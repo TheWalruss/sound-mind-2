@@ -131,9 +131,13 @@ This is what can be painted on.
 
 This layer composits the selected beneath it (by default: all the layers down to and including the next-lower filter layer), respecting their blend modes and opacities, applies a certain filter operation (sharpen, denoise, speckle, gradient fill, custom convolve, displace, etc.) to the composite, and renders the result.
 
+Refer to "### Adjustment Layers" in legacy/USER_GUIDE.md, but only as a guide. I think most of these filters are useful and fun, but I want to add more ways to add more interesting noise and distortion sources.
+
 ## Low Frequency Oscillations (MindWaves)
 
 The Studio has an LFO engine enabling the user to define arbitrary LFO's for use as MindWaves. A **MindWave** is a named parametric waveform that produces a per-pixel scalar field in [0, 1] across the canvas. 
+
+Refer to section 13 "MindWaves" in legacy/USER_GUIDE.md, but only to get the general idea. In this version of the Studio, I will revamp the way MindWaves are defined - it shall be easier and more powerful to generate some really interesting patterns.
 
 ### Filter parameters
 
@@ -308,6 +312,12 @@ Refer to legacy/USER_GUIDE.md "Snap to Grid". Could use refinement.
 Refer to legacy/USER_GUIDE.md  "Generators (`Ctrl+Alt+A`)". Definitely needs refinement.
 
 ## Analysis
+
+Refer to legacy/USER_GUIDE.md "29. Analysis Tools". Probably many of these analysis tools can be streamlined, some can be culled, and there are other tools that could be useful to add. 
+
+Focus here should be for music producers, editors, and musicians.
+
+Refine.
 
 ## Color Mapping
 
