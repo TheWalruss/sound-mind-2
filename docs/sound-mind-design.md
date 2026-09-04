@@ -99,7 +99,7 @@ In order to enable an easy and smooth user experience in the Studio, the Studio 
 
 However, this breaks the "nondual" principle behind Sound Mind, so Pool processing is available as a manual step. To minimize the auditory and visual difference between Pool and Stream output, audio will be always be imported in Pool mode, with the resulting Pool file converted to a light-weight Stream copy.
 
-In the Studio context, "Stream Mode" also means faster image processing - rather than processing and rendering large and clunky 4-layer TIFF (Pool format) files when painting, the Studio will use regular RGBA images for immediate visual feedback.
+In the Studio context, "Stream Mode" also means faster image processing - rather than processing and rendering large and clunky 4-layer TIFF (Pool format) files when painting, the Studio will use regular RGB images for immediate visual feedback. One consequence is that all channel-specific phase data that would be encoded in the 4-layer TIFF is lost in RGB.
 
 Finally, to close the loop to nonduality, the user also has the option to "pool" an imported image or a painted layer - this performs a Pool export to audio, followed by a Pool import. Subsequent exports and imports will not affect the image or the sound.
 
@@ -107,7 +107,7 @@ Finally, to close the loop to nonduality, the user also has the option to "pool"
 
 Operations in Sound Mind Projects are fully non-destructive. Importing a sound file copies the media to a project subdirectory and performs the encoding to an image. Painting in that image adds a "paint event" that exactly describes the paintbrush used and the path it followed, without modifying the image. This "paint event" can be copied, moved, modified, or removed.
 
-When performing a Pool export, all the operations are applied to the Pool-format media, rather than the lighter Stream media.
+When performing a Pool export, all the operations are applied to the Pool-format media, rather than the lighter Stream media. Pool-mode operations are all fully phase-aware, for optimal audio reconstruction.
 
 ## Layers
 
@@ -156,11 +156,9 @@ See "Supported Adjustment Filters" in legacy/USER_GUIDE.md. Needs refinement.
 
 Draws a segmented cubic Bézier curve and stamps brush marks along its length. Ideal for melodic lines, precise spectral contours, and rhythmically-timed patterns.
 
-The cursor outline and the stamp-dot preview along the curve both reflect the **selected brush tip shape** (square, diamond, line, etc.), so the preview matches what will be painted.
-
 ### Phase 1 — Placing Nodes
 
-- **Left-click** to place a node. A preview shows the curve and stamp dots as you move.
+- **Left-click** to place a node. A preview shows the path as you move.
 - **Right-click** or **double-click** to stop placing and enter edit mode.
 - The **corner/smooth toggle button** (see Node Controls below) sets the type of node placed on each click *before* you click — no need to convert nodes retroactively.
 
@@ -178,7 +176,7 @@ The cursor outline and the stamp-dot preview along the curve both reflect the **
 
 ### Node Controls
 
-The **Corner ↔ Smooth** button in the Curve section of the Tools panel serves two roles:
+The **Corner ↔ Smooth** button in the Paths section of the Tools panel serves two roles:
 
 | State | Button label | Click action |
 |-------|-------------|--------------|
@@ -189,13 +187,13 @@ The **Corner ↔ Smooth** button in the Curve section of the Tools panel serves 
 
 - **Delete Node** — removes the selected node.
 
-### Curve Gradient
+### Path Gradient
 
-A full gradient editor (see [Section 9](#9-the-gradient-editor)) controls color and opacity along the curve. t=0 is the start of the curve; t=1 is the end.
+A full gradient editor (see [Section 9](#9-the-gradient-editor)) controls color and opacity along the path. t=0 is the start of the path; t=1 is the end.
 
 ## Gradients
 
-The gradient editor appears in the Tools panel when the **Curve** or **Fill** tool is active, and in the **Gradient Fill** filter dialog. It controls how paint color and opacity vary along the path, across the filled region, or across the frequency axis.
+The gradient editor appears in the Tools panel when the **Path** or **Fill** tool is active, and in the **Gradient Fill** filter dialog. It controls how paint color and opacity vary along the path, across the filled region, or across the frequency axis.
 
 ### The Gradient Bar
 
@@ -243,8 +241,11 @@ Color, brush type, modulation settings, paths
 ### Procedural brushes
 
 #### Brush tips + harmonics
+Refer to legacy/USER_GUIDE.md "Brush Tip Shapes". Refine.
 
 #### adsr+harmonic+noise+body-resonance+inharmonicity
+
+Refer to legacy/USER_GUIDE.md "35. MIDI Instrument Editor". However, this will not be referred to as "MIDI instruments", but rather "Sound Mind instruments". Refine.
 
 #### Mind Shots
 
@@ -282,6 +283,8 @@ Rubber-band selection with transform handles
 
 #### Wand
 
+Click to flood-fill-select pixels by amplitude similarity. Optionally, it can be harmonics-aware.
+
 #### Lasso
 
 Freehand polygon selection
@@ -292,17 +295,25 @@ Warp a selection along a Path curve in time or frequency
 
 #### Fill
 
+This tool takes a selection and applies a color or gradient to the canvas, just inside the selection.
+
 ## Overlay Grids
 
-Refer to legacy/USER_GUIDE.md "Overlay grid presets". Could use refinement. 
+Refer to legacy/USER_GUIDE.md "16. Overlays & Grids". Could use refinement. 
 
 Refer to legacy/USER_GUIDE.md "Snap to Grid". Could use refinement. 
 
 ## Generators
 
+Refer to legacy/USER_GUIDE.md  "Generators (`Ctrl+Alt+A`)". Definitely needs refinement.
+
 ## Analysis
 
 ## Color Mapping
+
+When importing images, encoding sounds, and when rendering Sound Mind Pools on an RGB canvas, the stereo and phase channels must map to R G and B values.
+
+Refer to legacy/USER_GUIDE.md "RGB Mode". I think I want to change this up. Definitely refine.
 
 ## Polar Coordinates (Sound Flower)
 
@@ -310,25 +321,64 @@ Refer to legacy/USER_GUIDE.md "Sound Flowers". Could use refinement.
 
 ## Chords/Arpeggiator/Sequencer
 
-Refer to legacy/USER_GUIDE.md "Chord generator". Could use refinement.
+Refer to legacy/USER_GUIDE.md "Chord generator". It will not create MIDI events, but any kind of paint event, configured by the user. Needs refinement.
 
-The user shall be able t
+The user shall be able to write any sequence of notes or frequencies, with a notation for timing etc., and also generate paint events in this fashion.
 
 ## Composer Mode
 
-Each visible layer is a track
+This switches the paint canvas into a traditional DAW track panel.
 
-Amplitudes visualized on the track
+Each visible layer is a track.
+There are three track background options:
+ * Clean - the track has a blank background
+ * Amplitude - the track shows the total amplitude over all frequencies, as grayscale or as vertical stacks.
+ * Thumbnail - the track background is the actual painted layer, but squished vertically to fit to the track
 
-Paint objects illustrated on the track
+Project objects are rendered on the track as boxes.
+
+The Composer Mode allows the user to easily re-arrange objects, copy or move them between layers, adjust timing, etc. Also adjusting the gain, equalizer, etc., of individual objects, tracks, or track sections is easy in this mode.
+
 
 ## Record
 
+There's a Record panel allowing the user to record to a new layer, with a start/stop recording button, input device selector with refresh button, and input gain control.
+
+Refine.
+
 ## Playback
+
+There's a playback control with start/pause/stop buttons, an output device selector with refresh button, and a volume control.
+
+Refine.
 
 ## Live
 
+Refer to legacy/USER_GUIDE.md. See "32. Live Mode". Refine.
+
 ## Import
+
+Images and sound files as new layers.
+
+MIDI files as new layers, mapping each MIDI program/instrument to a paint preset (any kind of brush tip, MindShot, or Sound Mind Instrument) and creating a paint object for each MIDI event.
+
+Images and sound files as pasted objects in an existing layer.
+
+Layers from other Sound Mind Projects.
+
+Mind Shots from other Sound Mind Projects.
+
+Mind Waves from other Sound Mind Projects.
+
+Sound Mind Instruments from other Sound Mind Projects.
+
+Refine.
+
+## Export
+
+Exporting sound is best done in Pool mode, to enable full phase-aware processing for the best possible (re)construction of audio signals.
+
+See legacy/USER_GUIDE.md "35. Video Export" regarding video export. Refine.
 
 ## Pool
 
