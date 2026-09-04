@@ -27,6 +27,11 @@ Follow this sequence for **every** unit of work (feature, fix, or refactor), wit
 10. **Commit to GitHub.** Stage and commit with a clear, conventional commit message (what changed and why). Push if a remote is configured and I've indicated pushes are expected at this stage. Do not force-push, rewrite history, or touch branch protections.
 11. **Summary report.** Give me a concise summary of what changed, why, and any trade-offs or deviations from the design doc. Suggest specific manual tests I should run myself (what to click/do, what result to expect) before considering the step fully done.
 
+## Commit & Push Policy
+
+- **Design/planning phase** (changes confined to `docs/`, `CLAUDE.md`, and similar planning artifacts — no source, build, or test changes): commit and push directly, without waiting for my approval. Docs can always be revisited and disagreed with after the fact, so there's no downside to pushing eagerly here.
+- **Development/implementation phase** (any source, build, or test change): push only when I've indicated pushes are expected at that stage, per step 10 above. This isn't caution about the change itself — it's about doing as much QA as possible locally first, to keep GitHub's bandwidth, CPU, and storage costs down once real code is involved.
+
 ## Working Principles
 
 - **Design docs are the source of truth.** If an implementation detail conflicts with a design doc, stop and raise it rather than quietly resolving it either way.
