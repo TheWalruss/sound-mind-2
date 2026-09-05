@@ -154,11 +154,11 @@ A **MindWave** is a named parametric waveform that produces a per-pixel scalar f
 
 Rather than a long flat menu of named pattern types, MindWaves are meant to be built from a small set of primitives that compose:
 
-- a handful of **generator types** — periodic, envelope, stepped/noise, spatial, and fractal (see [MindWave Functions](#mindwave-functions));
-- **superposition**, combining any two or more waves with a chosen blend;
+- a handful of **generator types** — periodic, envelope, stepped/noise, spatial, fractal, drawn, and step-grid (see [MindWave Functions](#mindwave-functions));
+- **field operators** — superposition (combining two fields into one), warp (one field distorting the coordinates another is sampled at), and reduce (collapsing a 2D field to a 1D signal) (see [Field Operators](#field-operators));
 - and, recursively, a generator's own parameters — its period, its phase, its centre — can themselves be bound to another MindWave.
 
-That last point is what makes the system more powerful without growing the list of named functions: a sine whose period is itself driven by a slow noise field behaves like nothing in a flat catalogue of presets, without needing to be one. Complexity comes from composing a few simple, well-understood pieces rather than from adding more of them.
+That last point is what makes the system more powerful without growing the list of named functions: a sine whose period is itself driven by a slow noise field behaves like nothing in a flat catalogue of presets, without needing to be one. Complexity comes from composing a few simple, well-understood pieces rather than from adding more of them. How a person actually chooses and tunes these pieces is a separate, and still open, interaction-design question — see [Continuous Controls](#continuous-controls) for one promising direction, not yet a complete answer.
 
 ### Layer opacity
 
@@ -179,6 +179,15 @@ Two kinds of parameters behave differently under this binding, and the distincti
 
 The same binding applies to brush parameters — size, opacity, color/intensity, and the direct parameters described above (offset, angle) all accept a MindWave in place of a fixed value, with the same direct-vs-shape distinction. This lets a single stroke vary its own strength, width, or hue as it crosses the canvas, driven by the same waveform library used for layers and filters.
 
+### Binding Coordinate Frame
+
+A paint operation — and, within it, a Sound Mind Instrument note — bound to a MindWave can sample that field in one of two coordinate frames:
+
+- **Canvas-space** — the field is sampled at the operation's actual position on the canvas, the same way a layer- or filter-bound MindWave already is. Two identical strokes at different points in a piece are shaded differently, because each sits over a different part of the same fixed field — the MindWave behaves like a paint mask laid over the whole piece.
+- **Operation-relative** — the field is re-centred on the operation itself, so its own local origin (its start in time, its own pitch) becomes the field's origin every time. Two identical strokes anywhere in the piece are shaded identically, because each one sees the same field from its own point of view — this is what makes a MindWave behave like a conventional, retriggering LFO: the same shape, played fresh, every time a note starts.
+
+Both are genuinely useful, and neither replaces the other: canvas-space is the spatial-mask behaviour MindWaves were designed around; operation-relative is what lets the exact same binding also feel like a familiar per-note LFO — including for a note played live or from a Sound Mind VST instrument, where "operation-relative" is naturally evaluated fresh the moment the note starts, without needing a separate real-time-only mechanism.
+
 ### MindWave Functions
 
 A MindWave's shape comes from one of a small family of generator types:
@@ -188,8 +197,22 @@ A MindWave's shape comes from one of a small family of generator types:
 - **Stepped and noise fields** — a quantised staircase, and smooth (Gaussian-filtered) or fractal noise, for organic or mechanical texture rather than a clean curve.
 - **Spatial patterns** — ripples, checkerboards, cellular (Voronoi-like) blobs, and domain-warped noise, evaluated across both axes at once rather than projected from a single one.
 - **Fractal fields** — a branching structure (see [Generators](#generators)) evaluated as an opacity field instead of stamped as pixels, so a layer or filter can fade in and out along the shape of a fractal rather than a wave.
+- **Drawn shapes** — a hand-drawn [Path](#paths), sampled as a waveform rather than stamped as paint, and looped across whichever axis it's bound to — for grooves and one-off shapes no formula captures.
+- **Step grids** — discrete values on a grid of steps, snapped to the [Timing Grid](#overlay-grids) the same way a paint stroke can be — for rhythmic, mechanical modulation that a smooth curve or formula is clumsy at.
 
-Any two or more MindWaves combine into a new one by **superposition** — layering waves together the same way layers themselves composite, with a chosen blend (multiply, add, min, max, average) determining how each one folds into the running result. Combined with the recursive parameter binding described above, superposition is how genuinely complex, interference-like patterns are built from a small number of simple, well-understood pieces.
+### Field Operators
+
+Beyond generator types, three operators reshape or combine fields:
+
+- **Superposition** — combines any two or more MindWaves into one, layering them together the same way layers themselves composite, with a chosen blend (multiply, add, min, max, average) determining how each one folds into the running result. Combined with recursive parameter binding, superposition is how genuinely complex, interference-like patterns are built from a small number of simple, well-understood pieces.
+- **Warp** — one field distorts the coordinates another field is sampled at, rather than blending values with it — the general form of what a single named "domain-warped noise" function already does, made available between any two fields rather than baked into one.
+- **Reduce** — collapses a 2D field into an ordinary 1D signal, by slicing or integrating along one axis (typically frequency). This is the bridge between a MindWave's native spatial shading and a conventional, single-value-over-time control signal — useful wherever something downstream only wants the latter, such as a real-time instrument voice.
+
+### Continuous Controls
+
+Choosing a generator type and then dialling its raw parameters (period, phase, octaves, …) is precise but unfamiliar territory for anyone used to a synthesizer's LFO. An alternative interface — not a different underlying model, just a different way of reaching it — exposes two or three continuous controls (for example: **shape**, sweeping from a clean curve to something noisier; **skew**, biasing the shape earlier or later; **character**, adding harmonics or turbulence) that smoothly sweep through a whole family of the generator types and parameter combinations already described above, the way a modular synth's shape/slope/smoothness-style function generator does. This gives anyone already fluent in synthesizer modulation a familiar on-ramp into MindWaves, without adding a second system underneath it — it's a friendlier front door onto [MindWave Functions](#mindwave-functions), not a rival to them.
+
+This is one step toward a real interaction-design pass for building and combining MindWaves — a pass the current design still needs (see [Deferred Decisions](#deferred-decisions)), not a finished answer to it.
 
 ## Paths
 
@@ -465,3 +488,4 @@ Points intentionally punted rather than resolved — not blocking the move to ar
 4. **Sequence notation.** Whether ABC notation (or another existing standard) actually covers Sound Mind's needs — arbitrary frequencies, the codec's own timing resolution — needs validating before committing to it.
 5. **Real-time performance targets.** The ~100 ms graphical / ~250 ms audio feedback targets are aspirational; they need validating against real measurements once a Stream-mode pipeline exists.
 6. **External format licensing.** Format and licensing constraints (MP3 in particular) need re-verifying against the specific C++ libraries chosen, rather than assuming the legacy version's constraints still apply.
+7. **MindWave editor UI/UX.** The interaction design for building, tuning, and combining MindWaves — choosing a generator, dialling continuous controls, drawing a shape, editing a step grid, chaining field operators — needs a real design pass of its own. Continuous Controls is a step toward a friendlier interface, not a complete answer to it.

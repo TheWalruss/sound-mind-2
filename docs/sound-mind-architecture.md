@@ -105,14 +105,26 @@ classDiagram
         OperationId id
         apply(RasterCache) RasterCache
     }
-    class PaintOperation
-    class FilterOperation
-    class GeneratorOperation
-    class TransformOperation
+    class PaintOperation {
+        LayerId targetLayer
+    }
+    class FilterOperation {
+        LayerId targetLayer
+    }
+    class GeneratorOperation {
+        LayerId targetLayer
+    }
+    class TransformOperation {
+        LayerId targetLayer
+    }
+    class ReorderLayersOperation {
+        LayerId[] newOrder
+    }
     Operation <|-- PaintOperation
     Operation <|-- FilterOperation
     Operation <|-- GeneratorOperation
     Operation <|-- TransformOperation
+    Operation <|-- ReorderLayersOperation
 
     class MindWave {
         GeneratorType type
@@ -137,7 +149,7 @@ classDiagram
     Project "1" --> "1" OperationLog
     Project "1" --> "*" MindWave
     Project "1" --> "*" SoundMindInstrument
-    Layer "1" --> "*" Operation : owns
+    OperationLog "1" --> "*" Operation
     PaintOperation ..> SoundMindInstrument : may target
     PaintOperation ..> MindShot : may target
     PaintOperation ..> MindGrain : may target
@@ -148,6 +160,7 @@ classDiagram
 
 A few things worth calling out about this sketch before it becomes real classes:
 
+- **`Operation` belongs to the Project, not to a Layer.** The first version of this sketch had each `Layer` own its own slice of history, which cannot represent an operation like reordering the layer stack — that operation doesn't belong to any one layer, it changes the project's structure. The `OperationLog` is a single, project-wide, ordered sequence; layer-content operations (`PaintOperation`, `FilterOperation`, `GeneratorOperation`, `TransformOperation`) carry a `targetLayer` reference saying which layer's cache they affect, while structural operations like `ReorderLayersOperation` — and, by the same reasoning, adding/removing a layer or changing a layer's blend mode, opacity, or MindWave link — target the project's layer list itself rather than any one layer's raster content. Rebuilding a given layer's cache means replaying the project's log filtered to operations that target it, in log order, not replaying "that layer's log" as a separate thing.
 - **`Operation` is the unit of history**, and every one of the design doc's tools (Paint, Filter, Generator, Transform, and by extension Import, Pool, Chord/Sequence stamping) is some kind of `Operation`. `Layer.cache` is a derived value, not state that operations mutate directly — an operation's `apply` conceptually produces the next cache from the previous one (or from scratch on replay), rather than editing pixels in place. Whether that's *literally* how it's implemented (versus an equivalent optimization) is an implementation choice, not an architectural one — the log stays the source of truth either way.
 - **`MindWave` is self-referential** by design (superposition stack, and per the design doc's revamp, a generator's own parameters can themselves be `MindWave`-bound) — the data structure needs to support that recursion without becoming a special case.
 - **`SoundMindInstrument`, `MindShot`, and `MindGrain` are peers**: anything a `PaintOperation` can target. A `Sequence` doesn't produce audio directly — it resolves to a list of `PaintOperation`s against one of these, which is what keeps a stamped chord or sequence non-destructively editable.
@@ -169,8 +182,8 @@ A paint or filter action flows roughly:
 
 ```mermaid
 flowchart LR
-    A["Tool produces an Operation"] --> B["Append to Layer's Operation Log"]
-    B --> C["Invalidate affected Layer's cache"]
+    A["Tool produces an Operation"] --> B["Append to the Project's Operation Log"]
+    B --> C["Invalidate targeted Layer's cache"]
     C --> D["Recompute that Layer's cache<br/>(Stream codec + GPU compute)"]
     D --> E["Recomposite visible layer stack"]
     E --> F["Stream-decode composite for preview"]
@@ -181,7 +194,7 @@ Only the affected layer (and any Filter layer or MindWave-linked layer above it 
 
 # Determinism & Replay
 
-The operation log is what makes Pooling, Generators, and Remaster-style rebuilds possible at all: replaying the log against a Layer's inputs must reproduce its cache. Concretely:
+The operation log is what makes Pooling, Generators, and Remaster-style rebuilds possible at all: replaying the operations that target a given layer, in log order, must reproduce its cache. Concretely:
 
 - Every `Operation` that consumes randomness owns its own seed, stored in the log entry itself — not drawn from a shared/global RNG stream, which would make replay order-dependent.
 - Bit-for-bit reproducibility is scoped to *(Studio version, target architecture)* — an op log is not a portable, version-independent artifact, and cross-architecture replay is only held to sounding the same, not being byte-identical. This means the log format should record enough version/architecture context to know when a strict bit-for-bit check even applies.
