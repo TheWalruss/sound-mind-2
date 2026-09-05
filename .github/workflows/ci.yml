@@ -20,6 +20,12 @@ jobs:
         with:
           arch: x64
 
+      # windows-latest no longer guarantees Ninja as a transitive dependency
+      # of anything preinstalled - the Ninja generator in CMakePresets.json
+      # needs it on PATH explicitly.
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v6
+
       - name: Clone & bootstrap vcpkg
         shell: pwsh
         run: |
