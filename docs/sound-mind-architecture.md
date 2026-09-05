@@ -22,13 +22,12 @@ From `sound-mind-design.md`'s resolved decisions:
 
 # System Overview
 
-Four things get built, sharing two lower layers:
+Two applications get built on top of two shared lower layers — the Studio now, Sound Mind VST later:
 
 ```mermaid
 flowchart TB
     subgraph Apps["Applications"]
         Studio["Sound Mind Studio<br/>(GUI app)"]
-        CLIApp["Sound Mind CLI"]
         VSTApp["Sound Mind VST<br/>(deferred)"]
     end
 
@@ -53,7 +52,6 @@ flowchart TB
 
     Studio --> ProjectModel
     Studio --> Compositor
-    CLIApp --> Codec
     VSTApp -.-> Stream
     VSTApp -.-> InstrumentEngine
 
@@ -74,7 +72,6 @@ flowchart TB
 - **Sound Mind Codec** is the lowest layer and the one thing that must work standalone: Pool (NSGT, lossless, off-line) and Stream (fast, real-time-safe) transforms, plus the file formats each reads and writes. It has no knowledge of layers, MindWaves, or projects — it only converts between audio/image data and spectrogram data.
 - **Sound Mind Core** is everything about a *project* that isn't UI: the layer stack and operation log, the compositor that turns them into pixels, and the engines each operation type can call into (MindWaves, Sound Mind Instruments, Generators, Analysis). Core depends on Codec; Codec knows nothing about Core.
 - **Sound Mind Studio** is the GUI application: interaction (tools, panels, canvas), consuming Core and, through it, Codec. It is a Qt application — JUCE is not used for its GUI. JUCE's role narrows to what `sound-mind-core` (and the real-time audio path specifically) needs from it: audio device I/O and DSP building blocks, driven programmatically rather than through any JUCE GUI component. Qt owns the application's event loop and windowing; JUCE's audio engine runs underneath it as a library, not a competing framework. This boundary needs to stay clean in practice — no JUCE GUI classes should appear above `sound-mind-core`, and no Qt classes should appear inside the real-time audio path.
-- **Sound Mind CLI** is a thin consumer of Codec alone (encode/decode from the command line), matching the design doc's "codec library, command-line tool, full graphical studio" framing — it does not need Core at all unless a CLI operation ends up wanting the project model (e.g. batch-rendering a project non-interactively), which is a later question, not a day-one one.
 - **GPU Compute** is a thin dispatch layer under Codec's Stream transforms and Core's compositor, isolating the DirectX 12 specifics so nothing above it has to know or care whether an operation actually ran on the GPU or fell back to the CPU.
 
 # Core Data Model
@@ -198,7 +195,6 @@ A first cut at the top-level module split:
 - `sound-mind-core` — project model, operation log, compositor, MindWave/Instrument/Generator/Analysis engines. Depends on `sound-mind-codec`.
 - `sound-mind-gpu` — DirectX 12 compute wrapper, isolating the platform-specific API from both `sound-mind-codec` and `sound-mind-core`.
 - `sound-mind-studio` — the Qt GUI application. Depends on `sound-mind-core`, and through it, indirectly on JUCE's audio engine — but never on JUCE's GUI module.
-- `sound-mind-cli` — the command-line tool. Depends on `sound-mind-codec` (and, if batch project rendering is needed, `sound-mind-core`).
 - `sound-mind-vst` — deferred; not started until the Studio is operational.
 - A test target per module, following CLAUDE.md's test-first workflow once implementation begins.
 
@@ -228,9 +224,15 @@ The Pool codec's Non-Static Gabor Transform doesn't need to be written from scra
 
 Neither is a drop-in answer yet:
 
-- **`libnsgt` is the more direct fit** (C, CMake, already has a streaming mode, and its per-chunk timing is compatible with the Stream-mode latency targets) but its **FFTW3 dependency is GPLv2 unless commercially licensed**, which needs resolving before it can sit inside `sound-mind-codec` — either license FFTW3 commercially, or swap in a permissively-licensed FFT (e.g. PocketFFT, KissFFT, muFFT, or JUCE's own FFT, subject to JUCE's licensing tier for that use).
+- **`libnsgt` is the more direct structural fit** (C, CMake, already has a streaming mode, and its per-chunk timing is compatible with the Stream-mode latency targets) but its **FFTW3 dependency is GPLv2-or-later, commercially licensed otherwise**. Linking against the free GPL build would obligate the *entire* distributed Sound Mind binary — not just the codec — to ship under a GPL-compatible license (see the licensing discussion below); a commercial FFTW3 license avoids that but costs money. **The recommended path is neither**: swap `libnsgt`'s FFT backend for a permissively-licensed FFT (PocketFFT, KissFFT, or muFFT are all BSD/MIT-style), reusing its NSGT logic and streaming-mode structure without inheriting its dependency's license. This sidesteps the GPL question entirely, regardless of what Sound Mind's own license ends up being.
 - **`grrrr/nsgt` is the algorithmic reference** the legacy product's Pool format was actually built against — useful as a correctness oracle (compare a new C++ implementation's output against it) even if no code from it is reused directly, given it's Python and not something to embed in a real-time-adjacent C++ codec.
 - Neither has been checked yet for building cleanly on Arm64 (the primary dev platform) — that's a prerequisite for either becoming more than a reference.
+
+#### A note on FFTW3's license
+
+FFTW3 is dual-licensed: free under GPLv2-or-later, or available as a paid commercial license. GPL's copyleft isn't scoped to just the library you link — under its terms, *the whole distributed work* that includes GPL-licensed code must itself be distributed under a GPL-compatible license, source included. Concretely, using the free FFTW3 build would mean the entire shipped Sound Mind Studio (and any Sound Mind VST plugin later) would need to be GPL-compatible too, not just `sound-mind-codec` in isolation — and since FFTW3 is "GPLv2-or-later," it can be used under GPLv3 terms specifically, which is compatible with JUCE's free AGPLv3 tier, but not with GPLv2 alone.
+
+This only becomes an actual constraint once Sound Mind's own distribution license is decided — a question that isn't settled anywhere in the docs yet and matters beyond just this one dependency (every other third-party library's license, and the JUCE tier, hinge on it too). It's tracked in *Decisions Needed* below, but isn't blocking: using a permissively-licensed FFT library instead of FFTW3 keeps every option open regardless of how that question is eventually answered.
 
 # GPU / Audio-Thread Handoff: Options
 
@@ -249,5 +251,6 @@ A plausible direction, not yet a decision: a DX12 fence to know a result is read
 
 What's left unresolved after the above:
 
-1. **NSGT library selection.** Evaluate `libnsgt` (pending its FFTW3 licensing question and an Arm64 build check) against reimplementing the transform in C++ with `grrrr/nsgt` as the correctness reference.
+1. **NSGT library selection.** Validate that `libnsgt`'s NSGT/streaming logic can be rebuilt against a permissive FFT backend (PocketFFT/KissFFT/muFFT) in place of FFTW3, and that the result builds cleanly on Arm64, before committing to it over a from-scratch implementation referenced against `grrrr/nsgt`.
 2. **GPU/audio-thread handoff mechanism.** Prototype against the options above once a real Stream-mode pipeline exists to measure against — the two-consumer split (ring buffer for audio, double buffer for UI) is a reasonable starting hypothesis, not a final answer.
+3. **Sound Mind Studio's own distribution license.** Open source (and under what license), closed-source/commercial, or dual-licensed — not urgent for the NSGT question specifically (the permissive-FFT path above keeps that one open regardless), but it does gate the JUCE tier (free AGPLv3 vs. paid Indie/Pro) and every other third-party dependency's license, so it's worth deciding before dependencies pile up.

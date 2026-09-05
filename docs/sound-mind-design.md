@@ -4,7 +4,7 @@
 
 Sound Mind is a creative toolkit for working with audio as a visual medium. It encodes sound as a spectrogram image — a picture you can paint, layer, filter, and transform — then reconstructs audio from the result with perfect fidelity.
 
-The project spans a codec library, a command-line tool, and a full graphical studio. Together they let you see, touch, and reshape sound in ways that traditional audio editors cannot.
+The project spans a codec library and a full graphical studio. Together they let you see, touch, and reshape sound in ways that traditional audio editors cannot.
 
 In principle, Sound Mind creates sound from images, or images from sound. More precisely, when given a sound, it creates a spectrograph which uniquely represents or encodes that sound. Inversely, when given an image, it creates a unique sound of which spectrograph approximates that image. Converting from sound to image and back to sound is deterministic and perceptually lossless. Sound Mind is the physical/mathematical bidirectional bridge between a sound and its characteristic spectrograph, or between an image and its characteristic sound. Based on this foundation, the Studio is a sound engineering laboratory, a digital audio workstation, a painter's attic and a musician's instrument, all at once.
 
