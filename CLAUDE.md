@@ -22,8 +22,8 @@ Follow this sequence for **every** unit of work (feature, fix, or refactor), wit
 5. **Implement.** Write the implementation to satisfy the tests and the design doc, following modern C++ idioms (RAII, smart pointers, no raw `new`/`delete`, no allocation in real-time audio callbacks).
 6. **Run the new tests.** Confirm the new/updated tests pass against the new implementation.
 7. **Run the full regression suite.** Run the entire existing test suite to confirm nothing else broke. Do not proceed if there are regressions — fix or report them first.
-8. **Update documentation.** Update `README.md`, `USER_GUIDE.md`, and `CHANGELOG.md` to reflect the change, in a style and level of detail consistent with the existing docs.
-9. **Build the documents.** Run whatever generates the polished/distributable documentation output (doc site, PDF, or other build target) so the updated docs are verified to build cleanly, not just edited as source.
+8. **Update documentation.** Update `README.md`, `USER_GUIDE.md`, `CHANGELOG.md`, and the Doxygen comments on anything touched (see Code Documentation below), in a style and level of detail consistent with the existing docs.
+9. **Build the documents.** Run whatever generates the polished/distributable documentation output (doc site, PDF, or other build target), including the `docs` CMake target that regenerates the Doxygen output, so the updated docs are verified to build cleanly, not just edited as source.
 10. **Commit to GitHub.** Stage and commit with a clear, conventional commit message (what changed and why). Push if a remote is configured and I've indicated pushes are expected at this stage. Do not force-push, rewrite history, or touch branch protections.
 11. **Summary report.** Give me a concise summary of what changed, why, and any trade-offs or deviations from the design doc. Suggest specific manual tests I should run myself (what to click/do, what result to expect) before considering the step fully done.
 
@@ -31,6 +31,13 @@ Follow this sequence for **every** unit of work (feature, fix, or refactor), wit
 
 - **Design/planning phase** (changes confined to `docs/`, `CLAUDE.md`, and similar planning artifacts — no source, build, or test changes): commit and push directly, without waiting for my approval. Docs can always be revisited and disagreed with after the fact, so there's no downside to pushing eagerly here.
 - **Development/implementation phase** (any source, build, or test change): push only when I've indicated pushes are expected at that stage, per step 10 above. This isn't caution about the change itself — it's about doing as much QA as possible locally first, to keep GitHub's bandwidth, CPU, and storage costs down once real code is involved.
+
+## Code Documentation (Doxygen)
+
+- Every public class, struct, enum, and function gets a Doxygen comment block: `@brief`, a fuller description wherever the name alone doesn't say enough, `@param`/`@return`/`@throws` as applicable, and an explicit note on thread-safety / real-time-safety wherever that matters (audio callback, GPU dispatch paths especially).
+- Generated via the `docs` CMake target (`docs/Doxyfile`, HTML + XML output) — this is what step 9 above means by building the documents for any step that touches C++ source.
+- **Cross-check against `docs/sound-mind-architecture.md` before calling a step done.** The Doxygen output is the unit-level design doc; the architecture doc is the system-level one. When they disagree — a class exists that the architecture doc never mentioned, a described responsibility isn't actually reflected in the code, a signature drifted from what the architecture sketch implied — stop and reconcile: update the architecture doc if the code's approach turned out to be the better/actual design, or fix the implementation if it drifted from an intentional decision. Flag it to me if it's unclear which side should give.
+- **Cross-check tests against the Doxygen documentation too.** A comment that documents a precondition, edge case, or specific behavior should have a test exercising it. A documented behavior with no corresponding test — or a test exercising behavior the documentation doesn't mention — is a gap; treat it the same way as an architecture/code mismatch: stop and reconcile rather than letting it quietly stand.
 
 ## Working Principles
 
