@@ -6,25 +6,40 @@ on:
   pull_request:
 
 jobs:
-  build-test-x64:
-    name: Build & Test (Windows x64)
-    runs-on: windows-latest
+  build-test:
+    name: Build & Test (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-latest
+            msvc_arch: x64
+            ninja_platform: win
+          - name: Windows ARM64
+            runner: windows-11-arm
+            msvc_arch: arm64
+            ninja_platform: winarm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
-      # GitHub's windows-latest runners are genuinely x64 hardware, so this
-      # validates a real x64 build - not a cross-compile - per
-      # tech-stack-decisions.md's "validate real x64 builds via CI".
-      - name: Set up MSVC (x64)
+      # windows-latest is genuine x64 hardware and windows-11-arm is genuine
+      # Arm64 hardware (GitHub's Arm-partner runner, generally available for
+      # public repos) - both jobs are native builds, neither is a
+      # cross-compile, per tech-stack-decisions.md's Arm64-primary /
+      # x64-CI-validated split, now validated natively on both.
+      - name: Set up MSVC (${{ matrix.msvc_arch }})
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: x64
+          arch: ${{ matrix.msvc_arch }}
 
-      # windows-latest no longer guarantees Ninja as a transitive dependency
-      # of anything preinstalled - the Ninja generator in CMakePresets.json
-      # needs it on PATH explicitly.
+      # Neither runner image guarantees Ninja preinstalled for its
+      # architecture - install it explicitly for both.
       - name: Set up Ninja
         uses: seanmiddleditch/gha-setup-ninja@v6
+        with:
+          platform: ${{ matrix.ninja_platform }}
 
       - name: Clone & bootstrap vcpkg
         shell: pwsh
