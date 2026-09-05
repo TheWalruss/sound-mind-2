@@ -43,6 +43,11 @@
 build/
 Build/
 build-*/
+out/
+.vs/
+
+# Personal CMake preset overrides (not the shared CMakePresets.json)
+CMakeUserPresets.json
 
 # CMake generated files
 CMakeFiles/

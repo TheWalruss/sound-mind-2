@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test-x64:
+    name: Build & Test (Windows x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # GitHub's windows-latest runners are genuinely x64 hardware, so this
+      # validates a real x64 build - not a cross-compile - per
+      # tech-stack-decisions.md's "validate real x64 builds via CI".
+      - name: Set up MSVC (x64)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Clone & bootstrap vcpkg
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "${{ runner.temp }}\vcpkg"
+          & "${{ runner.temp }}\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+
+      - name: Configure
+        shell: pwsh
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}\vcpkg
+        run: cmake --preset debug
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build --preset debug
+
+      - name: Test
+        shell: pwsh
+        run: ctest --preset debug
