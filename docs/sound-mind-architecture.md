@@ -103,6 +103,8 @@ classDiagram
     class Operation {
         <<abstract>>
         OperationId id
+        OperationId supersedes
+        bounds() TimeFrequencyRect
         apply(RasterCache) RasterCache
     }
     class PaintOperation {
@@ -164,6 +166,83 @@ A few things worth calling out about this sketch before it becomes real classes:
 - **`Operation` is the unit of history**, and every one of the design doc's tools (Paint, Filter, Generator, Transform, and by extension Import, Pool, Chord/Sequence stamping) is some kind of `Operation`. `Layer.cache` is a derived value, not state that operations mutate directly — an operation's `apply` conceptually produces the next cache from the previous one (or from scratch on replay), rather than editing pixels in place. Whether that's *literally* how it's implemented (versus an equivalent optimization) is an implementation choice, not an architectural one — the log stays the source of truth either way.
 - **`MindWave` is self-referential** by design (superposition stack, and per the design doc's revamp, a generator's own parameters can themselves be `MindWave`-bound) — the data structure needs to support that recursion without becoming a special case.
 - **`SoundMindInstrument`, `MindShot`, and `MindGrain` are peers**: anything a `PaintOperation` can target. A `Sequence` doesn't produce audio directly — it resolves to a list of `PaintOperation`s against one of these, which is what keeps a stamped chord or sequence non-destructively editable.
+
+# Composer Mode Fit
+
+`sound-mind-design.md`'s Composer Mode — a DAW-style track view where each layer is a track and every paint operation renders as a labelled box — is a *view* over the model above, not a second data model. Checking it against that model surfaces two real gaps and confirms a third assumption:
+
+- **Operations need a queryable extent, not just an `apply()`.** Composer Mode draws every operation on its layer's track as a box positioned and sized by that operation's time (and, implicitly, frequency) range. `apply()` doesn't expose that range, so `Operation` above now also carries a `bounds()` method every subtype implements, independent of what the operation actually does. This serves a second view too, not just Composer Mode: it's the same information the legacy Studio's "show op geometry" canvas overlay (dashed outlines per operation) needed, so it's one capability the model owes both views, not something invented just for the timeline.
+- **Editing an existing operation (retime it, move it to another layer) needs to be a logged action, not a mutation.** Composer Mode explicitly wants to "re-order or retime" operations and "move them between layers." Given the append-only, replayable log this architecture already commits to, an in-place edit can't just change a past log entry — that would break replay determinism for anything computed after it. The resolution added above, consistent with how Pooling already works (hides the original, inserts the result "in its stead"): `Operation` now carries an optional `supersedes` reference to the operation it replaces. Editing appends a *new* operation pointing back at the old one; the old one becomes inactive (hidden, not deleted) rather than mutated. Replay honours only the non-superseded operation at each point in a layer's history.
+- **Track backgrounds (Clean / Amplitude / Thumbnail) are derived views, not stored state.** All three are computable from a layer's existing `RasterCache` — a plain re-render, a per-column amplitude summary, or a squashed thumbnail — so none of them need a new persisted field. Which background a track is currently showing is Studio view-state, not project data.
+
+Composer Mode needing the first two isn't a flaw specific to it — both would eventually surface from the plain canvas view too (any overlay or picking interaction needs *some* operation bounding box; re-editing a placed operation is implied by the legacy "Pick tool" idea even though the current design doc doesn't yet describe an equivalent). Both are folded into the Core Data Model above rather than treated as Composer-Mode-only additions.
+
+# File Formats & Portable Resources
+
+Four things need concrete on-disk shape: the project file itself, the two codec file formats it builds on (Pool, Stream), and the standalone resource files that let a MindWave, a Sound Mind Instrument, or a Mind Shot travel between projects. All of this is a first-cut sketch, consistent with the design doc's stance that a formal, versioned project schema is a near-beta concern — nothing here is meant to be locked in yet.
+
+### Project File & Folder
+
+A project is one JSON project file (`.smproj`, tentatively) plus a same-named folder holding everything binary:
+
+```
+MyPiece.smproj
+MyPiece/
+  sources/     — raw imported media, kept for re-encoding/provenance
+  media/       — cached Stream-format layer renders, one per Layer
+  pool/        — cached Pool-format renders, produced by Pooling
+  mindshots/   — captured MindShot Stream-format files
+```
+
+The project file itself holds:
+
+- **Project settings** — the codec defaults new layers inherit (sample rate, frequency scale and its parameters, timestep, canvas duration/dimensions), plus project-wide preferences (tuning reference, default tempo).
+- **The layer list**, in composite order — each entry's id, name, type, blend mode, opacity, MindWave link, transform, and a reference to its cached render in `media/` (absent until the layer has been rendered at least once).
+- **The operation log** — the single, project-wide, ordered sequence described above, each entry serialized with its own parameters, its `targetLayer` (or structural target), its seed where applicable, and its `supersedes` reference where it replaces an earlier one.
+- **Resource libraries** — MindWave and Sound Mind Instrument definitions stored inline (they're small and purely parametric); Mind Shot entries stored as metadata plus a path into `mindshots/` (the spectrogram data itself is binary and doesn't belong in a JSON file); Mind Grain definitions stored inline too, since a Mind Grain is only ever a reference to a layer in the *same* project (see below) — there's no external asset for it to point to.
+- **Sequences** — the notation string, inline, plus whatever resolved note events are cached from it.
+
+A project is meant to be self-contained: once a resource is imported, it's copied in and becomes ordinary project data — nothing inside a project ever points at a file outside its own folder.
+
+### Pool File Format
+
+Carries forward the legacy Sound Mind TIFF's proven shape — `CODEC_DETAILS.md` and `SOUND_MIND_TIFF_SPEC.md` are the exact legacy bit-level spec this is informed by, not bound to:
+
+- A TIFF container with four same-sized 16-bit grayscale pages — left amplitude, right amplitude, left phase, right phase — so any generic TIFF reader can still open it, even though only Sound Mind understands the pixel meaning.
+- Height = the actual bin count of whichever frequency scale is configured (log by default; mel, octave-aligned, and variable-Q are the same kind of alternative the design doc's Frequency Scale concept already allows for); width = time columns at the project's timestep.
+- Amplitude stored as dB mapped linearly onto the pixel range, with a perceptual (loudness-weighted) pre-emphasis applied before storage and removed on decode — cosmetic only, it makes visual brightness track perceived loudness without touching the reconstructed audio.
+- Phase stored as its angle mapped linearly onto the pixel range.
+- Fully self-describing: format version, sample rate, hop length, bin count, and frequency-scale parameters are embedded in the file itself, so nothing needed to decode it ever lives outside the file.
+- Two storage layouts: a simple sequential one for short clips and instrument-sized assets, and a tiled one enabling random-access seeking for long compositions — both worth keeping, since they solve different, real problems.
+- Long files split into sequential, independently-decodable snippets, normalized once against the whole file's peak (not per snippet) and given real neighbouring audio at each boundary rather than a synthetic reflection — both details exist specifically to avoid audible seams, and are worth keeping exactly.
+
+What's explicitly *not* carried forward as-is: the legacy metadata key set and its backend-name strings (CUDA/OpenCL/PyTorch-specific) — the new codec's metadata schema and backend identifiers should be designed fresh for the new implementation and GPU stack (DirectX 12, not CUDA/OpenCL), even though the *principle* of "fall back to CPU gracefully when no compatible GPU is present" carries over directly. The exact bin-count formula and any variable-Q zone parameters also depend on whichever NSGT implementation is ultimately selected — final metadata fields wait on that.
+
+### Stream File Format
+
+Built for speed, not archival fidelity — the opposite trade-off from Pool:
+
+- Per the design doc's Pool vs Stream distinction, a Stream file carries left and right amplitude, but *not* independent left/right phase — it's the same three-channel model the design doc's Color Mapping concept already describes (two amplitude channels plus a third that's empty, blended, or an approximate shared phase), not a fourth phase-per-channel page.
+- Self-describing the same way Pool files are, just a lighter payload — format version, sample rate, timestep, canvas dimensions, plus free-form provenance metadata (a display name, a creation timestamp) that a Mind Shot, in particular, needs.
+- Used in three places: a persisted layer cache (see the raster-cache decision above), a captured Mind Shot, and general fast interchange — the same format serving all three rather than inventing a separate one per use.
+- Whether the container itself stays TIFF-like (for consistency with Pool) or moves to something lighter-weight built specifically for encode/decode speed isn't decided yet — tracked in *Decisions Needed*, since it's directly relevant to the FFT-backend validation work coming up next.
+
+A Mind Shot, specifically, is *just* a Stream file with its provenance metadata filled in — no separate kernel/swatch/sidecar bundle the way the legacy version needed; the format's own metadata block is enough.
+
+### Portable Resource Files
+
+Three of the design doc's "shareable resources" get their own standalone file type; a fourth deliberately doesn't:
+
+| Resource | Portable file | Contents |
+|---|---|---|
+| MindWave | `.smwave` (proposed) | Generator type, parameters (including any nested MindWave-bound sub-parameters), superposition stack, field-operator chain — the same JSON shape used inline in a project's resource library, just saved standalone. |
+| Sound Mind Instrument | `.sminst` (proposed) | Harmonics, inharmonicity, noise model, body resonance, ADSR envelope — likewise, an extracted copy of the same inline shape. |
+| Mind Shot | *(none needed)* | A Stream file, as above — already portable on its own. |
+| Mind Grain | *(none — see below)* | — |
+
+Importing any of the above means copying it into the target project and adding an entry to the relevant resource list (with a name-collision suffix, as the legacy version did) — never a live link back to the original file or project.
+
+**Mind Grain is left off this list on purpose.** The design doc's own list of shareable resources — layers, Mind Shots, MindWaves, and Sound Mind Instruments — doesn't include Mind Grains, and that's consistent with what a Mind Grain actually is: a live reference to a selection on a layer *in the same project*, not a captured asset. Outside its own project, there's nothing for it to refer to. Since this round's task named Mind Grain definitions alongside the genuinely portable resources, this is flagged rather than quietly resolved either way: if Mind Grains are meant to be portable too, sharing one means deciding between converting it to a captured Mind Shot at export time (losing its live-reference behaviour) or bundling a copy of its source layer material alongside it — a real design choice, tracked in *Decisions Needed* rather than picked here.
 
 # Threading & Real-Time Model
 
@@ -267,3 +346,5 @@ What's left unresolved after the above:
 1. **NSGT library selection.** Validate that `libnsgt`'s NSGT/streaming logic can be rebuilt against a permissive FFT backend (PocketFFT/KissFFT/muFFT) in place of FFTW3, and that the result builds cleanly on Arm64, before committing to it over a from-scratch implementation referenced against `grrrr/nsgt`.
 2. **GPU/audio-thread handoff mechanism.** Prototype against the options above once a real Stream-mode pipeline exists to measure against — the two-consumer split (ring buffer for audio, double buffer for UI) is a reasonable starting hypothesis, not a final answer.
 3. **Sound Mind Studio's own distribution license.** Open source (and under what license), closed-source/commercial, or dual-licensed — not urgent for the NSGT question specifically (the permissive-FFT path above keeps that one open regardless), but it does gate the JUCE tier (free AGPLv3 vs. paid Indie/Pro) and every other third-party dependency's license, so it's worth deciding before dependencies pile up.
+4. **Stream file container format.** Whether Stream files (layer caches, Mind Shots, general interchange) stay TIFF-like for consistency with Pool, or move to a lighter container built specifically for encode/decode speed — decide alongside the FFT-backend validation work, since decode speed is Stream's entire reason to exist.
+5. **Mind Grain portability.** Confirm whether Mind Grains are meant to be a portable/shareable resource like Mind Shots, MindWaves, and Sound Mind Instruments, or are correctly scoped to their own project only, as the design doc's current wording implies. If portable, decide whether sharing one converts it to a captured Mind Shot (losing its live-reference behaviour) or bundles a copy of its source layer material alongside it.
