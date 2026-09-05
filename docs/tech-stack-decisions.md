@@ -20,7 +20,7 @@ Reference notes from the initial planning conversation. Previous version was Pyt
 
 ## Frameworks
 - **Audio/DSP**: JUCE — industry-standard for DAWs and plugins (VST3/AU hosting, lock-free audio callback patterns, real-time-safe design). Its codebase is also a good real-world reference for modern C++ idioms applied to audio constraints.
-- **GUI**: Leaning on JUCE's own GUI module (avoids a second toolkit) or Qt, given existing Qt experience. Decision can stay open — both are viable.
+- **GUI**: Qt. Decided over JUCE's own GUI module, given existing Qt experience. JUCE is used only for its audio engine (device I/O, DSP building blocks) — its GUI module is not used, so the Studio application's windowing and widgets are Qt's, not JUCE's. See `sound-mind-architecture.md` for how the two coexist.
 
 ## GPU Compute: DirectX 12 Compute
 - Chosen for cross-vendor support (Nvidia, AMD, Intel) on Windows, good documentation, and Windows-first target platform.
@@ -43,6 +43,5 @@ Reference notes from the initial planning conversation. Previous version was Pyt
 - Before committing to specific third-party audio libraries (VST SDK, codec libs, etc.), verify current Arm64 Windows packaging status — coverage was inconsistent as recently as the last year.
 
 ## Open Decisions (not yet settled)
-- GUI framework: JUCE's built-in GUI vs. Qt
-- Final DSP library choices for NSGT-equivalent processing in C++
+- Final DSP library choices for NSGT-equivalent processing in C++ (candidates under evaluation — see `sound-mind-architecture.md`)
 - Plugin format support scope (VST3/AU) if applicable

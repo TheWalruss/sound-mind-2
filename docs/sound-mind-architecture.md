@@ -73,7 +73,7 @@ flowchart TB
 
 - **Sound Mind Codec** is the lowest layer and the one thing that must work standalone: Pool (NSGT, lossless, off-line) and Stream (fast, real-time-safe) transforms, plus the file formats each reads and writes. It has no knowledge of layers, MindWaves, or projects — it only converts between audio/image data and spectrogram data.
 - **Sound Mind Core** is everything about a *project* that isn't UI: the layer stack and operation log, the compositor that turns them into pixels, and the engines each operation type can call into (MindWaves, Sound Mind Instruments, Generators, Analysis). Core depends on Codec; Codec knows nothing about Core.
-- **Sound Mind Studio** is the GUI application: interaction (tools, panels, canvas), consuming Core and, through it, Codec.
+- **Sound Mind Studio** is the GUI application: interaction (tools, panels, canvas), consuming Core and, through it, Codec. It is a Qt application — JUCE is not used for its GUI. JUCE's role narrows to what `sound-mind-core` (and the real-time audio path specifically) needs from it: audio device I/O and DSP building blocks, driven programmatically rather than through any JUCE GUI component. Qt owns the application's event loop and windowing; JUCE's audio engine runs underneath it as a library, not a competing framework. This boundary needs to stay clean in practice — no JUCE GUI classes should appear above `sound-mind-core`, and no Qt classes should appear inside the real-time audio path.
 - **Sound Mind CLI** is a thin consumer of Codec alone (encode/decode from the command line), matching the design doc's "codec library, command-line tool, full graphical studio" framing — it does not need Core at all unless a CLI operation ends up wanting the project model (e.g. batch-rendering a project non-interactively), which is a later question, not a day-one one.
 - **GPU Compute** is a thin dispatch layer under Codec's Stream transforms and Core's compositor, isolating the DirectX 12 specifics so nothing above it has to know or care whether an operation actually ran on the GPU or fell back to the CPU.
 
@@ -192,25 +192,62 @@ The operation log is what makes Pooling, Generators, and Remaster-style rebuilds
 
 # Build & Module Layout (proposal)
 
-A first cut at the top-level module split, to be revised once the GUI framework decision (below) lands:
+A first cut at the top-level module split:
 
 - `sound-mind-codec` — Pool/Stream transforms, file I/O. No GUI, no project model. Usable standalone.
 - `sound-mind-core` — project model, operation log, compositor, MindWave/Instrument/Generator/Analysis engines. Depends on `sound-mind-codec`.
 - `sound-mind-gpu` — DirectX 12 compute wrapper, isolating the platform-specific API from both `sound-mind-codec` and `sound-mind-core`.
-- `sound-mind-studio` — the GUI application. Depends on `sound-mind-core`.
+- `sound-mind-studio` — the Qt GUI application. Depends on `sound-mind-core`, and through it, indirectly on JUCE's audio engine — but never on JUCE's GUI module.
 - `sound-mind-cli` — the command-line tool. Depends on `sound-mind-codec` (and, if batch project rendering is needed, `sound-mind-core`).
 - `sound-mind-vst` — deferred; not started until the Studio is operational.
 - A test target per module, following CLAUDE.md's test-first workflow once implementation begins.
 
 CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpkg for dependencies, targeting native Arm64 locally and validating x64 via CI, matches this module split without needing anything unusual.
 
+# Decisions Made
+
+1. **GUI framework: Qt.** Settled in `tech-stack-decisions.md`. See the Studio's description in *System Overview* and *Build & Module Layout* above for how Qt (GUI) and JUCE (audio engine only) coexist.
+2. **Operation log serialization: JSON**, for development ergonomics — human-readable, diffable, and trivial to hand-edit or inspect while the schema is still moving. If it turns out too big or too slow to parse once real projects exist, this is meant to be revisited, not defended; nothing else in the architecture depends on it being JSON specifically, only on the operation log being *some* serializable, replayable sequence.
+3. **Raster cache persistence format: a Stream-format file.** Rather than invent a new on-disk format for a persisted layer cache, it's just an ordinary Stream-format file — after all, a layer's cache *is* exactly what a Stream file already represents. This also opens doors beyond simplicity: a cached layer becomes trivially exportable, importable into another project, or usable anywhere else a Stream file is accepted, without a special case.
+4. **Testing strategy for real-time/GPU code: behavioral tests plus performance tests.** Behavioral tests check the GPU path and the CPU fallback path produce equivalent (or tolerantly-close) results; a separate set of performance tests specifically checks that the GPU path is actually *faster* than the CPU fallback on real hardware — a GPU path that's merely correct but not faster has failed the reason it exists, and that failure mode needs its own test, not just a correctness one.
+
+# NSGT Library Candidates
+
+The Pool codec's Non-Static Gabor Transform doesn't need to be written from scratch — two existing implementations are worth evaluating before deciding to adapt one, bind to one, or reimplement against one as a reference:
+
+| | [grrrr/nsgt](https://github.com/grrrr/nsgt) | [mrgreywater/libnsgt](https://github.com/mrgreywater/libnsgt) |
+|---|---|---|
+| Language | Python | C |
+| License | Artistic License 2.0 | MIT (but its FFT dependency, FFTW3, is GPLv2/commercial dual-licensed) |
+| Transform | Forward + inverse NSGT; variable-Q is inherent to the algorithm | Forward + backward "Inversible Constant Q Transform"; supports both whole-signal and streamed ("sliCQ") operation |
+| Dependencies | NumPy (required); PyFFTW3, pysndfile (optional) | FFTW3, libsndfile (examples only) |
+| Build | Python package | CMake, plus a VS2015 solution |
+| Maintenance | Commits span 2011–2022; mature but not actively maintained | Very few commits; minimal activity |
+| Relationship | The library the **legacy Python product actually uses** for its Pool codec | An independent C port of the same algorithm, referencing the same University of Vienna (NUHAG) academic source |
+| Performance notes | Accelerated by PyFFTW3 when available; no real-time claims | ~393 ms one-time init for a full transform, ~132 ms for streaming init; ~5–6 ms per chunk once running; reconstruction error ≈ −152 dB (very high fidelity) |
+
+Neither is a drop-in answer yet:
+
+- **`libnsgt` is the more direct fit** (C, CMake, already has a streaming mode, and its per-chunk timing is compatible with the Stream-mode latency targets) but its **FFTW3 dependency is GPLv2 unless commercially licensed**, which needs resolving before it can sit inside `sound-mind-codec` — either license FFTW3 commercially, or swap in a permissively-licensed FFT (e.g. PocketFFT, KissFFT, muFFT, or JUCE's own FFT, subject to JUCE's licensing tier for that use).
+- **`grrrr/nsgt` is the algorithmic reference** the legacy product's Pool format was actually built against — useful as a correctness oracle (compare a new C++ implementation's output against it) even if no code from it is reused directly, given it's Python and not something to embed in a real-time-adjacent C++ codec.
+- Neither has been checked yet for building cleanly on Arm64 (the primary dev platform) — that's a prerequisite for either becoming more than a reference.
+
+# GPU / Audio-Thread Handoff: Options
+
+The compositor and Stream codec dispatch work to DirectX 12 compute from a worker thread (see *Threading & Real-Time Model*); the result then has to reach two different consumers with two different tolerances — the **audio callback thread** (must not glitch; a stale-by-one-frame result is fine, a torn or half-written one is not) and the **UI thread** (wants the freshest available frame for the canvas, but dropping an intermediate one is harmless). That difference matters more than any single mechanism below — the two consumers likely don't need the same answer.
+
+| Mechanism | How it works | Benefits | Drawbacks |
+|---|---|---|---|
+| **DX12 fence** | The GPU signals a fence value on completion; a (non-audio) thread waits on it before touching the result. | The standard, correct way to know GPU work is actually done; avoids reading a partially-written result. | Solves *when data is ready*, not *how it reaches another thread* — needed underneath one of the other mechanisms, not a replacement for one. |
+| **Double/triple buffering** | A fixed small number of result buffers; the writer fills the next one and an atomic index/pointer swap publishes it; readers always read the current published buffer. | Simple; wait-free for readers; bounded memory; matches the "latest frame wins" tolerance of the UI thread well. | Introduces roughly one buffer's worth of latency by construction; needs the swap itself to be atomic to avoid a reader seeing a half-updated buffer. |
+| **Lock-free SPSC ring buffer** | A fixed-capacity ring buffer with one writer and one reader, synchronized with atomics only — the standard real-time-audio pattern (JUCE itself ships a ready-made version of this). | Battle-tested for exactly this kind of real-time handoff; bounded latency; no allocation or locking on the audio thread. | Single-producer/single-consumer only — the UI thread and audio thread both wanting the data means either two separate rings or a different structure; still needs overrun/underrun handling. |
+| **Immutable snapshot + lock-free handle queue** | Each completed result becomes an immutable, reference-counted object; a lock-free queue carries handles to it rather than raw samples/pixels. | Works cleanly for multiple, differently-paced consumers (UI and audio) off one producer; avoids coupling producer and consumer buffer sizes. | Needs a real-time-safe reclamation scheme (an audio thread can't just `delete`/free) — more moving parts than a plain ring or double buffer. |
+
+A plausible direction, not yet a decision: a DX12 fence to know a result is ready, feeding a **lock-free ring buffer** on the audio-thread-facing path specifically (where dropouts are unacceptable and bounded latency is well understood), and a much simpler **double-buffered "latest result" pointer** on the UI-thread-facing path (where a stale-by-one-frame canvas is imperceptible and a full ring is unnecessary machinery). This isn't committed — it needs a real Stream pipeline to prototype against before it's more than a reasonable guess.
+
 # Decisions Needed
 
-Architectural questions this first pass surfaces, to settle before (or as part of) drawing the actual class diagrams:
+What's left unresolved after the above:
 
-1. **GUI framework.** `tech-stack-decisions.md` leaves JUCE's own GUI module versus Qt open. This affects the `sound-mind-studio` module's internal structure significantly and is worth settling before the canvas/tools/panels get designed in detail.
-2. **NSGT/DSP library.** What C++ library (or hand-rolled implementation) the Pool codec's Non-Static Gabor Transform is built on — also flagged as open in `tech-stack-decisions.md`.
-3. **Operation log serialization.** What format the operation log and project metadata are actually stored in (JSON, a binary format, something else) — informed by, but not identical to, the "project file schema" question deferred in the design doc.
-4. **Raster cache persistence format.** Whether a persisted layer cache is just a Stream-format file, or something new purpose-built for fast reload.
-5. **GPU/audio-thread handoff mechanism.** The concrete mechanism (fences, double-buffering, a lock-free ring) for getting DirectX 12 compute results to the audio callback and UI thread without violating the real-time constraints.
-6. **Testing strategy for real-time and GPU code.** How allocation-free, hardware-dependent code gets meaningfully unit-tested — likely a mix of behavioral tests against the CPU fallback path and separate, non-unit performance/regression checks for the GPU path.
+1. **NSGT library selection.** Evaluate `libnsgt` (pending its FFTW3 licensing question and an Arm64 build check) against reimplementing the transform in C++ with `grrrr/nsgt` as the correctness reference.
+2. **GPU/audio-thread handoff mechanism.** Prototype against the options above once a real Stream-mode pipeline exists to measure against — the two-consumer split (ring buffer for audio, double buffer for UI) is a reasonable starting hypothesis, not a final answer.
