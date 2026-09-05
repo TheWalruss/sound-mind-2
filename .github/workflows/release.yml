@@ -25,7 +25,7 @@ jobs:
             qt_target_pkg: win64_msvc2022_64
             qt_root_dir: C:/Qt/6.8.3/msvc2022_64
             qt_host_path_dir: ""
-            qt_deploy_qmake: C:/Qt/6.8.3/msvc2022_64/bin/qmake.bat
+            qt_deploy_qtpaths: C:/Qt/6.8.3/msvc2022_64/bin/qtpaths.exe
             asset_name: windows-x64
           - name: Windows ARM64
             runner: windows-11-arm
@@ -35,7 +35,7 @@ jobs:
             qt_target_pkg: win64_msvc2022_arm64_cross_compiled
             qt_root_dir: C:/Qt/6.8.3/msvc2022_arm64
             qt_host_path_dir: C:/Qt/6.8.3/msvc2022_64
-            qt_deploy_qmake: C:/Qt/6.8.3/msvc2022_arm64/bin/qmake.bat
+            qt_deploy_qtpaths: C:/Qt/6.8.3/msvc2022_arm64/bin/qtpaths.bat
             asset_name: windows-arm64
     runs-on: ${{ matrix.runner }}
     steps:
@@ -83,19 +83,20 @@ jobs:
         run: cmake --build --preset release --target sound-mind-studio
 
       # windeployqt is a host-side tool - the Arm64 job runs the x64 host's
-      # copy of it, pointed at the Arm64 Qt install via --qmake, the same
-      # way validated locally (see git history / CHANGELOG for this
-      # milestone). It also drops in the VC++ Redistributable installer
-      # for whichever CRT the build needs - not a fully app-local runtime,
-      # but a normal, common way to ship a Windows exe; documented in the
-      # release notes.
+      # copy of it, pointed at the Arm64 Qt install via --qtpaths (the
+      # x64 install has no qtpaths.bat wrapper, only the plain .exe;
+      # the Arm64 cross-compiled install's wrapper .bat is what makes
+      # cross-deployment work) - validated locally the same way. It also
+      # drops in the VC++ Redistributable installer for whichever CRT the
+      # build needs - not a fully app-local runtime, but a normal, common
+      # way to ship a Windows exe; documented in the release notes.
       - name: Package
         shell: pwsh
         run: |
           $dist = "dist/sound-mind-studio"
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
           Copy-Item "build/release/sound-mind-studio/sound-mind-studio.exe" $dist
-          & "C:/Qt/6.8.3/msvc2022_64/bin/windeployqt.exe" --qmake "${{ matrix.qt_deploy_qmake }}" --release --no-translations "$dist/sound-mind-studio.exe"
+          & "C:/Qt/6.8.3/msvc2022_64/bin/windeployqt.exe" --qtpaths "${{ matrix.qt_deploy_qtpaths }}" --release --no-translations "$dist/sound-mind-studio.exe"
           Compress-Archive -Path "$dist/*" -DestinationPath "sound-mind-studio-${{ github.ref_name }}-${{ matrix.asset_name }}.zip"
 
       - name: Upload artifact
