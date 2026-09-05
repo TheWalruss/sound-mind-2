@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  QT_VERSION: 6.8.3
+
 jobs:
   build-test:
     name: Build & Test (${{ matrix.name }})
@@ -16,10 +19,23 @@ jobs:
             runner: windows-latest
             msvc_arch: x64
             ninja_platform: win
+            qt_host_pkg: ""
+            qt_target_pkg: win64_msvc2022_64
+            qt_root_dir: C:/Qt/6.8.3/msvc2022_64
+            qt_host_path_dir: ""
           - name: Windows ARM64
             runner: windows-11-arm
             msvc_arch: arm64
             ninja_platform: winarm64
+            # Qt ships no natively-Arm64-built host tools (moc/uic/rcc) -
+            # the Arm64 target package needs the x64 desktop package
+            # installed alongside it to provide those (run via Windows'
+            # x64 emulation), even though the target libraries themselves
+            # are native Arm64. Validated locally the same way.
+            qt_host_pkg: win64_msvc2022_64
+            qt_target_pkg: win64_msvc2022_arm64_cross_compiled
+            qt_root_dir: C:/Qt/6.8.3/msvc2022_arm64
+            qt_host_path_dir: C:/Qt/6.8.3/msvc2022_64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -47,10 +63,25 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git "${{ runner.temp }}\vcpkg"
           & "${{ runner.temp }}\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
 
+      - name: Install aqtinstall
+        shell: pwsh
+        run: pip install aqtinstall
+
+      - name: Install Qt host tools (Arm64 job only)
+        if: matrix.qt_host_pkg != ''
+        shell: pwsh
+        run: python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_host_pkg }} --outputdir C:/Qt
+
+      - name: Install Qt
+        shell: pwsh
+        run: python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_target_pkg }} --outputdir C:/Qt
+
       - name: Configure
         shell: pwsh
         env:
           VCPKG_ROOT: ${{ runner.temp }}\vcpkg
+          QT_ROOT_DIR: ${{ matrix.qt_root_dir }}
+          QT_HOST_PATH_DIR: ${{ matrix.qt_host_path_dir }}
         run: cmake --preset debug
 
       - name: Build

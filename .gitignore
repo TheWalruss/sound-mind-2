@@ -49,6 +49,9 @@ out/
 # Personal CMake preset overrides (not the shared CMakePresets.json)
 CMakeUserPresets.json
 
+# Generated Doxygen output (regenerate via the `docs` CMake target)
+docs/generated/
+
 # CMake generated files
 CMakeFiles/
 CMakeCache.txt
