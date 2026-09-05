@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  QT_VERSION: 6.8.3
+
+permissions:
+  contents: write
+
+jobs:
+  build-package:
+    name: Build & Package (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-latest
+            msvc_arch: x64
+            ninja_platform: win
+            qt_host_pkg: ""
+            qt_target_pkg: win64_msvc2022_64
+            qt_root_dir: C:/Qt/6.8.3/msvc2022_64
+            qt_host_path_dir: ""
+            qt_deploy_qmake: C:/Qt/6.8.3/msvc2022_64/bin/qmake.bat
+            asset_name: windows-x64
+          - name: Windows ARM64
+            runner: windows-11-arm
+            msvc_arch: arm64
+            ninja_platform: winarm64
+            qt_host_pkg: win64_msvc2022_64
+            qt_target_pkg: win64_msvc2022_arm64_cross_compiled
+            qt_root_dir: C:/Qt/6.8.3/msvc2022_arm64
+            qt_host_path_dir: C:/Qt/6.8.3/msvc2022_64
+            qt_deploy_qmake: C:/Qt/6.8.3/msvc2022_arm64/bin/qmake.bat
+            asset_name: windows-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC (${{ matrix.msvc_arch }})
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc_arch }}
+
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v6
+        with:
+          platform: ${{ matrix.ninja_platform }}
+
+      - name: Clone & bootstrap vcpkg
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git "${{ runner.temp }}\vcpkg"
+          & "${{ runner.temp }}\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+
+      - name: Install aqtinstall
+        shell: pwsh
+        run: pip install aqtinstall
+
+      - name: Install Qt host tools (Arm64 job only)
+        if: matrix.qt_host_pkg != ''
+        shell: pwsh
+        run: python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_host_pkg }} --outputdir C:/Qt
+
+      - name: Install Qt
+        shell: pwsh
+        run: python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_target_pkg }} --outputdir C:/Qt
+
+      - name: Configure (Release)
+        shell: pwsh
+        env:
+          VCPKG_ROOT: ${{ runner.temp }}\vcpkg
+          QT_ROOT_DIR: ${{ matrix.qt_root_dir }}
+          QT_HOST_PATH_DIR: ${{ matrix.qt_host_path_dir }}
+        run: cmake --preset release
+
+      - name: Build sound-mind-studio (Release)
+        shell: pwsh
+        run: cmake --build --preset release --target sound-mind-studio
+
+      # windeployqt is a host-side tool - the Arm64 job runs the x64 host's
+      # copy of it, pointed at the Arm64 Qt install via --qmake, the same
+      # way validated locally (see git history / CHANGELOG for this
+      # milestone). It also drops in the VC++ Redistributable installer
+      # for whichever CRT the build needs - not a fully app-local runtime,
+      # but a normal, common way to ship a Windows exe; documented in the
+      # release notes.
+      - name: Package
+        shell: pwsh
+        run: |
+          $dist = "dist/sound-mind-studio"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          Copy-Item "build/release/sound-mind-studio/sound-mind-studio.exe" $dist
+          & "C:/Qt/6.8.3/msvc2022_64/bin/windeployqt.exe" --qmake "${{ matrix.qt_deploy_qmake }}" --release --no-translations "$dist/sound-mind-studio.exe"
+          Compress-Archive -Path "$dist/*" -DestinationPath "sound-mind-studio-${{ github.ref_name }}-${{ matrix.asset_name }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sound-mind-studio-${{ matrix.asset_name }}
+          path: sound-mind-studio-${{ github.ref_name }}-${{ matrix.asset_name }}.zip
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: build-package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+          generate_release_notes: true
+          body: |
+            Toolchain bring-up milestone (see CHANGELOG.md) - an empty
+            Sound Mind Studio window, proving the whole build chain
+            (CMake, vcpkg, MSVC, Qt, CI, packaging) works end to end, not
+            yet any real Studio functionality.
+
+            Each zip is self-contained except for the Visual C++ runtime:
+            it includes `vc_redist.<arch>.exe` - run that first if the
+            app doesn't launch (most systems already have it installed).
