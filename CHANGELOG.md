@@ -1,10 +1,24 @@
 # Changelog
 
 All notable changes to Sound Mind Studio are recorded here. Format loosely
-follows [Keep a Changelog](https://keepachangelog.com/); versioning follows
-`docs/tech-stack-decisions.md` and `CLAUDE.md`'s semantic-versioning policy,
-with an extra leading `0` component during this pre-alpha bring-up phase
-(`0.0.0.x`) before the project starts counting up through `0.x.y` proper.
+follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
+`vX.Y.Z.W` scheme documented in `docs/sound-mind-roadmap.md` (X stays `0`
+until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
+milestone; W per binary build).
+
+## [0.0.0.2] - 2026-09-06
+
+### Added
+
+- **WiX-based MSI installer**, alongside the existing release zip - not
+  replacing it. `cmake --install` now runs `windeployqt` automatically
+  (an `install(CODE ...)` hook), so both the zip and the installer are
+  produced from the same deployment logic. See `docs/sound-mind-roadmap.md`'s
+  "Packaging & Installers" for the two-stage plan this is the first half of.
+
+No feature or file-format change - a point release specifically to validate
+the installer on real GitHub Actions infrastructure (both x64 and Arm64),
+not just this local machine.
 
 ## [0.0.0.1] - 2026-09-05
 
