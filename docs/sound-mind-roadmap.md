@@ -1,6 +1,6 @@
 # Sound Mind Studio - Development Roadmap
 
-Status: **first draft.** This sequences `sound-mind-design.md`'s feature set into a series of concrete, always-working Studio versions, from the current empty-window bring-up (`v0.0.0.1`) to a feature-complete `v1.0.0.0`. Expect this to be revised as work proceeds and real effort/complexity becomes clearer — it's a plan to work from, not a schedule to hold to.
+Status: **first draft, revised once.** This sequences `sound-mind-design.md`'s feature set into a series of concrete, always-working Studio versions, from the current empty-window bring-up (`v0.0.0.1`) to a feature-complete `v1.0.0.0`. Expect this to be revised further as work proceeds and real effort/complexity becomes clearer — it's a plan to work from, not a schedule to hold to.
 
 ## Versioning
 
@@ -18,10 +18,11 @@ Exactly *when* Y will bump can't be predicted precisely this far out - it depend
 
 ## Sequencing principles
 
-1. **Stream before Pool.** Per the design doc, the Studio operates in Stream mode by default; Pool is a deliberate, manual, higher-fidelity step layered on top. Building the fast path first means every milestone from early on has real audio going in and out, rather than waiting for the much harder lossless codec to be finished first.
-2. **Every milestone is a working Studio**, not a library-only checkpoint. Each one below ends with something you can actually open, do a thing in, and see/hear the result of.
-3. **Dependency order, not design-doc reading order.** The sequence below follows what each capability actually needs to exist first, which isn't the same order the design doc presents things in.
-4. **Open questions get resolved where the work that needs them happens**, not all up front. Each milestone that depends on one of `sound-mind-architecture.md`'s Decisions Needed / Deferred Decisions says so.
+1. **Full I/O and real-time infrastructure comes right after Foundation, before any creative feature.** Pool codec, Export, Live Mode, and Record all sit in Phase 2, immediately after the basic Project/Stream/Import/Playback loop exists - deliberately not creative-feature-first. This gets the hardest, most performance-sensitive paths (a full lossless codec round trip, real-time capture, file export) working and measurable as early as possible, so every later phase has a real, working performance baseline to check against, rather than a promise that it'll be fine once painting and filters and MindWaves are layered on. From Phase 3 onward, re-confirming that baseline still holds - both correctness and the ~100 ms / ~250 ms latency targets - is part of finishing each milestone, not a separate later pass.
+2. **Stream before Pool**, still. Per the design doc, the Studio operates in Stream mode by default; Pool is a deliberate, manual, higher-fidelity step layered on top. Stream comes first within Phase 1 so Pool (Phase 2) has a working fast path, and an FFT backend decision, to build on.
+3. **Every milestone is a working Studio**, not a library-only checkpoint. Each one below ends with something you can actually open, do a thing in, and see/hear the result of.
+4. **Dependency order, not design-doc reading order.** The sequence below follows what each capability actually needs to exist first, which isn't the same order the design doc presents things in. A few milestones below get a *simpler* first pass than their eventual design-doc scope, specifically because they're now scheduled before something they'd otherwise lean on (Live Mode before MindWaves, Record before Mind Shots) - each says so, and says which later milestone comes back to finish the job.
+5. **Open questions get resolved where the work that needs them happens**, not all up front. Each milestone that depends on one of `sound-mind-architecture.md`'s Decisions Needed / Deferred Decisions says so.
 
 ## Explicit non-goals for this roadmap
 
@@ -61,27 +62,59 @@ Transport controls, Stream-mode decode of the live composite, audio output.
 
 ---
 
-## Phase 2 - Painting & Editing
+## Phase 2 - I/O Infrastructure & Performance Baseline
 
-### v0.Y.5.1 - Basic Painting
+Everything in this phase is, in one way or another, getting data into or out of the Studio at full fidelity or in real time - the parts most likely to be expensive, and the parts every later creative feature will eventually have to coexist with performance-wise. Building it now, while the project is still simple, means there's something concrete to measure against from here on.
 
-A plain procedural brush (tip shape + falloff, no harmonic model yet) painting into a layer's amplitude as logged `PaintOperation`s; undo/redo via the operation log (first real exercise of the `supersedes` mechanism).
+### v0.Y.5.1 - Pool Codec
 
-**Demo:** paint a stroke, hear the difference on playback, undo it.
+The lossless NSGT round-trip and the finalized Pool file format, reusing the FFT-backend groundwork from the Stream codec milestone; the "Pool" action itself (hide-not-delete of the raw layer/operations it replaces, per the non-destructive-processing principle). Nothing has been painted yet at this point in the roadmap, so pooling works on imported content.
 
-### v0.Y.6.1 - Selection & Fill
+**Demo:** pool an imported layer and confirm a lossless round trip.
+
+**Likely Y bump:** this is the milestone most likely to force a real Project-format change, once a Pool file actually needs referencing from project data.
+
+### v0.Y.6.1 - Export
+
+Audio export (Pool-mode primary, a quick Stream-mode bounce for scratch use, compressed formats from day one); video export of the canvas synced to audio.
+
+**Demo:** export the imported/pooled audio to a compressed format and to an MP4 with the spectrogram animation.
+
+### v0.Y.7.1 - Live Mode
+
+Continuous Stream-mode real-time capture and the "Live" layer compositing into the rest of the project. The design doc's operation-relative MindWave binding (for a genuine per-note retrigger feel) isn't available yet - MindWaves and Sound Mind Instruments don't exist until Phase 4 - so this first pass is plain continuous capture-composite-output; Live Mode gets revisited once those land to add it.
+
+**Demo:** feed a live input signal in and hear it composited with the rest of the project in real time.
+
+### v0.Y.8.1 - Record
+
+One-shot input-device capture into a new layer. Mind Shots don't exist yet (Phase 4), so capturing directly to one isn't available in this first pass; Record gets revisited once Mind Shots land to add that option.
+
+**Demo:** record a take directly into a new layer.
+
+---
+
+## Phase 3 - Painting & Editing
+
+### v0.Y.9.1 - Basic Painting
+
+A plain procedural brush (tip shape + falloff, no harmonic model yet) painting into a layer's amplitude as logged `PaintOperation`s; undo/redo via the operation log (first real exercise of the `supersedes` mechanism). Also: re-confirm Phase 2's Pool/Export/Live/Record pipeline still works, and still meets its performance targets, with real painted content flowing through it for the first time.
+
+**Demo:** paint a stroke, hear the difference on playback, undo it - then pool and export the result.
+
+### v0.Y.10.1 - Selection & Fill
 
 Rectangle, Lasso, and Wand selection with boolean combination; cut/copy/paste; the Gradient model; Fill.
 
 **Demo:** select a region, cut it, paste it elsewhere, fill another region with a gradient.
 
-### v0.Y.7.1 - Paths & Grids
+### v0.Y.11.1 - Paths & Grids
 
 The Path (Bézier) tool with node placement/editing and Path Gradient; Overlay Grids (frequency and timing) and Snap to Grid, including pitch quantising.
 
 **Demo:** draw a precise, grid-snapped melodic line.
 
-### v0.Y.8.1 - Filter Layers
+### v0.Y.12.1 - Filter Layers
 
 The Filter layer type, a first concrete filter set (blur family, sharpen, tone curve, frequency-axis gradient), and the Equalizer special layer made functional.
 
@@ -89,39 +122,39 @@ The Filter layer type, a first concrete filter set (blur family, sharpen, tone c
 
 ---
 
-## Phase 3 - Expressive Tools
+## Phase 4 - Expressive Tools
 
-### v0.Y.9.1 - MindWaves v1
+### v0.Y.13.1 - MindWaves v1
 
 The core generator types (periodic, envelope, stepped/noise, spatial, a first fractal field), superposition, and binding to layer opacity and filter parameters (the direct-vs-shape distinction).
 
 **Demo:** bind a sine MindWave to a layer's opacity; watch and hear it pulse.
 
-### v0.Y.10.1 - Sound Mind Instruments
+### v0.Y.14.1 - Sound Mind Instruments
 
-The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument model; the canvas-space vs. operation-relative MindWave binding-coordinate-frame choice, since that's specifically about how a paint operation (an instrument note, in particular) binds to a MindWave.
+The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument model; the canvas-space vs. operation-relative MindWave binding-coordinate-frame choice, since that's specifically about how a paint operation (an instrument note, in particular) binds to a MindWave. Also: revisit Live Mode (Phase 2) to add the operation-relative retrigger feel this unlocks.
 
-**Demo:** paint with an instrument voice that actually sounds like a plausible physical source.
+**Demo:** paint with an instrument voice that actually sounds like a plausible physical source; feed the same instrument through Live Mode and hear it retrigger per note.
 
-### v0.Y.11.1 - Mind Shots & Mind Grains
+### v0.Y.15.1 - Mind Shots & Mind Grains
 
-Capture-and-stamp static samples; live-reference dynamic grains from a source layer.
+Capture-and-stamp static samples; live-reference dynamic grains from a source layer. Also: revisit Record (Phase 2) to add capture-directly-to-a-Mind-Shot.
 
 **Demo:** capture a moment as a Mind Shot and restamp it; link a Mind Grain to a source layer and watch it change live as the source does.
 
-### v0.Y.12.1 - Composer Mode
+### v0.Y.16.1 - Composer Mode
 
 The DAW-style track view: each layer as a track, operations drawn as boxes via `Operation::bounds()`, retiming/moving an operation between layers via the `supersedes` mechanism, the three track background styles.
 
 **Demo:** arrange a multi-layer piece in the track view; move a stamped note to a different layer without repainting it.
 
-### v0.Y.13.1 - MindWaves v2
+### v0.Y.17.1 - MindWaves v2
 
 Field operators (Warp, Reduce), drawn-shape and step-grid generator types, and the continuous shape/skew/character controls.
 
 **Demo:** a MindWave built from a hand-drawn Path, reduced to a plain time-varying control signal.
 
-### v0.Y.14.1 - Chords/Arpeggiator/Sequencer
+### v0.Y.18.1 - Chords/Arpeggiator/Sequencer
 
 The Chord Generator and the generalized notation-driven sequence it's built on, targeting any paintable tip. Resolves the sequence-notation Deferred Decision (validating the ABC-notation direction, or picking an alternative).
 
@@ -129,55 +162,25 @@ The Chord Generator and the generalized notation-driven sequence it's built on, 
 
 ---
 
-## Phase 4 - Generative & Analytical
+## Phase 5 - Generative & Analytical
 
-### v0.Y.15.1 - Generators
+### v0.Y.19.1 - Generators
 
 Lattice, fractal, and streaming procedural content generators, sharing the Order/Chaos criticality axis.
 
 **Demo:** generate a fractal melodic texture as a new layer, tuned from rigid to chaotic.
 
-### v0.Y.16.1 - Analysis Tools v1
+### v0.Y.20.1 - Analysis Tools v1
 
 A first useful cross-section across all five categories (loudness/mastering, pitch/vocal, stereo/phase, spectral health, criticality/pattern) - not every meter the legacy version had, but at least one representative of each.
 
 **Demo:** check integrated loudness and stereo correlation on a real mix.
 
-### v0.Y.17.1 - Sound Flower
+### v0.Y.21.1 - Sound Flower
 
 Polar canvas view, and polar-form image import.
 
 **Demo:** toggle Sound Flower view while painting and keep working without switching tools.
-
----
-
-## Phase 5 - Fidelity & Real-Time
-
-### v0.Y.18.1 - Pool Codec
-
-The lossless NSGT round-trip and the finalized Pool file format (reusing the FFT-backend groundwork from the Stream codec milestone); the "Pool" action itself (hide-not-delete of raw layers/operations, per the non-destructive-processing principle).
-
-**Demo:** pool a painted layer and confirm a lossless round trip.
-
-**Likely Y bump:** this is the milestone most likely to force a real Project-format change, once a Pool file actually needs referencing from project data.
-
-### v0.Y.19.1 - Export
-
-Audio export (Pool-mode primary, a quick Stream-mode bounce for scratch use, compressed formats from day one); video export of the canvas synced to audio.
-
-**Demo:** export a finished piece to a compressed audio format and to an MP4 with the spectrogram animation.
-
-### v0.Y.20.1 - Live Mode
-
-Continuous Stream-mode real-time capture, the "Live" layer compositing into the rest of the project, operation-relative MindWave binding exercised for genuine per-note retrigger feel.
-
-**Demo:** sing or play into a microphone and hear it shaped by the project in real time.
-
-### v0.Y.21.1 - Record
-
-One-shot input-device capture into a new layer or a Mind Shot, distinct from continuous Live.
-
-**Demo:** record a take directly into a new layer.
 
 ---
 
@@ -191,7 +194,7 @@ Standalone `.smwave` and `.sminst` files; cross-project import of layers, Mind S
 
 ### v0.Y.23.1 - Performance Validation & Hardening
 
-Validate the ~100 ms / ~250 ms latency targets for real, on both this Arm64 machine and actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed, not just flagged - needs real desktop GPU access, which is a dependency outside pure coding). Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
+By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. Validate the ~100 ms / ~250 ms latency targets for real, on both this Arm64 machine and actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding). Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
 
 **Demo:** the full design-doc feature set, exercised together, meeting the latency targets on real desktop GPU hardware.
 
