@@ -6,6 +6,61 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.1.1] - 2026-09-06
+
+The "Project & Canvas" milestone from `docs/sound-mind-roadmap.md`: a real
+project file, and a Studio window that actually shows one.
+
+### Added
+
+- **`sound-mind-core` Project model**: `Project`, `ProjectSettings`, and
+  `OperationLog`, alongside the existing `Layer`/`Operation` base classes,
+  per the architecture doc's Core Data Model and "Project File & Folder".
+  `Project::createNew()` seeds a single Background layer; `Project::load()`
+  / `save()` round-trip the whole thing as JSON (`nlohmann::json`, via the
+  library's ADL `to_json`/`from_json` customization points) to a `.smproj`
+  file. `OperationLog` is genuinely empty for now - it serializes as `[]`
+  and accepts (but doesn't yet populate) an array on load, since no
+  concrete `Operation` subtype exists yet to fill it with.
+- **`sound-mind-studio` canvas and File menu**: `MainWindow` now owns a
+  real `Project` (starting from a fresh one via `newProject()`) and a
+  `CanvasWidget` central widget that renders the project's canvas
+  dimensions as a placeholder solid rect - no codec yet, so there's
+  nothing real to paint. File > New/Open/Save/Save As exercise
+  `Project::createNew()`/`load()`/`save()` through a `QFileDialog`
+  filtered to `*.smproj`, with load/save failures reported via
+  `QMessageBox` rather than crashing.
+- **QTest-based GUI test suite**: `sound-mind-studio-tests`, covering
+  `CanvasWidget`'s size-hint behavior and `MainWindow`'s fresh-project
+  lifecycle, run with `QT_QPA_PLATFORM=offscreen` (no real display in CI
+  or this dev environment) alongside the existing Catch2 suite in
+  `sound-mind-core`. Introduced now rather than deferred, since GUI
+  behavior worth testing already exists as of this milestone.
+
+### Fixed
+
+- **AUTOMOC never scanned `sound-mind-studio-lib`'s headers**: CMake's
+  AUTOMOC only auto-associates a header with a `.cpp` file when they share
+  a basename *and* directory; this project's headers live under
+  `include/sound_mind/studio/` while their sources live under `src/`, so
+  AUTOMOC silently produced an empty `mocs_compilation.cpp` and linking
+  failed with unresolved `moc`-generated symbols. Fixed by listing the
+  `Q_OBJECT`-bearing headers explicitly alongside their sources in
+  `add_library()`.
+- **QTest's default logger produced no output once redirected**: on this
+  Windows/Arm64 setup, QTest's plain-text logger wrote nothing at all once
+  stdout was piped or redirected - exactly what `ctest --output-on-failure`
+  always does - leaving a failing GUI test with no diagnosable detail.
+  Fixed by registering the test with `-o -,txt`, which forces the logger
+  to stdout explicitly regardless of how it's connected.
+
+### Notes
+
+- `sound-mind-studio` now depends on `sound-mind-core` for the first time.
+- The Equalizer special layer from `docs/sound-mind-design.md` isn't
+  created yet - it needs a working Filter mechanism, which doesn't exist
+  until the `Filter Layers` milestone.
+
 ## [0.0.0.2] - 2026-09-06
 
 ### Added

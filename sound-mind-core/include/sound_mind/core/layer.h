@@ -4,6 +4,8 @@
 #include <string>
 #include <utility>
 
+#include <nlohmann/json.hpp>
+
 namespace sound_mind::core {
 
 /// @brief Opaque identifier for a Layer within a Project.
@@ -18,6 +20,15 @@ enum class LayerType {
     Background,  ///< The locked, always-visible floor of the layer stack.
     Equalizer,   ///< The locked, top-of-stack Filter layer of Equalizer type.
 };
+
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(LayerType, {
+    {LayerType::Normal, "normal"},
+    {LayerType::Filter, "filter"},
+    {LayerType::Background, "background"},
+    {LayerType::Equalizer, "equalizer"},
+})
+// clang-format on
 
 /**
  * @brief One entry in a Project's layer stack.
@@ -34,6 +45,14 @@ enum class LayerType {
  */
 class Layer {
 public:
+    /// @brief Default-constructs a Layer with no identity yet.
+    ///
+    /// Exists so `from_json` (a free function, not a member) can populate
+    /// an instance in place via the friend declaration below, matching
+    /// nlohmann::json's default (de)serialization convention. Prefer the
+    /// parameterized constructor for normal use.
+    Layer() = default;
+
     /**
      * @param id Identity to give this layer within its project.
      * @param name Display name. The project (not this class) is
@@ -64,16 +83,39 @@ public:
     [[nodiscard]] LayerType type() const noexcept { return type_; }
 
     /**
+     * @brief How strongly this layer contributes to the composite.
+     * @return A value in [0, 1]; not clamped or validated here.
+     */
+    [[nodiscard]] float opacity() const noexcept { return opacity_; }
+
+    /**
      * @brief Renames the layer.
      * @param name The new display name. Uniqueness within the project is
      *        the project's responsibility, not enforced here.
      */
     void setName(std::string name) { name_ = std::move(name); }
 
+    /**
+     * @brief Sets how strongly this layer contributes to the composite.
+     * @param opacity Intended to be in [0, 1]; not clamped or validated here.
+     */
+    void setOpacity(float opacity) noexcept { opacity_ = opacity; }
+
+    friend void to_json(nlohmann::json& json, const Layer& layer);
+    friend void from_json(const nlohmann::json& json, Layer& layer);
+
 private:
-    LayerId id_;
+    LayerId id_ = 0;
     std::string name_;
-    LayerType type_;
+    LayerType type_ = LayerType::Normal;
+    float opacity_ = 1.0f;
 };
+
+/// @brief Serializes a Layer to its JSON representation.
+void to_json(nlohmann::json& json, const Layer& layer);
+
+/// @brief Parses a Layer from its JSON representation.
+/// @throws nlohmann::json::exception on malformed or missing required data.
+void from_json(const nlohmann::json& json, Layer& layer);
 
 }  // namespace sound_mind::core

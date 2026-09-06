@@ -1,7 +1,4 @@
 # sound-mind-studio: the Qt GUI application (see sound-mind-architecture.md).
-# Currently just an empty window - a toolchain/design bring-up milestone
-# (see CHANGELOG.md v0.0.0.1), proving Qt actually links and runs on this
-# stack, not the real Studio UI yet.
 #
 # Finds Qt via CMAKE_PREFIX_PATH, set from the QT_ROOT_DIR environment
 # variable each developer/CI job sets to point at their own architecture's
@@ -12,17 +9,50 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 set(CMAKE_AUTOMOC ON)
 
+# The GUI classes live in a library, separate from the thin main.cpp entry
+# point, so the test executable (see tests/) can link against them without
+# recompiling or duplicating anything the real app also builds.
+#
+# The Q_OBJECT-bearing headers are listed here too, not just their .cpp
+# files: AUTOMOC only auto-associates a header with a source file when they
+# share a basename *and* live in the same directory, and our headers live
+# under include/sound_mind/studio/ while the sources live under src/ - so
+# without this, AUTOMOC silently never scans them and moc never runs.
+add_library(sound-mind-studio-lib
+    src/canvas_widget.cpp
+    src/main_window.cpp
+    include/sound_mind/studio/canvas_widget.h
+    include/sound_mind/studio/main_window.h
+)
+
+target_include_directories(sound-mind-studio-lib
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+target_link_libraries(sound-mind-studio-lib
+    PUBLIC
+        Qt6::Widgets
+        sound-mind-core
+)
+
+target_compile_features(sound-mind-studio-lib PUBLIC cxx_std_23)
+target_compile_definitions(sound-mind-studio-lib PUBLIC SOUND_MIND_VERSION="${PROJECT_VERSION}")
+
 add_executable(sound-mind-studio WIN32
     src/main.cpp
 )
 
 target_link_libraries(sound-mind-studio
     PRIVATE
-        Qt6::Widgets
+        sound-mind-studio-lib
 )
 
 target_compile_features(sound-mind-studio PRIVATE cxx_std_23)
-target_compile_definitions(sound-mind-studio PRIVATE SOUND_MIND_VERSION="${PROJECT_VERSION}")
+
+if (BUILD_TESTING)
+    add_subdirectory(tests)
+endif ()
 
 # --- Packaging (see docs/sound-mind-roadmap.md's "Packaging & Installers") --
 #
