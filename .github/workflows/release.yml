@@ -99,11 +99,38 @@ jobs:
           & "C:/Qt/6.8.3/msvc2022_64/bin/windeployqt.exe" --qtpaths "${{ matrix.qt_deploy_qtpaths }}" --release --no-translations "$dist/sound-mind-studio.exe"
           Compress-Archive -Path "$dist/*" -DestinationPath "sound-mind-studio-${{ github.ref_name }}-${{ matrix.asset_name }}.zip"
 
-      - name: Upload artifact
+      - name: Upload zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: sound-mind-studio-${{ matrix.asset_name }}
+          name: sound-mind-studio-${{ matrix.asset_name }}-zip
           path: sound-mind-studio-${{ github.ref_name }}-${{ matrix.asset_name }}.zip
+          if-no-files-found: error
+
+      # WiX installer, via CMake's CPack integration (see CMakeLists.txt
+      # and sound-mind-studio/CMakeLists.txt) - alongside the zip above,
+      # not replacing it, per docs/sound-mind-roadmap.md's "Packaging &
+      # Installers". `wix` is a dotnet global tool; its UI extension
+      # version must match the tool version exactly.
+      - name: Set up .NET (for WiX)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 6.0.1
+          wix extension add --global WixToolset.UI.wixext/6.0.1
+
+      - name: Package (MSI)
+        shell: pwsh
+        run: cmake --build --preset release --target package
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sound-mind-studio-${{ matrix.asset_name }}-msi
+          path: build/release/*.msi
           if-no-files-found: error
 
   publish-release:
@@ -120,7 +147,9 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*.zip
+          files: |
+            artifacts/*.zip
+            artifacts/*.msi
           generate_release_notes: true
           body: |
             Toolchain bring-up milestone (see CHANGELOG.md) - an empty
@@ -128,6 +157,11 @@ jobs:
             (CMake, vcpkg, MSVC, Qt, CI, packaging) works end to end, not
             yet any real Studio functionality.
 
-            Each zip is self-contained except for the Visual C++ runtime:
-            it includes `vc_redist.<arch>.exe` - run that first if the
-            app doesn't launch (most systems already have it installed).
+            Two ways to get it, per architecture: a zip you extract and
+            run directly, or an `.msi` installer (built with WiX) that
+            installs it properly with a Start Menu shortcut and an
+            uninstaller. Both are self-contained except for the Visual
+            C++ runtime: the zip includes `vc_redist.<arch>.exe` to run
+            first if the app doesn't launch; the installer pulls it in
+            via the same mechanism (most systems already have it either
+            way).
