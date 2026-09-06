@@ -30,6 +30,14 @@ Exactly *when* Y will bump can't be predicted precisely this far out - it depend
 - **Collaboration/multi-user** stays out of scope throughout, per the design doc's resolved decision.
 - **A final Project file schema** is not a pre-1.0 requirement - the design doc explicitly treats that as a near-beta concern. Expect Y to move once, deliberately, around there.
 
+## Packaging & Installers
+
+Not its own Z-milestone - this is infrastructure, like the release workflow it extends, and can slot in whenever is convenient rather than waiting for a specific phase:
+
+- **A basic installer, early.** Once the release workflow's `windeployqt` packaging step exists (already does, as of `v0.0.0.1`), adding a minimal installer alongside the existing zip is low effort - CMake's built-in CPack can drive one from the same file list. Doing this early, rather than right before `v1.0.0.0`, is the same reasoning as moving Pool/Export/Live/Record into Phase 2: validate the packaging pipeline while the app is still simple, so it isn't a surprise at the end.
+- **Real installer polish belongs in Phase 6**, alongside Performance Validation & Hardening: code signing (needs a purchased certificate - a cost/logistics item, not just engineering), Start Menu shortcuts and icons, in-place upgrade handling across versions, file-type association for the Project file, license/EULA text.
+- **Tooling choice not yet made.** CPack can drive either WiX (a proper MSI, more Windows-native) or NSIS (simpler, more common, a bespoke EXE installer) - a new third-party dependency either way, which `CLAUDE.md` flags as something to discuss before adding, not to pick unilaterally.
+
 ---
 
 ## Phase 1 - Foundation
