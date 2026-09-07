@@ -64,7 +64,9 @@ Real audio and image import as new layers, using the Stream codec above; a first
 
 ### v0.Y.4.1 - Playback
 
-Transport controls, Stream-mode decode of the live composite, audio output.
+Transport controls, Stream-mode decode of the composite, audio output via JUCE (linked in for real for the first time - see `sound-mind-architecture.md`'s Decisions Made for the JUCE tier this settled on).
+
+**Simpler first pass than the design doc's eventual scope:** decode happens once, into a fixed buffer, when Play is pressed - the audio callback just reads sequentially from it (allocation-free by construction, satisfying `CLAUDE.md`'s non-negotiable real-time constraint). This isn't "live" in the edit-reactive, no-separate-render-step sense the design doc ultimately describes, but nothing generates a live edit to react to yet (Painting doesn't exist until Phase 3) - so building that now would be solving a problem that doesn't exist yet. The design doc's actual "always-current" model is needed for real by Live Mode (`v0.Y.7.1`), which inherently requires continuous incremental decode anyway (it's processing a continuously-arriving live input signal) - that's where it gets built, and Playback picks it up once it exists.
 
 **Demo:** import something, press play, hear it.
 
@@ -91,6 +93,8 @@ Audio export (Pool-mode primary, a quick Stream-mode bounce for scratch use, com
 ### v0.Y.7.1 - Live Mode
 
 Continuous Stream-mode real-time capture and the "Live" layer compositing into the rest of the project. The design doc's operation-relative MindWave binding (for a genuine per-note retrigger feel) isn't available yet - MindWaves and Sound Mind Instruments don't exist until Phase 4 - so this first pass is plain continuous capture-composite-output; Live Mode gets revisited once those land to add it.
+
+**Also where Playback's (`v0.Y.4.1`) deferred work lands.** Playback's first pass decodes once into a fixed buffer rather than the design doc's eventual always-current, no-separate-render-step model, since nothing existed yet to make the composite actually change during playback. Live Mode has no such luxury - a continuously-arriving live input signal *requires* continuous incremental Stream decode/composite by its very nature - so this is where that general real-time pipeline actually gets built. Playback should be revisited afterward to pick it up, so edits made during playback (once Painting exists in Phase 3) are reflected live too, closing the gap to the design doc's original description.
 
 **Demo:** feed a live input signal in and hear it composited with the rest of the project in real time.
 

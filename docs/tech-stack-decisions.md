@@ -19,7 +19,7 @@ Reference notes from the initial planning conversation. Previous version was Pyt
 - Compiler Explorer (godbolt.org) — inspect what modern C++ actually compiles to
 
 ## Frameworks
-- **Audio/DSP**: JUCE — industry-standard for DAWs and plugins (VST3/AU hosting, lock-free audio callback patterns, real-time-safe design). Its codebase is also a good real-world reference for modern C++ idioms applied to audio constraints.
+- **Audio/DSP**: JUCE — industry-standard for DAWs and plugins (VST3/AU hosting, lock-free audio callback patterns, real-time-safe design). Its codebase is also a good real-world reference for modern C++ idioms applied to audio constraints. Linked in via the vcpkg `juce` port, matching every other dependency here. Licensing tier: JUCE 8's free Starter tier (up to $20,000 gross annual revenue) as of `v0.0.4.1` — see `sound-mind-architecture.md`'s Decisions Made/Needed for the reasoning and what's still open beyond that threshold.
 - **GUI**: Qt. Decided over JUCE's own GUI module, given existing Qt experience. JUCE is used only for its audio engine (device I/O, DSP building blocks) — its GUI module is not used, so the Studio application's windowing and widgets are Qt's, not JUCE's. See `sound-mind-architecture.md` for how the two coexist.
 
 ## GPU Compute: DirectX 12 Compute
