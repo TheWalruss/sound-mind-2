@@ -7,12 +7,16 @@
 namespace sound_mind::studio {
 
 /**
- * @brief Renders the active project's canvas - currently a placeholder.
+ * @brief Renders the active project's canvas.
  *
- * No codec exists yet (see `docs/sound-mind-roadmap.md`'s "Project &
- * Canvas" milestone), so there's no real spectrogram data to show; this
- * paints a solid rectangle sized to the project's configured canvas
- * dimensions, standing in for the (still-empty) Background layer.
+ * Shows the topmost layer with cached content (see
+ * `sound_mind::core::renderLayer()`), scaled to fill the widget - real
+ * multi-layer compositing (blend modes, opacity, MindWave-bound
+ * parameters) doesn't exist yet, so "the composite" is, for now, just
+ * whichever layer was rendered most recently. Falls back to a placeholder
+ * rectangle, sized to the project's configured canvas dimensions, when no
+ * layer has any content yet (e.g. a fresh project with only its empty
+ * Background layer).
  */
 class CanvasWidget : public QWidget {
     Q_OBJECT

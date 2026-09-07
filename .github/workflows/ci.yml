@@ -95,7 +95,7 @@ jobs:
 
       - name: Install Qt
         shell: pwsh
-        run: python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_target_pkg }} --outputdir C:/Qt
+        run: python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_target_pkg }} --outputdir C:/Qt --modules qtimageformats
 
       # Step-scoped `env:` (as Configure below uses for QT_ROOT_DIR) does not
       # carry forward to later steps - so without this, the Test step below

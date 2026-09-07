@@ -12,6 +12,7 @@ add_library(sound-mind-core
     src/project_settings.cpp
     src/operation_log.cpp
     src/project.cpp
+    src/compositor.cpp
 )
 
 target_include_directories(sound-mind-core
@@ -22,6 +23,7 @@ target_include_directories(sound-mind-core
 target_link_libraries(sound-mind-core
     PUBLIC
         nlohmann_json::nlohmann_json
+        sound-mind-codec
 )
 
 target_compile_features(sound-mind-core PUBLIC cxx_std_23)

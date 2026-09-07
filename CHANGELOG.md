@@ -6,6 +6,75 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.3.1] - 2026-09-07
+
+The "Import & Display" milestone from `docs/sound-mind-roadmap.md`: real
+audio and image import as new layers, using the Stream codec, with a first
+Color Mapping rendering them on the canvas - no more placeholder rectangle.
+
+### Added
+
+- **WAV audio import**: `sound_mind::codec::readWavFile()`, a hand-rolled
+  RIFF/WAVE parser (16-bit PCM and 32-bit float, mono or stereo) - no new
+  dependency. Deliberately scoped to WAV only for this pass: real JUCE
+  integration (for AIFF/FLAC/OGG/MP3/etc) is deferred, partly because
+  JUCE's own distribution tier depends on Sound Mind's own license, which
+  isn't decided yet (`docs/sound-mind-architecture.md`'s Decisions Needed).
+- **Full five-format image import**: PNG, JPEG, BMP, TGA, and WebP, via
+  Qt's `QImage` plus the `qtimageformats` add-on module (installed
+  alongside the base Qt package - see `README.md`, `ci.yml`, `release.yml`)
+  for TGA/WebP specifically; PNG/JPEG/BMP are already built into Qt.
+- **Color Mapping, both directions**: `sound_mind::codec::toRgbImage()` /
+  `toGrayscaleImage()` render a `StreamImage` as pixels (red = left
+  amplitude, green = right amplitude, blue = the shared phase channel;
+  grayscale = combined amplitude only); `fromRgbImage()` does the reverse -
+  an imported image's RGB pixels become amplitude/phase data directly, no
+  transform involved, so an imported image is genuinely unified with
+  audio-imported content from the start, per the design doc's "sound and
+  image are one continuous surface" principle, not a picture bolted on
+  separately.
+- **A first, minimal Compositor**: `sound_mind::core::renderLayer()`, in
+  `sound-mind-core` - single-layer only (no blend modes, opacity, or
+  MindWave-bound parameters applied yet), turning a layer's cached content
+  into displayable pixels via Color Mapping. `CanvasWidget` now shows the
+  topmost layer with content, scaled to fill the widget, instead of always
+  drawing the placeholder rectangle (which remains the fallback for a
+  project where nothing has been imported yet).
+- **`Layer` gained a content cache**: `Layer::content()` /`setContent()`,
+  an in-memory `std::optional<sound_mind::codec::StreamImage>` -
+  deliberately *not* part of `Layer`'s JSON serialization. Per the
+  architecture doc's Project File & Folder layout, `Project::save()` now
+  writes each layer's cached content to its own Stream file under
+  `<project>/media/layer_<id>.smstream`, and `Project::load()` reads it
+  back - a project's imported audio/images survive a save/reload round
+  trip, not just its layer metadata.
+- **`Project::addLayer()`**: appends a new layer to the stack, assigning it
+  a fresh, unique id - the first time a Sound Mind project has more than
+  one layer.
+- File menu gained **Import Audio...** and **Import Image...**. Both are
+  backed by a plain, headless-safe `MainWindow::import{Audio,Image}File()`
+  pair (no dialog, no message box) that the interactive menu actions wrap -
+  kept deliberately separate so tests can exercise the real import logic,
+  including its failure path, without ever triggering `QMessageBox::exec()`
+  under the `offscreen` QPA platform, which blocks on a modal event loop
+  nothing can dismiss there.
+- `sound-mind-core` depends on `sound-mind-codec` for the first time
+  (`Layer` now holds a `codec::StreamImage`), per the architecture doc's
+  intended dependency direction.
+
+### Notes
+
+- No DirectX 12 GPU dispatch, no real-time audio path involvement - all of
+  this runs on the UI thread, same scope boundary as the Stream codec
+  milestone it builds on.
+- "The topmost layer with content" stands in for a real composite - true
+  multi-layer blending (opacity, blend modes) doesn't exist yet.
+- Test coverage: 14 new `sound-mind-codec` tests (WAV parsing, Color
+  Mapping both directions), 8 new `sound-mind-core` tests (`Layer` content,
+  `Project::addLayer()`, media persistence, the new Compositor), and 4 new
+  `sound-mind-studio` GUI tests (audio/image import success and failure
+  paths, canvas rendering) - 45 tests total across the project, all green.
+
 ## [0.0.2.1] - 2026-09-07
 
 The "Stream Codec" milestone from `docs/sound-mind-roadmap.md`: a real,

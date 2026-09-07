@@ -5,6 +5,7 @@ add_executable(sound-mind-core-tests
     test_layer.cpp
     test_project_settings.cpp
     test_project.cpp
+    test_compositor.cpp
 )
 
 target_link_libraries(sound-mind-core-tests

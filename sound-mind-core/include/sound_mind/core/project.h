@@ -51,6 +51,12 @@ public:
 
     /**
      * @brief Loads a project from its `.smproj` JSON file on disk.
+     *
+     * Any layer whose media file (see save()'s docs for the path) exists
+     * alongside the project is loaded back into that layer's
+     * `Layer::content()`; a layer with no media file yet (never rendered)
+     * simply has no content, same as a freshly-created one.
+     *
      * @param path Path to the project file.
      * @return The loaded project.
      * @throws std::ios_base::failure if the file can't be read.
@@ -60,10 +66,28 @@ public:
 
     /**
      * @brief Saves this project to a `.smproj` JSON file on disk.
+     *
+     * Per `docs/sound-mind-architecture.md`'s Project File & Folder layout,
+     * any layer with cached content (see `Layer::content()`) also gets that
+     * content written as its own Stream file, to `<path's folder>/<path's
+     * stem>/media/layer_<id>.smstream` - created if it doesn't exist yet.
+     *
      * @param path Destination path.
-     * @throws std::ios_base::failure if the file can't be written.
+     * @throws std::ios_base::failure if the file (or a layer's media file)
+     *         can't be written.
      */
     void save(const std::filesystem::path& path) const;
+
+    /**
+     * @brief Appends a new layer to the top of the layer stack.
+     *
+     * @param layer The layer to add. Its own id is ignored - a fresh,
+     *        unique id is assigned to the appended copy instead, since a
+     *        caller building a layer to import has no way to know what ids
+     *        are already taken.
+     * @return The id actually assigned to the appended layer.
+     */
+    LayerId addLayer(Layer layer);
 
     /// @brief This project's settings (sample rate, canvas size, etc).
     /// @return The settings this project currently holds.

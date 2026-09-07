@@ -8,4 +8,5 @@ class CanvasWidgetTest : public QObject {
 private slots:
     void sizeHintFallsBackWithNoProject();
     void sizeHintMatchesProjectCanvasDimensions();
+    void rendersALayersContentInsteadOfThePlaceholder();
 };

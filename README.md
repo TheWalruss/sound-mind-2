@@ -11,9 +11,12 @@ Prerequisites: a native Arm64 or x64 MSVC toolset (Visual Studio 2022/2026
 or Build Tools, with the matching architecture's C++ workload), CMake,
 Ninja, [vcpkg](https://github.com/microsoft/vcpkg) bootstrapped somewhere
 with `VCPKG_ROOT` set, and Qt 6.8+ installed via
-[aqtinstall](https://github.com/miurahr/aqtinstall) with `QT_ROOT_DIR`
-pointing at it (and, only for a cross-compiled Arm64 Qt build,
-`QT_HOST_PATH_DIR` pointing at the matching x64 Qt install alongside it).
+[aqtinstall](https://github.com/miurahr/aqtinstall) (include the
+`qtimageformats` module - `--modules qtimageformats` - for full image
+import format coverage: TGA and WebP load through it, PNG/JPEG/BMP are
+already built into Qt) with `QT_ROOT_DIR` pointing at it (and, only for a
+cross-compiled Arm64 Qt build, `QT_HOST_PATH_DIR` pointing at the matching
+x64 Qt install alongside it).
 
 From a Developer Command Prompt for your target architecture:
 

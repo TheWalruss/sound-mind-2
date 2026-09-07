@@ -1,14 +1,22 @@
 #include "sound_mind/studio/main_window.h"
 
+#include <cstddef>
+#include <cstring>
 #include <exception>
 
 #include <QAction>
 #include <QFileDialog>
+#include <QImage>
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 
+#include "sound_mind/codec/color_mapping.h"
+#include "sound_mind/codec/rgb_image.h"
+#include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/codec/wav_file.h"
+#include "sound_mind/core/layer.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
 
@@ -20,6 +28,27 @@ namespace sound_mind::studio {
 
 namespace {
 const char* kProjectFileFilter = "Sound Mind Projects (*.smproj)";
+const char* kAudioFileFilter = "WAV Audio (*.wav)";
+const char* kImageFileFilter = "Images (*.png *.jpg *.jpeg *.bmp *.tga *.webp)";
+
+/// @brief Converts a QImage to codec::RgbImage, forcing a consistent 3-byte-
+/// per-pixel layout first regardless of the source file's own format.
+[[nodiscard]] sound_mind::codec::RgbImage toRgbImage(const QImage& source) {
+    const QImage rgb888 = source.convertToFormat(QImage::Format_RGB888);
+
+    sound_mind::codec::RgbImage image;
+    image.width = static_cast<std::uint32_t>(rgb888.width());
+    image.height = static_cast<std::uint32_t>(rgb888.height());
+    image.pixels.resize(image.pixelCount() * 3);
+
+    for (int y = 0; y < rgb888.height(); ++y) {
+        const uchar* line = rgb888.constScanLine(y);
+        std::memcpy(image.pixels.data() + static_cast<std::size_t>(y) * image.width * 3, line,
+                    static_cast<std::size_t>(image.width) * 3);
+    }
+    return image;
+}
+
 }  // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
@@ -48,6 +77,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     QAction* saveAsAction = fileMenu->addAction(tr("Save Project &As..."));
     saveAsAction->setShortcut(QKeySequence::SaveAs);
     connect(saveAsAction, &QAction::triggered, this, &MainWindow::saveProjectAs);
+
+    fileMenu->addSeparator();
+
+    QAction* importAudioAction = fileMenu->addAction(tr("Import &Audio..."));
+    connect(importAudioAction, &QAction::triggered, this, &MainWindow::importAudio);
+
+    QAction* importImageAction = fileMenu->addAction(tr("Import &Image..."));
+    connect(importImageAction, &QAction::triggered, this, &MainWindow::importImage);
 
     newProject();
 }
@@ -111,6 +148,86 @@ void MainWindow::saveProjectAs() {
 
     currentPath_ = std::filesystem::path(fileName.toStdString());
     saveProject();
+}
+
+void MainWindow::importAudio() {
+    const QString fileName = QFileDialog::getOpenFileName(this, tr("Import Audio"), QString(), tr(kAudioFileFilter));
+    if (fileName.isEmpty()) {
+        return;
+    }
+    QString errorMessage;
+    if (!importAudioFile(std::filesystem::path(fileName.toStdString()), &errorMessage)) {
+        QMessageBox::critical(this, tr("Import Audio Failed"), errorMessage);
+    }
+}
+
+void MainWindow::importImage() {
+    const QString fileName = QFileDialog::getOpenFileName(this, tr("Import Image"), QString(), tr(kImageFileFilter));
+    if (fileName.isEmpty()) {
+        return;
+    }
+    QString errorMessage;
+    if (!importImageFile(std::filesystem::path(fileName.toStdString()), &errorMessage)) {
+        QMessageBox::critical(this, tr("Import Image Failed"), errorMessage);
+    }
+}
+
+bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* errorMessage) {
+    if (!project_) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No project is open.");
+        }
+        return false;
+    }
+
+    try {
+        const auto audio = sound_mind::codec::readWavFile(path);
+        const auto content = sound_mind::codec::encode(audio, sound_mind::codec::StreamCodecConfig{});
+
+        sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
+        layer.setContent(content);
+        project_->addLayer(std::move(layer));
+        canvas_->update();
+        return true;
+    } catch (const std::exception& e) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QString::fromStdString(e.what());
+        }
+        return false;
+    }
+}
+
+bool MainWindow::importImageFile(const std::filesystem::path& path, QString* errorMessage) {
+    if (!project_) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No project is open.");
+        }
+        return false;
+    }
+
+    const QImage sourceImage(QString::fromStdString(path.string()));
+    if (sourceImage.isNull()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("Could not load the image file.");
+        }
+        return false;
+    }
+
+    try {
+        const auto rgbImage = toRgbImage(sourceImage);
+        const auto content = sound_mind::codec::fromRgbImage(rgbImage, sound_mind::codec::StreamCodecConfig{});
+
+        sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
+        layer.setContent(content);
+        project_->addLayer(std::move(layer));
+        canvas_->update();
+        return true;
+    } catch (const std::exception& e) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QString::fromStdString(e.what());
+        }
+        return false;
+    }
 }
 
 }  // namespace sound_mind::studio

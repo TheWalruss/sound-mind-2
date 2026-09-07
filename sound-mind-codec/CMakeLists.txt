@@ -14,6 +14,8 @@ add_library(sound-mind-codec
     src/version.cpp
     src/stream_codec.cpp
     src/stream_file.cpp
+    src/wav_file.cpp
+    src/color_mapping.cpp
 )
 
 target_include_directories(sound-mind-codec

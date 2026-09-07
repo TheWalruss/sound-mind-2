@@ -8,4 +8,7 @@ class MainWindowTest : public QObject {
 private slots:
     void startsWithAFreshProject();
     void newProjectReplacesTheCurrentOne();
+    void importAudioFileAddsANewLayer();
+    void importImageFileAddsANewLayer();
+    void importAudioFileFailsGracefullyForAMissingFile();
 };

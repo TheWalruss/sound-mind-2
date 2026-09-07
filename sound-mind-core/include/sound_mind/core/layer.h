@@ -1,10 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include <nlohmann/json.hpp>
+
+#include "sound_mind/codec/stream_codec.h"
 
 namespace sound_mind::core {
 
@@ -89,6 +92,18 @@ public:
     [[nodiscard]] float opacity() const noexcept { return opacity_; }
 
     /**
+     * @brief Reassigns the layer's id.
+     *
+     * Not needed for normal use - a Layer's id is meant to be set once at
+     * construction. Exists specifically for `Project::addLayer()`, which
+     * has to assign a fresh, project-unique id to whatever id a caller's
+     * about-to-be-imported Layer happened to be constructed with.
+     *
+     * @param id The new id.
+     */
+    void setId(LayerId id) noexcept { id_ = id; }
+
+    /**
      * @brief Renames the layer.
      * @param name The new display name. Uniqueness within the project is
      *        the project's responsibility, not enforced here.
@@ -101,6 +116,26 @@ public:
      */
     void setOpacity(float opacity) noexcept { opacity_ = opacity; }
 
+    /**
+     * @brief This layer's cached Stream-encoded content, if it's been
+     *        rendered at least once (by importing media into it, or -
+     *        once painting exists - by painting on it).
+     * @return The cached content, or `std::nullopt` for a layer with
+     *         nothing rendered yet (e.g. a fresh Background layer).
+     *
+     * @note In-memory only - deliberately not part of `to_json`/`from_json`.
+     *       Per `docs/sound-mind-architecture.md`'s Project File & Folder
+     *       layout, a layer's cached render is persisted as its own Stream
+     *       file under the project's `media/` folder, not inlined into the
+     *       JSON project file; `Project::save()`/`load()` are what read and
+     *       write that file, deriving its name from this layer's id.
+     */
+    [[nodiscard]] const std::optional<sound_mind::codec::StreamImage>& content() const noexcept { return content_; }
+
+    /// @brief Sets this layer's cached Stream-encoded content.
+    /// @param content The new content, replacing anything previously cached.
+    void setContent(sound_mind::codec::StreamImage content) { content_ = std::move(content); }
+
     friend void to_json(nlohmann::json& json, const Layer& layer);
     friend void from_json(const nlohmann::json& json, Layer& layer);
 
@@ -109,6 +144,7 @@ private:
     std::string name_;
     LayerType type_ = LayerType::Normal;
     float opacity_ = 1.0f;
+    std::optional<sound_mind::codec::StreamImage> content_;
 };
 
 /// @brief Serializes a Layer to its JSON representation.

@@ -7,6 +7,8 @@
 
 #include "sound_mind/core/project.h"
 
+class QString;
+
 namespace sound_mind::studio {
 
 class CanvasWidget;
@@ -49,6 +51,52 @@ public slots:
 
     /// @brief Prompts for a file and saves the current project there.
     void saveProjectAs();
+
+    /// @brief Prompts for a WAV file and imports it as a new layer.
+    void importAudio();
+
+    /// @brief Prompts for an image file and imports it as a new layer.
+    void importImage();
+
+public:
+    /**
+     * @brief Imports a WAV file as a new layer, without prompting or
+     *        showing an error dialog on failure.
+     *
+     * The actual work behind importAudio(), split out so it's callable
+     * directly - by a test, or eventually a drag-and-drop handler - without
+     * needing a real file dialog, and deliberately without ever showing a
+     * message box: `QMessageBox::critical()` blocks on a modal event loop
+     * that nothing can dismiss under the `offscreen` QPA platform tests run
+     * under, so this stays a plain, headless-safe function and only
+     * importAudio() (the interactive slot) shows a dialog, based on the
+     * error text this returns.
+     *
+     * @param path Path to the WAV file to import.
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @return `true` on success; `false` if reading or encoding it failed.
+     */
+    bool importAudioFile(const std::filesystem::path& path, QString* errorMessage = nullptr);
+
+    /**
+     * @brief Imports an image file as a new layer, without prompting or
+     *        showing an error dialog on failure.
+     *
+     * The image's RGB pixels are converted into amplitude/phase data via
+     * `sound_mind::codec::fromRgbImage()` - per
+     * `docs/sound-mind-design.md`'s "sound and image are one continuous
+     * surface" principle, an imported image is genuinely unified with
+     * audio-imported content, not a picture with no underlying sound
+     * representation. See importAudioFile()'s docs for why this never shows
+     * a message box itself.
+     *
+     * @param path Path to the image file to import.
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @return `true` on success; `false` if loading or converting it failed.
+     */
+    bool importImageFile(const std::filesystem::path& path, QString* errorMessage = nullptr);
 
 private:
     void setProject(sound_mind::core::Project project);
