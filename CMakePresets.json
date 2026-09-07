@@ -41,13 +41,23 @@
       "name": "debug",
       "configurePreset": "debug",
       "output": { "outputOnFailure": true },
-      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": false,
+        "timeout": 120,
+        "repeat": { "mode": "until-pass", "count": 3 }
+      }
     },
     {
       "name": "release",
       "configurePreset": "release",
       "output": { "outputOnFailure": true },
-      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": false,
+        "timeout": 120,
+        "repeat": { "mode": "until-pass", "count": 3 }
+      }
     }
   ]
 }

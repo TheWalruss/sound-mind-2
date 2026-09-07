@@ -11,6 +11,12 @@ env:
 jobs:
   build-test:
     name: Build & Test (${{ matrix.name }})
+    # Default job timeout is 6 hours - a genuine hang (rather than a normal
+    # few-minute run) should fail loudly and stop burning runner time long
+    # before that. ctest's own --timeout (see CMakePresets.json) should
+    # already catch a hung test specifically; this is the outer safety net
+    # in case something else entirely (configure, build, tooling) hangs.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -39,6 +45,21 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
+
+      # A freshly built .exe has a brand-new hash Defender has never seen -
+      # its first execution can trigger a real-time scan that occasionally
+      # takes a very long time (reproduced locally: a fresh rebuild's first
+      # run of sound-mind-studio-tests.exe hit a 120s timeout, then passed
+      # in <0.1s on every subsequent run of that same binary). Excluding the
+      # paths that only ever contain build output/toolchain files we just
+      # fetched or compiled ourselves removes that scan without disabling
+      # Defender itself.
+      - name: Exclude build output from Windows Defender scanning
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+          Add-MpPreference -ExclusionPath "C:\Qt"
+          Add-MpPreference -ExclusionPath "${{ runner.temp }}\vcpkg"
 
       # windows-latest is genuine x64 hardware and windows-11-arm is genuine
       # Arm64 hardware (GitHub's Arm-partner runner, generally available for
@@ -76,6 +97,17 @@ jobs:
         shell: pwsh
         run: python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_target_pkg }} --outputdir C:/Qt
 
+      # Step-scoped `env:` (as Configure below uses for QT_ROOT_DIR) does not
+      # carry forward to later steps - so without this, the Test step below
+      # has no way to find Qt's DLLs (Qt6Widgetsd.dll etc) at runtime, since
+      # nothing else ever puts Qt's bin directory on PATH. $GITHUB_PATH is
+      # the mechanism that *does* persist across steps for the rest of the
+      # job. Local dev doesn't hit this because a Developer Command Prompt
+      # session normally has Qt's bin directory added to PATH directly.
+      - name: Add Qt runtime to PATH
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value "${{ matrix.qt_root_dir }}/bin"
+
       - name: Configure
         shell: pwsh
         env:
@@ -90,4 +122,11 @@ jobs:
 
       - name: Test
         shell: pwsh
+        # QT_QPA_PLATFORM is also set per-test via CMake's ENVIRONMENT test
+        # property (see sound-mind-studio/tests/CMakeLists.txt) - set again
+        # here at the step level as defense in depth, so a GUI test can
+        # never end up trying to create a real window on a runner with no
+        # interactive desktop.
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: ctest --preset debug
