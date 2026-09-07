@@ -80,11 +80,25 @@ find_program(SOUND_MIND_QTPATHS
     NO_DEFAULT_PATH
 )
 
+# windeployqt needs to be told which Qt DLL variant to copy - it doesn't
+# infer this from the target executable. Hardcoding --release here would
+# silently deploy release Qt DLLs (Qt6Widgets.dll) alongside a Debug-
+# configured build linked against debug ones (Qt6Widgetsd.dll), the same
+# class of CRT/Qt debug-vs-release mismatch diagnosed for the test suite
+# in v0.0.1.1's development. Harmless today only because packaging is
+# always done from the "release" preset - but a real bug waiting to
+# surface the first time someone packages a Debug build.
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(SOUND_MIND_WINDEPLOYQT_CONFIG_FLAG "--debug")
+else ()
+    set(SOUND_MIND_WINDEPLOYQT_CONFIG_FLAG "--release")
+endif ()
+
 if (SOUND_MIND_WINDEPLOYQT AND SOUND_MIND_QTPATHS)
     install(CODE "
         message(STATUS \"Deploying Qt runtime via windeployqt...\")
         execute_process(
-            COMMAND \"${SOUND_MIND_WINDEPLOYQT}\" --qtpaths \"${SOUND_MIND_QTPATHS}\" --release --no-translations \"\${CMAKE_INSTALL_PREFIX}/sound-mind-studio.exe\"
+            COMMAND \"${SOUND_MIND_WINDEPLOYQT}\" --qtpaths \"${SOUND_MIND_QTPATHS}\" ${SOUND_MIND_WINDEPLOYQT_CONFIG_FLAG} --no-translations \"\${CMAKE_INSTALL_PREFIX}/sound-mind-studio.exe\"
             RESULT_VARIABLE _sound_mind_windeployqt_result
         )
         if (NOT _sound_mind_windeployqt_result EQUAL 0)
