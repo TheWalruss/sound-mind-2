@@ -6,6 +6,58 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.2.1] - 2026-09-07
+
+The "Stream Codec" milestone from `docs/sound-mind-roadmap.md`: a real,
+working audio codec in `sound-mind-codec` - not yet wired into the Studio's
+GUI (that's next milestone's job), validated instead by an automated
+round-trip test, per this milestone's own "a round-trip test" demo wording.
+
+### Added
+
+- **The Stream codec itself**: `encode()`/`decode()` in `sound-mind-codec`,
+  a Short-Time Fourier Transform (Hann window, 75% overlap) with output
+  remapped onto log-spaced frequency bins, matching the visual axis Pool
+  will eventually share. `AudioBuffer` (planar stereo PCM) and
+  `StreamCodecConfig`/`StreamImage` are the new public types - all
+  independent of `sound-mind-core`'s project model, per the architecture
+  doc's module-layout constraint (`codec` has no project model and stays
+  usable standalone).
+- **PocketFFT** as the FFT backend (new third-party dependency, confirmed
+  before adding it): header-only C++, BSD-3-Clause, vcpkg-packaged, no
+  build/link step. Chosen over `KissFFT` (also vcpkg-packaged, also
+  BSD-3-Clause, but needs actual linking and has a narrower feature set)
+  and over FFTW3 (GPL-encumbered, per `docs/sound-mind-architecture.md`'s
+  NSGT Library Candidates discussion) - see that doc's updated *Decisions
+  Made* for the full reasoning.
+- **A lightweight custom Stream file format** (`writeStreamFile()` /
+  `readStreamFile()`): a small fixed binary header followed by three raw
+  `float[bin][frame]` planes - left amplitude, right amplitude, and a
+  single *shared* phase channel (from the left/right mono downmix, reused
+  for both channels on decode), not TIFF-like and not independent
+  left/right phase, since Stream's entire reason to exist is encode/decode
+  speed rather than generic-viewer compatibility or Pool-level fidelity.
+- Catch2 round-trip tests: a mono-in-stereo tone (where the shared-phase
+  approximation is exact, isolating the STFT/log-binning/overlap-add
+  pipeline's own correctness) and a genuinely stereo tone (where it isn't),
+  both checked via normalized cross-correlation against the original
+  signal; a file round-trip test; a bad-magic-bytes error case.
+
+### Notes
+
+- CPU-only - no DirectX 12 GPU dispatch yet. Per
+  `docs/sound-mind-architecture.md`'s GPU/Audio-Thread Handoff section,
+  that needs a working Stream pipeline to prototype *against*, which now
+  exists.
+- Not real-time-safe as written (allocates throughout) - real-time-safe
+  decode is Playback's concern (`v0.Y.4.1`), not this milestone's.
+- Not yet wired into the Studio's GUI, `Project`, or `Layer` - that's
+  `v0.Y.3.1` (Import & Display), next.
+- The NSGT-specific half of the architecture doc's "NSGT library selection"
+  decision (whether `libnsgt`'s logic ports onto PocketFFT) is still open -
+  Stream mode uses a plain STFT, not NSGT, so this milestone didn't need to
+  resolve it. That's Pool's job, in `v0.Y.5.1`.
+
 ## [0.0.1.1] - 2026-09-06
 
 The "Project & Canvas" milestone from `docs/sound-mind-roadmap.md`: a real

@@ -2,6 +2,8 @@ find_package(Catch2 3 CONFIG REQUIRED)
 
 add_executable(sound-mind-codec-tests
     test_version.cpp
+    test_stream_codec.cpp
+    test_stream_file.cpp
 )
 
 target_link_libraries(sound-mind-codec-tests
