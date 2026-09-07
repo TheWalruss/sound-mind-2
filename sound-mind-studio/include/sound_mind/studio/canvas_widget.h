@@ -22,6 +22,9 @@ class CanvasWidget : public QWidget {
     Q_OBJECT
 
 public:
+    /// @brief Constructs an empty canvas, with no project set yet.
+    /// @param parent The owning widget, per Qt's normal parent-ownership
+    ///        convention; may be `nullptr`.
     explicit CanvasWidget(QWidget* parent = nullptr);
 
     /**
@@ -33,9 +36,15 @@ public:
      */
     void setProject(const sound_mind::core::Project* project);
 
+    /// @brief The widget's preferred size.
+    /// @return The current project's configured canvas dimensions, or a
+    ///         fallback size if no project is set.
     [[nodiscard]] QSize sizeHint() const override;
 
 protected:
+    /// @brief Repaints the canvas - see the class's own docs for what's
+    ///        actually drawn.
+    /// @param event Unused; required by QWidget's override signature.
     void paintEvent(QPaintEvent* event) override;
 
 private:

@@ -1036,7 +1036,9 @@ WARN_LOGFILE           =
 INPUT                  = sound-mind-codec/include \
                          sound-mind-codec/src \
                          sound-mind-core/include \
-                         sound-mind-core/src
+                         sound-mind-core/src \
+                         sound-mind-studio/include \
+                         sound-mind-studio/src
 
 # This tag can be used to specify the character encoding of the source files
 # that Doxygen parses. Internally Doxygen uses the UTF-8 encoding. Doxygen uses

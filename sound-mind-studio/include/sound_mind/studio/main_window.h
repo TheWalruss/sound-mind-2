@@ -5,6 +5,7 @@
 
 #include <QMainWindow>
 
+#include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project.h"
 
 class QString;
@@ -16,15 +17,21 @@ class CanvasWidget;
 /**
  * @brief The Sound Mind Studio main window.
  *
- * Owns the currently open Project and a File menu (New/Open/Save/Save As)
- * over it, plus the CanvasWidget that reflects it. See
- * `docs/sound-mind-roadmap.md`'s "Project & Canvas" milestone - everything
- * else (painting, layers panel, etc.) arrives in later milestones.
+ * Owns the currently open Project and a File menu (New/Open/Save/Save As/
+ * Import Audio/Import Image) over it, plus the CanvasWidget that reflects
+ * it and a transport toolbar (Play/Pause/Stop) over a PlaybackEngine. See
+ * `docs/sound-mind-roadmap.md`'s Playback milestone (`v0.0.4.1`) -
+ * everything else (real compositing, live-edit-reactive playback, layers
+ * panel, etc.) arrives in later milestones.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
+    /// @brief Builds the window: menu bar, transport toolbar, canvas, and a
+    ///        fresh project to start with.
+    /// @param parent The owning widget, per Qt's normal parent-ownership
+    ///        convention; may be `nullptr`.
     explicit MainWindow(QWidget* parent = nullptr);
 
     /**
@@ -58,7 +65,30 @@ public slots:
     /// @brief Prompts for an image file and imports it as a new layer.
     void importImage();
 
+    /**
+     * @brief Starts (or resumes) playback of the topmost layer with
+     *        content.
+     *
+     * Per the confirmed scope for this milestone: "the composite" is, for
+     * now, just whichever layer CanvasWidget would also show (see
+     * `sound_mind::core::renderLayer()`'s docs) - real multi-layer mixing
+     * doesn't exist yet. Decodes and loads that layer's audio once (not on
+     * every call - resuming after pausePlayback() continues from the same
+     * position); does nothing if no layer has content, or none is open.
+     */
+    void startPlayback();
+
+    /// @brief Pauses playback; startPlayback() resumes from the same position.
+    void pausePlayback();
+
+    /// @brief Stops playback and rewinds to the beginning.
+    void stopPlayback();
+
 public:
+    /// @brief Whether playback is currently active.
+    /// @return The underlying PlaybackEngine's isPlaying().
+    [[nodiscard]] bool isPlaying() const noexcept;
+
     /**
      * @brief Imports a WAV file as a new layer, without prompting or
      *        showing an error dialog on failure.
@@ -104,6 +134,13 @@ private:
     std::optional<sound_mind::core::Project> project_;
     std::optional<std::filesystem::path> currentPath_;
     CanvasWidget* canvas_ = nullptr;
+    sound_mind::core::PlaybackEngine playbackEngine_;
+
+    /// @brief Whether playbackEngine_ already has the current topmost
+    /// layer's audio loaded - so startPlayback() knows to just resume
+    /// rather than re-decode and restart from the beginning. Cleared by
+    /// stopPlayback() and whenever the project (or its content) changes.
+    bool playbackLoaded_ = false;
 };
 
 }  // namespace sound_mind::studio

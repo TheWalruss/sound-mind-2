@@ -6,6 +6,65 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.4.1] - 2026-09-07
+
+The "Playback" milestone from `docs/sound-mind-roadmap.md`: transport
+controls, real audio output - press Play, hear the imported audio.
+
+### Added
+
+- **JUCE, linked in for real for the first time**, via the vcpkg `juce`
+  port - `juce_core`, `juce_audio_basics`, `juce_events`, and
+  `juce_audio_devices` only (never JUCE's GUI modules; Qt still owns the
+  Studio's windowing and widgets). Under JUCE 8's free Starter license (up
+  to $20,000 gross annual revenue) - see `docs/sound-mind-architecture.md`'s
+  Decisions Made for the full reasoning and what's still open beyond that
+  threshold. The root CMake project now enables the C language too - JUCE's
+  CMake package requires it.
+- **`sound_mind::core::PlaybackEngine`**: decodes a layer's content once,
+  in full, when told to play, then reads sequentially from that fixed
+  buffer via an atomic position index in the real-time audio callback - no
+  allocation, no locking, satisfying `CLAUDE.md`'s non-negotiable
+  real-time constraint. Its actual per-block rendering logic
+  (`renderBlock()`) is exposed separately from the `AudioIODeviceCallback`
+  interface specifically so it's unit-testable without a real audio
+  device; gracefully falls back to a silent no-op (`isDeviceAvailable()`)
+  rather than crashing when no output device exists (CI runners, in
+  particular).
+- **Transport toolbar**: Play/Pause/Stop, wired to `MainWindow::start
+  Playback()`/`pausePlayback()`/`stopPlayback()`, which play the topmost
+  layer with content - the same layer `CanvasWidget` already shows, so
+  what you hear matches what you see. `startPlayback()` only decodes once
+  per "session" (tracked by `playbackLoaded_`), so pausing and resuming
+  continues from the same position rather than restarting; stopping, or
+  importing new content, invalidates that so the next Play re-picks the
+  current topmost layer.
+
+### Notes
+
+- **Simpler than the design doc's eventual scope, on purpose**: decode
+  happens once, not continuously - nothing generates a live edit to react
+  to yet (Painting doesn't exist until Phase 3). The design doc's actual
+  always-current, no-separate-render-step model is Live Mode's job
+  (`v0.Y.7.1`), which inherently needs continuous incremental decode
+  anyway; Playback will pick that up once it exists. See
+  `docs/sound-mind-roadmap.md` for the full reasoning.
+- Plays only the topmost layer with content - real multi-layer mixing
+  doesn't exist yet, matching `CanvasWidget`'s own current simplification.
+- No output device selection or volume control yet - the design doc
+  describes both, but the roadmap's demo bar ("press play, hear it")
+  doesn't need them, so they're deferred rather than built speculatively.
+- Fixed a real, pre-existing gap while cross-checking Doxygen against the
+  architecture doc for this milestone: `sound-mind-studio` was never in
+  Doxygen's `INPUT` list, so `MainWindow`/`CanvasWidget`'s documentation
+  had never actually been verified since it was first written. Added it,
+  and fixed the several genuinely undocumented members (mostly
+  constructors and simple overrides) that surfaced as a result.
+- Test coverage: 6 new `sound-mind-core` tests for `PlaybackEngine`
+  (playing state, sample-accurate rendering, end-of-buffer handling, none
+  of which need real audio hardware); 4 new `sound-mind-studio` GUI tests
+  for the transport wiring - 55 tests total across the project, all green.
+
 ## [0.0.3.1] - 2026-09-07
 
 The "Import & Display" milestone from `docs/sound-mind-roadmap.md`: real

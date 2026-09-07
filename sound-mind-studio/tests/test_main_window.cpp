@@ -114,3 +114,55 @@ void MainWindowTest::importAudioFileFailsGracefullyForAMissingFile() {
     QVERIFY(!ok);
     QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(1));
 }
+
+void MainWindowTest::startPlaybackDoesNothingWithNoContent() {
+    // A fresh project's only layer (Background) has no content yet.
+    MainWindow window;
+    window.startPlayback();
+    QVERIFY(!window.isPlaying());
+}
+
+void MainWindowTest::startPlaybackPlaysAnImportedLayer() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.startPlayback();
+    QVERIFY(window.isPlaying());
+}
+
+void MainWindowTest::pauseAndResumePlayback() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-pause.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.startPlayback();
+    QVERIFY(window.isPlaying());
+
+    window.pausePlayback();
+    QVERIFY(!window.isPlaying());
+
+    window.startPlayback();
+    QVERIFY(window.isPlaying());
+}
+
+void MainWindowTest::stopPlaybackStopsIt() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-stop.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.startPlayback();
+    QVERIFY(window.isPlaying());
+
+    window.stopPlayback();
+    QVERIFY(!window.isPlaying());
+}

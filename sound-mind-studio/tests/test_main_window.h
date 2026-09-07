@@ -11,4 +11,8 @@ private slots:
     void importAudioFileAddsANewLayer();
     void importImageFileAddsANewLayer();
     void importAudioFileFailsGracefullyForAMissingFile();
+    void startPlaybackDoesNothingWithNoContent();
+    void startPlaybackPlaysAnImportedLayer();
+    void pauseAndResumePlayback();
+    void stopPlaybackStopsIt();
 };

@@ -12,6 +12,12 @@
 
 #include "sound_mind/studio/main_window.h"
 
+/**
+ * @brief Constructs and shows the main window, then runs the Qt event loop.
+ * @param argc Argument count, forwarded to QApplication.
+ * @param argv Argument values, forwarded to QApplication.
+ * @return The application's exit code, from QApplication::exec().
+ */
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
 

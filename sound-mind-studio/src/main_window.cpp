@@ -11,6 +11,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QToolBar>
 
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/rgb_image.h"
@@ -86,6 +87,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     QAction* importImageAction = fileMenu->addAction(tr("Import &Image..."));
     connect(importImageAction, &QAction::triggered, this, &MainWindow::importImage);
 
+    QToolBar* transportToolBar = addToolBar(tr("Transport"));
+    // Plain text actions rather than icons - no icon assets exist yet, and
+    // these are unambiguous enough on their own for a first pass.
+    QAction* playAction = transportToolBar->addAction(tr("Play"));
+    connect(playAction, &QAction::triggered, this, &MainWindow::startPlayback);
+
+    QAction* pauseAction = transportToolBar->addAction(tr("Pause"));
+    connect(pauseAction, &QAction::triggered, this, &MainWindow::pausePlayback);
+
+    QAction* stopAction = transportToolBar->addAction(tr("Stop"));
+    connect(stopAction, &QAction::triggered, this, &MainWindow::stopPlayback);
+
     newProject();
 }
 
@@ -96,6 +109,8 @@ const sound_mind::core::Project* MainWindow::project() const noexcept {
 void MainWindow::setProject(sound_mind::core::Project project) {
     project_ = std::move(project);
     canvas_->setProject(&*project_);
+    playbackEngine_.stop();
+    playbackLoaded_ = false;
 }
 
 void MainWindow::newProject() {
@@ -188,6 +203,10 @@ bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* err
         layer.setContent(content);
         project_->addLayer(std::move(layer));
         canvas_->update();
+        // The topmost layer just changed - the next startPlayback() should
+        // pick up the newly imported one instead of whatever was loaded
+        // before, rather than silently keep playing stale content.
+        playbackLoaded_ = false;
         return true;
     } catch (const std::exception& e) {
         if (errorMessage != nullptr) {
@@ -221,6 +240,7 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, QString* err
         layer.setContent(content);
         project_->addLayer(std::move(layer));
         canvas_->update();
+        playbackLoaded_ = false;
         return true;
     } catch (const std::exception& e) {
         if (errorMessage != nullptr) {
@@ -228,6 +248,43 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, QString* err
         }
         return false;
     }
+}
+
+void MainWindow::startPlayback() {
+    if (!project_) {
+        return;
+    }
+
+    if (!playbackLoaded_) {
+        const auto& layers = project_->layers();
+        bool foundContent = false;
+        for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
+            if (it->content().has_value()) {
+                playbackEngine_.loadAudio(sound_mind::codec::decode(*it->content()));
+                foundContent = true;
+                break;
+            }
+        }
+        if (!foundContent) {
+            return;
+        }
+        playbackLoaded_ = true;
+    }
+
+    playbackEngine_.play();
+}
+
+void MainWindow::pausePlayback() {
+    playbackEngine_.pause();
+}
+
+void MainWindow::stopPlayback() {
+    playbackEngine_.stop();
+    playbackLoaded_ = false;
+}
+
+bool MainWindow::isPlaying() const noexcept {
+    return playbackEngine_.isPlaying();
 }
 
 }  // namespace sound_mind::studio

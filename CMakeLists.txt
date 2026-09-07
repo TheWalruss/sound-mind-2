@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(SoundMind
-    VERSION 0.0.3.1
+    VERSION 0.0.4.1
     DESCRIPTION "Sound Mind Studio: a spectrogram-as-image DAW and graphics studio"
-    LANGUAGES CXX
+    LANGUAGES CXX C
 )
 
 set(CMAKE_CXX_STANDARD 23)

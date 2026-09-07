@@ -5,6 +5,7 @@
   "dependencies": [
     "catch2",
     "nlohmann-json",
-    "pocketfft"
+    "pocketfft",
+    "juce"
   ]
 }
