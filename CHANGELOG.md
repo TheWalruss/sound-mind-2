@@ -6,6 +6,50 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.6.2] - 2026-09-08
+
+Maintenance pass, ahead of Live Mode: a non-modal status bar reporting
+progress/completion for imports, exports, and pooling in
+`sound-mind-studio`. A second planned item - porting the legacy codec's
+edge-artifact suppression (reflection-padding a clip before its whole-signal
+FFT) into the Pool codec - was investigated but not shipped; see Notes.
+
+### Added
+
+- **`sound-mind-studio` status bar**: `importAudio()`/`importImage()`/
+  `exportAudio()`/`exportVideo()`/`poolTopmostLayer()` now show an
+  in-progress message (e.g. "Importing audio...") before their (still
+  synchronous - see Notes) work starts, and a completion message
+  afterward, via `QMainWindow::statusBar()`. Per the confirmed scope:
+  failures still show a modal (`QMessageBox::critical`) - a missed error is
+  worse than an intrusive one - but `poolTopmostLayer()`'s success
+  confirmation, previously a `QMessageBox::information` modal, is now a
+  status bar message instead.
+
+### Notes
+
+- **Pool codec edge-artifact suppression: investigated, not shipped.**
+  The legacy Python codec (`sound_mind_codec/encoder.py`) reflection-pads a
+  clip by one period of its lowest analyzed frequency before the transform,
+  trimming the padding back out afterward, to give its widest analysis
+  window a smooth boundary at the clip's true start/end instead of the
+  discontinuity a whole-signal FFT's implicit periodicity otherwise creates
+  there. Porting this into `sound-mind-codec`'s Pool codec turned out to
+  need more than padding the input: because Pool directly interpolates each
+  bin's native-rate sequence onto the output frame grid (rather than
+  legacy's "transform the padded signal, then trim frames" pipeline),
+  padding also shifts `fftSize` and (per bin) `windowLength`, and every
+  attempt at compensating the frame-to-native-index mapping for that shift
+  - verified algebraically self-consistent between encode and decode each
+  time - still produced far worse round-trip fidelity than doing nothing,
+  for reasons not yet root-caused (a genuine, reproducible spurious-energy
+  effect in low-frequency bins was observed, but shown not to be the actual
+  cause of the regression). Reverted cleanly rather than ship something
+  broken or half-verified; the Pool codec is unchanged from `v0.0.5.1`.
+  Worth a fresh, dedicated pass rather than folding into other work.
+- No Y bump, no file-format change: this is UI plus an abandoned
+  investigation, nothing in any on-disk format changed. Stayed `v0.0.6.2`.
+
 ## [0.0.6.1] - 2026-09-08
 
 The "Export" milestone from `docs/sound-mind-roadmap.md`: real compressed

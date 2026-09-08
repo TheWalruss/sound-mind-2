@@ -22,4 +22,8 @@ private slots:
     void exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension();
     void exportTopmostLayerVideoNowFailsGracefullyWithNoContent();
     void exportTopmostLayerVideoNowExportsAnImportedLayer();
+    void importAudioFileShowsProgressThenCompletionInTheStatusBar();
+    void poolTopmostLayerNowShowsProgressThenCompletionInTheStatusBar();
+    void exportTopmostLayerAudioNowShowsProgressThenCompletionInTheStatusBar();
+    void aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMessage();
 };

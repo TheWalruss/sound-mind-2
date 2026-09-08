@@ -60,9 +60,13 @@ public slots:
     void saveProjectAs();
 
     /// @brief Prompts for a WAV file and imports it as a new layer.
+    /// Progress and completion are reported via the status bar (non-modal) -
+    /// see poolTopmostLayer()'s docs for why only failure shows a modal.
     void importAudio();
 
     /// @brief Prompts for an image file and imports it as a new layer.
+    /// Progress and completion are reported via the status bar (non-modal) -
+    /// see poolTopmostLayer()'s docs for why only failure shows a modal.
     void importImage();
 
     /**
@@ -94,7 +98,10 @@ public slots:
      * docs for why this isn't yet the design doc's "hide-not-delete,
      * undoable operation" behavior) rather than prompting for anything -
      * "the topmost layer" is the same one startPlayback() and
-     * CanvasWidget use.
+     * CanvasWidget use. Progress and success are reported via the status
+     * bar (non-modal, since pooling can take a real amount of time); only
+     * a failure shows a modal, per this milestone's confirmed "status bar
+     * for progress/success, keep errors modal" scope.
      */
     void poolTopmostLayer();
 
@@ -106,7 +113,9 @@ public slots:
      *
      * The chosen format (Flac/Ogg/MP3) is inferred from the destination
      * file's extension. Does nothing if no layer has content, or none is
-     * open.
+     * open. Progress and completion are reported via the status bar
+     * (non-modal) - see poolTopmostLayer()'s docs for why only failure
+     * shows a modal.
      */
     void exportAudio();
 
@@ -116,7 +125,9 @@ public slots:
      *        exportLayerVideo()`): its rendered canvas animated with a
      *        playhead synced to its audio.
      *
-     * Does nothing if no layer has content, or none is open.
+     * Does nothing if no layer has content, or none is open. Progress and
+     * completion are reported via the status bar (non-modal) - see
+     * poolTopmostLayer()'s docs for why only failure shows a modal.
      */
     void exportVideo();
 

@@ -7,6 +7,8 @@
 
 #include <QFile>
 #include <QImage>
+#include <QSignalSpy>
+#include <QStatusBar>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/main_window.h"
@@ -257,4 +259,71 @@ void MainWindowTest::exportTopmostLayerVideoNowExportsAnImportedLayer() {
     QVERIFY(ok);
     QVERIFY(QFile::exists(QString::fromStdString(exportPath.string())));
     std::filesystem::remove(exportPath);
+}
+
+void MainWindowTest::importAudioFileShowsProgressThenCompletionInTheStatusBar() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-status-import.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    QSignalSpy spy(window.statusBar(), &QStatusBar::messageChanged);
+
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    // At least one "in progress" message, followed by a completion message
+    // still showing once the (synchronous) call has returned - not an empty
+    // string, which is what a bare clearMessage() would leave behind.
+    QVERIFY(spy.count() >= 2);
+    QVERIFY(!window.statusBar()->currentMessage().isEmpty());
+}
+
+void MainWindowTest::poolTopmostLayerNowShowsProgressThenCompletionInTheStatusBar() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-status-pool.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    QSignalSpy spy(window.statusBar(), &QStatusBar::messageChanged);
+    QString streamPngPath;
+    QString poolPngPath;
+    QVERIFY(window.poolTopmostLayerNow(nullptr, &streamPngPath, &poolPngPath));
+
+    QVERIFY(spy.count() >= 2);
+    QVERIFY(!window.statusBar()->currentMessage().isEmpty());
+
+    QFile::remove(streamPngPath);
+    QFile::remove(poolPngPath);
+}
+
+void MainWindowTest::exportTopmostLayerAudioNowShowsProgressThenCompletionInTheStatusBar() {
+    const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-status-export.wav";
+    writeTestWavFile(wavPath);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(wavPath));
+    std::filesystem::remove(wavPath);
+
+    const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-status-export.flac";
+    QSignalSpy spy(window.statusBar(), &QStatusBar::messageChanged);
+    QVERIFY(window.exportTopmostLayerAudioNow(exportPath));
+    std::filesystem::remove(exportPath);
+
+    QVERIFY(spy.count() >= 2);
+    QVERIFY(!window.statusBar()->currentMessage().isEmpty());
+}
+
+void MainWindowTest::aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMessage() {
+    // No layer with content to export - fails, and shows a modal in the
+    // interactive path (exportAudio()), but exportTopmostLayerAudioNow()
+    // itself never shows dialogs (see its docs) - it should still leave the
+    // status bar clean rather than stuck on an "Exporting..." message that
+    // never actually completed.
+    MainWindow window;
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-status-fail.flac";
+
+    QVERIFY(!window.exportTopmostLayerAudioNow(path));
+    QVERIFY(window.statusBar()->currentMessage().isEmpty());
 }

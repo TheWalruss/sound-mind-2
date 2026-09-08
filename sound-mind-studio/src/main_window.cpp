@@ -7,12 +7,14 @@
 #include <stdexcept>
 
 #include <QAction>
+#include <QCoreApplication>
 #include <QFileDialog>
 #include <QImage>
 #include <QKeySequence>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QStatusBar>
 #include <QToolBar>
 
 #include "sound_mind/codec/color_mapping.h"
@@ -57,6 +59,19 @@ const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
         return sound_mind::codec::CompressedAudioFormat::Mp3;
     }
     return std::nullopt;
+}
+
+/// @brief Shows `message` in `bar` and forces an immediate repaint.
+///
+/// Imports/exports/pooling are synchronous, blocking calls (see the
+/// confirmed scope for this milestone - a background-thread model is
+/// deferred to Live Mode's real-time pipeline work) - without the explicit
+/// processEvents() call, Qt wouldn't actually paint the status bar's new
+/// text until *after* the blocking call already returned, defeating the
+/// whole point of showing progress before a slow operation starts.
+void showBusyStatus(QStatusBar* bar, const QString& message) {
+    bar->showMessage(message);
+    QCoreApplication::processEvents();
 }
 
 /// @brief Converts a QImage to codec::RgbImage, forcing a consistent 3-byte-
@@ -243,6 +258,7 @@ bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* err
         return false;
     }
 
+    showBusyStatus(statusBar(), tr("Importing audio..."));
     try {
         const auto audio = sound_mind::codec::readWavFile(path);
         const auto content = sound_mind::codec::encode(audio, sound_mind::codec::StreamCodecConfig{});
@@ -255,8 +271,10 @@ bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* err
         // pick up the newly imported one instead of whatever was loaded
         // before, rather than silently keep playing stale content.
         playbackLoaded_ = false;
+        statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
         return true;
     } catch (const std::exception& e) {
+        statusBar()->clearMessage();
         if (errorMessage != nullptr) {
             *errorMessage = QString::fromStdString(e.what());
         }
@@ -280,6 +298,7 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, QString* err
         return false;
     }
 
+    showBusyStatus(statusBar(), tr("Importing image..."));
     try {
         const auto rgbImage = toRgbImage(sourceImage);
         const auto content = sound_mind::codec::fromRgbImage(rgbImage, sound_mind::codec::StreamCodecConfig{});
@@ -289,8 +308,10 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, QString* err
         project_->addLayer(std::move(layer));
         canvas_->update();
         playbackLoaded_ = false;
+        statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
         return true;
     } catch (const std::exception& e) {
+        statusBar()->clearMessage();
         if (errorMessage != nullptr) {
             *errorMessage = QString::fromStdString(e.what());
         }
@@ -339,9 +360,16 @@ bool MainWindow::exportTopmostLayerAudioNow(const std::filesystem::path& path, Q
         return false;
     }
 
+    showBusyStatus(statusBar(), tr("Exporting audio..."));
     try {
-        return sound_mind::core::exportLayerAudio(*layer, path, *format);
+        if (!sound_mind::core::exportLayerAudio(*layer, path, *format)) {
+            statusBar()->clearMessage();
+            return false;
+        }
+        statusBar()->showMessage(tr("Exported audio to \"%1\".").arg(QString::fromStdString(path.string())), 5000);
+        return true;
     } catch (const std::exception& e) {
+        statusBar()->clearMessage();
         if (errorMessage != nullptr) {
             *errorMessage = QString::fromStdString(e.what());
         }
@@ -358,9 +386,16 @@ bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, Q
         return false;
     }
 
+    showBusyStatus(statusBar(), tr("Exporting video..."));
     try {
-        return sound_mind::core::exportLayerVideo(*layer, path);
+        if (!sound_mind::core::exportLayerVideo(*layer, path)) {
+            statusBar()->clearMessage();
+            return false;
+        }
+        statusBar()->showMessage(tr("Exported video to \"%1\".").arg(QString::fromStdString(path.string())), 5000);
+        return true;
     } catch (const std::exception& e) {
+        statusBar()->clearMessage();
         if (errorMessage != nullptr) {
             *errorMessage = QString::fromStdString(e.what());
         }
@@ -413,16 +448,14 @@ bool MainWindow::isPlaying() const noexcept {
 
 void MainWindow::poolTopmostLayer() {
     QString errorMessage;
-    QString streamPath;
-    QString poolPath;
-    if (!poolTopmostLayerNow(&errorMessage, &streamPath, &poolPath)) {
+    // Success is reported via the status bar (see poolTopmostLayerNow()),
+    // not a modal - only a failure needs one here, since it's the one
+    // outcome the status bar's "helpful, not intrusive" role isn't
+    // appropriate for (per the confirmed scope for this milestone: a
+    // missed error is worse than an intrusive one).
+    if (!poolTopmostLayerNow(&errorMessage, nullptr, nullptr)) {
         QMessageBox::critical(this, tr("Pool Layer Failed"), errorMessage);
-        return;
     }
-
-    QMessageBox::information(this, tr("Pool Layer"),
-                              tr("Pooled successfully.\n\nStream render: %1\nPool render: %2")
-                                  .arg(streamPath, poolPath));
 }
 
 bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPath, QString* poolPngPath) {
@@ -434,8 +467,10 @@ bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPa
         return false;
     }
 
+    showBusyStatus(statusBar(), tr("Pooling layer..."));
     try {
         if (!sound_mind::core::poolLayer(*layer)) {
+            statusBar()->clearMessage();
             if (errorMessage != nullptr) {
                 *errorMessage = tr("Pooling failed unexpectedly.");
             }
@@ -464,8 +499,13 @@ bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPa
         if (poolPngPath != nullptr) {
             *poolPngPath = poolPath;
         }
+        statusBar()->showMessage(
+            tr("Pooled layer \"%1\". Stream render: %2, Pool render: %3")
+                .arg(QString::fromStdString(layer->name()), streamPath, poolPath),
+            5000);
         return true;
     } catch (const std::exception& e) {
+        statusBar()->clearMessage();
         if (errorMessage != nullptr) {
             *errorMessage = QString::fromStdString(e.what());
         }
