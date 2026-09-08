@@ -5,6 +5,7 @@
 #include <fstream>
 #include <vector>
 
+#include <QFile>
 #include <QImage>
 #include <QtTest/QtTest>
 
@@ -165,4 +166,33 @@ void MainWindowTest::stopPlaybackStopsIt() {
 
     window.stopPlayback();
     QVERIFY(!window.isPlaying());
+}
+
+void MainWindowTest::poolTopmostLayerNowFailsGracefullyWithNoContent() {
+    // A fresh project's only layer (Background) has no content yet.
+    MainWindow window;
+    QVERIFY(!window.poolTopmostLayerNow());
+}
+
+void MainWindowTest::poolTopmostLayerNowPoolsAnImportedLayer() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-pool.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    QString streamPngPath;
+    QString poolPngPath;
+    const bool ok = window.poolTopmostLayerNow(nullptr, &streamPngPath, &poolPngPath);
+
+    QVERIFY(ok);
+    QVERIFY(!streamPngPath.isEmpty());
+    QVERIFY(!poolPngPath.isEmpty());
+    QVERIFY(QFile::exists(streamPngPath));
+    QVERIFY(QFile::exists(poolPngPath));
+    QCOMPARE(window.project()->layers().back().poolContent().has_value(), true);
+
+    QFile::remove(streamPngPath);
+    QFile::remove(poolPngPath);
 }

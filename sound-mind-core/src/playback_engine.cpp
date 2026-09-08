@@ -4,7 +4,10 @@
 
 namespace sound_mind::core {
 
-PlaybackEngine::PlaybackEngine() {
+PlaybackEngine::PlaybackEngine(AudioDeviceMode deviceMode) {
+    if (deviceMode == AudioDeviceMode::None) {
+        return;
+    }
     const juce::String error = deviceManager_.initialiseWithDefaultDevices(0, 2);
     deviceAvailable_ = error.isEmpty();
     if (deviceAvailable_) {

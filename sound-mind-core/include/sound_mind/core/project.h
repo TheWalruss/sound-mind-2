@@ -52,10 +52,11 @@ public:
     /**
      * @brief Loads a project from its `.smproj` JSON file on disk.
      *
-     * Any layer whose media file (see save()'s docs for the path) exists
-     * alongside the project is loaded back into that layer's
-     * `Layer::content()`; a layer with no media file yet (never rendered)
-     * simply has no content, same as a freshly-created one.
+     * Any layer whose media/pool file (see save()'s docs for the paths)
+     * exists alongside the project is loaded back into that layer's
+     * `Layer::content()`/`poolContent()`; a layer with no such file yet
+     * (never rendered, or never Pooled) simply has no content there, same
+     * as a freshly-created one.
      *
      * @param path Path to the project file.
      * @return The loaded project.
@@ -70,11 +71,13 @@ public:
      * Per `docs/sound-mind-architecture.md`'s Project File & Folder layout,
      * any layer with cached content (see `Layer::content()`) also gets that
      * content written as its own Stream file, to `<path's folder>/<path's
-     * stem>/media/layer_<id>.smstream` - created if it doesn't exist yet.
+     * stem>/media/layer_<id>.smstream`; any layer with Pool content (see
+     * `Layer::poolContent()`) likewise gets `.../pool/layer_<id>.smpool` -
+     * both created if they don't exist yet.
      *
      * @param path Destination path.
-     * @throws std::ios_base::failure if the file (or a layer's media file)
-     *         can't be written.
+     * @throws std::ios_base::failure if the file (or a layer's media/pool
+     *         file) can't be written.
      */
     void save(const std::filesystem::path& path) const;
 
@@ -96,6 +99,14 @@ public:
     /// @brief This project's layer stack, in bottom-to-top order.
     /// @return The layers this project currently holds.
     [[nodiscard]] const std::vector<Layer>& layers() const noexcept { return layers_; }
+
+    /// @brief This project's layer stack, in bottom-to-top order - mutable
+    ///        access, for in-place changes (renaming, opacity, Pooling,
+    ///        and eventually painting) that don't change the stack's
+    ///        membership or order (addLayer() is still how a new layer
+    ///        gets appended).
+    /// @return The layers this project currently holds.
+    [[nodiscard]] std::vector<Layer>& layers() noexcept { return layers_; }
 
     /// @brief This project's single, project-wide operation log.
     /// @return The operation log this project currently holds.

@@ -7,6 +7,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
 
 namespace sound_mind::core {
@@ -136,6 +137,24 @@ public:
     /// @param content The new content, replacing anything previously cached.
     void setContent(sound_mind::codec::StreamImage content) { content_ = std::move(content); }
 
+    /**
+     * @brief This layer's cached Pool-encoded content, if it's been
+     *        Pooled at least once (see `sound_mind::core::poolLayer()`).
+     * @return The cached Pool content, or `std::nullopt` for a layer that
+     *         has never been Pooled.
+     *
+     * @note In-memory only, same reasoning as content(): persisted as its
+     *       own Pool file under the project's `pool/` folder, not inlined
+     *       into the JSON project file.
+     */
+    [[nodiscard]] const std::optional<sound_mind::codec::PoolImage>& poolContent() const noexcept {
+        return poolContent_;
+    }
+
+    /// @brief Sets this layer's cached Pool-encoded content.
+    /// @param content The new content, replacing anything previously cached.
+    void setPoolContent(sound_mind::codec::PoolImage content) { poolContent_ = std::move(content); }
+
     friend void to_json(nlohmann::json& json, const Layer& layer);
     friend void from_json(const nlohmann::json& json, Layer& layer);
 
@@ -145,6 +164,7 @@ private:
     LayerType type_ = LayerType::Normal;
     float opacity_ = 1.0f;
     std::optional<sound_mind::codec::StreamImage> content_;
+    std::optional<sound_mind::codec::PoolImage> poolContent_;
 };
 
 /// @brief Serializes a Layer to its JSON representation.

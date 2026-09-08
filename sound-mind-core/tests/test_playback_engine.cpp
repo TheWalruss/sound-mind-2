@@ -5,6 +5,7 @@
 #include "sound_mind/core/playback_engine.h"
 
 using sound_mind::codec::AudioBuffer;
+using sound_mind::core::AudioDeviceMode;
 using sound_mind::core::PlaybackEngine;
 
 namespace {
@@ -19,20 +20,22 @@ AudioBuffer makeTestAudio() {
 
 }  // namespace
 
-// No test here depends on a real audio device actually being present -
-// PlaybackEngine's constructor is defensive about that (see
-// isDeviceAvailable()'s docs), and renderBlock() - the one method actually
-// exercised below - is called directly rather than through a real device
-// callback, so these tests are safe to run on a CI runner with no audio
-// hardware.
+// Every engine below is constructed with AudioDeviceMode::None - these
+// tests call renderBlock() directly, and a real device (when one exists)
+// would also be calling it concurrently from its own background callback
+// thread, racing against these direct calls on the same shared atomics.
+// See AudioDeviceMode's docs for why that's a real, not just theoretical,
+// source of flakiness (found via exactly this: a rare failure in "stop()
+// rewinds to the beginning" when run alongside other tests, never in
+// isolation - a classic race-condition signature).
 
 TEST_CASE("A fresh PlaybackEngine is not playing", "[core][playback_engine]") {
-    const PlaybackEngine engine;
+    const PlaybackEngine engine(AudioDeviceMode::None);
     CHECK_FALSE(engine.isPlaying());
 }
 
 TEST_CASE("play() and pause() toggle the playing state", "[core][playback_engine]") {
-    PlaybackEngine engine;
+    PlaybackEngine engine(AudioDeviceMode::None);
     engine.loadAudio(makeTestAudio());
 
     engine.play();
@@ -43,7 +46,7 @@ TEST_CASE("play() and pause() toggle the playing state", "[core][playback_engine
 }
 
 TEST_CASE("renderBlock outputs silence when not playing", "[core][playback_engine]") {
-    PlaybackEngine engine;
+    PlaybackEngine engine(AudioDeviceMode::None);
     engine.loadAudio(makeTestAudio());
 
     std::vector<float> left(4, 999.0f);
@@ -61,7 +64,7 @@ TEST_CASE("renderBlock outputs silence when not playing", "[core][playback_engin
 }
 
 TEST_CASE("renderBlock fills output with the loaded audio's samples in order", "[core][playback_engine]") {
-    PlaybackEngine engine;
+    PlaybackEngine engine(AudioDeviceMode::None);
     engine.loadAudio(makeTestAudio());
     engine.play();
 
@@ -85,7 +88,7 @@ TEST_CASE("renderBlock fills output with the loaded audio's samples in order", "
 }
 
 TEST_CASE("renderBlock silences and stops once the loaded audio ends", "[core][playback_engine]") {
-    PlaybackEngine engine;
+    PlaybackEngine engine(AudioDeviceMode::None);
     engine.loadAudio(makeTestAudio());
     engine.play();
 
@@ -103,7 +106,7 @@ TEST_CASE("renderBlock silences and stops once the loaded audio ends", "[core][p
 }
 
 TEST_CASE("stop() rewinds to the beginning", "[core][playback_engine]") {
-    PlaybackEngine engine;
+    PlaybackEngine engine(AudioDeviceMode::None);
     engine.loadAudio(makeTestAudio());
     engine.play();
 
@@ -121,7 +124,7 @@ TEST_CASE("stop() rewinds to the beginning", "[core][playback_engine]") {
 }
 
 TEST_CASE("renderBlock mixes to a single output channel using just the left channel", "[core][playback_engine]") {
-    PlaybackEngine engine;
+    PlaybackEngine engine(AudioDeviceMode::None);
     engine.loadAudio(makeTestAudio());
     engine.play();
 
@@ -132,4 +135,9 @@ TEST_CASE("renderBlock mixes to a single output channel using just the left chan
 
     CHECK(mono[0] == 0.1f);
     CHECK(mono[1] == 0.2f);
+}
+
+TEST_CASE("AudioDeviceMode::None never reports a device as available", "[core][playback_engine]") {
+    const PlaybackEngine engine(AudioDeviceMode::None);
+    CHECK_FALSE(engine.isDeviceAvailable());
 }

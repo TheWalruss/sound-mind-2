@@ -6,6 +6,8 @@ add_executable(sound-mind-codec-tests
     test_stream_file.cpp
     test_wav_file.cpp
     test_color_mapping.cpp
+    test_pool_codec.cpp
+    test_pool_file.cpp
 )
 
 target_link_libraries(sound-mind-codec-tests

@@ -125,4 +125,26 @@ StreamImage fromRgbImage(const RgbImage& rgb, const StreamCodecConfig& configIn)
     return image;
 }
 
+RgbImage toRgbImage(const PoolImage& image) {
+    RgbImage rgb;
+    rgb.width = image.frameCount;
+    rgb.height = image.config.binCount;
+    rgb.pixels.resize(rgb.pixelCount() * 3);
+
+    const std::uint32_t binCount = image.config.binCount;
+    const std::uint32_t frameCount = image.frameCount;
+
+    for (std::uint32_t row = 0; row < binCount; ++row) {
+        const std::uint32_t bin = binCount - 1 - row;  // row 0 = highest frequency
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * frameCount + frame;
+            const std::size_t pixel = (static_cast<std::size_t>(row) * frameCount + frame) * 3;
+            rgb.pixels[pixel + 0] = dbToByte(image.leftMagnitudeDb[cell]);
+            rgb.pixels[pixel + 1] = dbToByte(image.rightMagnitudeDb[cell]);
+            rgb.pixels[pixel + 2] = phaseToByte(image.leftPhaseRadians[cell]);
+        }
+    }
+    return rgb;
+}
+
 }  // namespace sound_mind::codec

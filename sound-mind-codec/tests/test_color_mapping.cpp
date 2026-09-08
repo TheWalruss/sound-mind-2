@@ -5,8 +5,10 @@
 #include <numbers>
 
 #include "sound_mind/codec/color_mapping.h"
+#include "sound_mind/codec/pool_codec.h"
 
 using sound_mind::codec::fromRgbImage;
+using sound_mind::codec::PoolImage;
 using sound_mind::codec::RgbImage;
 using sound_mind::codec::StreamCodecConfig;
 using sound_mind::codec::StreamImage;
@@ -98,4 +100,24 @@ TEST_CASE("fromRgbImage inverts toRgbImage within 8-bit quantization tolerance",
     // the same angle but map to opposite ends of the byte range, so a
     // straightforward margin check isn't meaningful right at that seam.
     CHECK(roundTripped.sharedPhaseRadians[3] == Catch::Approx(original.sharedPhaseRadians[3]).margin(kPhaseTolerance));
+}
+
+TEST_CASE("toRgbImage(PoolImage) uses the same red/green/blue convention as the StreamImage overload", "[color_mapping]") {
+    PoolImage image;
+    image.config.binCount = 2;
+    image.frameCount = 2;
+    image.leftMagnitudeDb = {0.0f, -200.0f, -48.0f, -96.0f};
+    image.rightMagnitudeDb = {-96.0f, 0.0f, -48.0f, -200.0f};
+    image.leftPhaseRadians = {0.0f, std::numbers::pi_v<float>, -std::numbers::pi_v<float>,
+                               std::numbers::pi_v<float> / 2.0f};
+    image.rightPhaseRadians = {1.0f, 1.0f, 1.0f, 1.0f};  // deliberately different from left - must not leak into blue
+
+    const RgbImage rgb = toRgbImage(image);
+
+    REQUIRE(rgb.width == 2);
+    REQUIRE(rgb.height == 2);
+    // Row 0 = bin 1, frame 0: left = -48 dB, right = -48 dB, left phase = -pi.
+    CHECK(rgb.pixels[0] > 120);
+    CHECK(rgb.pixels[0] < 135);
+    CHECK(rgb.pixels[2] == 0);  // blue comes from left phase (-pi), not right's constant 1.0
 }

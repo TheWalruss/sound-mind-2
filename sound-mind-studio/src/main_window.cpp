@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstring>
 #include <exception>
+#include <stdexcept>
 
 #include <QAction>
 #include <QFileDialog>
@@ -18,6 +19,7 @@
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/codec/wav_file.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
 
@@ -48,6 +50,16 @@ const char* kImageFileFilter = "Images (*.png *.jpg *.jpeg *.bmp *.tga *.webp)";
                     static_cast<std::size_t>(image.width) * 3);
     }
     return image;
+}
+
+/// @brief Converts a codec::RgbImage to a QImage, copying the pixel data
+/// so the result stays valid independent of the source's own lifetime
+/// (unlike CanvasWidget's paintEvent(), where the source stays alive for
+/// the whole synchronous paint call and a copy would be wasted work).
+[[nodiscard]] QImage toQImage(const sound_mind::codec::RgbImage& image) {
+    return QImage(image.pixels.data(), static_cast<int>(image.width), static_cast<int>(image.height),
+                  static_cast<int>(image.width) * 3, QImage::Format_RGB888)
+        .copy();
 }
 
 }  // namespace
@@ -98,6 +110,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     QAction* stopAction = transportToolBar->addAction(tr("Stop"));
     connect(stopAction, &QAction::triggered, this, &MainWindow::stopPlayback);
+
+    QAction* poolAction = transportToolBar->addAction(tr("Pool Layer"));
+    connect(poolAction, &QAction::triggered, this, &MainWindow::poolTopmostLayer);
 
     newProject();
 }
@@ -250,24 +265,30 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, QString* err
     }
 }
 
+sound_mind::core::Layer* MainWindow::topmostLayerWithContent() {
+    if (!project_) {
+        return nullptr;
+    }
+    auto& layers = project_->layers();
+    for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
+        if (it->content().has_value()) {
+            return &*it;
+        }
+    }
+    return nullptr;
+}
+
 void MainWindow::startPlayback() {
     if (!project_) {
         return;
     }
 
     if (!playbackLoaded_) {
-        const auto& layers = project_->layers();
-        bool foundContent = false;
-        for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
-            if (it->content().has_value()) {
-                playbackEngine_.loadAudio(sound_mind::codec::decode(*it->content()));
-                foundContent = true;
-                break;
-            }
-        }
-        if (!foundContent) {
+        const sound_mind::core::Layer* layer = topmostLayerWithContent();
+        if (layer == nullptr) {
             return;
         }
+        playbackEngine_.loadAudio(sound_mind::codec::decode(*layer->content()));
         playbackLoaded_ = true;
     }
 
@@ -285,6 +306,68 @@ void MainWindow::stopPlayback() {
 
 bool MainWindow::isPlaying() const noexcept {
     return playbackEngine_.isPlaying();
+}
+
+void MainWindow::poolTopmostLayer() {
+    QString errorMessage;
+    QString streamPath;
+    QString poolPath;
+    if (!poolTopmostLayerNow(&errorMessage, &streamPath, &poolPath)) {
+        QMessageBox::critical(this, tr("Pool Layer Failed"), errorMessage);
+        return;
+    }
+
+    QMessageBox::information(this, tr("Pool Layer"),
+                              tr("Pooled successfully.\n\nStream render: %1\nPool render: %2")
+                                  .arg(streamPath, poolPath));
+}
+
+bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPath, QString* poolPngPath) {
+    sound_mind::core::Layer* layer = topmostLayerWithContent();
+    if (layer == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No layer with content to pool.");
+        }
+        return false;
+    }
+
+    try {
+        if (!sound_mind::core::poolLayer(*layer)) {
+            if (errorMessage != nullptr) {
+                *errorMessage = tr("Pooling failed unexpectedly.");
+            }
+            return false;
+        }
+        canvas_->update();
+        // The layer's content was just replaced with a fresh, pool-derived
+        // Stream copy - the next startPlayback() should pick that up
+        // rather than continue playing whatever was loaded before.
+        playbackLoaded_ = false;
+
+        const QString base = QString::fromStdString((std::filesystem::temp_directory_path() / "sound-mind-pool-compare").string());
+        const QString streamPath = base + "-stream.png";
+        const QString poolPath = base + "-pool.png";
+
+        if (!toQImage(sound_mind::codec::toRgbImage(*layer->content())).save(streamPath)) {
+            throw std::runtime_error("could not write Stream comparison image");
+        }
+        if (!toQImage(sound_mind::codec::toRgbImage(*layer->poolContent())).save(poolPath)) {
+            throw std::runtime_error("could not write Pool comparison image");
+        }
+
+        if (streamPngPath != nullptr) {
+            *streamPngPath = streamPath;
+        }
+        if (poolPngPath != nullptr) {
+            *poolPngPath = poolPath;
+        }
+        return true;
+    } catch (const std::exception& e) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QString::fromStdString(e.what());
+        }
+        return false;
+    }
 }
 
 }  // namespace sound_mind::studio

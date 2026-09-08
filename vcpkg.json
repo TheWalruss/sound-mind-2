@@ -6,6 +6,7 @@
     "catch2",
     "nlohmann-json",
     "pocketfft",
-    "juce"
+    "juce",
+    "tiff"
   ]
 }

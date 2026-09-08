@@ -1,12 +1,15 @@
 #include <filesystem>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/project.h"
 
+using sound_mind::codec::PoolImage;
 using sound_mind::codec::StreamImage;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
@@ -112,6 +115,51 @@ TEST_CASE("A layer's cached content round-trips through a project file's media f
     // The Background layer never had content set, so it should round-trip
     // with none - no phantom media file should have been created for it.
     CHECK_FALSE(restored.layers().front().content().has_value());
+
+    std::filesystem::remove(path);
+    std::filesystem::remove_all(projectFolder);
+}
+
+TEST_CASE("A layer's cached Pool content round-trips through a project file's pool folder", "[core][project]") {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-project-with-pool.smproj";
+    const auto projectFolder = std::filesystem::temp_directory_path() / "sound-mind-test-project-with-pool";
+    std::filesystem::remove_all(projectFolder);
+
+    Project original = Project::createNew(ProjectSettings{});
+    PoolImage content;
+    content.config.binCount = 8;
+    content.frameCount = 4;
+    content.leftMagnitudeDb.assign(32, -10.0f);
+    content.rightMagnitudeDb.assign(32, -20.0f);
+    content.leftPhaseRadians.assign(32, 1.0f);
+    content.rightPhaseRadians.assign(32, -1.0f);
+
+    Layer imported(0, "Imported", LayerType::Normal);
+    imported.setPoolContent(content);
+    const auto importedId = original.addLayer(std::move(imported));
+
+    original.save(path);
+    const Project restored = Project::load(path);
+
+    const auto& restoredLayer = restored.layers().back();
+    REQUIRE(restoredLayer.id() == importedId);
+    REQUIRE(restoredLayer.poolContent().has_value());
+    CHECK(restoredLayer.poolContent()->config.binCount == 8);
+    CHECK(restoredLayer.poolContent()->frameCount == 4);
+    // A Pool file quantizes to 16-bit integers (see writePoolFile()'s docs)
+    // - a real, if very fine, precision loss on top of the in-memory
+    // values, unlike Stream's raw-float media files. Compare within that
+    // tolerance rather than expecting bit-exact equality.
+    constexpr float kDbTolerance = 96.0f / 65535.0f;
+    constexpr float kPhaseTolerance = 2.0f * 3.14159265f / 65535.0f;
+    for (std::size_t i = 0; i < content.leftMagnitudeDb.size(); ++i) {
+        CHECK(restoredLayer.poolContent()->leftMagnitudeDb[i] == Catch::Approx(content.leftMagnitudeDb[i]).margin(kDbTolerance));
+        CHECK(restoredLayer.poolContent()->rightMagnitudeDb[i] == Catch::Approx(content.rightMagnitudeDb[i]).margin(kDbTolerance));
+        CHECK(restoredLayer.poolContent()->leftPhaseRadians[i] == Catch::Approx(content.leftPhaseRadians[i]).margin(kPhaseTolerance));
+        CHECK(restoredLayer.poolContent()->rightPhaseRadians[i] == Catch::Approx(content.rightPhaseRadians[i]).margin(kPhaseTolerance));
+    }
+
+    CHECK_FALSE(restored.layers().front().poolContent().has_value());
 
     std::filesystem::remove(path);
     std::filesystem::remove_all(projectFolder);

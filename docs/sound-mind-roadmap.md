@@ -78,11 +78,13 @@ Everything in this phase is, in one way or another, getting data into or out of 
 
 ### v0.Y.5.1 - Pool Codec
 
-The lossless NSGT round-trip and the finalized Pool file format, reusing the FFT-backend groundwork from the Stream codec milestone; the "Pool" action itself (hide-not-delete of the raw layer/operations it replaces, per the non-destructive-processing principle). Nothing has been painted yet at this point in the roadmap, so pooling works on imported content.
+The near-lossless NSGT round-trip and the finalized Pool file format, reusing the FFT-backend groundwork from the Stream codec milestone; a first "Pool" action. Nothing has been painted yet at this point in the roadmap, so pooling works on imported content.
 
-**Demo:** pool an imported layer and confirm a lossless round trip.
+**Simpler first pass than the design doc's eventual scope, on purpose:** pooling replaces a layer's content in place (re-deriving a fresh Stream copy from the pooled result) rather than the design doc's "hide-not-delete, recorded as an undoable operation" behavior - that needs the first concrete `Operation` subtype, which arrives with Basic Painting, not here. Revisit Pooling once that exists.
 
-**Likely Y bump:** this is the milestone most likely to force a real Project-format change, once a Pool file actually needs referencing from project data.
+**Demo:** pool an imported layer and confirm a near-lossless round trip (measured via correlation against the original, since a practical NSGT implementation's rectangular-storage step - interpolating onto a common pixel grid - is never mathematically bit-exact, matching how the wider NSGT literature and the legacy codec both use "lossless" in practice, not as an absolute claim).
+
+**No Y bump after all.** Predicted "likely" above, but the actual addition (a `pool/layer_<id>.smpool` reference, mirroring how `media/` was added for Stream in `v0.0.3.1`) is additive, not breaking - nothing in an existing project file's shape changes. Stayed `v0.0.5.1`, not `v0.1.0.1`.
 
 ### v0.Y.6.1 - Export
 

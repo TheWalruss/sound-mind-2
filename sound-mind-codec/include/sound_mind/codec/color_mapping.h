@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
 
@@ -52,5 +53,23 @@ namespace sound_mind::codec {
  * @return The converted StreamImage.
  */
 [[nodiscard]] StreamImage fromRgbImage(const RgbImage& image, const StreamCodecConfig& config);
+
+/**
+ * @brief Renders a PoolImage as an RGB composite, using the same
+ *        red/green/blue convention as `toRgbImage(const StreamImage&)`:
+ *        red = left amplitude, green = right amplitude, blue = a phase
+ *        channel - here, arbitrarily but consistently, the *left* phase
+ *        (PoolImage has no single "the" phase channel the way StreamImage
+ *        does, since it keeps left and right independent; picking one
+ *        deterministically is what makes a layer's Pool and Stream renders
+ *        directly comparable pixel-for-pixel, per PoolImage's own docs on
+ *        why they share a grid).
+ *
+ * Same row-0-is-highest-frequency orientation as the StreamImage overload.
+ *
+ * @param image The Pool image to render.
+ * @return The rendered RGB composite.
+ */
+[[nodiscard]] RgbImage toRgbImage(const PoolImage& image);
 
 }  // namespace sound_mind::codec

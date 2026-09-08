@@ -15,4 +15,6 @@ private slots:
     void startPlaybackPlaysAnImportedLayer();
     void pauseAndResumePlayback();
     void stopPlaybackStopsIt();
+    void poolTopmostLayerNowFailsGracefullyWithNoContent();
+    void poolTopmostLayerNowPoolsAnImportedLayer();
 };

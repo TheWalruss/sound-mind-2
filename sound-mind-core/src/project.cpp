@@ -4,6 +4,7 @@
 #include <fstream>
 #include <ios>
 
+#include "sound_mind/codec/pool_file.h"
 #include "sound_mind/codec/stream_file.h"
 
 namespace sound_mind::core {
@@ -25,6 +26,12 @@ constexpr LayerId kBackgroundLayerId = 1;
 /// within a project's folder.
 [[nodiscard]] std::filesystem::path mediaPathFor(const std::filesystem::path& projectFilePath, LayerId layerId) {
     return projectFolder(projectFilePath) / "media" / ("layer_" + std::to_string(layerId) + ".smstream");
+}
+
+/// @brief The path a given layer's cached Pool render would live at,
+/// within a project's folder.
+[[nodiscard]] std::filesystem::path poolPathFor(const std::filesystem::path& projectFilePath, LayerId layerId) {
+    return projectFolder(projectFilePath) / "pool" / ("layer_" + std::to_string(layerId) + ".smpool");
 }
 }  // namespace
 
@@ -49,6 +56,10 @@ Project Project::load(const std::filesystem::path& path) {
         if (std::filesystem::exists(mediaPath)) {
             layer.setContent(sound_mind::codec::readStreamFile(mediaPath));
         }
+        const std::filesystem::path poolPath = poolPathFor(path, layer.id());
+        if (std::filesystem::exists(poolPath)) {
+            layer.setPoolContent(sound_mind::codec::readPoolFile(poolPath));
+        }
     }
 
     return project;
@@ -63,12 +74,16 @@ void Project::save(const std::filesystem::path& path) const {
     file << json.dump(2);
 
     for (const Layer& layer : layers_) {
-        if (!layer.content().has_value()) {
-            continue;
+        if (layer.content().has_value()) {
+            const std::filesystem::path mediaPath = mediaPathFor(path, layer.id());
+            std::filesystem::create_directories(mediaPath.parent_path());
+            sound_mind::codec::writeStreamFile(mediaPath, *layer.content());
         }
-        const std::filesystem::path mediaPath = mediaPathFor(path, layer.id());
-        std::filesystem::create_directories(mediaPath.parent_path());
-        sound_mind::codec::writeStreamFile(mediaPath, *layer.content());
+        if (layer.poolContent().has_value()) {
+            const std::filesystem::path poolPath = poolPathFor(path, layer.id());
+            std::filesystem::create_directories(poolPath.parent_path());
+            sound_mind::codec::writePoolFile(poolPath, *layer.poolContent());
+        }
     }
 }
 

@@ -6,6 +6,92 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.5.1] - 2026-09-08
+
+The "Pool Codec" milestone from `docs/sound-mind-roadmap.md`: a real,
+near-lossless NSGT-based Pool codec, a "Pool Layer" action, and the
+architecture doc's long-open NSGT library question actually resolved.
+
+### Added
+
+- **`sound_mind::codec::poolEncode()`/`poolDecode()`**: a real
+  Non-Stationary Gabor Transform, implemented from scratch on PocketFFT -
+  the standard frequency-domain-windowing technique (one global FFT per
+  channel; each log-spaced bin's own native-rate coefficient sequence
+  comes directly from a Hann-windowed spectral slice via the DFT
+  filter-bank identity, no separate demodulation step needed).
+  Constant-Q: deep frequency resolution at bass, fine time resolution at
+  treble, unlike Stream's fixed-window STFT. Independent left/right
+  phase (unlike Stream's shared-phase approximation) - measured
+  round-trip correlation: 0.999984, for both mono and genuinely-stereo
+  content, on the first working implementation.
+- **`sound_mind::codec::writePoolFile()`/`readPoolFile()`**: the Pool
+  file format - a standard TIFF 6.0 container (via libtiff), four 16-bit
+  grayscale pages (left/right amplitude, left/right phase), LZW-
+  compressed, informed by (not bound to) `docs/legacy/SOUND_MIND_TIFF_SPEC.md`;
+  a fresh `SoundMindPool:key=value` metadata block, not the legacy key
+  set. A-weighting and the tiled storage layout are deferred (see Notes).
+- **`toRgbImage(const PoolImage&)`**: renders a Pool image using the same
+  red/green/blue convention as the Stream overload (red = left amplitude,
+  green = right amplitude, blue = a phase channel - left phase, since
+  Pool has no single shared one) - directly enabling pixel-for-pixel
+  comparison between a layer's Stream and Pool renders.
+- **`sound_mind::core::poolLayer()`**: pools a layer in place - Pool
+  content stored on `Layer::poolContent()` (mirroring `content()`,
+  persisted the same way under the project's new `pool/` folder), with a
+  fresh Stream copy re-derived from the pooled result, per the design
+  doc's "resulting Pool file converted to a light-weight Stream copy."
+- **"Pool Layer" toolbar action** in `sound-mind-studio`: pools the
+  topmost layer with content, then writes both its Stream and Pool
+  renders as PNG files (to the system temp directory) for side-by-side
+  comparison in any image viewer.
+- `Project::layers()` gained a non-const overload, for in-place layer
+  mutation (Pooling now, opacity/renaming/painting later).
+
+### Fixed
+
+- **A real, if rare, race condition in `PlaybackEngine`**, found while
+  running the full regression suite for this milestone (unrelated to Pool
+  Codec itself, but not deferred, per the project's regression-testing
+  discipline): when a real audio device exists, the constructor
+  unconditionally registered a background callback that also calls
+  `renderBlock()` - racing against a test's own direct calls to that
+  method on the same shared atomics. Added `AudioDeviceMode::None` so
+  tests can construct a fully hermetic engine that never touches real
+  hardware; `PlaybackEngine`'s own tests now also run roughly 10x faster
+  (no real device-enumeration overhead) as a side benefit.
+
+### Notes
+
+- **Confirmed scope, per the four decisions asked before implementing**:
+  NSGT implemented from scratch rather than porting `libnsgt` (its actual
+  ~710-line FFTW-coupled source wasn't reliably obtainable through
+  available tooling for a faithful port - only a summarized view of it,
+  confirmed this session); libtiff over `tinytiff` (permissive license,
+  complete native LZW/multi-page support); Pooling as a plain in-place
+  mutation rather than building the first `Operation` subtype early; no Y
+  bump (the roadmap's own "likely" prediction turned out wrong - the
+  `pool/` addition is additive, same as `media/` was in `v0.0.3.1`).
+- "Lossless" is a practical claim, not an absolute one, matching the wider
+  NSGT literature and the legacy codec's own usage of the term: the
+  interpolate-onto-a-common-pixel-grid step every practical NSGT
+  implementation needs for rectangular storage is the only source of
+  reconstruction error in an otherwise perfectly-invertible transform.
+  Energy outside `[minFrequencyHz, maxFrequencyHz]` (DC and Nyquist, in
+  particular) is a deliberate, accepted loss, not a bug.
+- A-weighting (a cosmetic, decode-reversible dB pre-emphasis the legacy
+  TIFF format applies) and the tiled/multi-snippet storage layout (for
+  efficient partial decode of long compositions) are both deferred -
+  neither affects round-trip correctness, and nothing yet needs partial
+  decode (Playback pre-decodes a whole layer at once).
+- Test coverage: 8 new `sound-mind-codec` tests (NSGT round-trip fidelity
+  both mono and stereo, energy-outside-range handling, Pool file I/O,
+  Color Mapping), 5 new `sound-mind-core` tests (`Layer.poolContent()`,
+  project persistence, the `poolLayer()` action, plus one covering the
+  `PlaybackEngine` fix above), 2 new `sound-mind-studio` GUI tests (the
+  Pool Layer action, including its comparison-image output) - 75 tests
+  total across the project (22 + 39 + 14), all green.
+
 ## [0.0.4.1] - 2026-09-07
 
 The "Playback" milestone from `docs/sound-mind-roadmap.md`: transport

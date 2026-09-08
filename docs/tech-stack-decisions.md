@@ -21,6 +21,8 @@ Reference notes from the initial planning conversation. Previous version was Pyt
 ## Frameworks
 - **Audio/DSP**: JUCE — industry-standard for DAWs and plugins (VST3/AU hosting, lock-free audio callback patterns, real-time-safe design). Its codebase is also a good real-world reference for modern C++ idioms applied to audio constraints. Linked in via the vcpkg `juce` port, matching every other dependency here. Licensing tier: JUCE 8's free Starter tier (up to $20,000 gross annual revenue) as of `v0.0.4.1` — see `sound-mind-architecture.md`'s Decisions Made/Needed for the reasoning and what's still open beyond that threshold.
 - **GUI**: Qt. Decided over JUCE's own GUI module, given existing Qt experience. JUCE is used only for its audio engine (device I/O, DSP building blocks) — its GUI module is not used, so the Studio application's windowing and widgets are Qt's, not JUCE's. See `sound-mind-architecture.md` for how the two coexist.
+- **FFT backend**: PocketFFT (header-only C++, BSD-3-Clause, vcpkg `pocketfft` port) — settled `v0.0.2.1`, used directly by both the Stream codec's STFT and the Pool codec's from-scratch NSGT implementation (`v0.0.5.1`). See `sound-mind-architecture.md`'s Decisions Made for the full reasoning (sidesteps FFTW3's GPL entirely).
+- **Pool file I/O**: libtiff (permissive license, vcpkg `tiff` port) — settled `v0.0.5.1`, over `tinytiff` (LGPL-3.0).
 
 ## GPU Compute: DirectX 12 Compute
 - Chosen for cross-vendor support (Nvidia, AMD, Intel) on Windows, good documentation, and Windows-first target platform.
@@ -43,5 +45,4 @@ Reference notes from the initial planning conversation. Previous version was Pyt
 - Before committing to specific third-party audio libraries (VST SDK, codec libs, etc.), verify current Arm64 Windows packaging status — coverage was inconsistent as recently as the last year.
 
 ## Open Decisions (not yet settled)
-- Final DSP library choices for NSGT-equivalent processing in C++ (candidates under evaluation — see `sound-mind-architecture.md`)
 - Plugin format support scope (VST3/AU) if applicable

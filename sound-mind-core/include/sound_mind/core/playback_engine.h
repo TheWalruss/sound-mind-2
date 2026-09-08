@@ -9,6 +9,23 @@
 namespace sound_mind::core {
 
 /**
+ * @brief Whether a PlaybackEngine should attach to a real audio device.
+ *
+ * `None` exists specifically for tests that call renderBlock() directly:
+ * with a real device attached, JUCE's own background callback thread
+ * would *also* be calling renderBlock() concurrently (whenever the OS
+ * audio subsystem wants a buffer), racing against the test's own direct
+ * calls on the same shared atomics - `position_` in particular ends up
+ * advanced by whichever caller runs first, which is exactly the kind of
+ * hard-to-reproduce flakiness this sidesteps entirely rather than papering
+ * over with locks or timing assumptions.
+ */
+enum class AudioDeviceMode {
+    Real,  ///< Attaches to the system's real default output device (normal use).
+    None,  ///< Never attaches to a real device - for hermetic, device-independent tests.
+};
+
+/**
  * @brief Plays back a fixed, pre-decoded audio buffer through the system's
  *        default output device.
  *
@@ -33,7 +50,12 @@ namespace sound_mind::core {
  */
 class PlaybackEngine : private juce::AudioIODeviceCallback {
 public:
-    PlaybackEngine();
+    /// @brief Constructs a PlaybackEngine.
+    /// @param deviceMode `Real` (the default) attaches to the system's
+    ///        real output device, falling back gracefully
+    ///        (isDeviceAvailable() == false) if none exists; `None` never
+    ///        attaches to one at all - see AudioDeviceMode's docs.
+    explicit PlaybackEngine(AudioDeviceMode deviceMode = AudioDeviceMode::Real);
     ~PlaybackEngine() override;
 
     PlaybackEngine(const PlaybackEngine&) = delete;

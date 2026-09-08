@@ -22,6 +22,7 @@ add_library(sound-mind-core
     src/project.cpp
     src/compositor.cpp
     src/playback_engine.cpp
+    src/pooling.cpp
 )
 
 target_include_directories(sound-mind-core

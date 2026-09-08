@@ -1,9 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/layer.h"
 
+using sound_mind::codec::PoolImage;
 using sound_mind::codec::StreamImage;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
@@ -77,4 +79,33 @@ TEST_CASE("A Layer's content is not part of its JSON representation", "[core][la
 
     REQUIRE(original.content().has_value());
     REQUIRE_FALSE(restored.content().has_value());
+}
+
+TEST_CASE("A Layer has no Pool content by default", "[core][layer]") {
+    const Layer layer(1, "Untitled", LayerType::Normal);
+    REQUIRE_FALSE(layer.poolContent().has_value());
+}
+
+TEST_CASE("A Layer's Pool content can be set", "[core][layer]") {
+    Layer layer(1, "Untitled", LayerType::Normal);
+    PoolImage content;
+    content.config.binCount = 4;
+    content.frameCount = 2;
+
+    layer.setPoolContent(content);
+
+    REQUIRE(layer.poolContent().has_value());
+    CHECK(layer.poolContent()->config.binCount == 4);
+    CHECK(layer.poolContent()->frameCount == 2);
+}
+
+TEST_CASE("A Layer's Pool content is not part of its JSON representation", "[core][layer]") {
+    Layer original(1, "Untitled", LayerType::Normal);
+    original.setPoolContent(PoolImage{});
+
+    const nlohmann::json json = original;
+    const Layer restored = json.get<Layer>();
+
+    REQUIRE(original.poolContent().has_value());
+    REQUIRE_FALSE(restored.poolContent().has_value());
 }

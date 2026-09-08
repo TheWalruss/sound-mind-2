@@ -84,6 +84,20 @@ public slots:
     /// @brief Stops playback and rewinds to the beginning.
     void stopPlayback();
 
+    /**
+     * @brief Pools the topmost layer with content, then exports both its
+     *        Stream and Pool renders as PNG files, for side-by-side
+     *        comparison in any image viewer.
+     *
+     * Per the confirmed scope for this milestone: pooling replaces the
+     * layer's content in place (see `sound_mind::core::poolLayer()`'s
+     * docs for why this isn't yet the design doc's "hide-not-delete,
+     * undoable operation" behavior) rather than prompting for anything -
+     * "the topmost layer" is the same one startPlayback() and
+     * CanvasWidget use.
+     */
+    void poolTopmostLayer();
+
 public:
     /// @brief Whether playback is currently active.
     /// @return The underlying PlaybackEngine's isPlaying().
@@ -128,8 +142,34 @@ public:
      */
     bool importImageFile(const std::filesystem::path& path, QString* errorMessage = nullptr);
 
+    /**
+     * @brief Pools the topmost layer with content and writes its Stream
+     *        and Pool renders as PNG files, without showing any dialog -
+     *        the actual work behind poolTopmostLayer(), split out for the
+     *        same headless-testability reason as importAudioFile()/
+     *        importImageFile() (see their docs).
+     *
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @param streamPngPath If non-null and this returns `true`, set to the
+     *        path the Stream render was written to.
+     * @param poolPngPath If non-null and this returns `true`, set to the
+     *        path the Pool render was written to.
+     * @return `true` on success; `false` if there was no layer to pool, or
+     *         writing either PNG failed.
+     */
+    bool poolTopmostLayerNow(QString* errorMessage = nullptr, QString* streamPngPath = nullptr,
+                              QString* poolPngPath = nullptr);
+
 private:
     void setProject(sound_mind::core::Project project);
+
+    /// @brief The topmost layer with content, if any - the same notion of
+    /// "the composite" startPlayback(), CanvasWidget, and
+    /// poolTopmostLayer() all share for now (see their docs).
+    /// @return A mutable pointer to that layer, or `nullptr` if none has
+    ///         content, or no project is open.
+    [[nodiscard]] sound_mind::core::Layer* topmostLayerWithContent();
 
     std::optional<sound_mind::core::Project> project_;
     std::optional<std::filesystem::path> currentPath_;
