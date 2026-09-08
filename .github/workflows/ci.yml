@@ -16,7 +16,16 @@ jobs:
     # before that. ctest's own --timeout (see CMakePresets.json) should
     # already catch a hung test specifically; this is the outer safety net
     # in case something else entirely (configure, build, tooling) hangs.
-    timeout-minutes: 20
+    # 45 minutes, not 20 (raised in v0.0.6.2): a cold vcpkg binary cache -
+    # the very first run after any vcpkg.json/baseline change, cache
+    # eviction, or a brand-new cache key - has to build every dependency
+    # from source, and ffmpeg alone (added in v0.0.6.1) takes ~15-17
+    # minutes on its own on comparable hardware (confirmed locally); 20
+    # minutes was already tight before ffmpeg and hard-cancelled both
+    # matrix legs (mid-build, not a real failure) the first time it had to
+    # build ffmpeg from scratch. A warm cache (see "Cache vcpkg binary
+    # cache" below) finishes in a small fraction of this.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -84,6 +93,24 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git "${{ runner.temp }}\vcpkg"
           & "${{ runner.temp }}\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
 
+      # Without this, every run rebuilds every dependency (JUCE, ffmpeg,
+      # tiff, pocketfft, catch2, nlohmann-json...) from source every single
+      # time - vcpkg has no memory of a previous run's builds otherwise.
+      # Keyed on vcpkg.json's own content (so a dependency/feature/version
+      # change invalidates it) plus the matrix leg (x64 and Arm64 build
+      # different binaries and run on different runners, so neither should
+      # restore the other's cache). A cache miss still means a full,
+      # ffmpeg-from-scratch build - see timeout-minutes above - but every
+      # run after that first one is fast regardless of what else changes,
+      # as long as vcpkg.json itself doesn't.
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\vcpkg-binary-cache
+          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ matrix.name }}-
+
       - name: Install aqtinstall
         shell: pwsh
         run: pip install aqtinstall
@@ -112,9 +139,16 @@ jobs:
         shell: pwsh
         env:
           VCPKG_ROOT: ${{ runner.temp }}\vcpkg
+          # Points vcpkg at the directory the cache step above restores/saves
+          # - without this, vcpkg falls back to its own default location
+          # (%LOCALAPPDATA%\vcpkg\archives), which the cache step never
+          # touches, silently making the cache a no-op.
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}\vcpkg-binary-cache
           QT_ROOT_DIR: ${{ matrix.qt_root_dir }}
           QT_HOST_PATH_DIR: ${{ matrix.qt_host_path_dir }}
-        run: cmake --preset debug
+        run: |
+          New-Item -ItemType Directory -Force "${{ runner.temp }}\vcpkg-binary-cache" | Out-Null
+          cmake --preset debug
 
       - name: Build
         shell: pwsh

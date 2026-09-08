@@ -57,6 +57,17 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git "${{ runner.temp }}\vcpkg"
           & "${{ runner.temp }}\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
 
+      # Same reasoning as ci.yml's identical step - without it, every
+      # release build rebuilds every dependency (including ffmpeg, ~15-17
+      # minutes on its own) from source.
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\vcpkg-binary-cache
+          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ matrix.name }}-
+
       - name: Install aqtinstall
         shell: pwsh
         run: pip install aqtinstall
@@ -74,9 +85,12 @@ jobs:
         shell: pwsh
         env:
           VCPKG_ROOT: ${{ runner.temp }}\vcpkg
+          VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}\vcpkg-binary-cache
           QT_ROOT_DIR: ${{ matrix.qt_root_dir }}
           QT_HOST_PATH_DIR: ${{ matrix.qt_host_path_dir }}
-        run: cmake --preset release
+        run: |
+          New-Item -ItemType Directory -Force "${{ runner.temp }}\vcpkg-binary-cache" | Out-Null
+          cmake --preset release
 
       - name: Build sound-mind-studio (Release)
         shell: pwsh
