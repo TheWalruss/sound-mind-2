@@ -7,60 +7,18 @@
 
 #include <pocketfft_hdronly.h>
 
+#include "stream_frame_codec.h"
+
 namespace sound_mind::codec {
 
-namespace {
+using namespace detail;  // NOLINT(google-build-using-namespace) - this file's own shared frame-codec helpers.
 
-/// @brief dB floor guard well below audible range, avoiding -inf for exact
-/// silence rather than approximating a perceptually meaningful noise floor
-/// (that's a Pool/TIFF-pixel-quantization concern - see docs/legacy/
-/// CODEC_DETAILS.md's -96 dBFS rationale - not relevant here, since Stream
-/// stores real float32 values rather than quantizing into a fixed pixel
-/// range).
-constexpr float kMinLinearAmplitude = 1e-7f;
+namespace {
 
 /// @brief Guards the overlap-add normalization divisor near a signal's
 /// start/end, where fewer windows have accumulated, against dividing by
 /// (near) zero.
 constexpr float kMinWindowSumSquared = 1e-6f;
-
-/// @brief FFT size for a given hop length: 4x hop, i.e. 75% overlap with a
-/// Hann analysis/synthesis window - matches the legacy codec's fallback
-/// STFT backend's overlap ratio (see docs/legacy/CODEC_DETAILS.md's
-/// VulkanSTFTBackend).
-[[nodiscard]] std::uint32_t fftSizeFor(std::uint32_t hopLength) noexcept {
-    return hopLength * 4;
-}
-
-/// @brief A periodic Hann window of the given size.
-[[nodiscard]] std::vector<float> hannWindow(std::size_t size) {
-    std::vector<float> window(size);
-    for (std::size_t i = 0; i < size; ++i) {
-        window[i] =
-            0.5f - 0.5f * std::cos(2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / static_cast<float>(size));
-    }
-    return window;
-}
-
-/// @brief Copies `frame.size()` samples starting at `start` from `source`
-/// into `frame`, zero-filling anywhere that falls outside `source`'s range.
-void extractFrame(const std::vector<float>& source, std::ptrdiff_t start, std::vector<float>& frame) {
-    const auto sourceSize = static_cast<std::ptrdiff_t>(source.size());
-    for (std::size_t i = 0; i < frame.size(); ++i) {
-        const std::ptrdiff_t sourceIndex = start + static_cast<std::ptrdiff_t>(i);
-        frame[i] = (sourceIndex >= 0 && sourceIndex < sourceSize) ? source[static_cast<std::size_t>(sourceIndex)] : 0.0f;
-    }
-}
-
-/// @brief Forward real FFT: `frame.size()` real samples -> `frame.size()/2 + 1` complex bins.
-void forwardRealFft(const std::vector<float>& frame, std::vector<std::complex<float>>& bins) {
-    const std::size_t n = frame.size();
-    bins.resize(n / 2 + 1);
-    const pocketfft::shape_t shape{n};
-    const pocketfft::stride_t strideIn{sizeof(float)};
-    const pocketfft::stride_t strideOut{sizeof(std::complex<float>)};
-    pocketfft::r2c(shape, strideIn, strideOut, std::size_t{0}, pocketfft::FORWARD, frame.data(), bins.data(), 1.0f);
-}
 
 /// @brief Inverse real FFT: `n/2 + 1` complex bins -> `n` real samples.
 void inverseRealFft(const std::vector<std::complex<float>>& bins, std::size_t n, std::vector<float>& frame) {
@@ -75,32 +33,8 @@ void inverseRealFft(const std::vector<std::complex<float>>& bins, std::size_t n,
                    1.0f / static_cast<float>(n));
 }
 
-[[nodiscard]] float amplitudeToDb(float amplitude) noexcept {
-    return 20.0f * std::log10(std::max(amplitude, kMinLinearAmplitude));
-}
-
 [[nodiscard]] float dbToAmplitude(float db) noexcept {
     return std::pow(10.0f, db / 20.0f);
-}
-
-/// @brief The Nyquist-clamped upper edge of a config's encoded frequency range.
-[[nodiscard]] float clampedMaxFrequencyHz(const StreamCodecConfig& config) noexcept {
-    return std::min(config.maxFrequencyHz, static_cast<float>(config.sampleRateHz) / 2.0f);
-}
-
-/// @brief For each of `config.binCount` log-spaced output bins, the
-/// fractional linear-FFT-bin index it maps to, for the given `fftSize`.
-[[nodiscard]] std::vector<float> logBinToLinearBinIndex(const StreamCodecConfig& config, std::uint32_t fftSize) {
-    std::vector<float> linearIndex(config.binCount);
-    const float maxFrequencyHz = clampedMaxFrequencyHz(config);
-    const float logRange = std::log(maxFrequencyHz / config.minFrequencyHz);
-    const float hzPerLinearBin = static_cast<float>(config.sampleRateHz) / static_cast<float>(fftSize);
-    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
-        const float t = (config.binCount > 1) ? static_cast<float>(bin) / static_cast<float>(config.binCount - 1) : 0.0f;
-        const float logFrequencyHz = config.minFrequencyHz * std::exp(t * logRange);
-        linearIndex[bin] = logFrequencyHz / hzPerLinearBin;
-    }
-    return linearIndex;
 }
 
 /// @brief The inverse mapping of logBinToLinearBinIndex(): for each linear
@@ -118,36 +52,6 @@ void inverseRealFft(const std::vector<std::complex<float>>& bins, std::size_t n,
         logIndex[k] = t * static_cast<float>(config.binCount - 1);
     }
     return logIndex;
-}
-
-/// @brief One frequency-domain sample: magnitude plus phase decomposed into
-/// its cosine/sine components (rather than a raw angle), so callers can
-/// linearly interpolate two of these without the wraparound artefacts a
-/// direct angle interpolation would produce - the same reasoning as
-/// docs/legacy/CODEC_DETAILS.md section 3.9's phase resampling.
-struct SpectrumSample {
-    float magnitude = 0.0f;
-    float cosPhase = 1.0f;
-    float sinPhase = 0.0f;
-};
-
-/// @brief Linearly interpolates `spectrum` at the fractional index
-/// `index`, clamped to the array's valid range.
-[[nodiscard]] SpectrumSample sampleSpectrum(const std::vector<std::complex<float>>& spectrum, float index) {
-    const auto maxIndex = static_cast<float>(spectrum.size() - 1);
-    const float clamped = std::clamp(index, 0.0f, maxIndex);
-    const auto lowIndex = static_cast<std::size_t>(clamped);
-    const std::size_t highIndex = std::min(lowIndex + 1, spectrum.size() - 1);
-    const float t = clamped - static_cast<float>(lowIndex);
-
-    const std::complex<float>& low = spectrum[lowIndex];
-    const std::complex<float>& high = spectrum[highIndex];
-
-    SpectrumSample sample;
-    sample.magnitude = std::lerp(std::abs(low), std::abs(high), t);
-    sample.cosPhase = std::lerp(std::cos(std::arg(low)), std::cos(std::arg(high)), t);
-    sample.sinPhase = std::lerp(std::sin(std::arg(low)), std::sin(std::arg(high)), t);
-    return sample;
 }
 
 /// @brief Linearly interpolates a stored `[bin][frame]` plane's `frame`

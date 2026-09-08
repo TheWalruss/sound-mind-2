@@ -6,6 +6,77 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.7.1] - 2026-09-08
+
+The "Live Mode" milestone from `docs/sound-mind-roadmap.md`: continuous
+real-time capture from an input device, encoded into a growing layer and
+streamed back out through the Stream codec - the first genuinely continuous,
+real-time-safe audio pipeline in the codebase, and the first real use of a
+lock-free ring buffer for the audio-thread handoff
+`docs/sound-mind-architecture.md`'s GPU/Audio-Thread Handoff section had
+long left as "a plausible direction, not yet a decision."
+
+Confirmed scope, per the two decisions asked before implementing:
+- Real multi-layer audio mixing doesn't exist anywhere yet (not even
+  Playback does it) - building it for Live Mode alone was declined; this
+  first pass's output is the live input alone, round-tripped through the
+  Stream codec, not composited with the rest of the project.
+- The captured layer's spectrogram *does* visibly grow on the canvas in
+  real time, via a UI-thread timer.
+
+### Added
+
+- **`sound_mind::codec::StreamIncrementalEncoder`**: the live-capture
+  counterpart to `encode()` - encodes a growing audio stream frame-by-frame
+  as enough newly-captured audio makes each frame's analysis window
+  available, never zero-padding a frame with fake future audio the way
+  `encode()`'s whole-buffer approach does at a clip's real end. Shares its
+  per-frame STFT primitives with `encode()` via a new private
+  `stream_frame_codec.h` header rather than duplicating that logic.
+  Bit-exact with `encode()` on every frame both agree on, and identical
+  regardless of how audio is chunked across `pushSamples()` calls
+  (verified: matters for real audio callbacks, which never deliver a
+  clip's audio in one piece).
+- **`sound_mind::core::LiveEngine`**: opens a duplex (input+output) audio
+  device and runs the real-time pipeline - the audio callback
+  (`processBlock()`) only ever copies fixed-size blocks into/out of two
+  `juce::AbstractFifo`-backed lock-free ring buffers (no allocation, no
+  locking); a background `juce::Thread` drains the capture ring into
+  `StreamIncrementalEncoder`, re-decodes the accumulated image each pass,
+  and publishes only the newly-*stable* prefix of the result to the
+  playback ring (the last `fftSize - hopLength` samples of any decode are
+  still subject to change as more frames arrive, so they're recomputed,
+  not published early) - bounding round-trip latency to about one analysis
+  window (~40 ms at the default config). `processBlock()`/
+  `processPendingAudio()` are both exposed as independently, deterministic-
+  ly testable methods (mirroring `PlaybackEngine::renderBlock()`), so the
+  whole pipeline is tested without a real audio device or real thread
+  timing.
+- **"Live" toolbar toggle** in `sound-mind-studio`: starts/stops capture
+  into a new "Live Input" layer, mutually exclusive with Playback (both
+  would otherwise try to open the default output device through two
+  independent JUCE device managers at once) - starting Live Mode stops
+  Playback first, and Play is a no-op while Live Mode is running. A 33 ms
+  (~30 fps) timer refreshes the captured layer's content from
+  `LiveEngine::currentImage()` and repaints the canvas while running.
+
+### Notes
+
+- **Known limitation: decoding is not incremental.** The worker thread
+  re-decodes the *entire* accumulated history every pass rather than
+  extending a previous decode - correct (each pass's stable prefix is
+  identical to what an incremental decoder would produce, since decode()'s
+  overlap-add only resolves a sample once every frame overlapping it
+  exists), but cost grows with how long a Live session has run. Fine for
+  the durations this milestone's demo needs; a real problem for an
+  extended session. Revisit with an actual incremental decoder if that
+  turns out to matter in practice.
+- No Y bump: `StreamIncrementalEncoder` and `LiveEngine` are new, additive
+  capabilities - no project file format or existing public API changed.
+  Stayed `v0.0.7.1`, not `v0.1.0.1`.
+
+Full regression suite: 86/86 tests passing (codec, core, studio).
+
 ## [0.0.6.2] - 2026-09-08
 
 Maintenance pass, ahead of Live Mode: a non-modal status bar reporting

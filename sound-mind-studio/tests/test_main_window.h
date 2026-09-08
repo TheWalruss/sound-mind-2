@@ -26,4 +26,7 @@ private slots:
     void poolTopmostLayerNowShowsProgressThenCompletionInTheStatusBar();
     void exportTopmostLayerAudioNowShowsProgressThenCompletionInTheStatusBar();
     void aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMessage();
+    void toggleLiveModeAddsALayerAndStartsTheEngine();
+    void toggleLiveModeStopsARunningCapture();
+    void startPlaybackDoesNothingWhileLiveModeIsRunning();
 };

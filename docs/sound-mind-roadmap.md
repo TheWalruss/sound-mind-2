@@ -102,6 +102,10 @@ Continuous Stream-mode real-time capture and the "Live" layer compositing into t
 
 **Demo:** feed a live input signal in and hear it composited with the rest of the project in real time.
 
+**Confirmed scope, narrower than "composited with the rest of the project" on two points, both asked before implementing:** real multi-layer audio mixing doesn't exist anywhere in the codebase yet - not even Playback does it (it plays only the single topmost layer with content) - so building it for Live Mode alone, ahead of Playback, was explicitly declined; this first pass's output is the live input alone, round-tripped through the Stream codec, not mixed with any other layer. Real compositing (and Playback's own deferred always-current model, above) both remain open follow-up work, now that a real continuous pipeline exists to build them on. The captured layer's spectrogram *does* visibly grow on the canvas in real time (confirmed in scope) - a UI-thread timer polls the growing Stream image and repaints, satisfying the design doc's "sound and image are one continuous surface" principle even though the audio-mixing half of "composited" is deferred. See `docs/sound-mind-architecture.md`'s Decisions Made for the real-time handoff mechanism (lock-free ring buffers) this settled, and its own "known limitation" note on why decoding isn't yet incremental.
+
+**No Y bump.** `sound_mind::codec::StreamIncrementalEncoder` and `sound_mind::core::LiveEngine` are new, additive capabilities - nothing about the project file format or any existing public API changed. Stayed `v0.0.7.1`, not `v0.1.0.1`.
+
 ### v0.Y.8.1 - Record
 
 One-shot input-device capture into a new layer. Mind Shots don't exist yet (Phase 4), so capturing directly to one isn't available in this first pass; Record gets revisited once Mind Shots land to add that option.

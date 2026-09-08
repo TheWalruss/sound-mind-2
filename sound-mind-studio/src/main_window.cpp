@@ -15,6 +15,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QStatusBar>
+#include <QTimer>
 #include <QToolBar>
 
 #include "sound_mind/codec/color_mapping.h"
@@ -161,6 +162,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     QAction* poolAction = transportToolBar->addAction(tr("Pool Layer"));
     connect(poolAction, &QAction::triggered, this, &MainWindow::poolTopmostLayer);
+
+    QAction* liveAction = transportToolBar->addAction(tr("Live"));
+    liveAction->setCheckable(true);
+    connect(liveAction, &QAction::triggered, this, &MainWindow::toggleLiveMode);
+
+    // ~30fps - frequent enough for the live-growing spectrogram to read as
+    // continuous, without repainting so often it competes noticeably with
+    // the background encode/decode worker thread (see LiveEngine's docs)
+    // for CPU time.
+    liveUpdateTimer_ = new QTimer(this);
+    liveUpdateTimer_->setInterval(33);
+    connect(liveUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLiveLayer);
 
     newProject();
 }
@@ -416,8 +429,24 @@ sound_mind::core::Layer* MainWindow::topmostLayerWithContent() {
     return nullptr;
 }
 
+sound_mind::core::Layer* MainWindow::layerById(sound_mind::core::LayerId id) {
+    if (!project_) {
+        return nullptr;
+    }
+    for (auto& layer : project_->layers()) {
+        if (layer.id() == id) {
+            return &layer;
+        }
+    }
+    return nullptr;
+}
+
 void MainWindow::startPlayback() {
     if (!project_) {
+        return;
+    }
+    if (liveEngine_.isRunning()) {
+        // Mutually exclusive with Live Mode - see toggleLiveMode()'s docs.
         return;
     }
 
@@ -442,8 +471,57 @@ void MainWindow::stopPlayback() {
     playbackLoaded_ = false;
 }
 
+void MainWindow::toggleLiveMode() {
+    if (liveEngine_.isRunning()) {
+        liveUpdateTimer_->stop();
+        liveEngine_.stop();
+        liveLayerId_.reset();
+        statusBar()->showMessage(tr("Live capture stopped."), 5000);
+        return;
+    }
+
+    if (!project_) {
+        return;
+    }
+
+    stopPlayback();
+
+    sound_mind::core::Layer layer(0, tr("Live Input").toStdString(), sound_mind::core::LayerType::Normal);
+    liveLayerId_ = project_->addLayer(std::move(layer));
+
+    liveEngine_.start();
+    if (!liveEngine_.isDeviceAvailable()) {
+        statusBar()->showMessage(
+            tr("Live capture started, but no input device is available - nothing will be captured."), 5000);
+    } else {
+        statusBar()->showMessage(tr("Live capture started..."));
+    }
+    liveUpdateTimer_->start();
+}
+
+void MainWindow::updateLiveLayer() {
+    if (!liveLayerId_) {
+        return;
+    }
+    sound_mind::core::Layer* layer = layerById(*liveLayerId_);
+    if (layer == nullptr) {
+        return;
+    }
+
+    sound_mind::codec::StreamImage image = liveEngine_.currentImage();
+    if (image.frameCount == 0) {
+        return;
+    }
+    layer->setContent(std::move(image));
+    canvas_->update();
+}
+
 bool MainWindow::isPlaying() const noexcept {
     return playbackEngine_.isPlaying();
+}
+
+bool MainWindow::isLiveModeRunning() const noexcept {
+    return liveEngine_.isRunning();
 }
 
 void MainWindow::poolTopmostLayer() {

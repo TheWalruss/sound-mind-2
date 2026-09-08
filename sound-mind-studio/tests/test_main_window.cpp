@@ -327,3 +327,43 @@ void MainWindowTest::aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMe
     QVERIFY(!window.exportTopmostLayerAudioNow(path));
     QVERIFY(window.statusBar()->currentMessage().isEmpty());
 }
+
+void MainWindowTest::toggleLiveModeAddsALayerAndStartsTheEngine() {
+    MainWindow window;
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    window.toggleLiveMode();
+
+    QVERIFY(window.isLiveModeRunning());
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
+    QCOMPARE(QString::fromStdString(window.project()->layers().back().name()), QStringLiteral("Live Input"));
+
+    window.toggleLiveMode();  // cleanup - stop before the window is destroyed.
+}
+
+void MainWindowTest::toggleLiveModeStopsARunningCapture() {
+    MainWindow window;
+    window.toggleLiveMode();
+    QVERIFY(window.isLiveModeRunning());
+
+    window.toggleLiveMode();
+
+    QVERIFY(!window.isLiveModeRunning());
+}
+
+void MainWindowTest::startPlaybackDoesNothingWhileLiveModeIsRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-live-playback-guard.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.toggleLiveMode();
+    QVERIFY(window.isLiveModeRunning());
+
+    window.startPlayback();
+    QVERIFY(!window.isPlaying());
+
+    window.toggleLiveMode();  // cleanup.
+}

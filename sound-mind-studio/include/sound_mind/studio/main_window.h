@@ -5,10 +5,12 @@
 
 #include <QMainWindow>
 
+#include "sound_mind/core/live_engine.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project.h"
 
 class QString;
+class QTimer;
 
 namespace sound_mind::studio {
 
@@ -78,7 +80,9 @@ public slots:
      * `sound_mind::core::renderLayer()`'s docs) - real multi-layer mixing
      * doesn't exist yet. Decodes and loads that layer's audio once (not on
      * every call - resuming after pausePlayback() continues from the same
-     * position); does nothing if no layer has content, or none is open.
+     * position); does nothing if no layer has content, or none is open, or
+     * Live Mode is currently running (see toggleLiveMode()'s docs for why
+     * the two are mutually exclusive).
      */
     void startPlayback();
 
@@ -87,6 +91,29 @@ public slots:
 
     /// @brief Stops playback and rewinds to the beginning.
     void stopPlayback();
+
+    /**
+     * @brief Starts or stops Live Mode: continuously captures the default
+     *        input device into a newly created layer, encoding and
+     *        streaming it back out in real time (see
+     *        `sound_mind::core::LiveEngine`'s docs for the full pipeline).
+     *
+     * Per the confirmed scope for this milestone: the output is the live
+     * input alone, round-tripped through the Stream codec - not composited
+     * with any other layer or project content yet (real multi-layer audio
+     * mixing doesn't exist anywhere in the codebase yet - see LiveEngine's
+     * own docs). Stops Playback first if it's running - both engines would
+     * otherwise try to open the system's default output device
+     * simultaneously through two independent JUCE device managers, which
+     * isn't guaranteed to work depending on the platform/driver. Creates a
+     * new Normal layer ("Live Input") to capture into; while running, that
+     * layer's content refreshes from LiveEngine::currentImage() on a timer
+     * and the canvas repaints, so the spectrogram visibly grows in real
+     * time (per the confirmed scope for this milestone) - stopping leaves
+     * the layer's content as whatever was last captured, exactly like any
+     * other layer.
+     */
+    void toggleLiveMode();
 
     /**
      * @brief Pools the topmost layer with content, then exports both its
@@ -135,6 +162,10 @@ public:
     /// @brief Whether playback is currently active.
     /// @return The underlying PlaybackEngine's isPlaying().
     [[nodiscard]] bool isPlaying() const noexcept;
+
+    /// @brief Whether Live Mode is currently capturing.
+    /// @return The underlying LiveEngine's isRunning().
+    [[nodiscard]] bool isLiveModeRunning() const noexcept;
 
     /**
      * @brief Imports a WAV file as a new layer, without prompting or
@@ -235,6 +266,16 @@ private:
     ///         content, or no project is open.
     [[nodiscard]] sound_mind::core::Layer* topmostLayerWithContent();
 
+    /// @brief The layer with the given id, if the current project has one.
+    /// @return A mutable pointer to that layer, or `nullptr` if no project
+    ///         is open or no layer in it has this id.
+    [[nodiscard]] sound_mind::core::Layer* layerById(sound_mind::core::LayerId id);
+
+    /// @brief liveUpdateTimer_'s slot: refreshes the Live layer's content
+    /// from liveEngine_.currentImage() and repaints the canvas, while Live
+    /// Mode is running - see toggleLiveMode()'s docs.
+    void updateLiveLayer();
+
     std::optional<sound_mind::core::Project> project_;
     std::optional<std::filesystem::path> currentPath_;
     CanvasWidget* canvas_ = nullptr;
@@ -245,6 +286,16 @@ private:
     /// rather than re-decode and restart from the beginning. Cleared by
     /// stopPlayback() and whenever the project (or its content) changes.
     bool playbackLoaded_ = false;
+
+    sound_mind::core::LiveEngine liveEngine_{sound_mind::codec::StreamCodecConfig{}};
+    QTimer* liveUpdateTimer_ = nullptr;
+
+    /// @brief The layer currently being captured into, while Live Mode is
+    /// running - std::nullopt otherwise. An id, not a Layer*, since
+    /// Project::layers() is a std::vector<Layer> that addLayer() (or
+    /// future layer-list operations) can reallocate, invalidating a raw
+    /// pointer held across such a call - see layerById().
+    std::optional<sound_mind::core::LayerId> liveLayerId_;
 };
 
 }  // namespace sound_mind::studio
