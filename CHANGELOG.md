@@ -6,6 +6,59 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.8.1] - 2026-09-08
+
+The "Record" milestone from `docs/sound-mind-roadmap.md` - the last of
+Phase 2 (I/O Infrastructure & Performance Baseline): one-shot capture from
+an input device into a new layer, encoded exactly as an imported file would
+be. Deliberately much simpler than Live Mode (`v0.0.7.1`): no incremental
+encoder, no streaming output, no background worker thread.
+
+### Added
+
+- **`sound_mind::core::RecordEngine`**: opens an input-only audio device;
+  the real-time callback (`processBlock()`) copies captured samples into a
+  `juce::AbstractFifo`-backed lock-free ring buffer (no allocation, no
+  locking); `drainAvailable()` (called from a UI-thread timer, no dedicated
+  background thread needed - there's no per-block work to do during
+  capture, just accumulating raw samples) moves them into a growing
+  `AudioBuffer`. `stop()` drains any final samples so nothing captured
+  right before stopping is lost. `processBlock()` is independently,
+  deterministically testable (mirroring `PlaybackEngine::renderBlock()`/
+  `LiveEngine::processBlock()`) - no real device needed to test the
+  capture pipeline.
+- **"Record" toolbar toggle** in `sound-mind-studio`: starts/stops
+  capture; on stop, the captured audio is encoded via the same whole-buffer
+  `sound_mind::codec::encode()` any import already uses (per the design
+  doc's "encoded ... exactly as any other imported audio would be" - not
+  `StreamIncrementalEncoder`'s slightly different framing) and added as a
+  new "Recording" layer, mirroring `importAudioFile()`'s own shape. Stops
+  Playback first, and refuses to start against a running Live Mode session
+  (and vice versa) - see Notes.
+
+### Notes
+
+- **Confirmed scope, mirroring Playback's and Live Mode's own precedent:**
+  the design doc's "choose the input device (with rescan)" and "set an
+  input gain" are both deferred as UI affordances layered on top of a
+  working capture pipeline - Playback deferred an output-device picker the
+  same way, and Live Mode an input-device picker.
+- **Playback, Live Mode, and Recording are now mutually exclusive** (each
+  owns an independent `juce::AudioDeviceManager`, so any two running at
+  once risk device contention with no guaranteed cross-platform behavior).
+  Starting Live Mode or Recording stops Playback outright; Live Mode and
+  Recording instead refuse to start against each other, rather than
+  surprise-stopping an in-progress capture. Simultaneous playback-while-
+  recording (monitoring a backing track while capturing a take) is
+  deliberately out of scope for this first pass.
+- No Y bump: `RecordEngine` is a new, additive capability - no project
+  file format or existing public API changed. Stayed `v0.0.8.1`, not
+  `v0.1.0.1`.
+- **Phase 2 complete.** Pool, Export, Live Mode, and Record all now exist;
+  Phase 3 (Painting & Editing) is next, per the roadmap.
+
+Full regression suite: 92/92 tests passing (codec, core, studio).
+
 ## [0.0.7.1] - 2026-09-08
 
 The "Live Mode" milestone from `docs/sound-mind-roadmap.md`: continuous

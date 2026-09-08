@@ -367,3 +367,56 @@ void MainWindowTest::startPlaybackDoesNothingWhileLiveModeIsRunning() {
 
     window.toggleLiveMode();  // cleanup.
 }
+
+void MainWindowTest::toggleRecordingStartsAndStopsWithoutAddingALayerWhenNothingWasCaptured() {
+    MainWindow window;
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    window.toggleRecording();
+    QVERIFY(window.isRecording());
+
+    // No real audio device delivers samples in this test environment, so
+    // stopping immediately should find nothing captured - no new layer.
+    window.toggleRecording();
+    QVERIFY(!window.isRecording());
+    QCOMPARE(window.project()->layers().size(), layerCountBefore);
+}
+
+void MainWindowTest::startPlaybackDoesNothingWhileRecordingIsRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-record-playback-guard.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.toggleRecording();
+    QVERIFY(window.isRecording());
+
+    window.startPlayback();
+    QVERIFY(!window.isPlaying());
+
+    window.toggleRecording();  // cleanup.
+}
+
+void MainWindowTest::toggleLiveModeDoesNothingWhileRecordingIsRunning() {
+    MainWindow window;
+    window.toggleRecording();
+    QVERIFY(window.isRecording());
+
+    window.toggleLiveMode();
+
+    QVERIFY(!window.isLiveModeRunning());
+    window.toggleRecording();  // cleanup.
+}
+
+void MainWindowTest::toggleRecordingDoesNothingWhileLiveModeIsRunning() {
+    MainWindow window;
+    window.toggleLiveMode();
+    QVERIFY(window.isLiveModeRunning());
+
+    window.toggleRecording();
+
+    QVERIFY(!window.isRecording());
+    window.toggleLiveMode();  // cleanup.
+}

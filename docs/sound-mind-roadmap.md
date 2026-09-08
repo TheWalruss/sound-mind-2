@@ -112,6 +112,10 @@ One-shot input-device capture into a new layer. Mind Shots don't exist yet (Phas
 
 **Demo:** record a take directly into a new layer.
 
+**Confirmed scope, mirroring Playback's and Live Mode's own precedent:** the design doc's "choose the input device (with rescan)" and "set an input gain" are both deferred as UI affordances layered on top of a working capture pipeline, same as Playback deferred an output-device picker and Live Mode deferred an input-device picker before it. Mutually exclusive with Playback and Live Mode (see `docs/sound-mind-architecture.md`'s Decisions Made) - starting Recording stops Playback outright, but refuses to start against a running Live Mode session (and vice versa) rather than surprise-stopping it. `RecordEngine` is deliberately simpler than `LiveEngine`: no incremental encoder, no output/decode side, no background worker thread - see the architecture doc for why a UI-thread timer drain is enough here.
+
+**No Y bump.** `sound_mind::core::RecordEngine` is a new, additive capability - no project file format or existing public API changed. Stayed `v0.0.8.1`, not `v0.1.0.1`.
+
 ---
 
 ## Phase 3 - Painting & Editing

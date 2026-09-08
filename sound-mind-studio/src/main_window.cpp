@@ -175,6 +175,18 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     liveUpdateTimer_->setInterval(33);
     connect(liveUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLiveLayer);
 
+    QAction* recordAction = transportToolBar->addAction(tr("Record"));
+    recordAction->setCheckable(true);
+    connect(recordAction, &QAction::triggered, this, &MainWindow::toggleRecording);
+
+    // Just needs to keep RecordEngine's ring buffer (~370ms of headroom at
+    // its default capacity/sample rate) from ever filling up - unlike
+    // liveUpdateTimer_, nothing visual depends on this cadence, so a
+    // slower interval with a comfortable safety margin is fine.
+    recordDrainTimer_ = new QTimer(this);
+    recordDrainTimer_->setInterval(100);
+    connect(recordDrainTimer_, &QTimer::timeout, this, &MainWindow::drainRecording);
+
     newProject();
 }
 
@@ -445,8 +457,9 @@ void MainWindow::startPlayback() {
     if (!project_) {
         return;
     }
-    if (liveEngine_.isRunning()) {
-        // Mutually exclusive with Live Mode - see toggleLiveMode()'s docs.
+    if (liveEngine_.isRunning() || recordEngine_.isRecording()) {
+        // Mutually exclusive with Live Mode and Recording - see
+        // toggleLiveMode()'s/toggleRecording()'s docs.
         return;
     }
 
@@ -481,6 +494,11 @@ void MainWindow::toggleLiveMode() {
     }
 
     if (!project_) {
+        return;
+    }
+    if (recordEngine_.isRecording()) {
+        // Refuse rather than surprise-stop an in-progress recording - both
+        // would otherwise want the same input device at once.
         return;
     }
 
@@ -522,6 +540,63 @@ bool MainWindow::isPlaying() const noexcept {
 
 bool MainWindow::isLiveModeRunning() const noexcept {
     return liveEngine_.isRunning();
+}
+
+bool MainWindow::isRecording() const noexcept {
+    return recordEngine_.isRecording();
+}
+
+void MainWindow::toggleRecording() {
+    if (recordEngine_.isRecording()) {
+        recordDrainTimer_->stop();
+        recordEngine_.stop();
+
+        const sound_mind::codec::AudioBuffer& captured = recordEngine_.capturedAudio();
+        if (!project_ || captured.frameCount() == 0) {
+            statusBar()->showMessage(tr("Recording stopped - nothing captured."), 5000);
+            return;
+        }
+
+        try {
+            // Encoded exactly as an imported file would be - see
+            // toggleRecording()'s docs for why this doesn't go through
+            // LiveEngine's incremental encoder.
+            const auto content = sound_mind::codec::encode(captured, sound_mind::codec::StreamCodecConfig{});
+            sound_mind::core::Layer layer(0, tr("Recording").toStdString(), sound_mind::core::LayerType::Normal);
+            layer.setContent(content);
+            project_->addLayer(std::move(layer));
+            canvas_->update();
+            playbackLoaded_ = false;
+            statusBar()->showMessage(tr("Recording added as a new layer."), 5000);
+        } catch (const std::exception& e) {
+            QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));
+        }
+        return;
+    }
+
+    if (!project_) {
+        return;
+    }
+    if (liveEngine_.isRunning()) {
+        // Refuse rather than surprise-stop a running Live session - both
+        // would otherwise want the same input device at once.
+        return;
+    }
+
+    stopPlayback();
+
+    recordEngine_.start();
+    if (!recordEngine_.isDeviceAvailable()) {
+        statusBar()->showMessage(tr("Recording started, but no input device is available - nothing will be captured."),
+                                  5000);
+    } else {
+        statusBar()->showMessage(tr("Recording..."));
+    }
+    recordDrainTimer_->start();
+}
+
+void MainWindow::drainRecording() {
+    recordEngine_.drainAvailable();
 }
 
 void MainWindow::poolTopmostLayer() {

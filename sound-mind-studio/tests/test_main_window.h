@@ -29,4 +29,8 @@ private slots:
     void toggleLiveModeAddsALayerAndStartsTheEngine();
     void toggleLiveModeStopsARunningCapture();
     void startPlaybackDoesNothingWhileLiveModeIsRunning();
+    void toggleRecordingStartsAndStopsWithoutAddingALayerWhenNothingWasCaptured();
+    void startPlaybackDoesNothingWhileRecordingIsRunning();
+    void toggleLiveModeDoesNothingWhileRecordingIsRunning();
+    void toggleRecordingDoesNothingWhileLiveModeIsRunning();
 };

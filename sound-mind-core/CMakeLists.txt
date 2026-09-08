@@ -25,6 +25,7 @@ add_library(sound-mind-core
     src/compositor.cpp
     src/playback_engine.cpp
     src/live_engine.cpp
+    src/record_engine.cpp
     src/pooling.cpp
     src/layer_export.cpp
 )

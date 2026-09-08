@@ -8,6 +8,7 @@
 #include "sound_mind/core/live_engine.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project.h"
+#include "sound_mind/core/record_engine.h"
 
 class QString;
 class QTimer;
@@ -81,8 +82,9 @@ public slots:
      * doesn't exist yet. Decodes and loads that layer's audio once (not on
      * every call - resuming after pausePlayback() continues from the same
      * position); does nothing if no layer has content, or none is open, or
-     * Live Mode is currently running (see toggleLiveMode()'s docs for why
-     * the two are mutually exclusive).
+     * Live Mode or Recording is currently running (see toggleLiveMode()'s/
+     * toggleRecording()'s docs for why all three are mutually exclusive in
+     * this first pass).
      */
     void startPlayback();
 
@@ -111,9 +113,31 @@ public slots:
      * and the canvas repaints, so the spectrogram visibly grows in real
      * time (per the confirmed scope for this milestone) - stopping leaves
      * the layer's content as whatever was last captured, exactly like any
-     * other layer.
+     * other layer. Does nothing (refuses to start) if Recording is
+     * currently running - both would otherwise want the same input device
+     * at once, through two independent JUCE device managers.
      */
     void toggleLiveMode();
+
+    /**
+     * @brief Starts or stops Recording: one-shot capture from the default
+     *        input device into a newly created layer, encoded exactly as
+     *        an imported file would be once capture stops (see
+     *        `sound_mind::core::RecordEngine`'s docs for why this differs
+     *        from Live Mode's continuous, incrementally-encoded pipeline).
+     *
+     * Per the confirmed scope for this milestone (mirroring Playback's and
+     * Live Mode's own precedent): defers a real input-device picker and
+     * input gain control - both named in the design doc's Record section -
+     * as UI affordances layered on top of a working capture pipeline.
+     * Stops Playback first if it's running (same device-contention
+     * reasoning as toggleLiveMode()); does nothing (refuses to start) if
+     * Live Mode is currently running, or if no project is open. Creates a
+     * new Normal layer ("Recording") once capture stops and something was
+     * actually captured; stopping with nothing captured (e.g. no input
+     * device was available) leaves the project unchanged.
+     */
+    void toggleRecording();
 
     /**
      * @brief Pools the topmost layer with content, then exports both its
@@ -166,6 +190,10 @@ public:
     /// @brief Whether Live Mode is currently capturing.
     /// @return The underlying LiveEngine's isRunning().
     [[nodiscard]] bool isLiveModeRunning() const noexcept;
+
+    /// @brief Whether Recording is currently capturing.
+    /// @return The underlying RecordEngine's isRecording().
+    [[nodiscard]] bool isRecording() const noexcept;
 
     /**
      * @brief Imports a WAV file as a new layer, without prompting or
@@ -276,6 +304,12 @@ private:
     /// Mode is running - see toggleLiveMode()'s docs.
     void updateLiveLayer();
 
+    /// @brief recordDrainTimer_'s slot: moves whatever's newly captured
+    /// out of recordEngine_'s ring buffer, while Recording is running -
+    /// see RecordEngine::drainAvailable()'s docs for why this needs to
+    /// happen periodically rather than only once recording stops.
+    void drainRecording();
+
     std::optional<sound_mind::core::Project> project_;
     std::optional<std::filesystem::path> currentPath_;
     CanvasWidget* canvas_ = nullptr;
@@ -296,6 +330,9 @@ private:
     /// future layer-list operations) can reallocate, invalidating a raw
     /// pointer held across such a call - see layerById().
     std::optional<sound_mind::core::LayerId> liveLayerId_;
+
+    sound_mind::core::RecordEngine recordEngine_{sound_mind::codec::StreamCodecConfig{}.sampleRateHz};
+    QTimer* recordDrainTimer_ = nullptr;
 };
 
 }  // namespace sound_mind::studio
