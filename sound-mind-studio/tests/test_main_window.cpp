@@ -196,3 +196,65 @@ void MainWindowTest::poolTopmostLayerNowPoolsAnImportedLayer() {
     QFile::remove(streamPngPath);
     QFile::remove(poolPngPath);
 }
+
+void MainWindowTest::exportTopmostLayerAudioNowFailsGracefullyWithNoContent() {
+    // A fresh project's only layer (Background) has no content yet.
+    MainWindow window;
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export.flac";
+    QVERIFY(!window.exportTopmostLayerAudioNow(path));
+    QVERIFY(!QFile::exists(QString::fromStdString(path.string())));
+}
+
+void MainWindowTest::exportTopmostLayerAudioNowExportsAnImportedLayer() {
+    const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-audio.wav";
+    writeTestWavFile(wavPath);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(wavPath));
+    std::filesystem::remove(wavPath);
+
+    const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export.flac";
+    const bool ok = window.exportTopmostLayerAudioNow(exportPath);
+
+    QVERIFY(ok);
+    QVERIFY(QFile::exists(QString::fromStdString(exportPath.string())));
+    std::filesystem::remove(exportPath);
+}
+
+void MainWindowTest::exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension() {
+    const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-audio2.wav";
+    writeTestWavFile(wavPath);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(wavPath));
+    std::filesystem::remove(wavPath);
+
+    QString errorMessage;
+    const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export.xyz";
+    QVERIFY(!window.exportTopmostLayerAudioNow(exportPath, &errorMessage));
+    QVERIFY(!errorMessage.isEmpty());
+}
+
+void MainWindowTest::exportTopmostLayerVideoNowFailsGracefullyWithNoContent() {
+    // A fresh project's only layer (Background) has no content yet.
+    MainWindow window;
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export.mp4";
+    QVERIFY(!window.exportTopmostLayerVideoNow(path));
+    QVERIFY(!QFile::exists(QString::fromStdString(path.string())));
+}
+
+void MainWindowTest::exportTopmostLayerVideoNowExportsAnImportedLayer() {
+    const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-video.wav";
+    writeTestWavFile(wavPath);
+
+    MainWindow window;
+    QVERIFY(window.importAudioFile(wavPath));
+    std::filesystem::remove(wavPath);
+
+    const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export.mp4";
+    const bool ok = window.exportTopmostLayerVideoNow(exportPath);
+
+    QVERIFY(ok);
+    QVERIFY(QFile::exists(QString::fromStdString(exportPath.string())));
+    std::filesystem::remove(exportPath);
+}

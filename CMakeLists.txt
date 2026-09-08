@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(SoundMind
-    VERSION 0.0.5.1
+    VERSION 0.0.6.1
     DESCRIPTION "Sound Mind Studio: a spectrogram-as-image DAW and graphics studio"
     LANGUAGES CXX C
 )
@@ -14,6 +14,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # nothing here relaxes that per module, it's enforced by review, not the build.
 
 include(CTest)
+
+# JUCE, found once here rather than separately in each module that needs it
+# (sound-mind-codec, since v0.0.6.1's juce_audio_formats use; sound-mind-core,
+# since v0.0.4.1's audio-device I/O). vcpkg's JUCEConfig.cmake has a real bug
+# in its re-entry guard (JUCEConfig.cmake:94 builds its "already defined"
+# comparison list from `${_juce_modules}` - the whole module list - instead
+# of the per-iteration `${_juce_module}`, so it never matches and a second
+# find_package(JUCE...) call in the same configure hits its "Some targets in
+# this export set were already defined" FATAL_ERROR branch even though
+# nothing is actually wrong) - calling it exactly once, before any
+# subdirectory that needs its imported `juce::*` targets, sidesteps the bug
+# entirely rather than working around it per-caller.
+find_package(JUCE CONFIG REQUIRED)
 
 add_subdirectory(sound-mind-codec)
 add_subdirectory(sound-mind-core)

@@ -17,4 +17,9 @@ private slots:
     void stopPlaybackStopsIt();
     void poolTopmostLayerNowFailsGracefullyWithNoContent();
     void poolTopmostLayerNowPoolsAnImportedLayer();
+    void exportTopmostLayerAudioNowFailsGracefullyWithNoContent();
+    void exportTopmostLayerAudioNowExportsAnImportedLayer();
+    void exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension();
+    void exportTopmostLayerVideoNowFailsGracefullyWithNoContent();
+    void exportTopmostLayerVideoNowExportsAnImportedLayer();
 };

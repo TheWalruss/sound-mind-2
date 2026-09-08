@@ -11,8 +11,10 @@ find_package(nlohmann_json CONFIG REQUIRED)
 # docs/tech-stack-decisions.md for the dependency record. Only the audio
 # engine modules are linked, per that same doc's Build & Module Layout -
 # never juce_gui_basics/juce_gui_extra, since Qt (not JUCE) owns the
-# Studio's windowing and widgets.
-find_package(JUCE CONFIG REQUIRED)
+# Studio's windowing and widgets. find_package(JUCE...) itself is called
+# once, at the top-level CMakeLists.txt, not repeated here - see its comment
+# there (a real bug in vcpkg's JUCEConfig.cmake breaks a second call to it
+# within the same configure).
 
 add_library(sound-mind-core
     src/operation.cpp
@@ -23,6 +25,7 @@ add_library(sound-mind-core
     src/compositor.cpp
     src/playback_engine.cpp
     src/pooling.cpp
+    src/layer_export.cpp
 )
 
 target_include_directories(sound-mind-core

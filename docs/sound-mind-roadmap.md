@@ -88,9 +88,11 @@ The near-lossless NSGT round-trip and the finalized Pool file format, reusing th
 
 ### v0.Y.6.1 - Export
 
-Audio export (Pool-mode primary, a quick Stream-mode bounce for scratch use, compressed formats from day one); video export of the canvas synced to audio.
+Audio export (Pool-mode primary, a quick Stream-mode bounce for scratch use, compressed formats from day one); video export of the canvas synced to audio. ffmpeg joins the dependency set here (MP3 encoding and MP4 muxing/video/audio - JUCE's own MP3 writer turned out to be an unimplemented stub, and ffmpeg was already the only practical MP4-muxing option in vcpkg) - see `sound-mind-architecture.md`'s Decisions Made for the codec/linking-mode reasoning.
 
 **Demo:** export the imported/pooled audio to a compressed format and to an MP4 with the spectrogram animation.
+
+**No Y bump.** Same reasoning as `v0.0.5.1`: `sound-mind-codec` gains new export functions and two new dependencies, but nothing about the project file format or any existing public API changes - additive, not breaking. Stayed `v0.0.6.1`, not `v0.1.0.1`.
 
 ### v0.Y.7.1 - Live Mode
 

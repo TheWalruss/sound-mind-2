@@ -6,6 +6,65 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.6.1] - 2026-09-08
+
+The "Export" milestone from `docs/sound-mind-roadmap.md`: real compressed
+audio export (FLAC/Ogg via JUCE, MP3 via ffmpeg) and real MP4 video export
+(the spectrogram canvas animated with a playhead, synced to its audio),
+plus a File > Export UI and the layer-level "Pool-primary, Stream-fallback"
+export policy the design doc calls for.
+
+### Added
+
+- **`sound_mind::codec::exportCompressedAudio()`**: writes FLAC and Ogg
+  Vorbis via JUCE's own bundled encoders (`juce_audio_formats`, already a
+  linked dependency); writes MP3 via ffmpeg/libmp3lame, since JUCE's own
+  `MP3AudioFormat` writer turned out to be an explicit unimplemented stub
+  (confirmed by reading its actual source) - JUCE can only *read* MP3, not
+  write it.
+- **`sound_mind::codec::exportVideo()`**: writes an MP4 (via ffmpeg) of a
+  spectrogram canvas animated with a moving vertical playhead line, synced
+  to its audio - MPEG-4 Part 2 video (LGPL-compatible, unlike H.264's GPL
+  `libx264`) and AAC audio, muxed together. Canvas dimensions are padded to
+  the nearest even size for YUV420P's chroma planes if needed.
+- **ffmpeg** joins the dependency set (`avcodec`/`avformat`/`swresample`/
+  `swscale`/`libmp3lame`, vcpkg `ffmpeg` port), linked dynamically (SHARED)
+  - the one deliberate exception to every other dependency here being
+    statically linked, since ffmpeg's default LGPL build requires dynamic
+    linking to stay compliant with this project's closed-source
+    distribution. The only practical vcpkg-available MP4-muxing option.
+- **`sound_mind::core::decodeLayerForExport()`/`exportLayerAudio()`/
+  `exportLayerVideo()`**: per the design doc's "Pool-mode primary, a quick
+  Stream-mode bounce for scratch use" - exporting a layer decodes its Pool
+  content (near-lossless) when it's been Pooled, falling back to its
+  Stream content (a faster, only approximately phase-accurate bounce)
+  otherwise.
+- **"Export Audio.../Export Video..." File menu actions** in
+  `sound-mind-studio`: export the topmost layer with content, with the
+  audio format inferred from the chosen file's extension
+  (`.flac`/`.ogg`/`.mp3`).
+
+### Notes
+
+- MP3 export has a real, standard encoder delay (libmp3lame's filter-bank
+  priming) before the decoded audio lines back up with the source - an
+  inherent MP3 property, not a defect; its round-trip test verifies best-
+  alignment correlation rather than assuming zero delay, unlike the
+  lossless/JUCE-backed formats.
+- A real bug surfaced and was fixed in vcpkg's packaged `JUCEConfig.cmake`
+  (its re-entry guard compares against a garbled expected-target list, so
+  a second `find_package(JUCE CONFIG REQUIRED)` call in the same CMake
+  configure always fails) - resolved by calling it exactly once, at the
+  top-level `CMakeLists.txt`, rather than separately in `sound-mind-codec`
+  and `sound-mind-core`.
+- No Y bump: additive to `sound-mind-codec`'s and `sound-mind-core`'s
+  public API, nothing about the project file format changes. Stayed
+  `v0.0.6.1`, not `v0.1.0.1`.
+- Video export is synchronous and can take a real amount of time for
+  longer content (per-frame RGB->YUV conversion plus ffmpeg encoding) -
+  no progress indicator or background-thread dispatch yet; noted as
+  future work, not in this milestone's scope.
+
 ## [0.0.5.1] - 2026-09-08
 
 The "Pool Codec" milestone from `docs/sound-mind-roadmap.md`: a real,

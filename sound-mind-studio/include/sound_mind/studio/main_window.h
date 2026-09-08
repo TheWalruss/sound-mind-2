@@ -98,6 +98,28 @@ public slots:
      */
     void poolTopmostLayer();
 
+    /**
+     * @brief Prompts for a destination file and exports the topmost layer
+     *        with content's audio to it (see `sound_mind::core::
+     *        exportLayerAudio()` - Pool content when available, else a
+     *        Stream-mode bounce).
+     *
+     * The chosen format (Flac/Ogg/MP3) is inferred from the destination
+     * file's extension. Does nothing if no layer has content, or none is
+     * open.
+     */
+    void exportAudio();
+
+    /**
+     * @brief Prompts for a destination file and exports the topmost layer
+     *        with content as an MP4 video (see `sound_mind::core::
+     *        exportLayerVideo()`): its rendered canvas animated with a
+     *        playhead synced to its audio.
+     *
+     * Does nothing if no layer has content, or none is open.
+     */
+    void exportVideo();
+
 public:
     /// @brief Whether playback is currently active.
     /// @return The underlying PlaybackEngine's isPlaying().
@@ -160,6 +182,37 @@ public:
      */
     bool poolTopmostLayerNow(QString* errorMessage = nullptr, QString* streamPngPath = nullptr,
                               QString* poolPngPath = nullptr);
+
+    /**
+     * @brief Exports the topmost layer with content's audio to `path`,
+     *        without prompting or showing an error dialog on failure - the
+     *        actual work behind exportAudio(), split out for the same
+     *        headless-testability reason as importAudioFile() (see its docs).
+     *
+     * @param path Destination path; its extension (`.flac`/`.ogg`/`.mp3`)
+     *        selects the compressed format.
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @return `true` on success; `false` if there was no layer to export,
+     *         the extension didn't match a supported format, or the
+     *         underlying codec export failed.
+     */
+    bool exportTopmostLayerAudioNow(const std::filesystem::path& path, QString* errorMessage = nullptr);
+
+    /**
+     * @brief Exports the topmost layer with content as an MP4 video at
+     *        `path`, without prompting or showing an error dialog on
+     *        failure - the actual work behind exportVideo(), split out for
+     *        the same headless-testability reason as importAudioFile()
+     *        (see its docs).
+     *
+     * @param path Destination path.
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @return `true` on success; `false` if there was no layer to export,
+     *         or the underlying codec export failed.
+     */
+    bool exportTopmostLayerVideoNow(const std::filesystem::path& path, QString* errorMessage = nullptr);
 
 private:
     void setProject(sound_mind::core::Project project);

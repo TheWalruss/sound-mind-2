@@ -8,6 +8,7 @@ add_executable(sound-mind-core-tests
     test_compositor.cpp
     test_playback_engine.cpp
     test_pooling.cpp
+    test_layer_export.cpp
 )
 
 target_link_libraries(sound-mind-core-tests

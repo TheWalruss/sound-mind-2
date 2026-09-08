@@ -1,5 +1,6 @@
 #include "sound_mind/studio/main_window.h"
 
+#include <cctype>
 #include <cstddef>
 #include <cstring>
 #include <exception>
@@ -19,6 +20,7 @@
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/codec/wav_file.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/layer_export.h"
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
@@ -33,6 +35,29 @@ namespace {
 const char* kProjectFileFilter = "Sound Mind Projects (*.smproj)";
 const char* kAudioFileFilter = "WAV Audio (*.wav)";
 const char* kImageFileFilter = "Images (*.png *.jpg *.jpeg *.bmp *.tga *.webp)";
+const char* kExportAudioFileFilter = "FLAC Audio (*.flac);;Ogg Vorbis Audio (*.ogg);;MP3 Audio (*.mp3)";
+const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
+
+/// @brief Maps a destination path's extension to a compressed audio format.
+/// @return The matching format, or `std::nullopt` for an unrecognized
+///         extension.
+[[nodiscard]] std::optional<sound_mind::codec::CompressedAudioFormat> audioFormatFromExtension(
+    const std::filesystem::path& path) {
+    std::string extension = path.extension().string();
+    for (char& c : extension) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    if (extension == ".flac") {
+        return sound_mind::codec::CompressedAudioFormat::Flac;
+    }
+    if (extension == ".ogg") {
+        return sound_mind::codec::CompressedAudioFormat::Ogg;
+    }
+    if (extension == ".mp3") {
+        return sound_mind::codec::CompressedAudioFormat::Mp3;
+    }
+    return std::nullopt;
+}
 
 /// @brief Converts a QImage to codec::RgbImage, forcing a consistent 3-byte-
 /// per-pixel layout first regardless of the source file's own format.
@@ -98,6 +123,14 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     QAction* importImageAction = fileMenu->addAction(tr("Import &Image..."));
     connect(importImageAction, &QAction::triggered, this, &MainWindow::importImage);
+
+    fileMenu->addSeparator();
+
+    QAction* exportAudioAction = fileMenu->addAction(tr("&Export Audio..."));
+    connect(exportAudioAction, &QAction::triggered, this, &MainWindow::exportAudio);
+
+    QAction* exportVideoAction = fileMenu->addAction(tr("Export &Video..."));
+    connect(exportVideoAction, &QAction::triggered, this, &MainWindow::exportVideo);
 
     QToolBar* transportToolBar = addToolBar(tr("Transport"));
     // Plain text actions rather than icons - no icon assets exist yet, and
@@ -257,6 +290,76 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, QString* err
         canvas_->update();
         playbackLoaded_ = false;
         return true;
+    } catch (const std::exception& e) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QString::fromStdString(e.what());
+        }
+        return false;
+    }
+}
+
+void MainWindow::exportAudio() {
+    const QString fileName =
+        QFileDialog::getSaveFileName(this, tr("Export Audio"), QString(), tr(kExportAudioFileFilter));
+    if (fileName.isEmpty()) {
+        return;
+    }
+    QString errorMessage;
+    if (!exportTopmostLayerAudioNow(std::filesystem::path(fileName.toStdString()), &errorMessage)) {
+        QMessageBox::critical(this, tr("Export Audio Failed"), errorMessage);
+    }
+}
+
+void MainWindow::exportVideo() {
+    const QString fileName =
+        QFileDialog::getSaveFileName(this, tr("Export Video"), QString(), tr(kExportVideoFileFilter));
+    if (fileName.isEmpty()) {
+        return;
+    }
+    QString errorMessage;
+    if (!exportTopmostLayerVideoNow(std::filesystem::path(fileName.toStdString()), &errorMessage)) {
+        QMessageBox::critical(this, tr("Export Video Failed"), errorMessage);
+    }
+}
+
+bool MainWindow::exportTopmostLayerAudioNow(const std::filesystem::path& path, QString* errorMessage) {
+    sound_mind::core::Layer* layer = topmostLayerWithContent();
+    if (layer == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No layer with content to export.");
+        }
+        return false;
+    }
+
+    const auto format = audioFormatFromExtension(path);
+    if (!format.has_value()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("Unrecognized audio file extension - use .flac, .ogg, or .mp3.");
+        }
+        return false;
+    }
+
+    try {
+        return sound_mind::core::exportLayerAudio(*layer, path, *format);
+    } catch (const std::exception& e) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QString::fromStdString(e.what());
+        }
+        return false;
+    }
+}
+
+bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, QString* errorMessage) {
+    sound_mind::core::Layer* layer = topmostLayerWithContent();
+    if (layer == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No layer with content to export.");
+        }
+        return false;
+    }
+
+    try {
+        return sound_mind::core::exportLayerVideo(*layer, path);
     } catch (const std::exception& e) {
         if (errorMessage != nullptr) {
             *errorMessage = QString::fromStdString(e.what());
