@@ -121,7 +121,7 @@ One-shot input-device capture into a new layer. Mind Shots don't exist yet (Phas
 
 ## Phase 2.5 - UI Foundations
 
-Inserted after the fact (following `v0.0.8.1`), informed by a review of the legacy Studio's UI - not to replicate it, but because several of its patterns (a persistent start screen instead of a splash, a real project-creation wizard, a fixed-length loop-pedal Live Mode) turned out worth adopting deliberately rather than backing into later. Phase numbers stay stable as anchors; a `.5` phase can be inserted between any two numbered phases whenever a similar UI/workflow checkpoint is worth taking before more creative features land on top of it - this is not expected to be the last one.
+Inserted after the fact (following `v0.0.8.1`), informed by a review of the legacy Studio's UI - not to replicate it, but because several of its patterns (a persistent start screen instead of a splash, a real project-creation wizard, a fixed-length loop-pedal Live Mode, a Layers panel worth adapting rather than inventing from scratch, and a distinct brand identity worth carrying into this rewrite) turned out worth adopting deliberately rather than backing into later. Phase numbers stay stable as anchors; a `.5` phase can be inserted between any two numbered phases whenever a similar UI/workflow checkpoint is worth taking before more creative features land on top of it - this is not expected to be the last one.
 
 ### v0.Y.9.1 - Landing Page
 
@@ -143,37 +143,63 @@ Replaces today's no-dialog `newProject()` (an in-memory default project, nothing
 
 ### v0.Y.12.1 - Loop Mode (renamed from Live Mode)
 
-Live Mode (`v0.0.7.1`) is renamed **Loop Mode** (`LiveEngine`/`LiveLayer`-style names follow suit) and reimplemented as the fixed-length loop pedal the legacy Studio's own "Live Mode" actually was, confirmed as the right model rather than continuous streaming: loop length derived from the project's own duration (not user-adjustable); each loop, in sequence - record the input for that loop's duration, encode it into the Loop layer, **composite it with the rest of the project**, decode the composite, queue the result for playback during the *next* loop - with a measured, displayed loop delay (in whole loops, not milliseconds), since a slower-than-real-time pipeline falls behind by whole loop iterations, not a fixed latency.
+Live Mode (`v0.0.7.1`) is renamed **Loop Mode** (`LiveEngine`/`LiveLayer`-style names follow suit) and reimplemented as the fixed-length loop pedal the legacy Studio's own "Live Mode" actually was, confirmed as the right model rather than continuous streaming: loop length derived from the project's own duration (not user-adjustable); each loop, in sequence - record the input for that loop's duration, encode it into the Loop layer, decode it, queue the result for playback during the *next* loop - with a measured, displayed loop delay (in whole loops, not milliseconds), since a slower-than-real-time pipeline falls behind by whole loop iterations, not a fixed latency.
 
-**Real dependency, not a deferral this time:** "composited with the rest of the project" is the actual point of a loop pedal, so unlike `v0.0.7.1`'s explicitly narrower first pass, this milestone has to build real (if still plain - unweighted sum, no blend modes/opacity yet) multi-layer audio mixing to mean anything. Worth sharing with Playback's own still-outstanding "always-current" revisit (noted back in `v0.0.7.1`/`v0.0.4.1`) if the timing works out, rather than building two separate mixers.
+**Reduced scope, confirmed before implementing:** no compositing with the rest of the project after all - each loop plays back only the current topmost layer with content (the just-recorded Loop layer, or whatever else happens to already be on top - a recorded take, an imported clip, anything), the same "topmost layer" convention Playback (`v0.Y.4.1`) and Record (`v0.Y.8.1`) already use. This removes the real multi-layer audio mixing dependency `v0.0.7.1`'s notes originally expected this milestone to finally force - Loop Mode no longer needs it, and real compositing stays deferred to whenever Playback's own still-outstanding "always-current" revisit (noted back in `v0.0.7.1`/`v0.0.4.1`) actually happens.
 
-**Demo:** start Loop Mode against a project that already has other layers with content; hear your live input composited with them, looping with a visible loop-delay indicator.
+**New capability, not present in the legacy version:** a "Keep looping" checkbox. Checked, subsequent loop iterations replay the last-captured Loop layer's content unchanged instead of recording over it again each cycle - so a captured take can keep looping hands-free without re-arming capture every time. Unchecked (the default, matching the legacy behavior) is the record-every-loop behavior described above.
 
-**Likely Y bump.** Renaming a layer's role/kind (however it ends up represented on disk) is exactly the kind of thing that could touch the project file format - confirm exactly what changes once this is actually implemented, rather than guessing here.
+**Demo:** start Loop Mode, record a few seconds; hear it loop back on the next cycle with a visible loop-delay indicator. Check "Keep looping" and confirm playback keeps looping the captured take without recording over it, until unchecked.
+
+**No Y bump after all.** Predicted "likely" above on the assumption compositing would touch the project file format; dropping that requirement removes the reason - nothing about the format changes here.
+
+### v0.Y.13.1 - Layers Panel
+
+A dockable panel listing the project's layer stack, adapted from the legacy Studio's Layers panel (drag-handle reorder, per-row visibility toggle, name, opacity, add/delete) rather than designed from scratch - but scoped down to what the current, deliberately minimal `sound_mind::core::Layer` model actually supports. The legacy panel's blend-mode combo, MindWave-link combo, and transform controls are all left out of this first pass, since none of those concepts exist in the engine yet (blend modes and MindWaves both arrive in Phase 3/4) - adding placeholder UI for features that don't do anything yet isn't worth it.
+
+**Real dependency:** `Layer` gains a `visible` flag, which doesn't exist today, so the panel's visibility toggle has something real to control. Toggling a layer hidden changes what "topmost layer with content" logic (Playback, Record, Loop Mode above) treats as being on top - skipping hidden layers - rather than changing anything about mixing, since real multi-layer compositing is still separately deferred.
+
+**Row design, adapted from the legacy panel:** drag handle for reordering, replaced with a lock icon (no drag, no delete) for the fixed-position `Background` and `Equalizer` `LayerType`s; visibility toggle; name (double-click to rename); a small type tag for non-`Normal` layers; an opacity slider (the model already has `opacity()`, just never had UI for it); a delete button, hidden for the two locked types. No settings/gear button yet - deferred until there's a blend mode or MindWave link to put behind it, unlike the legacy panel's floating config window.
+
+**Demo:** open a project with several layers, reorder them by dragging, hide one, rename another, adjust an opacity slider, delete a fourth.
+
+**No Y bump.** Adding `visible` to the in-memory `Layer` model is additive to the project file's per-layer JSON, not a change to an already-established field.
+
+### v0.Y.14.1 - Visual Identity
+
+A lumped UI-polish milestone, per explicit go-ahead to bundle smaller UI changes into one point release rather than spreading them across several:
+
+- The legacy Studio's app icon (`ChooseAgainIcon.ico`) and its large companion image (`ChooseAgainLarge.png`) carried over as this project's own icon - wired as the real window/taskbar/executable icon (there is none today; the Studio currently runs under Qt's generic default icon).
+- The whole Studio UI restyled with the legacy documentation's brand palette - deep orange `#DD4B00` to amber gold `#FEC100` gradient accents on a dark/slate ground, per `docs/stylesheets/extra.css` in the legacy repo - applied as one app-wide Qt stylesheet rather than per-widget styling (there is no styling of any kind applied today; every widget renders in Qt's default Fusion look).
+- The generated Doxygen HTML output (`docs/generated`) given a matching `HTML_EXTRA_STYLESHEET`, currently unset, so the code documentation reads as the same product rather than a stock Doxygen theme.
+
+**Demo:** launch the Studio and see the branded icon and palette throughout, including the new Layers panel; open the generated Doxygen docs and see the same palette applied there too.
+
+**No Y bump.** Purely visual - no project file, public API, or codec format is touched.
 
 ---
 
 ## Phase 3 - Painting & Editing
 
-### v0.Y.13.1 - Basic Painting
+### v0.Y.15.1 - Basic Painting
 
 A plain procedural brush (tip shape + falloff, no harmonic model yet) painting into a layer's amplitude as logged `PaintOperation`s; undo/redo via the operation log (first real exercise of the `supersedes` mechanism). Also: re-confirm Phase 2's Pool/Export/Loop/Record pipeline still works, and still meets its performance targets, with real painted content flowing through it for the first time.
 
 **Demo:** paint a stroke, hear the difference on playback, undo it - then pool and export the result.
 
-### v0.Y.14.1 - Selection & Fill
+### v0.Y.16.1 - Selection & Fill
 
 Rectangle, Lasso, and Wand selection with boolean combination; cut/copy/paste; the Gradient model; Fill.
 
 **Demo:** select a region, cut it, paste it elsewhere, fill another region with a gradient.
 
-### v0.Y.15.1 - Paths & Grids
+### v0.Y.17.1 - Paths & Grids
 
 The Path (Bézier) tool with node placement/editing and Path Gradient; Overlay Grids (frequency and timing) and Snap to Grid, including pitch quantising.
 
 **Demo:** draw a precise, grid-snapped melodic line.
 
-### v0.Y.16.1 - Filter Layers
+### v0.Y.18.1 - Filter Layers
 
 The Filter layer type, a first concrete filter set (blur family, sharpen, tone curve, frequency-axis gradient), and the Equalizer special layer made functional.
 
@@ -183,37 +209,37 @@ The Filter layer type, a first concrete filter set (blur family, sharpen, tone c
 
 ## Phase 4 - Expressive Tools
 
-### v0.Y.17.1 - MindWaves v1
+### v0.Y.19.1 - MindWaves v1
 
 The core generator types (periodic, envelope, stepped/noise, spatial, a first fractal field), superposition, and binding to layer opacity and filter parameters (the direct-vs-shape distinction).
 
 **Demo:** bind a sine MindWave to a layer's opacity; watch and hear it pulse.
 
-### v0.Y.18.1 - Sound Mind Instruments
+### v0.Y.20.1 - Sound Mind Instruments
 
 The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument model; the canvas-space vs. operation-relative MindWave binding-coordinate-frame choice, since that's specifically about how a paint operation (an instrument note, in particular) binds to a MindWave. Also: revisit Loop Mode (Phase 2.5) to add the operation-relative retrigger feel this unlocks.
 
 **Demo:** paint with an instrument voice that actually sounds like a plausible physical source; feed the same instrument through Loop Mode and hear it retrigger per note.
 
-### v0.Y.19.1 - Mind Shots & Mind Grains
+### v0.Y.21.1 - Mind Shots & Mind Grains
 
 Capture-and-stamp static samples; live-reference dynamic grains from a source layer. Also: revisit Record (Phase 2) to add capture-directly-to-a-Mind-Shot.
 
 **Demo:** capture a moment as a Mind Shot and restamp it; link a Mind Grain to a source layer and watch it change live as the source does.
 
-### v0.Y.20.1 - Composer Mode
+### v0.Y.22.1 - Composer Mode
 
 The DAW-style track view: each layer as a track, operations drawn as boxes via `Operation::bounds()`, retiming/moving an operation between layers via the `supersedes` mechanism, the three track background styles.
 
 **Demo:** arrange a multi-layer piece in the track view; move a stamped note to a different layer without repainting it.
 
-### v0.Y.21.1 - MindWaves v2
+### v0.Y.23.1 - MindWaves v2
 
 Field operators (Warp, Reduce), drawn-shape and step-grid generator types, and the continuous shape/skew/character controls.
 
 **Demo:** a MindWave built from a hand-drawn Path, reduced to a plain time-varying control signal.
 
-### v0.Y.22.1 - Chords/Arpeggiator/Sequencer
+### v0.Y.24.1 - Chords/Arpeggiator/Sequencer
 
 The Chord Generator and the generalized notation-driven sequence it's built on, targeting any paintable tip. Resolves the sequence-notation Deferred Decision (validating the ABC-notation direction, or picking an alternative).
 
@@ -223,19 +249,19 @@ The Chord Generator and the generalized notation-driven sequence it's built on, 
 
 ## Phase 5 - Generative & Analytical
 
-### v0.Y.23.1 - Generators
+### v0.Y.25.1 - Generators
 
 Lattice, fractal, and streaming procedural content generators, sharing the Order/Chaos criticality axis.
 
 **Demo:** generate a fractal melodic texture as a new layer, tuned from rigid to chaotic.
 
-### v0.Y.24.1 - Analysis Tools v1
+### v0.Y.26.1 - Analysis Tools v1
 
 A first useful cross-section across all five categories (loudness/mastering, pitch/vocal, stereo/phase, spectral health, criticality/pattern) - not every meter the legacy version had, but at least one representative of each.
 
 **Demo:** check integrated loudness and stereo correlation on a real mix.
 
-### v0.Y.25.1 - Sound Flower
+### v0.Y.27.1 - Sound Flower
 
 Polar canvas view, and polar-form image import.
 
@@ -245,13 +271,13 @@ Polar canvas view, and polar-form image import.
 
 ## Phase 6 - Interchange & Polish
 
-### v0.Y.26.1 - Portable Resources
+### v0.Y.28.1 - Portable Resources
 
 Standalone `.smwave` and `.sminst` files; cross-project import of layers, Mind Shots, MindWaves, and Sound Mind Instruments. Resolves the Mind Grain portability Deferred Decision one way or the other.
 
 **Demo:** export an instrument from one project, import it cleanly into another.
 
-### v0.Y.27.1 - Performance Validation & Hardening
+### v0.Y.29.1 - Performance Validation & Hardening
 
 By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. Validate the ~100 ms / ~250 ms latency targets for real, on both this Arm64 machine and actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding). Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
 
