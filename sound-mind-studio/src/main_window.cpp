@@ -14,6 +14,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QStackedWidget>
 #include <QStatusBar>
 #include <QTimer>
 #include <QToolBar>
@@ -27,6 +28,7 @@
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/landing_page.h"
 
 #ifndef SOUND_MIND_VERSION
 #define SOUND_MIND_VERSION "unknown"
@@ -109,8 +111,23 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle(QStringLiteral("Sound Mind Studio v" SOUND_MIND_VERSION));
     resize(800, 600);
 
+    landingPage_ = new LandingPage(this);
+    landingPage_->setRecentProjects(recentProjects_.list());
+    connect(landingPage_, &LandingPage::newProjectRequested, this, &MainWindow::newProject);
+    connect(landingPage_, &LandingPage::openProjectRequested, this, &MainWindow::openProject);
+    connect(landingPage_, &LandingPage::recentProjectRequested, this, [this](const QString& path) {
+        QString errorMessage;
+        if (!openProjectAt(std::filesystem::path(path.toStdString()), &errorMessage)) {
+            QMessageBox::critical(this, tr("Open Project Failed"), errorMessage);
+        }
+    });
+
     canvas_ = new CanvasWidget(this);
-    setCentralWidget(canvas_);
+
+    stack_ = new QStackedWidget(this);
+    stack_->addWidget(landingPage_);  // index 0 - shown first, see setProject().
+    stack_->addWidget(canvas_);       // index 1
+    setCentralWidget(stack_);
 
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
 
@@ -187,18 +204,25 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     recordDrainTimer_->setInterval(100);
     connect(recordDrainTimer_, &QTimer::timeout, this, &MainWindow::drainRecording);
 
-    newProject();
+    // No newProject() call here, per the Landing Page milestone (v0.Y.9.1):
+    // the window starts with no project open at all, showing the Landing
+    // Page (stack_ defaults to index 0) until New/Open Project actually
+    // creates or loads one - see setProject()'s and isShowingLandingPage()'s
+    // docs.
 }
 
 const sound_mind::core::Project* MainWindow::project() const noexcept {
     return project_ ? &*project_ : nullptr;
 }
 
+bool MainWindow::isShowingLandingPage() const noexcept { return stack_->currentWidget() == landingPage_; }
+
 void MainWindow::setProject(sound_mind::core::Project project) {
     project_ = std::move(project);
     canvas_->setProject(&*project_);
     playbackEngine_.stop();
     playbackLoaded_ = false;
+    stack_->setCurrentWidget(canvas_);
 }
 
 void MainWindow::newProject() {
@@ -213,12 +237,24 @@ void MainWindow::openProject() {
         return;
     }
 
-    const std::filesystem::path path(fileName.toStdString());
+    QString errorMessage;
+    if (!openProjectAt(std::filesystem::path(fileName.toStdString()), &errorMessage)) {
+        QMessageBox::critical(this, tr("Open Project Failed"), errorMessage);
+    }
+}
+
+bool MainWindow::openProjectAt(const std::filesystem::path& path, QString* errorMessage) {
     try {
         setProject(sound_mind::core::Project::load(path));
         currentPath_ = path;
+        recentProjects_.add(path);
+        landingPage_->setRecentProjects(recentProjects_.list());
+        return true;
     } catch (const std::exception& e) {
-        QMessageBox::critical(this, tr("Open Project Failed"), QString::fromStdString(e.what()));
+        if (errorMessage != nullptr) {
+            *errorMessage = QString::fromStdString(e.what());
+        }
+        return false;
     }
 }
 
@@ -233,6 +269,8 @@ void MainWindow::saveProject() {
 
     try {
         project_->save(*currentPath_);
+        recentProjects_.add(*currentPath_);
+        landingPage_->setRecentProjects(recentProjects_.list());
     } catch (const std::exception& e) {
         QMessageBox::critical(this, tr("Save Project Failed"), QString::fromStdString(e.what()));
     }

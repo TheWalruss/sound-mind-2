@@ -10,12 +10,22 @@
  */
 
 #include <QApplication>
+#include <QStandardPaths>
 #include <QtTest/QtTest>
 
 #include "test_canvas_widget.h"
+#include "test_landing_page.h"
 #include "test_main_window.h"
+#include "test_recent_projects.h"
 
 int main(int argc, char** argv) {
+    // Redirects ini-format QSettings storage (MainWindow's recentProjects_,
+    // in particular - see main_window.h's docs) to a sandboxed test
+    // location, so running this suite never touches - or pollutes with
+    // throwaway test project paths - the real, installed Studio's own
+    // persisted settings on this machine.
+    QStandardPaths::setTestModeEnabled(true);
+
     QApplication app(argc, argv);
 
     int status = 0;
@@ -23,8 +33,14 @@ int main(int argc, char** argv) {
     CanvasWidgetTest canvasWidgetTest;
     status |= QTest::qExec(&canvasWidgetTest, argc, argv);
 
+    LandingPageTest landingPageTest;
+    status |= QTest::qExec(&landingPageTest, argc, argv);
+
     MainWindowTest mainWindowTest;
     status |= QTest::qExec(&mainWindowTest, argc, argv);
+
+    RecentProjectsTest recentProjectsTest;
+    status |= QTest::qExec(&recentProjectsTest, argc, argv);
 
     return status;
 }

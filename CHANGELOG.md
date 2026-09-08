@@ -6,6 +6,62 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.9.1] - 2026-09-08
+
+The "Landing Page" milestone from `docs/sound-mind-roadmap.md` - the first
+of Phase 2.5 (UI Foundations). The Studio no longer silently creates an
+in-memory project at startup: a persistent start screen is shown until a
+project is actually created or opened, informed by (but narrower than) the
+legacy Studio's Welcome panel.
+
+### Added
+
+- **`sound_mind::studio::LandingPage`**: the new start screen - a title,
+  "New Project"/"Open Project..." actions, and a Recent Projects list.
+  Purely presentational (every action is a Qt signal `MainWindow` connects
+  to its own existing handlers), narrower than the legacy `WelcomePanel` it
+  was informed by: no standalone-file actions (there's no standalone-TIFF
+  concept in this rewrite), and no startup-profile selector or favorite-
+  directories list - both deferred until there's a real profile/preferences
+  concept, or the added surface is worth it.
+- **`sound_mind::studio::RecentProjects`**: persists a most-recently-used
+  list of project file paths (up to 10, most recent first, missing files
+  silently filtered out on read - matching the legacy Studio's own
+  behavior) via a caller-supplied `QSettings`. `MainWindow` backs it with a
+  real, ini-format settings file under a fresh "SoundMind"/"SoundMindStudio"
+  identity, distinct from the legacy Python Studio's own settings (an
+  incompatible project file format either way, so nothing would carry over
+  meaningfully). Recorded on every successful open or save.
+- **`MainWindow::openProjectAt()`**: the non-prompting, directly-testable
+  work behind `openProject()` - mirrors `importAudioFile()`'s existing
+  split between an interactive slot and a headless-safe worker.
+  `MainWindow::isShowingLandingPage()` is a small new testable accessor
+  for which of the central `QStackedWidget`'s two pages (Landing Page or
+  Canvas) is currently visible.
+
+### Changed
+
+- **`MainWindow`'s central widget is now a `QStackedWidget`** alternating
+  between the Landing Page (index 0, shown first) and the `CanvasWidget`
+  (index 1) - `setProject()` switches to the canvas the moment a project
+  actually exists. The constructor no longer calls `newProject()` itself.
+
+### Notes
+
+- **No Y bump.** Nothing about the project file format changed - this is
+  entirely new UI plus one new, additive settings store.
+- **Real dependency confirmed, not carried over as-is:** `CanvasWidget`
+  already accepted a `nullptr` project gracefully (built that way from its
+  own first milestone), so the only real gap this milestone had to close
+  was `MainWindow` itself no longer assuming a project always exists -
+  every action already guarded on `!project_` defensively, which turned
+  out to already be correct, not just forward-compatible scaffolding.
+
+Full regression suite: 92/92 ctest entries passing (codec, core, studio) -
+`sound-mind-studio-tests` itself now runs 45 QTest functions across four
+classes (up from 29), including new coverage for `LandingPage` and
+`RecentProjects` in isolation.
+
 ## [0.0.8.1] - 2026-09-08
 
 The "Record" milestone from `docs/sound-mind-roadmap.md` - the last of

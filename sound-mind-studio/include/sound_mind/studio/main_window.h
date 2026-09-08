@@ -4,43 +4,58 @@
 #include <optional>
 
 #include <QMainWindow>
+#include <QSettings>
 
 #include "sound_mind/core/live_engine.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/record_engine.h"
+#include "sound_mind/studio/recent_projects.h"
 
+class QStackedWidget;
 class QString;
 class QTimer;
 
 namespace sound_mind::studio {
 
 class CanvasWidget;
+class LandingPage;
 
 /**
  * @brief The Sound Mind Studio main window.
  *
- * Owns the currently open Project and a File menu (New/Open/Save/Save As/
- * Import Audio/Import Image) over it, plus the CanvasWidget that reflects
- * it and a transport toolbar (Play/Pause/Stop) over a PlaybackEngine. See
+ * Owns the currently open Project (if any - see the Landing Page milestone,
+ * `v0.Y.9.1`, below) and a File menu (New/Open/Save/Save As/Import Audio/
+ * Import Image) over it, plus the CanvasWidget that reflects it and a
+ * transport toolbar (Play/Pause/Stop) over a PlaybackEngine. See
  * `docs/sound-mind-roadmap.md`'s Playback milestone (`v0.0.4.1`) -
- * everything else (real compositing, live-edit-reactive playback, layers
- * panel, etc.) arrives in later milestones.
+ * everything else (real compositing, layers panel, etc.) arrives in later
+ * milestones.
+ *
+ * **As of `v0.Y.9.1`:** the window no longer silently creates a project at
+ * startup. Its central widget is a `QStackedWidget` alternating between a
+ * `LandingPage` (shown until a project actually exists) and the
+ * `CanvasWidget` - see setProject()'s and isShowingLandingPage()'s docs.
+ * The Landing Page's Recent Projects list is backed by `recentProjects_`,
+ * an ini-format `QSettings` store distinct from the legacy Python Studio's
+ * own settings (a fresh product identity for a rewrite with an
+ * incompatible project file format) - see recent_projects.h.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
-    /// @brief Builds the window: menu bar, transport toolbar, canvas, and a
-    ///        fresh project to start with.
+    /// @brief Builds the window: menu bar, transport toolbar, and the
+    ///        Landing Page/Canvas stack - see the class docs for why no
+    ///        project exists yet at this point.
     /// @param parent The owning widget, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
     explicit MainWindow(QWidget* parent = nullptr);
 
     /**
-     * @brief The currently open project.
-     * @return A pointer to the open project. Never `nullptr` - a window
-     *         always has some project open, starting with a fresh one.
+     * @brief The currently open project, if any.
+     * @return A pointer to the open project, or `nullptr` if none is open
+     *         yet - see isShowingLandingPage().
      */
     [[nodiscard]] const sound_mind::core::Project* project() const noexcept;
 
@@ -48,7 +63,10 @@ public slots:
     /// @brief Replaces the current project with a freshly created one.
     void newProject();
 
-    /// @brief Prompts for a file and opens it as the current project.
+    /// @brief Prompts for a file and opens it as the current project - see
+    ///        openProjectAt() for the actual, non-prompting work, and for
+    ///        why this is split out the same way importAudio()/
+    ///        importAudioFile() are.
     void openProject();
 
     /**
@@ -183,6 +201,29 @@ public slots:
     void exportVideo();
 
 public:
+    /**
+     * @brief Opens the project at `path` as the current project, without
+     *        prompting or showing an error dialog on failure.
+     *
+     * The actual work behind openProject(), split out so it's callable
+     * directly - by a test, or by the Landing Page's Recent Projects
+     * entries - without needing a real file dialog. On success, records
+     * `path` via `recentProjects_` and refreshes the Landing Page's list -
+     * see importAudioFile()'s docs for why this never shows a message box
+     * itself.
+     *
+     * @param path Path to the `.smproj` file to open.
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @return `true` on success; `false` if the file couldn't be loaded.
+     */
+    bool openProjectAt(const std::filesystem::path& path, QString* errorMessage = nullptr);
+
+    /// @brief Whether the Landing Page is currently the visible central
+    ///        widget (no project open yet) rather than the canvas.
+    /// @return `true` until setProject() has been called at least once.
+    [[nodiscard]] bool isShowingLandingPage() const noexcept;
+
     /// @brief Whether playback is currently active.
     /// @return The underlying PlaybackEngine's isPlaying().
     [[nodiscard]] bool isPlaying() const noexcept;
@@ -312,7 +353,22 @@ private:
 
     std::optional<sound_mind::core::Project> project_;
     std::optional<std::filesystem::path> currentPath_;
+
+    /// @brief Alternates between landingPage_ (index 0, shown until a
+    /// project exists) and canvas_ (index 1) - see setProject()'s docs.
+    QStackedWidget* stack_ = nullptr;
+    LandingPage* landingPage_ = nullptr;
     CanvasWidget* canvas_ = nullptr;
+
+    /// @brief Backing store for recentProjects_ - an ini-format file (not
+    /// the platform registry/native format) specifically so
+    /// QStandardPaths::setTestModeEnabled(true) (see tests/main.cpp) can
+    /// sandbox it during automated tests, without touching whatever a real
+    /// installed Studio has persisted on the same machine.
+    QSettings settings_{QSettings::IniFormat, QSettings::UserScope, QStringLiteral("SoundMind"),
+                         QStringLiteral("SoundMindStudio")};
+    RecentProjects recentProjects_{settings_};
+
     sound_mind::core::PlaybackEngine playbackEngine_;
 
     /// @brief Whether playbackEngine_ already has the current topmost

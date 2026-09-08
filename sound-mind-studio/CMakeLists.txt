@@ -20,9 +20,13 @@ set(CMAKE_AUTOMOC ON)
 # without this, AUTOMOC silently never scans them and moc never runs.
 add_library(sound-mind-studio-lib
     src/canvas_widget.cpp
+    src/landing_page.cpp
     src/main_window.cpp
+    src/recent_projects.cpp
     include/sound_mind/studio/canvas_widget.h
+    include/sound_mind/studio/landing_page.h
     include/sound_mind/studio/main_window.h
+    include/sound_mind/studio/recent_projects.h
 )
 
 target_include_directories(sound-mind-studio-lib

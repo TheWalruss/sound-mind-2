@@ -7,12 +7,15 @@
 
 #include <QFile>
 #include <QImage>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QStatusBar>
 #include <QtTest/QtTest>
 
+#include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/main_window.h"
 
+using sound_mind::studio::LandingPage;
 using sound_mind::studio::MainWindow;
 
 namespace {
@@ -60,10 +63,113 @@ void writeTestWavFile(const std::filesystem::path& path) {
 
 }  // namespace
 
-void MainWindowTest::startsWithAFreshProject() {
+void MainWindowTest::startsWithNoProjectOpen() {
+    // Per the Landing Page milestone (v0.Y.9.1): the Studio no longer
+    // silently creates an in-memory project at startup - the Landing Page
+    // is shown until New/Open Project actually creates or loads one.
     const MainWindow window;
+    QVERIFY(window.project() == nullptr);
+}
+
+void MainWindowTest::newProjectShowsTheCanvasInsteadOfTheLandingPage() {
+    MainWindow window;
+    QVERIFY(window.isShowingLandingPage());
+
+    window.newProject();
+
+    QVERIFY(!window.isShowingLandingPage());
+}
+
+void MainWindowTest::openProjectAtOpensAndRecordsARecentProject() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-recent-project.smproj";
+
+    // saveProject()/saveProjectAs() prompt interactively (QFileDialog),
+    // which would hang under the offscreen test platform - write the
+    // project file directly via Project::save() instead, exactly as a
+    // real "open a project someone else saved" scenario would find on
+    // disk (a window's own currentPath_ isn't involved either way).
+    {
+        MainWindow writer;
+        writer.newProject();
+        const_cast<sound_mind::core::Project*>(writer.project())->save(projectPath);
+    }
+
+    MainWindow window;
+    const bool ok = window.openProjectAt(projectPath);
+
+    QVERIFY(ok);
     QVERIFY(window.project() != nullptr);
+    QVERIFY(!window.isShowingLandingPage());
+
+    auto* landing = window.findChild<LandingPage*>();
+    QVERIFY(landing != nullptr);
+    const auto entries = landing->findChildren<QPushButton*>(QStringLiteral("recentProjectButton"));
+    bool foundIt = false;
+    for (auto* entry : entries) {
+        if (entry->toolTip() == QString::fromStdString(projectPath.string())) {
+            foundIt = true;
+            break;
+        }
+    }
+    QVERIFY(foundIt);
+
+    std::filesystem::remove(projectPath);
+}
+
+void MainWindowTest::openProjectAtFailsGracefullyForAMissingFile() {
+    MainWindow window;
+    const bool ok = window.openProjectAt(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.smproj");
+
+    QVERIFY(!ok);
+    QVERIFY(window.project() == nullptr);
+    QVERIFY(window.isShowingLandingPage());
+}
+
+void MainWindowTest::landingPageNewProjectRequestedCreatesAProject() {
+    MainWindow window;
+    auto* landing = window.findChild<LandingPage*>();
+    QVERIFY(landing != nullptr);
+
+    auto* button = landing->findChild<QPushButton*>(QStringLiteral("newProjectButton"));
+    QVERIFY(button != nullptr);
+    button->click();
+
+    QVERIFY(window.project() != nullptr);
+    QVERIFY(!window.isShowingLandingPage());
+}
+
+void MainWindowTest::landingPageRecentProjectRequestedOpensThatPath() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-landing-recent.smproj";
+    {
+        MainWindow writer;
+        writer.newProject();
+        const_cast<sound_mind::core::Project*>(writer.project())->save(projectPath);
+    }
+
+    MainWindow window;
+    // Populate the list the same way a real recent-project entry would get
+    // there - via a prior successful open, not by reaching into internals.
+    QVERIFY(window.openProjectAt(projectPath));
+    window.newProject();  // back to a fresh, different project.
     QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(1));
+
+    auto* landing = window.findChild<LandingPage*>();
+    QVERIFY(landing != nullptr);
+    QPushButton* recentButton = nullptr;
+    for (auto* entry : landing->findChildren<QPushButton*>(QStringLiteral("recentProjectButton"))) {
+        if (entry->toolTip() == QString::fromStdString(projectPath.string())) {
+            recentButton = entry;
+            break;
+        }
+    }
+    QVERIFY(recentButton != nullptr);
+
+    recentButton->click();
+
+    QVERIFY(window.project() != nullptr);
+    QVERIFY(!window.isShowingLandingPage());
+
+    std::filesystem::remove(projectPath);
 }
 
 void MainWindowTest::newProjectReplacesTheCurrentOne() {
@@ -73,8 +179,10 @@ void MainWindowTest::newProjectReplacesTheCurrentOne() {
     // What actually matters is that the *contents* are a fresh project
     // afterwards, which is what this checks.
     MainWindow window;
-
     window.newProject();
+    QVERIFY(window.project() != nullptr);
+
+    window.newProject();  // replace it with another fresh one.
 
     QVERIFY(window.project() != nullptr);
     QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(1));
@@ -85,6 +193,7 @@ void MainWindowTest::importAudioFileAddsANewLayer() {
     writeTestWavFile(path);
 
     MainWindow window;
+    window.newProject();
     const bool ok = window.importAudioFile(path);
     std::filesystem::remove(path);
 
@@ -100,6 +209,7 @@ void MainWindowTest::importImageFileAddsANewLayer() {
     QVERIFY(image.save(QString::fromStdString(path.string())));
 
     MainWindow window;
+    window.newProject();
     const bool ok = window.importImageFile(path);
     std::filesystem::remove(path);
 
@@ -112,6 +222,7 @@ void MainWindowTest::importImageFileAddsANewLayer() {
 
 void MainWindowTest::importAudioFileFailsGracefullyForAMissingFile() {
     MainWindow window;
+    window.newProject();
     const bool ok = window.importAudioFile(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.wav");
 
     QVERIFY(!ok);
@@ -121,6 +232,7 @@ void MainWindowTest::importAudioFileFailsGracefullyForAMissingFile() {
 void MainWindowTest::startPlaybackDoesNothingWithNoContent() {
     // A fresh project's only layer (Background) has no content yet.
     MainWindow window;
+    window.newProject();
     window.startPlayback();
     QVERIFY(!window.isPlaying());
 }
@@ -130,6 +242,7 @@ void MainWindowTest::startPlaybackPlaysAnImportedLayer() {
     writeTestWavFile(path);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -142,6 +255,7 @@ void MainWindowTest::pauseAndResumePlayback() {
     writeTestWavFile(path);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -160,6 +274,7 @@ void MainWindowTest::stopPlaybackStopsIt() {
     writeTestWavFile(path);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -173,6 +288,7 @@ void MainWindowTest::stopPlaybackStopsIt() {
 void MainWindowTest::poolTopmostLayerNowFailsGracefullyWithNoContent() {
     // A fresh project's only layer (Background) has no content yet.
     MainWindow window;
+    window.newProject();
     QVERIFY(!window.poolTopmostLayerNow());
 }
 
@@ -181,6 +297,7 @@ void MainWindowTest::poolTopmostLayerNowPoolsAnImportedLayer() {
     writeTestWavFile(path);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -202,6 +319,7 @@ void MainWindowTest::poolTopmostLayerNowPoolsAnImportedLayer() {
 void MainWindowTest::exportTopmostLayerAudioNowFailsGracefullyWithNoContent() {
     // A fresh project's only layer (Background) has no content yet.
     MainWindow window;
+    window.newProject();
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export.flac";
     QVERIFY(!window.exportTopmostLayerAudioNow(path));
     QVERIFY(!QFile::exists(QString::fromStdString(path.string())));
@@ -212,6 +330,7 @@ void MainWindowTest::exportTopmostLayerAudioNowExportsAnImportedLayer() {
     writeTestWavFile(wavPath);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(wavPath));
     std::filesystem::remove(wavPath);
 
@@ -228,6 +347,7 @@ void MainWindowTest::exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension()
     writeTestWavFile(wavPath);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(wavPath));
     std::filesystem::remove(wavPath);
 
@@ -240,6 +360,7 @@ void MainWindowTest::exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension()
 void MainWindowTest::exportTopmostLayerVideoNowFailsGracefullyWithNoContent() {
     // A fresh project's only layer (Background) has no content yet.
     MainWindow window;
+    window.newProject();
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export.mp4";
     QVERIFY(!window.exportTopmostLayerVideoNow(path));
     QVERIFY(!QFile::exists(QString::fromStdString(path.string())));
@@ -250,6 +371,7 @@ void MainWindowTest::exportTopmostLayerVideoNowExportsAnImportedLayer() {
     writeTestWavFile(wavPath);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(wavPath));
     std::filesystem::remove(wavPath);
 
@@ -266,6 +388,7 @@ void MainWindowTest::importAudioFileShowsProgressThenCompletionInTheStatusBar() 
     writeTestWavFile(path);
 
     MainWindow window;
+    window.newProject();
     QSignalSpy spy(window.statusBar(), &QStatusBar::messageChanged);
 
     QVERIFY(window.importAudioFile(path));
@@ -283,6 +406,7 @@ void MainWindowTest::poolTopmostLayerNowShowsProgressThenCompletionInTheStatusBa
     writeTestWavFile(path);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -303,6 +427,7 @@ void MainWindowTest::exportTopmostLayerAudioNowShowsProgressThenCompletionInTheS
     writeTestWavFile(wavPath);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(wavPath));
     std::filesystem::remove(wavPath);
 
@@ -322,6 +447,7 @@ void MainWindowTest::aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMe
     // status bar clean rather than stuck on an "Exporting..." message that
     // never actually completed.
     MainWindow window;
+    window.newProject();
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-status-fail.flac";
 
     QVERIFY(!window.exportTopmostLayerAudioNow(path));
@@ -330,6 +456,7 @@ void MainWindowTest::aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMe
 
 void MainWindowTest::toggleLiveModeAddsALayerAndStartsTheEngine() {
     MainWindow window;
+    window.newProject();
     const std::size_t layerCountBefore = window.project()->layers().size();
 
     window.toggleLiveMode();
@@ -343,6 +470,7 @@ void MainWindowTest::toggleLiveModeAddsALayerAndStartsTheEngine() {
 
 void MainWindowTest::toggleLiveModeStopsARunningCapture() {
     MainWindow window;
+    window.newProject();
     window.toggleLiveMode();
     QVERIFY(window.isLiveModeRunning());
 
@@ -356,6 +484,7 @@ void MainWindowTest::startPlaybackDoesNothingWhileLiveModeIsRunning() {
     writeTestWavFile(path);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -370,6 +499,7 @@ void MainWindowTest::startPlaybackDoesNothingWhileLiveModeIsRunning() {
 
 void MainWindowTest::toggleRecordingStartsAndStopsWithoutAddingALayerWhenNothingWasCaptured() {
     MainWindow window;
+    window.newProject();
     const std::size_t layerCountBefore = window.project()->layers().size();
 
     window.toggleRecording();
@@ -387,6 +517,7 @@ void MainWindowTest::startPlaybackDoesNothingWhileRecordingIsRunning() {
     writeTestWavFile(path);
 
     MainWindow window;
+    window.newProject();
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -401,6 +532,7 @@ void MainWindowTest::startPlaybackDoesNothingWhileRecordingIsRunning() {
 
 void MainWindowTest::toggleLiveModeDoesNothingWhileRecordingIsRunning() {
     MainWindow window;
+    window.newProject();
     window.toggleRecording();
     QVERIFY(window.isRecording());
 
@@ -412,6 +544,7 @@ void MainWindowTest::toggleLiveModeDoesNothingWhileRecordingIsRunning() {
 
 void MainWindowTest::toggleRecordingDoesNothingWhileLiveModeIsRunning() {
     MainWindow window;
+    window.newProject();
     window.toggleLiveMode();
     QVERIFY(window.isLiveModeRunning());
 

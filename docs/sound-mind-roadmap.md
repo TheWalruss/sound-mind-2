@@ -129,6 +129,10 @@ A persistent start screen - not a splash, no timed/loading behavior - shown as t
 
 **Demo:** launch the Studio with no project open, see the landing page; create or open a project and land in the real editor.
 
+**Implemented as `sound_mind::studio::LandingPage`** (a `QStackedWidget` alternates it with `CanvasWidget` as `MainWindow`'s central widget) **and `sound_mind::studio::RecentProjects`** (an ini-format `QSettings`-backed most-recently-used list, capped at 10, missing files filtered out on read - see `docs/sound-mind-architecture.md`'s Decisions Made #15 for the storage-format choice). "Not shown again until there's no project open" is accurate as far as it goes in this pass - nothing yet *returns* to a no-project state (that's `v0.Y.10.1`'s Project Lifecycle work), so in practice the Landing Page is simply shown once, at launch, until the first New/Open succeeds.
+
+**No Y bump.** `LandingPage` and `RecentProjects` are new, additive UI/settings capabilities - no project file format changed.
+
 ### v0.Y.10.1 - Project Lifecycle
 
 Real unsaved-changes guards on every path that can discard work - New, Open, and switching projects, not just window Close (the only one that currently has one). Every project switch - new, open, or otherwise - fully clears all in-memory buffers, caches, and panel-local state first, so nothing from the previous project (a layer's decoded audio, a Live/Loop layer's partially-captured content, a panel showing stale data) can leak into or be confused with the next one. `MainWindow::setProject()` is the audit point: everything it doesn't already reset when a new `Project` comes in is a gap to close here.

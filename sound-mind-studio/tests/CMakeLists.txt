@@ -3,7 +3,9 @@ find_package(Qt6 REQUIRED COMPONENTS Test)
 add_executable(sound-mind-studio-tests
     main.cpp
     test_canvas_widget.cpp
+    test_landing_page.cpp
     test_main_window.cpp
+    test_recent_projects.cpp
 )
 
 target_link_libraries(sound-mind-studio-tests

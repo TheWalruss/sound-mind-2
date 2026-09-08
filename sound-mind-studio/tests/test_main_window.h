@@ -6,7 +6,12 @@ class MainWindowTest : public QObject {
     Q_OBJECT
 
 private slots:
-    void startsWithAFreshProject();
+    void startsWithNoProjectOpen();
+    void newProjectShowsTheCanvasInsteadOfTheLandingPage();
+    void openProjectAtOpensAndRecordsARecentProject();
+    void openProjectAtFailsGracefullyForAMissingFile();
+    void landingPageNewProjectRequestedCreatesAProject();
+    void landingPageRecentProjectRequestedOpensThatPath();
     void newProjectReplacesTheCurrentOne();
     void importAudioFileAddsANewLayer();
     void importImageFileAddsANewLayer();
