@@ -12,6 +12,7 @@
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/record_engine.h"
+#include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/recent_projects.h"
 
 class QCloseEvent;
@@ -185,9 +186,23 @@ public slots:
     /// @brief Prompts for a file and saves the current project there.
     void saveProjectAs();
 
-    /// @brief Prompts for a WAV file and imports it as a new layer.
-    /// Progress and completion are reported via the status bar (non-modal) -
-    /// see poolTopmostLayer()'s docs for why only failure shows a modal.
+    /**
+     * @brief Prompts for a WAV file and imports it as one or more new
+     *        layers - see `docs/sound-mind-roadmap.md`'s Audio Import
+     *        Snippets milestone (`v0.Y.19.1`).
+     *
+     * Audio longer than the current project's own duration is split into
+     * project-length snippets first (see audioSnippetsForFile()'s docs).
+     * With exactly one snippet (the common case - audio no longer than the
+     * project), imports it directly, matching this method's previous,
+     * simpler behavior exactly - no dialog beyond the file picker itself.
+     * With more than one, shows an `AudioSnippetPickerDialog` (every
+     * snippet checked by default) and imports only what's still checked
+     * when it's accepted - cancelling it, or accepting with nothing
+     * checked, imports nothing. Progress and completion are reported via
+     * the status bar (non-modal) - see poolTopmostLayer()'s docs for why
+     * only failure shows a modal.
+     */
     void importAudio();
 
     /// @brief Prompts for an image file and imports it as a new layer.
@@ -617,8 +632,9 @@ public:
     [[nodiscard]] float playbackVolume() const noexcept;
 
     /**
-     * @brief Imports a WAV file as a new layer, without prompting or
-     *        showing an error dialog on failure.
+     * @brief Imports every project-length snippet of a WAV file as new
+     *        layers, without prompting or showing an error dialog on
+     *        failure.
      *
      * The actual work behind importAudio(), split out so it's callable
      * directly - by a test, or eventually a drag-and-drop handler - without
@@ -629,6 +645,13 @@ public:
      * importAudio() (the interactive slot) shows a dialog, based on the
      * error text this returns.
      *
+     * Equivalent to calling importAudioSnippets() with every index
+     * audioSnippetsForFile() reports - i.e. the legacy Studio's own
+     * "import everything, no picker" behavior. Audio no longer than the
+     * project's own duration always has exactly one snippet, so this stays
+     * a plain single-layer import in the common case, named from the
+     * file's own name exactly as before this milestone.
+     *
      * Marks hasUnsavedChanges() on success, per the Project Lifecycle
      * milestone (`v0.Y.10.1`).
      *
@@ -638,6 +661,60 @@ public:
      * @return `true` on success; `false` if reading or encoding it failed.
      */
     bool importAudioFile(const std::filesystem::path& path, QString* errorMessage = nullptr);
+
+    /**
+     * @brief Computes how the audio file at `path` would split into the
+     *        current project's own duration worth of snippets, without
+     *        importing anything or showing any dialog.
+     *
+     * A snippet's length is the same `canvasWidth * hopLength` samples
+     * `sound_mind::core::LoopEngine`'s own loop length is derived from
+     * (see its docs) - snippet `0` is the source's first such stretch,
+     * snippet `1` the next, and so on; the final snippet is shorter than
+     * the rest if the source's length isn't an exact multiple. Audio no
+     * longer than one snippet's worth always returns exactly one entry.
+     *
+     * @param path Path to the WAV file to analyze.
+     * @param errorMessage If non-null and this returns empty, set to a
+     *        human-readable description of what went wrong.
+     * @return One entry per snippet, in order; empty if no project is
+     *         open or the file couldn't be read.
+     */
+    [[nodiscard]] std::vector<AudioSnippetPickerDialog::RowData> audioSnippetsForFile(
+        const std::filesystem::path& path, QString* errorMessage = nullptr) const;
+
+    /**
+     * @brief Imports specific snippets (see audioSnippetsForFile()) of an
+     *        audio file as new layers, without prompting or showing an
+     *        error dialog on failure - the actual work behind both
+     *        importAudioFile() (which requests every snippet) and
+     *        importAudio()'s snippet picker (which requests only the
+     *        checked subset).
+     *
+     * Each imported snippet becomes its own new Normal layer. With more
+     * than one snippet in the source overall, a layer's name is
+     * `"<stem>_NNNN"` (the source file's stem, an underscore, and its
+     * snippet index zero-padded to four digits) - matching the legacy
+     * Studio's own `name_0000`/`name_0001`/... convention - so a layer's
+     * name still reflects its real position in the source even if some
+     * snippets were skipped. With only one snippet in the source overall,
+     * the layer is named from the file's own name directly, matching
+     * importAudioFile()'s pre-existing single-layer behavior exactly.
+     *
+     * @param path Path to the WAV file to import from.
+     * @param snippetIndices Which of the source's snippets to import, in
+     *        any order and with any duplicates ignored; an index at or
+     *        beyond the source's actual snippet count is silently
+     *        skipped, not an error.
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @return `true` if the file was read and at least one requested
+     *         snippet was imported; `false` if the file couldn't be read,
+     *         no project is open, or nothing was actually imported (an
+     *         empty `snippetIndices`, or every given index out of range).
+     */
+    bool importAudioSnippets(const std::filesystem::path& path, const std::vector<std::size_t>& snippetIndices,
+                              QString* errorMessage = nullptr);
 
     /**
      * @brief Imports an image file as a new layer, without prompting or

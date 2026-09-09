@@ -1,11 +1,14 @@
 #include "sound_mind/studio/main_window.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <iomanip>
 #include <memory>
 #include <exception>
+#include <sstream>
 #include <stdexcept>
 
 #include <QAction>
@@ -32,6 +35,7 @@
 #include "sound_mind/core/layer_export.h"
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/create_project_wizard.h"
 #include "sound_mind/studio/landing_page.h"
@@ -64,6 +68,15 @@ const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
         result.append(QString::fromStdString(name));
     }
     return result;
+}
+
+/// @brief Zero-pads a snippet index to four digits ("0000", "0001", ...) -
+/// matching the legacy Studio's own `name_0000`/`name_0001`/... naming
+/// convention for a multi-snippet audio import.
+[[nodiscard]] std::string formatSnippetIndex(std::size_t index) {
+    std::ostringstream stream;
+    stream << std::setw(4) << std::setfill('0') << index;
+    return stream.str();
 }
 
 /// @brief Maps a destination path's extension to a compressed audio format.
@@ -481,8 +494,35 @@ void MainWindow::importAudio() {
     if (fileName.isEmpty()) {
         return;
     }
+    const std::filesystem::path path(fileName.toStdString());
+
+    QString snippetsError;
+    const auto snippets = audioSnippetsForFile(path, &snippetsError);
+    if (snippets.empty()) {
+        QMessageBox::critical(this, tr("Import Audio Failed"),
+                               snippetsError.isEmpty() ? tr("Could not read the audio file.") : snippetsError);
+        return;
+    }
+
+    std::vector<std::size_t> indices;
+    if (snippets.size() == 1) {
+        // The common case - audio no longer than the project's own
+        // duration - skips the picker entirely, matching this method's
+        // pre-existing behavior exactly (see importAudio()'s own docs).
+        indices.push_back(snippets.front().index);
+    } else {
+        AudioSnippetPickerDialog dialog(snippets, this);
+        if (dialog.exec() != QDialog::Accepted) {
+            return;
+        }
+        indices = dialog.selectedIndices();
+        if (indices.empty()) {
+            return;
+        }
+    }
+
     QString errorMessage;
-    if (!importAudioFile(std::filesystem::path(fileName.toStdString()), &errorMessage)) {
+    if (!importAudioSnippets(path, indices, &errorMessage)) {
         QMessageBox::critical(this, tr("Import Audio Failed"), errorMessage);
     }
 }
@@ -499,6 +539,70 @@ void MainWindow::importImage() {
 }
 
 bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* errorMessage) {
+    QString snippetsError;
+    const auto snippets = audioSnippetsForFile(path, &snippetsError);
+    if (snippets.empty()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = snippetsError;
+        }
+        return false;
+    }
+
+    std::vector<std::size_t> allIndices;
+    allIndices.reserve(snippets.size());
+    for (const auto& snippet : snippets) {
+        allIndices.push_back(snippet.index);
+    }
+    return importAudioSnippets(path, allIndices, errorMessage);
+}
+
+std::vector<AudioSnippetPickerDialog::RowData> MainWindow::audioSnippetsForFile(const std::filesystem::path& path,
+                                                                                 QString* errorMessage) const {
+    if (!project_) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No project is open.");
+        }
+        return {};
+    }
+
+    try {
+        const auto audio = sound_mind::codec::readWavFile(path);
+        const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
+        const auto loopLengthSamples =
+            static_cast<std::size_t>(project_->settings().canvasWidth) * static_cast<std::size_t>(config.hopLength);
+        if (loopLengthSamples == 0 || audio.sampleRateHz == 0) {
+            if (errorMessage != nullptr) {
+                *errorMessage = tr("The project's own duration is zero - nothing to split against.");
+            }
+            return {};
+        }
+
+        const std::size_t totalSamples = audio.frameCount();
+        const std::size_t snippetCount =
+            std::max<std::size_t>((totalSamples + loopLengthSamples - 1) / loopLengthSamples, std::size_t{1});
+
+        std::vector<AudioSnippetPickerDialog::RowData> result;
+        result.reserve(snippetCount);
+        for (std::size_t index = 0; index < snippetCount; ++index) {
+            const std::size_t start = index * loopLengthSamples;
+            const std::size_t end = std::min(start + loopLengthSamples, totalSamples);
+            AudioSnippetPickerDialog::RowData row;
+            row.index = index;
+            row.startSeconds = static_cast<double>(start) / static_cast<double>(audio.sampleRateHz);
+            row.endSeconds = static_cast<double>(end) / static_cast<double>(audio.sampleRateHz);
+            result.push_back(row);
+        }
+        return result;
+    } catch (const std::exception& e) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QString::fromStdString(e.what());
+        }
+        return {};
+    }
+}
+
+bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const std::vector<std::size_t>& snippetIndices,
+                                      QString* errorMessage) {
     if (!project_) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No project is open.");
@@ -509,11 +613,61 @@ bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* err
     showBusyStatus(statusBar(), tr("Importing audio..."));
     try {
         const auto audio = sound_mind::codec::readWavFile(path);
-        const auto content = sound_mind::codec::encode(audio, sound_mind::core::streamCodecConfigFor(project_->settings()));
+        const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
+        const auto loopLengthSamples =
+            static_cast<std::size_t>(project_->settings().canvasWidth) * static_cast<std::size_t>(config.hopLength);
+        const std::size_t totalSamples = audio.frameCount();
+        const std::size_t snippetCount = loopLengthSamples > 0
+                                              ? std::max<std::size_t>((totalSamples + loopLengthSamples - 1) / loopLengthSamples,
+                                                                       std::size_t{1})
+                                              : 1;
 
-        sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
-        layer.setContent(content);
-        project_->addLayer(std::move(layer));
+        // Sorted, de-duplicated so layers land in the project in ascending
+        // snippet order regardless of the order the caller listed indices
+        // in - a snippet picker's checked order needn't match position
+        // order.
+        std::vector<std::size_t> sortedIndices = snippetIndices;
+        std::sort(sortedIndices.begin(), sortedIndices.end());
+        sortedIndices.erase(std::unique(sortedIndices.begin(), sortedIndices.end()), sortedIndices.end());
+
+        const std::string stem = path.stem().string();
+        int importedCount = 0;
+        for (const std::size_t index : sortedIndices) {
+            if (index >= snippetCount) {
+                continue;  // silently skipped - see this method's own docs.
+            }
+            const std::size_t start = loopLengthSamples > 0 ? index * loopLengthSamples : 0;
+            const std::size_t end =
+                loopLengthSamples > 0 ? std::min(start + loopLengthSamples, totalSamples) : totalSamples;
+            if (start > end) {
+                continue;
+            }
+
+            sound_mind::codec::AudioBuffer snippet;
+            snippet.sampleRateHz = audio.sampleRateHz;
+            snippet.left.assign(audio.left.begin() + static_cast<std::ptrdiff_t>(start),
+                                 audio.left.begin() + static_cast<std::ptrdiff_t>(end));
+            snippet.right.assign(audio.right.begin() + static_cast<std::ptrdiff_t>(start),
+                                  audio.right.begin() + static_cast<std::ptrdiff_t>(end));
+
+            const auto content = sound_mind::codec::encode(snippet, config);
+            const std::string layerName =
+                snippetCount > 1 ? stem + "_" + formatSnippetIndex(index) : path.filename().string();
+
+            sound_mind::core::Layer layer(0, layerName, sound_mind::core::LayerType::Normal);
+            layer.setContent(content);
+            project_->addLayer(std::move(layer));
+            ++importedCount;
+        }
+
+        if (importedCount == 0) {
+            statusBar()->clearMessage();
+            if (errorMessage != nullptr) {
+                *errorMessage = tr("No snippets were imported.");
+            }
+            return false;
+        }
+
         canvas_->update();
         // The topmost layer just changed - the next startPlayback() should
         // pick up the newly imported one instead of whatever was loaded
@@ -521,7 +675,9 @@ bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* err
         playbackLoaded_ = false;
         hasUnsavedChanges_ = true;
         refreshLayersPanel();
-        statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
+        statusBar()->showMessage(
+            tr("Imported %1 layer(s) from \"%2\".").arg(importedCount).arg(QString::fromStdString(path.filename().string())),
+            5000);
         return true;
     } catch (const std::exception& e) {
         statusBar()->clearMessage();

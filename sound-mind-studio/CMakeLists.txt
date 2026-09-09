@@ -26,6 +26,7 @@ set(CMAKE_AUTORCC ON)
 # under include/sound_mind/studio/ while the sources live under src/ - so
 # without this, AUTOMOC silently never scans them and moc never runs.
 add_library(sound-mind-studio-lib
+    src/audio_snippet_picker_dialog.cpp
     src/canvas_widget.cpp
     src/create_project_wizard.cpp
     src/landing_page.cpp
@@ -36,6 +37,7 @@ add_library(sound-mind-studio-lib
     src/record_panel.cpp
     src/recent_projects.cpp
     src/theme.cpp
+    include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/create_project_wizard.h
     include/sound_mind/studio/landing_page.h

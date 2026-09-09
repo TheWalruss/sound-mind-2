@@ -92,4 +92,13 @@ private slots:
     void setPlaybackVolumeForwardsToThePlaybackEngine();
     void loopPanelToggleButtonStartsAndStopsTheRealEngine();
     void playbackPanelButtonsDriveRealPlayback();
+
+    // Audio Import Snippets (v0.Y.19.1)
+    void audioSnippetsForFileReturnsOneSnippetForAudioNoLongerThanTheProject();
+    void audioSnippetsForFileSplitsLongerAudioIntoProjectLengthSegments();
+    void audioSnippetsForFileFailsGracefullyWithNoProjectOpen();
+    void importAudioFileImportsEveryComputedSnippetForLongAudio();
+    void importAudioSnippetsImportsOnlyTheRequestedSubset();
+    void importAudioSnippetsSkipsOutOfRangeIndicesGracefully();
+    void importAudioSnippetsFailsWhenNothingWasImported();
 };

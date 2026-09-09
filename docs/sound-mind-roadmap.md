@@ -270,7 +270,7 @@ Record, Loop, and a new Playback toolbar button each open their own dockable pan
 
 **Each device combo's first entry is "(System Default)"**, mapped to an empty device name - the same empty-string-means-default convention the engines themselves already use, so a picker never needs a special "no selection" state.
 
-### v0.Y.19.1 - Audio Import Snippets 🔜 Next
+### v0.Y.19.1 - Audio Import Snippets ✅
 
 When importing audio, cut the input into segments exactly the project's own duration (the same `canvasWidth * hopLength` loop length `v0.Y.14.1`'s Loop Mode already derives) and import each snippet as its own layer, numbered in sequence - matching the legacy Studio's own `_start_layer_import()`/`_on_layer_import_done()` behavior (`name_0000`, `name_0001`, ...) for audio longer than the project canvas.
 
@@ -280,7 +280,11 @@ When importing audio, cut the input into segments exactly the project's own dura
 
 **No Y bump expected** - a new import-time behavior; doesn't touch the project file format itself.
 
-### v0.Y.20.1 - Image Import Scaling 🔜 Then
+**Implemented as `sound_mind::studio::AudioSnippetPickerDialog`** (a modal `QDialog`, not a persistent dock panel - "panel" in the opening scope note above meant the picker's own row list, not a `QDockWidget`) plus three new `MainWindow` methods: `audioSnippetsForFile()` (the testable, no-dialog analysis step - computes the split without importing anything), `importAudioSnippets()` (imports a specific, caller-given set of snippet indices), and `importAudioFile()` itself, now a thin wrapper requesting every snippet `audioSnippetsForFile()` reports - preserving its exact pre-existing single-layer behavior and naming for audio no longer than the project (the common case), and headless-safe for tests either way, per the same interactive/testable split `openProject()`/`openProjectAt()` established. `importAudio()` (the interactive slot) skips the dialog entirely when there's only one snippet - it only ever appears when there's an actual choice to make.
+
+**Layer naming, confirmed while implementing:** with more than one snippet, a layer is named `"<stem>_NNNN"` using its *original* position in the full split (zero-padded to four digits) - not renumbered sequentially among just the imported subset - so a layer's name still tells you where it came from even if some snippets were skipped. Requested indices are de-duplicated and imported in ascending position order regardless of the order they were requested in, so a picker's checked order never affects layer order.
+
+### v0.Y.20.1 - Image Import Scaling 🔜 Next
 
 When importing an image, offer a choice of how it's resized to the project's canvas dimensions, presented before the import proceeds:
 

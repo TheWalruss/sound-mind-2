@@ -6,6 +6,65 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.16.1] - 2026-09-09
+
+The "Audio Import Snippets" milestone from `docs/sound-mind-roadmap.md`
+(Phase 2.5): audio longer than the project's own duration is now split
+into project-length snippets on import, with a picker to choose which
+ones actually become layers - going beyond the legacy Studio's own
+"import everything, no picker" behavior.
+
+### Added
+
+- **`sound_mind::studio::AudioSnippetPickerDialog`**: a modal `QDialog`
+  listing every snippet an import would produce (a numbered row, each
+  showing its timespan, checkable), plus a "Select All" checkbox - every
+  row checked by default, so accepting immediately matches the legacy
+  behavior exactly. `MainWindow::importAudio()` shows it only when a file
+  actually splits into more than one snippet; the common case (audio no
+  longer than the project) still imports directly, no dialog beyond the
+  file picker itself.
+- **`MainWindow::audioSnippetsForFile()`**: the new testable, no-dialog
+  analysis step - computes how a file would split (each segment exactly
+  the project's own `canvasWidth * hopLength` loop length, matching Loop
+  Mode's own derivation) without importing anything.
+- **`MainWindow::importAudioSnippets()`**: imports a caller-given set of
+  snippet indices as new layers - the actual work behind both
+  `importAudioFile()` (which now requests every snippet) and the picker
+  dialog (which requests only the checked subset). An index beyond the
+  file's actual snippet count is silently skipped, not an error.
+
+### Changed
+
+- **`MainWindow::importAudioFile()`** is now a thin wrapper around
+  `audioSnippetsForFile()` + `importAudioSnippets()`, requesting every
+  computed snippet - preserving its exact pre-existing single-layer
+  behavior and naming for the common case (audio no longer than the
+  project), and staying headless-safe for tests either way.
+
+### Notes
+
+- **A real design constraint, confirmed while implementing**:
+  `importAudioFile()`'s own established "never shows a dialog" contract
+  (needed for headless testability) meant the snippet-splitting analysis
+  and the actual import had to be two separate methods, rather than one
+  that both analyzes and conditionally pops up a picker - see
+  `docs/sound-mind-architecture.md`'s Decisions Made #22.
+- **Snippet layer naming keeps its original split position**: with more
+  than one snippet, a layer is named `"<stem>_NNNN"` using its position
+  in the *full* split (zero-padded to four digits), not renumbered
+  sequentially among just the imported subset - so a layer's name stays
+  meaningful even when some snippets were skipped. Requested indices are
+  de-duplicated and imported in ascending position order regardless of
+  the order they were requested in.
+- **No Y bump.** A new import-time behavior only; the project file format
+  is unchanged.
+
+Full regression suite: `sound-mind-core-tests` unaffected (no
+`sound-mind-core` changes this milestone); `sound-mind-studio-tests`
+gains a new `AudioSnippetPickerDialogTest` class (4 tests) and 7 new
+`MainWindow` tests for the snippet-splitting/import logic.
+
 ## [0.0.15.1] - 2026-09-09
 
 The "Transport Panels" milestone from `docs/sound-mind-roadmap.md` (Phase

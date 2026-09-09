@@ -74,6 +74,50 @@ void writeTestWavFile(const std::filesystem::path& path) {
     stream.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
 }
 
+/// @brief Writes a valid 16-bit PCM mono WAV file with exactly
+/// `frameCount` samples at `sampleRateHz`, to `path` - for exercising the
+/// Audio Import Snippets milestone's splitting logic, which needs audio
+/// longer than writeTestWavFile()'s own fixed 4 samples.
+void writeTestWavFileWithFrameCount(const std::filesystem::path& path, std::size_t frameCount,
+                                     std::uint32_t sampleRateHz = 44100) {
+    const std::uint32_t dataSize = static_cast<std::uint32_t>(frameCount * sizeof(std::int16_t));
+
+    std::vector<char> bytes;
+    bytes.insert(bytes.end(), {'R', 'I', 'F', 'F'});
+    appendUint32(bytes, 36 + dataSize);
+    bytes.insert(bytes.end(), {'W', 'A', 'V', 'E'});
+    bytes.insert(bytes.end(), {'f', 'm', 't', ' '});
+    appendUint32(bytes, 16);
+    appendUint16(bytes, 1);  // PCM
+    appendUint16(bytes, 1);  // mono
+    appendUint32(bytes, sampleRateHz);
+    appendUint32(bytes, sampleRateHz * 2);
+    appendUint16(bytes, 2);
+    appendUint16(bytes, 16);
+    bytes.insert(bytes.end(), {'d', 'a', 't', 'a'});
+    appendUint32(bytes, dataSize);
+    for (std::size_t i = 0; i < frameCount; ++i) {
+        // A cheap, deterministic ramp - the exact waveform doesn't matter,
+        // only that a real, valid PCM stream of the requested length exists.
+        const auto sample = static_cast<std::int16_t>((static_cast<int>(i % 2000) - 1000));
+        appendUint16(bytes, static_cast<std::uint16_t>(sample));
+    }
+
+    std::ofstream stream(path, std::ios::binary);
+    stream.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+}
+
+/// @brief A project settings struct with a small `canvasWidth`, for fast
+/// snippet-splitting tests - the default `ProjectSettings{}`'s own loop
+/// length (canvasWidth * hopLength, per LoopEngine's docs) is over 10
+/// seconds of audio at the default sample rate, which would make a
+/// multi-snippet test file impractically large.
+sound_mind::core::ProjectSettings smallCanvasProjectSettings() {
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 8;  // loop length = 8 * 441 = 3528 samples at the default 44100 Hz/10 ms timestep.
+    return settings;
+}
+
 /// @brief Gives `window` a fresh, saved-to-disk project with default
 /// settings - the testable-core equivalent of the old, no-dialog
 /// newProject() for every test that just needs *some* project to work
@@ -1277,4 +1321,135 @@ void MainWindowTest::playbackPanelButtonsDriveRealPlayback() {
 
     stopButton->click();
     QVERIFY(!window.isPlaying());
+}
+
+void MainWindowTest::audioSnippetsForFileReturnsOneSnippetForAudioNoLongerThanTheProject() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-snippets-short.wav";
+    writeTestWavFile(path);  // 4 samples - far shorter than any project's own duration.
+
+    MainWindow window;
+    createFreshTestProject(window);
+
+    const auto snippets = window.audioSnippetsForFile(path);
+    std::filesystem::remove(path);
+
+    QCOMPARE(snippets.size(), static_cast<std::size_t>(1));
+    QCOMPARE(snippets.front().index, static_cast<std::size_t>(0));
+    QCOMPARE(snippets.front().startSeconds, 0.0);
+}
+
+void MainWindowTest::audioSnippetsForFileSplitsLongerAudioIntoProjectLengthSegments() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-snippets-long.wav";
+    constexpr std::size_t loopLengthSamples = 3528;  // 8 * 441 - see smallCanvasProjectSettings()'s docs.
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 7 / 2);  // 3.5 loops - a shorter final snippet.
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-snippets-long.smproj";
+    MainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+
+    const auto snippets = window.audioSnippetsForFile(path);
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QCOMPARE(snippets.size(), static_cast<std::size_t>(4));
+    for (std::size_t i = 0; i < snippets.size(); ++i) {
+        QCOMPARE(snippets[i].index, i);
+    }
+    constexpr double sampleRate = 44100.0;
+    QCOMPARE(snippets[0].startSeconds, 0.0);
+    QCOMPARE(snippets[0].endSeconds, loopLengthSamples / sampleRate);
+    // The final snippet is shorter - half a loop's worth.
+    const double finalDuration = snippets[3].endSeconds - snippets[3].startSeconds;
+    QVERIFY(finalDuration < loopLengthSamples / sampleRate);
+    QVERIFY(finalDuration > 0.0);
+}
+
+void MainWindowTest::audioSnippetsForFileFailsGracefullyWithNoProjectOpen() {
+    MainWindow window;
+    const auto snippets =
+        window.audioSnippetsForFile(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.wav");
+    QVERIFY(snippets.empty());
+}
+
+void MainWindowTest::importAudioFileImportsEveryComputedSnippetForLongAudio() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-all.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 3);  // exactly 3 whole snippets.
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-all.smproj";
+    MainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    const bool ok = window.importAudioFile(path);
+    const std::string stem = path.stem().string();
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 3);
+    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore].name()),
+              QString::fromStdString(stem + "_0000"));
+    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore + 1].name()),
+              QString::fromStdString(stem + "_0001"));
+    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore + 2].name()),
+              QString::fromStdString(stem + "_0002"));
+}
+
+void MainWindowTest::importAudioSnippetsImportsOnlyTheRequestedSubset() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-subset.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 4);  // 4 whole snippets: 0, 1, 2, 3.
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-subset.smproj";
+    MainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    // Requested out of order - confirms imported layers land in ascending
+    // position order regardless, not request order.
+    const bool ok = window.importAudioSnippets(path, {2, 0});
+    const std::string stem = path.stem().string();
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
+    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore].name()),
+              QString::fromStdString(stem + "_0000"));
+    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore + 1].name()),
+              QString::fromStdString(stem + "_0002"));
+}
+
+void MainWindowTest::importAudioSnippetsSkipsOutOfRangeIndicesGracefully() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-range.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 2);  // exactly 2 snippets: 0, 1.
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-range.smproj";
+    MainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    const bool ok = window.importAudioSnippets(path, {0, 99});  // 99 is out of range.
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);  // at least one requested snippet (0) was imported.
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
+}
+
+void MainWindowTest::importAudioSnippetsFailsWhenNothingWasImported() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-none.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    createFreshTestProject(window);
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    const bool ok = window.importAudioSnippets(path, {});  // nothing requested.
+    std::filesystem::remove(path);
+
+    QVERIFY(!ok);
+    QCOMPARE(window.project()->layers().size(), layerCountBefore);
 }
