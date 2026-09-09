@@ -483,33 +483,33 @@ void MainWindowTest::aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMe
     QVERIFY(window.statusBar()->currentMessage().isEmpty());
 }
 
-void MainWindowTest::toggleLiveModeAddsALayerAndStartsTheEngine() {
+void MainWindowTest::toggleLoopModeAddsALayerAndStartsTheEngine() {
     MainWindow window;
     createFreshTestProject(window);
     const std::size_t layerCountBefore = window.project()->layers().size();
 
-    window.toggleLiveMode();
+    window.toggleLoopMode();
 
-    QVERIFY(window.isLiveModeRunning());
+    QVERIFY(window.isLoopModeRunning());
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
-    QCOMPARE(QString::fromStdString(window.project()->layers().back().name()), QStringLiteral("Live Input"));
+    QCOMPARE(QString::fromStdString(window.project()->layers().back().name()), QStringLiteral("Loop Input"));
 
-    window.toggleLiveMode();  // cleanup - stop before the window is destroyed.
+    window.toggleLoopMode();  // cleanup - stop before the window is destroyed.
 }
 
-void MainWindowTest::toggleLiveModeStopsARunningCapture() {
+void MainWindowTest::toggleLoopModeStopsARunningCapture() {
     MainWindow window;
     createFreshTestProject(window);
-    window.toggleLiveMode();
-    QVERIFY(window.isLiveModeRunning());
+    window.toggleLoopMode();
+    QVERIFY(window.isLoopModeRunning());
 
-    window.toggleLiveMode();
+    window.toggleLoopMode();
 
-    QVERIFY(!window.isLiveModeRunning());
+    QVERIFY(!window.isLoopModeRunning());
 }
 
-void MainWindowTest::startPlaybackDoesNothingWhileLiveModeIsRunning() {
-    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-live-playback-guard.wav";
+void MainWindowTest::startPlaybackDoesNothingWhileLoopModeIsRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-loop-playback-guard.wav";
     writeTestWavFile(path);
 
     MainWindow window;
@@ -517,13 +517,13 @@ void MainWindowTest::startPlaybackDoesNothingWhileLiveModeIsRunning() {
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
-    window.toggleLiveMode();
-    QVERIFY(window.isLiveModeRunning());
+    window.toggleLoopMode();
+    QVERIFY(window.isLoopModeRunning());
 
     window.startPlayback();
     QVERIFY(!window.isPlaying());
 
-    window.toggleLiveMode();  // cleanup.
+    window.toggleLoopMode();  // cleanup.
 }
 
 void MainWindowTest::toggleRecordingStartsAndStopsWithoutAddingALayerWhenNothingWasCaptured() {
@@ -559,28 +559,28 @@ void MainWindowTest::startPlaybackDoesNothingWhileRecordingIsRunning() {
     window.toggleRecording();  // cleanup.
 }
 
-void MainWindowTest::toggleLiveModeDoesNothingWhileRecordingIsRunning() {
+void MainWindowTest::toggleLoopModeDoesNothingWhileRecordingIsRunning() {
     MainWindow window;
     createFreshTestProject(window);
     window.toggleRecording();
     QVERIFY(window.isRecording());
 
-    window.toggleLiveMode();
+    window.toggleLoopMode();
 
-    QVERIFY(!window.isLiveModeRunning());
+    QVERIFY(!window.isLoopModeRunning());
     window.toggleRecording();  // cleanup.
 }
 
-void MainWindowTest::toggleRecordingDoesNothingWhileLiveModeIsRunning() {
+void MainWindowTest::toggleRecordingDoesNothingWhileLoopModeIsRunning() {
     MainWindow window;
     createFreshTestProject(window);
-    window.toggleLiveMode();
-    QVERIFY(window.isLiveModeRunning());
+    window.toggleLoopMode();
+    QVERIFY(window.isLoopModeRunning());
 
     window.toggleRecording();
 
     QVERIFY(!window.isRecording());
-    window.toggleLiveMode();  // cleanup.
+    window.toggleLoopMode();  // cleanup.
 }
 
 void MainWindowTest::newProjectStartsWithNoUnsavedChanges() {
@@ -621,15 +621,15 @@ void MainWindowTest::poolTopmostLayerNowMarksUnsavedChanges() {
     QVERIFY(window.hasUnsavedChanges());
 }
 
-void MainWindowTest::toggleLiveModeMarksUnsavedChangesWhenItStarts() {
+void MainWindowTest::toggleLoopModeMarksUnsavedChangesWhenItStarts() {
     MainWindow window;
     createFreshTestProject(window);
     QVERIFY(!window.hasUnsavedChanges());
 
-    window.toggleLiveMode();
+    window.toggleLoopMode();
     QVERIFY(window.hasUnsavedChanges());
 
-    window.toggleLiveMode();  // cleanup.
+    window.toggleLoopMode();  // cleanup.
 }
 
 void MainWindowTest::savingProjectClearsUnsavedChanges() {
@@ -690,36 +690,36 @@ void MainWindowTest::closeAcceptsWhenThereAreNoUnsavedChanges() {
     QVERIFY(window.close());
 }
 
-void MainWindowTest::closeRefusesWhileLiveModeIsRunning() {
+void MainWindowTest::closeRefusesWhileLoopModeIsRunning() {
     MainWindow window;
     createFreshTestProject(window);
-    window.toggleLiveMode();
-    QVERIFY(window.isLiveModeRunning());
+    window.toggleLoopMode();
+    QVERIFY(window.isLoopModeRunning());
 
     // Refused outright (no dialog reached - see closeEvent()'s docs), so
     // this is safe to call even though the project is also now dirty
-    // (starting Live Mode just added a layer).
+    // (starting Loop Mode just added a layer).
     QVERIFY(!window.close());
 
-    window.toggleLiveMode();  // cleanup.
+    window.toggleLoopMode();  // cleanup.
 }
 
-void MainWindowTest::newProjectRefusesWhileLiveModeIsRunning() {
+void MainWindowTest::newProjectRefusesWhileLoopModeIsRunning() {
     MainWindow window;
     createFreshTestProject(window);
-    window.toggleLiveMode();
-    QVERIFY(window.isLiveModeRunning());
+    window.toggleLoopMode();
+    QVERIFY(window.isLoopModeRunning());
     const std::size_t layerCountBefore = window.project()->layers().size();
 
     // The real, interactive newProject() - safe to call directly, since
-    // the Live Mode/Recording check runs *before* the wizard would ever
+    // the Loop Mode/Recording check runs *before* the wizard would ever
     // be shown (see its own docs) - refused outright, no dialog reached.
     window.newProject();
 
-    QVERIFY(window.isLiveModeRunning());
+    QVERIFY(window.isLoopModeRunning());
     QCOMPARE(window.project()->layers().size(), layerCountBefore);
 
-    window.toggleLiveMode();  // cleanup.
+    window.toggleLoopMode();  // cleanup.
 }
 
 void MainWindowTest::openProjectRefusesWhileRecordingIsRunning() {
@@ -737,11 +737,11 @@ void MainWindowTest::openProjectRefusesWhileRecordingIsRunning() {
     window.toggleRecording();  // cleanup.
 }
 
-void MainWindowTest::openProjectAtRefusesWhileLiveModeIsRunning() {
+void MainWindowTest::openProjectAtRefusesWhileLoopModeIsRunning() {
     MainWindow window;
     createFreshTestProject(window);
-    window.toggleLiveMode();
-    QVERIFY(window.isLiveModeRunning());
+    window.toggleLoopMode();
+    QVERIFY(window.isLoopModeRunning());
 
     QString errorMessage;
     const bool ok = window.openProjectAt(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.smproj",
@@ -749,9 +749,9 @@ void MainWindowTest::openProjectAtRefusesWhileLiveModeIsRunning() {
 
     QVERIFY(!ok);
     QVERIFY(!errorMessage.isEmpty());
-    QVERIFY(window.isLiveModeRunning());
+    QVERIFY(window.isLoopModeRunning());
 
-    window.toggleLiveMode();  // cleanup.
+    window.toggleLoopMode();  // cleanup.
 }
 
 void MainWindowTest::createProjectAtSavesImmediatelyAndBecomesCurrent() {
@@ -1014,4 +1014,69 @@ void MainWindowTest::changingARealRowsOpacitySliderDoesNotCrash() {
 
     // If this line is reached at all, the process didn't crash.
     QCOMPARE(window.project()->layers().front().opacity(), 0.42f);
+}
+
+void MainWindowTest::toggleLoopModeDoesNothingWithNoProjectOpen() {
+    // loopEngine_ doesn't exist until setProject() has been called at
+    // least once (see the class docs' v0.Y.12.1 note) - toggling before
+    // that must be a plain no-op, not a null-dereference crash.
+    MainWindow window;
+    QVERIFY(!window.isLoopModeRunning());
+
+    window.toggleLoopMode();
+
+    QVERIFY(!window.isLoopModeRunning());
+    QVERIFY(window.isShowingLandingPage());
+}
+
+void MainWindowTest::settingProjectReconfiguresTheLoopEngineForItsOwnSettings() {
+    // Regression test for the v0.Y.12.1 construction-time-config fix:
+    // loopEngine_ used to be a single member built once, before any
+    // project existed, with a hardcoded default config - switching to a
+    // second, differently-configured project never reconfigured it (see
+    // the class docs' v0.Y.11.1 note). Not directly inspectable
+    // (loopEngine_ is private) - this exercises the observable
+    // consequence instead: Loop Mode still starts and adds a layer
+    // normally on a *second* project, with different settings (and so a
+    // different loop length) than the first.
+    MainWindow window;
+    createFreshTestProject(window);
+    window.toggleLoopMode();
+    QVERIFY(window.isLoopModeRunning());
+    window.toggleLoopMode();  // stop before switching projects.
+
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 2048;  // different from ProjectSettings{}'s default (1024).
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-loop-reconfigure.smproj";
+    QVERIFY(window.createProjectAt(settings, path));
+
+    const std::size_t layerCountBefore = window.project()->layers().size();
+    window.toggleLoopMode();
+
+    QVERIFY(window.isLoopModeRunning());
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
+
+    window.toggleLoopMode();  // cleanup.
+    std::filesystem::remove(path);
+}
+
+void MainWindowTest::setKeepLoopingForwardsToTheLoopEngine() {
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(!window.keepLooping());
+
+    window.setKeepLooping(true);
+    QVERIFY(window.keepLooping());
+
+    window.setKeepLooping(false);
+    QVERIFY(!window.keepLooping());
+}
+
+void MainWindowTest::setKeepLoopingDoesNothingWithNoProjectOpen() {
+    MainWindow window;
+    QVERIFY(!window.keepLooping());
+
+    window.setKeepLooping(true);  // must not crash - loopEngine_ is still null.
+
+    QVERIFY(!window.keepLooping());
 }

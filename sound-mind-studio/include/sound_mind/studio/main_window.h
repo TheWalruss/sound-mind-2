@@ -1,18 +1,20 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <vector>
 
 #include <QMainWindow>
 #include <QSettings>
 
-#include "sound_mind/core/live_engine.h"
+#include "sound_mind/core/loop_engine.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/recent_projects.h"
 
+class QCheckBox;
 class QCloseEvent;
 class QStackedWidget;
 class QString;
@@ -49,13 +51,13 @@ class LayersPanel;
  * unsaved work - New, Open (both the file-dialog and Recent Projects
  * routes), and closing the window - now guards on hasUnsavedChanges(),
  * via confirmDiscardUnsavedChanges(). Separately, New/Open/Close all
- * refuse outright (no dialog, just a status-bar message) while Live Mode
+ * refuse outright (no dialog, just a status-bar message) while Loop Mode
  * or Recording is active, rather than risking either an unsaved-changes
  * prompt *or* a project switch silently discarding an in-progress
- * capture - see toggleLiveMode()'s/toggleRecording()'s own docs for why
+ * capture - see toggleLoopMode()'s/toggleRecording()'s own docs for why
  * "refuse rather than surprise-stop" is this codebase's established
  * answer to exactly that tension. setProject() itself unconditionally
- * stops both engines and clears liveLayerId_ regardless, as a defensive
+ * stops both engines and clears loopLayerId_ regardless, as a defensive
  * invariant - normally unreachable through the guarded entry points
  * above, but keeping the *audit point* itself correct is what the
  * Project Lifecycle milestone actually asked for.
@@ -70,9 +72,10 @@ class LayersPanel;
  * site (`importAudioFile()`, `importImageFile()`, Recording's post-
  * capture encode) via `sound_mind::core::streamCodecConfigFor()` -
  * previously all three silently used a hardcoded default regardless of
- * the open project's settings. `LiveEngine`'s own construction-time
- * config is deliberately not part of this wiring - see
- * `streamCodecConfigFor()`'s own docs for why.
+ * the open project's settings. `LoopEngine`'s own construction-time
+ * config was deliberately left out of this wiring at the time - resolved
+ * by the Loop Mode milestone below, which reworks that engine's whole
+ * construction/lifecycle anyway.
  *
  * **As of `v0.Y.13.1` (Layers Panel):** a `LayersPanel` dock
  * (`layersPanel_`) shows the current project's layer stack, hidden until
@@ -83,6 +86,22 @@ class LayersPanel;
  * to toggleLayerVisibility()/setLayerOpacity()/renameLayer()/
  * deleteLayer()/reorderLayers(). topmostLayerWithContent() now also
  * skips hidden layers - see its own docs.
+ *
+ * **As of `v0.Y.12.1` (Loop Mode, renamed from Live Mode):** the original
+ * `LiveEngine` is renamed/reimplemented as `sound_mind::core::LoopEngine` -
+ * see its own docs for the fixed-length loop-pedal redesign. `loopEngine_`
+ * is no longer a fixed member constructed once with a default config: it's
+ * a `std::unique_ptr`, `nullptr` until the first setProject() call, then
+ * (re)constructed there from the *new* project's own
+ * `streamCodecConfigFor()` config and its duration in samples
+ * (`canvasWidth * hopLength`) - resolving the construction-time-config gap
+ * `v0.Y.11.1`'s docs above flagged as this milestone's job. toggleLoopMode()
+ * (renamed from toggleLiveMode()) creates a "Loop Input" layer (renamed
+ * from "Live Input") the same way Live Mode's did; setKeepLooping()
+ * forwards to `LoopEngine::setKeepLooping()` - the new "Keep looping"
+ * toolbar checkbox's actual work. updateLoopLayer() (renamed from
+ * updateLiveLayer()) additionally reports `LoopEngine::loopsBehind()` in
+ * the status bar - the confirmed scope's "visible loop-delay indicator".
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -116,7 +135,7 @@ public slots:
      *
      * Per the Project Lifecycle milestone (`v0.Y.10.1`): refuses outright
      * (a status-bar message, no dialog - checked *before* the wizard is
-     * even shown) while Live Mode or Recording is active; otherwise, if
+     * even shown) while Loop Mode or Recording is active; otherwise, if
      * the current project has unsaved changes, prompts to save/discard/
      * cancel first (see confirmDiscardUnsavedChanges()) - proceeds
      * unguarded if there's nothing to lose. Per the Create Project Wizard
@@ -134,7 +153,7 @@ public slots:
      *        importAudioFile() are.
      *
      * Per the Project Lifecycle milestone (`v0.Y.10.1`): guarded exactly
-     * like newProject() (refuses outright while Live Mode/Recording is
+     * like newProject() (refuses outright while Loop Mode/Recording is
      * active; prompts first if there are unsaved changes) *before* even
      * showing the file picker - see newProject()'s docs.
      */
@@ -171,7 +190,7 @@ public slots:
      * doesn't exist yet. Decodes and loads that layer's audio once (not on
      * every call - resuming after pausePlayback() continues from the same
      * position); does nothing if no layer has content, or none is open, or
-     * Live Mode or Recording is currently running (see toggleLiveMode()'s/
+     * Loop Mode or Recording is currently running (see toggleLoopMode()'s/
      * toggleRecording()'s docs for why all three are mutually exclusive in
      * this first pass).
      */
@@ -184,57 +203,79 @@ public slots:
     void stopPlayback();
 
     /**
-     * @brief Starts or stops Live Mode: continuously captures the default
-     *        input device into a newly created layer, encoding and
-     *        streaming it back out in real time (see
-     *        `sound_mind::core::LiveEngine`'s docs for the full pipeline).
+     * @brief Starts or stops Loop Mode (renamed from Loop Mode): a fixed-
+     *        length loop pedal that continuously captures the default input
+     *        device one loop at a time into a newly created layer, encoding/
+     *        decoding each completed loop and playing the previous loop's
+     *        result back during the next (see
+     *        `sound_mind::core::LoopEngine`'s docs for the full pipeline,
+     *        including its confirmed real, structural playback latency).
      *
-     * Per the confirmed scope for this milestone: the output is the live
+     * Per the confirmed scope for this milestone: the output is the loop
      * input alone, round-tripped through the Stream codec - not composited
      * with any other layer or project content yet (real multi-layer audio
-     * mixing doesn't exist anywhere in the codebase yet - see LiveEngine's
+     * mixing doesn't exist anywhere in the codebase yet - see LoopEngine's
      * own docs). Stops Playback first if it's running - both engines would
      * otherwise try to open the system's default output device
      * simultaneously through two independent JUCE device managers, which
      * isn't guaranteed to work depending on the platform/driver. Creates a
-     * new Normal layer ("Live Input") to capture into; while running, that
-     * layer's content refreshes from LiveEngine::currentImage() on a timer
-     * and the canvas repaints, so the spectrogram visibly grows in real
-     * time (per the confirmed scope for this milestone) - stopping leaves
-     * the layer's content as whatever was last captured, exactly like any
-     * other layer. Does nothing (refuses to start) if Recording is
-     * currently running - both would otherwise want the same input device
-     * at once, through two independent JUCE device managers.
+     * new Normal layer ("Loop Input") to capture into; while running, that
+     * layer's content refreshes from LoopEngine::currentImage() on a timer
+     * and the canvas repaints, so each completed loop's spectrogram
+     * visibly updates - stopping leaves the layer's content as whatever
+     * was last captured, exactly like any other layer. Does nothing
+     * (refuses to start) if Recording is currently running - both would
+     * otherwise want the same input device at once, through two
+     * independent JUCE device managers. Does nothing at all (no-op, not
+     * even the refusal above) if no project is open, since the loop
+     * length itself is derived from the project's own duration - see
+     * LoopEngine's own docs.
      *
-     * Marks hasUnsavedChanges() the moment the "Live Input" layer is
+     * Marks hasUnsavedChanges() the moment the "Loop Input" layer is
      * added (starting) - per the Project Lifecycle milestone (`v0.Y.10.1`),
      * New/Open/Close all refuse outright while this is running, so the
      * capture itself is never at risk of being silently discarded by a
      * project switch.
      */
-    void toggleLiveMode();
+    void toggleLoopMode();
+
+    /**
+     * @brief Sets whether Loop Mode should keep replaying the last
+     *        successfully captured take unchanged instead of recording
+     *        over it - the actual work behind the transport toolbar's
+     *        "Keep Looping" checkbox.
+     *
+     * Forwards directly to `LoopEngine::setKeepLooping()` - see its own
+     * docs. Does nothing if no project is open yet (loopEngine_ doesn't
+     * exist until setProject() has been called at least once) - harmless,
+     * since there's no running Loop Mode session for the checkbox to affect
+     * in that case either.
+     *
+     * @param keepLooping The new state.
+     */
+    void setKeepLooping(bool keepLooping);
 
     /**
      * @brief Starts or stops Recording: one-shot capture from the default
      *        input device into a newly created layer, encoded exactly as
      *        an imported file would be once capture stops (see
      *        `sound_mind::core::RecordEngine`'s docs for why this differs
-     *        from Live Mode's continuous, incrementally-encoded pipeline).
+     *        from Loop Mode's per-loop, whole-buffer-encoded pipeline).
      *
      * Per the confirmed scope for this milestone (mirroring Playback's and
-     * Live Mode's own precedent): defers a real input-device picker and
+     * Loop Mode's own precedent): defers a real input-device picker and
      * input gain control - both named in the design doc's Record section -
      * as UI affordances layered on top of a working capture pipeline.
      * Stops Playback first if it's running (same device-contention
-     * reasoning as toggleLiveMode()); does nothing (refuses to start) if
-     * Live Mode is currently running, or if no project is open. Creates a
+     * reasoning as toggleLoopMode()); does nothing (refuses to start) if
+     * Loop Mode is currently running, or if no project is open. Creates a
      * new Normal layer ("Recording") once capture stops and something was
      * actually captured; stopping with nothing captured (e.g. no input
      * device was available) leaves the project unchanged.
      *
      * Marks hasUnsavedChanges() when a layer is actually added. Per the
      * Project Lifecycle milestone (`v0.Y.10.1`), New/Open/Close all refuse
-     * outright while Recording is running - see toggleLiveMode()'s docs.
+     * outright while Recording is running - see toggleLoopMode()'s docs.
      */
     void toggleRecording();
 
@@ -363,7 +404,7 @@ public:
      *
      * Per the Project Lifecycle milestone (`v0.Y.10.1`): refuses (no
      * dialog - `errorMessage` is set, same as any other failure here)
-     * while Live Mode or Recording is active - the one guard this method
+     * while Loop Mode or Recording is active - the one guard this method
      * *does* enforce itself, since it's a plain status check rather than
      * a blocking prompt. The unsaved-changes confirmation is deliberately
      * `openProject()`'s/the Recent Projects handler's job, not this
@@ -374,7 +415,7 @@ public:
      * @param errorMessage If non-null and this returns `false`, set to a
      *        human-readable description of what went wrong.
      * @return `true` on success; `false` if the file couldn't be loaded,
-     *         or if Live Mode/Recording is currently active.
+     *         or if Loop Mode/Recording is currently active.
      */
     bool openProjectAt(const std::filesystem::path& path, QString* errorMessage = nullptr);
 
@@ -430,7 +471,7 @@ public:
      *        beyond its just-created state).
      *
      * Tracked as a plain flag, set whenever content actually changes
-     * (import, Pool, a Live/Recording capture adding or updating a layer)
+     * (import, Pool, a Loop/Recording capture adding or updating a layer)
      * and cleared by a successful save or by setProject() (a fresh/loaded
      * project matches what's on disk, or - for `newProject()` - has
      * nothing on disk to differ from yet). Deliberately simpler than
@@ -448,9 +489,15 @@ public:
     /// @return The underlying PlaybackEngine's isPlaying().
     [[nodiscard]] bool isPlaying() const noexcept;
 
-    /// @brief Whether Live Mode is currently capturing.
-    /// @return The underlying LiveEngine's isRunning().
-    [[nodiscard]] bool isLiveModeRunning() const noexcept;
+    /// @brief Whether Loop Mode is currently capturing.
+    /// @return The underlying LoopEngine's isRunning().
+    [[nodiscard]] bool isLoopModeRunning() const noexcept;
+
+    /// @brief The current "Keep Looping" state - see setKeepLooping()'s
+    /// docs.
+    /// @return The underlying LoopEngine's keepLooping(), or `false` if no
+    ///         project has ever been opened yet (loopEngine_ doesn't exist).
+    [[nodiscard]] bool keepLooping() const noexcept;
 
     /// @brief Whether Recording is currently capturing.
     /// @return The underlying RecordEngine's isRecording().
@@ -557,7 +604,7 @@ protected:
     /**
      * @brief Guards window close the same way newProject()/openProject()
      *        do: refuses (ignores the event, a status-bar message) while
-     *        Live Mode or Recording is active; otherwise prompts via
+     *        Loop Mode or Recording is active; otherwise prompts via
      *        confirmDiscardUnsavedChanges() if there are unsaved changes,
      *        ignoring the event if the user cancels.
      * @param event The close event; accepted or ignored per the above.
@@ -608,10 +655,11 @@ private:
     /// empty list (not a no-op) when no project is open.
     void refreshLayersPanel();
 
-    /// @brief liveUpdateTimer_'s slot: refreshes the Live layer's content
-    /// from liveEngine_.currentImage() and repaints the canvas, while Live
-    /// Mode is running - see toggleLiveMode()'s docs.
-    void updateLiveLayer();
+    /// @brief loopUpdateTimer_'s slot: refreshes the Loop layer's content
+    /// from loopEngine_->currentImage() and repaints the canvas, and shows
+    /// loopEngine_->loopsBehind() in the status bar, while Loop Mode is
+    /// running - see toggleLoopMode()'s docs.
+    void updateLoopLayer();
 
     /// @brief recordDrainTimer_'s slot: moves whatever's newly captured
     /// out of recordEngine_'s ring buffer, while Recording is running -
@@ -653,15 +701,26 @@ private:
     /// stopPlayback() and whenever the project (or its content) changes.
     bool playbackLoaded_ = false;
 
-    sound_mind::core::LiveEngine liveEngine_{sound_mind::codec::StreamCodecConfig{}};
-    QTimer* liveUpdateTimer_ = nullptr;
+    /// @brief `nullptr` until the first setProject() call - LoopEngine
+    /// needs a real loop length (the project's own duration in samples)
+    /// and codec config at construction time, so it's (re)constructed
+    /// fresh in setProject() for whatever project is current, rather than
+    /// being a fixed member built once before any project exists - see the
+    /// class docs' `v0.Y.12.1` note for why this replaced the original
+    /// `LiveEngine` member's simpler, always-default-constructed shape.
+    std::unique_ptr<sound_mind::core::LoopEngine> loopEngine_;
+    QTimer* loopUpdateTimer_ = nullptr;
 
-    /// @brief The layer currently being captured into, while Live Mode is
+    /// @brief The transport toolbar's "Keep Looping" checkbox - see
+    /// setKeepLooping()'s docs.
+    QCheckBox* keepLoopingCheckBox_ = nullptr;
+
+    /// @brief The layer currently being captured into, while Loop Mode is
     /// running - std::nullopt otherwise. An id, not a Layer*, since
     /// Project::layers() is a std::vector<Layer> that addLayer() (or
     /// future layer-list operations) can reallocate, invalidating a raw
     /// pointer held across such a call - see layerById().
-    std::optional<sound_mind::core::LayerId> liveLayerId_;
+    std::optional<sound_mind::core::LayerId> loopLayerId_;
 
     sound_mind::core::RecordEngine recordEngine_{sound_mind::codec::StreamCodecConfig{}.sampleRateHz};
     QTimer* recordDrainTimer_ = nullptr;

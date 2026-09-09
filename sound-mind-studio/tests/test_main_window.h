@@ -31,26 +31,26 @@ private slots:
     void poolTopmostLayerNowShowsProgressThenCompletionInTheStatusBar();
     void exportTopmostLayerAudioNowShowsProgressThenCompletionInTheStatusBar();
     void aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMessage();
-    void toggleLiveModeAddsALayerAndStartsTheEngine();
-    void toggleLiveModeStopsARunningCapture();
-    void startPlaybackDoesNothingWhileLiveModeIsRunning();
+    void toggleLoopModeAddsALayerAndStartsTheEngine();
+    void toggleLoopModeStopsARunningCapture();
+    void startPlaybackDoesNothingWhileLoopModeIsRunning();
     void toggleRecordingStartsAndStopsWithoutAddingALayerWhenNothingWasCaptured();
     void startPlaybackDoesNothingWhileRecordingIsRunning();
-    void toggleLiveModeDoesNothingWhileRecordingIsRunning();
-    void toggleRecordingDoesNothingWhileLiveModeIsRunning();
+    void toggleLoopModeDoesNothingWhileRecordingIsRunning();
+    void toggleRecordingDoesNothingWhileLoopModeIsRunning();
 
     // Project Lifecycle (v0.Y.10.1)
     void newProjectStartsWithNoUnsavedChanges();
     void importAudioFileMarksUnsavedChanges();
     void poolTopmostLayerNowMarksUnsavedChanges();
-    void toggleLiveModeMarksUnsavedChangesWhenItStarts();
+    void toggleLoopModeMarksUnsavedChangesWhenItStarts();
     void savingProjectClearsUnsavedChanges();
     void openProjectAtClearsUnsavedChangesFromThePreviousProject();
     void closeAcceptsWhenThereAreNoUnsavedChanges();
-    void closeRefusesWhileLiveModeIsRunning();
-    void newProjectRefusesWhileLiveModeIsRunning();
+    void closeRefusesWhileLoopModeIsRunning();
+    void newProjectRefusesWhileLoopModeIsRunning();
     void openProjectRefusesWhileRecordingIsRunning();
-    void openProjectAtRefusesWhileLiveModeIsRunning();
+    void openProjectAtRefusesWhileLoopModeIsRunning();
 
     // Create Project Wizard (v0.Y.11.1)
     void createProjectAtSavesImmediatelyAndBecomesCurrent();
@@ -72,4 +72,10 @@ private slots:
     void reorderLayersAppliesAValidPermutation();
     void reorderLayersRejectsAnInvalidPermutation();
     void changingARealRowsOpacitySliderDoesNotCrash();
+
+    // Loop Mode (v0.Y.12.1)
+    void toggleLoopModeDoesNothingWithNoProjectOpen();
+    void settingProjectReconfiguresTheLoopEngineForItsOwnSettings();
+    void setKeepLoopingForwardsToTheLoopEngine();
+    void setKeepLoopingDoesNothingWithNoProjectOpen();
 };

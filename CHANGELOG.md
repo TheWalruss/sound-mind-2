@@ -6,6 +6,80 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.14.1] - 2026-09-09
+
+The "Loop Mode" milestone from `docs/sound-mind-roadmap.md` (Phase 2.5),
+renamed and reimplemented from Live Mode as the fixed-length loop pedal
+the legacy Studio's own "Live Mode" actually was, confirmed as the right
+model before implementing.
+
+### Changed
+
+- **`sound_mind::core::LiveEngine` renamed/reimplemented as `LoopEngine`**
+  (`live_engine.h`/`.cpp` → `loop_engine.h`/`.cpp`). Constructed with a
+  fixed `loopLengthSamples` (the project's own duration - `canvasWidth *
+  hopLength` - not user-adjustable) in addition to a `StreamCodecConfig`.
+  Each completed loop is sliced off the capture ring and run through the
+  same whole-buffer `sound_mind::codec::encode()`/`decode()` any import or
+  Recording already uses - not `StreamIncrementalEncoder` - since a loop
+  is a fixed, bounded buffer, not a continuously-growing stream. Playback
+  reads sequentially from one of two pre-allocated, fixed-length buffers;
+  the worker publishes a newly-decoded loop by flipping which one is
+  "active," and the audio thread only picks that up once per loop *it
+  itself* plays through (never mid-loop, to avoid an audible splice).
+  `loopsCaptured()`/`loopsBehind()` report progress and how many whole
+  loops the worker's published result currently lags behind.
+- **`sound_mind::studio::MainWindow`**: `toggleLiveMode()` → renamed
+  `toggleLoopMode()`, `isLiveModeRunning()` → `isLoopModeRunning()`,
+  `liveLayerId_` → `loopLayerId_`, the captured layer's default name
+  "Live Input" → "Loop Input". `loopEngine_` is no longer a fixed member
+  built once with a default config: it's a `std::unique_ptr`, `nullptr`
+  until the first `setProject()` call, then (re)constructed there from
+  the *current* project's own `streamCodecConfigFor()` config and loop
+  length - resolving the construction-time-config gap `v0.0.12.1`'s notes
+  deferred to this milestone.
+
+### Added
+
+- **`LoopEngine::setKeepLooping()`/`keepLooping()`**: while enabled,
+  newly captured input is never pushed into the ring at all, so the
+  currently-active playback buffer just keeps replaying, untouched,
+  instead of being recorded over each cycle - a new capability, not
+  present in the legacy version. `MainWindow::setKeepLooping()` forwards
+  to it, wired to a new "Keep Looping" checkbox in the transport toolbar.
+- **A visible loop-delay indicator**: `MainWindow::updateLoopLayer()` now
+  also shows `LoopEngine::loopsBehind()` in the status bar
+  (`"Looping... (N loops behind)"` once nonzero) - a non-modal message,
+  matching every other progress indicator in this codebase, updated on
+  the same 33 ms timer that already refreshes the captured layer's
+  content.
+
+### Notes
+
+- **A real, structural latency confirmed acceptable rather than
+  engineered away**: never splicing a newly-published result in
+  mid-loop, combined with a loop's audio only being encodable once its
+  own capture finishes, means a captured loop is first heard during
+  playback loop `N + 2`, not `N + 1`, even when the worker keeps up
+  perfectly (`loopsBehind() == 0`). See `LoopEngine`'s own docs for the
+  full derivation - a true zero-extra-latency design would need capture
+  and playback to run deliberately out of phase with each other, which
+  is future work if this baseline ever turns out to matter in practice,
+  not part of this milestone's confirmed scope.
+- **No compositing with the rest of the project, still** - each loop
+  plays back only the current topmost layer with content, the same
+  convention Playback and Record already use. Real multi-layer audio
+  mixing remains deferred, as it has been since Live Mode's own original
+  milestone.
+- **No Y bump.** No project file format changes here at all.
+
+Full regression suite: `sound-mind-core-tests` 72/72 Catch2 test cases
+(339 assertions) passing, including 7 new for `LoopEngine` (replacing
+`LiveEngine`'s 4); `sound-mind-studio-tests` runs 101 QTest functions
+across seven classes (up from 97), including 4 new for `MainWindow`'s
+Loop Mode reconstruction/Keep Looping behavior and 7 renamed in place
+(`toggleLiveMode...` → `toggleLoopMode...`).
+
 ## [0.0.13.1] - 2026-09-09
 
 The "Layers Panel" milestone from `docs/sound-mind-roadmap.md` (Phase

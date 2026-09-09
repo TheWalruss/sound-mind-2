@@ -2,11 +2,14 @@
 
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <memory>
 #include <exception>
 #include <stdexcept>
 
 #include <QAction>
+#include <QCheckBox>
 #include <QCloseEvent>
 #include <QCoreApplication>
 #include <QFileDialog>
@@ -74,7 +77,7 @@ const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
 ///
 /// Imports/exports/pooling are synchronous, blocking calls (see the
 /// confirmed scope for this milestone - a background-thread model is
-/// deferred to Live Mode's real-time pipeline work) - without the explicit
+/// deferred to Loop Mode's real-time pipeline work) - without the explicit
 /// processEvents() call, Qt wouldn't actually paint the status bar's new
 /// text until *after* the blocking call already returned, defeating the
 /// whole point of showing progress before a slow operation starts.
@@ -124,7 +127,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(landingPage_, &LandingPage::openProjectRequested, this, &MainWindow::openProject);
     connect(landingPage_, &LandingPage::recentProjectRequested, this, [this](const QString& path) {
         // Same guard as openProject() - see its docs - before reaching
-        // openProjectAt(), which enforces the Live Mode/Recording refusal
+        // openProjectAt(), which enforces the Loop Mode/Recording refusal
         // on its own but never prompts about unsaved changes itself.
         if (!confirmDiscardUnsavedChanges()) {
             return;
@@ -202,17 +205,27 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     QAction* poolAction = transportToolBar->addAction(tr("Pool Layer"));
     connect(poolAction, &QAction::triggered, this, &MainWindow::poolTopmostLayer);
 
-    QAction* liveAction = transportToolBar->addAction(tr("Live"));
-    liveAction->setCheckable(true);
-    connect(liveAction, &QAction::triggered, this, &MainWindow::toggleLiveMode);
+    QAction* loopAction = transportToolBar->addAction(tr("Loop"));
+    loopAction->setCheckable(true);
+    connect(loopAction, &QAction::triggered, this, &MainWindow::toggleLoopMode);
 
-    // ~30fps - frequent enough for the live-growing spectrogram to read as
-    // continuous, without repainting so often it competes noticeably with
-    // the background encode/decode worker thread (see LiveEngine's docs)
-    // for CPU time.
-    liveUpdateTimer_ = new QTimer(this);
-    liveUpdateTimer_->setInterval(33);
-    connect(liveUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLiveLayer);
+    // The "Keep Looping" checkbox - a plain QCheckBox rather than a
+    // QAction, since it needs to show its own label/checkmark inline
+    // rather than toggling a single button's own pressed state (there's no
+    // icon asset to use for it either - matching the plain-text-action
+    // precedent above). Forwards straight to setKeepLooping() - see its own
+    // docs.
+    keepLoopingCheckBox_ = new QCheckBox(tr("Keep Looping"), this);
+    connect(keepLoopingCheckBox_, &QCheckBox::toggled, this, &MainWindow::setKeepLooping);
+    transportToolBar->addWidget(keepLoopingCheckBox_);
+
+    // ~30fps - frequent enough for each completed loop's spectrogram
+    // update to read as prompt, without repainting so often it competes
+    // noticeably with the background encode/decode worker thread (see
+    // LoopEngine's docs) for CPU time.
+    loopUpdateTimer_ = new QTimer(this);
+    loopUpdateTimer_->setInterval(33);
+    connect(loopUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLoopLayer);
 
     QAction* recordAction = transportToolBar->addAction(tr("Record"));
     recordAction->setCheckable(true);
@@ -220,7 +233,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     // Just needs to keep RecordEngine's ring buffer (~370ms of headroom at
     // its default capacity/sample rate) from ever filling up - unlike
-    // liveUpdateTimer_, nothing visual depends on this cadence, so a
+    // loopUpdateTimer_, nothing visual depends on this cadence, so a
     // slower interval with a comfortable safety margin is fine.
     recordDrainTimer_ = new QTimer(this);
     recordDrainTimer_->setInterval(100);
@@ -242,8 +255,8 @@ bool MainWindow::isShowingLandingPage() const noexcept { return stack_->currentW
 bool MainWindow::hasUnsavedChanges() const noexcept { return hasUnsavedChanges_; }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
-    if (liveEngine_.isRunning() || recordEngine_.isRecording()) {
-        statusBar()->showMessage(tr("Stop Live Mode or Recording before closing."), 5000);
+    if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
+        statusBar()->showMessage(tr("Stop Loop Mode or Recording before closing."), 5000);
         event->ignore();
         return;
     }
@@ -281,15 +294,28 @@ bool MainWindow::confirmDiscardUnsavedChanges() {
 void MainWindow::setProject(sound_mind::core::Project project) {
     // Defensive invariant, not the normal path - see the class docs'
     // v0.Y.10.1 note. Unconditional and idempotent (both engines' stop()
-    // no-op when already stopped), so this is always safe regardless of
-    // caller.
-    liveUpdateTimer_->stop();
-    liveEngine_.stop();
-    liveLayerId_.reset();
+    // no-op when already stopped, or when loopEngine_ doesn't exist yet -
+    // see its own docs), so this is always safe regardless of caller.
+    loopUpdateTimer_->stop();
+    if (loopEngine_) {
+        loopEngine_->stop();
+    }
+    loopLayerId_.reset();
     recordDrainTimer_->stop();
     recordEngine_.stop();
 
     project_ = std::move(project);
+
+    // (Re)constructed fresh for the new project's own settings - loop
+    // length is the project's own duration in samples (canvasWidth
+    // timeline columns, each hopLength samples wide) - see the class docs'
+    // v0.Y.12.1 note for why this replaced a fixed, always-default-
+    // constructed member.
+    const sound_mind::core::ProjectSettings& settings = project_->settings();
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+    const auto loopLengthSamples = static_cast<std::size_t>(settings.canvasWidth) * config.hopLength;
+    loopEngine_ = std::make_unique<sound_mind::core::LoopEngine>(config, loopLengthSamples);
+
     canvas_->setProject(&*project_);
     playbackEngine_.stop();
     playbackLoaded_ = false;
@@ -300,8 +326,8 @@ void MainWindow::setProject(sound_mind::core::Project project) {
 }
 
 void MainWindow::newProject() {
-    if (liveEngine_.isRunning() || recordEngine_.isRecording()) {
-        statusBar()->showMessage(tr("Stop Live Mode or Recording before starting a new project."), 5000);
+    if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
+        statusBar()->showMessage(tr("Stop Loop Mode or Recording before starting a new project."), 5000);
         return;
     }
     if (!confirmDiscardUnsavedChanges()) {
@@ -339,8 +365,8 @@ bool MainWindow::createProjectAt(sound_mind::core::ProjectSettings settings, con
 }
 
 void MainWindow::openProject() {
-    if (liveEngine_.isRunning() || recordEngine_.isRecording()) {
-        statusBar()->showMessage(tr("Stop Live Mode or Recording before opening a project."), 5000);
+    if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
+        statusBar()->showMessage(tr("Stop Loop Mode or Recording before opening a project."), 5000);
         return;
     }
     if (!confirmDiscardUnsavedChanges()) {
@@ -360,9 +386,9 @@ void MainWindow::openProject() {
 }
 
 bool MainWindow::openProjectAt(const std::filesystem::path& path, QString* errorMessage) {
-    if (liveEngine_.isRunning() || recordEngine_.isRecording()) {
+    if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
         if (errorMessage != nullptr) {
-            *errorMessage = tr("Stop Live Mode or Recording before opening a project.");
+            *errorMessage = tr("Stop Loop Mode or Recording before opening a project.");
         }
         return false;
     }
@@ -728,9 +754,9 @@ void MainWindow::startPlayback() {
     if (!project_) {
         return;
     }
-    if (liveEngine_.isRunning() || recordEngine_.isRecording()) {
-        // Mutually exclusive with Live Mode and Recording - see
-        // toggleLiveMode()'s/toggleRecording()'s docs.
+    if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
+        // Mutually exclusive with Loop Mode and Recording - see
+        // toggleLoopMode()'s/toggleRecording()'s docs.
         return;
     }
 
@@ -755,18 +781,23 @@ void MainWindow::stopPlayback() {
     playbackLoaded_ = false;
 }
 
-void MainWindow::toggleLiveMode() {
-    if (liveEngine_.isRunning()) {
-        liveUpdateTimer_->stop();
-        liveEngine_.stop();
-        liveLayerId_.reset();
-        statusBar()->showMessage(tr("Live capture stopped."), 5000);
+void MainWindow::toggleLoopMode() {
+    if (!loopEngine_) {
+        // No project has ever been opened yet - loopEngine_ doesn't exist
+        // until setProject() has run once, since the loop length itself is
+        // derived from a project's own duration - nothing to start or stop
+        // - see the class docs' v0.Y.12.1 note.
         return;
     }
 
-    if (!project_) {
+    if (loopEngine_->isRunning()) {
+        loopUpdateTimer_->stop();
+        loopEngine_->stop();
+        loopLayerId_.reset();
+        statusBar()->showMessage(tr("Loop capture stopped."), 5000);
         return;
     }
+
     if (recordEngine_.isRecording()) {
         // Refuse rather than surprise-stop an in-progress recording - both
         // would otherwise want the same input device at once.
@@ -775,44 +806,64 @@ void MainWindow::toggleLiveMode() {
 
     stopPlayback();
 
-    sound_mind::core::Layer layer(0, tr("Live Input").toStdString(), sound_mind::core::LayerType::Normal);
-    liveLayerId_ = project_->addLayer(std::move(layer));
+    sound_mind::core::Layer layer(0, tr("Loop Input").toStdString(), sound_mind::core::LayerType::Normal);
+    loopLayerId_ = project_->addLayer(std::move(layer));
     hasUnsavedChanges_ = true;
     refreshLayersPanel();
 
-    liveEngine_.start();
-    if (!liveEngine_.isDeviceAvailable()) {
+    loopEngine_->start();
+    if (!loopEngine_->isDeviceAvailable()) {
         statusBar()->showMessage(
-            tr("Live capture started, but no input device is available - nothing will be captured."), 5000);
+            tr("Loop capture started, but no input device is available - nothing will be captured."), 5000);
     } else {
-        statusBar()->showMessage(tr("Live capture started..."));
+        statusBar()->showMessage(tr("Looping..."));
     }
-    liveUpdateTimer_->start();
+    loopUpdateTimer_->start();
 }
 
-void MainWindow::updateLiveLayer() {
-    if (!liveLayerId_) {
+void MainWindow::setKeepLooping(bool keepLooping) {
+    if (!loopEngine_) {
         return;
     }
-    sound_mind::core::Layer* layer = layerById(*liveLayerId_);
+    loopEngine_->setKeepLooping(keepLooping);
+}
+
+void MainWindow::updateLoopLayer() {
+    if (!loopLayerId_ || !loopEngine_) {
+        return;
+    }
+    sound_mind::core::Layer* layer = layerById(*loopLayerId_);
     if (layer == nullptr) {
         return;
     }
 
-    sound_mind::codec::StreamImage image = liveEngine_.currentImage();
-    if (image.frameCount == 0) {
-        return;
+    sound_mind::codec::StreamImage image = loopEngine_->currentImage();
+    if (image.frameCount > 0) {
+        layer->setContent(std::move(image));
+        canvas_->update();
     }
-    layer->setContent(std::move(image));
-    canvas_->update();
+
+    // The confirmed scope's "visible loop-delay indicator" - see
+    // LoopEngine::loopsBehind()'s own docs for exactly what this counts.
+    const std::uint64_t loopsBehind = loopEngine_->loopsBehind();
+    if (loopsBehind > 0) {
+        statusBar()->showMessage(
+            tr("Looping... (%1 loop%2 behind)").arg(loopsBehind).arg(loopsBehind == 1 ? QString() : tr("s")));
+    } else {
+        statusBar()->showMessage(tr("Looping..."));
+    }
 }
 
 bool MainWindow::isPlaying() const noexcept {
     return playbackEngine_.isPlaying();
 }
 
-bool MainWindow::isLiveModeRunning() const noexcept {
-    return liveEngine_.isRunning();
+bool MainWindow::isLoopModeRunning() const noexcept {
+    return loopEngine_ && loopEngine_->isRunning();
+}
+
+bool MainWindow::keepLooping() const noexcept {
+    return loopEngine_ && loopEngine_->keepLooping();
 }
 
 bool MainWindow::isRecording() const noexcept {
@@ -831,9 +882,10 @@ void MainWindow::toggleRecording() {
         }
 
         try {
-            // Encoded exactly as an imported file would be - see
-            // toggleRecording()'s docs for why this doesn't go through
-            // LiveEngine's incremental encoder.
+            // Encoded exactly as an imported file would be - a one-shot
+            // whole-buffer encode(), same as LoopEngine now does per loop
+            // (see its own docs) - just triggered once, at Recording's own
+            // end, rather than every loop.
             const auto content =
                 sound_mind::codec::encode(captured, sound_mind::core::streamCodecConfigFor(project_->settings()));
             sound_mind::core::Layer layer(0, tr("Recording").toStdString(), sound_mind::core::LayerType::Normal);
@@ -853,9 +905,9 @@ void MainWindow::toggleRecording() {
     if (!project_) {
         return;
     }
-    if (liveEngine_.isRunning()) {
-        // Refuse rather than surprise-stop a running Live session - both
-        // would otherwise want the same input device at once.
+    if (loopEngine_ && loopEngine_->isRunning()) {
+        // Refuse rather than surprise-stop a running Loop Mode session -
+        // both would otherwise want the same input device at once.
         return;
     }
 
