@@ -14,10 +14,6 @@
 
 namespace sound_mind::studio {
 
-namespace {
-constexpr const char* kProjectFileFilter = "Sound Mind Projects (*.smproj)";
-}  // namespace
-
 CreateProjectWizard::CreateProjectWizard(QWidget* parent) : QDialog(parent) {
     setWindowTitle(tr("Create Project"));
 
@@ -40,7 +36,7 @@ CreateProjectWizard::CreateProjectWizard(QWidget* parent) : QDialog(parent) {
     locationHBox->addWidget(locationEdit_, 1);
     locationHBox->addWidget(browseButton);
     locationRow->addLayout(locationHBox);
-    mainForm->addRow(tr("Save Location:"), locationRow);
+    mainForm->addRow(tr("Save Folder:"), locationRow);
 
     durationSecondsSpin_ = new QDoubleSpinBox();
     durationSecondsSpin_->setObjectName(QStringLiteral("durationSpin"));
@@ -109,6 +105,16 @@ CreateProjectWizard::CreateProjectWizard(QWidget* parent) : QDialog(parent) {
     connect(buttonBox_, &QDialogButtonBox::rejected, this, &QDialog::reject);
     root->addWidget(buttonBox_);
 
+    // Without this, the dialog only ever grows: hiding advancedContainer_
+    // frees up its layout space, but a QDialog doesn't shrink back down to
+    // reclaim it on its own. SetFixedSize makes the top-level layout keep
+    // the dialog's actual size in sync with its current size hint on every
+    // change - including a child's visibility toggling - growing *and*
+    // shrinking, at the cost of the dialog no longer being manually
+    // resizable (an acceptable trade for a small settings dialog like
+    // this one).
+    root->setSizeConstraint(QLayout::SetFixedSize);
+
     connect(nameEdit_, &QLineEdit::textChanged, this, &CreateProjectWizard::updateOkEnabled);
     connect(locationEdit_, &QLineEdit::textChanged, this, &CreateProjectWizard::updateOkEnabled);
     updateOkEnabled();
@@ -128,19 +134,19 @@ sound_mind::core::ProjectSettings CreateProjectWizard::settings() const {
 }
 
 std::filesystem::path CreateProjectWizard::path() const {
-    std::filesystem::path result(locationEdit_->text().toStdString());
-    if (result.extension() != ".smproj") {
-        result += ".smproj";
+    QString name = nameEdit_->text();
+    if (name.endsWith(QStringLiteral(".smproj"), Qt::CaseInsensitive)) {
+        name.chop(7);  // strlen(".smproj") - avoid doubling it up below.
     }
-    return result;
+
+    const std::filesystem::path directory(locationEdit_->text().toStdString());
+    return directory / (name.toStdString() + ".smproj");
 }
 
 void CreateProjectWizard::browseForLocation() {
-    const QString suggestedName = nameEdit_->text().isEmpty() ? QStringLiteral("Untitled") : nameEdit_->text();
-    const QString fileName = QFileDialog::getSaveFileName(this, tr("Save Location"), suggestedName + ".smproj",
-                                                            tr(kProjectFileFilter));
-    if (!fileName.isEmpty()) {
-        locationEdit_->setText(fileName);
+    const QString directory = QFileDialog::getExistingDirectory(this, tr("Save Folder"), locationEdit_->text());
+    if (!directory.isEmpty()) {
+        locationEdit_->setText(directory);
     }
 }
 

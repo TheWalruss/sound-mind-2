@@ -16,12 +16,21 @@ closing a real gap surfaced while scoping this milestone.
 
 ### Added
 
-- **`sound_mind::studio::CreateProjectWizard`**: Name, Save Location, and
+- **`sound_mind::studio::CreateProjectWizard`**: Name, Save Folder, and
   Duration always visible; sample rate, frequency range, bin count, and
   timestep hidden behind an "Advanced" disclosure, defaulted to match
   `ProjectSettings{}` for anyone who never opens it. Purely
   presentational - `settings()`/`path()` are read by `MainWindow`, which
-  does the actual creating/saving.
+  does the actual creating/saving. Save Folder is a *folder*, not a full
+  file path - the destination filename always comes from Name (`<Save
+  Folder>/<Name>.smproj`), so the two can never drift apart the way two
+  independently-typed fields could (caught in review before the first
+  push - the initial version let Location hold a full, independently-
+  typed path). The dialog also keeps its size in sync with whichever
+  fields are currently visible via `QLayout::SetFixedSize` on its
+  top-level layout, so closing "Advanced" actually shrinks it back down
+  instead of leaving it at its expanded size (also caught in review -
+  Qt doesn't do this on its own when a layout's child is hidden).
 - **`MainWindow::createProjectAt()`**: the non-prompting, testable work
   behind `newProject()` (mirroring `openProject()`/`openProjectAt()`) -
   creates the project, saves it to the given path immediately ("the
@@ -54,8 +63,9 @@ closing a real gap surfaced while scoping this milestone.
   additive, not a breaking format change.
 
 Full regression suite: 96/96 ctest entries passing (codec, core, studio) -
-`sound-mind-studio-tests` now runs 72 QTest functions across six classes
-(up from 61), including 8 new for `CreateProjectWizard` and 4 more for
+`sound-mind-studio-tests` now runs 73 QTest functions across six classes
+(up from 61), including 9 new for `CreateProjectWizard` (folder-based
+Location, the shrink-back-on-collapse fix included) and 4 more for
 `MainWindow::createProjectAt()`/the real codec-settings wiring; four new
 Catch2 cases cover `streamCodecConfigFor()` and backward-compatible
 deserialization in `sound-mind-core`, alongside extended assertions on

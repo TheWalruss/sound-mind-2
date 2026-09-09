@@ -31,8 +31,10 @@ namespace sound_mind::studio {
  * what actually does that once the dialog is accepted.
  *
  * @note Name doesn't correspond to any persisted `ProjectSettings` field
- *       (no such field exists) - its only role is suggesting a filename
- *       when "Browse..." opens the save-location file dialog.
+ *       (no such field exists) - its role is *being* the destination
+ *       file's name: Location is a folder, not a full file path, so the
+ *       project's name and its `.smproj` filename can never drift apart
+ *       the way two independently-typed fields could.
  */
 class CreateProjectWizard : public QDialog {
     Q_OBJECT
@@ -60,17 +62,18 @@ public:
     [[nodiscard]] sound_mind::core::ProjectSettings settings() const;
 
     /**
-     * @brief The destination `.smproj` path the Location field currently
-     *        describes.
-     * @return The path, with a `.smproj` extension appended if the field's
-     *         text doesn't already end with one.
+     * @brief The destination `.smproj` path the Name and Location fields
+     *        currently describe together.
+     * @return `<Location>/<Name>.smproj` - Name's own text has any
+     *         already-present `.smproj` suffix stripped first, so typing
+     *         one in doesn't double it up.
      */
     [[nodiscard]] std::filesystem::path path() const;
 
 private slots:
-    /// @brief "Browse..." button handler: opens a real save-file dialog
-    ///        (pre-filled from the Name field), and fills the Location
-    ///        field with the chosen path if one was chosen.
+    /// @brief "Browse..." button handler: opens a real folder-choosing
+    ///        dialog, and fills the Location field with the chosen
+    ///        folder if one was chosen.
     void browseForLocation();
 
     /// @brief Enables the dialog's OK button only once both Name and

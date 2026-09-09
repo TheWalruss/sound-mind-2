@@ -8,10 +8,11 @@ class CreateProjectWizardTest : public QObject {
 private slots:
     void settingsMatchProjectSettingsDefaultsInitially();
     void okIsDisabledUntilNameAndLocationAreBothSet();
-    void pathAppendsSmprojExtensionWhenMissing();
-    void pathKeepsAnAlreadyPresentSmprojExtension();
+    void pathCombinesLocationAndName();
+    void pathStripsAnAlreadyPresentSmprojExtensionFromName();
     void advancedFieldsAreHiddenUntilToggled();
     void changingAdvancedFieldsChangesSettings();
     void durationDrivesCanvasWidthAtTheCurrentTimestep();
     void canvasHeightStaysEqualToBinCount();
+    void collapsingAdvancedShrinksTheDialogBackDown();
 };
