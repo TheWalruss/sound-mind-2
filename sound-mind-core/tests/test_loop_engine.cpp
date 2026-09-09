@@ -37,6 +37,26 @@ TEST_CASE("LoopEngine starts with no image, not running, and keepLooping off", "
     CHECK(engine.loopsBehind() == 0);
 }
 
+TEST_CASE("emptyImage returns a silent, correctly-dimensioned placeholder without touching currentImage()",
+          "[loop_engine]") {
+    const StreamCodecConfig config;
+    constexpr std::size_t loopLen = 64;
+    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
+
+    const sound_mind::codec::StreamImage placeholder = engine.emptyImage();
+
+    CHECK(placeholder.frameCount > 0);
+    CHECK(placeholder.config.binCount == config.binCount);
+    CHECK(placeholder.sampleCount == loopLen);
+    // currentImage() is untouched - emptyImage() is a pure function of this
+    // engine's own config/loop length, independent of running state.
+    CHECK(engine.currentImage().frameCount == 0);
+
+    // Callable before start() too, not just at any point after.
+    LoopEngine neverStarted(config, loopLen, AudioDeviceMode::None);
+    CHECK(neverStarted.emptyImage().frameCount == placeholder.frameCount);
+}
+
 TEST_CASE("LoopEngine::start with AudioDeviceMode::None never opens a real device", "[loop_engine]") {
     LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
     engine.start();

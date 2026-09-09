@@ -169,6 +169,29 @@ public:
     ///         at least one whole loop has been captured and processed.
     [[nodiscard]] sound_mind::codec::StreamImage currentImage() const;
 
+    /**
+     * @brief A correctly-dimensioned, silent placeholder Stream image -
+     *        exactly what encoding a whole loop's worth of pure silence,
+     *        at this engine's own config/loop length, would produce.
+     *
+     * Exists so a caller (`sound-mind-studio`'s `MainWindow`, for a
+     * freshly created "Loop Input" layer that has never captured anything
+     * yet - see `toggleLoopMode()`'s own docs) can give a layer *something*
+     * to render immediately when Loop Mode starts, instead of leaving it
+     * with no content at all until the first real loop finishes - which
+     * can take as long as the whole project's duration, with nothing
+     * visible in the meantime. A pure function of this engine's config and
+     * loop length: doesn't touch or depend on currentImage()/isRunning(),
+     * and is safe to call whether or not the engine has ever been started.
+     *
+     * @return A silent StreamImage, the same dimensions any real completed
+     *         loop's image would have.
+     *
+     * @note Not real-time-safe (allocates, runs a real `encode()` pass) -
+     *       call from the UI thread only, same as currentImage().
+     */
+    [[nodiscard]] sound_mind::codec::StreamImage emptyImage() const;
+
     /// @brief How many whole loops of input have been captured since
     ///        start() - advances continuously while running (unless
     ///        keepLooping() is `true`, which freezes it - see

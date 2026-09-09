@@ -102,6 +102,14 @@ sound_mind::codec::StreamImage LoopEngine::currentImage() const {
     return currentImage_;
 }
 
+sound_mind::codec::StreamImage LoopEngine::emptyImage() const {
+    sound_mind::codec::AudioBuffer silence;
+    silence.sampleRateHz = config_.sampleRateHz;
+    silence.left.assign(loopLengthSamples_, 0.0f);
+    silence.right.assign(loopLengthSamples_, 0.0f);
+    return sound_mind::codec::encode(silence, config_);
+}
+
 std::uint64_t LoopEngine::loopsCaptured() const noexcept {
     return capturedSamplesTotal_.load(std::memory_order_relaxed) / static_cast<std::uint64_t>(loopLengthSamples_);
 }

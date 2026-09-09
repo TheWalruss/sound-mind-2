@@ -225,7 +225,13 @@ public slots:
      * its previous content stays visible immediately on a restart instead
      * of the canvas going blank again while the new session's first loop
      * is still being captured (see LoopEngine's own docs for how long that
-     * first loop alone can take - the whole project's duration). While
+     * first loop alone can take - the whole project's duration). A
+     * genuinely **new** layer instead gets LoopEngine::emptyImage() - a
+     * silent placeholder at the right dimensions - as its starting content,
+     * so the canvas shows an empty spectrogram immediately rather than
+     * nothing at all, which otherwise reads as "Loop Mode isn't capturing
+     * anything" (a real, confirmed point of confusion) rather than "Loop
+     * Mode is running and has genuinely captured nothing *yet*". While
      * running, that layer's content refreshes from
      * LoopEngine::currentImage() on a timer and the canvas repaints, so
      * each completed loop's spectrogram visibly updates - stopping leaves

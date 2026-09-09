@@ -824,10 +824,18 @@ void MainWindow::toggleLoopMode() {
         loopLayerId_ = existing->id();
     } else {
         sound_mind::core::Layer layer(0, loopInputName, sound_mind::core::LayerType::Normal);
+        // A silent, correctly-dimensioned placeholder - see LoopEngine::
+        // emptyImage()'s own docs - so a brand-new layer has something to
+        // render immediately, rather than nothing at all until the first
+        // real loop finishes. A *reused* layer (the branch above) already
+        // has real content from a previous session, so it deliberately
+        // keeps that instead of being overwritten with a blank image here.
+        layer.setContent(loopEngine_->emptyImage());
         loopLayerId_ = project_->addLayer(std::move(layer));
     }
     hasUnsavedChanges_ = true;
     refreshLayersPanel();
+    canvas_->update();
 
     loopEngine_->start();
     if (!loopEngine_->isDeviceAvailable()) {

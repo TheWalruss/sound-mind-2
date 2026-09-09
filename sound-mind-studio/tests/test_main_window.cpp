@@ -1112,3 +1112,25 @@ void MainWindowTest::toggleLoopModeReusesAnExistingLoopInputLayerInsteadOfCreati
 
     window.toggleLoopMode();  // cleanup.
 }
+
+void MainWindowTest::toggleLoopModeGivesANewLoopInputLayerAPlaceholderContentImmediately() {
+    // Regression test: a freshly created "Loop Input" layer used to have
+    // no content at all until the first whole loop finished capturing -
+    // which can take as long as the project's own duration, with nothing
+    // rendered on the canvas in the meantime - easily read as "Loop Mode
+    // isn't capturing anything". toggleLoopMode() now seeds it with
+    // LoopEngine::emptyImage() immediately, before any real capture has
+    // happened.
+    MainWindow window;
+    createFreshTestProject(window);
+
+    window.toggleLoopMode();
+    QVERIFY(window.isLoopModeRunning());
+
+    const sound_mind::core::Layer& loopLayer = window.project()->layers().back();
+    QCOMPARE(QString::fromStdString(loopLayer.name()), QStringLiteral("Loop Input"));
+    QVERIFY(loopLayer.content().has_value());
+    QVERIFY(loopLayer.content()->frameCount > 0);
+
+    window.toggleLoopMode();  // cleanup.
+}

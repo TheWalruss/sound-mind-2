@@ -179,6 +179,8 @@ Live Mode (`v0.0.7.1`) is renamed **Loop Mode** (`LiveEngine`/`LiveLayer`-style 
 
 **Fixed in manual testing, before push:** `toggleLoopMode()` unconditionally created a brand-new "Loop Input" layer on every start, rather than reusing one already in the project - stopping and restarting (or reopening a project that already captured a loop) piled up duplicate "Loop Input" layers instead of continuing to build on the same one. Worse, since the newest layer is always topmost and starts with no content, `findTopmostRender()` would render *nothing at all* until that new layer's own first loop finished (up to a whole project-duration's wait, in silence, with no earlier layer's content showing through) - easily read as "Loop Mode isn't capturing anything," especially on a project where the Loop layer was the only one with real content. Fixed by having `toggleLoopMode()` search the current project for an existing Normal layer named "Loop Input" and reuse its id if found, only creating a new one otherwise - so a restart's canvas shows the previous session's last-captured content immediately, rather than going blank again while a new one is captured.
 
+**A second round of manual testing found the remaining half of that same confusion**: even for a genuinely *new* "Loop Input" layer (nothing to reuse), the canvas correctly had nothing real to show yet - but a silent, unchanged canvas for up to a whole project-duration's wait still reads as "not working," not as "correctly empty." New **`LoopEngine::emptyImage()`**: a silent, correctly-dimensioned placeholder Stream image (a real `encode()` of a zero-filled buffer, at the engine's own config/loop length), given to a brand-new "Loop Input" layer immediately on start, so the canvas shows an empty spectrogram right away instead of nothing at all. A reused layer keeps its real previous content untouched, per the fix above.
+
 ### v0.Y.13.1 - Layers Panel
 
 A dockable panel listing the project's layer stack, adapted from the legacy Studio's Layers panel (drag-handle reorder, per-row visibility toggle, name, opacity, add/delete) rather than designed from scratch - but scoped down to what the current, deliberately minimal `sound_mind::core::Layer` model actually supports. The legacy panel's blend-mode combo, MindWave-link combo, and transform controls are all left out of this first pass, since none of those concepts exist in the engine yet (blend modes and MindWaves both arrive in Phase 3/4) - adding placeholder UI for features that don't do anything yet isn't worth it.
@@ -351,23 +353,35 @@ The Chord Generator and the generalized notation-driven sequence it's built on, 
 
 **Demo:** stamp a chord progression, then re-voice and re-time it without repainting.
 
+### v0.Y.31.1 - Loop Mode Live Preview
+
+A live-updating preview of the *currently capturing* loop, rendered incrementally as it's captured - restoring the visual behavior the original Live Mode (`v0.0.7.1`) had before Loop Mode's fixed-length redesign (`v0.Y.12.1`) replaced it. Today, the canvas only updates once a whole loop finishes - a real, silent wait as long as the project's own duration (see `v0.Y.12.1`'s own "Fixed in manual testing" note on how confusing that first wait already reads, even with a placeholder image now covering the very first activation).
+
+**A second, parallel pipeline - not a change to what's actually played back.** LoopEngine's own whole-buffer encode/decode-per-loop design (confirmed, `v0.Y.12.1`) stays exactly as-is for the audio that's actually heard - this milestone is purely about what's *rendered on the canvas* while a loop is still being captured. A `sound_mind::codec::StreamIncrementalEncoder` instance (the same one the original Live Mode used, still present in `sound-mind-codec`, unused since the `v0.Y.12.1` rewrite) tracks just the current loop's progress, reset at every loop boundary rather than growing across a whole session - sidestepping the original Live Mode's own "cost grows with session length" limitation by construction, since a loop is always bounded.
+
+**Distinct from `v0.Y.26.1`'s own "revisit Loop Mode" note**: that one is about *audio* - a per-note, operation-relative retrigger feel, once Sound Mind Instruments exists. This one is purely visual - what the canvas shows while a loop is in progress - and doesn't depend on Instruments existing first.
+
+**Demo:** start Loop Mode and watch the spectrogram grow continuously *during* the current loop, the same way the original Live Mode used to, rather than jumping once per completed loop.
+
+**No Y bump expected** - a rendering-only addition; the project file format, and what's actually captured/played back, are unchanged.
+
 ---
 
 ## Phase 5 - Generative & Analytical
 
-### v0.Y.31.1 - Generators
+### v0.Y.32.1 - Generators
 
 Lattice, fractal, and streaming procedural content generators, sharing the Order/Chaos criticality axis.
 
 **Demo:** generate a fractal melodic texture as a new layer, tuned from rigid to chaotic.
 
-### v0.Y.32.1 - Analysis Tools v1
+### v0.Y.33.1 - Analysis Tools v1
 
 A first useful cross-section across all five categories (loudness/mastering, pitch/vocal, stereo/phase, spectral health, criticality/pattern) - not every meter the legacy version had, but at least one representative of each.
 
 **Demo:** check integrated loudness and stereo correlation on a real mix.
 
-### v0.Y.33.1 - Sound Flower
+### v0.Y.34.1 - Sound Flower
 
 Polar canvas view, and polar-form image import.
 
@@ -377,13 +391,13 @@ Polar canvas view, and polar-form image import.
 
 ## Phase 6 - Interchange & Polish
 
-### v0.Y.34.1 - Portable Resources
+### v0.Y.35.1 - Portable Resources
 
 Standalone `.smwave` and `.sminst` files; cross-project import of layers, Mind Shots, MindWaves, and Sound Mind Instruments. Resolves the Mind Grain portability Deferred Decision one way or the other.
 
 **Demo:** export an instrument from one project, import it cleanly into another.
 
-### v0.Y.35.1 - Performance Validation & Hardening
+### v0.Y.36.1 - Performance Validation & Hardening
 
 By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. Validate the ~100 ms / ~250 ms latency targets for real, on both this Arm64 machine and actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding). Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
 

@@ -64,6 +64,16 @@ model before implementing.
   can be as long as the whole project duration. `toggleLoopMode()` now
   searches the project for an existing Normal layer named "Loop Input"
   and reuses its id if found, only creating a new one otherwise.
+- **A genuinely new "Loop Input" layer showed nothing at all until its
+  first whole loop finished capturing** - confirmed as expected-but-
+  confusing behavior, not a capture bug: the canvas is correct to have
+  nothing real to show yet, but a silent, unchanged canvas for up to a
+  whole project-duration's wait reads exactly like "not working." New
+  **`LoopEngine::emptyImage()`**: a silent, correctly-dimensioned
+  placeholder Stream image (a real `encode()` of a zero-filled buffer at
+  the engine's own config/loop length), given to a brand-new "Loop Input"
+  layer immediately on start - a *reused* layer (the fix above) keeps its
+  real previous content instead, untouched by this.
 
 ### Notes
 
@@ -84,12 +94,13 @@ model before implementing.
   milestone.
 - **No Y bump.** No project file format changes here at all.
 
-Full regression suite: `sound-mind-core-tests` 72/72 Catch2 test cases
-(339 assertions) passing, including 7 new for `LoopEngine` (replacing
-`LiveEngine`'s 4); `sound-mind-studio-tests` runs 102 QTest functions
-across seven classes (up from 97), including 5 new for `MainWindow`'s
-Loop Mode reconstruction/Keep Looping/layer-reuse behavior and 7
-renamed in place (`toggleLiveMode...` → `toggleLoopMode...`).
+Full regression suite: `sound-mind-core-tests` 73/73 Catch2 test cases
+(344 assertions) passing, including 8 new for `LoopEngine` (replacing
+`LiveEngine`'s 4); `sound-mind-studio-tests` runs 103 QTest functions
+across seven classes (up from 97), including 6 new for `MainWindow`'s
+Loop Mode reconstruction/Keep Looping/layer-reuse/placeholder-content
+behavior and 7 renamed in place (`toggleLiveMode...` →
+`toggleLoopMode...`).
 
 ## [0.0.13.1] - 2026-09-09
 
