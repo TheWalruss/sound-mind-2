@@ -20,6 +20,7 @@ class QTimer;
 namespace sound_mind::studio {
 
 class CanvasWidget;
+class CreateProjectWizard;
 class LandingPage;
 
 /**
@@ -56,6 +57,20 @@ class LandingPage;
  * invariant - normally unreachable through the guarded entry points
  * above, but keeping the *audit point* itself correct is what the
  * Project Lifecycle milestone actually asked for.
+ *
+ * **As of `v0.Y.11.1` (Create Project Wizard):** newProject() now shows a
+ * real `CreateProjectWizard` dialog instead of silently creating an
+ * in-memory default project - see its own docs, and createProjectAt()'s,
+ * for the interactive/testable split this introduces (the same shape as
+ * openProject()/openProjectAt()). A project's `ProjectSettings` (sample
+ * rate, frequency range, bin count, timestep) now actually drives
+ * `sound_mind::codec::encode()`/`fromRgbImage()` at every direct call
+ * site (`importAudioFile()`, `importImageFile()`, Recording's post-
+ * capture encode) via `sound_mind::core::streamCodecConfigFor()` -
+ * previously all three silently used a hardcoded default regardless of
+ * the open project's settings. `LiveEngine`'s own construction-time
+ * config is deliberately not part of this wiring - see
+ * `streamCodecConfigFor()`'s own docs for why.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -81,14 +96,22 @@ public:
 
 public slots:
     /**
-     * @brief Replaces the current project with a freshly created one.
+     * @brief Shows the Create Project wizard and, if accepted, replaces
+     *        the current project with the new one it describes - see
+     *        createProjectAt() for the actual, non-prompting work, and
+     *        for why this is split out the same way openProject()/
+     *        openProjectAt() are.
      *
      * Per the Project Lifecycle milestone (`v0.Y.10.1`): refuses outright
-     * (a status-bar message, no dialog) while Live Mode or Recording is
-     * active; otherwise, if the current project has unsaved changes,
-     * prompts to save/discard/cancel first (see
-     * confirmDiscardUnsavedChanges()) - proceeds unguarded if there's
-     * nothing to lose.
+     * (a status-bar message, no dialog - checked *before* the wizard is
+     * even shown) while Live Mode or Recording is active; otherwise, if
+     * the current project has unsaved changes, prompts to save/discard/
+     * cancel first (see confirmDiscardUnsavedChanges()) - proceeds
+     * unguarded if there's nothing to lose. Per the Create Project Wizard
+     * milestone (`v0.Y.11.1`): does nothing further if the wizard is
+     * cancelled; on failure to save the new project, reports it via a
+     * modal (the new project still becomes current regardless - see
+     * createProjectAt()'s docs for why).
      */
     void newProject();
 
@@ -274,6 +297,32 @@ public:
      *         or if Live Mode/Recording is currently active.
      */
     bool openProjectAt(const std::filesystem::path& path, QString* errorMessage = nullptr);
+
+    /**
+     * @brief Creates a new project with `settings`, saves it to `path`
+     *        immediately, and makes it the current project - without
+     *        showing any dialog. The actual work behind newProject(),
+     *        split out the same way openProjectAt() is.
+     *
+     * Per the Create Project Wizard milestone (`v0.Y.11.1`): "the
+     * wizard's completion *is* the first save" - a project created this
+     * way always has a real file on disk from the moment it exists,
+     * unlike the pre-wizard `newProject()`'s in-memory-only result. If
+     * the save itself fails, the new project still becomes current (its
+     * `currentPath_` is still set to `path`, so a later `saveProject()`
+     * retries the same location) - reported via `errorMessage`/the
+     * return value rather than rolled back, the same "report, don't
+     * silently revert" precedent `importAudioFile()` and friends use.
+     *
+     * @param settings The settings for the new project.
+     * @param path Destination path to save it to immediately.
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @return `true` if the save succeeded; `false` if it failed (the
+     *         project is still current, just not yet actually on disk).
+     */
+    bool createProjectAt(sound_mind::core::ProjectSettings settings, const std::filesystem::path& path,
+                          QString* errorMessage = nullptr);
 
     /// @brief Whether the Landing Page is currently the visible central
     ///        widget (no project open yet) rather than the canvas.

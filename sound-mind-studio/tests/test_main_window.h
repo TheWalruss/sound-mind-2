@@ -11,7 +11,6 @@ private slots:
     void newProjectShowsTheCanvasInsteadOfTheLandingPage();
     void openProjectAtOpensAndRecordsARecentProject();
     void openProjectAtFailsGracefullyForAMissingFile();
-    void landingPageNewProjectRequestedCreatesAProject();
     void landingPageRecentProjectRequestedOpensThatPath();
     void newProjectReplacesTheCurrentOne();
     void importAudioFileAddsANewLayer();
@@ -52,4 +51,10 @@ private slots:
     void newProjectRefusesWhileLiveModeIsRunning();
     void openProjectRefusesWhileRecordingIsRunning();
     void openProjectAtRefusesWhileLiveModeIsRunning();
+
+    // Create Project Wizard (v0.Y.11.1)
+    void createProjectAtSavesImmediatelyAndBecomesCurrent();
+    void createProjectAtAppliesGivenSettings();
+    void createProjectAtFailsGracefullyForAnUnwritableLocation();
+    void importAudioFileUsesTheProjectsConfiguredCodecSettings();
 };

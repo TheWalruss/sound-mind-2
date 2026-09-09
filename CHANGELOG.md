@@ -6,6 +6,61 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.12.1] - 2026-09-09
+
+The "Create Project Wizard" milestone from `docs/sound-mind-roadmap.md`
+(Phase 2.5). Replaces the no-dialog `newProject()` (an in-memory default
+project, nothing asked) with a real creation dialog, plus real wiring: a
+project's settings now actually drive how new content gets encoded,
+closing a real gap surfaced while scoping this milestone.
+
+### Added
+
+- **`sound_mind::studio::CreateProjectWizard`**: Name, Save Location, and
+  Duration always visible; sample rate, frequency range, bin count, and
+  timestep hidden behind an "Advanced" disclosure, defaulted to match
+  `ProjectSettings{}` for anyone who never opens it. Purely
+  presentational - `settings()`/`path()` are read by `MainWindow`, which
+  does the actual creating/saving.
+- **`MainWindow::createProjectAt()`**: the non-prompting, testable work
+  behind `newProject()` (mirroring `openProject()`/`openProjectAt()`) -
+  creates the project, saves it to the given path immediately ("the
+  wizard's completion *is* the first save"), and makes it current. A
+  failed save doesn't roll the new project back - reported via the
+  return value/`errorMessage` instead, matching `importAudioFile()`'s
+  "report, don't silently revert" precedent.
+- **`sound_mind::core::streamCodecConfigFor()`**: bridges a project's
+  `ProjectSettings` to a real `sound_mind::codec::StreamCodecConfig`.
+  Wired into `MainWindow::importAudioFile()`/`importImageFile()` and
+  Recording's post-capture encode - all three previously used a
+  hardcoded default regardless of the open project's settings, a real,
+  pre-existing gap this milestone closed rather than left standing.
+- **`ProjectSettings` gains `binCount`, `minFrequencyHz`,
+  `maxFrequencyHz`** - so the wizard's Advanced fields have somewhere to
+  live. Deserialized leniently (falling back to their own defaults if
+  absent), so a project file saved before this milestone still loads.
+
+### Notes
+
+- **`LiveEngine`'s own capture/encode config deliberately stays
+  unwired** - it's constructed once, before any project exists, with no
+  way to be reconfigured afterward; Loop Mode's imminent reimplementation
+  (next on the roadmap) is already expected to rework its construction/
+  lifecycle, so investing in that here would likely be thrown away there.
+  See `docs/sound-mind-architecture.md`'s Decisions Made #18.
+- **`poolLayer()`/`decode()` needed no changes** - both already derive
+  everything from a layer's existing, self-describing Stream content.
+- **No Y bump.** The new `ProjectSettings` fields deserialize leniently -
+  additive, not a breaking format change.
+
+Full regression suite: 96/96 ctest entries passing (codec, core, studio) -
+`sound-mind-studio-tests` now runs 72 QTest functions across six classes
+(up from 61), including 8 new for `CreateProjectWizard` and 4 more for
+`MainWindow::createProjectAt()`/the real codec-settings wiring; four new
+Catch2 cases cover `streamCodecConfigFor()` and backward-compatible
+deserialization in `sound-mind-core`, alongside extended assertions on
+the two existing `ProjectSettings` tests.
+
 ## [0.0.11.1] - 2026-09-09
 
 The "Project Lifecycle" milestone from `docs/sound-mind-roadmap.md`

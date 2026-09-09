@@ -14,6 +14,7 @@
 #include <QtTest/QtTest>
 
 #include "test_canvas_widget.h"
+#include "test_create_project_wizard.h"
 #include "test_landing_page.h"
 #include "test_main_window.h"
 #include "test_recent_projects.h"
@@ -50,6 +51,9 @@ int main(int argc, char** argv) {
 
     ThemeTest themeTest;
     status |= QTest::qExec(&themeTest, argc, argv);
+
+    CreateProjectWizardTest createProjectWizardTest;
+    status |= QTest::qExec(&createProjectWizardTest, argc, argv);
 
     return status;
 }

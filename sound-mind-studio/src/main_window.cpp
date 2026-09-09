@@ -29,6 +29,7 @@
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/create_project_wizard.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/theme.h"
 
@@ -293,8 +294,34 @@ void MainWindow::newProject() {
         return;
     }
 
-    currentPath_.reset();
-    setProject(sound_mind::core::Project::createNew(sound_mind::core::ProjectSettings{}));
+    CreateProjectWizard wizard(this);
+    if (wizard.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    QString errorMessage;
+    if (!createProjectAt(wizard.settings(), wizard.path(), &errorMessage)) {
+        QMessageBox::critical(this, tr("Save Project Failed"), errorMessage);
+    }
+}
+
+bool MainWindow::createProjectAt(sound_mind::core::ProjectSettings settings, const std::filesystem::path& path,
+                                  QString* errorMessage) {
+    setProject(sound_mind::core::Project::createNew(std::move(settings)));
+    currentPath_ = path;
+
+    try {
+        project_->save(path);
+        recentProjects_.add(path);
+        landingPage_->setRecentProjects(recentProjects_.list());
+        return true;
+    } catch (const std::exception& e) {
+        hasUnsavedChanges_ = true;
+        if (errorMessage != nullptr) {
+            *errorMessage = QString::fromStdString(e.what());
+        }
+        return false;
+    }
 }
 
 void MainWindow::openProject() {
@@ -407,7 +434,7 @@ bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* err
     showBusyStatus(statusBar(), tr("Importing audio..."));
     try {
         const auto audio = sound_mind::codec::readWavFile(path);
-        const auto content = sound_mind::codec::encode(audio, sound_mind::codec::StreamCodecConfig{});
+        const auto content = sound_mind::codec::encode(audio, sound_mind::core::streamCodecConfigFor(project_->settings()));
 
         sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
         layer.setContent(content);
@@ -448,7 +475,8 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, QString* err
     showBusyStatus(statusBar(), tr("Importing image..."));
     try {
         const auto rgbImage = toRgbImage(sourceImage);
-        const auto content = sound_mind::codec::fromRgbImage(rgbImage, sound_mind::codec::StreamCodecConfig{});
+        const auto content =
+            sound_mind::codec::fromRgbImage(rgbImage, sound_mind::core::streamCodecConfigFor(project_->settings()));
 
         sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
         layer.setContent(content);
@@ -685,7 +713,8 @@ void MainWindow::toggleRecording() {
             // Encoded exactly as an imported file would be - see
             // toggleRecording()'s docs for why this doesn't go through
             // LiveEngine's incremental encoder.
-            const auto content = sound_mind::codec::encode(captured, sound_mind::codec::StreamCodecConfig{});
+            const auto content =
+                sound_mind::codec::encode(captured, sound_mind::core::streamCodecConfigFor(project_->settings()));
             sound_mind::core::Layer layer(0, tr("Recording").toStdString(), sound_mind::core::LayerType::Normal);
             layer.setContent(content);
             project_->addLayer(std::move(layer));
