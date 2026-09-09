@@ -6,6 +6,64 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.11.1] - 2026-09-09
+
+The "Project Lifecycle" milestone from `docs/sound-mind-roadmap.md`
+(Phase 2.5). Real unsaved-changes guards on every path that can discard
+work - New, Open (both the file-dialog and Recent Projects routes), and
+closing the window - none of which existed before this milestone, despite
+the roadmap's own wording implying window Close already had one (a
+planning-stage assumption that didn't match the actual code - corrected
+in the roadmap entry itself, not silently built around).
+
+### Added
+
+- **`MainWindow::hasUnsavedChanges()`**: a plain flag, marked on every
+  content-mutating action that exists today (import, Pool, Live Mode
+  starting, Recording adding a layer) and cleared by a successful save or
+  by `setProject()`. Deliberately not an operation-log diff - no
+  `Operation` subtype logs these mutations yet (that's Phase 3's job).
+- **`MainWindow::closeEvent()`**: new override - guards exactly like
+  `newProject()`/`openProject()` (see below), ignoring the close event if
+  the guard says not to proceed.
+- **A real `QMessageBox` (Save/Discard/Cancel) guard** on `newProject()`,
+  `openProject()`, the Landing Page's Recent Projects click handler, and
+  `closeEvent()`, whenever `hasUnsavedChanges()` is true.
+  `openProjectAt()` stays deliberately unguarded itself (its established
+  "non-prompting, testable" contract) - each interactive caller guards
+  before calling it instead.
+- **A separate, non-modal refusal for Live Mode/Recording**: `newProject()`,
+  `openProject()`, `openProjectAt()`, and `closeEvent()` all refuse
+  outright (a status-bar message, no dialog) while either is active,
+  rather than risking a silently-discarded in-progress hardware capture -
+  extends this codebase's existing "refuse rather than surprise-stop"
+  policy for Live Mode/Recording's own mutual exclusion (`docs/sound-mind-
+  architecture.md`'s Decisions Made #14) to project switching too. See
+  Decisions Made #17 for why this stayed a separate mechanism from the
+  unsaved-changes prompt.
+- **`setProject()`** now unconditionally stops `liveEngine_`/
+  `recordEngine_` (and their UI timers) and clears `liveLayerId_`,
+  regardless of caller - a defensive invariant, normally unreachable
+  through the guarded entry points above, but keeping the actual *audit
+  point* correct is what this milestone asked for.
+
+### Notes
+
+- **No Y bump.** `hasUnsavedChanges_` is in-memory only, never
+  serialized - no project file format changed.
+- **`CanvasWidget` and `PlaybackEngine` needed no changes.** Audited both
+  per `setProject()`'s "audit point" framing: `CanvasWidget` already held
+  no cache beyond a raw `Project*` it fully re-renders from on every
+  paint; `PlaybackEngine`'s loaded buffer is already unconditionally
+  overwritten by the next `startPlayback()` (via `playbackLoaded_`),
+  never played stale. The real gaps were `MainWindow`'s own missing
+  guards and its unmanaged `liveEngine_`/`recordEngine_` state.
+
+Full regression suite: 92/92 ctest entries passing (codec, core, studio) -
+`sound-mind-studio-tests` now runs 61 QTest functions across five classes
+(up from 50), including 11 new for unsaved-changes tracking, the
+save/switch-clears-it paths, and the Live Mode/Recording refusals.
+
 ## [0.0.10.1] - 2026-09-09
 
 The "Visual Identity" milestone from `docs/sound-mind-roadmap.md` - a

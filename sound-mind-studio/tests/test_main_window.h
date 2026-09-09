@@ -39,4 +39,17 @@ private slots:
     void startPlaybackDoesNothingWhileRecordingIsRunning();
     void toggleLiveModeDoesNothingWhileRecordingIsRunning();
     void toggleRecordingDoesNothingWhileLiveModeIsRunning();
+
+    // Project Lifecycle (v0.Y.10.1)
+    void newProjectStartsWithNoUnsavedChanges();
+    void importAudioFileMarksUnsavedChanges();
+    void poolTopmostLayerNowMarksUnsavedChanges();
+    void toggleLiveModeMarksUnsavedChangesWhenItStarts();
+    void savingProjectClearsUnsavedChanges();
+    void openProjectAtClearsUnsavedChangesFromThePreviousProject();
+    void closeAcceptsWhenThereAreNoUnsavedChanges();
+    void closeRefusesWhileLiveModeIsRunning();
+    void newProjectRefusesWhileLiveModeIsRunning();
+    void openProjectRefusesWhileRecordingIsRunning();
+    void openProjectAtRefusesWhileLiveModeIsRunning();
 };

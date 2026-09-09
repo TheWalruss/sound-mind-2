@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 #include <QAction>
+#include <QCloseEvent>
 #include <QCoreApplication>
 #include <QFileDialog>
 #include <QImage>
@@ -118,6 +119,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(landingPage_, &LandingPage::newProjectRequested, this, &MainWindow::newProject);
     connect(landingPage_, &LandingPage::openProjectRequested, this, &MainWindow::openProject);
     connect(landingPage_, &LandingPage::recentProjectRequested, this, [this](const QString& path) {
+        // Same guard as openProject() - see its docs - before reaching
+        // openProjectAt(), which enforces the Live Mode/Recording refusal
+        // on its own but never prompts about unsaved changes itself.
+        if (!confirmDiscardUnsavedChanges()) {
+            return;
+        }
         QString errorMessage;
         if (!openProjectAt(std::filesystem::path(path.toStdString()), &errorMessage)) {
             QMessageBox::critical(this, tr("Open Project Failed"), errorMessage);
@@ -219,20 +226,86 @@ const sound_mind::core::Project* MainWindow::project() const noexcept {
 
 bool MainWindow::isShowingLandingPage() const noexcept { return stack_->currentWidget() == landingPage_; }
 
+bool MainWindow::hasUnsavedChanges() const noexcept { return hasUnsavedChanges_; }
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    if (liveEngine_.isRunning() || recordEngine_.isRecording()) {
+        statusBar()->showMessage(tr("Stop Live Mode or Recording before closing."), 5000);
+        event->ignore();
+        return;
+    }
+    if (!confirmDiscardUnsavedChanges()) {
+        event->ignore();
+        return;
+    }
+    event->accept();
+}
+
+bool MainWindow::confirmDiscardUnsavedChanges() {
+    if (!hasUnsavedChanges_) {
+        return true;
+    }
+
+    const auto choice =
+        QMessageBox::warning(this, tr("Unsaved Changes"), tr("This project has unsaved changes. Save them first?"),
+                              QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
+    if (choice == QMessageBox::Cancel) {
+        return false;
+    }
+    if (choice == QMessageBox::Discard) {
+        return true;
+    }
+
+    // Save. saveProject() clears hasUnsavedChanges_ only once the save
+    // actually completes - still true afterward means the user cancelled
+    // saveProjectAs()'s file picker, or the save itself failed (already
+    // reported via its own QMessageBox::critical()), so this correctly
+    // still refuses to proceed either way.
+    saveProject();
+    return !hasUnsavedChanges_;
+}
+
 void MainWindow::setProject(sound_mind::core::Project project) {
+    // Defensive invariant, not the normal path - see the class docs'
+    // v0.Y.10.1 note. Unconditional and idempotent (both engines' stop()
+    // no-op when already stopped), so this is always safe regardless of
+    // caller.
+    liveUpdateTimer_->stop();
+    liveEngine_.stop();
+    liveLayerId_.reset();
+    recordDrainTimer_->stop();
+    recordEngine_.stop();
+
     project_ = std::move(project);
     canvas_->setProject(&*project_);
     playbackEngine_.stop();
     playbackLoaded_ = false;
+    hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
 }
 
 void MainWindow::newProject() {
+    if (liveEngine_.isRunning() || recordEngine_.isRecording()) {
+        statusBar()->showMessage(tr("Stop Live Mode or Recording before starting a new project."), 5000);
+        return;
+    }
+    if (!confirmDiscardUnsavedChanges()) {
+        return;
+    }
+
     currentPath_.reset();
     setProject(sound_mind::core::Project::createNew(sound_mind::core::ProjectSettings{}));
 }
 
 void MainWindow::openProject() {
+    if (liveEngine_.isRunning() || recordEngine_.isRecording()) {
+        statusBar()->showMessage(tr("Stop Live Mode or Recording before opening a project."), 5000);
+        return;
+    }
+    if (!confirmDiscardUnsavedChanges()) {
+        return;
+    }
+
     const QString fileName =
         QFileDialog::getOpenFileName(this, tr("Open Project"), QString(), tr(kProjectFileFilter));
     if (fileName.isEmpty()) {
@@ -246,6 +319,13 @@ void MainWindow::openProject() {
 }
 
 bool MainWindow::openProjectAt(const std::filesystem::path& path, QString* errorMessage) {
+    if (liveEngine_.isRunning() || recordEngine_.isRecording()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("Stop Live Mode or Recording before opening a project.");
+        }
+        return false;
+    }
+
     try {
         setProject(sound_mind::core::Project::load(path));
         currentPath_ = path;
@@ -273,6 +353,7 @@ void MainWindow::saveProject() {
         project_->save(*currentPath_);
         recentProjects_.add(*currentPath_);
         landingPage_->setRecentProjects(recentProjects_.list());
+        hasUnsavedChanges_ = false;
     } catch (const std::exception& e) {
         QMessageBox::critical(this, tr("Save Project Failed"), QString::fromStdString(e.what()));
     }
@@ -336,6 +417,7 @@ bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* err
         // pick up the newly imported one instead of whatever was loaded
         // before, rather than silently keep playing stale content.
         playbackLoaded_ = false;
+        hasUnsavedChanges_ = true;
         statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
         return true;
     } catch (const std::exception& e) {
@@ -373,6 +455,7 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, QString* err
         project_->addLayer(std::move(layer));
         canvas_->update();
         playbackLoaded_ = false;
+        hasUnsavedChanges_ = true;
         statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
         return true;
     } catch (const std::exception& e) {
@@ -546,6 +629,7 @@ void MainWindow::toggleLiveMode() {
 
     sound_mind::core::Layer layer(0, tr("Live Input").toStdString(), sound_mind::core::LayerType::Normal);
     liveLayerId_ = project_->addLayer(std::move(layer));
+    hasUnsavedChanges_ = true;
 
     liveEngine_.start();
     if (!liveEngine_.isDeviceAvailable()) {
@@ -607,6 +691,7 @@ void MainWindow::toggleRecording() {
             project_->addLayer(std::move(layer));
             canvas_->update();
             playbackLoaded_ = false;
+            hasUnsavedChanges_ = true;
             statusBar()->showMessage(tr("Recording added as a new layer."), 5000);
         } catch (const std::exception& e) {
             QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));
@@ -674,6 +759,7 @@ bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPa
         // Stream copy - the next startPlayback() should pick that up
         // rather than continue playing whatever was loaded before.
         playbackLoaded_ = false;
+        hasUnsavedChanges_ = true;
 
         const QString base = QString::fromStdString((std::filesystem::temp_directory_path() / "sound-mind-pool-compare").string());
         const QString streamPath = base + "-stream.png";

@@ -559,3 +559,171 @@ void MainWindowTest::toggleRecordingDoesNothingWhileLiveModeIsRunning() {
     QVERIFY(!window.isRecording());
     window.toggleLiveMode();  // cleanup.
 }
+
+void MainWindowTest::newProjectStartsWithNoUnsavedChanges() {
+    MainWindow window;
+    window.newProject();
+    QVERIFY(!window.hasUnsavedChanges());
+}
+
+void MainWindowTest::importAudioFileMarksUnsavedChanges() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-lifecycle-import.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    window.newProject();
+    QVERIFY(!window.hasUnsavedChanges());
+
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    QVERIFY(window.hasUnsavedChanges());
+}
+
+void MainWindowTest::poolTopmostLayerNowMarksUnsavedChanges() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-lifecycle-pool.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    window.newProject();
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    QString streamPngPath;
+    QString poolPngPath;
+    QVERIFY(window.poolTopmostLayerNow(nullptr, &streamPngPath, &poolPngPath));
+    QFile::remove(streamPngPath);
+    QFile::remove(poolPngPath);
+
+    QVERIFY(window.hasUnsavedChanges());
+}
+
+void MainWindowTest::toggleLiveModeMarksUnsavedChangesWhenItStarts() {
+    MainWindow window;
+    window.newProject();
+    QVERIFY(!window.hasUnsavedChanges());
+
+    window.toggleLiveMode();
+    QVERIFY(window.hasUnsavedChanges());
+
+    window.toggleLiveMode();  // cleanup.
+}
+
+void MainWindowTest::savingProjectClearsUnsavedChanges() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-lifecycle-save.smproj";
+    const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-lifecycle-save.wav";
+    writeTestWavFile(wavPath);
+
+    MainWindow window;
+    window.newProject();
+    // Project::save() directly, not saveProjectAs() - see
+    // openProjectAtOpensAndRecordsARecentProject()'s comment for why:
+    // saveProjectAs() prompts interactively, which would hang here.
+    const_cast<sound_mind::core::Project*>(window.project())->save(projectPath);
+    QVERIFY(window.openProjectAt(projectPath));  // establishes currentPath_ without a dialog.
+
+    QVERIFY(window.importAudioFile(wavPath));
+    std::filesystem::remove(wavPath);
+    QVERIFY(window.hasUnsavedChanges());
+
+    window.saveProject();  // currentPath_ is already set - no dialog.
+
+    QVERIFY(!window.hasUnsavedChanges());
+    std::filesystem::remove(projectPath);
+}
+
+void MainWindowTest::openProjectAtClearsUnsavedChangesFromThePreviousProject() {
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "sound-mind-test-lifecycle-switch.smproj";
+    const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-lifecycle-switch.wav";
+    writeTestWavFile(wavPath);
+    {
+        MainWindow writer;
+        writer.newProject();
+        const_cast<sound_mind::core::Project*>(writer.project())->save(projectPath);
+    }
+
+    MainWindow window;
+    window.newProject();
+    QVERIFY(window.importAudioFile(wavPath));
+    std::filesystem::remove(wavPath);
+    QVERIFY(window.hasUnsavedChanges());
+
+    // openProjectAt() is deliberately the non-prompting core (see its own
+    // docs) - calling it directly here, bypassing openProject()'s
+    // unsaved-changes guard, is the same intentional bypass every other
+    // *At()/*Now() test in this file relies on.
+    QVERIFY(window.openProjectAt(projectPath));
+
+    QVERIFY(!window.hasUnsavedChanges());
+    std::filesystem::remove(projectPath);
+}
+
+void MainWindowTest::closeAcceptsWhenThereAreNoUnsavedChanges() {
+    MainWindow window;
+    window.newProject();
+    QVERIFY(!window.hasUnsavedChanges());
+
+    QVERIFY(window.close());
+}
+
+void MainWindowTest::closeRefusesWhileLiveModeIsRunning() {
+    MainWindow window;
+    window.newProject();
+    window.toggleLiveMode();
+    QVERIFY(window.isLiveModeRunning());
+
+    // Refused outright (no dialog reached - see closeEvent()'s docs), so
+    // this is safe to call even though the project is also now dirty
+    // (starting Live Mode just added a layer).
+    QVERIFY(!window.close());
+
+    window.toggleLiveMode();  // cleanup.
+}
+
+void MainWindowTest::newProjectRefusesWhileLiveModeIsRunning() {
+    MainWindow window;
+    window.newProject();
+    window.toggleLiveMode();
+    QVERIFY(window.isLiveModeRunning());
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    window.newProject();  // refused outright - no dialog reached.
+
+    QVERIFY(window.isLiveModeRunning());
+    QCOMPARE(window.project()->layers().size(), layerCountBefore);
+
+    window.toggleLiveMode();  // cleanup.
+}
+
+void MainWindowTest::openProjectRefusesWhileRecordingIsRunning() {
+    MainWindow window;
+    window.newProject();
+    window.toggleRecording();
+    QVERIFY(window.isRecording());
+
+    // Refused before ever reaching the file dialog - see openProject()'s
+    // docs - so this is safe to call directly in a headless test.
+    window.openProject();
+
+    QVERIFY(window.isRecording());
+
+    window.toggleRecording();  // cleanup.
+}
+
+void MainWindowTest::openProjectAtRefusesWhileLiveModeIsRunning() {
+    MainWindow window;
+    window.newProject();
+    window.toggleLiveMode();
+    QVERIFY(window.isLiveModeRunning());
+
+    QString errorMessage;
+    const bool ok = window.openProjectAt(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.smproj",
+                                          &errorMessage);
+
+    QVERIFY(!ok);
+    QVERIFY(!errorMessage.isEmpty());
+    QVERIFY(window.isLiveModeRunning());
+
+    window.toggleLiveMode();  // cleanup.
+}

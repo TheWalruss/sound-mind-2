@@ -12,6 +12,7 @@
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/recent_projects.h"
 
+class QCloseEvent;
 class QStackedWidget;
 class QString;
 class QTimer;
@@ -40,6 +41,21 @@ class LandingPage;
  * an ini-format `QSettings` store distinct from the legacy Python Studio's
  * own settings (a fresh product identity for a rewrite with an
  * incompatible project file format) - see recent_projects.h.
+ *
+ * **As of `v0.Y.10.1` (Project Lifecycle):** every path that can discard
+ * unsaved work - New, Open (both the file-dialog and Recent Projects
+ * routes), and closing the window - now guards on hasUnsavedChanges(),
+ * via confirmDiscardUnsavedChanges(). Separately, New/Open/Close all
+ * refuse outright (no dialog, just a status-bar message) while Live Mode
+ * or Recording is active, rather than risking either an unsaved-changes
+ * prompt *or* a project switch silently discarding an in-progress
+ * capture - see toggleLiveMode()'s/toggleRecording()'s own docs for why
+ * "refuse rather than surprise-stop" is this codebase's established
+ * answer to exactly that tension. setProject() itself unconditionally
+ * stops both engines and clears liveLayerId_ regardless, as a defensive
+ * invariant - normally unreachable through the guarded entry points
+ * above, but keeping the *audit point* itself correct is what the
+ * Project Lifecycle milestone actually asked for.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -64,13 +80,29 @@ public:
     [[nodiscard]] const sound_mind::core::Project* project() const noexcept;
 
 public slots:
-    /// @brief Replaces the current project with a freshly created one.
+    /**
+     * @brief Replaces the current project with a freshly created one.
+     *
+     * Per the Project Lifecycle milestone (`v0.Y.10.1`): refuses outright
+     * (a status-bar message, no dialog) while Live Mode or Recording is
+     * active; otherwise, if the current project has unsaved changes,
+     * prompts to save/discard/cancel first (see
+     * confirmDiscardUnsavedChanges()) - proceeds unguarded if there's
+     * nothing to lose.
+     */
     void newProject();
 
-    /// @brief Prompts for a file and opens it as the current project - see
-    ///        openProjectAt() for the actual, non-prompting work, and for
-    ///        why this is split out the same way importAudio()/
-    ///        importAudioFile() are.
+    /**
+     * @brief Prompts for a file and opens it as the current project - see
+     *        openProjectAt() for the actual, non-prompting work, and for
+     *        why this is split out the same way importAudio()/
+     *        importAudioFile() are.
+     *
+     * Per the Project Lifecycle milestone (`v0.Y.10.1`): guarded exactly
+     * like newProject() (refuses outright while Live Mode/Recording is
+     * active; prompts first if there are unsaved changes) *before* even
+     * showing the file picker - see newProject()'s docs.
+     */
     void openProject();
 
     /**
@@ -138,6 +170,12 @@ public slots:
      * other layer. Does nothing (refuses to start) if Recording is
      * currently running - both would otherwise want the same input device
      * at once, through two independent JUCE device managers.
+     *
+     * Marks hasUnsavedChanges() the moment the "Live Input" layer is
+     * added (starting) - per the Project Lifecycle milestone (`v0.Y.10.1`),
+     * New/Open/Close all refuse outright while this is running, so the
+     * capture itself is never at risk of being silently discarded by a
+     * project switch.
      */
     void toggleLiveMode();
 
@@ -158,6 +196,10 @@ public slots:
      * new Normal layer ("Recording") once capture stops and something was
      * actually captured; stopping with nothing captured (e.g. no input
      * device was available) leaves the project unchanged.
+     *
+     * Marks hasUnsavedChanges() when a layer is actually added. Per the
+     * Project Lifecycle milestone (`v0.Y.10.1`), New/Open/Close all refuse
+     * outright while Recording is running - see toggleLiveMode()'s docs.
      */
     void toggleRecording();
 
@@ -216,10 +258,20 @@ public:
      * see importAudioFile()'s docs for why this never shows a message box
      * itself.
      *
+     * Per the Project Lifecycle milestone (`v0.Y.10.1`): refuses (no
+     * dialog - `errorMessage` is set, same as any other failure here)
+     * while Live Mode or Recording is active - the one guard this method
+     * *does* enforce itself, since it's a plain status check rather than
+     * a blocking prompt. The unsaved-changes confirmation is deliberately
+     * `openProject()`'s/the Recent Projects handler's job, not this
+     * method's - callers that intentionally bypass the interactive layer
+     * (tests, in particular) still get a non-prompting call this way.
+     *
      * @param path Path to the `.smproj` file to open.
      * @param errorMessage If non-null and this returns `false`, set to a
      *        human-readable description of what went wrong.
-     * @return `true` on success; `false` if the file couldn't be loaded.
+     * @return `true` on success; `false` if the file couldn't be loaded,
+     *         or if Live Mode/Recording is currently active.
      */
     bool openProjectAt(const std::filesystem::path& path, QString* errorMessage = nullptr);
 
@@ -227,6 +279,26 @@ public:
     ///        widget (no project open yet) rather than the canvas.
     /// @return `true` until setProject() has been called at least once.
     [[nodiscard]] bool isShowingLandingPage() const noexcept;
+
+    /**
+     * @brief Whether the current project has changes not yet reflected in
+     *        its last save (or, for a project never saved at all, changes
+     *        beyond its just-created state).
+     *
+     * Tracked as a plain flag, set whenever content actually changes
+     * (import, Pool, a Live/Recording capture adding or updating a layer)
+     * and cleared by a successful save or by setProject() (a fresh/loaded
+     * project matches what's on disk, or - for `newProject()` - has
+     * nothing on disk to differ from yet). Deliberately simpler than
+     * diffing against the operation log's replay: no operation type logs
+     * these particular mutations yet (that starts with real `Operation`
+     * subtypes in Phase 3's Basic Painting milestone) - revisit once it
+     * does, rather than building a fuller mechanism speculatively now.
+     *
+     * @return `true` if closing or switching away from the current
+     *         project right now would lose something.
+     */
+    [[nodiscard]] bool hasUnsavedChanges() const noexcept;
 
     /// @brief Whether playback is currently active.
     /// @return The underlying PlaybackEngine's isPlaying().
@@ -253,6 +325,9 @@ public:
      * importAudio() (the interactive slot) shows a dialog, based on the
      * error text this returns.
      *
+     * Marks hasUnsavedChanges() on success, per the Project Lifecycle
+     * milestone (`v0.Y.10.1`).
+     *
      * @param path Path to the WAV file to import.
      * @param errorMessage If non-null and this returns `false`, set to a
      *        human-readable description of what went wrong.
@@ -271,6 +346,8 @@ public:
      * audio-imported content, not a picture with no underlying sound
      * representation. See importAudioFile()'s docs for why this never shows
      * a message box itself.
+     *
+     * Marks hasUnsavedChanges() on success, same as importAudioFile().
      *
      * @param path Path to the image file to import.
      * @param errorMessage If non-null and this returns `false`, set to a
@@ -294,6 +371,9 @@ public:
      *        path the Pool render was written to.
      * @return `true` on success; `false` if there was no layer to pool, or
      *         writing either PNG failed.
+     *
+     * Marks hasUnsavedChanges() on success (the layer's content genuinely
+     * changed in place - see `sound_mind::core::poolLayer()`'s docs).
      */
     bool poolTopmostLayerNow(QString* errorMessage = nullptr, QString* streamPngPath = nullptr,
                               QString* poolPngPath = nullptr);
@@ -329,8 +409,39 @@ public:
      */
     bool exportTopmostLayerVideoNow(const std::filesystem::path& path, QString* errorMessage = nullptr);
 
+protected:
+    /**
+     * @brief Guards window close the same way newProject()/openProject()
+     *        do: refuses (ignores the event, a status-bar message) while
+     *        Live Mode or Recording is active; otherwise prompts via
+     *        confirmDiscardUnsavedChanges() if there are unsaved changes,
+     *        ignoring the event if the user cancels.
+     * @param event The close event; accepted or ignored per the above.
+     */
+    void closeEvent(QCloseEvent* event) override;
+
 private:
     void setProject(sound_mind::core::Project project);
+
+    /**
+     * @brief If hasUnsavedChanges() is `false`, returns `true` immediately
+     *        (nothing to guard). Otherwise, prompts (Save/Discard/Cancel)
+     *        and returns whether the caller should proceed with whatever
+     *        would discard the current project - `true` for Discard, or
+     *        for Save once it actually completes (hasUnsavedChanges()
+     *        false afterward - a cancelled/failed save leaves it `true`,
+     *        so this correctly still returns `false`); `false` for
+     *        Cancel.
+     *
+     * Shows a real, blocking `QMessageBox` when there's something to
+     * guard - callers that must stay headless-safe (tests, in particular)
+     * should never invoke this while hasUnsavedChanges() is `true`, the
+     * same constraint every other `QMessageBox`-showing method in this
+     * class already carries (see importAudioFile()'s docs).
+     *
+     * @return Whether the caller should proceed.
+     */
+    [[nodiscard]] bool confirmDiscardUnsavedChanges();
 
     /// @brief The topmost layer with content, if any - the same notion of
     /// "the composite" startPlayback(), CanvasWidget, and
@@ -357,6 +468,10 @@ private:
 
     std::optional<sound_mind::core::Project> project_;
     std::optional<std::filesystem::path> currentPath_;
+
+    /// @brief Backing flag for hasUnsavedChanges() - see its own docs for
+    /// what sets and clears it.
+    bool hasUnsavedChanges_ = false;
 
     /// @brief Alternates between landingPage_ (index 0, shown until a
     /// project exists) and canvas_ (index 1) - see setProject()'s docs.
