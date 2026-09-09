@@ -2,6 +2,8 @@
 
 Status: **first draft, revised once.** This sequences `sound-mind-design.md`'s feature set into a series of concrete, always-working Studio versions, from the current empty-window bring-up (`v0.0.0.1`) to a feature-complete `v1.0.0.0`. Expect this to be revised further as work proceeds and real effort/complexity becomes clearer — it's a plan to work from, not a schedule to hold to.
 
+**Status legend:** ✅ marks a milestone actually implemented, tested, and merged - not just planned. 🔜 marks what's next in line, in order. An unmarked milestone hasn't been started yet. This tracks real, current progress, not the roadmap's own planning history - a milestone implemented out of its listed order (Visual Identity, `v0.Y.16.1`) is still marked ✅ once it's actually done.
+
 ## Versioning
 
 `vX.Y.Z.W`, per your instruction:
@@ -16,6 +18,8 @@ Exactly *when* Y will bump can't be predicted precisely this far out - it depend
 
 `v0.0.0.1` (already shipped) was the toolchain bring-up: empty window, no real feature yet - Z and Y both still 0.
 
+**Note on this roadmap's own `Z` numbering versus actually-shipped binary versions:** this document's `v0.Y.N.1` labels are planning slots in this roadmap's own sequence, not a promise every milestone ships as that exact binary version - a milestone can (and has) shipped out of its listed order (see Visual Identity, `v0.Y.16.1`, "implemented out of order" in its own entry), and the real, shipped version numbers recorded in `CHANGELOG.md` advance strictly by actual build order instead. Treat this roadmap's numbers as "where a milestone sits in the plan," not as a literal version-history log.
+
 ## Sequencing principles
 
 1. **Full I/O and real-time infrastructure comes right after Foundation, before any creative feature.** Pool codec, Export, Live Mode, and Record all sit in Phase 2, immediately after the basic Project/Stream/Import/Playback loop exists - deliberately not creative-feature-first. This gets the hardest, most performance-sensitive paths (a full lossless codec round trip, real-time capture, file export) working and measurable as early as possible, so every later phase has a real, working performance baseline to check against, rather than a promise that it'll be fine once painting and filters and MindWaves are layered on. From Phase 3 onward, re-confirming that baseline still holds - both correctness and the ~100 ms / ~250 ms latency targets - is part of finishing each milestone, not a separate later pass.
@@ -24,6 +28,7 @@ Exactly *when* Y will bump can't be predicted precisely this far out - it depend
 4. **Dependency order, not design-doc reading order.** The sequence below follows what each capability actually needs to exist first, which isn't the same order the design doc presents things in. A few milestones below get a *simpler* first pass than their eventual design-doc scope, specifically because they're now scheduled before something they'd otherwise lean on (Live Mode before MindWaves, Record before Mind Shots) - each says so, and says which later milestone comes back to finish the job.
 5. **Open questions get resolved where the work that needs them happens**, not all up front. Each milestone that depends on one of `sound-mind-architecture.md`'s Decisions Needed / Deferred Decisions says so.
 6. **`.5` phases get inserted between numbered phases as UI/workflow checkpoints, not planned in advance.** `Phase 2.5` (added after `v0.0.8.1`) is the first: a review of the legacy Studio's UI surfaced patterns (a persistent start screen, a real project-creation wizard, a fixed-length loop-pedal Live Mode) worth adopting deliberately once enough of the underlying engine existed to make that concrete, rather than guessing at UI needs from Phase 1. Numbered phases keep their names and don't get renumbered when this happens - only the `Z` values of whatever came after the insertion point shift up to make room. Expect more of these (`Phase 3.5`, etc.) at similar junctures, not just this one.
+7. **Every phase ends with a "Refactor & Clean Up" milestone**, added once all of a phase's real feature work exists to clean up after - not planned in detail in advance, since what actually needs cleaning up only becomes clear once the phase's real code exists. Purely internal: code quality, structure, testability, and decomposition/separation-of-concerns work that makes the *next* phase faster and cheaper to build, especially for Claude Code working in this codebase - never new user-facing behavior, and never expected to bump Y.
 
 ## Explicit non-goals for this roadmap
 
@@ -43,13 +48,13 @@ Not its own Z-milestone - this is infrastructure, like the release workflow it e
 
 ## Phase 1 - Foundation
 
-### v0.Y.1.1 - Project & Canvas
+### v0.Y.1.1 - Project & Canvas ✅
 
 A real `Project` (settings, an ordered layer list, the operation log) that loads and saves as the JSON project file sketched in the architecture doc, and a canvas that renders the (still-empty) Background layer. No codec yet - the canvas can show a placeholder/solid raster.
 
 **Demo:** open the Studio, see a canvas backed by a real, saved-and-reloadable project file.
 
-### v0.Y.2.1 - Stream Codec
+### v0.Y.2.1 - Stream Codec ✅
 
 The Stream codec itself: encode a short audio clip into a Stream-format layer, decode it back to audio. This is where the NSGT/FFT backend Decision Needed gets resolved for real (the permissive-FFT-backend direction already scoped in the architecture doc) and the Stream file container format decision gets settled.
 
@@ -57,19 +62,27 @@ The Stream codec itself: encode a short audio clip into a Stream-format layer, d
 
 **Likely Y bump:** first time the Stream file format is exercised for real; whether it needs to change again once real content is flowing through it is the open question.
 
-### v0.Y.3.1 - Import & Display
+### v0.Y.3.1 - Import & Display ✅
 
 Real audio and image import as new layers, using the Stream codec above; a first, minimal Color Mapping (single-page grayscale plus a basic RGB composite).
 
 **Demo:** import a WAV or an image, see it rendered on the canvas as a real layer, not a placeholder.
 
-### v0.Y.4.1 - Playback
+### v0.Y.4.1 - Playback ✅
 
 Transport controls, Stream-mode decode of the composite, audio output via JUCE (linked in for real for the first time - see `sound-mind-architecture.md`'s Decisions Made for the JUCE tier this settled on).
 
-**Simpler first pass than the design doc's eventual scope:** decode happens once, into a fixed buffer, when Play is pressed - the audio callback just reads sequentially from it (allocation-free by construction, satisfying `CLAUDE.md`'s non-negotiable real-time constraint). This isn't "live" in the edit-reactive, no-separate-render-step sense the design doc ultimately describes, but nothing generates a live edit to react to yet (Painting doesn't exist until Phase 3) - so building that now would be solving a problem that doesn't exist yet. The design doc's actual "always-current" model is needed for real by Live Mode (`v0.Y.7.1`), which inherently requires continuous incremental decode anyway (it's processing a continuously-arriving live input signal) - that's where it gets built, and Playback picks it up once it exists.
+**Simpler first pass than the design doc's eventual scope:** decode happens once, into a fixed buffer, when Play is pressed - the audio callback just reads sequentially from it (allocation-free by construction, satisfying `CLAUDE.md`'s non-negotiable real-time constraint). This isn't "live" in the edit-reactive, no-separate-render-step sense the design doc ultimately describes, but nothing generates a live edit to react to yet (Painting doesn't exist until Phase 3) - so building that now would be solving a problem that doesn't exist yet. The design doc's actual "always-current" model is needed for real by Live Mode (`v0.Y.8.1`), which inherently requires continuous incremental decode anyway (it's processing a continuously-arriving live input signal) - that's where it gets built, and Playback picks it up once it exists.
 
 **Demo:** import something, press play, hear it.
+
+### v0.Y.5.1 - Refactor & Clean Up
+
+A dedicated pass over everything Phase 1 (Project & Canvas, Stream Codec, Import & Display, Playback) added, purely for code quality and maintainability - no new user-facing behavior. Look for: classes/files that grew too large or took on too many responsibilities and would benefit from decomposition/separation of concerns; duplicated logic worth factoring into a shared helper; test coverage gaps surfaced while building this phase's own features; anything that reads harder to navigate than it needs to - specifically because a smaller, better-organized codebase is faster and cheaper to work in on every later phase, especially for Claude Code, not just a one-time tidiness pass.
+
+**Demo:** the full regression suite still passes, unchanged in behavior - no demo of its own, since success here means the *next* phase is easier to build, not that anything new is visible.
+
+**No Y bump expected** - refactoring, by definition, doesn't change behavior or the project file format; a genuine breaking cleanup found along the way would be flagged explicitly, not folded in silently here.
 
 ---
 
@@ -77,7 +90,7 @@ Transport controls, Stream-mode decode of the composite, audio output via JUCE (
 
 Everything in this phase is, in one way or another, getting data into or out of the Studio at full fidelity or in real time - the parts most likely to be expensive, and the parts every later creative feature will eventually have to coexist with performance-wise. Building it now, while the project is still simple, means there's something concrete to measure against from here on.
 
-### v0.Y.5.1 - Pool Codec
+### v0.Y.6.1 - Pool Codec ✅
 
 The near-lossless NSGT round-trip and the finalized Pool file format, reusing the FFT-backend groundwork from the Stream codec milestone; a first "Pool" action. Nothing has been painted yet at this point in the roadmap, so pooling works on imported content.
 
@@ -87,7 +100,7 @@ The near-lossless NSGT round-trip and the finalized Pool file format, reusing th
 
 **No Y bump after all.** Predicted "likely" above, but the actual addition (a `pool/layer_<id>.smpool` reference, mirroring how `media/` was added for Stream in `v0.0.3.1`) is additive, not breaking - nothing in an existing project file's shape changes. Stayed `v0.0.5.1`, not `v0.1.0.1`.
 
-### v0.Y.6.1 - Export
+### v0.Y.7.1 - Export ✅
 
 Audio export (Pool-mode primary, a quick Stream-mode bounce for scratch use, compressed formats from day one); video export of the canvas synced to audio. ffmpeg joins the dependency set here (MP3 encoding and MP4 muxing/video/audio - JUCE's own MP3 writer turned out to be an unimplemented stub, and ffmpeg was already the only practical MP4-muxing option in vcpkg) - see `sound-mind-architecture.md`'s Decisions Made for the codec/linking-mode reasoning.
 
@@ -95,7 +108,7 @@ Audio export (Pool-mode primary, a quick Stream-mode bounce for scratch use, com
 
 **No Y bump.** Same reasoning as `v0.0.5.1`: `sound-mind-codec` gains new export functions and two new dependencies, but nothing about the project file format or any existing public API changes - additive, not breaking. Stayed `v0.0.6.1`, not `v0.1.0.1`.
 
-### v0.Y.7.1 - Live Mode
+### v0.Y.8.1 - Live Mode ✅
 
 Continuous Stream-mode real-time capture and the "Live" layer compositing into the rest of the project. The design doc's operation-relative MindWave binding (for a genuine per-note retrigger feel) isn't available yet - MindWaves and Sound Mind Instruments don't exist until Phase 4 - so this first pass is plain continuous capture-composite-output; Live Mode gets revisited once those land to add it.
 
@@ -107,7 +120,7 @@ Continuous Stream-mode real-time capture and the "Live" layer compositing into t
 
 **No Y bump.** `sound_mind::codec::StreamIncrementalEncoder` and `sound_mind::core::LiveEngine` are new, additive capabilities - nothing about the project file format or any existing public API changed. Stayed `v0.0.7.1`, not `v0.1.0.1`.
 
-### v0.Y.8.1 - Record
+### v0.Y.9.1 - Record ✅
 
 One-shot input-device capture into a new layer. Mind Shots don't exist yet (Phase 4), so capturing directly to one isn't available in this first pass; Record gets revisited once Mind Shots land to add that option.
 
@@ -117,23 +130,31 @@ One-shot input-device capture into a new layer. Mind Shots don't exist yet (Phas
 
 **No Y bump.** `sound_mind::core::RecordEngine` is a new, additive capability - no project file format or existing public API changed. Stayed `v0.0.8.1`, not `v0.1.0.1`.
 
+### v0.Y.10.1 - Refactor & Clean Up
+
+A dedicated pass over everything Phase 2 (Pool Codec, Export, Live Mode, Record) added, same purpose and scope as `v0.Y.5.1`'s entry - purely code quality/structure/testability, no new user-facing behavior. Particularly worth a look here: `LiveEngine`/`RecordEngine`/`PlaybackEngine`'s device-I/O and ring-buffer plumbing, which grew somewhat organically across three milestones building on each other - a natural point to check for logic that should already be shared rather than duplicated per engine.
+
+**Demo:** the full regression suite still passes, unchanged in behavior.
+
+**No Y bump expected.**
+
 ---
 
 ## Phase 2.5 - UI Foundations
 
 Inserted after the fact (following `v0.0.8.1`), informed by a review of the legacy Studio's UI - not to replicate it, but because several of its patterns (a persistent start screen instead of a splash, a real project-creation wizard, a fixed-length loop-pedal Live Mode, a Layers panel worth adapting rather than inventing from scratch, and a distinct brand identity worth carrying into this rewrite) turned out worth adopting deliberately rather than backing into later. Phase numbers stay stable as anchors; a `.5` phase can be inserted between any two numbered phases whenever a similar UI/workflow checkpoint is worth taking before more creative features land on top of it - this is not expected to be the last one.
 
-### v0.Y.9.1 - Landing Page
+### v0.Y.11.1 - Landing Page ✅
 
-A persistent start screen - not a splash, no timed/loading behavior - shown as the Studio's central widget until a project is created or opened, then swapped for the real canvas and not shown again until there's no project open. Informed by the legacy Welcome panel's shape (a quick-actions column plus a Recent Projects list) without carrying over everything it had - no standalone-file actions (there's no standalone-TIFF concept to open here, see `v0.Y.10.1`), and richer polish like a startup-profile selector or favorite directories is deferred until there's a real profile/preferences concept to hang it on.
+A persistent start screen - not a splash, no timed/loading behavior - shown as the Studio's central widget until a project is created or opened, then swapped for the real canvas and not shown again until there's no project open. Informed by the legacy Welcome panel's shape (a quick-actions column plus a Recent Projects list) without carrying over everything it had - no standalone-file actions (there's no standalone-TIFF concept to open here, see `v0.Y.12.1`), and richer polish like a startup-profile selector or favorite directories is deferred until there's a real profile/preferences concept to hang it on.
 
 **Demo:** launch the Studio with no project open, see the landing page; create or open a project and land in the real editor.
 
-**Implemented as `sound_mind::studio::LandingPage`** (a `QStackedWidget` alternates it with `CanvasWidget` as `MainWindow`'s central widget) **and `sound_mind::studio::RecentProjects`** (an ini-format `QSettings`-backed most-recently-used list, capped at 10, missing files filtered out on read - see `docs/sound-mind-architecture.md`'s Decisions Made #15 for the storage-format choice). "Not shown again until there's no project open" is accurate as far as it goes in this pass - nothing yet *returns* to a no-project state (that's `v0.Y.10.1`'s Project Lifecycle work), so in practice the Landing Page is simply shown once, at launch, until the first New/Open succeeds.
+**Implemented as `sound_mind::studio::LandingPage`** (a `QStackedWidget` alternates it with `CanvasWidget` as `MainWindow`'s central widget) **and `sound_mind::studio::RecentProjects`** (an ini-format `QSettings`-backed most-recently-used list, capped at 10, missing files filtered out on read - see `docs/sound-mind-architecture.md`'s Decisions Made #15 for the storage-format choice). "Not shown again until there's no project open" is accurate as far as it goes in this pass - nothing yet *returns* to a no-project state (that's `v0.Y.12.1`'s Project Lifecycle work), so in practice the Landing Page is simply shown once, at launch, until the first New/Open succeeds.
 
 **No Y bump.** `LandingPage` and `RecentProjects` are new, additive UI/settings capabilities - no project file format changed.
 
-### v0.Y.10.1 - Project Lifecycle
+### v0.Y.12.1 - Project Lifecycle ✅
 
 Real unsaved-changes guards on every path that can discard work - New, Open, and switching projects, not just window Close (the only one that currently has one). Every project switch - new, open, or otherwise - fully clears all in-memory buffers, caches, and panel-local state first, so nothing from the previous project (a layer's decoded audio, a Live/Loop layer's partially-captured content, a panel showing stale data) can leak into or be confused with the next one. `MainWindow::setProject()` is the audit point: everything it doesn't already reset when a new `Project` comes in is a gap to close here.
 
@@ -147,9 +168,9 @@ Real unsaved-changes guards on every path that can discard work - New, Open, and
 
 **No Y bump.** `hasUnsavedChanges_` is in-memory only, never serialized - no project file format changed.
 
-### v0.Y.11.1 - Create Project Wizard
+### v0.Y.13.1 - Create Project Wizard ✅
 
-Replaces today's no-dialog `newProject()` (an in-memory default project, nothing asked) with a real creation wizard: name, save location, and duration always visible; sample rate, frequency range, bin count, and timestep hidden behind an "Advanced" disclosure, defaulted sensibly for anyone who never opens it. Matches the legacy pattern confirmed worth keeping in `v0.Y.10.1`: a project becomes a real file on disk at creation time (the wizard's completion *is* the first save), not an in-memory thing that only becomes a file on first explicit save.
+Replaces today's no-dialog `newProject()` (an in-memory default project, nothing asked) with a real creation wizard: name, save location, and duration always visible; sample rate, frequency range, bin count, and timestep hidden behind an "Advanced" disclosure, defaulted sensibly for anyone who never opens it. Matches the legacy pattern confirmed worth keeping in `v0.Y.12.1`: a project becomes a real file on disk at creation time (the wizard's completion *is* the first save), not an in-memory thing that only becomes a file on first explicit save.
 
 **Demo:** create a new project through the wizard using only the always-visible fields; create another using the Advanced section to pick a non-default sample rate.
 
@@ -157,11 +178,11 @@ Replaces today's no-dialog `newProject()` (an in-memory default project, nothing
 
 **No Y bump.** The new `ProjectSettings` fields are read leniently (see above) - an old project file isn't broken by their absence, so this stays additive rather than a breaking format change.
 
-### v0.Y.12.1 - Loop Mode (renamed from Live Mode)
+### v0.Y.14.1 - Loop Mode (renamed from Live Mode) ✅
 
 Live Mode (`v0.0.7.1`) is renamed **Loop Mode** (`LiveEngine`/`LiveLayer`-style names follow suit) and reimplemented as the fixed-length loop pedal the legacy Studio's own "Live Mode" actually was, confirmed as the right model rather than continuous streaming: loop length derived from the project's own duration (not user-adjustable); each loop, in sequence - record the input for that loop's duration, encode it into the Loop layer, decode it, queue the result for playback during the *next* loop - with a measured, displayed loop delay (in whole loops, not milliseconds), since a slower-than-real-time pipeline falls behind by whole loop iterations, not a fixed latency.
 
-**Reduced scope, confirmed before implementing:** no compositing with the rest of the project after all - each loop plays back only the current topmost layer with content (the just-recorded Loop layer, or whatever else happens to already be on top - a recorded take, an imported clip, anything), the same "topmost layer" convention Playback (`v0.Y.4.1`) and Record (`v0.Y.8.1`) already use. This removes the real multi-layer audio mixing dependency `v0.0.7.1`'s notes originally expected this milestone to finally force - Loop Mode no longer needs it, and real compositing stays deferred to whenever Playback's own still-outstanding "always-current" revisit (noted back in `v0.0.7.1`/`v0.0.4.1`) actually happens.
+**Reduced scope, confirmed before implementing:** no compositing with the rest of the project after all - each loop plays back only the current topmost layer with content (the just-recorded Loop layer, or whatever else happens to already be on top - a recorded take, an imported clip, anything), the same "topmost layer" convention Playback (`v0.Y.4.1`) and Record (`v0.Y.9.1`) already use. This removes the real multi-layer audio mixing dependency `v0.0.7.1`'s notes originally expected this milestone to finally force - Loop Mode no longer needs it, and real compositing stays deferred to whenever Playback's own still-outstanding "always-current" revisit (noted back in `v0.0.7.1`/`v0.0.4.1`) actually happens.
 
 **New capability, not present in the legacy version:** a "Keep looping" checkbox. Checked, subsequent loop iterations replay the last-captured Loop layer's content unchanged instead of recording over it again each cycle - so a captured take can keep looping hands-free without re-arming capture every time. Unchecked (the default, matching the legacy behavior) is the record-every-loop behavior described above.
 
@@ -173,15 +194,15 @@ Live Mode (`v0.0.7.1`) is renamed **Loop Mode** (`LiveEngine`/`LiveLayer`-style 
 
 **One real, structural latency clarification, confirmed acceptable rather than engineered away:** the opening paragraph's "queue the result for playback during the *next* loop" turned out to slightly overstate it once actually built - a loop's audio can't begin encoding until its own capture finishes, and the playback cursor only checks for a newly-published result once per loop it itself plays through, so the earliest a captured loop is actually heard is playback loop `N + 2`, not `N + 1`, even when the worker keeps up perfectly. `LoopEngine::loopsBehind()` tracks something additive on top of that fixed baseline (whether the worker has *also* fallen further behind) - `0` means only the baseline applies, not that there's no latency at all. A true zero-extra-latency design would need capture and playback to run deliberately out of phase with each other - future work if this baseline turns out to matter in practice, not part of this milestone.
 
-**Resolves the construction-time-config gap `v0.Y.11.1`'s docs flagged as this milestone's job:** `loopEngine_` is no longer a single `MainWindow` member built once, before any project exists, with a hardcoded default config - it's a `std::unique_ptr`, `nullptr` until the first `setProject()` call, then (re)constructed there from the *current* project's own `streamCodecConfigFor()` config and its duration in samples (`canvasWidth * hopLength`).
+**Resolves the construction-time-config gap `v0.Y.13.1`'s docs flagged as this milestone's job:** `loopEngine_` is no longer a single `MainWindow` member built once, before any project exists, with a hardcoded default config - it's a `std::unique_ptr`, `nullptr` until the first `setProject()` call, then (re)constructed there from the *current* project's own `streamCodecConfigFor()` config and its duration in samples (`canvasWidth * hopLength`).
 
-**Demo, as actually implemented:** the "Keep Looping" checkbox lives in the transport toolbar next to the renamed "Loop" button; the loop-delay indicator is a status-bar message (`"Looping... (N loops behind)"` once `loopsBehind() > 0`), matching every other non-modal progress indicator in this codebase rather than a dedicated widget.
+**Demo, as actually implemented:** the "Keep Looping" checkbox lives in the transport toolbar next to the renamed "Loop" button; the loop-delay indicator is a status-bar message (`"Looping... (N loops behind)"` once `loopsBehind() > 0`), matching every other non-modal progress indicator in this codebase rather than a dedicated widget. **Superseded by `v0.Y.18.1`**: the "Keep Looping" checkbox later moved from the toolbar into a dedicated Loop panel - see that milestone's own entry.
 
 **Fixed in manual testing, before push:** `toggleLoopMode()` unconditionally created a brand-new "Loop Input" layer on every start, rather than reusing one already in the project - stopping and restarting (or reopening a project that already captured a loop) piled up duplicate "Loop Input" layers instead of continuing to build on the same one. Worse, since the newest layer is always topmost and starts with no content, `findTopmostRender()` would render *nothing at all* until that new layer's own first loop finished (up to a whole project-duration's wait, in silence, with no earlier layer's content showing through) - easily read as "Loop Mode isn't capturing anything," especially on a project where the Loop layer was the only one with real content. Fixed by having `toggleLoopMode()` search the current project for an existing Normal layer named "Loop Input" and reuse its id if found, only creating a new one otherwise - so a restart's canvas shows the previous session's last-captured content immediately, rather than going blank again while a new one is captured.
 
 **A second round of manual testing found the remaining half of that same confusion**: even for a genuinely *new* "Loop Input" layer (nothing to reuse), the canvas correctly had nothing real to show yet - but a silent, unchanged canvas for up to a whole project-duration's wait still reads as "not working," not as "correctly empty." New **`LoopEngine::emptyImage()`**: a silent, correctly-dimensioned placeholder Stream image (a real `encode()` of a zero-filled buffer, at the engine's own config/loop length), given to a brand-new "Loop Input" layer immediately on start, so the canvas shows an empty spectrogram right away instead of nothing at all. A reused layer keeps its real previous content untouched, per the fix above.
 
-### v0.Y.13.1 - Layers Panel
+### v0.Y.15.1 - Layers Panel ✅
 
 A dockable panel listing the project's layer stack, adapted from the legacy Studio's Layers panel (drag-handle reorder, per-row visibility toggle, name, opacity, add/delete) rather than designed from scratch - but scoped down to what the current, deliberately minimal `sound_mind::core::Layer` model actually supports. The legacy panel's blend-mode combo, MindWave-link combo, and transform controls are all left out of this first pass, since none of those concepts exist in the engine yet (blend modes and MindWaves both arrive in Phase 3/4) - adding placeholder UI for features that don't do anything yet isn't worth it.
 
@@ -197,9 +218,9 @@ A dockable panel listing the project's layer stack, adapted from the legacy Stud
 
 **Reordering's drag validation, confirmed while implementing:** a drag that would displace `Background`/`Equalizer` from their fixed position is rejected - `LayersPanel` snaps its own display back to the last known-good order rather than emitting the reorder, and `MainWindow::reorderLayers()`/`Project::reorderLayers()` both independently re-validate too (defense in depth, the same pattern `setProject()`'s engine-stopping already established). The drag-and-drop mechanics themselves aren't covered by an automated test - matching this codebase's existing precedent for anything that fundamentally needs a real, interactive gesture (modal dialogs, real file pickers) - confirmed manually instead.
 
-**No Y bump**, confirmed: `Layer::visible` deserializes leniently (defaults to `true` if absent, the same treatment `ProjectSettings`' own new fields got in `v0.Y.11.1`) - a project file saved before this milestone still loads.
+**No Y bump**, confirmed: `Layer::visible` deserializes leniently (defaults to `true` if absent, the same treatment `ProjectSettings`' own new fields got in `v0.Y.13.1`) - a project file saved before this milestone still loads.
 
-### v0.Y.14.1 - Visual Identity
+### v0.Y.16.1 - Visual Identity ✅
 
 A lumped UI-polish milestone, per explicit go-ahead to bundle smaller UI changes into one point release rather than spreading them across several:
 
@@ -209,13 +230,13 @@ A lumped UI-polish milestone, per explicit go-ahead to bundle smaller UI changes
 
 **Demo:** launch the Studio and see the branded icon and palette throughout, including the new Layers panel; open the generated Doxygen docs and see the same palette applied there too.
 
-**Implemented out of order, ahead of `v0.Y.10.1`-`v0.Y.13.1`** (Project Lifecycle, Create Project Wizard, Loop Mode, Layers Panel - none built yet): confirmed explicitly before starting. The "including the new Layers panel" half of the demo above doesn't yet apply - there's no Layers panel to see it on - but the app-wide QSS (`sound_mind::studio::theme::studioStyleSheet()`) styles `QDockWidget`/`QDockWidget::title` pre-emptively, so it needs no revisiting once that milestone lands. `ChooseAgainIcon.ico` is used only as `sound-mind-studio`'s native Win32 executable resource (`resources/app.rc`, read by the RC compiler at build time); `ChooseAgainLarge.png` covers both `QApplication`/`MainWindow`'s runtime window icon and the Landing Page's header logo (both via Qt's resource system, `assets/app.qrc`) - splitting the two files this way, rather than loading the `.ico` through Qt too, avoids an otherwise-pointless runtime dependency on Qt's `qico` imageformat plugin. See `docs/sound-mind-architecture.md`'s Decisions Made #16 for the fixed-theme-not-a-toggle scope note and a real static-library resource-linking gotcha hit and fixed along the way.
+**Implemented out of order, ahead of `v0.Y.12.1`-`v0.Y.15.1`** (Project Lifecycle, Create Project Wizard, Loop Mode, Layers Panel - none built yet): confirmed explicitly before starting. The "including the new Layers panel" half of the demo above doesn't yet apply - there's no Layers panel to see it on - but the app-wide QSS (`sound_mind::studio::theme::studioStyleSheet()`) styles `QDockWidget`/`QDockWidget::title` pre-emptively, so it needs no revisiting once that milestone lands. `ChooseAgainIcon.ico` is used only as `sound-mind-studio`'s native Win32 executable resource (`resources/app.rc`, read by the RC compiler at build time); `ChooseAgainLarge.png` covers both `QApplication`/`MainWindow`'s runtime window icon and the Landing Page's header logo (both via Qt's resource system, `assets/app.qrc`) - splitting the two files this way, rather than loading the `.ico` through Qt too, avoids an otherwise-pointless runtime dependency on Qt's `qico` imageformat plugin. See `docs/sound-mind-architecture.md`'s Decisions Made #16 for the fixed-theme-not-a-toggle scope note and a real static-library resource-linking gotcha hit and fixed along the way.
 
 **No Y bump.** Purely visual - no project file, public API, or codec format is touched.
 
-### v0.Y.15.1 - Drag & Drop Import
+### v0.Y.17.1 - Drag & Drop Import
 
-Dropping files onto the main window imports them, similar to the legacy Studio's own `dragEnterEvent`/`dropEvent`/`_route_dropped_files` handling - routed by extension, reusing the File menu's existing import paths rather than adding a separate code path for it. Narrower than the legacy routing table: no MIDI, no standalone-TIFF silent import, no per-drop import wizard - none of those concepts exist in this codebase yet, or (TIFF) never carried over as their own standalone-file idea in `v0.Y.10.1`'s notes.
+Dropping files onto the main window imports them, similar to the legacy Studio's own `dragEnterEvent`/`dropEvent`/`_route_dropped_files` handling - routed by extension, reusing the File menu's existing import paths rather than adding a separate code path for it. Narrower than the legacy routing table: no MIDI, no standalone-TIFF silent import, no per-drop import wizard - none of those concepts exist in this codebase yet, or (TIFF) never carried over as their own standalone-file idea in `v0.Y.12.1`'s notes.
 
 **Routing:** `.wav` calls `importAudioFile()`; the image extensions `importImageFile()` already accepts (`.png`, `.jpg`, `.jpeg`, `.bmp`, `.tga`, `.webp`) call `importImageFile()`; `.smproj` calls `openProjectAt()` - subject to the same unsaved-changes-confirmation and Live-Mode/Recording-in-progress refusal those already enforce today (a drop is not a back door around guards a menu click has to respect). Unrecognized extensions are silently ignored, not an error - a stray file dropped by accident shouldn't force a dialog onto the screen.
 
@@ -225,15 +246,15 @@ Dropping files onto the main window imports them, similar to the legacy Studio's
 
 **No Y bump expected** - no project-file-format change; this is a new entry point onto import/open methods that already exist.
 
-### v0.Y.16.1 - Transport Panels
+### v0.Y.18.1 - Transport Panels ✅
 
-Record, Loop, and a new Playback toolbar button each open their own dockable panel in the right sidebar - adapted from the legacy Studio's separate `_build_record_dock`/`_build_live_dock`/`_build_playback_dock`, replacing today's plain toolbar toggle buttons (`v0.0.4.1`/`v0.Y.12.1`/`v0.0.8.1`) with real per-engine surfaces to put controls on, rather than growing the transport toolbar itself indefinitely.
+Record, Loop, and a new Playback toolbar button each open their own dockable panel in the right sidebar - adapted from the legacy Studio's separate `_build_record_dock`/`_build_live_dock`/`_build_playback_dock`, replacing today's plain toolbar toggle buttons (`v0.0.4.1`/`v0.Y.14.1`/`v0.0.8.1`) with real per-engine surfaces to put controls on, rather than growing the transport toolbar itself indefinitely.
 
-**Real input/output device selection, finally**: named as deferred scope at Playback (`v0.0.4.1`), Live/Loop Mode (`v0.0.7.1`/`v0.Y.12.1`), and Record (`v0.0.8.1`) alike - every engine has used whatever the system's default device happened to be, with no picker anywhere. Lands here, on these panels themselves (Loop/Record share an input picker; Playback gets an output picker), not a separate preferences dialog.
+**Real input/output device selection, finally**: named as deferred scope at Playback (`v0.0.4.1`), Live/Loop Mode (`v0.0.7.1`/`v0.Y.14.1`), and Record (`v0.0.8.1`) alike - every engine has used whatever the system's default device happened to be, with no picker anywhere. Lands here, on these panels themselves (Loop/Record share an input picker; Playback gets an output picker), not a separate preferences dialog.
 
 **Output volume control, allowed above "100%"**: a real gain boost past unity, not just an attenuator down to silence - on the Playback panel.
 
-**"Keep Looping" moves into the Loop panel**, out of the transport toolbar checkbox `v0.Y.12.1` added it to as a confirmed stopgap location, pending this milestone.
+**"Keep Looping" moves into the Loop panel**, out of the transport toolbar checkbox `v0.Y.14.1` added it to as a confirmed stopgap location, pending this milestone.
 
 **Scroll bars** on any panel whose content (device picker, volume/Keep Looping controls, etc.) exceeds the dock's available height, rather than clipping content or forcing the dock wider than the window.
 
@@ -249,9 +270,9 @@ Record, Loop, and a new Playback toolbar button each open their own dockable pan
 
 **Each device combo's first entry is "(System Default)"**, mapped to an empty device name - the same empty-string-means-default convention the engines themselves already use, so a picker never needs a special "no selection" state.
 
-### v0.Y.17.1 - Audio Import Snippets
+### v0.Y.19.1 - Audio Import Snippets 🔜 Next
 
-When importing audio, cut the input into segments exactly the project's own duration (the same `canvasWidth * hopLength` loop length `v0.Y.12.1`'s Loop Mode already derives) and import each snippet as its own layer, numbered in sequence - matching the legacy Studio's own `_start_layer_import()`/`_on_layer_import_done()` behavior (`name_0000`, `name_0001`, ...) for audio longer than the project canvas.
+When importing audio, cut the input into segments exactly the project's own duration (the same `canvasWidth * hopLength` loop length `v0.Y.14.1`'s Loop Mode already derives) and import each snippet as its own layer, numbered in sequence - matching the legacy Studio's own `_start_layer_import()`/`_on_layer_import_done()` behavior (`name_0000`, `name_0001`, ...) for audio longer than the project canvas.
 
 **Going beyond the legacy version, per explicit instruction**: a panel lists every resulting snippet - a numbered row per snippet, each showing its timespan within the source audio and a checkbox - so the user can import only a chosen subset rather than all-or-nothing, plus a "select all" checkbox. The legacy Studio always imported every snippet with no picker at all.
 
@@ -259,7 +280,7 @@ When importing audio, cut the input into segments exactly the project's own dura
 
 **No Y bump expected** - a new import-time behavior; doesn't touch the project file format itself.
 
-### v0.Y.18.1 - Image Import Scaling
+### v0.Y.20.1 - Image Import Scaling 🔜 Then
 
 When importing an image, offer a choice of how it's resized to the project's canvas dimensions, presented before the import proceeds:
 
@@ -275,7 +296,7 @@ When importing an image, offer a choice of how it's resized to the project's can
 
 **No Y bump expected** - an import-time behavior change only.
 
-### v0.Y.19.1 - Layer Time Alignment
+### v0.Y.21.1 - Layer Time Alignment
 
 Two new per-layer transform controls: horizontal translation (shifts a layer's content earlier/later in time, for lining up audio between layers) and horizontal rescaling (stretches/compresses a layer's own timeline, for matching timing between layers) - adapted from the legacy Studio's per-layer transform, narrowed per explicit instruction.
 
@@ -285,131 +306,171 @@ Two new per-layer transform controls: horizontal translation (shifts a layer's c
 
 **No Y bump expected** - a new, additive per-layer field (translation/rescale offsets), deserialized leniently like every other optional field added so far - a project file saved before this milestone still loads.
 
-### v0.Y.20.1 - Image Sequence Import
+### v0.Y.22.1 - Image Sequence Import
 
-When importing multiple images at once, an "import as sequence" option applies `v0.Y.18.1`'s "scale vertically to fit project, rescale horizontal in proportion" mode to each one, and automatically places each subsequent image's layer immediately after the previous one in time via `v0.Y.19.1`'s horizontal translation control - matching the legacy Studio's own cumulative-offset placement for multi-image imports.
+When importing multiple images at once, an "import as sequence" option applies `v0.Y.20.1`'s "scale vertically to fit project, rescale horizontal in proportion" mode to each one, and automatically places each subsequent image's layer immediately after the previous one in time via `v0.Y.21.1`'s horizontal translation control - matching the legacy Studio's own cumulative-offset placement for multi-image imports.
 
 **Demo:** select five images at once, check "import as sequence", and see five layers laid out end-to-end in time, each scaled to the project's own bin count.
 
-**No Y bump expected.** Depends on `v0.Y.18.1`/`v0.Y.19.1` already existing - sequenced after both per Sequencing principle #4 (dependency order), matching the order these five points were given in.
+**No Y bump expected.** Depends on `v0.Y.20.1`/`v0.Y.21.1` already existing - sequenced after both per Sequencing principle #4 (dependency order), matching the order these five points were given in.
+
+### v0.Y.23.1 - Refactor & Clean Up
+
+A dedicated pass over everything Phase 2.5 (UI Foundations - Landing Page through Image Sequence Import) added, same purpose and scope as `v0.Y.5.1`'s entry. This phase grew the largest and most UI-heavy so far, spanning eight real milestones plus this one - particularly worth a look: `MainWindow`'s own size/complexity (it has accumulated a lot of direct responsibility across every one of this phase's milestones) and whether any of it is now ready to decompose into smaller, more focused controllers or panels-owning-more-of-their-own-logic, the way `LayersPanel`/`LoopPanel`/`RecordPanel`/`PlaybackPanel` already own their own presentation.
+
+**Demo:** the full regression suite still passes, unchanged in behavior.
+
+**No Y bump expected.**
 
 ---
 
 ## Phase 3 - Painting & Editing
 
-### v0.Y.21.1 - Basic Painting
+### v0.Y.24.1 - Basic Painting
 
 A plain procedural brush (tip shape + falloff, no harmonic model yet) painting into a layer's amplitude as logged `PaintOperation`s; undo/redo via the operation log (first real exercise of the `supersedes` mechanism). Also: re-confirm Phase 2's Pool/Export/Loop/Record pipeline still works, and still meets its performance targets, with real painted content flowing through it for the first time.
 
 **Demo:** paint a stroke, hear the difference on playback, undo it - then pool and export the result.
 
-### v0.Y.22.1 - Selection & Fill
+### v0.Y.25.1 - Selection & Fill
 
 Rectangle, Lasso, and Wand selection with boolean combination; cut/copy/paste; the Gradient model; Fill.
 
 **Demo:** select a region, cut it, paste it elsewhere, fill another region with a gradient.
 
-### v0.Y.23.1 - Paths & Grids
+### v0.Y.26.1 - Paths & Grids
 
 The Path (Bézier) tool with node placement/editing and Path Gradient; Overlay Grids (frequency and timing) and Snap to Grid, including pitch quantising.
 
 **Demo:** draw a precise, grid-snapped melodic line.
 
-### v0.Y.24.1 - Filter Layers
+### v0.Y.27.1 - Filter Layers
 
 The Filter layer type, a first concrete filter set (blur family, sharpen, tone curve, frequency-axis gradient), and the Equalizer special layer made functional.
 
 **Demo:** add an EQ layer, reshape frequency balance, hear it.
 
+### v0.Y.28.1 - Refactor & Clean Up
+
+A dedicated pass over everything Phase 3 (Basic Painting, Selection & Fill, Paths & Grids, Filter Layers) added, same purpose and scope as `v0.Y.5.1`'s entry. This phase introduces the operation log's first real `Operation` subtypes and the `supersedes` mechanism's first real exercise - worth specifically checking that the paint/selection/path/filter tool implementations share what they should (common brush/stroke/selection-mask plumbing) rather than each having independently reinvented it.
+
+**Demo:** the full regression suite still passes, unchanged in behavior.
+
+**No Y bump expected.**
+
 ---
 
 ## Phase 4 - Expressive Tools
 
-### v0.Y.25.1 - MindWaves v1
+### v0.Y.29.1 - MindWaves v1
 
 The core generator types (periodic, envelope, stepped/noise, spatial, a first fractal field), superposition, and binding to layer opacity and filter parameters (the direct-vs-shape distinction).
 
 **Demo:** bind a sine MindWave to a layer's opacity; watch and hear it pulse.
 
-### v0.Y.26.1 - Sound Mind Instruments
+### v0.Y.30.1 - Sound Mind Instruments
 
 The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument model; the canvas-space vs. operation-relative MindWave binding-coordinate-frame choice, since that's specifically about how a paint operation (an instrument note, in particular) binds to a MindWave. Also: revisit Loop Mode (Phase 2.5) to add the operation-relative retrigger feel this unlocks.
 
 **Demo:** paint with an instrument voice that actually sounds like a plausible physical source; feed the same instrument through Loop Mode and hear it retrigger per note.
 
-### v0.Y.27.1 - Mind Shots & Mind Grains
+### v0.Y.31.1 - Mind Shots & Mind Grains
 
 Capture-and-stamp static samples; live-reference dynamic grains from a source layer. Also: revisit Record (Phase 2) to add capture-directly-to-a-Mind-Shot.
 
 **Demo:** capture a moment as a Mind Shot and restamp it; link a Mind Grain to a source layer and watch it change live as the source does.
 
-### v0.Y.28.1 - Composer Mode
+### v0.Y.32.1 - Composer Mode
 
 The DAW-style track view: each layer as a track, operations drawn as boxes via `Operation::bounds()`, retiming/moving an operation between layers via the `supersedes` mechanism, the three track background styles.
 
 **Demo:** arrange a multi-layer piece in the track view; move a stamped note to a different layer without repainting it.
 
-### v0.Y.29.1 - MindWaves v2
+### v0.Y.33.1 - MindWaves v2
 
 Field operators (Warp, Reduce), drawn-shape and step-grid generator types, and the continuous shape/skew/character controls.
 
 **Demo:** a MindWave built from a hand-drawn Path, reduced to a plain time-varying control signal.
 
-### v0.Y.30.1 - Chords/Arpeggiator/Sequencer
+### v0.Y.34.1 - Chords/Arpeggiator/Sequencer
 
 The Chord Generator and the generalized notation-driven sequence it's built on, targeting any paintable tip. Resolves the sequence-notation Deferred Decision (validating the ABC-notation direction, or picking an alternative).
 
 **Demo:** stamp a chord progression, then re-voice and re-time it without repainting.
 
-### v0.Y.31.1 - Loop Mode Live Preview
+### v0.Y.35.1 - Loop Mode Live Preview
 
-A live-updating preview of the *currently capturing* loop, rendered incrementally as it's captured - restoring the visual behavior the original Live Mode (`v0.0.7.1`) had before Loop Mode's fixed-length redesign (`v0.Y.12.1`) replaced it. Today, the canvas only updates once a whole loop finishes - a real, silent wait as long as the project's own duration (see `v0.Y.12.1`'s own "Fixed in manual testing" note on how confusing that first wait already reads, even with a placeholder image now covering the very first activation).
+A live-updating preview of the *currently capturing* loop, rendered incrementally as it's captured - restoring the visual behavior the original Live Mode (`v0.0.7.1`) had before Loop Mode's fixed-length redesign (`v0.Y.14.1`) replaced it. Today, the canvas only updates once a whole loop finishes - a real, silent wait as long as the project's own duration (see `v0.Y.14.1`'s own "Fixed in manual testing" note on how confusing that first wait already reads, even with a placeholder image now covering the very first activation).
 
-**A second, parallel pipeline - not a change to what's actually played back.** LoopEngine's own whole-buffer encode/decode-per-loop design (confirmed, `v0.Y.12.1`) stays exactly as-is for the audio that's actually heard - this milestone is purely about what's *rendered on the canvas* while a loop is still being captured. A `sound_mind::codec::StreamIncrementalEncoder` instance (the same one the original Live Mode used, still present in `sound-mind-codec`, unused since the `v0.Y.12.1` rewrite) tracks just the current loop's progress, reset at every loop boundary rather than growing across a whole session - sidestepping the original Live Mode's own "cost grows with session length" limitation by construction, since a loop is always bounded.
+**A second, parallel pipeline - not a change to what's actually played back.** LoopEngine's own whole-buffer encode/decode-per-loop design (confirmed, `v0.Y.14.1`) stays exactly as-is for the audio that's actually heard - this milestone is purely about what's *rendered on the canvas* while a loop is still being captured. A `sound_mind::codec::StreamIncrementalEncoder` instance (the same one the original Live Mode used, still present in `sound-mind-codec`, unused since the `v0.Y.14.1` rewrite) tracks just the current loop's progress, reset at every loop boundary rather than growing across a whole session - sidestepping the original Live Mode's own "cost grows with session length" limitation by construction, since a loop is always bounded.
 
-**Distinct from `v0.Y.26.1`'s own "revisit Loop Mode" note**: that one is about *audio* - a per-note, operation-relative retrigger feel, once Sound Mind Instruments exists. This one is purely visual - what the canvas shows while a loop is in progress - and doesn't depend on Instruments existing first.
+**Distinct from `v0.Y.30.1`'s own "revisit Loop Mode" note**: that one is about *audio* - a per-note, operation-relative retrigger feel, once Sound Mind Instruments exists. This one is purely visual - what the canvas shows while a loop is in progress - and doesn't depend on Instruments existing first.
 
 **Demo:** start Loop Mode and watch the spectrogram grow continuously *during* the current loop, the same way the original Live Mode used to, rather than jumping once per completed loop.
 
 **No Y bump expected** - a rendering-only addition; the project file format, and what's actually captured/played back, are unchanged.
 
+### v0.Y.36.1 - Refactor & Clean Up
+
+A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, Sound Mind Instruments, Mind Shots & Mind Grains, Composer Mode, Chords/Arpeggiator/Sequencer, Loop Mode Live Preview) added, same purpose and scope as `v0.Y.5.1`'s entry. This is the largest phase in the whole roadmap - a strong candidate for the biggest structural payoff of any of these cleanup milestones, particularly around the MindWave binding machinery (used by opacity, filter parameters, and instrument notes alike by this point) and Composer Mode's operation-to-track bookkeeping.
+
+**Demo:** the full regression suite still passes, unchanged in behavior.
+
+**No Y bump expected.**
+
 ---
 
 ## Phase 5 - Generative & Analytical
 
-### v0.Y.32.1 - Generators
+### v0.Y.37.1 - Generators
 
 Lattice, fractal, and streaming procedural content generators, sharing the Order/Chaos criticality axis.
 
 **Demo:** generate a fractal melodic texture as a new layer, tuned from rigid to chaotic.
 
-### v0.Y.33.1 - Analysis Tools v1
+### v0.Y.38.1 - Analysis Tools v1
 
 A first useful cross-section across all five categories (loudness/mastering, pitch/vocal, stereo/phase, spectral health, criticality/pattern) - not every meter the legacy version had, but at least one representative of each.
 
 **Demo:** check integrated loudness and stereo correlation on a real mix.
 
-### v0.Y.34.1 - Sound Flower
+### v0.Y.39.1 - Sound Flower
 
 Polar canvas view, and polar-form image import.
 
 **Demo:** toggle Sound Flower view while painting and keep working without switching tools.
 
+### v0.Y.40.1 - Refactor & Clean Up
+
+A dedicated pass over everything Phase 5 (Generators, Analysis Tools v1, Sound Flower) added, same purpose and scope as `v0.Y.5.1`'s entry.
+
+**Demo:** the full regression suite still passes, unchanged in behavior.
+
+**No Y bump expected.**
+
 ---
 
 ## Phase 6 - Interchange & Polish
 
-### v0.Y.35.1 - Portable Resources
+### v0.Y.41.1 - Portable Resources
 
 Standalone `.smwave` and `.sminst` files; cross-project import of layers, Mind Shots, MindWaves, and Sound Mind Instruments. Resolves the Mind Grain portability Deferred Decision one way or the other.
 
 **Demo:** export an instrument from one project, import it cleanly into another.
 
-### v0.Y.36.1 - Performance Validation & Hardening
+### v0.Y.42.1 - Performance Validation & Hardening
 
 By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. Validate the ~100 ms / ~250 ms latency targets for real, on both this Arm64 machine and actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding). Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
 
 **Demo:** the full design-doc feature set, exercised together, meeting the latency targets on real desktop GPU hardware.
+
+### v0.Y.43.1 - Refactor & Clean Up
+
+A dedicated pass over everything Phase 6 (Portable Resources, Performance Validation & Hardening) added, same purpose and scope as `v0.Y.5.1`'s entry - and, by extension, the last general cleanup pass before `v1.0.0.0` itself. Real overlap with `v0.Y.42.1`'s own "full pass reconciling Doxygen output, architecture.md, and the test suite" - that milestone already covers documentation/test consistency end to end, so this one's own scope is specifically the code structure/decomposition half Sequencing principle #7 describes, not a duplicate documentation pass.
+
+**Demo:** the full regression suite still passes, unchanged in behavior.
+
+**No Y bump expected.**
 
 ---
 

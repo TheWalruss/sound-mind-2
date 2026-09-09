@@ -874,7 +874,7 @@ controls, real audio output - press Play, hear the imported audio.
   happens once, not continuously - nothing generates a live edit to react
   to yet (Painting doesn't exist until Phase 3). The design doc's actual
   always-current, no-separate-render-step model is Live Mode's job
-  (`v0.Y.7.1`), which inherently needs continuous incremental decode
+  (`v0.Y.8.1`), which inherently needs continuous incremental decode
   anyway; Playback will pick that up once it exists. See
   `docs/sound-mind-roadmap.md` for the full reasoning.
 - Plays only the topmost layer with content - real multi-layer mixing
@@ -1012,7 +1012,7 @@ round-trip test, per this milestone's own "a round-trip test" demo wording.
 - The NSGT-specific half of the architecture doc's "NSGT library selection"
   decision (whether `libnsgt`'s logic ports onto PocketFFT) is still open -
   Stream mode uses a plain STFT, not NSGT, so this milestone didn't need to
-  resolve it. That's Pool's job, in `v0.Y.5.1`.
+  resolve it. That's Pool's job, in `v0.Y.6.1`.
 
 ## [0.0.1.1] - 2026-09-06
 
