@@ -284,7 +284,7 @@ When importing audio, cut the input into segments exactly the project's own dura
 
 **Layer naming, confirmed while implementing:** with more than one snippet, a layer is named `"<stem>_NNNN"` using its *original* position in the full split (zero-padded to four digits) - not renumbered sequentially among just the imported subset - so a layer's name still tells you where it came from even if some snippets were skipped. Requested indices are de-duplicated and imported in ascending position order regardless of the order they were requested in, so a picker's checked order never affects layer order.
 
-### v0.Y.20.1 - Image Import Scaling 🔜 Next
+### v0.Y.20.1 - Image Import Scaling ✅
 
 When importing an image, offer a choice of how it's resized to the project's canvas dimensions, presented before the import proceeds:
 
@@ -299,6 +299,12 @@ When importing an image, offer a choice of how it's resized to the project's can
 **Demo:** import a portrait-oriented photo with each of the five modes in turn and see the resulting layer's dimensions differ accordingly.
 
 **No Y bump expected** - an import-time behavior change only.
+
+**Implemented as `sound_mind::studio::ImageScalePickerDialog`** (a modal `QDialog`, five radio buttons, "Rescale to fit project" pre-selected) plus a `mode` parameter added to `MainWindow::importImageFile()` and a new private `scaleImageForImport()` helper that does the actual `QImage::scaled()` call per mode. Unlike Audio Import Snippets' picker, this dialog is shown unconditionally by `importImage()` - there's no "trivial, skip it" case the way a short audio file has only one snippet; an image import always has a real scaling choice to make.
+
+**A real, pre-existing gap surfaced while scoping this milestone**: before this pass, `importImageFile()`/`fromRgbImage()` never resized anything at all - "Keep Native Resolution" was every import's *only* actual behavior, silently. This milestone is what first makes the other four modes possible, not just exposes a choice that already existed.
+
+**`ScaleVerticalProportional`'s width is computed by hand, not via `QImage::scaled()`'s own aspect-ratio modes**: `Qt::KeepAspectRatio` fits *within* a bounding box rather than hitting an exact height, so the proportional width is computed directly (`sourceWidth * canvasHeight / sourceHeight`, rounded) and then applied via `Qt::IgnoreAspectRatio` - guaranteeing the exact, documented result rather than whatever Qt's own fitting logic happens to produce.
 
 ### v0.Y.21.1 - Layer Time Alignment
 

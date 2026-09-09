@@ -17,6 +17,7 @@
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/loop_panel.h"
@@ -24,6 +25,7 @@
 #include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/record_panel.h"
 
+using sound_mind::studio::ImageScalePickerDialog;
 using sound_mind::studio::LandingPage;
 using sound_mind::studio::LayersPanel;
 using sound_mind::studio::LoopPanel;
@@ -115,6 +117,19 @@ void writeTestWavFileWithFrameCount(const std::filesystem::path& path, std::size
 sound_mind::core::ProjectSettings smallCanvasProjectSettings() {
     sound_mind::core::ProjectSettings settings;
     settings.canvasWidth = 8;  // loop length = 8 * 441 = 3528 samples at the default 44100 Hz/10 ms timestep.
+    return settings;
+}
+
+/// @brief A project settings struct with `canvasWidth`/`canvasHeight`/
+/// `binCount` values distinct from both each other and from the 30x20 test
+/// image the Image Import Scaling tests use - so each of the five scale
+/// modes produces a uniquely identifiable (frameCount, binCount) result,
+/// unambiguously confirming which mode actually ran.
+sound_mind::core::ProjectSettings imageScalingTestProjectSettings() {
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 100;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;  // kept numerically equal to canvasHeight, per ProjectSettings' own docs.
     return settings;
 }
 
@@ -291,7 +306,9 @@ void MainWindowTest::importImageFileAddsANewLayer() {
 
     MainWindow window;
     createFreshTestProject(window);
-    const bool ok = window.importImageFile(path);
+    // KeepNativeResolution - matches this test's own pre-existing intent
+    // (does importing add a layer at all) rather than exercising scaling.
+    const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::KeepNativeResolution);
     std::filesystem::remove(path);
 
     QVERIFY(ok);
@@ -1452,4 +1469,109 @@ void MainWindowTest::importAudioSnippetsFailsWhenNothingWasImported() {
 
     QVERIFY(!ok);
     QCOMPARE(window.project()->layers().size(), layerCountBefore);
+}
+
+namespace {
+
+/// @brief Writes a 30x20 PNG to `path` - the fixed source size every Image
+/// Import Scaling test uses, paired with imageScalingTestProjectSettings()'s
+/// 100x50 project so each scale mode's result is unambiguous (see that
+/// function's own docs).
+void writeImageScalingTestImage(const std::filesystem::path& path) {
+    QImage image(30, 20, QImage::Format_RGB32);
+    image.fill(Qt::red);
+    QVERIFY2(image.save(QString::fromStdString(path.string())), "failed to write the test PNG");
+}
+
+}  // namespace
+
+void MainWindowTest::importImageFileRescaleToFitProjectStretchesBothAxes() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-fit.png";
+    writeImageScalingTestImage(path);
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-fit.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+
+    const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::RescaleToFitProject);
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    const auto& content = *window.project()->layers().back().content();
+    QCOMPARE(content.frameCount, static_cast<std::uint32_t>(100));    // project's canvasWidth.
+    QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(50));  // project's binCount.
+}
+
+void MainWindowTest::importImageFileScaleVerticalKeepHorizontalKeepsNativeWidth() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-v.png";
+    writeImageScalingTestImage(path);
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-v.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+
+    const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::ScaleVerticalKeepHorizontal);
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    const auto& content = *window.project()->layers().back().content();
+    QCOMPARE(content.frameCount, static_cast<std::uint32_t>(30));     // the source image's own native width.
+    QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(50));  // project's binCount.
+}
+
+void MainWindowTest::importImageFileScaleHorizontalKeepVerticalKeepsNativeHeight() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-h.png";
+    writeImageScalingTestImage(path);
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-h.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+
+    const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::ScaleHorizontalKeepVertical);
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    const auto& content = *window.project()->layers().back().content();
+    QCOMPARE(content.frameCount, static_cast<std::uint32_t>(100));    // project's canvasWidth.
+    QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(20));  // the source image's own native height.
+}
+
+void MainWindowTest::importImageFileScaleVerticalProportionalPreservesAspectRatio() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-proportional.png";
+    writeImageScalingTestImage(path);
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-proportional.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+
+    const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::ScaleVerticalProportional);
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    const auto& content = *window.project()->layers().back().content();
+    QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(50));  // project's binCount.
+    QCOMPARE(content.frameCount, static_cast<std::uint32_t>(75));       // 30 * 50 / 20, preserving the 3:2 aspect ratio.
+}
+
+void MainWindowTest::importImageFileKeepNativeResolutionDoesNotRescale() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-native.png";
+    writeImageScalingTestImage(path);
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-native.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+
+    const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::KeepNativeResolution);
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    const auto& content = *window.project()->layers().back().content();
+    QCOMPARE(content.frameCount, static_cast<std::uint32_t>(30));     // the source image's own native width.
+    QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(20));  // the source image's own native height.
 }

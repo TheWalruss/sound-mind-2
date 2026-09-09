@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -38,6 +39,7 @@
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/create_project_wizard.h"
+#include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/loop_panel.h"
@@ -129,6 +131,37 @@ void showBusyStatus(QStatusBar* bar, const QString& message) {
                     static_cast<std::size_t>(image.width) * 3);
     }
     return image;
+}
+
+/// @brief Resizes `source` to the project's canvas dimensions according to
+/// `mode` - see `ImageScalePickerDialog::Mode`'s own docs for exactly what
+/// each value means. `Qt::IgnoreAspectRatio` is used throughout, including
+/// for `ScaleVerticalProportional`, since that mode's own proportional
+/// width is already computed by hand below - asking Qt to *also* fit an
+/// aspect ratio on top would risk a slightly different rounding than the
+/// one this method's own docs promise.
+[[nodiscard]] QImage scaleImageForImport(const QImage& source, sound_mind::studio::ImageScalePickerDialog::Mode mode,
+                                          int canvasWidth, int canvasHeight) {
+    using Mode = sound_mind::studio::ImageScalePickerDialog::Mode;
+    switch (mode) {
+        case Mode::RescaleToFitProject:
+            return source.scaled(canvasWidth, canvasHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        case Mode::ScaleVerticalKeepHorizontal:
+            return source.scaled(source.width(), canvasHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        case Mode::ScaleHorizontalKeepVertical:
+            return source.scaled(canvasWidth, source.height(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        case Mode::ScaleVerticalProportional: {
+            const int proportionalWidth =
+                source.height() > 0
+                    ? std::max(1, static_cast<int>(std::lround(static_cast<double>(source.width()) * canvasHeight /
+                                                                source.height())))
+                    : canvasWidth;
+            return source.scaled(proportionalWidth, canvasHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+        }
+        case Mode::KeepNativeResolution:
+            return source;
+    }
+    return source;  // unreachable - every Mode value is handled above.
 }
 
 /// @brief Converts a codec::RgbImage to a QImage, copying the pixel data
@@ -532,8 +565,14 @@ void MainWindow::importImage() {
     if (fileName.isEmpty()) {
         return;
     }
+
+    ImageScalePickerDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
     QString errorMessage;
-    if (!importImageFile(std::filesystem::path(fileName.toStdString()), &errorMessage)) {
+    if (!importImageFile(std::filesystem::path(fileName.toStdString()), dialog.selectedMode(), &errorMessage)) {
         QMessageBox::critical(this, tr("Import Image Failed"), errorMessage);
     }
 }
@@ -688,7 +727,8 @@ bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const st
     }
 }
 
-bool MainWindow::importImageFile(const std::filesystem::path& path, QString* errorMessage) {
+bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePickerDialog::Mode mode,
+                                  QString* errorMessage) {
     if (!project_) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No project is open.");
@@ -706,9 +746,11 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, QString* err
 
     showBusyStatus(statusBar(), tr("Importing image..."));
     try {
-        const auto rgbImage = toRgbImage(sourceImage);
-        const auto content =
-            sound_mind::codec::fromRgbImage(rgbImage, sound_mind::core::streamCodecConfigFor(project_->settings()));
+        const auto& settings = project_->settings();
+        const QImage scaledImage = scaleImageForImport(sourceImage, mode, static_cast<int>(settings.canvasWidth),
+                                                        static_cast<int>(settings.canvasHeight));
+        const auto rgbImage = toRgbImage(scaledImage);
+        const auto content = sound_mind::codec::fromRgbImage(rgbImage, sound_mind::core::streamCodecConfigFor(settings));
 
         sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
         layer.setContent(content);

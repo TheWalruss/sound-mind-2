@@ -16,6 +16,7 @@
 #include "test_audio_snippet_picker_dialog.h"
 #include "test_canvas_widget.h"
 #include "test_create_project_wizard.h"
+#include "test_image_scale_picker_dialog.h"
 #include "test_landing_page.h"
 #include "test_layers_panel.h"
 #include "test_loop_panel.h"
@@ -74,6 +75,9 @@ int main(int argc, char** argv) {
 
     AudioSnippetPickerDialogTest audioSnippetPickerDialogTest;
     status |= QTest::qExec(&audioSnippetPickerDialogTest, argc, argv);
+
+    ImageScalePickerDialogTest imageScalePickerDialogTest;
+    status |= QTest::qExec(&imageScalePickerDialogTest, argc, argv);
 
     return status;
 }

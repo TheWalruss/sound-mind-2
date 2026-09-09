@@ -6,6 +6,56 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.17.1] - 2026-09-09
+
+The "Image Import Scaling" milestone from `docs/sound-mind-roadmap.md`
+(Phase 2.5): importing an image now offers a choice of how it's resized
+to the project's canvas dimensions, presented before the import
+proceeds.
+
+### Added
+
+- **`sound_mind::studio::ImageScalePickerDialog`**: a modal `QDialog`
+  with five radio-button options - "Rescale to fit project" (the
+  default), "Scale vertically to fit project, keep horizontal
+  resolution", "Scale horizontally to fit project, keep vertical
+  resolution", "Scale vertically to fit project, rescale horizontal in
+  proportion", and "Keep native resolution". `MainWindow::importImage()`
+  always shows it - unlike Audio Import Snippets' picker, there's no
+  trivial case to skip it for.
+- **`MainWindow::importImageFile()`** gains a required `mode` parameter
+  (`ImageScalePickerDialog::Mode`) and a new private `scaleImageForImport()`
+  helper that resizes the source `QImage` via `QImage::scaled()`
+  accordingly, before it's ever converted to the codec's `RgbImage`.
+
+### Notes
+
+- **A real, pre-existing gap surfaced while scoping this milestone**:
+  before this pass, no image import ever resized anything at all -
+  `fromRgbImage()`'s own docs already say an image's pixel grid becomes
+  the bin/frame grid directly, so "Keep Native Resolution" was silently
+  every import's *only* actual behavior. This milestone is what first
+  makes the other four modes possible, not just a new choice layered on
+  top of existing scaling.
+- **`ScaleVerticalProportional`'s width is computed by hand**, not via
+  `QImage::scaled()`'s own `Qt::KeepAspectRatio` (which fits *within* a
+  bounding box rather than hitting an exact height) - `sourceWidth *
+  canvasHeight / sourceHeight`, rounded, applied via
+  `Qt::IgnoreAspectRatio` - guaranteeing the documented exact-height
+  result. See `docs/sound-mind-architecture.md`'s Decisions Made #23.
+- **The existing `importImageFile(path, errorMessage)` call site (one
+  test) was updated** to pass `Mode::KeepNativeResolution` explicitly,
+  preserving its own pre-existing intent (confirming a layer gets added
+  at all, not exercising scaling) - matching this codebase's preference
+  for explicit test intent over a silently-implied default.
+- **No Y bump.** An import-time behavior change only.
+
+Full regression suite: `sound-mind-core-tests` unaffected (no
+`sound-mind-core` changes this milestone); `sound-mind-studio-tests`
+gains a new `ImageScalePickerDialogTest` class (5 tests) and 5 new
+`MainWindow` tests, one per scale mode, each asserting a distinct
+(frameCount, binCount) result.
+
 ## [0.0.16.1] - 2026-09-09
 
 The "Audio Import Snippets" milestone from `docs/sound-mind-roadmap.md`

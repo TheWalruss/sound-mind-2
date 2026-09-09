@@ -101,4 +101,11 @@ private slots:
     void importAudioSnippetsImportsOnlyTheRequestedSubset();
     void importAudioSnippetsSkipsOutOfRangeIndicesGracefully();
     void importAudioSnippetsFailsWhenNothingWasImported();
+
+    // Image Import Scaling (v0.Y.20.1)
+    void importImageFileRescaleToFitProjectStretchesBothAxes();
+    void importImageFileScaleVerticalKeepHorizontalKeepsNativeWidth();
+    void importImageFileScaleHorizontalKeepVerticalKeepsNativeHeight();
+    void importImageFileScaleVerticalProportionalPreservesAspectRatio();
+    void importImageFileKeepNativeResolutionDoesNotRescale();
 };

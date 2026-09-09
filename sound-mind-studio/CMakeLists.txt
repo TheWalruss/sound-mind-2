@@ -29,6 +29,7 @@ add_library(sound-mind-studio-lib
     src/audio_snippet_picker_dialog.cpp
     src/canvas_widget.cpp
     src/create_project_wizard.cpp
+    src/image_scale_picker_dialog.cpp
     src/landing_page.cpp
     src/layers_panel.cpp
     src/loop_panel.cpp
@@ -40,6 +41,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/create_project_wizard.h
+    include/sound_mind/studio/image_scale_picker_dialog.h
     include/sound_mind/studio/landing_page.h
     include/sound_mind/studio/layers_panel.h
     include/sound_mind/studio/loop_panel.h

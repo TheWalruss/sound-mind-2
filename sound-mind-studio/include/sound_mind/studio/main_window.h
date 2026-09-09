@@ -13,6 +13,7 @@
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
+#include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/recent_projects.h"
 
 class QCloseEvent;
@@ -205,9 +206,18 @@ public slots:
      */
     void importAudio();
 
-    /// @brief Prompts for an image file and imports it as a new layer.
-    /// Progress and completion are reported via the status bar (non-modal) -
-    /// see poolTopmostLayer()'s docs for why only failure shows a modal.
+    /**
+     * @brief Prompts for an image file, then how to scale it, and imports
+     *        it as a new layer - see `docs/sound-mind-roadmap.md`'s Image
+     *        Import Scaling milestone (`v0.Y.20.1`).
+     *
+     * Always shows an `ImageScalePickerDialog` after the file is chosen -
+     * unlike Audio Import Snippets' picker, there's no "trivial, skip the
+     * dialog" case here (every image import has a real scaling choice to
+     * make). Cancelling that dialog cancels the whole import. Progress and
+     * completion are reported via the status bar (non-modal) - see
+     * poolTopmostLayer()'s docs for why only failure shows a modal.
+     */
     void importImage();
 
     /**
@@ -717,25 +727,29 @@ public:
                               QString* errorMessage = nullptr);
 
     /**
-     * @brief Imports an image file as a new layer, without prompting or
-     *        showing an error dialog on failure.
+     * @brief Imports an image file as a new layer, resized per `mode`,
+     *        without prompting or showing an error dialog on failure.
      *
-     * The image's RGB pixels are converted into amplitude/phase data via
-     * `sound_mind::codec::fromRgbImage()` - per
-     * `docs/sound-mind-design.md`'s "sound and image are one continuous
-     * surface" principle, an imported image is genuinely unified with
-     * audio-imported content, not a picture with no underlying sound
-     * representation. See importAudioFile()'s docs for why this never shows
-     * a message box itself.
+     * The image is first resized to the project's canvas dimensions
+     * according to `mode` (see `ImageScalePickerDialog::Mode`'s own docs
+     * for exactly what each value does), then its RGB pixels are converted
+     * into amplitude/phase data via `sound_mind::codec::fromRgbImage()` -
+     * per `docs/sound-mind-design.md`'s "sound and image are one
+     * continuous surface" principle, an imported image is genuinely
+     * unified with audio-imported content, not a picture with no
+     * underlying sound representation. See importAudioFile()'s docs for
+     * why this never shows a message box itself.
      *
      * Marks hasUnsavedChanges() on success, same as importAudioFile().
      *
      * @param path Path to the image file to import.
+     * @param mode How to resize the image before importing it.
      * @param errorMessage If non-null and this returns `false`, set to a
      *        human-readable description of what went wrong.
      * @return `true` on success; `false` if loading or converting it failed.
      */
-    bool importImageFile(const std::filesystem::path& path, QString* errorMessage = nullptr);
+    bool importImageFile(const std::filesystem::path& path, ImageScalePickerDialog::Mode mode,
+                          QString* errorMessage = nullptr);
 
     /**
      * @brief Pools the topmost layer with content and writes its Stream
