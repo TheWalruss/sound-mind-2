@@ -201,29 +201,41 @@ A lumped UI-polish milestone, per explicit go-ahead to bundle smaller UI changes
 
 **No Y bump.** Purely visual - no project file, public API, or codec format is touched.
 
+### v0.Y.15.1 - Drag & Drop Import
+
+Dropping files onto the main window imports them, similar to the legacy Studio's own `dragEnterEvent`/`dropEvent`/`_route_dropped_files` handling - routed by extension, reusing the File menu's existing import paths rather than adding a separate code path for it. Narrower than the legacy routing table: no MIDI, no standalone-TIFF silent import, no per-drop import wizard - none of those concepts exist in this codebase yet, or (TIFF) never carried over as their own standalone-file idea in `v0.Y.10.1`'s notes.
+
+**Routing:** `.wav` calls `importAudioFile()`; the image extensions `importImageFile()` already accepts (`.png`, `.jpg`, `.jpeg`, `.bmp`, `.tga`, `.webp`) call `importImageFile()`; `.smproj` calls `openProjectAt()` - subject to the same unsaved-changes-confirmation and Live-Mode/Recording-in-progress refusal those already enforce today (a drop is not a back door around guards a menu click has to respect). Unrecognized extensions are silently ignored, not an error - a stray file dropped by accident shouldn't force a dialog onto the screen.
+
+**Multiple dropped files:** each recognized file is routed through its normal single-file import method in order. Unlike the legacy Studio's batching into one `_show_import_wizard(paths, ...)` call per type, there's no batch-import UI here to hand a list to, so this stays a plain per-file loop rather than something warranting a dedicated wizard of its own.
+
+**Demo:** drag a `.wav` onto the canvas and see a new layer appear; with unsaved changes in the current project, drag a `.smproj` onto the window and confirm the same discard-changes prompt Open Project already shows, rather than silently losing the change.
+
+**No Y bump expected** - no project-file-format change; this is a new entry point onto import/open methods that already exist.
+
 ---
 
 ## Phase 3 - Painting & Editing
 
-### v0.Y.15.1 - Basic Painting
+### v0.Y.16.1 - Basic Painting
 
 A plain procedural brush (tip shape + falloff, no harmonic model yet) painting into a layer's amplitude as logged `PaintOperation`s; undo/redo via the operation log (first real exercise of the `supersedes` mechanism). Also: re-confirm Phase 2's Pool/Export/Loop/Record pipeline still works, and still meets its performance targets, with real painted content flowing through it for the first time.
 
 **Demo:** paint a stroke, hear the difference on playback, undo it - then pool and export the result.
 
-### v0.Y.16.1 - Selection & Fill
+### v0.Y.17.1 - Selection & Fill
 
 Rectangle, Lasso, and Wand selection with boolean combination; cut/copy/paste; the Gradient model; Fill.
 
 **Demo:** select a region, cut it, paste it elsewhere, fill another region with a gradient.
 
-### v0.Y.17.1 - Paths & Grids
+### v0.Y.18.1 - Paths & Grids
 
 The Path (Bézier) tool with node placement/editing and Path Gradient; Overlay Grids (frequency and timing) and Snap to Grid, including pitch quantising.
 
 **Demo:** draw a precise, grid-snapped melodic line.
 
-### v0.Y.18.1 - Filter Layers
+### v0.Y.19.1 - Filter Layers
 
 The Filter layer type, a first concrete filter set (blur family, sharpen, tone curve, frequency-axis gradient), and the Equalizer special layer made functional.
 
@@ -233,37 +245,37 @@ The Filter layer type, a first concrete filter set (blur family, sharpen, tone c
 
 ## Phase 4 - Expressive Tools
 
-### v0.Y.19.1 - MindWaves v1
+### v0.Y.20.1 - MindWaves v1
 
 The core generator types (periodic, envelope, stepped/noise, spatial, a first fractal field), superposition, and binding to layer opacity and filter parameters (the direct-vs-shape distinction).
 
 **Demo:** bind a sine MindWave to a layer's opacity; watch and hear it pulse.
 
-### v0.Y.20.1 - Sound Mind Instruments
+### v0.Y.21.1 - Sound Mind Instruments
 
 The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument model; the canvas-space vs. operation-relative MindWave binding-coordinate-frame choice, since that's specifically about how a paint operation (an instrument note, in particular) binds to a MindWave. Also: revisit Loop Mode (Phase 2.5) to add the operation-relative retrigger feel this unlocks.
 
 **Demo:** paint with an instrument voice that actually sounds like a plausible physical source; feed the same instrument through Loop Mode and hear it retrigger per note.
 
-### v0.Y.21.1 - Mind Shots & Mind Grains
+### v0.Y.22.1 - Mind Shots & Mind Grains
 
 Capture-and-stamp static samples; live-reference dynamic grains from a source layer. Also: revisit Record (Phase 2) to add capture-directly-to-a-Mind-Shot.
 
 **Demo:** capture a moment as a Mind Shot and restamp it; link a Mind Grain to a source layer and watch it change live as the source does.
 
-### v0.Y.22.1 - Composer Mode
+### v0.Y.23.1 - Composer Mode
 
 The DAW-style track view: each layer as a track, operations drawn as boxes via `Operation::bounds()`, retiming/moving an operation between layers via the `supersedes` mechanism, the three track background styles.
 
 **Demo:** arrange a multi-layer piece in the track view; move a stamped note to a different layer without repainting it.
 
-### v0.Y.23.1 - MindWaves v2
+### v0.Y.24.1 - MindWaves v2
 
 Field operators (Warp, Reduce), drawn-shape and step-grid generator types, and the continuous shape/skew/character controls.
 
 **Demo:** a MindWave built from a hand-drawn Path, reduced to a plain time-varying control signal.
 
-### v0.Y.24.1 - Chords/Arpeggiator/Sequencer
+### v0.Y.25.1 - Chords/Arpeggiator/Sequencer
 
 The Chord Generator and the generalized notation-driven sequence it's built on, targeting any paintable tip. Resolves the sequence-notation Deferred Decision (validating the ABC-notation direction, or picking an alternative).
 
@@ -273,19 +285,19 @@ The Chord Generator and the generalized notation-driven sequence it's built on, 
 
 ## Phase 5 - Generative & Analytical
 
-### v0.Y.25.1 - Generators
+### v0.Y.26.1 - Generators
 
 Lattice, fractal, and streaming procedural content generators, sharing the Order/Chaos criticality axis.
 
 **Demo:** generate a fractal melodic texture as a new layer, tuned from rigid to chaotic.
 
-### v0.Y.26.1 - Analysis Tools v1
+### v0.Y.27.1 - Analysis Tools v1
 
 A first useful cross-section across all five categories (loudness/mastering, pitch/vocal, stereo/phase, spectral health, criticality/pattern) - not every meter the legacy version had, but at least one representative of each.
 
 **Demo:** check integrated loudness and stereo correlation on a real mix.
 
-### v0.Y.27.1 - Sound Flower
+### v0.Y.28.1 - Sound Flower
 
 Polar canvas view, and polar-form image import.
 
@@ -295,13 +307,13 @@ Polar canvas view, and polar-form image import.
 
 ## Phase 6 - Interchange & Polish
 
-### v0.Y.28.1 - Portable Resources
+### v0.Y.29.1 - Portable Resources
 
 Standalone `.smwave` and `.sminst` files; cross-project import of layers, Mind Shots, MindWaves, and Sound Mind Instruments. Resolves the Mind Grain portability Deferred Decision one way or the other.
 
 **Demo:** export an instrument from one project, import it cleanly into another.
 
-### v0.Y.29.1 - Performance Validation & Hardening
+### v0.Y.30.1 - Performance Validation & Hardening
 
 By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. Validate the ~100 ms / ~250 ms latency targets for real, on both this Arm64 machine and actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding). Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
 
