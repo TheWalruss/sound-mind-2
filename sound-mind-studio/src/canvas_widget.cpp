@@ -19,6 +19,15 @@ const QSize kFallbackSize(400, 300);
 [[nodiscard]] std::optional<sound_mind::codec::RgbImage> findTopmostRender(const sound_mind::core::Project& project) {
     const auto& layers = project.layers();
     for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
+        // A layer hidden via the Layers Panel (v0.Y.13.1) is skipped here
+        // too, same as MainWindow::topmostLayerWithContent() - this is a
+        // second, independent "topmost layer" traversal (CanvasWidget
+        // renders directly from the Project it's given, rather than going
+        // through MainWindow), so it needs the same check applied
+        // separately rather than inheriting it for free.
+        if (!it->visible()) {
+            continue;
+        }
         if (auto rendered = sound_mind::core::renderLayer(*it); rendered.has_value()) {
             return rendered;
         }

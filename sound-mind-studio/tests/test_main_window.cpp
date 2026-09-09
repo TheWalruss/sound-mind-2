@@ -10,6 +10,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QSlider>
 #include <QStatusBar>
 #include <QtTest/QtTest>
 
@@ -849,6 +850,12 @@ void MainWindowTest::refreshLayersPanelReflectsTheCurrentLayers() {
 
     auto* panel = window.findChild<LayersPanel*>();
     QVERIFY(panel != nullptr);
+    // LayersPanel::setLayers() deletes the previous rows via deleteLater()
+    // (see its own docs for why) - QTest::qWait(0) spins the event loop
+    // once so the initial (createFreshTestProject()'s own) row is
+    // actually gone before counting below, the same as it would have been
+    // by the time a real user's next interaction runs.
+    QTest::qWait(0);
     QCOMPARE(panel->findChildren<QLabel*>(QStringLiteral("nameLabel")).size(), 2);
 }
 
@@ -978,4 +985,33 @@ void MainWindowTest::reorderLayersRejectsAnInvalidPermutation() {
 
     QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(1));
     QVERIFY(!window.hasUnsavedChanges());
+}
+
+void MainWindowTest::changingARealRowsOpacitySliderDoesNotCrash() {
+    // Regression test for a real crash: dragging a row's opacity slider
+    // (or double-clicking its name to rename) used to crash the whole
+    // app. Root cause: MainWindow::setLayerOpacity()/renameLayerTo() both
+    // call refreshLayersPanel(), which used to *synchronously* delete
+    // every row widget - including the very slider/label still further
+    // up this same call stack, mid-emission of its own valueChanged()/
+    // doubleClicked() signal. LayersPanel::setLayers() now uses
+    // deleteLater() instead - this test drives the *real* embedded
+    // slider directly (not MainWindow::setLayerOpacity() on its own,
+    // which wouldn't reproduce the crash - nothing would be "mid-
+    // emission"), so it actually exercises the fixed code path. Renaming
+    // shares the identical setLayers() call and isn't separately
+    // exercised here only because it needs a real QInputDialog, which
+    // would block this headless test - see importAudioFile()'s docs.
+    MainWindow window;
+    createFreshTestProject(window);
+
+    auto* panel = window.findChild<LayersPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* slider = panel->findChild<QSlider*>(QStringLiteral("opacitySlider"));
+    QVERIFY(slider != nullptr);
+
+    slider->setValue(42);  // Emits valueChanged() for real, synchronously.
+
+    // If this line is reached at all, the process didn't crash.
+    QCOMPARE(window.project()->layers().front().opacity(), 0.42f);
 }

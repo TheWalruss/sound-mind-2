@@ -55,6 +55,11 @@ void LayersPanelTest::setLayersReplacesThePreviousRows() {
     single.id = 3;
     single.name = QStringLiteral("Only");
     panel.setLayers({single});
+    // setLayers() deletes the previous rows via deleteLater() (see its
+    // own docs for why) - QTest::qWait(0) spins the event loop once so
+    // that's actually happened before counting children below, the same
+    // as it would have by the time a real user's next interaction runs.
+    QTest::qWait(0);
 
     const auto nameLabels = panel.findChildren<QLabel*>(QStringLiteral("nameLabel"));
     QCOMPARE(nameLabels.size(), 1);
@@ -163,5 +168,6 @@ void LayersPanelTest::nonNormalLayersShowATypeTag() {
     QVERIFY(panel.findChild<QLabel*>(QStringLiteral("typeTagLabel")) != nullptr);
 
     panel.setLayers(twoNormalLayers());
+    QTest::qWait(0);  // let the Background row's deleteLater() actually happen - see setLayersReplacesThePreviousRows().
     QVERIFY(panel.findChild<QLabel*>(QStringLiteral("typeTagLabel")) == nullptr);
 }

@@ -39,6 +39,38 @@ adapted from the legacy Studio's own Layers panel, scoped down to what
   (`QInputDialog`). A rejected reorder still refreshes the panel, so its
   speculative drag-driven display snaps back to the authoritative order.
 
+### Fixed (found in manual testing, before the first push)
+
+- **Dragging a row didn't reorder anything.** `DragHandleLabel::forward()`
+  mapped the forwarded mouse event's position with `viewport->mapFrom(this,
+  pos)` - backwards: both `mapTo`/`mapFrom` require their "other widget"
+  argument to be an *ancestor of the object the method is called on*, and
+  here that's `viewport` being an ancestor of the drag handle, not the
+  other way around. The forwarded events landed on the wrong point,
+  outside any real item, so `QListWidget` never started a drag at all.
+  Fixed by calling `mapTo` on the drag handle itself, matching the
+  direction the legacy Studio's own equivalent code used.
+- **Hiding a layer toggled its own row icon but never changed the
+  canvas.** `MainWindow::topmostLayerWithContent()` (Playback/Pool/
+  Export's shared notion of "the composite") got the `visible()` check;
+  `CanvasWidget`'s own, entirely separate `findTopmostRender()` - the
+  function that actually decides what gets drawn - didn't, since it
+  renders straight from a `Project*` rather than going through
+  `MainWindow`. Fixed by adding the same check there.
+- **Renaming a layer, or dragging its opacity slider, crashed the whole
+  app.** Root cause: `LayersPanel::setLayers()` deleted the previous
+  rows' widgets *synchronously* - including, in these two cases, the very
+  widget (the name label, the slider) still further up the call stack,
+  mid-emission of its own signal (`renameLayerTo()`/`setLayerOpacity()`
+  both reach `setLayers()` via `refreshLayersPanel()`, called from that
+  same row's `doubleClicked()`/`valueChanged()` handler). Visibility's
+  toggle and the delete button happened not to crash only because
+  `QAbstractButton`'s own click handling is specifically written to
+  tolerate the button beneath it disappearing mid-click - `QSlider` and
+  this file's own `ClickableNameLabel` aren't. Fixed by using
+  `deleteLater()` instead of `delete` for the old rows, deferring their
+  actual destruction until nothing is still executing on top of them.
+
 ### Notes
 
 - **Scoped down from the opening roadmap paragraph's "add/delete"
@@ -58,15 +90,18 @@ adapted from the legacy Studio's own Layers panel, scoped down to what
 - **Drag-and-drop reordering itself isn't covered by an automated test** -
   matching this codebase's existing precedent for anything that
   fundamentally needs a real, interactive gesture (modal dialogs, real
-  file pickers) - confirmed manually instead.
+  file pickers) - confirmed manually instead (see Fixed, above, for what
+  manual testing actually caught here).
 - **No Y bump.** `Layer::visible` deserializes leniently - additive, not
   a breaking format change.
 
 Full regression suite: 105/105 ctest entries passing (codec, core,
-studio) - `sound-mind-studio-tests` now runs 95 QTest functions across
-seven classes (up from 73), including 10 new for `LayersPanel` and 12
-more for `MainWindow`'s layer-mutating slots; nine new Catch2 cases cover
-`Layer::visible` and `Project::removeLayer()`/`reorderLayers()` in
+studio) - `sound-mind-studio-tests` now runs 97 QTest functions across
+seven classes (up from 73), including 10 new for `LayersPanel`, 13 more
+for `MainWindow`'s layer-mutating slots and the opacity-slider crash
+regression test, and one for `CanvasWidget`'s own visibility-skip fix;
+nine new Catch2 cases cover `Layer::visible` and
+`Project::removeLayer()`/`reorderLayers()` in
 `sound-mind-core`.
 
 ## [0.0.12.1] - 2026-09-09

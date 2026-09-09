@@ -61,7 +61,16 @@ protected:
 private:
     void forward(QMouseEvent* event) {
         QWidget* viewport = list_->viewport();
-        const QPoint local = viewport->mapFrom(this, event->pos());
+        // this->mapTo(viewport, ...), not viewport->mapFrom(this, ...) -
+        // both take an "other widget" argument that Qt requires to be an
+        // *ancestor of the object the method is called on*, and here
+        // that's viewport being an ancestor of `this` (true, once
+        // setItemWidget() reparents this row under the viewport), not
+        // the other way around - the reversed call silently mapped to
+        // the wrong point instead of erroring, which is why dragging
+        // had no effect at all (the forwarded press/move never landed on
+        // any real item, so QListWidget never started a drag).
+        const QPoint local = mapTo(viewport, event->pos());
         QMouseEvent forwarded(event->type(), local, viewport->mapToGlobal(local), event->button(), event->buttons(),
                                event->modifiers());
         QApplication::sendEvent(viewport, &forwarded);
@@ -209,8 +218,23 @@ void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
     // separately from the item itself) - without this, every setLayers()
     // call after the first would leak the previous rows' widgets, which
     // would then keep showing up alongside the new ones.
+    //
+    // deleteLater(), not delete: setLayers() is commonly called *from*
+    // one of these very rows' own signal handlers (MainWindow's
+    // renameLayerTo()/setLayerOpacity()/etc. all call it via
+    // refreshLayersPanel(), reached via that row's own emitted signal) -
+    // a plain delete would destroy the widget still further up the very
+    // call stack currently running one of its own event handlers
+    // (QSlider::valueChanged's internal bookkeeping, or this file's own
+    // ClickableNameLabel::mouseDoubleClickEvent() touching `this` again
+    // right after emitting doubleClicked()) - a real, reproduced crash,
+    // not a theoretical one. deleteLater() defers the actual destruction
+    // to the next trip through the event loop, once nothing is still
+    // executing on top of it.
     for (int i = 0; i < list_->count(); ++i) {
-        delete list_->itemWidget(list_->item(i));
+        if (QWidget* rowWidget = list_->itemWidget(list_->item(i))) {
+            rowWidget->deleteLater();
+        }
     }
     list_->clear();
     for (auto it = layersBottomToTop.rbegin(); it != layersBottomToTop.rend(); ++it) {

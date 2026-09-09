@@ -9,4 +9,5 @@ private slots:
     void sizeHintFallsBackWithNoProject();
     void sizeHintMatchesProjectCanvasDimensions();
     void rendersALayersContentInsteadOfThePlaceholder();
+    void skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt();
 };

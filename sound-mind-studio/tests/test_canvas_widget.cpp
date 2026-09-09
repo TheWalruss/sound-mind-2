@@ -60,3 +60,45 @@ void CanvasWidgetTest::rendersALayersContentInsteadOfThePlaceholder() {
     QCOMPARE(centerPixel.green(), 0);
     QVERIFY(centerPixel.blue() > 120 && centerPixel.blue() < 135);
 }
+
+void CanvasWidgetTest::skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt() {
+    // Per the Layers Panel milestone (v0.Y.13.1) - toggling a layer hidden
+    // should actually change what's on screen, not just its own row icon.
+    Project project = Project::createNew(ProjectSettings{});
+
+    // Bottom (visible): full-scale red/no-green/mid-blue, same recipe as
+    // rendersALayersContentInsteadOfThePlaceholder() above.
+    StreamImage bottomContent;
+    bottomContent.config.binCount = 2;
+    bottomContent.frameCount = 2;
+    bottomContent.leftMagnitudeDb.assign(4, 0.0f);
+    bottomContent.rightMagnitudeDb.assign(4, -96.0f);
+    bottomContent.sharedPhaseRadians.assign(4, 0.0f);
+    Layer bottomLayer(0, "Bottom", LayerType::Normal);
+    bottomLayer.setContent(bottomContent);
+    project.addLayer(std::move(bottomLayer));
+
+    // Top (hidden): the inverse recipe - no red, full-scale green - so a
+    // wrong (unskipped) render is trivially distinguishable from a correct
+    // (skipped-to-Bottom) one.
+    StreamImage topContent;
+    topContent.config.binCount = 2;
+    topContent.frameCount = 2;
+    topContent.leftMagnitudeDb.assign(4, -96.0f);
+    topContent.rightMagnitudeDb.assign(4, 0.0f);
+    topContent.sharedPhaseRadians.assign(4, 0.0f);
+    Layer topLayer(0, "Top", LayerType::Normal);
+    topLayer.setContent(topContent);
+    topLayer.setVisible(false);
+    project.addLayer(std::move(topLayer));
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(20, 20);
+
+    const QImage rendered = widget.grab().toImage();
+    const QColor centerPixel = rendered.pixelColor(rendered.width() / 2, rendered.height() / 2);
+
+    QCOMPARE(centerPixel.red(), 255);
+    QCOMPARE(centerPixel.green(), 0);
+}

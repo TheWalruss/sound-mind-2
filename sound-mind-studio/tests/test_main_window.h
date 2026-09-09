@@ -71,4 +71,5 @@ private slots:
     void deleteLayerRefusesToDeleteTheBackgroundLayer();
     void reorderLayersAppliesAValidPermutation();
     void reorderLayersRejectsAnInvalidPermutation();
+    void changingARealRowsOpacitySliderDoesNotCrash();
 };
