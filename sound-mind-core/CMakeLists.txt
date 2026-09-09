@@ -23,6 +23,7 @@ add_library(sound-mind-core
     src/operation_log.cpp
     src/project.cpp
     src/compositor.cpp
+    src/audio_device_list.cpp
     src/playback_engine.cpp
     src/loop_engine.cpp
     src/record_engine.cpp

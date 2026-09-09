@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "sound_mind/core/audio_device_list.h"
+
 namespace sound_mind::core {
 
 PlaybackEngine::PlaybackEngine(AudioDeviceMode deviceMode) {
@@ -47,6 +49,38 @@ bool PlaybackEngine::isDeviceAvailable() const noexcept {
     return deviceAvailable_;
 }
 
+std::vector<std::string> PlaybackEngine::availableOutputDeviceNames() {
+    return availableAudioDeviceNames(deviceManager_, false);
+}
+
+bool PlaybackEngine::setPreferredOutputDevice(const std::string& deviceName) {
+    juce::AudioDeviceManager::AudioDeviceSetup setup;
+    deviceManager_.getAudioDeviceSetup(setup);
+    setup.outputDeviceName = juce::String(deviceName);
+    setup.useDefaultOutputChannels = true;
+    const juce::String error = deviceManager_.setAudioDeviceSetup(setup, true);
+    if (!error.isEmpty()) {
+        return false;
+    }
+    deviceAvailable_ = true;
+    return true;
+}
+
+std::string PlaybackEngine::currentOutputDeviceName() const {
+    if (!deviceAvailable_) {
+        return {};
+    }
+    return deviceManager_.getAudioDeviceSetup().outputDeviceName.toStdString();
+}
+
+void PlaybackEngine::setVolume(float volume) noexcept {
+    volume_.store(std::clamp(volume, 0.0f, kMaxVolume), std::memory_order_relaxed);
+}
+
+float PlaybackEngine::volume() const noexcept {
+    return volume_.load(std::memory_order_relaxed);
+}
+
 void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputChannels, int numSamples) noexcept {
     if (numOutputChannels <= 0 || numSamples <= 0) {
         return;
@@ -61,12 +95,13 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
 
     std::size_t position = position_.load(std::memory_order_relaxed);
     const std::size_t frameCount = audio_.frameCount();
+    const float volume = volume_.load(std::memory_order_relaxed);
 
     for (int sample = 0; sample < numSamples; ++sample) {
         if (position < frameCount) {
-            outputChannelData[0][sample] = audio_.left[position];
+            outputChannelData[0][sample] = audio_.left[position] * volume;
             if (numOutputChannels > 1) {
-                outputChannelData[1][sample] = audio_.right[position];
+                outputChannelData[1][sample] = audio_.right[position] * volume;
             }
             for (int channel = 2; channel < numOutputChannels; ++channel) {
                 outputChannelData[channel][sample] = 0.0f;

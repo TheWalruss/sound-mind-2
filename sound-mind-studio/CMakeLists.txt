@@ -30,14 +30,20 @@ add_library(sound-mind-studio-lib
     src/create_project_wizard.cpp
     src/landing_page.cpp
     src/layers_panel.cpp
+    src/loop_panel.cpp
     src/main_window.cpp
+    src/playback_panel.cpp
+    src/record_panel.cpp
     src/recent_projects.cpp
     src/theme.cpp
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/create_project_wizard.h
     include/sound_mind/studio/landing_page.h
     include/sound_mind/studio/layers_panel.h
+    include/sound_mind/studio/loop_panel.h
     include/sound_mind/studio/main_window.h
+    include/sound_mind/studio/playback_panel.h
+    include/sound_mind/studio/record_panel.h
     include/sound_mind/studio/recent_projects.h
     include/sound_mind/studio/theme.h
     assets/app.qrc

@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <utility>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/audio_device_list.h"
 
 namespace sound_mind::core {
 
@@ -55,7 +57,12 @@ void LoopEngine::start() {
     }
 
     if (deviceMode_ == AudioDeviceMode::Real) {
-        const juce::String error = deviceManager_.initialiseWithDefaultDevices(2, 2);
+        juce::AudioDeviceManager::AudioDeviceSetup setup;
+        setup.inputDeviceName = juce::String(preferredInputDevice_);
+        setup.outputDeviceName = juce::String(preferredOutputDevice_);
+        setup.useDefaultInputChannels = true;
+        setup.useDefaultOutputChannels = true;
+        const juce::String error = deviceManager_.initialise(2, 2, nullptr, true, {}, &setup);
         deviceAvailable_ = error.isEmpty();
         if (deviceAvailable_) {
             deviceManager_.addAudioCallback(this);
@@ -87,6 +94,30 @@ bool LoopEngine::isRunning() const noexcept {
 
 bool LoopEngine::isDeviceAvailable() const noexcept {
     return deviceAvailable_;
+}
+
+std::vector<std::string> LoopEngine::availableInputDeviceNames() {
+    return availableAudioDeviceNames(deviceManager_, true);
+}
+
+std::vector<std::string> LoopEngine::availableOutputDeviceNames() {
+    return availableAudioDeviceNames(deviceManager_, false);
+}
+
+void LoopEngine::setPreferredInputDevice(std::string deviceName) {
+    preferredInputDevice_ = std::move(deviceName);
+}
+
+const std::string& LoopEngine::preferredInputDevice() const noexcept {
+    return preferredInputDevice_;
+}
+
+void LoopEngine::setPreferredOutputDevice(std::string deviceName) {
+    preferredOutputDevice_ = std::move(deviceName);
+}
+
+const std::string& LoopEngine::preferredOutputDevice() const noexcept {
+    return preferredOutputDevice_;
 }
 
 void LoopEngine::setKeepLooping(bool keepLooping) noexcept {

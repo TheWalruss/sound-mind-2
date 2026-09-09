@@ -6,6 +6,7 @@ add_executable(sound-mind-core-tests
     test_project_settings.cpp
     test_project.cpp
     test_compositor.cpp
+    test_audio_device_list.cpp
     test_playback_engine.cpp
     test_loop_engine.cpp
     test_record_engine.cpp

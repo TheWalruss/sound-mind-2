@@ -17,7 +17,10 @@
 #include "test_create_project_wizard.h"
 #include "test_landing_page.h"
 #include "test_layers_panel.h"
+#include "test_loop_panel.h"
 #include "test_main_window.h"
+#include "test_playback_panel.h"
+#include "test_record_panel.h"
 #include "test_recent_projects.h"
 #include "test_theme.h"
 
@@ -58,6 +61,15 @@ int main(int argc, char** argv) {
 
     LayersPanelTest layersPanelTest;
     status |= QTest::qExec(&layersPanelTest, argc, argv);
+
+    LoopPanelTest loopPanelTest;
+    status |= QTest::qExec(&loopPanelTest, argc, argv);
+
+    RecordPanelTest recordPanelTest;
+    status |= QTest::qExec(&recordPanelTest, argc, argv);
+
+    PlaybackPanelTest playbackPanelTest;
+    status |= QTest::qExec(&playbackPanelTest, argc, argv);
 
     return status;
 }

@@ -37,6 +37,31 @@ TEST_CASE("LoopEngine starts with no image, not running, and keepLooping off", "
     CHECK(engine.loopsBehind() == 0);
 }
 
+TEST_CASE("A fresh LoopEngine prefers the default input/output devices", "[loop_engine]") {
+    const LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
+    CHECK(engine.preferredInputDevice().empty());
+    CHECK(engine.preferredOutputDevice().empty());
+}
+
+TEST_CASE("setPreferredInputDevice/setPreferredOutputDevice store the preference for the next start()",
+          "[loop_engine]") {
+    LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
+    engine.setPreferredInputDevice("Some Microphone");
+    engine.setPreferredOutputDevice("Some Speakers");
+    CHECK(engine.preferredInputDevice() == "Some Microphone");
+    CHECK(engine.preferredOutputDevice() == "Some Speakers");
+}
+
+TEST_CASE("availableInputDeviceNames/availableOutputDeviceNames are callable without crashing", "[loop_engine]") {
+    LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
+    const auto inputs = engine.availableInputDeviceNames();
+    const auto outputs = engine.availableOutputDeviceNames();
+    // No real device is guaranteed in a CI/test environment - just confirm
+    // the calls are well-formed.
+    CHECK(inputs == engine.availableInputDeviceNames());
+    CHECK(outputs == engine.availableOutputDeviceNames());
+}
+
 TEST_CASE("emptyImage returns a silent, correctly-dimensioned placeholder without touching currentImage()",
           "[loop_engine]") {
     const StreamCodecConfig config;

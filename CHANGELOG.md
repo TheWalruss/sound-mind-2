@@ -6,6 +6,85 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.15.1] - 2026-09-09
+
+The "Transport Panels" milestone from `docs/sound-mind-roadmap.md` (Phase
+2.5): Playback/Record/Loop each get their own dockable panel, adapted
+from the legacy Studio's separate docks, finally landing real input/
+output device selection and an above-unity Playback volume control.
+
+### Changed
+
+- **Play/Pause/Stop/Record/Loop are no longer direct toolbar actions** -
+  confirmed before implementing: matching the legacy Studio's own dock
+  panels exactly, all five moved fully into three new dock panels, not
+  just the newly-added device pickers/volume/Keep Looping. The transport
+  toolbar's three remaining actions for these are pure show/hide toggles
+  (`QDockWidget::toggleViewAction()`) for the panels, nothing more.
+- **The "Keep Looping" checkbox moved** from the transport toolbar (its
+  confirmed stopgap location as of `v0.0.14.1`) into the new Loop panel.
+
+### Added
+
+- **`sound_mind::studio::LoopPanel`/`RecordPanel`/`PlaybackPanel`**: three
+  new `QDockWidget`s (each wrapped in a `QScrollArea`, per the confirmed
+  scroll-bar requirement), hidden until a project exists like
+  `LayersPanel`. `LoopPanel`: Start/Stop, input+output device pickers,
+  "Keep Looping". `RecordPanel`: Start/Stop, an input device picker.
+  `PlaybackPanel`: Play/Pause/Stop, an output device picker, a volume
+  slider (0-200%). Every device picker's first entry is
+  "(System Default)", mapped to an empty device name - the same
+  empty-string-means-default convention the engines themselves use.
+- **`sound_mind::core::availableAudioDeviceNames()`**: a new shared free
+  function for the JUCE device-enumeration dance (`AudioIODeviceType::
+  scanForDevices()` then `getDeviceNames()`), used by all three engines'
+  own `availableInputDeviceNames()`/`availableOutputDeviceNames()` rather
+  than tripling the logic.
+- **`PlaybackEngine::setPreferredOutputDevice()`/`currentOutputDeviceName()`**:
+  switches immediately (its device is open for the engine's whole
+  lifetime, unlike the other two engines) - confirmed via a real JUCE
+  quirk found while testing (see Notes). **`setVolume()`/`volume()`**: a
+  real gain boost past unity, clamped to `[0, kMaxVolume]` (`2.0`, 200%) -
+  applied in `renderBlock()`.
+- **`LoopEngine`/`RecordEngine::setPreferredInputDevice()`** (`LoopEngine`
+  also `setPreferredOutputDevice()`): stores a preference applied on the
+  *next* start() - both only ever open a device inside start() to begin
+  with, unlike `PlaybackEngine`.
+- **`MainWindow::setLoopInputDevice()`/`setLoopOutputDevice()`/
+  `setRecordInputDevice()`/`setPlaybackOutputDevice()`/
+  `setPlaybackVolume()`**: the panels' actual device/volume-picker
+  handlers, plus `loopInputDevice()`/`loopOutputDevice()`/
+  `recordInputDevice()`/`playbackVolume()` readback accessors (matching
+  the `keepLooping()` accessor's own testability precedent).
+
+### Notes
+
+- **Two scope questions confirmed before implementing**: (1) transport
+  controls move fully into the panels, matching legacy exactly, not just
+  device pickers; (2) device/volume choices are session-only for this
+  pass (reset to system defaults every launch) - persistence via
+  `QSettings` is deferred, not part of this milestone.
+- **A real JUCE quirk, confirmed while testing**:
+  `AudioDeviceManager::setAudioDeviceSetup()` only actually validates a
+  device name once the manager's device types have been populated at
+  least once (`getAvailableDeviceTypes()`/`scanForDevices()`) - calling it
+  as the very first thing ever done on a brand-new engine trivially
+  "succeeds" against a name never actually checked. Never an issue in
+  practice (a real picker always populates itself first), but the tests
+  had to work around it explicitly.
+- **No Y bump.** No project file format changes; device/volume state
+  isn't persisted anywhere yet (see Notes above).
+
+Full regression suite: `sound-mind-core-tests` 86/86 Catch2 test cases
+(365 assertions) passing, including a new `test_audio_device_list.cpp`
+and 6/3/3 new cases for `PlaybackEngine`/`RecordEngine`/`LoopEngine`'s
+device-selection APIs; `sound-mind-studio-tests` runs 130 QTest functions
+across ten classes (up from 103 across seven) - three new classes
+(`LoopPanelTest` 7, `RecordPanelTest` 4, `PlaybackPanelTest` 6) and 10 new
+for `MainWindow`'s panel wiring, including two real embedded-widget,
+end-to-end wiring checks (`loopPanelToggleButtonStartsAndStopsTheRealEngine`,
+`playbackPanelButtonsDriveRealPlayback`).
+
 ## [0.0.14.1] - 2026-09-09
 
 The "Loop Mode" milestone from `docs/sound-mind-roadmap.md` (Phase 2.5),

@@ -5,6 +5,8 @@
 #include <fstream>
 #include <vector>
 
+#include <QCheckBox>
+#include <QComboBox>
 #include <QFile>
 #include <QImage>
 #include <QLabel>
@@ -17,11 +19,17 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
+#include "sound_mind/studio/loop_panel.h"
 #include "sound_mind/studio/main_window.h"
+#include "sound_mind/studio/playback_panel.h"
+#include "sound_mind/studio/record_panel.h"
 
 using sound_mind::studio::LandingPage;
 using sound_mind::studio::LayersPanel;
+using sound_mind::studio::LoopPanel;
 using sound_mind::studio::MainWindow;
+using sound_mind::studio::PlaybackPanel;
+using sound_mind::studio::RecordPanel;
 
 namespace {
 
@@ -1133,4 +1141,140 @@ void MainWindowTest::toggleLoopModeGivesANewLoopInputLayerAPlaceholderContentImm
     QVERIFY(loopLayer.content()->frameCount > 0);
 
     window.toggleLoopMode();  // cleanup.
+}
+
+void MainWindowTest::panelsAreHiddenUntilAProjectExists() {
+    MainWindow window;
+    auto* loopPanel = window.findChild<LoopPanel*>();
+    auto* recordPanel = window.findChild<RecordPanel*>();
+    auto* playbackPanel = window.findChild<PlaybackPanel*>();
+    QVERIFY(loopPanel != nullptr);
+    QVERIFY(recordPanel != nullptr);
+    QVERIFY(playbackPanel != nullptr);
+    QVERIFY(loopPanel->isHidden());
+    QVERIFY(recordPanel->isHidden());
+    QVERIFY(playbackPanel->isHidden());
+
+    createFreshTestProject(window);
+
+    QVERIFY(!loopPanel->isHidden());
+    QVERIFY(!recordPanel->isHidden());
+    QVERIFY(!playbackPanel->isHidden());
+}
+
+void MainWindowTest::toggleLoopModeSyncsTheLoopPanelsRunningState() {
+    MainWindow window;
+    createFreshTestProject(window);
+    auto* button = window.findChild<QPushButton*>(QStringLiteral("loopToggleButton"));
+    QVERIFY(button != nullptr);
+    QVERIFY(!button->isChecked());
+
+    window.toggleLoopMode();
+    QVERIFY(button->isChecked());
+    QCOMPARE(button->text(), QStringLiteral("Stop Loop"));
+
+    window.toggleLoopMode();
+    QVERIFY(!button->isChecked());
+    QCOMPARE(button->text(), QStringLiteral("Start Loop"));
+}
+
+void MainWindowTest::toggleRecordingSyncsTheRecordPanelsRecordingState() {
+    MainWindow window;
+    createFreshTestProject(window);
+    auto* button = window.findChild<QPushButton*>(QStringLiteral("recordToggleButton"));
+    QVERIFY(button != nullptr);
+    QVERIFY(!button->isChecked());
+
+    window.toggleRecording();
+    QVERIFY(button->isChecked());
+    QCOMPARE(button->text(), QStringLiteral("Stop Recording"));
+
+    window.toggleRecording();
+    QVERIFY(!button->isChecked());
+    QCOMPARE(button->text(), QStringLiteral("Start Recording"));
+}
+
+void MainWindowTest::setKeepLoopingSyncsTheLoopPanelsCheckBox() {
+    MainWindow window;
+    createFreshTestProject(window);
+    auto* checkBox = window.findChild<QCheckBox*>(QStringLiteral("keepLoopingCheckBox"));
+    QVERIFY(checkBox != nullptr);
+
+    window.setKeepLooping(true);
+    QVERIFY(checkBox->isChecked());
+
+    window.setKeepLooping(false);
+    QVERIFY(!checkBox->isChecked());
+}
+
+void MainWindowTest::setLoopInputDeviceForwardsToTheLoopEngine() {
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.loopInputDevice().isEmpty());
+
+    window.setLoopInputDevice(QStringLiteral("Some Microphone"));
+    QCOMPARE(window.loopInputDevice(), QStringLiteral("Some Microphone"));
+}
+
+void MainWindowTest::setLoopOutputDeviceForwardsToTheLoopEngine() {
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.loopOutputDevice().isEmpty());
+
+    window.setLoopOutputDevice(QStringLiteral("Some Speakers"));
+    QCOMPARE(window.loopOutputDevice(), QStringLiteral("Some Speakers"));
+}
+
+void MainWindowTest::setRecordInputDeviceForwardsToTheRecordEngine() {
+    MainWindow window;
+    QVERIFY(window.recordInputDevice().isEmpty());
+
+    window.setRecordInputDevice(QStringLiteral("Some Microphone"));
+    QCOMPARE(window.recordInputDevice(), QStringLiteral("Some Microphone"));
+}
+
+void MainWindowTest::setPlaybackVolumeForwardsToThePlaybackEngine() {
+    MainWindow window;
+    QCOMPARE(window.playbackVolume(), 1.0f);
+
+    window.setPlaybackVolume(150);
+    QCOMPARE(window.playbackVolume(), 1.5f);
+}
+
+void MainWindowTest::loopPanelToggleButtonStartsAndStopsTheRealEngine() {
+    // End-to-end wiring check, driving the real embedded button rather
+    // than calling toggleLoopMode() directly.
+    MainWindow window;
+    createFreshTestProject(window);
+    auto* button = window.findChild<QPushButton*>(QStringLiteral("loopToggleButton"));
+    QVERIFY(button != nullptr);
+
+    button->click();
+    QVERIFY(window.isLoopModeRunning());
+
+    button->click();
+    QVERIFY(!window.isLoopModeRunning());
+}
+
+void MainWindowTest::playbackPanelButtonsDriveRealPlayback() {
+    // End-to-end wiring check, driving the real embedded Play/Stop buttons
+    // rather than calling startPlayback()/stopPlayback() directly.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-panel-buttons.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    auto* playButton = window.findChild<QPushButton*>(QStringLiteral("playButton"));
+    auto* stopButton = window.findChild<QPushButton*>(QStringLiteral("stopButton"));
+    QVERIFY(playButton != nullptr);
+    QVERIFY(stopButton != nullptr);
+
+    playButton->click();
+    QVERIFY(window.isPlaying());
+
+    stopButton->click();
+    QVERIFY(!window.isPlaying());
 }

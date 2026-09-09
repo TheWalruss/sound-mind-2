@@ -14,7 +14,6 @@
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/recent_projects.h"
 
-class QCheckBox;
 class QCloseEvent;
 class QStackedWidget;
 class QString;
@@ -26,6 +25,9 @@ class CanvasWidget;
 class CreateProjectWizard;
 class LandingPage;
 class LayersPanel;
+class LoopPanel;
+class PlaybackPanel;
+class RecordPanel;
 
 /**
  * @brief The Sound Mind Studio main window.
@@ -102,6 +104,19 @@ class LayersPanel;
  * toolbar checkbox's actual work. updateLoopLayer() (renamed from
  * updateLiveLayer()) additionally reports `LoopEngine::loopsBehind()` in
  * the status bar - the confirmed scope's "visible loop-delay indicator".
+ *
+ * **As of `v0.Y.16.1` (Transport Panels):** Play/Pause/Stop/Loop/Record
+ * are no longer direct toolbar actions - each moved into its own new dock
+ * panel (`playbackPanel_`/`recordPanel_`/`loopPanel_`), adapted from the
+ * legacy Studio's own separate docks. The transport toolbar's three
+ * remaining actions for these are pure show/hide toggles
+ * (`QDockWidget::toggleViewAction()`), not transport controls themselves.
+ * The "Keep Looping" checkbox mentioned above moved from the toolbar into
+ * `loopPanel_`. Real input/output device selection
+ * (`setLoopInputDevice()`/`setLoopOutputDevice()`/`setRecordInputDevice()`/
+ * `setPlaybackOutputDevice()`) and an above-unity Playback volume control
+ * (`setPlaybackVolume()`) - all previously-deferred scope across Playback/
+ * Live Mode/Record's own original milestones - land on these panels too.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -203,6 +218,32 @@ public slots:
     void stopPlayback();
 
     /**
+     * @brief Switches `playbackEngine_` to the named output device, right
+     *        now - the actual work behind the Playback panel's device
+     *        picker (`v0.Y.16.1`).
+     *
+     * Forwards to `PlaybackEngine::setPreferredOutputDevice()` - see its
+     * own docs for why this takes effect immediately rather than on a
+     * later start(), unlike Loop/Record's device pickers. Reports a
+     * failed switch via the status bar (the previously open device, if
+     * any, stays open); does nothing silently on success beyond the
+     * switch itself.
+     *
+     * @param deviceName The device to switch to, or empty for the system
+     *        default.
+     */
+    void setPlaybackOutputDevice(const QString& deviceName);
+
+    /**
+     * @brief Sets `playbackEngine_`'s output gain - the actual work behind
+     *        the Playback panel's volume slider (`v0.Y.16.1`).
+     * @param percent `[0, PlaybackPanel::kMaxVolumePercent]` (200) - `100`
+     *        is unity gain; above `100` is a real boost past it, per the
+     *        confirmed scope for this milestone.
+     */
+    void setPlaybackVolume(int percent);
+
+    /**
      * @brief Starts or stops Loop Mode (renamed from Live Mode): a fixed-
      *        length loop pedal that continuously captures the default input
      *        device one loop at a time into a newly created layer, encoding/
@@ -254,18 +295,44 @@ public slots:
     /**
      * @brief Sets whether Loop Mode should keep replaying the last
      *        successfully captured take unchanged instead of recording
-     *        over it - the actual work behind the transport toolbar's
-     *        "Keep Looping" checkbox.
+     *        over it - the actual work behind the Loop panel's "Keep
+     *        Looping" checkbox (`v0.Y.16.1`; moved here from a transport
+     *        toolbar checkbox `v0.Y.12.1` added as a confirmed stopgap).
      *
-     * Forwards directly to `LoopEngine::setKeepLooping()` - see its own
-     * docs. Does nothing if no project is open yet (loopEngine_ doesn't
-     * exist until setProject() has been called at least once) - harmless,
-     * since there's no running Loop Mode session for the checkbox to affect
-     * in that case either.
+     * Also syncs `loopPanel_`'s own checkbox display (harmless/idempotent
+     * when called *from* that checkbox's own signal) - so calling this
+     * directly (a test, in particular) never leaves the panel showing a
+     * stale state. Forwards to `LoopEngine::setKeepLooping()` - see its
+     * own docs. Does nothing further if no project is open yet
+     * (loopEngine_ doesn't exist until setProject() has been called at
+     * least once) - harmless, since there's no running Loop Mode session
+     * for the checkbox to affect in that case either.
      *
      * @param keepLooping The new state.
      */
     void setKeepLooping(bool keepLooping);
+
+    /**
+     * @brief Sets which input device Loop Mode's *next* start() should
+     *        open - the actual work behind the Loop panel's input device
+     *        picker (`v0.Y.16.1`).
+     *
+     * Forwards to `LoopEngine::setPreferredInputDevice()` - see its own
+     * docs for why this only takes effect on the next start(), not
+     * retroactively. Does nothing if no project is open yet.
+     *
+     * @param deviceName The device to prefer, or empty for the system
+     *        default.
+     */
+    void setLoopInputDevice(const QString& deviceName);
+
+    /// @brief Sets which output device Loop Mode's *next* start() should
+    /// open - the actual work behind the Loop panel's output device
+    /// picker (`v0.Y.16.1`). See setLoopInputDevice()'s docs for the same
+    /// "next start()", "does nothing with no project open" behavior.
+    /// @param deviceName The device to prefer, or empty for the system
+    ///        default.
+    void setLoopOutputDevice(const QString& deviceName);
 
     /**
      * @brief Starts or stops Recording: one-shot capture from the default
@@ -275,10 +342,11 @@ public slots:
      *        from Loop Mode's per-loop, whole-buffer-encoded pipeline).
      *
      * Per the confirmed scope for this milestone (mirroring Playback's and
-     * Loop Mode's own precedent): defers a real input-device picker and
-     * input gain control - both named in the design doc's Record section -
-     * as UI affordances layered on top of a working capture pipeline.
-     * Stops Playback first if it's running (same device-contention
+     * Loop Mode's own precedent): defers an input gain control - named in
+     * the design doc's Record section - as a UI affordance layered on top
+     * of a working capture pipeline. A real input-device picker landed in
+     * `v0.Y.16.1` - see setRecordInputDevice(). Stops Playback first if
+     * it's running (same device-contention
      * reasoning as toggleLoopMode()); does nothing (refuses to start) if
      * Loop Mode is currently running, or if no project is open. Creates a
      * new Normal layer ("Recording") once capture stops and something was
@@ -290,6 +358,18 @@ public slots:
      * outright while Recording is running - see toggleLoopMode()'s docs.
      */
     void toggleRecording();
+
+    /**
+     * @brief Sets which input device Recording's *next* start() should
+     *        open - the actual work behind the Record panel's input
+     *        device picker (`v0.Y.16.1`).
+     *
+     * Forwards to `RecordEngine::setPreferredInputDevice()`.
+     *
+     * @param deviceName The device to prefer, or empty for the system
+     *        default.
+     */
+    void setRecordInputDevice(const QString& deviceName);
 
     /**
      * @brief Pools the topmost layer with content, then exports both its
@@ -515,6 +595,27 @@ public:
     /// @return The underlying RecordEngine's isRecording().
     [[nodiscard]] bool isRecording() const noexcept;
 
+    /// @brief The input device Loop Mode's next start() will prefer - see
+    /// setLoopInputDevice(). Empty for the system default, or if no
+    /// project has ever been opened yet.
+    /// @return The preferred input device name.
+    [[nodiscard]] QString loopInputDevice() const;
+
+    /// @brief The output device Loop Mode's next start() will prefer -
+    /// see setLoopOutputDevice(). Empty for the system default, or if no
+    /// project has ever been opened yet.
+    /// @return The preferred output device name.
+    [[nodiscard]] QString loopOutputDevice() const;
+
+    /// @brief The input device Recording's next start() will prefer - see
+    /// setRecordInputDevice(). Empty means the system default.
+    /// @return The preferred input device name.
+    [[nodiscard]] QString recordInputDevice() const;
+
+    /// @brief The current Playback output gain - see setPlaybackVolume().
+    /// @return `1.0` is unity; the underlying PlaybackEngine's volume().
+    [[nodiscard]] float playbackVolume() const noexcept;
+
     /**
      * @brief Imports a WAV file as a new layer, without prompting or
      *        showing an error dialog on failure.
@@ -696,6 +797,16 @@ private:
     /// called (see refreshLayersPanel()'s docs).
     LayersPanel* layersPanel_ = nullptr;
 
+    /// @brief The Playback/Record/Loop transport panels (`v0.Y.16.1`) -
+    /// each hidden until setProject() is first called, matching
+    /// layersPanel_'s own treatment. The transport toolbar's
+    /// Playback/Record/Loop actions are each that panel's own
+    /// toggleViewAction() (set up in the constructor), not separate
+    /// members - see the constructor's own comments.
+    PlaybackPanel* playbackPanel_ = nullptr;
+    RecordPanel* recordPanel_ = nullptr;
+    LoopPanel* loopPanel_ = nullptr;
+
     /// @brief Backing store for recentProjects_ - an ini-format file (not
     /// the platform registry/native format) specifically so
     /// QStandardPaths::setTestModeEnabled(true) (see tests/main.cpp) can
@@ -722,10 +833,6 @@ private:
     /// `LiveEngine` member's simpler, always-default-constructed shape.
     std::unique_ptr<sound_mind::core::LoopEngine> loopEngine_;
     QTimer* loopUpdateTimer_ = nullptr;
-
-    /// @brief The transport toolbar's "Keep Looping" checkbox - see
-    /// setKeepLooping()'s docs.
-    QCheckBox* keepLoopingCheckBox_ = nullptr;
 
     /// @brief The layer currently being captured into, while Loop Mode is
     /// running - std::nullopt otherwise. An id, not a Layer*, since

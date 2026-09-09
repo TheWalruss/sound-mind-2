@@ -141,3 +141,62 @@ TEST_CASE("AudioDeviceMode::None never reports a device as available", "[core][p
     const PlaybackEngine engine(AudioDeviceMode::None);
     CHECK_FALSE(engine.isDeviceAvailable());
 }
+
+TEST_CASE("A fresh PlaybackEngine has unity volume", "[core][playback_engine]") {
+    const PlaybackEngine engine(AudioDeviceMode::None);
+    CHECK(engine.volume() == 1.0f);
+}
+
+TEST_CASE("setVolume clamps to [0, kMaxVolume]", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+
+    engine.setVolume(1.5f);
+    CHECK(engine.volume() == 1.5f);
+
+    engine.setVolume(-1.0f);
+    CHECK(engine.volume() == 0.0f);
+
+    engine.setVolume(PlaybackEngine::kMaxVolume + 10.0f);
+    CHECK(engine.volume() == PlaybackEngine::kMaxVolume);
+}
+
+TEST_CASE("renderBlock applies volume as a real gain multiplier, including above unity",
+          "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    engine.play();
+    engine.setVolume(2.0f);
+
+    std::vector<float> left(2, 0.0f);
+    std::vector<float> right(2, 0.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 2);
+
+    CHECK(left[0] == 0.2f);   // 0.1 * 2.0
+    CHECK(left[1] == 0.4f);   // 0.2 * 2.0
+    CHECK(right[0] == -0.2f);  // -0.1 * 2.0
+}
+
+TEST_CASE("AudioDeviceMode::None reports no current output device", "[core][playback_engine]") {
+    const PlaybackEngine engine(AudioDeviceMode::None);
+    CHECK(engine.currentOutputDeviceName().empty());
+}
+
+TEST_CASE("setPreferredOutputDevice fails gracefully for an unknown device name", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    // Populate the device manager's device types first - JUCE's own
+    // setAudioDeviceSetup() has nothing to validate a device name against
+    // (and so trivially "succeeds") until some device type has actually
+    // been queried at least once, the same way availableOutputDeviceNames()
+    // (or a real start()) would in practice.
+    (void)engine.availableOutputDeviceNames();
+    CHECK_FALSE(engine.setPreferredOutputDevice("definitely not a real device name"));
+}
+
+TEST_CASE("availableOutputDeviceNames is callable without crashing", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    const auto names = engine.availableOutputDeviceNames();
+    // No real device is guaranteed in a CI/test environment - just confirm
+    // the call is well-formed.
+    CHECK(names == engine.availableOutputDeviceNames());
+}

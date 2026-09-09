@@ -80,4 +80,16 @@ private slots:
     void setKeepLoopingDoesNothingWithNoProjectOpen();
     void toggleLoopModeReusesAnExistingLoopInputLayerInsteadOfCreatingANewOne();
     void toggleLoopModeGivesANewLoopInputLayerAPlaceholderContentImmediately();
+
+    // Transport Panels (v0.Y.16.1)
+    void panelsAreHiddenUntilAProjectExists();
+    void toggleLoopModeSyncsTheLoopPanelsRunningState();
+    void toggleRecordingSyncsTheRecordPanelsRecordingState();
+    void setKeepLoopingSyncsTheLoopPanelsCheckBox();
+    void setLoopInputDeviceForwardsToTheLoopEngine();
+    void setLoopOutputDeviceForwardsToTheLoopEngine();
+    void setRecordInputDeviceForwardsToTheRecordEngine();
+    void setPlaybackVolumeForwardsToThePlaybackEngine();
+    void loopPanelToggleButtonStartsAndStopsTheRealEngine();
+    void playbackPanelButtonsDriveRealPlayback();
 };

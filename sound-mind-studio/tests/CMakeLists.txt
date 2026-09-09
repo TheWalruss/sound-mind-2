@@ -6,7 +6,10 @@ add_executable(sound-mind-studio-tests
     test_create_project_wizard.cpp
     test_landing_page.cpp
     test_layers_panel.cpp
+    test_loop_panel.cpp
     test_main_window.cpp
+    test_playback_panel.cpp
+    test_record_panel.cpp
     test_recent_projects.cpp
     test_theme.cpp
 )

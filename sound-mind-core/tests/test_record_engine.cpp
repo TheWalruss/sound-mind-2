@@ -105,3 +105,22 @@ TEST_CASE("stop() drains any samples still sitting in the ring buffer", "[record
 
     CHECK(engine.capturedAudio().frameCount() == input.size());
 }
+
+TEST_CASE("A fresh RecordEngine prefers the default input device", "[record_engine]") {
+    const RecordEngine engine(44100, AudioDeviceMode::None);
+    CHECK(engine.preferredInputDevice().empty());
+}
+
+TEST_CASE("setPreferredInputDevice stores the preference for the next start()", "[record_engine]") {
+    RecordEngine engine(44100, AudioDeviceMode::None);
+    engine.setPreferredInputDevice("Some Microphone");
+    CHECK(engine.preferredInputDevice() == "Some Microphone");
+}
+
+TEST_CASE("availableInputDeviceNames is callable without crashing", "[record_engine]") {
+    RecordEngine engine(44100, AudioDeviceMode::None);
+    const auto names = engine.availableInputDeviceNames();
+    // No real device is guaranteed in a CI/test environment - just confirm
+    // the call is well-formed.
+    CHECK(names == engine.availableInputDeviceNames());
+}

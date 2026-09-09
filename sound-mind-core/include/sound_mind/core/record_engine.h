@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include <juce_audio_devices/juce_audio_devices.h>
@@ -32,6 +33,11 @@ namespace sound_mind::core {
  * this first pass also defers the design doc's "choose the input device
  * (with rescan)" and "set an input gain" as UI affordances layered on top
  * of a working capture pipeline, rather than building them unasked.
+ *
+ * **As of `v0.Y.16.1` (Transport Panels):** the deferred device picker
+ * lands - availableInputDeviceNames()/setPreferredInputDevice() - for the
+ * new Record panel. An input gain control is still deferred; not named in
+ * this milestone's own confirmed scope.
  *
  * Architecture: the audio callback thread only ever copies fixed-size
  * blocks into a lock-free ring buffer (`juce::AbstractFifo`, same as
@@ -96,6 +102,35 @@ public:
     [[nodiscard]] bool isDeviceAvailable() const noexcept;
 
     /**
+     * @brief The input device names currently available, for the device
+     *        manager's current device type - see
+     *        `sound_mind::core::availableAudioDeviceNames()`'s own docs.
+     * @return Device names; empty if none are available (or
+     *         `AudioDeviceMode::None` was used and no device type exists).
+     */
+    [[nodiscard]] std::vector<std::string> availableInputDeviceNames();
+
+    /**
+     * @brief Sets which input device the *next* start() should open.
+     *
+     * Unlike `PlaybackEngine` (whose device stays open for its whole
+     * lifetime, so a device switch takes effect immediately), this engine
+     * only opens a device inside start() - so a preference set while
+     * already recording doesn't take effect until the *next* start(), not
+     * retroactively on the current session.
+     *
+     * @param deviceName The device to prefer, from
+     *        availableInputDeviceNames() - an empty string (the default)
+     *        requests the system default device.
+     */
+    void setPreferredInputDevice(std::string deviceName);
+
+    /// @brief The input device start() will prefer - see
+    /// setPreferredInputDevice(). Empty means "system default".
+    /// @return The preferred input device name.
+    [[nodiscard]] const std::string& preferredInputDevice() const noexcept;
+
+    /**
      * @brief Moves whatever's currently in the capture ring buffer into
      *        the accumulated recording.
      *
@@ -151,6 +186,7 @@ private:
     bool deviceAvailable_ = false;
     AudioDeviceMode deviceMode_;
     std::uint32_t sampleRateHz_;
+    std::string preferredInputDevice_;
 
     juce::AbstractFifo captureFifo_{kRingCapacity};
     std::vector<float> captureRingLeft_;

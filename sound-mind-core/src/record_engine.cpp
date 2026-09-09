@@ -1,6 +1,9 @@
 #include "sound_mind/core/record_engine.h"
 
 #include <algorithm>
+#include <utility>
+
+#include "sound_mind/core/audio_device_list.h"
 
 namespace sound_mind::core {
 
@@ -28,7 +31,10 @@ void RecordEngine::start() {
     if (deviceMode_ == AudioDeviceMode::Real) {
         // Input-only - Record doesn't monitor/pass audio through to an
         // output device (see the class docs' deferred-scope note).
-        const juce::String error = deviceManager_.initialiseWithDefaultDevices(2, 0);
+        juce::AudioDeviceManager::AudioDeviceSetup setup;
+        setup.inputDeviceName = juce::String(preferredInputDevice_);
+        setup.useDefaultInputChannels = true;
+        const juce::String error = deviceManager_.initialise(2, 0, nullptr, true, {}, &setup);
         deviceAvailable_ = error.isEmpty();
         if (deviceAvailable_) {
             deviceManager_.addAudioCallback(this);
@@ -61,6 +67,18 @@ bool RecordEngine::isRecording() const noexcept {
 
 bool RecordEngine::isDeviceAvailable() const noexcept {
     return deviceAvailable_;
+}
+
+std::vector<std::string> RecordEngine::availableInputDeviceNames() {
+    return availableAudioDeviceNames(deviceManager_, true);
+}
+
+void RecordEngine::setPreferredInputDevice(std::string deviceName) {
+    preferredInputDevice_ = std::move(deviceName);
+}
+
+const std::string& RecordEngine::preferredInputDevice() const noexcept {
+    return preferredInputDevice_;
 }
 
 void RecordEngine::drainAvailable() {

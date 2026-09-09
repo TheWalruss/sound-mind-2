@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <vector>
 
 #include <juce_audio_devices/juce_audio_devices.h>
@@ -89,6 +90,13 @@ namespace sound_mind::core {
  * after loop, instead of being recorded over. The default, `false`, matches
  * the legacy behavior: record over the previous take every loop.
  *
+ * **As of `v0.Y.16.1` (Transport Panels):** input/output device selection
+ * (availableInputDeviceNames()/availableOutputDeviceNames()/
+ * setPreferredInputDevice()/setPreferredOutputDevice()) for the new Loop
+ * panel - like `RecordEngine`, a preference set while already running only
+ * takes effect on the *next* start(), since (unlike `PlaybackEngine`) the
+ * device is only ever opened inside start().
+ *
  * @note Thread-safety: `start()`/`stop()`/`setKeepLooping()`/`keepLooping()`
  *       are meant to be called from the UI thread only. `processBlock()` is
  *       real-time-safe and is the one method actually called from the audio
@@ -151,6 +159,50 @@ public:
      * @return `true` if a real input+output device is open.
      */
     [[nodiscard]] bool isDeviceAvailable() const noexcept;
+
+    /**
+     * @brief The input device names currently available, for the device
+     *        manager's current device type - see
+     *        `sound_mind::core::availableAudioDeviceNames()`'s own docs.
+     * @return Device names; empty if none are available (or
+     *         `AudioDeviceMode::None` was used and no device type exists).
+     */
+    [[nodiscard]] std::vector<std::string> availableInputDeviceNames();
+
+    /// @brief The output device names currently available - see
+    /// availableInputDeviceNames()'s docs for the shared caveats.
+    /// @return Device names; empty if none are available.
+    [[nodiscard]] std::vector<std::string> availableOutputDeviceNames();
+
+    /**
+     * @brief Sets which input device the *next* start() should open.
+     *
+     * Like `RecordEngine` (and unlike `PlaybackEngine`): this engine only
+     * opens a device inside start(), so a preference set while already
+     * running doesn't take effect until the *next* start().
+     *
+     * @param deviceName The device to prefer, from
+     *        availableInputDeviceNames() - an empty string (the default)
+     *        requests the system default device.
+     */
+    void setPreferredInputDevice(std::string deviceName);
+
+    /// @brief The input device start() will prefer - see
+    /// setPreferredInputDevice(). Empty means "system default".
+    /// @return The preferred input device name.
+    [[nodiscard]] const std::string& preferredInputDevice() const noexcept;
+
+    /// @brief Sets which output device the *next* start() should open -
+    /// see setPreferredInputDevice()'s docs for the same "next start()"
+    /// timing.
+    /// @param deviceName From availableOutputDeviceNames(); empty for the
+    ///        system default.
+    void setPreferredOutputDevice(std::string deviceName);
+
+    /// @brief The output device start() will prefer - see
+    /// setPreferredOutputDevice(). Empty means "system default".
+    /// @return The preferred output device name.
+    [[nodiscard]] const std::string& preferredOutputDevice() const noexcept;
 
     /**
      * @brief Whether subsequent loops should replay the last successfully
@@ -283,6 +335,8 @@ private:
     AudioDeviceMode deviceMode_;
     sound_mind::codec::StreamCodecConfig config_;
     std::size_t loopLengthSamples_;
+    std::string preferredInputDevice_;
+    std::string preferredOutputDevice_;
 
     juce::AbstractFifo captureFifo_{kRingCapacity};
     std::vector<float> captureRingLeft_;

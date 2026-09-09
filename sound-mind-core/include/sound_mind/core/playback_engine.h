@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <string>
+#include <vector>
 
 #include <juce_audio_devices/juce_audio_devices.h>
 
@@ -39,14 +41,23 @@ enum class AudioDeviceMode {
  * step model. That fuller model is Live Mode's job (`v0.Y.7.1`) - see the
  * roadmap for why.
  *
- * @note Thread-safety: `loadAudio()`/`play()`/`pause()`/`stop()` are meant
- *       to be called from the UI thread only. `loadAudio()` must not be
- *       called while playing (`stop()` first) - swapping the buffer while
- *       the audio thread might be reading it isn't safe, and this first
- *       pass doesn't build the lock-free double-buffering that would allow
- *       it. `renderBlock()` is the one method actually called from the
- *       audio callback thread (indirectly, via JUCE) - it is real-time-safe
- *       (no allocation, no locking, only atomics and array indexing).
+ * **As of `v0.Y.16.1` (Transport Panels):** output device selection
+ * (availableOutputDeviceNames()/setPreferredOutputDevice()/
+ * currentOutputDeviceName()) and a gain-boost-capable volume control
+ * (setVolume()/volume(), allowed above unity - see kMaxVolume) - both
+ * previously-deferred scope, per the Playback panel this milestone adds.
+ *
+ * @note Thread-safety: `loadAudio()`/`play()`/`pause()`/`stop()`/
+ *       `setPreferredOutputDevice()` are meant to be called from the UI
+ *       thread only. `loadAudio()` must not be called while playing
+ *       (`stop()` first) - swapping the buffer while the audio thread
+ *       might be reading it isn't safe, and this first pass doesn't build
+ *       the lock-free double-buffering that would allow it. `renderBlock()`
+ *       is the one method actually called from the audio callback thread
+ *       (indirectly, via JUCE) - it is real-time-safe (no allocation, no
+ *       locking, only atomics and array indexing); `setVolume()`/`volume()`
+ *       are real-time-safe too (a plain atomic), safely callable from
+ *       either thread.
  */
 class PlaybackEngine : private juce::AudioIODeviceCallback {
 public:
@@ -112,6 +123,67 @@ public:
      */
     void renderBlock(float* const* outputChannelData, int numOutputChannels, int numSamples) noexcept;
 
+    /**
+     * @brief The output device names currently available, for the device
+     *        manager's current device type - see
+     *        `sound_mind::core::availableAudioDeviceNames()`'s own docs.
+     * @return Device names; empty if none are available (or
+     *         `AudioDeviceMode::None` was used and no device type exists).
+     */
+    [[nodiscard]] std::vector<std::string> availableOutputDeviceNames();
+
+    /**
+     * @brief Switches to the named output device, right now.
+     *
+     * Unlike `LoopEngine`/`RecordEngine` (which have a separate start()/
+     * stop() to defer a device-preference change to), this engine opens
+     * its device once, at construction, and keeps it open for its whole
+     * lifetime (see the class docs) - so there's no later "start" to defer
+     * to. Switching devices while `isPlaying()` is safe (JUCE closes and
+     * reopens around the switch) but will produce a brief audible gap.
+     *
+     * @param deviceName The device to switch to, from
+     *        availableOutputDeviceNames() - an empty string requests the
+     *        system default device.
+     * @return `true` if the switch succeeded. `false` leaves whichever
+     *         device was open before this call unchanged (including if
+     *         `deviceName` isn't a currently available device).
+     *
+     * @note A real JUCE quirk, confirmed while testing: an unrecognized
+     *       `deviceName` is only actually rejected (returning `false`) once
+     *       the device manager's device types have been populated at least
+     *       once - calling availableOutputDeviceNames() first (as a real
+     *       caller populating a device picker always would) guarantees
+     *       that; calling this as the very first thing ever done on a
+     *       brand-new engine does not, and would trivially "succeed"
+     *       against a name that was never actually validated.
+     */
+    bool setPreferredOutputDevice(const std::string& deviceName);
+
+    /// @brief The currently open output device's name.
+    /// @return Empty if no device is open (isDeviceAvailable() is `false`).
+    [[nodiscard]] std::string currentOutputDeviceName() const;
+
+    /**
+     * @brief Sets the output gain applied in renderBlock().
+     *
+     * Allowed above `1.0` - a real gain boost past unity, not just an
+     * attenuator down to silence, per the confirmed scope for this
+     * milestone. Clamped to `[0, kMaxVolume]`.
+     *
+     * @param volume The new gain - `1.0` is unchanged/unity.
+     */
+    void setVolume(float volume) noexcept;
+
+    /// @brief The current output gain - see setVolume().
+    /// @return The current gain, `1.0` meaning unity.
+    [[nodiscard]] float volume() const noexcept;
+
+    /// @brief The upper bound setVolume() clamps to - 200%, a real boost
+    /// past unity but still a sane ceiling against accidental clipping/
+    /// hearing damage from an unbounded slider.
+    static constexpr float kMaxVolume = 2.0f;
+
 private:
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData, int numInputChannels,
                                            float* const* outputChannelData, int numOutputChannels, int numSamples,
@@ -124,6 +196,7 @@ private:
     sound_mind::codec::AudioBuffer audio_;
     std::atomic<std::size_t> position_{0};
     std::atomic<bool> playing_{false};
+    std::atomic<float> volume_{1.0f};
 };
 
 }  // namespace sound_mind::core

@@ -9,7 +9,6 @@
 #include <stdexcept>
 
 #include <QAction>
-#include <QCheckBox>
 #include <QCloseEvent>
 #include <QCoreApplication>
 #include <QFileDialog>
@@ -37,6 +36,9 @@
 #include "sound_mind/studio/create_project_wizard.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
+#include "sound_mind/studio/loop_panel.h"
+#include "sound_mind/studio/playback_panel.h"
+#include "sound_mind/studio/record_panel.h"
 #include "sound_mind/studio/theme.h"
 
 #ifndef SOUND_MIND_VERSION
@@ -51,6 +53,18 @@ const char* kAudioFileFilter = "WAV Audio (*.wav)";
 const char* kImageFileFilter = "Images (*.png *.jpg *.jpeg *.bmp *.tga *.webp)";
 const char* kExportAudioFileFilter = "FLAC Audio (*.flac);;Ogg Vorbis Audio (*.ogg);;MP3 Audio (*.mp3)";
 const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
+
+/// @brief Converts a plain std::string device-name list (as the engines'
+/// availableXDeviceNames() methods return) into the QStringList a device
+/// picker combo box actually wants.
+[[nodiscard]] QStringList toQStringList(const std::vector<std::string>& names) {
+    QStringList result;
+    result.reserve(static_cast<int>(names.size()));
+    for (const std::string& name : names) {
+        result.append(QString::fromStdString(name));
+    }
+    return result;
+}
 
 /// @brief Maps a destination path's extension to a compressed audio format.
 /// @return The matching format, or `std::nullopt` for an unrecognized
@@ -154,6 +168,35 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(layersPanel_, &LayersPanel::deleteRequested, this, &MainWindow::deleteLayer);
     connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
 
+    // Playback/Record/Loop each get their own dockable panel (v0.Y.16.1) -
+    // hidden until setProject(), matching layersPanel_'s own "nothing to
+    // control yet" treatment, even though playbackEngine_/recordEngine_
+    // themselves exist regardless of project state.
+    playbackPanel_ = new PlaybackPanel(this);
+    playbackPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, playbackPanel_);
+    connect(playbackPanel_, &PlaybackPanel::playRequested, this, &MainWindow::startPlayback);
+    connect(playbackPanel_, &PlaybackPanel::pauseRequested, this, &MainWindow::pausePlayback);
+    connect(playbackPanel_, &PlaybackPanel::stopRequested, this, &MainWindow::stopPlayback);
+    connect(playbackPanel_, &PlaybackPanel::outputDeviceChanged, this, &MainWindow::setPlaybackOutputDevice);
+    connect(playbackPanel_, &PlaybackPanel::volumePercentChanged, this, &MainWindow::setPlaybackVolume);
+    playbackPanel_->setOutputDevices(toQStringList(playbackEngine_.availableOutputDeviceNames()));
+
+    recordPanel_ = new RecordPanel(this);
+    recordPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, recordPanel_);
+    connect(recordPanel_, &RecordPanel::toggleRequested, this, &MainWindow::toggleRecording);
+    connect(recordPanel_, &RecordPanel::inputDeviceChanged, this, &MainWindow::setRecordInputDevice);
+    recordPanel_->setInputDevices(toQStringList(recordEngine_.availableInputDeviceNames()));
+
+    loopPanel_ = new LoopPanel(this);
+    loopPanel_->hide();  // also needs setProject() - loopEngine_ doesn't exist until then.
+    addDockWidget(Qt::RightDockWidgetArea, loopPanel_);
+    connect(loopPanel_, &LoopPanel::toggleRequested, this, &MainWindow::toggleLoopMode);
+    connect(loopPanel_, &LoopPanel::keepLoopingChanged, this, &MainWindow::setKeepLooping);
+    connect(loopPanel_, &LoopPanel::inputDeviceChanged, this, &MainWindow::setLoopInputDevice);
+    connect(loopPanel_, &LoopPanel::outputDeviceChanged, this, &MainWindow::setLoopOutputDevice);
+
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
 
     QAction* newAction = fileMenu->addAction(tr("&New Project"));
@@ -193,31 +236,20 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     QToolBar* transportToolBar = addToolBar(tr("Transport"));
     // Plain text actions rather than icons - no icon assets exist yet, and
     // these are unambiguous enough on their own for a first pass.
-    QAction* playAction = transportToolBar->addAction(tr("Play"));
-    connect(playAction, &QAction::triggered, this, &MainWindow::startPlayback);
-
-    QAction* pauseAction = transportToolBar->addAction(tr("Pause"));
-    connect(pauseAction, &QAction::triggered, this, &MainWindow::pausePlayback);
-
-    QAction* stopAction = transportToolBar->addAction(tr("Stop"));
-    connect(stopAction, &QAction::triggered, this, &MainWindow::stopPlayback);
-
     QAction* poolAction = transportToolBar->addAction(tr("Pool Layer"));
     connect(poolAction, &QAction::triggered, this, &MainWindow::poolTopmostLayer);
 
-    QAction* loopAction = transportToolBar->addAction(tr("Loop"));
-    loopAction->setCheckable(true);
-    connect(loopAction, &QAction::triggered, this, &MainWindow::toggleLoopMode);
-
-    // The "Keep Looping" checkbox - a plain QCheckBox rather than a
-    // QAction, since it needs to show its own label/checkmark inline
-    // rather than toggling a single button's own pressed state (there's no
-    // icon asset to use for it either - matching the plain-text-action
-    // precedent above). Forwards straight to setKeepLooping() - see its own
-    // docs.
-    keepLoopingCheckBox_ = new QCheckBox(tr("Keep Looping"), this);
-    connect(keepLoopingCheckBox_, &QCheckBox::toggled, this, &MainWindow::setKeepLooping);
-    transportToolBar->addWidget(keepLoopingCheckBox_);
+    // As of v0.Y.16.1 (Transport Panels): Play/Pause/Stop/Loop/Record are
+    // no longer direct toolbar actions - each now lives inside its own
+    // dock panel (see the panel construction above), and these three
+    // toolbar actions are pure show/hide toggles for those docks.
+    // toggleViewAction() is Qt's own ready-made action for exactly this -
+    // it stays in sync with the dock's actual visibility automatically, no
+    // manual signal wiring needed (unlike a hand-rolled checkable QAction
+    // would).
+    transportToolBar->addAction(playbackPanel_->toggleViewAction());
+    transportToolBar->addAction(recordPanel_->toggleViewAction());
+    transportToolBar->addAction(loopPanel_->toggleViewAction());
 
     // ~30fps - frequent enough for each completed loop's spectrogram
     // update to read as prompt, without repainting so often it competes
@@ -226,10 +258,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     loopUpdateTimer_ = new QTimer(this);
     loopUpdateTimer_->setInterval(33);
     connect(loopUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLoopLayer);
-
-    QAction* recordAction = transportToolBar->addAction(tr("Record"));
-    recordAction->setCheckable(true);
-    connect(recordAction, &QAction::triggered, this, &MainWindow::toggleRecording);
 
     // Just needs to keep RecordEngine's ring buffer (~370ms of headroom at
     // its default capacity/sample rate) from ever filling up - unlike
@@ -301,8 +329,10 @@ void MainWindow::setProject(sound_mind::core::Project project) {
         loopEngine_->stop();
     }
     loopLayerId_.reset();
+    loopPanel_->setRunning(false);
     recordDrainTimer_->stop();
     recordEngine_.stop();
+    recordPanel_->setRecording(false);
 
     project_ = std::move(project);
 
@@ -315,6 +345,8 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     const auto config = sound_mind::core::streamCodecConfigFor(settings);
     const auto loopLengthSamples = static_cast<std::size_t>(settings.canvasWidth) * config.hopLength;
     loopEngine_ = std::make_unique<sound_mind::core::LoopEngine>(config, loopLengthSamples);
+    loopPanel_->setInputDevices(toQStringList(loopEngine_->availableInputDeviceNames()));
+    loopPanel_->setOutputDevices(toQStringList(loopEngine_->availableOutputDeviceNames()));
 
     canvas_->setProject(&*project_);
     playbackEngine_.stop();
@@ -322,6 +354,9 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
     layersPanel_->show();
+    playbackPanel_->show();
+    recordPanel_->show();
+    loopPanel_->show();
     refreshLayersPanel();
 }
 
@@ -781,6 +816,20 @@ void MainWindow::stopPlayback() {
     playbackLoaded_ = false;
 }
 
+void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
+    // Unlike Loop/Record's device preferences (only applied on their next
+    // start()), PlaybackEngine's device is open for its whole lifetime, so
+    // this switches immediately - see PlaybackEngine::setPreferredOutputDevice()'s
+    // own docs.
+    if (!playbackEngine_.setPreferredOutputDevice(deviceName.toStdString())) {
+        statusBar()->showMessage(tr("Could not switch to the selected output device."), 5000);
+    }
+}
+
+void MainWindow::setPlaybackVolume(int percent) {
+    playbackEngine_.setVolume(static_cast<float>(percent) / 100.0f);
+}
+
 void MainWindow::toggleLoopMode() {
     if (!loopEngine_) {
         // No project has ever been opened yet - loopEngine_ doesn't exist
@@ -794,6 +843,7 @@ void MainWindow::toggleLoopMode() {
         loopUpdateTimer_->stop();
         loopEngine_->stop();
         loopLayerId_.reset();
+        loopPanel_->setRunning(false);
         statusBar()->showMessage(tr("Loop capture stopped."), 5000);
         return;
     }
@@ -838,6 +888,7 @@ void MainWindow::toggleLoopMode() {
     canvas_->update();
 
     loopEngine_->start();
+    loopPanel_->setRunning(true);
     if (!loopEngine_->isDeviceAvailable()) {
         statusBar()->showMessage(
             tr("Loop capture started, but no input device is available - nothing will be captured."), 5000);
@@ -848,10 +899,25 @@ void MainWindow::toggleLoopMode() {
 }
 
 void MainWindow::setKeepLooping(bool keepLooping) {
+    loopPanel_->setKeepLoopingChecked(keepLooping);
     if (!loopEngine_) {
         return;
     }
     loopEngine_->setKeepLooping(keepLooping);
+}
+
+void MainWindow::setLoopInputDevice(const QString& deviceName) {
+    if (!loopEngine_) {
+        return;
+    }
+    loopEngine_->setPreferredInputDevice(deviceName.toStdString());
+}
+
+void MainWindow::setLoopOutputDevice(const QString& deviceName) {
+    if (!loopEngine_) {
+        return;
+    }
+    loopEngine_->setPreferredOutputDevice(deviceName.toStdString());
 }
 
 void MainWindow::updateLoopLayer() {
@@ -896,10 +962,27 @@ bool MainWindow::isRecording() const noexcept {
     return recordEngine_.isRecording();
 }
 
+QString MainWindow::loopInputDevice() const {
+    return loopEngine_ ? QString::fromStdString(loopEngine_->preferredInputDevice()) : QString();
+}
+
+QString MainWindow::loopOutputDevice() const {
+    return loopEngine_ ? QString::fromStdString(loopEngine_->preferredOutputDevice()) : QString();
+}
+
+QString MainWindow::recordInputDevice() const {
+    return QString::fromStdString(recordEngine_.preferredInputDevice());
+}
+
+float MainWindow::playbackVolume() const noexcept {
+    return playbackEngine_.volume();
+}
+
 void MainWindow::toggleRecording() {
     if (recordEngine_.isRecording()) {
         recordDrainTimer_->stop();
         recordEngine_.stop();
+        recordPanel_->setRecording(false);
 
         const sound_mind::codec::AudioBuffer& captured = recordEngine_.capturedAudio();
         if (!project_ || captured.frameCount() == 0) {
@@ -940,6 +1023,7 @@ void MainWindow::toggleRecording() {
     stopPlayback();
 
     recordEngine_.start();
+    recordPanel_->setRecording(true);
     if (!recordEngine_.isDeviceAvailable()) {
         statusBar()->showMessage(tr("Recording started, but no input device is available - nothing will be captured."),
                                   5000);
@@ -947,6 +1031,10 @@ void MainWindow::toggleRecording() {
         statusBar()->showMessage(tr("Recording..."));
     }
     recordDrainTimer_->start();
+}
+
+void MainWindow::setRecordInputDevice(const QString& deviceName) {
+    recordEngine_.setPreferredInputDevice(deviceName.toStdString());
 }
 
 void MainWindow::drainRecording() {
