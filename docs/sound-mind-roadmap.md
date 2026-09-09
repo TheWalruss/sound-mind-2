@@ -179,7 +179,13 @@ A dockable panel listing the project's layer stack, adapted from the legacy Stud
 
 **Demo:** open a project with several layers, reorder them by dragging, hide one, rename another, adjust an opacity slider, delete a fourth.
 
-**No Y bump.** Adding `visible` to the in-memory `Layer` model is additive to the project file's per-layer JSON, not a change to an already-established field.
+**Implemented as `sound_mind::studio::LayersPanel`** (a `QDockWidget`, hidden until a project exists), **`Project::removeLayer()`/`reorderLayers()`** (new - per `layers()`'s own docs, membership/order changes go through dedicated methods, not the mutable vector directly), and **`MainWindow::toggleLayerVisibility()`/`setLayerOpacity()`/`renameLayer()`+`renameLayerTo()`/`deleteLayer()`/`reorderLayers()`** (the last four mirroring the openProject()/openProjectAt() interactive-vs-testable split where a real dialog's involved - only renaming needs one, via `QInputDialog`).
+
+**One item narrowed from the opening paragraph's "add/delete" mention:** no "+ Add Layer" button this pass, despite the general adapted-from-legacy list naming "add" - the detailed Row design bullet above and the demo line never actually called for one, and Painting doesn't exist yet (Phase 3) to make a blank layer meaningful to add. Left out rather than building placeholder UI for it, matching this milestone's own stated philosophy about the settings/gear button.
+
+**Reordering's drag validation, confirmed while implementing:** a drag that would displace `Background`/`Equalizer` from their fixed position is rejected - `LayersPanel` snaps its own display back to the last known-good order rather than emitting the reorder, and `MainWindow::reorderLayers()`/`Project::reorderLayers()` both independently re-validate too (defense in depth, the same pattern `setProject()`'s engine-stopping already established). The drag-and-drop mechanics themselves aren't covered by an automated test - matching this codebase's existing precedent for anything that fundamentally needs a real, interactive gesture (modal dialogs, real file pickers) - confirmed manually instead.
+
+**No Y bump**, confirmed: `Layer::visible` deserializes leniently (defaults to `true` if absent, the same treatment `ProjectSettings`' own new fields got in `v0.Y.11.1`) - a project file saved before this milestone still loads.
 
 ### v0.Y.14.1 - Visual Identity
 

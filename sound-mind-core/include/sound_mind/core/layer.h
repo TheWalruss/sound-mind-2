@@ -93,6 +93,20 @@ public:
     [[nodiscard]] float opacity() const noexcept { return opacity_; }
 
     /**
+     * @brief Whether this layer currently contributes to the project at
+     *        all - see `docs/sound-mind-roadmap.md`'s Layers Panel
+     *        milestone (`v0.Y.13.1`).
+     *
+     * A hidden layer is skipped by "topmost layer with content" logic
+     * (`sound-mind-studio`'s `MainWindow::topmostLayerWithContent()`, in
+     * particular) - real multi-layer compositing (which would need this
+     * for blending, not just skipping) is still separately deferred.
+     *
+     * @return `true` unless explicitly hidden via setVisible(false).
+     */
+    [[nodiscard]] bool visible() const noexcept { return visible_; }
+
+    /**
      * @brief Reassigns the layer's id.
      *
      * Not needed for normal use - a Layer's id is meant to be set once at
@@ -116,6 +130,15 @@ public:
      * @param opacity Intended to be in [0, 1]; not clamped or validated here.
      */
     void setOpacity(float opacity) noexcept { opacity_ = opacity; }
+
+    /**
+     * @brief Sets whether this layer currently contributes to the project.
+     * @param visible The new visibility. Not enforced here that a
+     *        `Background` layer stays visible - that's a UI-level rule
+     *        (`sound-mind-studio`'s `LayersPanel` disables the toggle for
+     *        it), not a `Layer`-level invariant.
+     */
+    void setVisible(bool visible) noexcept { visible_ = visible; }
 
     /**
      * @brief This layer's cached Stream-encoded content, if it's been
@@ -163,6 +186,7 @@ private:
     std::string name_;
     LayerType type_ = LayerType::Normal;
     float opacity_ = 1.0f;
+    bool visible_ = true;
     std::optional<sound_mind::codec::StreamImage> content_;
     std::optional<sound_mind::codec::PoolImage> poolContent_;
 };

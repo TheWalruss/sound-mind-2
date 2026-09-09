@@ -11,7 +11,9 @@
 #include <QCoreApplication>
 #include <QFileDialog>
 #include <QImage>
+#include <QInputDialog>
 #include <QKeySequence>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -31,6 +33,7 @@
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/create_project_wizard.h"
 #include "sound_mind/studio/landing_page.h"
+#include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/theme.h"
 
 #ifndef SOUND_MIND_VERSION
@@ -138,6 +141,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     stack_->addWidget(landingPage_);  // index 0 - shown first, see setProject().
     stack_->addWidget(canvas_);       // index 1
     setCentralWidget(stack_);
+
+    layersPanel_ = new LayersPanel(this);
+    layersPanel_->hide();  // nothing to show until setProject() - see refreshLayersPanel()'s docs.
+    addDockWidget(Qt::RightDockWidgetArea, layersPanel_);
+    connect(layersPanel_, &LayersPanel::visibilityToggled, this, &MainWindow::toggleLayerVisibility);
+    connect(layersPanel_, &LayersPanel::opacityChanged, this, &MainWindow::setLayerOpacity);
+    connect(layersPanel_, &LayersPanel::renameRequested, this, &MainWindow::renameLayer);
+    connect(layersPanel_, &LayersPanel::deleteRequested, this, &MainWindow::deleteLayer);
+    connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
 
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
 
@@ -283,6 +295,8 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     playbackLoaded_ = false;
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
+    layersPanel_->show();
+    refreshLayersPanel();
 }
 
 void MainWindow::newProject() {
@@ -445,6 +459,7 @@ bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* err
         // before, rather than silently keep playing stale content.
         playbackLoaded_ = false;
         hasUnsavedChanges_ = true;
+        refreshLayersPanel();
         statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
         return true;
     } catch (const std::exception& e) {
@@ -484,6 +499,7 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, QString* err
         canvas_->update();
         playbackLoaded_ = false;
         hasUnsavedChanges_ = true;
+        refreshLayersPanel();
         statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
         return true;
     } catch (const std::exception& e) {
@@ -585,7 +601,7 @@ sound_mind::core::Layer* MainWindow::topmostLayerWithContent() {
     }
     auto& layers = project_->layers();
     for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
-        if (it->content().has_value()) {
+        if (it->content().has_value() && it->visible()) {
             return &*it;
         }
     }
@@ -602,6 +618,110 @@ sound_mind::core::Layer* MainWindow::layerById(sound_mind::core::LayerId id) {
         }
     }
     return nullptr;
+}
+
+void MainWindow::refreshLayersPanel() {
+    std::vector<LayersPanel::RowData> rows;
+    if (project_) {
+        rows.reserve(project_->layers().size());
+        for (const auto& layer : project_->layers()) {
+            LayersPanel::RowData row;
+            row.id = layer.id();
+            row.name = QString::fromStdString(layer.name());
+            row.type = layer.type();
+            row.opacity = layer.opacity();
+            row.visible = layer.visible();
+            rows.push_back(row);
+        }
+    }
+    layersPanel_->setLayers(rows);
+}
+
+void MainWindow::toggleLayerVisibility(sound_mind::core::LayerId id, bool visible) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    layer->setVisible(visible);
+    hasUnsavedChanges_ = true;
+    playbackLoaded_ = false;  // "topmost layer with content" may have changed.
+    canvas_->update();
+    refreshLayersPanel();
+}
+
+void MainWindow::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    layer->setOpacity(opacity);
+    hasUnsavedChanges_ = true;
+    refreshLayersPanel();
+}
+
+void MainWindow::renameLayer(sound_mind::core::LayerId id) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    bool ok = false;
+    const QString newName = QInputDialog::getText(this, tr("Rename Layer"), tr("Name:"), QLineEdit::Normal,
+                                                    QString::fromStdString(layer->name()), &ok);
+    if (!ok) {
+        return;
+    }
+    renameLayerTo(id, newName);
+}
+
+bool MainWindow::renameLayerTo(sound_mind::core::LayerId id, const QString& newName) {
+    if (newName.isEmpty()) {
+        return false;
+    }
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return false;
+    }
+    layer->setName(newName.toStdString());
+    hasUnsavedChanges_ = true;
+    refreshLayersPanel();
+    return true;
+}
+
+void MainWindow::deleteLayer(sound_mind::core::LayerId id) {
+    if (!project_) {
+        return;
+    }
+    const sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    if (layer->type() == sound_mind::core::LayerType::Background ||
+        layer->type() == sound_mind::core::LayerType::Equalizer) {
+        // Defense in depth - LayersPanel doesn't even show a delete
+        // button for these, but refuse here too regardless of caller.
+        return;
+    }
+
+    if (project_->removeLayer(id)) {
+        hasUnsavedChanges_ = true;
+        playbackLoaded_ = false;
+        canvas_->update();
+        refreshLayersPanel();
+    }
+}
+
+void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {
+    if (!project_) {
+        return;
+    }
+    if (project_->reorderLayers(newOrderBottomToTop)) {
+        hasUnsavedChanges_ = true;
+        canvas_->update();
+    }
+    // Refreshed either way - even a rejected reorder needs the panel
+    // snapped back to the authoritative order (see LayersPanel::
+    // reorderRequested()'s docs).
+    refreshLayersPanel();
 }
 
 void MainWindow::startPlayback() {
@@ -658,6 +778,7 @@ void MainWindow::toggleLiveMode() {
     sound_mind::core::Layer layer(0, tr("Live Input").toStdString(), sound_mind::core::LayerType::Normal);
     liveLayerId_ = project_->addLayer(std::move(layer));
     hasUnsavedChanges_ = true;
+    refreshLayersPanel();
 
     liveEngine_.start();
     if (!liveEngine_.isDeviceAvailable()) {
@@ -721,6 +842,7 @@ void MainWindow::toggleRecording() {
             canvas_->update();
             playbackLoaded_ = false;
             hasUnsavedChanges_ = true;
+            refreshLayersPanel();
             statusBar()->showMessage(tr("Recording added as a new layer."), 5000);
         } catch (const std::exception& e) {
             QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));

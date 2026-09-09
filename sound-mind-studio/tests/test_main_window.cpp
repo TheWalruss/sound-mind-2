@@ -7,6 +7,7 @@
 
 #include <QFile>
 #include <QImage>
+#include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QStatusBar>
@@ -14,9 +15,11 @@
 
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/landing_page.h"
+#include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/main_window.h"
 
 using sound_mind::studio::LandingPage;
+using sound_mind::studio::LayersPanel;
 using sound_mind::studio::MainWindow;
 
 namespace {
@@ -819,4 +822,160 @@ void MainWindowTest::importAudioFileUsesTheProjectsConfiguredCodecSettings() {
     std::filesystem::remove(projectPath);
 
     QCOMPARE(window.project()->layers().back().content()->config.binCount, static_cast<std::uint32_t>(128));
+}
+
+void MainWindowTest::layersPanelIsHiddenUntilAProjectExists() {
+    // isHidden(), not isVisible() - see LayersPanel's own tests for why
+    // (the dialog/window chain is never actually shown in this headless
+    // test, but hide()/show() still set each widget's own explicit flag).
+    MainWindow window;
+    auto* panel = window.findChild<LayersPanel*>();
+    QVERIFY(panel != nullptr);
+    QVERIFY(panel->isHidden());
+
+    createFreshTestProject(window);
+
+    QVERIFY(!panel->isHidden());
+}
+
+void MainWindowTest::refreshLayersPanelReflectsTheCurrentLayers() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layers-refresh.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    auto* panel = window.findChild<LayersPanel*>();
+    QVERIFY(panel != nullptr);
+    QCOMPARE(panel->findChildren<QLabel*>(QStringLiteral("nameLabel")).size(), 2);
+}
+
+void MainWindowTest::toggleLayerVisibilityHidesALayerFromTopmostLookup() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layers-visibility.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+    const auto layerId = window.project()->layers().back().id();
+
+    // poolTopmostLayerNow() needs a topmost layer with content - a clean,
+    // already-established way to observe topmostLayerWithContent()
+    // (private) skipping a hidden layer without exposing it directly.
+    QVERIFY(window.poolTopmostLayerNow());
+
+    window.toggleLayerVisibility(layerId, false);
+
+    QVERIFY(!window.poolTopmostLayerNow());
+}
+
+void MainWindowTest::toggleLayerVisibilityMarksUnsavedChanges() {
+    MainWindow window;
+    createFreshTestProject(window);
+    const auto backgroundId = window.project()->layers().front().id();
+    QVERIFY(!window.hasUnsavedChanges());
+
+    window.toggleLayerVisibility(backgroundId, false);
+
+    QVERIFY(window.hasUnsavedChanges());
+}
+
+void MainWindowTest::setLayerOpacityChangesTheLayersOpacity() {
+    MainWindow window;
+    createFreshTestProject(window);
+    const auto backgroundId = window.project()->layers().front().id();
+
+    window.setLayerOpacity(backgroundId, 0.5f);
+
+    QCOMPARE(window.project()->layers().front().opacity(), 0.5f);
+    QVERIFY(window.hasUnsavedChanges());
+}
+
+void MainWindowTest::renameLayerToRenamesTheLayer() {
+    MainWindow window;
+    createFreshTestProject(window);
+    const auto backgroundId = window.project()->layers().front().id();
+
+    const bool ok = window.renameLayerTo(backgroundId, QStringLiteral("Floor"));
+
+    QVERIFY(ok);
+    QCOMPARE(QString::fromStdString(window.project()->layers().front().name()), QStringLiteral("Floor"));
+    QVERIFY(window.hasUnsavedChanges());
+}
+
+void MainWindowTest::renameLayerToFailsForAnEmptyName() {
+    MainWindow window;
+    createFreshTestProject(window);
+    const auto backgroundId = window.project()->layers().front().id();
+
+    const bool ok = window.renameLayerTo(backgroundId, QString());
+
+    QVERIFY(!ok);
+    QCOMPARE(QString::fromStdString(window.project()->layers().front().name()), QStringLiteral("Background"));
+}
+
+void MainWindowTest::renameLayerToFailsForAnUnknownId() {
+    MainWindow window;
+    createFreshTestProject(window);
+
+    QVERIFY(!window.renameLayerTo(999999, QStringLiteral("Nope")));
+}
+
+void MainWindowTest::deleteLayerRemovesANormalLayer() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layers-delete.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+    const auto layerId = window.project()->layers().back().id();
+    const std::size_t countBefore = window.project()->layers().size();
+
+    window.deleteLayer(layerId);
+
+    QCOMPARE(window.project()->layers().size(), countBefore - 1);
+}
+
+void MainWindowTest::deleteLayerRefusesToDeleteTheBackgroundLayer() {
+    MainWindow window;
+    createFreshTestProject(window);
+    const auto backgroundId = window.project()->layers().front().id();
+    const std::size_t countBefore = window.project()->layers().size();
+
+    window.deleteLayer(backgroundId);
+
+    QCOMPARE(window.project()->layers().size(), countBefore);
+}
+
+void MainWindowTest::reorderLayersAppliesAValidPermutation() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layers-reorder.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+    const auto backgroundId = window.project()->layers().at(0).id();
+    const auto importedId = window.project()->layers().at(1).id();
+
+    window.reorderLayers({importedId, backgroundId});
+
+    QCOMPARE(window.project()->layers().at(0).id(), importedId);
+    QCOMPARE(window.project()->layers().at(1).id(), backgroundId);
+    QVERIFY(window.hasUnsavedChanges());
+}
+
+void MainWindowTest::reorderLayersRejectsAnInvalidPermutation() {
+    MainWindow window;
+    createFreshTestProject(window);
+    const auto backgroundId = window.project()->layers().front().id();
+
+    window.reorderLayers({backgroundId, 999999});  // not a valid permutation.
+
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(1));
+    QVERIFY(!window.hasUnsavedChanges());
 }

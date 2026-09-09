@@ -6,6 +6,69 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.13.1] - 2026-09-09
+
+The "Layers Panel" milestone from `docs/sound-mind-roadmap.md` (Phase
+2.5). A dockable panel listing the current project's layer stack -
+adapted from the legacy Studio's own Layers panel, scoped down to what
+`sound_mind::core::Layer` actually supports today.
+
+### Added
+
+- **`sound_mind::studio::LayersPanel`**: a `QDockWidget`, hidden until a
+  project exists. Each row: a drag handle (a lock icon instead for
+  `Background`/`Equalizer`, which can't be reordered), a visibility
+  toggle (disabled for `Background`, which is always visible), the name
+  (double-click to rename), a type tag for non-`Normal` layers, an
+  opacity slider, and a delete button (hidden for the two locked types).
+- **`sound_mind::core::Layer::visible()`/`setVisible()`**: a new field,
+  deserialized leniently (defaults to `true` if absent) so a project file
+  saved before this milestone still loads.
+  `MainWindow::topmostLayerWithContent()` now skips hidden layers.
+- **`Project::removeLayer()`/`reorderLayers()`**: new - per
+  `Project::layers()`'s own docs, layer-stack membership/order changes go
+  through dedicated methods, not the mutable vector it also exposes.
+  `reorderLayers()` validates its input is a genuine permutation of the
+  current layers before applying anything (see Notes for a real bug this
+  caught in its own tests).
+- **`MainWindow::toggleLayerVisibility()`/`setLayerOpacity()`/
+  `renameLayer()`+`renameLayerTo()`/`deleteLayer()`/`reorderLayers()`**:
+  wired to the panel's signals. `renameLayer()`/`renameLayerTo()` mirror
+  the interactive/testable split `openProject()`/`openProjectAt()`
+  already established - the only one of these that needs a real dialog
+  (`QInputDialog`). A rejected reorder still refreshes the panel, so its
+  speculative drag-driven display snaps back to the authoritative order.
+
+### Notes
+
+- **Scoped down from the opening roadmap paragraph's "add/delete"
+  mention**: no "+ Add Layer" button this pass - the detailed row-design
+  spec and demo never actually called for one, and Painting doesn't exist
+  yet (Phase 3) to make a blank layer meaningful to add.
+- **A real bug caught while writing `Project::reorderLayers()`'s own
+  tests**: an earlier version detected a *missing* id in a proposed
+  reorder but not a *duplicated* one - a duplicate would have silently
+  stood in for whatever id it crowded out, corrupting the stack (losing a
+  real layer) instead of being rejected. Fixed before it ever shipped.
+- **A real `QListWidget` gotcha hit and fixed**: `QListWidget::clear()`
+  does not delete widgets set via `setItemWidget()` - without an explicit
+  fix, every `LayersPanel::setLayers()` call after the first would leak
+  the previous rows' widgets, which then kept showing up alongside the
+  new ones.
+- **Drag-and-drop reordering itself isn't covered by an automated test** -
+  matching this codebase's existing precedent for anything that
+  fundamentally needs a real, interactive gesture (modal dialogs, real
+  file pickers) - confirmed manually instead.
+- **No Y bump.** `Layer::visible` deserializes leniently - additive, not
+  a breaking format change.
+
+Full regression suite: 105/105 ctest entries passing (codec, core,
+studio) - `sound-mind-studio-tests` now runs 95 QTest functions across
+seven classes (up from 73), including 10 new for `LayersPanel` and 12
+more for `MainWindow`'s layer-mutating slots; nine new Catch2 cases cover
+`Layer::visible` and `Project::removeLayer()`/`reorderLayers()` in
+`sound-mind-core`.
+
 ## [0.0.12.1] - 2026-09-09
 
 The "Create Project Wizard" milestone from `docs/sound-mind-roadmap.md`

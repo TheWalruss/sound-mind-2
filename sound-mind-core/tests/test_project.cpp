@@ -83,6 +83,79 @@ TEST_CASE("addLayer appends a layer with a fresh, unique id", "[core][project]")
     CHECK(project.layers().back().name() == "Imported");
 }
 
+TEST_CASE("removeLayer removes the layer with the given id and returns true", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto newId = project.addLayer(Layer(999, "Imported", LayerType::Normal));
+    REQUIRE(project.layers().size() == 2);
+
+    const bool removed = project.removeLayer(newId);
+
+    REQUIRE(removed);
+    REQUIRE(project.layers().size() == 1);
+    REQUIRE(project.layers().front().type() == LayerType::Background);
+}
+
+TEST_CASE("removeLayer returns false and changes nothing for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+
+    const bool removed = project.removeLayer(999999);
+
+    REQUIRE_FALSE(removed);
+    REQUIRE(project.layers().size() == 1);
+}
+
+TEST_CASE("reorderLayers applies a valid permutation of the current layer ids", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto backgroundId = project.layers().front().id();
+    const auto middleId = project.addLayer(Layer(0, "Middle", LayerType::Normal));
+    const auto topId = project.addLayer(Layer(0, "Top", LayerType::Normal));
+
+    const bool ok = project.reorderLayers({backgroundId, topId, middleId});
+
+    REQUIRE(ok);
+    REQUIRE(project.layers().at(0).id() == backgroundId);
+    REQUIRE(project.layers().at(1).id() == topId);
+    REQUIRE(project.layers().at(2).id() == middleId);
+}
+
+TEST_CASE("reorderLayers rejects an order that's missing a layer id, changing nothing", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto backgroundId = project.layers().front().id();
+    const auto newId = project.addLayer(Layer(0, "Imported", LayerType::Normal));
+
+    const bool ok = project.reorderLayers({backgroundId});  // missing newId.
+
+    REQUIRE_FALSE(ok);
+    REQUIRE(project.layers().size() == 2);
+    REQUIRE(project.layers().at(1).id() == newId);
+}
+
+TEST_CASE("reorderLayers rejects an order with an id that isn't a current layer, changing nothing",
+          "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto backgroundId = project.layers().front().id();
+
+    const bool ok = project.reorderLayers({backgroundId, 999999});
+
+    REQUIRE_FALSE(ok);
+    REQUIRE(project.layers().size() == 1);
+}
+
+TEST_CASE("reorderLayers rejects an order with a duplicated id, changing nothing", "[core][project]") {
+    // A duplicate must not be allowed to silently stand in for a missing
+    // id - that would corrupt the stack (losing a real layer) rather than
+    // being rejected outright.
+    Project project = Project::createNew(ProjectSettings{});
+    const auto backgroundId = project.layers().front().id();
+    const auto newId = project.addLayer(Layer(0, "Imported", LayerType::Normal));
+
+    const bool ok = project.reorderLayers({backgroundId, backgroundId});  // newId missing, backgroundId doubled.
+
+    REQUIRE_FALSE(ok);
+    REQUIRE(project.layers().size() == 2);
+    REQUIRE(project.layers().at(1).id() == newId);
+}
+
 TEST_CASE("A layer's cached content round-trips through a project file's media folder", "[core][project]") {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-project-with-media.smproj";
     const auto projectFolder = std::filesystem::temp_directory_path() / "sound-mind-test-project-with-media";

@@ -5,6 +5,7 @@ add_executable(sound-mind-studio-tests
     test_canvas_widget.cpp
     test_create_project_wizard.cpp
     test_landing_page.cpp
+    test_layers_panel.cpp
     test_main_window.cpp
     test_recent_projects.cpp
     test_theme.cpp

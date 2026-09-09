@@ -57,4 +57,18 @@ private slots:
     void createProjectAtAppliesGivenSettings();
     void createProjectAtFailsGracefullyForAnUnwritableLocation();
     void importAudioFileUsesTheProjectsConfiguredCodecSettings();
+
+    // Layers Panel (v0.Y.13.1)
+    void layersPanelIsHiddenUntilAProjectExists();
+    void refreshLayersPanelReflectsTheCurrentLayers();
+    void toggleLayerVisibilityHidesALayerFromTopmostLookup();
+    void toggleLayerVisibilityMarksUnsavedChanges();
+    void setLayerOpacityChangesTheLayersOpacity();
+    void renameLayerToRenamesTheLayer();
+    void renameLayerToFailsForAnEmptyName();
+    void renameLayerToFailsForAnUnknownId();
+    void deleteLayerRemovesANormalLayer();
+    void deleteLayerRefusesToDeleteTheBackgroundLayer();
+    void reorderLayersAppliesAValidPermutation();
+    void reorderLayersRejectsAnInvalidPermutation();
 };

@@ -34,9 +34,21 @@ TEST_CASE("A Layer's opacity can be changed", "[core][layer]") {
     REQUIRE(layer.opacity() == 0.5f);
 }
 
+TEST_CASE("A Layer defaults to visible", "[core][layer]") {
+    const Layer layer(1, "Untitled", LayerType::Normal);
+    REQUIRE(layer.visible());
+}
+
+TEST_CASE("A Layer's visibility can be changed", "[core][layer]") {
+    Layer layer(1, "Untitled", LayerType::Normal);
+    layer.setVisible(false);
+    REQUIRE_FALSE(layer.visible());
+}
+
 TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     Layer original(42, "Vocals", LayerType::Background);
     original.setOpacity(0.75f);
+    original.setVisible(false);
 
     const nlohmann::json json = original;
     const Layer restored = json.get<Layer>();
@@ -45,6 +57,18 @@ TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     REQUIRE(restored.name() == original.name());
     REQUIRE(restored.type() == original.type());
     REQUIRE(restored.opacity() == original.opacity());
+    REQUIRE(restored.visible() == original.visible());
+}
+
+TEST_CASE("A Layer loads from JSON missing visible (a layer saved before v0.Y.13.1) as visible",
+          "[core][layer]") {
+    const nlohmann::json json{
+        {"id", 1}, {"name", "Untitled"}, {"type", "normal"}, {"opacity", 1.0f},
+    };
+
+    const Layer restored = json.get<Layer>();
+
+    REQUIRE(restored.visible());
 }
 
 TEST_CASE("A Layer has no content by default", "[core][layer]") {

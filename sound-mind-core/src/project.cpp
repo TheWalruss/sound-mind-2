@@ -97,6 +97,44 @@ LayerId Project::addLayer(Layer layer) {
     return newId;
 }
 
+bool Project::removeLayer(LayerId id) {
+    const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const Layer& layer) { return layer.id() == id; });
+    if (it == layers_.end()) {
+        return false;
+    }
+    layers_.erase(it);
+    return true;
+}
+
+bool Project::reorderLayers(const std::vector<LayerId>& newOrderBottomToTop) {
+    if (newOrderBottomToTop.size() != layers_.size()) {
+        return false;
+    }
+
+    std::vector<Layer> reordered;
+    reordered.reserve(layers_.size());
+    // Tracks which current layers newOrderBottomToTop has already
+    // consumed - without this, a duplicated id would pass the size check
+    // above by silently standing in for a missing one, corrupting the
+    // stack (losing a real layer) instead of being rejected.
+    std::vector<bool> used(layers_.size(), false);
+    for (const LayerId id : newOrderBottomToTop) {
+        const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const Layer& layer) { return layer.id() == id; });
+        if (it == layers_.end()) {
+            return false;  // Unknown id.
+        }
+        const auto index = static_cast<std::size_t>(std::distance(layers_.begin(), it));
+        if (used[index]) {
+            return false;  // Duplicate id.
+        }
+        used[index] = true;
+        reordered.push_back(*it);
+    }
+
+    layers_ = std::move(reordered);
+    return true;
+}
+
 void to_json(nlohmann::json& json, const Project& project) {
     json = nlohmann::json{
         {"settings", project.settings_},

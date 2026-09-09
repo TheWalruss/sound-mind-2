@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <vector>
 
 #include <QMainWindow>
 #include <QSettings>
@@ -22,6 +23,7 @@ namespace sound_mind::studio {
 class CanvasWidget;
 class CreateProjectWizard;
 class LandingPage;
+class LayersPanel;
 
 /**
  * @brief The Sound Mind Studio main window.
@@ -71,6 +73,16 @@ class LandingPage;
  * the open project's settings. `LiveEngine`'s own construction-time
  * config is deliberately not part of this wiring - see
  * `streamCodecConfigFor()`'s own docs for why.
+ *
+ * **As of `v0.Y.13.1` (Layers Panel):** a `LayersPanel` dock
+ * (`layersPanel_`) shows the current project's layer stack, hidden until
+ * setProject() is first called (matching the Landing Page's own
+ * "nothing to show yet" treatment) and refreshed via refreshLayersPanel()
+ * after any action that adds, removes, reorders, renames, or changes a
+ * layer's visibility/opacity - including the panel's own signals, wired
+ * to toggleLayerVisibility()/setLayerOpacity()/renameLayer()/
+ * deleteLayer()/reorderLayers(). topmostLayerWithContent() now also
+ * skips hidden layers - see its own docs.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -269,6 +281,74 @@ public slots:
      */
     void exportVideo();
 
+    /**
+     * @brief Sets whether the layer with the given id contributes to the
+     *        project - the actual work behind `LayersPanel`'s visibility
+     *        toggle.
+     *
+     * Marks hasUnsavedChanges() and refreshes both the canvas and the
+     * Layers Panel. Does nothing if no layer with this id exists.
+     *
+     * @param id The layer to change.
+     * @param visible The new visibility.
+     */
+    void toggleLayerVisibility(sound_mind::core::LayerId id, bool visible);
+
+    /**
+     * @brief Sets the opacity of the layer with the given id - the actual
+     *        work behind `LayersPanel`'s opacity slider.
+     *
+     * Marks hasUnsavedChanges() and refreshes both the canvas and the
+     * Layers Panel. Does nothing if no layer with this id exists.
+     *
+     * @param id The layer to change.
+     * @param opacity The new opacity, intended to be in [0, 1].
+     */
+    void setLayerOpacity(sound_mind::core::LayerId id, float opacity);
+
+    /**
+     * @brief Prompts for a new name and applies it - the actual work
+     *        behind `LayersPanel`'s double-click-to-rename, split into an
+     *        interactive slot (this one) and renameLayerTo() (the
+     *        non-prompting testable core), the same shape as
+     *        openProject()/openProjectAt().
+     * @param id The layer to rename.
+     */
+    void renameLayer(sound_mind::core::LayerId id);
+
+    /**
+     * @brief Deletes the layer with the given id - the actual work behind
+     *        `LayersPanel`'s delete button.
+     *
+     * No confirmation prompt (matching the legacy Studio's own row-level
+     * delete button); refuses (no-op) for a `Background`/`Equalizer`
+     * layer, or if no layer with this id exists - `LayersPanel` doesn't
+     * even show a delete button for the two locked types, but this is
+     * still enforced here too, the same defense-in-depth `setProject()`'s
+     * own docs describe for its engine-stopping invariant. Marks
+     * hasUnsavedChanges() and refreshes the canvas and Layers Panel on
+     * success.
+     *
+     * @param id The layer to delete.
+     */
+    void deleteLayer(sound_mind::core::LayerId id);
+
+    /**
+     * @brief Reorders the current project's layer stack - the actual work
+     *        behind `LayersPanel`'s drag-to-reorder.
+     *
+     * Delegates the actual validation to `Project::reorderLayers()` (a
+     * no-op, `false` return, for anything other than a valid permutation
+     * of the current layers' ids) - refreshes the Layers Panel either way,
+     * since even a rejected reorder needs the panel snapped back to the
+     * authoritative order (see `LayersPanel::reorderRequested()`'s docs).
+     * Marks hasUnsavedChanges() only if the reorder actually applied.
+     *
+     * @param newOrderBottomToTop Every current layer's id, exactly once
+     *        each, in the desired new bottom-to-top order.
+     */
+    void reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop);
+
 public:
     /**
      * @brief Opens the project at `path` as the current project, without
@@ -323,6 +403,21 @@ public:
      */
     bool createProjectAt(sound_mind::core::ProjectSettings settings, const std::filesystem::path& path,
                           QString* errorMessage = nullptr);
+
+    /**
+     * @brief Renames the layer with the given id, without prompting - the
+     *        actual work behind renameLayer(), split out for the same
+     *        headless-testability reason as importAudioFile() (see its
+     *        docs).
+     *
+     * Marks hasUnsavedChanges() and refreshes the Layers Panel on success.
+     *
+     * @param id The layer to rename.
+     * @param newName The new name - an empty name is rejected.
+     * @return `true` on success; `false` if no layer with this id exists,
+     *         or `newName` is empty.
+     */
+    bool renameLayerTo(sound_mind::core::LayerId id, const QString& newName);
 
     /// @brief Whether the Landing Page is currently the visible central
     ///        widget (no project open yet) rather than the canvas.
@@ -492,17 +587,26 @@ private:
      */
     [[nodiscard]] bool confirmDiscardUnsavedChanges();
 
-    /// @brief The topmost layer with content, if any - the same notion of
-    /// "the composite" startPlayback(), CanvasWidget, and
-    /// poolTopmostLayer() all share for now (see their docs).
-    /// @return A mutable pointer to that layer, or `nullptr` if none has
-    ///         content, or no project is open.
+    /// @brief The topmost *visible* layer with content, if any - the same
+    /// notion of "the composite" startPlayback(), CanvasWidget, and
+    /// poolTopmostLayer() all share for now (see their docs). As of the
+    /// Layers Panel milestone (`v0.Y.13.1`), a layer hidden via
+    /// toggleLayerVisibility() is skipped here, same as one with no
+    /// content at all.
+    /// @return A mutable pointer to that layer, or `nullptr` if none
+    ///         qualifies, or no project is open.
     [[nodiscard]] sound_mind::core::Layer* topmostLayerWithContent();
 
     /// @brief The layer with the given id, if the current project has one.
     /// @return A mutable pointer to that layer, or `nullptr` if no project
     ///         is open or no layer in it has this id.
     [[nodiscard]] sound_mind::core::Layer* layerById(sound_mind::core::LayerId id);
+
+    /// @brief Pushes the current project's layer stack into layersPanel_ -
+    /// called after setProject() and after any action that adds, removes,
+    /// reorders, renames, or changes a layer's visibility/opacity. An
+    /// empty list (not a no-op) when no project is open.
+    void refreshLayersPanel();
 
     /// @brief liveUpdateTimer_'s slot: refreshes the Live layer's content
     /// from liveEngine_.currentImage() and repaints the canvas, while Live
@@ -527,6 +631,10 @@ private:
     QStackedWidget* stack_ = nullptr;
     LandingPage* landingPage_ = nullptr;
     CanvasWidget* canvas_ = nullptr;
+
+    /// @brief The Layers Panel dock - hidden until setProject() is first
+    /// called (see refreshLayersPanel()'s docs).
+    LayersPanel* layersPanel_ = nullptr;
 
     /// @brief Backing store for recentProjects_ - an ini-format file (not
     /// the platform registry/native format) specifically so

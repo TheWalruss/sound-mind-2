@@ -92,6 +92,33 @@ public:
      */
     LayerId addLayer(Layer layer);
 
+    /**
+     * @brief Removes the layer with the given id, if one exists.
+     *
+     * No restriction here on removing a `Background`/`Equalizer` layer -
+     * that's a UI-level rule (`sound-mind-studio`'s `LayersPanel` doesn't
+     * even show a delete button for them), not a `Project`-level
+     * invariant, the same division `Layer::setVisible()`'s docs draw for
+     * the Background-stays-visible rule.
+     *
+     * @param id The layer to remove.
+     * @return `true` if a layer with this id was found and removed;
+     *         `false` (no change) if none was.
+     */
+    bool removeLayer(LayerId id);
+
+    /**
+     * @brief Reorders the layer stack.
+     *
+     * @param newOrderBottomToTop Every current layer's id, exactly once
+     *        each, in the desired new bottom-to-top order.
+     * @return `true` and applies the reorder if `newOrderBottomToTop` is
+     *         a valid permutation of the current layers' ids (same size,
+     *         same set, no duplicates); `false` (no change) otherwise -
+     *         e.g. a missing id, an unknown id, or a duplicate.
+     */
+    bool reorderLayers(const std::vector<LayerId>& newOrderBottomToTop);
+
     /// @brief This project's settings (sample rate, canvas size, etc).
     /// @return The settings this project currently holds.
     [[nodiscard]] const ProjectSettings& settings() const noexcept { return settings_; }
