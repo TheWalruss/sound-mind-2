@@ -806,8 +806,26 @@ void MainWindow::toggleLoopMode() {
 
     stopPlayback();
 
-    sound_mind::core::Layer layer(0, tr("Loop Input").toStdString(), sound_mind::core::LayerType::Normal);
-    loopLayerId_ = project_->addLayer(std::move(layer));
+    // Reuse an existing "Loop Input" layer if the project already has one
+    // (from an earlier Loop Mode session this run, or reloaded from disk)
+    // rather than creating a new one every time - starting Loop Mode again
+    // keeps building on the same layer, so its previous content stays
+    // visible immediately instead of the canvas going blank again while
+    // the first loop of the new session is still being captured.
+    const std::string loopInputName = tr("Loop Input").toStdString();
+    sound_mind::core::Layer* existing = nullptr;
+    for (sound_mind::core::Layer& candidate : project_->layers()) {
+        if (candidate.type() == sound_mind::core::LayerType::Normal && candidate.name() == loopInputName) {
+            existing = &candidate;
+            break;
+        }
+    }
+    if (existing != nullptr) {
+        loopLayerId_ = existing->id();
+    } else {
+        sound_mind::core::Layer layer(0, loopInputName, sound_mind::core::LayerType::Normal);
+        loopLayerId_ = project_->addLayer(std::move(layer));
+    }
     hasUnsavedChanges_ = true;
     refreshLayersPanel();
 

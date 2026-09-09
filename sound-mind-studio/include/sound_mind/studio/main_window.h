@@ -203,7 +203,7 @@ public slots:
     void stopPlayback();
 
     /**
-     * @brief Starts or stops Loop Mode (renamed from Loop Mode): a fixed-
+     * @brief Starts or stops Loop Mode (renamed from Live Mode): a fixed-
      *        length loop pedal that continuously captures the default input
      *        device one loop at a time into a newly created layer, encoding/
      *        decoding each completed loop and playing the previous loop's
@@ -218,18 +218,24 @@ public slots:
      * own docs). Stops Playback first if it's running - both engines would
      * otherwise try to open the system's default output device
      * simultaneously through two independent JUCE device managers, which
-     * isn't guaranteed to work depending on the platform/driver. Creates a
-     * new Normal layer ("Loop Input") to capture into; while running, that
-     * layer's content refreshes from LoopEngine::currentImage() on a timer
-     * and the canvas repaints, so each completed loop's spectrogram
-     * visibly updates - stopping leaves the layer's content as whatever
-     * was last captured, exactly like any other layer. Does nothing
-     * (refuses to start) if Recording is currently running - both would
-     * otherwise want the same input device at once, through two
-     * independent JUCE device managers. Does nothing at all (no-op, not
-     * even the refusal above) if no project is open, since the loop
-     * length itself is derived from the project's own duration - see
-     * LoopEngine's own docs.
+     * isn't guaranteed to work depending on the platform/driver. Captures
+     * into a Normal layer named "Loop Input" - **reusing one that already
+     * exists in the project** (from an earlier session this run, or
+     * reloaded from disk), rather than creating a new one every start, so
+     * its previous content stays visible immediately on a restart instead
+     * of the canvas going blank again while the new session's first loop
+     * is still being captured (see LoopEngine's own docs for how long that
+     * first loop alone can take - the whole project's duration). While
+     * running, that layer's content refreshes from
+     * LoopEngine::currentImage() on a timer and the canvas repaints, so
+     * each completed loop's spectrogram visibly updates - stopping leaves
+     * the layer's content as whatever was last captured, exactly like any
+     * other layer. Does nothing (refuses to start) if Recording is
+     * currently running - both would otherwise want the same input device
+     * at once, through two independent JUCE device managers. Does nothing
+     * at all (no-op, not even the refusal above) if no project is open,
+     * since the loop length itself is derived from the project's own
+     * duration - see LoopEngine's own docs.
      *
      * Marks hasUnsavedChanges() the moment the "Loop Input" layer is
      * added (starting) - per the Project Lifecycle milestone (`v0.Y.10.1`),

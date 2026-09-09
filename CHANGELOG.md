@@ -54,6 +54,17 @@ model before implementing.
   the same 33 ms timer that already refreshes the captured layer's
   content.
 
+### Fixed (found in manual testing, before the first push)
+
+- **Restarting Loop Mode piled up duplicate "Loop Input" layers**, and the
+  newest one (always topmost, starting with no content) hid whatever the
+  previous session had already captured until its own first loop
+  finished - reading as "Loop Mode isn't capturing anything" on a project
+  where it was the only real content, especially since that first wait
+  can be as long as the whole project duration. `toggleLoopMode()` now
+  searches the project for an existing Normal layer named "Loop Input"
+  and reuses its id if found, only creating a new one otherwise.
+
 ### Notes
 
 - **A real, structural latency confirmed acceptable rather than
@@ -75,10 +86,10 @@ model before implementing.
 
 Full regression suite: `sound-mind-core-tests` 72/72 Catch2 test cases
 (339 assertions) passing, including 7 new for `LoopEngine` (replacing
-`LiveEngine`'s 4); `sound-mind-studio-tests` runs 101 QTest functions
-across seven classes (up from 97), including 4 new for `MainWindow`'s
-Loop Mode reconstruction/Keep Looping behavior and 7 renamed in place
-(`toggleLiveMode...` → `toggleLoopMode...`).
+`LiveEngine`'s 4); `sound-mind-studio-tests` runs 102 QTest functions
+across seven classes (up from 97), including 5 new for `MainWindow`'s
+Loop Mode reconstruction/Keep Looping/layer-reuse behavior and 7
+renamed in place (`toggleLiveMode...` → `toggleLoopMode...`).
 
 ## [0.0.13.1] - 2026-09-09
 

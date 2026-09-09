@@ -78,4 +78,5 @@ private slots:
     void settingProjectReconfiguresTheLoopEngineForItsOwnSettings();
     void setKeepLoopingForwardsToTheLoopEngine();
     void setKeepLoopingDoesNothingWithNoProjectOpen();
+    void toggleLoopModeReusesAnExistingLoopInputLayerInsteadOfCreatingANewOne();
 };

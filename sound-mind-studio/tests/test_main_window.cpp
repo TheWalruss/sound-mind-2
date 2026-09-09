@@ -1080,3 +1080,35 @@ void MainWindowTest::setKeepLoopingDoesNothingWithNoProjectOpen() {
 
     QVERIFY(!window.keepLooping());
 }
+
+void MainWindowTest::toggleLoopModeReusesAnExistingLoopInputLayerInsteadOfCreatingANewOne() {
+    // Regression test: starting Loop Mode used to unconditionally add a
+    // brand new "Loop Input" layer every time, so stopping and restarting
+    // (or reopening a project that already captured one) piled up
+    // duplicates instead of continuing to build on the same one - see
+    // toggleLoopMode()'s own docs.
+    MainWindow window;
+    createFreshTestProject(window);
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    window.toggleLoopMode();  // start - creates "Loop Input".
+    QVERIFY(window.isLoopModeRunning());
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
+
+    window.toggleLoopMode();  // stop.
+    QVERIFY(!window.isLoopModeRunning());
+
+    window.toggleLoopMode();  // start again.
+    QVERIFY(window.isLoopModeRunning());
+
+    int loopInputCount = 0;
+    for (const auto& layer : window.project()->layers()) {
+        if (layer.name() == "Loop Input") {
+            ++loopInputCount;
+        }
+    }
+    QCOMPARE(loopInputCount, 1);
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
+
+    window.toggleLoopMode();  // cleanup.
+}
