@@ -221,29 +221,89 @@ Dropping files onto the main window imports them, similar to the legacy Studio's
 
 **No Y bump expected** - no project-file-format change; this is a new entry point onto import/open methods that already exist.
 
+### v0.Y.16.1 - Transport Panels
+
+Record, Loop, and a new Playback toolbar button each open their own dockable panel in the right sidebar - adapted from the legacy Studio's separate `_build_record_dock`/`_build_live_dock`/`_build_playback_dock`, replacing today's plain toolbar toggle buttons (`v0.0.4.1`/`v0.Y.12.1`/`v0.0.8.1`) with real per-engine surfaces to put controls on, rather than growing the transport toolbar itself indefinitely.
+
+**Real input/output device selection, finally**: named as deferred scope at Playback (`v0.0.4.1`), Live/Loop Mode (`v0.0.7.1`/`v0.Y.12.1`), and Record (`v0.0.8.1`) alike - every engine has used whatever the system's default device happened to be, with no picker anywhere. Lands here, on these panels themselves (Loop/Record share an input picker; Playback gets an output picker), not a separate preferences dialog.
+
+**Output volume control, allowed above "100%"**: a real gain boost past unity, not just an attenuator down to silence - on the Playback panel.
+
+**"Keep Looping" moves into the Loop panel**, out of the transport toolbar checkbox `v0.Y.12.1` added it to as a confirmed stopgap location, pending this milestone.
+
+**Scroll bars** on any panel whose content (device picker, volume/Keep Looping controls, etc.) exceeds the dock's available height, rather than clipping content or forcing the dock wider than the window.
+
+**Demo:** open the Loop panel, pick a different input device, and check "Keep Looping" there instead of the toolbar; open the Playback panel and push its volume control past 100%.
+
+**No Y bump expected** - a UI/device-selection milestone; whether a chosen device gets persisted anywhere, and how, is left to this milestone's own implementation to resolve.
+
+### v0.Y.17.1 - Audio Import Snippets
+
+When importing audio, cut the input into segments exactly the project's own duration (the same `canvasWidth * hopLength` loop length `v0.Y.12.1`'s Loop Mode already derives) and import each snippet as its own layer, numbered in sequence - matching the legacy Studio's own `_start_layer_import()`/`_on_layer_import_done()` behavior (`name_0000`, `name_0001`, ...) for audio longer than the project canvas.
+
+**Going beyond the legacy version, per explicit instruction**: a panel lists every resulting snippet - a numbered row per snippet, each showing its timespan within the source audio and a checkbox - so the user can import only a chosen subset rather than all-or-nothing, plus a "select all" checkbox. The legacy Studio always imported every snippet with no picker at all.
+
+**Demo:** import an audio file longer than the project's own duration into a short project; see it listed as numbered snippets with their timespans in the picker, pick a handful, and see only those become layers.
+
+**No Y bump expected** - a new import-time behavior; doesn't touch the project file format itself.
+
+### v0.Y.18.1 - Image Import Scaling
+
+When importing an image, offer a choice of how it's resized to the project's canvas dimensions, presented before the import proceeds:
+
+- **Rescale to fit project (default)** - both axes stretched to the project's exact width/height, independent of the source image's own aspect ratio. Matches the legacy Studio's `stretch_fill` mode.
+- **Scale vertically to fit project, keep horizontal resolution** - height changes to match the project's bin count; width stays the source image's own native pixel width. Matches legacy's `height_only`.
+- **Scale horizontally to fit project, keep vertical resolution** - the width-first mirror of the option above; height stays native. Not present in the legacy Studio - its own `stretch_width` mode always also scales height proportionally, unlike this one.
+- **Scale vertically to fit project, rescale horizontal in proportion** - height changes to match the project's bin count; width scales proportionally, preserving the source's aspect ratio. Matches legacy's `aspect` mode (its actual default there).
+- **Keep native resolution** - no rescaling at all. Matches legacy's `native`.
+
+**Narrower than the legacy version**: legacy's `stretch_width` (width-fit plus proportional height - no equivalent among the five options above) and `polar` (a polar-to-rectangular unwrap tied to its own view) modes aren't carried over - the latter belongs with Sound Flower, once that view exists, not general image import.
+
+**Demo:** import a portrait-oriented photo with each of the five modes in turn and see the resulting layer's dimensions differ accordingly.
+
+**No Y bump expected** - an import-time behavior change only.
+
+### v0.Y.19.1 - Layer Time Alignment
+
+Two new per-layer transform controls: horizontal translation (shifts a layer's content earlier/later in time, for lining up audio between layers) and horizontal rescaling (stretches/compresses a layer's own timeline, for matching timing between layers) - adapted from the legacy Studio's per-layer transform, narrowed per explicit instruction.
+
+**Narrower than the legacy version, confirmed**: the legacy Studio's full affine transform (independent X/Y scale, rotation, vertical translation) is not needed here - only the two horizontal-axis controls above; nothing in this codebase's current scope needs vertical repositioning or rotation of a layer's spectrogram.
+
+**Demo:** import two audio clips as separate layers slightly out of sync; nudge one layer's horizontal translation until they line up; rescale one layer's timeline to match the other's.
+
+**No Y bump expected** - a new, additive per-layer field (translation/rescale offsets), deserialized leniently like every other optional field added so far - a project file saved before this milestone still loads.
+
+### v0.Y.20.1 - Image Sequence Import
+
+When importing multiple images at once, an "import as sequence" option applies `v0.Y.18.1`'s "scale vertically to fit project, rescale horizontal in proportion" mode to each one, and automatically places each subsequent image's layer immediately after the previous one in time via `v0.Y.19.1`'s horizontal translation control - matching the legacy Studio's own cumulative-offset placement for multi-image imports.
+
+**Demo:** select five images at once, check "import as sequence", and see five layers laid out end-to-end in time, each scaled to the project's own bin count.
+
+**No Y bump expected.** Depends on `v0.Y.18.1`/`v0.Y.19.1` already existing - sequenced after both per Sequencing principle #4 (dependency order), matching the order these five points were given in.
+
 ---
 
 ## Phase 3 - Painting & Editing
 
-### v0.Y.16.1 - Basic Painting
+### v0.Y.21.1 - Basic Painting
 
 A plain procedural brush (tip shape + falloff, no harmonic model yet) painting into a layer's amplitude as logged `PaintOperation`s; undo/redo via the operation log (first real exercise of the `supersedes` mechanism). Also: re-confirm Phase 2's Pool/Export/Loop/Record pipeline still works, and still meets its performance targets, with real painted content flowing through it for the first time.
 
 **Demo:** paint a stroke, hear the difference on playback, undo it - then pool and export the result.
 
-### v0.Y.17.1 - Selection & Fill
+### v0.Y.22.1 - Selection & Fill
 
 Rectangle, Lasso, and Wand selection with boolean combination; cut/copy/paste; the Gradient model; Fill.
 
 **Demo:** select a region, cut it, paste it elsewhere, fill another region with a gradient.
 
-### v0.Y.18.1 - Paths & Grids
+### v0.Y.23.1 - Paths & Grids
 
 The Path (Bézier) tool with node placement/editing and Path Gradient; Overlay Grids (frequency and timing) and Snap to Grid, including pitch quantising.
 
 **Demo:** draw a precise, grid-snapped melodic line.
 
-### v0.Y.19.1 - Filter Layers
+### v0.Y.24.1 - Filter Layers
 
 The Filter layer type, a first concrete filter set (blur family, sharpen, tone curve, frequency-axis gradient), and the Equalizer special layer made functional.
 
@@ -253,37 +313,37 @@ The Filter layer type, a first concrete filter set (blur family, sharpen, tone c
 
 ## Phase 4 - Expressive Tools
 
-### v0.Y.20.1 - MindWaves v1
+### v0.Y.25.1 - MindWaves v1
 
 The core generator types (periodic, envelope, stepped/noise, spatial, a first fractal field), superposition, and binding to layer opacity and filter parameters (the direct-vs-shape distinction).
 
 **Demo:** bind a sine MindWave to a layer's opacity; watch and hear it pulse.
 
-### v0.Y.21.1 - Sound Mind Instruments
+### v0.Y.26.1 - Sound Mind Instruments
 
 The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument model; the canvas-space vs. operation-relative MindWave binding-coordinate-frame choice, since that's specifically about how a paint operation (an instrument note, in particular) binds to a MindWave. Also: revisit Loop Mode (Phase 2.5) to add the operation-relative retrigger feel this unlocks.
 
 **Demo:** paint with an instrument voice that actually sounds like a plausible physical source; feed the same instrument through Loop Mode and hear it retrigger per note.
 
-### v0.Y.22.1 - Mind Shots & Mind Grains
+### v0.Y.27.1 - Mind Shots & Mind Grains
 
 Capture-and-stamp static samples; live-reference dynamic grains from a source layer. Also: revisit Record (Phase 2) to add capture-directly-to-a-Mind-Shot.
 
 **Demo:** capture a moment as a Mind Shot and restamp it; link a Mind Grain to a source layer and watch it change live as the source does.
 
-### v0.Y.23.1 - Composer Mode
+### v0.Y.28.1 - Composer Mode
 
 The DAW-style track view: each layer as a track, operations drawn as boxes via `Operation::bounds()`, retiming/moving an operation between layers via the `supersedes` mechanism, the three track background styles.
 
 **Demo:** arrange a multi-layer piece in the track view; move a stamped note to a different layer without repainting it.
 
-### v0.Y.24.1 - MindWaves v2
+### v0.Y.29.1 - MindWaves v2
 
 Field operators (Warp, Reduce), drawn-shape and step-grid generator types, and the continuous shape/skew/character controls.
 
 **Demo:** a MindWave built from a hand-drawn Path, reduced to a plain time-varying control signal.
 
-### v0.Y.25.1 - Chords/Arpeggiator/Sequencer
+### v0.Y.30.1 - Chords/Arpeggiator/Sequencer
 
 The Chord Generator and the generalized notation-driven sequence it's built on, targeting any paintable tip. Resolves the sequence-notation Deferred Decision (validating the ABC-notation direction, or picking an alternative).
 
@@ -293,19 +353,19 @@ The Chord Generator and the generalized notation-driven sequence it's built on, 
 
 ## Phase 5 - Generative & Analytical
 
-### v0.Y.26.1 - Generators
+### v0.Y.31.1 - Generators
 
 Lattice, fractal, and streaming procedural content generators, sharing the Order/Chaos criticality axis.
 
 **Demo:** generate a fractal melodic texture as a new layer, tuned from rigid to chaotic.
 
-### v0.Y.27.1 - Analysis Tools v1
+### v0.Y.32.1 - Analysis Tools v1
 
 A first useful cross-section across all five categories (loudness/mastering, pitch/vocal, stereo/phase, spectral health, criticality/pattern) - not every meter the legacy version had, but at least one representative of each.
 
 **Demo:** check integrated loudness and stereo correlation on a real mix.
 
-### v0.Y.28.1 - Sound Flower
+### v0.Y.33.1 - Sound Flower
 
 Polar canvas view, and polar-form image import.
 
@@ -315,13 +375,13 @@ Polar canvas view, and polar-form image import.
 
 ## Phase 6 - Interchange & Polish
 
-### v0.Y.29.1 - Portable Resources
+### v0.Y.34.1 - Portable Resources
 
 Standalone `.smwave` and `.sminst` files; cross-project import of layers, Mind Shots, MindWaves, and Sound Mind Instruments. Resolves the Mind Grain portability Deferred Decision one way or the other.
 
 **Demo:** export an instrument from one project, import it cleanly into another.
 
-### v0.Y.30.1 - Performance Validation & Hardening
+### v0.Y.35.1 - Performance Validation & Hardening
 
 By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. Validate the ~100 ms / ~250 ms latency targets for real, on both this Arm64 machine and actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding). Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
 
