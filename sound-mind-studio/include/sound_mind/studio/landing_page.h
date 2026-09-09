@@ -25,6 +25,11 @@ namespace sound_mind::studio {
  * connects to its own existing handlers (`newProject()`, `openProject()`,
  * a path-taking open) - no project or file-system logic lives here, the
  * same division of responsibility the legacy `WelcomePanel` used.
+ *
+ * **As of `v0.Y.14.1` (Visual Identity):** the header shows the legacy
+ * Studio's own logo (`ChooseAgainLarge.png`, embedded via `assets/app.qrc`
+ * - see `theme.h`) alongside the title text, matching the legacy
+ * `WelcomePanel`'s header layout now that the asset has been carried over.
  */
 class LandingPage : public QWidget {
     Q_OBJECT

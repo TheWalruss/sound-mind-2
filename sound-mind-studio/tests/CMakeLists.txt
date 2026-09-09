@@ -6,6 +6,7 @@ add_executable(sound-mind-studio-tests
     test_landing_page.cpp
     test_main_window.cpp
     test_recent_projects.cpp
+    test_theme.cpp
 )
 
 target_link_libraries(sound-mind-studio-tests

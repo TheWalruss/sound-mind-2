@@ -1,0 +1,97 @@
+/* Sound Mind brand palette for the generated Doxygen output - see
+ * docs/sound-mind-roadmap.md's Visual Identity milestone (v0.Y.14.1).
+ *
+ * Carries over the same #DD4B00 (deep orange) -> #FEC100 (amber gold)
+ * palette applied to the Studio app itself (sound-mind-studio/src/theme.cpp)
+ * and to the legacy documentation (docs/stylesheets/extra.css in the
+ * legacy repo), for one cohesive look across app, code docs, and the
+ * project's own written docs.
+ *
+ * Loaded via HTML_EXTRA_STYLESHEET, which Doxygen links in *after* its own
+ * generated doxygen.css - these overrides reuse doxygen.css's own CSS
+ * custom-property names (introduced in modern Doxygen, 1.9.7+) at the
+ * same selectors it defines them under, so the cascade just wins on
+ * ordering without needing !important anywhere. Two selectors are
+ * repeated deliberately: the default/light block (plain `html`) and the
+ * OS-dark-preference block, so the palette holds regardless of the
+ * reader's OS theme. See this file's own limitation note at the bottom
+ * for the one case that's still stock Doxygen colors.
+ */
+
+html {
+    --page-link-color: #DD4B00;
+    --page-visited-link-color: #DD4B00;
+    --page-external-link-color: #b53c00;
+
+    --header-background-color: #FEC100;
+    --header-separator-color: #DD4B00;
+    --group-header-color: #b53c00;
+
+    --title-background-color: #FEC100;
+    --title-separator-color: #DD4B00;
+
+    --nav-background-color: #1a0f00;
+    --nav-foreground-color: #FEC100;
+    --nav-text-normal-color: #f0e6d8;
+    --nav-menu-active-bg: #DD4B00;
+    --nav-menu-active-color: #ffffff;
+    --nav-menu-background-color: #1a0f00;
+    --nav-menu-foreground-color: #f0e6d8;
+    --nav-arrow-selected-color: #FEC100;
+
+    --table-header-background-color: #DD4B00;
+    --table-header-foreground-color: #ffffff;
+
+    --label-background-color: #DD4B00;
+    --label-left-top-border-color: #b53c00;
+    --label-right-bottom-border-color: #FEC100;
+
+    --toc-header-color: #DD4B00;
+
+    --search-filter-highlight-bg-color: #FEC100;
+    --search-results-foreground-color: #b53c00;
+}
+
+@media (prefers-color-scheme: dark) {
+    html:not(.dark-mode) {
+        --page-link-color: #FEC100;
+        --page-visited-link-color: #FEC100;
+        --page-external-link-color: #e8651a;
+
+        --header-background-color: #1a0f00;
+        --header-separator-color: #DD4B00;
+        --group-header-color: #FEC100;
+
+        --title-background-color: #1a0f00;
+        --title-separator-color: #DD4B00;
+
+        --nav-background-color: #1a0f00;
+        --nav-foreground-color: #FEC100;
+
+        --table-header-background-color: #b53c00;
+        --table-header-foreground-color: #ffffff;
+
+        --label-background-color: #DD4B00;
+
+        --toc-header-color: #FEC100;
+    }
+}
+
+/* Top title bar gradient - the same left-to-right orange-to-gold treatment
+ * as the Studio app's QMenuBar and the legacy docs' .md-header. */
+#titlearea {
+    background: linear-gradient(90deg, #DD4B00 0%, #FEC100 100%);
+}
+#titlearea #projectname,
+#titlearea #projectbrief {
+    color: #ffffff;
+}
+
+/* Known limitation: Doxygen's explicit in-page dark-mode toggle (the
+ * moon/sun icon) doesn't get its own variable overrides here - doxygen.css
+ * itself only redefines these variables for the OS-preference media query
+ * above, not for a `.dark-mode`-toggled `html`, so a reader who manually
+ * switches modes away from their OS default sees this palette only in
+ * whichever of the two states (light/OS-dark) doxygen.css's own toggle
+ * mechanism actually reuses variables for. Not worth chasing further for
+ * this milestone's "reads as the same product, not a stock theme" bar. */

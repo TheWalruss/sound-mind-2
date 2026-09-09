@@ -8,10 +8,17 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 set(CMAKE_AUTOMOC ON)
+# Compiles assets/app.qrc (the embedded logo PNG - see theme.h) into a
+# generated qrc_app.cpp automatically, the same way AUTOMOC handles moc -
+# no manual qt_add_resources()/rcc invocation needed.
+set(CMAKE_AUTORCC ON)
 
 # The GUI classes live in a library, separate from the thin main.cpp entry
 # point, so the test executable (see tests/) can link against them without
-# recompiling or duplicating anything the real app also builds.
+# recompiling or duplicating anything the real app also builds. The Qt
+# resource file lives here too, not on the executable target, since it's
+# LandingPage/theme.cpp (library code) that actually reads from it - see
+# their own docs.
 #
 # The Q_OBJECT-bearing headers are listed here too, not just their .cpp
 # files: AUTOMOC only auto-associates a header with a source file when they
@@ -23,10 +30,13 @@ add_library(sound-mind-studio-lib
     src/landing_page.cpp
     src/main_window.cpp
     src/recent_projects.cpp
+    src/theme.cpp
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/landing_page.h
     include/sound_mind/studio/main_window.h
     include/sound_mind/studio/recent_projects.h
+    include/sound_mind/studio/theme.h
+    assets/app.qrc
 )
 
 target_include_directories(sound-mind-studio-lib
@@ -43,8 +53,20 @@ target_link_libraries(sound-mind-studio-lib
 target_compile_features(sound-mind-studio-lib PUBLIC cxx_std_23)
 target_compile_definitions(sound-mind-studio-lib PUBLIC SOUND_MIND_VERSION="${PROJECT_VERSION}")
 
+# resources/app.rc gives the built .exe its own icon (Explorer, taskbar,
+# Alt+Tab) via the RC compiler - a build-time step entirely separate from
+# assets/app.qrc above (Qt's own resource system, compiled into the lib and
+# read at runtime) - see that file's docs for why the two aren't merged.
+# RC isn't in the top-level project()'s LANGUAGES (this whole project is
+# Windows-only anyway, per CLAUDE.md, so there's no cross-platform reason
+# to enable it any earlier) - the Ninja generator needs it explicitly
+# enabled before a target can list a .rc source, unlike the Visual Studio
+# generator, which understands .rc files intrinsically via MSBuild.
+enable_language(RC)
+
 add_executable(sound-mind-studio WIN32
     src/main.cpp
+    resources/app.rc
 )
 
 target_link_libraries(sound-mind-studio

@@ -17,6 +17,7 @@
 #include "test_landing_page.h"
 #include "test_main_window.h"
 #include "test_recent_projects.h"
+#include "test_theme.h"
 
 int main(int argc, char** argv) {
     // Redirects ini-format QSettings storage (MainWindow's recentProjects_,
@@ -27,6 +28,11 @@ int main(int argc, char** argv) {
     QStandardPaths::setTestModeEnabled(true);
 
     QApplication app(argc, argv);
+
+    // See main.cpp's own comment - the same static-library resource
+    // gotcha applies here too: LandingPageTest/ThemeTest need
+    // ":/ChooseAgainLarge.png" to actually resolve.
+    Q_INIT_RESOURCE(app);
 
     int status = 0;
 
@@ -41,6 +47,9 @@ int main(int argc, char** argv) {
 
     RecentProjectsTest recentProjectsTest;
     status |= QTest::qExec(&recentProjectsTest, argc, argv);
+
+    ThemeTest themeTest;
+    status |= QTest::qExec(&themeTest, argc, argv);
 
     return status;
 }

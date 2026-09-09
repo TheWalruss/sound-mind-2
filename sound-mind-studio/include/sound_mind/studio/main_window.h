@@ -47,7 +47,11 @@ class MainWindow : public QMainWindow {
 public:
     /// @brief Builds the window: menu bar, transport toolbar, and the
     ///        Landing Page/Canvas stack - see the class docs for why no
-    ///        project exists yet at this point.
+    ///        project exists yet at this point. Sets the window icon to
+    ///        `theme::studioWindowIcon()` - see `docs/sound-mind-roadmap.md`'s
+    ///        Visual Identity milestone (`v0.Y.14.1`); the app-wide QSS
+    ///        (`theme::studioStyleSheet()`) is applied once, at the
+    ///        `QApplication` level in `main.cpp`, not per-window here.
     /// @param parent The owning widget, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
     explicit MainWindow(QWidget* parent = nullptr);

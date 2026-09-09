@@ -6,6 +6,69 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.10.1] - 2026-09-09
+
+The "Visual Identity" milestone from `docs/sound-mind-roadmap.md` - a
+lumped UI-polish pass (Phase 2.5), implemented ahead of the Project
+Lifecycle/Create Project Wizard/Loop Mode/Layers Panel milestones between
+it and Landing Page, per explicit go-ahead. The legacy Studio's icon and
+brand palette now carry into this rewrite, across the app itself and its
+generated code documentation.
+
+### Added
+
+- **`sound_mind::studio::theme` (`theme.h`)**: `studioStyleSheet()` - the
+  app-wide Qt stylesheet (deep orange `#DD4B00` to amber gold `#FEC100`
+  gradient accents on a dark ground, matching `docs/stylesheets/extra.css`
+  in the legacy repo) applied once, at the `QApplication` level in
+  `main.cpp` - and `studioWindowIcon()`, the Studio's window/taskbar icon,
+  loaded from the newly-carried-over `ChooseAgainLarge.png`.
+- **`sound-mind-studio/assets/`**: `ChooseAgainIcon.ico` and
+  `ChooseAgainLarge.png`, copied over from the legacy Studio. The `.ico`
+  is used only via the new `resources/app.rc` - the executable's native
+  Win32 icon resource (Explorer/taskbar/Alt+Tab), compiled in by the RC
+  compiler; the PNG is embedded through Qt's own resource system
+  (`assets/app.qrc`) and covers both the runtime window icon and the
+  Landing Page's header logo. Splitting the two this way avoids pulling in
+  Qt's `qico` imageformat plugin as a runtime dependency for no benefit.
+- **Doxygen theme** (`docs/doxygen/sound-mind-theme.css`), wired via
+  `HTML_EXTRA_STYLESHEET`: overrides the same brand palette onto modern
+  Doxygen's generated CSS custom properties, for both the default/light
+  and OS-dark-preference cases, so the code documentation reads as the
+  same product rather than a stock Doxygen theme.
+- **`LandingPage`'s header** now shows the logo pixmap next to the title,
+  matching the legacy `WelcomePanel`'s own header layout now that the
+  asset exists.
+- **`MainWindow`** sets its own window icon in the constructor (in
+  addition to the `QApplication`-level default), so it's real and
+  testable independent of `main.cpp`'s own wiring.
+
+### Fixed (during development, not a regression)
+
+- **A real Qt static-library gotcha**: the embedded logo silently resolved
+  to a null `QPixmap`/`QIcon` at runtime - `rcc`'s generated resource-
+  registration object file, compiled into `sound-mind-studio-lib` (a
+  static library), was dropped by the linker because nothing in either
+  final executable referenced it directly. Fixed with an explicit
+  `Q_INIT_RESOURCE(app)` call in both `main()` entry points (the real app
+  and the test binary), per Qt's own documented pattern for this exact
+  situation - see `docs/sound-mind-architecture.md`'s Decisions Made #16.
+
+### Notes
+
+- **Deliberately one fixed, dark-first theme - not a light/dark toggle.**
+  `docs/sound-mind-design.md`'s Export section already names a future
+  Studio-wide light/dark setting; building that toggle is separate,
+  not-yet-scheduled work, out of scope for this milestone per
+  `docs/sound-mind-roadmap.md`'s own wording.
+- **No Y bump.** Purely visual - no project file, public API, or codec
+  format is touched.
+
+Full regression suite: 92/92 ctest entries passing (codec, core, studio) -
+`sound-mind-studio-tests` now runs 50 QTest functions across five classes
+(up from 45), including new coverage for `theme.h` and the logo/window-icon
+wiring.
+
 ## [0.0.9.1] - 2026-09-08
 
 The "Landing Page" milestone from `docs/sound-mind-roadmap.md` - the first

@@ -1,0 +1,10 @@
+// Windows resource script: gives the built executable a real icon (shown
+// by Explorer, the taskbar, and Alt+Tab) instead of the generic default
+// one every prior build has run under - see docs/sound-mind-roadmap.md's
+// Visual Identity milestone (v0.Y.14.1).
+//
+// IDI_ICON1 being the *first* ICON resource in the .rc is what makes
+// Windows use it as the executable's own file icon; a second ICON
+// statement wouldn't get that treatment, so this file deliberately only
+// carries this one resource.
+IDI_ICON1 ICON "../assets/ChooseAgainIcon.ico"

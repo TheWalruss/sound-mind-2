@@ -29,6 +29,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/landing_page.h"
+#include "sound_mind/studio/theme.h"
 
 #ifndef SOUND_MIND_VERSION
 #define SOUND_MIND_VERSION "unknown"
@@ -109,6 +110,7 @@ void showBusyStatus(QStatusBar* bar, const QString& message) {
 
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle(QStringLiteral("Sound Mind Studio v" SOUND_MIND_VERSION));
+    setWindowIcon(studioWindowIcon());
     resize(800, 600);
 
     landingPage_ = new LandingPage(this);

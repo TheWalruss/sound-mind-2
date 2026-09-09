@@ -6,6 +6,7 @@ class MainWindowTest : public QObject {
     Q_OBJECT
 
 private slots:
+    void hasARealWindowIconNotTheDefaultOne();
     void startsWithNoProjectOpen();
     void newProjectShowsTheCanvasInsteadOfTheLandingPage();
     void openProjectAtOpensAndRecordsARecentProject();

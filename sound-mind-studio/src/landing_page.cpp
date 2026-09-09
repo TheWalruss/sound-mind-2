@@ -2,7 +2,9 @@
 
 #include <QFont>
 #include <QFrame>
+#include <QHBoxLayout>
 #include <QLabel>
+#include <QPixmap>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -28,6 +30,28 @@ QFrame* makeSeparator() {
     return line;
 }
 
+/// @brief The logo + title row - see the class docs' `v0.Y.14.1` note.
+/// Falls back to just the title (no logo) if the embedded resource
+/// somehow failed to load, rather than showing a broken-image icon.
+/// @param titleText Already-translated title text - a free function (no
+///        `QObject` base) can't call `tr()` itself, so the constructor
+///        does that and passes the result in.
+QHBoxLayout* makeHeader(const QString& titleText) {
+    auto* header = new QHBoxLayout();
+    header->setSpacing(16);
+
+    const QPixmap logo(QStringLiteral(":/ChooseAgainLarge.png"));
+    if (!logo.isNull()) {
+        auto* logoLabel = new QLabel();
+        logoLabel->setObjectName(QStringLiteral("logoLabel"));
+        logoLabel->setPixmap(logo.scaledToHeight(64, Qt::SmoothTransformation));
+        header->addWidget(logoLabel, 0, Qt::AlignVCenter);
+    }
+
+    header->addWidget(makeHeading(titleText, 10), 0, Qt::AlignVCenter);
+    return header;
+}
+
 }  // namespace
 
 LandingPage::LandingPage(QWidget* parent) : QWidget(parent) {
@@ -35,7 +59,9 @@ LandingPage::LandingPage(QWidget* parent) : QWidget(parent) {
     root->setContentsMargins(48, 40, 48, 40);
     root->addStretch(1);
 
-    root->addWidget(makeHeading(tr("Sound Mind Studio"), 10), 0, Qt::AlignHCenter);
+    auto* header = makeHeader(tr("Sound Mind Studio"));
+    root->addLayout(header);
+    root->setAlignment(header, Qt::AlignHCenter);
     root->addSpacing(24);
 
     auto* newButton = new QPushButton(tr("New Project..."));

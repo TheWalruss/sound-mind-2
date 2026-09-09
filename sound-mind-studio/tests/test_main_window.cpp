@@ -63,6 +63,12 @@ void writeTestWavFile(const std::filesystem::path& path) {
 
 }  // namespace
 
+void MainWindowTest::hasARealWindowIconNotTheDefaultOne() {
+    // Per the Visual Identity milestone (v0.Y.14.1) - see theme.h.
+    const MainWindow window;
+    QVERIFY(!window.windowIcon().isNull());
+}
+
 void MainWindowTest::startsWithNoProjectOpen() {
     // Per the Landing Page milestone (v0.Y.9.1): the Studio no longer
     // silently creates an in-memory project at startup - the Landing Page

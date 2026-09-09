@@ -1,5 +1,6 @@
 #include "test_landing_page.h"
 
+#include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
@@ -7,6 +8,15 @@
 #include "sound_mind/studio/landing_page.h"
 
 using sound_mind::studio::LandingPage;
+
+void LandingPageTest::showsTheEmbeddedLogo() {
+    // Per the Visual Identity milestone (v0.Y.14.1): the header shows the
+    // legacy Studio's logo, embedded via assets/app.qrc - see theme.h.
+    LandingPage page;
+    auto* logoLabel = page.findChild<QLabel*>(QStringLiteral("logoLabel"));
+    QVERIFY(logoLabel != nullptr);
+    QVERIFY(logoLabel->pixmap().isNull() == false);
+}
 
 void LandingPageTest::newProjectButtonEmitsNewProjectRequested() {
     LandingPage page;

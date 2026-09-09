@@ -6,6 +6,7 @@ class LandingPageTest : public QObject {
     Q_OBJECT
 
 private slots:
+    void showsTheEmbeddedLogo();
     void newProjectButtonEmitsNewProjectRequested();
     void openProjectButtonEmitsOpenProjectRequested();
     void setRecentProjectsWithNoPathsShowsNoClickableEntries();

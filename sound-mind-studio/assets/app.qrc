@@ -1,0 +1,17 @@
+<!--
+  Runtime-embedded assets for sound-mind-studio-lib (see theme.h/.cpp and
+  landing_page.cpp) - compiled in via Qt's resource system (CMAKE_AUTORCC),
+  so nothing here depends on a loose file being deployed alongside the exe.
+
+  ChooseAgainIcon.ico is deliberately NOT embedded here - it's used only via
+  resources/app.rc, as the executable's native Win32 icon resource, which
+  the RC compiler reads directly at build time. Loading it through Qt at
+  runtime instead would pull in the qico imageformat plugin as a real
+  runtime dependency for no benefit, since QApplication::setWindowIcon()
+  and MainWindow's own icon both use the PNG below just as well.
+-->
+<RCC>
+    <qresource prefix="/">
+        <file>ChooseAgainLarge.png</file>
+    </qresource>
+</RCC>

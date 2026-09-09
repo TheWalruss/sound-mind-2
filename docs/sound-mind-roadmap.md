@@ -179,6 +179,8 @@ A lumped UI-polish milestone, per explicit go-ahead to bundle smaller UI changes
 
 **Demo:** launch the Studio and see the branded icon and palette throughout, including the new Layers panel; open the generated Doxygen docs and see the same palette applied there too.
 
+**Implemented out of order, ahead of `v0.Y.10.1`-`v0.Y.13.1`** (Project Lifecycle, Create Project Wizard, Loop Mode, Layers Panel - none built yet): confirmed explicitly before starting. The "including the new Layers panel" half of the demo above doesn't yet apply - there's no Layers panel to see it on - but the app-wide QSS (`sound_mind::studio::theme::studioStyleSheet()`) styles `QDockWidget`/`QDockWidget::title` pre-emptively, so it needs no revisiting once that milestone lands. `ChooseAgainIcon.ico` is used only as `sound-mind-studio`'s native Win32 executable resource (`resources/app.rc`, read by the RC compiler at build time); `ChooseAgainLarge.png` covers both `QApplication`/`MainWindow`'s runtime window icon and the Landing Page's header logo (both via Qt's resource system, `assets/app.qrc`) - splitting the two files this way, rather than loading the `.ico` through Qt too, avoids an otherwise-pointless runtime dependency on Qt's `qico` imageformat plugin. See `docs/sound-mind-architecture.md`'s Decisions Made #16 for the fixed-theme-not-a-toggle scope note and a real static-library resource-linking gotcha hit and fixed along the way.
+
 **No Y bump.** Purely visual - no project file, public API, or codec format is touched.
 
 ---
