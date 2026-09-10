@@ -12,6 +12,7 @@ add_executable(sound-mind-studio-tests
     test_layers_panel.cpp
     test_loop_panel.cpp
     test_main_window.cpp
+    test_paint_controller.cpp
     test_playback_controller.cpp
     test_playback_panel.cpp
     test_record_panel.cpp

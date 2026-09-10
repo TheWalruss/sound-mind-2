@@ -6,6 +6,34 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.4] - 2026-09-10
+
+Part 4 of the Phase 3 "Basic Painting" milestone - `sound_mind::studio::PaintController`,
+the session-level orchestration between an in-progress freehand stroke
+and Core's paint/undo machinery. Still not wired into `CanvasWidget`/
+`MainWindow` - real mouse capture and the Tool Configuration Panel/Pick
+are the remaining installments.
+
+### Added
+
+- **`sound_mind::studio::PaintController`** - owns an in-progress
+  stroke's raw point buffer and live-fitted preview `Path`
+  (`beginStroke()`/`continueStroke()`/`endStroke()`/`cancelStroke()`),
+  each touched layer's own session-only pre-paint base content (for
+  `undo()`/`redo()` correctness), and the current `ToolConfiguration`
+  new strokes paint with. Emits `pathChanged()` (live preview) and
+  `contentChanged(LayerId)` for `MainWindow` to connect once real
+  wiring exists - the same "purely presentational-adjacent" shape as
+  `PlaybackController`. `frequencyToTimeScale()` (the normalization
+  `fitPathToPoints()`/`applyPaintOperation()` both need) is derived
+  from the current project's own canvas geometry.
+
+Regression: `sound-mind-core-tests` (unaffected) and the full
+`sound-mind-studio-tests` suite (15 new `PaintControllerTest` cases)
+both pass. Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.3] - 2026-09-10
 
 Part 3 of the Phase 3 "Basic Painting" milestone - the procedural
