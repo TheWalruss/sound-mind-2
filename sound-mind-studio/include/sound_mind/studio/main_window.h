@@ -17,6 +17,7 @@
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/recent_projects.h"
+#include "sound_mind/studio/tool_configuration_panel.h"
 
 class QAction;
 class QCloseEvent;
@@ -1236,6 +1237,13 @@ private:
     /// opened, the same way it resets every other per-project session
     /// state.
     QAction* paintAction_ = nullptr;
+
+    /// @brief The dockable panel exposing the current paint tool's own
+    /// parameters - see its own class docs for what's deliberately not
+    /// built yet (the Wizard button, the Tool Preset drop-down). Hidden
+    /// by default, matching Playback/Record/Loop's own "off until shown"
+    /// convention (not Layers', which is shown automatically once).
+    ToolConfigurationPanel* toolConfigurationPanel_ = nullptr;
 
     /// @brief `nullptr` until the first setProject() call - LoopEngine
     /// needs a real loop length (the project's own duration in samples)

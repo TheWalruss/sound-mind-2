@@ -29,6 +29,7 @@
 #include "test_record_panel.h"
 #include "test_recent_projects.h"
 #include "test_theme.h"
+#include "test_tool_configuration_panel.h"
 
 int main(int argc, char** argv) {
     // Redirects ini-format QSettings storage (MainWindow's recentProjects_,
@@ -82,6 +83,9 @@ int main(int argc, char** argv) {
 
     PaintControllerTest paintControllerTest;
     status |= QTest::qExec(&paintControllerTest, argc, argv);
+
+    ToolConfigurationPanelTest toolConfigurationPanelTest;
+    status |= QTest::qExec(&toolConfigurationPanelTest, argc, argv);
 
     AudioSnippetPickerDialogTest audioSnippetPickerDialogTest;
     status |= QTest::qExec(&audioSnippetPickerDialogTest, argc, argv);

@@ -6,6 +6,45 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.6] - 2026-09-10
+
+Part 6 of the Phase 3 "Basic Painting" milestone - the Tool
+Configuration Panel and the "Show bounding boxes"/"Show path geometry"
+overlays. **Painting is now genuinely visible** - open the new "Tool
+Configuration" dock (toolbar toggle), adjust its controls or just use
+its own already-opaque defaults, and a painted stroke actually changes
+what's on screen.
+
+### Added
+
+- **`sound_mind::studio::ToolConfigurationPanel`** - a dockable panel
+  (off by default) with the Procedural brush's own real parameters: tip
+  shape, falloff, brush size, and intensity/opacity controls that set
+  both gradient stops uniformly (a full multi-stop gradient editor is a
+  separate, later feature). Deliberately omits the Wizard button and
+  Tool Preset drop-down the design doc describes - neither exists yet
+  (no Wizard built, no project-level saved-preset list) - rather than
+  showing dead controls; see the class's own docs. Its own constructed
+  defaults are a real, fully opaque brush, not `ToolConfiguration`'s own
+  transparent default, so a stroke painted before ever touching a
+  control already paints something visible.
+- **`CanvasWidget` gained `setShowBoundingBoxes()`/`setShowPathGeometry()`** -
+  draws every active `PaintOperation` targeting the displayed layer's
+  own bounding box (cyan) and/or Path geometry (magenta), both off by
+  default. Independent of the live in-progress preview, which is always
+  drawn regardless of these settings.
+- `MainWindow` wires the panel's `toolConfigurationChanged()` into
+  `PaintController::setToolConfiguration()` and its two checkboxes into
+  `CanvasWidget`'s new overlay settings, and applies the panel's own
+  default configuration to `PaintController` immediately at startup.
+
+Regression: `sound-mind-core-tests` (unaffected) and the full
+`sound-mind-studio-tests` suite (new `ToolConfigurationPanelTest` class,
+plus new tests in `CanvasWidgetTest`/`MainWindowTest`) both pass.
+Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.5] - 2026-09-10
 
 Part 5 of the Phase 3 "Basic Painting" milestone - `CanvasWidget`/

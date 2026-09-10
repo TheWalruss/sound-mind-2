@@ -43,6 +43,7 @@ add_library(sound-mind-studio-lib
     src/record_panel.cpp
     src/recent_projects.cpp
     src/theme.cpp
+    src/tool_configuration_panel.cpp
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/create_project_wizard.h
@@ -60,6 +61,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/record_panel.h
     include/sound_mind/studio/recent_projects.h
     include/sound_mind/studio/theme.h
+    include/sound_mind/studio/tool_configuration_panel.h
     assets/app.qrc
 )
 

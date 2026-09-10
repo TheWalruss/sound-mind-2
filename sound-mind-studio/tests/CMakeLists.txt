@@ -18,6 +18,7 @@ add_executable(sound-mind-studio-tests
     test_record_panel.cpp
     test_recent_projects.cpp
     test_theme.cpp
+    test_tool_configuration_panel.cpp
 )
 
 target_link_libraries(sound-mind-studio-tests

@@ -2,12 +2,14 @@
 
 #include <optional>
 
+#include <QPainterPath>
 #include <QWidget>
 
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 
 class QMouseEvent;
+class QPainter;
 
 namespace sound_mind::studio {
 
@@ -95,6 +97,33 @@ public:
     [[nodiscard]] ToolMode toolMode() const noexcept { return toolMode_; }
 
     /**
+     * @brief Sets whether every paintable operation's bounding box is
+     *        drawn over the canvas - see `docs/sound-mind-design.md`'s
+     *        "Tool Configuration" ("Show bounding boxes").
+     *
+     * Drawn for the same layer the canvas otherwise renders (its topmost
+     * visible layer with content) - every one of that layer's own active
+     * `PaintOperation`s, via `Operation::bounds()`.
+     *
+     * @param shown Whether to draw them; `false` by default.
+     */
+    void setShowBoundingBoxes(bool shown);
+
+    /**
+     * @brief Sets whether every paintable operation's own Path geometry
+     *        (nodes and handles) is drawn over the canvas - see
+     *        `docs/sound-mind-design.md`'s "Tool Configuration" ("Show
+     *        path geometry").
+     *
+     * Independent of the in-progress live preview (setPaintPreviewPath()),
+     * which is always drawn regardless of this setting - see that
+     * method's own docs for why.
+     *
+     * @param shown Whether to draw them; `false` by default.
+     */
+    void setShowPathGeometry(bool shown);
+
+    /**
      * @brief Sets the live paint-stroke preview to draw, and repaints.
      *
      * Drawn as an overlay - its nodes converted from time/frequency space
@@ -162,11 +191,30 @@ private:
     ///        drawing the live preview path.
     [[nodiscard]] QPointF timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint point) const;
 
+    /// @brief Draws every active `PaintOperation` targeting the displayed
+    ///        layer's own bounding box and/or Path geometry, per
+    ///        showBoundingBoxes_/showPathGeometry_ - the shared logic
+    ///        behind both overlay settings, since both need the same
+    ///        "which layer, which operations" lookup.
+    /// @param painter The painter to draw with - already set up by
+    ///        paintEvent().
+    void drawOperationOverlays(QPainter& painter) const;
+
+    /// @brief Converts a Path into a `QPainterPath` in widget-pixel space,
+    ///        via timeFrequencyToWidgetPoint() - the shared geometry
+    ///        behind both the live preview and Show path geometry's own
+    ///        overlay.
+    /// @param path The path to convert; an empty (no-node) Path converts
+    ///        to an empty QPainterPath.
+    [[nodiscard]] QPainterPath toPainterPath(const sound_mind::core::Path& path) const;
+
     const sound_mind::core::Project* project_ = nullptr;
     std::optional<double> playheadFraction_;
     ToolMode toolMode_ = ToolMode::None;
     bool paintStrokeActive_ = false;
     sound_mind::core::Path paintPreviewPath_;
+    bool showBoundingBoxes_ = false;
+    bool showPathGeometry_ = false;
 };
 
 }  // namespace sound_mind::studio

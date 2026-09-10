@@ -6,20 +6,24 @@
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/paint_application.h"
+#include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/canvas_widget.h"
 
 using sound_mind::codec::StreamImage;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
+using sound_mind::core::PaintOperation;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
+using sound_mind::core::ToolConfiguration;
 using sound_mind::studio::CanvasWidget;
 
 namespace {
@@ -341,4 +345,91 @@ void CanvasWidgetTest::setPaintPreviewPathWithNoNodesDrawsNothing() {
     const QImage rendered = widget.grab().toImage();
     // The placeholder's own dark-gray fill, not yellow anywhere.
     QCOMPARE(rendered.pixelColor(50, 25), QColor(40, 40, 40));
+}
+
+namespace {
+
+/// @brief A project (per mouseConversionTestSettings()) with one Normal
+/// layer with real (blank) content, plus one real `PaintOperation`
+/// already appended to its own OperationLog - a straight diagonal Path
+/// from (frame 20, bin 10) to (frame 80, bin 40), so its bounding box has
+/// real, non-degenerate width and height to check for.
+///
+/// @param project The project to populate.
+/// @return The new layer's own id.
+sound_mind::core::LayerId addLayerWithARealPaintOperation(Project& project) {
+    Layer layer(0, "Test", LayerType::Normal);
+    const auto& settings = project.settings();
+    StreamImage content;
+    content.config = sound_mind::core::streamCodecConfigFor(settings);
+    content.frameCount = settings.canvasWidth;
+    const std::size_t pixelCount = std::size_t{content.config.binCount} * content.frameCount;
+    content.leftMagnitudeDb.assign(pixelCount, 0.0f);
+    content.rightMagnitudeDb.assign(pixelCount, 0.0f);
+    content.sharedPhaseRadians.assign(pixelCount, 0.0f);
+    layer.setContent(content);
+    const auto layerId = project.addLayer(std::move(layer));
+
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+    Path path;
+    PathNode start;
+    start.anchor = TimeFrequencyPoint{sound_mind::core::frameIndexToTime(20.0, config),
+                                       sound_mind::core::binIndexToFrequency(10.0f, config)};
+    start.type = PathNodeType::Corner;
+    path.addNode(start);
+    PathNode end;
+    end.anchor = TimeFrequencyPoint{sound_mind::core::frameIndexToTime(80.0, config),
+                                     sound_mind::core::binIndexToFrequency(40.0f, config)};
+    end.type = PathNodeType::Corner;
+    path.addNode(end);
+
+    const auto opId = project.operationLog().reserveId();
+    project.operationLog().append(std::make_unique<PaintOperation>(opId, layerId, path, ToolConfiguration{}));
+    return layerId;
+}
+
+}  // namespace
+
+void CanvasWidgetTest::showBoundingBoxesDrawsNothingWhenOff() {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    addLayerWithARealPaintOperation(project);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    const QImage rendered = widget.grab().toImage();
+    // Not the overlay's own cyan - whatever color the layer's own 0 dB
+    // content renders as (full-scale, not silent - see
+    // rendersALayersContentInsteadOfThePlaceholder()'s own comment for
+    // why "blank" content isn't literally black here) doesn't matter, as
+    // long as it isn't the bounding-box overlay's own distinctive color.
+    QVERIFY(rendered.pixelColor(20, 10) != QColor(0, 255, 255));
+}
+
+void CanvasWidgetTest::showBoundingBoxesDrawsAnActiveOperationsBoundingBox() {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    addLayerWithARealPaintOperation(project);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setShowBoundingBoxes(true);
+
+    const QImage rendered = widget.grab().toImage();
+    QCOMPARE(rendered.pixelColor(20, 10), QColor(0, 255, 255));  // Qt::cyan - the box's own top-left corner.
+}
+
+void CanvasWidgetTest::showPathGeometryDrawsAnActiveOperationsPath() {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    addLayerWithARealPaintOperation(project);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setShowPathGeometry(true);
+
+    const QImage rendered = widget.grab().toImage();
+    // The path's own start node, at (frame 20, bin 10).
+    QCOMPARE(rendered.pixelColor(20, 10), QColor(255, 0, 255));  // Qt::magenta.
 }

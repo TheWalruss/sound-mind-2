@@ -199,6 +199,21 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         refreshLayersPanel();
     });
 
+    toolConfigurationPanel_ = new ToolConfigurationPanel(this);
+    toolConfigurationPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, toolConfigurationPanel_);
+    // The panel's own constructed-with defaults are already a real,
+    // opaque brush (not ToolConfiguration's own transparent default - see
+    // the panel's own docs) - applied here so a stroke painted before
+    // ever opening the panel still paints something visible.
+    paintController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration());
+    connect(toolConfigurationPanel_, &ToolConfigurationPanel::toolConfigurationChanged, this,
+            [this](const sound_mind::core::ToolConfiguration& config) { paintController_->setToolConfiguration(config); });
+    connect(toolConfigurationPanel_, &ToolConfigurationPanel::showBoundingBoxesChanged, canvas_,
+            &CanvasWidget::setShowBoundingBoxes);
+    connect(toolConfigurationPanel_, &ToolConfigurationPanel::showPathGeometryChanged, canvas_,
+            &CanvasWidget::setShowPathGeometry);
+
     recordPanel_ = new RecordPanel(this);
     recordPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, recordPanel_);
@@ -294,6 +309,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     transportToolBar->addAction(playbackPanel_->toggleViewAction());
     transportToolBar->addAction(recordPanel_->toggleViewAction());
     transportToolBar->addAction(loopPanel_->toggleViewAction());
+    // Off by default, the same as Playback/Record/Loop above - see
+    // toolConfigurationPanel_'s own docs.
+    transportToolBar->addAction(toolConfigurationPanel_->toggleViewAction());
 
     // ~30fps - frequent enough for each completed loop's spectrogram
     // update to read as prompt, without repainting so often it competes

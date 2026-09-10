@@ -11,6 +11,7 @@
 
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/paint_application.h"
+#include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/qt_image_conversion.h"
 
@@ -41,6 +42,23 @@ const QSize kFallbackSize(400, 300);
     return std::nullopt;
 }
 
+/// @brief The same "topmost visible layer with content" the image
+/// findTopmostRender() above returns actually came from - as the Layer
+/// itself, for drawOperationOverlays() to query its own id's operations
+/// with. A second, independent lookup (same reasoning as findTopmostRender()'s
+/// own docs) rather than having findTopmostRender() return both, to keep
+/// its own return type (just the rendered image) unchanged for every
+/// existing caller.
+[[nodiscard]] const sound_mind::core::Layer* findTopmostLayerWithContent(const sound_mind::core::Project& project) {
+    const auto& layers = project.layers();
+    for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
+        if (it->visible() && it->content().has_value()) {
+            return &*it;
+        }
+    }
+    return nullptr;
+}
+
 }  // namespace
 
 CanvasWidget::CanvasWidget(QWidget* parent) : QWidget(parent) {}
@@ -63,6 +81,16 @@ void CanvasWidget::setToolMode(ToolMode mode) {
 
 void CanvasWidget::setPaintPreviewPath(sound_mind::core::Path path) {
     paintPreviewPath_ = std::move(path);
+    update();
+}
+
+void CanvasWidget::setShowBoundingBoxes(bool shown) {
+    showBoundingBoxes_ = shown;
+    update();
+}
+
+void CanvasWidget::setShowPathGeometry(bool shown) {
+    showPathGeometry_ = shown;
     update();
 }
 
@@ -90,6 +118,10 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
             painter.setPen(Qt::darkGray);
             painter.drawRect(canvasRect.adjusted(0, 0, -1, -1));
         }
+
+        if (showBoundingBoxes_ || showPathGeometry_) {
+            drawOperationOverlays(painter);
+        }
     }
 
     // The playhead (v0.0.21.1, Playback position bar) is drawn last, over
@@ -104,23 +136,63 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     }
 
     // The live paint-stroke preview (v0.Y.24.1, Basic Painting) - see
-    // setPaintPreviewPath()'s own docs. Drawn as a real cubic Bézier path
-    // via QPainterPath, matching Path's own segment shape exactly rather
-    // than approximating it with straight line segments.
+    // setPaintPreviewPath()'s own docs. Always drawn, regardless of Show
+    // path geometry's own setting - see that method's own docs for why.
     if (project_ != nullptr && !paintPreviewPath_.nodes().empty()) {
-        const auto& nodes = paintPreviewPath_.nodes();
-        QPainterPath qPath;
-        qPath.moveTo(timeFrequencyToWidgetPoint(nodes.front().anchor));
-        for (std::size_t i = 0; i + 1 < nodes.size(); ++i) {
-            const auto& start = nodes[i];
-            const auto& end = nodes[i + 1];
-            const QPointF p1 = timeFrequencyToWidgetPoint(start.handleOut.value_or(start.anchor));
-            const QPointF p2 = timeFrequencyToWidgetPoint(end.handleIn.value_or(end.anchor));
-            qPath.cubicTo(p1, p2, timeFrequencyToWidgetPoint(end.anchor));
-        }
         painter.setPen(QPen(Qt::yellow, 1));
-        painter.drawPath(qPath);
+        painter.drawPath(toPainterPath(paintPreviewPath_));
     }
+}
+
+void CanvasWidget::drawOperationOverlays(QPainter& painter) const {
+    const sound_mind::core::Layer* layer = findTopmostLayerWithContent(*project_);
+    if (layer == nullptr) {
+        return;
+    }
+    const auto operations = project_->operationLog().activeOperationsTargeting(layer->id());
+
+    if (showBoundingBoxes_) {
+        painter.setPen(QPen(Qt::cyan, 1));
+        for (const sound_mind::core::Operation* operation : operations) {
+            const auto bounds = operation->bounds();
+            // .normalized() guards against bin 0 mapping to the *top* of
+            // the widget (see widgetPointToTimeFrequency()'s own docs) -
+            // highFrequencyHz's own corner lands at a numerically *larger*
+            // y than lowFrequencyHz's, the opposite of what a plain
+            // QRectF(topLeft, bottomRight) construction assumes.
+            const QPointF corner1 = timeFrequencyToWidgetPoint(
+                sound_mind::core::TimeFrequencyPoint{bounds.startTimeSeconds, bounds.highFrequencyHz});
+            const QPointF corner2 = timeFrequencyToWidgetPoint(
+                sound_mind::core::TimeFrequencyPoint{bounds.endTimeSeconds, bounds.lowFrequencyHz});
+            painter.drawRect(QRectF(corner1, corner2).normalized());
+        }
+    }
+
+    if (showPathGeometry_) {
+        painter.setPen(QPen(Qt::magenta, 1));
+        for (const sound_mind::core::Operation* operation : operations) {
+            if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(operation)) {
+                painter.drawPath(toPainterPath(paint->path()));
+            }
+        }
+    }
+}
+
+QPainterPath CanvasWidget::toPainterPath(const sound_mind::core::Path& path) const {
+    QPainterPath qPath;
+    const auto& nodes = path.nodes();
+    if (nodes.empty()) {
+        return qPath;
+    }
+    qPath.moveTo(timeFrequencyToWidgetPoint(nodes.front().anchor));
+    for (std::size_t i = 0; i + 1 < nodes.size(); ++i) {
+        const auto& start = nodes[i];
+        const auto& end = nodes[i + 1];
+        const QPointF p1 = timeFrequencyToWidgetPoint(start.handleOut.value_or(start.anchor));
+        const QPointF p2 = timeFrequencyToWidgetPoint(end.handleIn.value_or(end.anchor));
+        qPath.cubicTo(p1, p2, timeFrequencyToWidgetPoint(end.anchor));
+    }
+    return qPath;
 }
 
 void CanvasWidget::mousePressEvent(QMouseEvent* event) {

@@ -28,6 +28,7 @@
 #include "sound_mind/studio/main_window.h"
 #include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/record_panel.h"
+#include "sound_mind/studio/tool_configuration_panel.h"
 
 using sound_mind::studio::CanvasWidget;
 using sound_mind::studio::ImageScalePickerDialog;
@@ -37,6 +38,7 @@ using sound_mind::studio::LoopPanel;
 using sound_mind::studio::MainWindow;
 using sound_mind::studio::PlaybackPanel;
 using sound_mind::studio::RecordPanel;
+using sound_mind::studio::ToolConfigurationPanel;
 
 namespace {
 
@@ -2204,4 +2206,72 @@ void MainWindowTest::settingANewProjectResetsPaintModeToOff() {
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);
     QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
+}
+
+void MainWindowTest::paintingWithTheDefaultToolConfigurationActuallyPaintsSomethingVisible() {
+    const auto imagePath = std::filesystem::temp_directory_path() / "sound-mind-test-paint-visible.png";
+    writeImageScalingTestImage(imagePath);  // 30x20.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-paint-visible.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
+    std::filesystem::remove(projectPath);
+
+    // Painting targets the topmost layer in the stack (paintTargetLayerId()'s
+    // own docs) - importing an image first gives that layer real content
+    // to paint onto, exactly matching canvas->resize() below, and matches
+    // the topmost-layer-is-freshest precedent every other import already
+    // establishes.
+    QVERIFY(window.importImageFile(imagePath, ImageScalePickerDialog::Mode::RescaleToFitProject));
+    std::filesystem::remove(imagePath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    // canvas is layout-managed (MainWindow's own central QStackedWidget) -
+    // a plain resize() here wouldn't reliably stick without a real layout
+    // pass, which headless tests that never show() the window don't get.
+    // setFixedSize() pins both the minimum and maximum size, which a
+    // layout must respect regardless of whether it ever actually runs.
+    canvas->setFixedSize(100, 50);
+    window.setPaintModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Paint);
+    QCOMPARE(canvas->size(), QSize(100, 50));
+
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+
+    // Painted with the ToolConfigurationPanel's own real, opaque default
+    // (0 dB / 100% - see its own docs) - unlike before this panel
+    // existed, this should now actually change stored pixel data, not
+    // just append a no-visible-effect logged operation. Checked on the
+    // *right* channel specifically: the imported image is pure red (see
+    // writeImageScalingTestImage()'s own docs), meaning its left channel
+    // already starts at 0 dB - painting *to* 0 dB there would converge to
+    // the same value it started at and prove nothing either way. The
+    // right channel starts near the silent floor instead, so painting it
+    // to 0 dB is the one channel guaranteed to show a real numeric change.
+    const auto& content = *window.project()->layers().back().content();
+    const bool anyPainted = std::any_of(content.rightMagnitudeDb.begin(), content.rightMagnitudeDb.end(),
+                                         [](float value) { return value > -50.0f; });
+    QVERIFY(anyPainted);
+}
+
+void MainWindowTest::toggleToolConfigurationPanelShowsAndHidesIt() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* panel = window.findChild<ToolConfigurationPanel*>();
+    QVERIFY(panel != nullptr);
+    QVERIFY(panel->isHidden());  // off by default - see its own docs.
+
+    QAction* toggleAction = panel->toggleViewAction();
+    QVERIFY(toggleAction != nullptr);
+    auto* toolBar = window.findChild<QToolBar*>();
+    QVERIFY(toolBar != nullptr);
+    QVERIFY(toolBar->actions().contains(toggleAction));
+
+    toggleAction->trigger();
+    QVERIFY(!panel->isHidden());
+
+    toggleAction->trigger();
+    QVERIFY(panel->isHidden());
 }

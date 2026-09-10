@@ -146,4 +146,6 @@ private slots:
     void paintingOnTheCanvasAppendsAPaintOperationToTheProjectsLog();
     void undoAndRedoDelegateToThePaintController();
     void settingANewProjectResetsPaintModeToOff();
+    void paintingWithTheDefaultToolConfigurationActuallyPaintsSomethingVisible();
+    void toggleToolConfigurationPanelShowsAndHidesIt();
 };
