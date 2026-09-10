@@ -6,6 +6,73 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.21.1] - 2026-09-10
+
+A UI polish pass across several already-shipped milestones (Drag & Drop
+Import, Transport Panels, Layers Panel, Loop Mode, Playback), requested
+directly and confirmed point-by-point before implementing - not itself
+a new `docs/sound-mind-roadmap.md` entry.
+
+### Added
+
+- **Drag & Drop Import now offers the same choices File -> Import
+  Audio/Image would**: dropping images shows the same
+  `ImageScalePickerDialog` (rescale mode, and "Import as sequence" for
+  multiple images) File -> Import Image does; dropping a `.wav` with
+  more than one computed snippet shows the same
+  `AudioSnippetPickerDialog` File -> Import Audio would, per file.
+  Cancelling any one of these dialogs cancels the whole drop, including
+  unrelated files carried alongside it. See
+  `docs/sound-mind-architecture.md`'s Decisions Made #27.
+- **A Layers toggle button** in the transport toolbar, next to
+  Playback/Record/Loop's own - same `QDockWidget::toggleViewAction()`
+  mechanism, defaulting to shown (the other three default to hidden).
+  Playback/Record/Loop no longer get force-shown every time a project
+  is opened/created; a user's own show/hide choice for any of the four
+  now persists across New/Open Project within a session. See Decisions
+  Made #28.
+- **"Keep Looping" renamed to "Freeze Loop"** in the Loop panel - not
+  descriptive of the actual behavior (freezing the currently-playing
+  take, not literally "keeping" anything looping that wouldn't already
+  be). Label only - `setKeepLooping()`/`keepLooping()`/
+  `keepLoopingChanged` and the checkbox's own internal object name are
+  unchanged.
+- **The project name in the window title**: "Sound Mind Studio
+  v`<version>` - `<project name>`" once a project has been created,
+  opened, or saved-as; just the plain title before that.
+- **A Playback position bar and a live playhead line**: a draggable,
+  seekable elapsed/total position bar and time label in the Playback
+  panel, plus a moving vertical white line over the canvas during
+  playback - matching video export's own playhead line exactly, so
+  live playback looks the same as the video it would export to.
+  `PlaybackEngine` gained `positionSamples()`/`totalSamples()`/
+  `sampleRateHz()`/`seek()`. See Decisions Made #29.
+
+### Notes
+
+- **A real headless-testing-only quirk found and documented, not
+  fixed** (there's nothing to fix - it doesn't occur in a real, shown
+  application): `QDockWidget::toggleViewAction()`'s checked state syncs
+  from real Show/Hide *events*, which Qt never dispatches for a
+  `MainWindow` that's never actually `show()`n - exactly this test
+  suite's own situation. `layersToggleActionShowsAndHidesTheLayersPanel`
+  verifies the toggle action exists, is checkable, and is in the
+  toolbar, not that triggering it changes `isHidden()` - the same kind
+  of "can't verify headlessly" limitation `dropEvent()`/
+  `dragEnterEvent()` already have for real OS drag gestures. See
+  Decisions Made #28's own note.
+- **No Y bump.** Every change here is either presentational (labels,
+  window title, toolbar buttons) or additive (new `PlaybackEngine`
+  accessors, new optional `handleDroppedFiles()` parameters defaulted
+  to prior behavior) - no project file format change.
+
+Regression: `sound-mind-core-tests` (413 assertions/102 cases, up from
+404/97 - new `PlaybackEngine` position/seek tests) and the full
+`sound-mind-studio-tests` suite (all 12 test classes) both pass.
+Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.20.1] - 2026-09-10
 
 The "Image Sequence Import" milestone from `docs/sound-mind-roadmap.md`

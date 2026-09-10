@@ -9,6 +9,7 @@ private slots:
     void toggleButtonEmitsToggleRequested();
     void setRunningUpdatesButtonAndDisablesDevicePickers();
     void keepLoopingCheckBoxEmitsKeepLoopingChanged();
+    void keepLoopingCheckBoxIsLabeledFreezeLoop();
     void setKeepLoopingCheckedDoesNotEmitKeepLoopingChanged();
     void setInputDevicesListsSystemDefaultFirst();
     void changingTheInputDeviceEmitsInputDeviceChanged();

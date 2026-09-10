@@ -82,7 +82,9 @@ private slots:
     void toggleLoopModeGivesANewLoopInputLayerAPlaceholderContentImmediately();
 
     // Transport Panels (v0.Y.16.1)
-    void panelsAreHiddenUntilAProjectExists();
+    void transportPanelsStayHiddenByDefaultEvenAfterAProjectExists();
+    void panelVisibilityPersistsAcrossProjectSwitches();
+    void layersToggleActionShowsAndHidesTheLayersPanel();
     void toggleLoopModeSyncsTheLoopPanelsRunningState();
     void toggleRecordingSyncsTheRecordPanelsRecordingState();
     void setKeepLoopingSyncsTheLoopPanelsCheckBox();
@@ -116,6 +118,9 @@ private slots:
     void handleDroppedFilesIgnoresUnrecognizedExtensions();
     void handleDroppedFilesRoutesMultipleFilesInOrder();
     void handleDroppedFilesSmprojRefusesWhileLoopModeIsRunning();
+    void handleDroppedFilesAppliesTheGivenImageMode();
+    void handleDroppedFilesSequencesDroppedImagesWhenRequested();
+    void handleDroppedFilesAppliesGivenAudioSnippetSelections();
 
     // Layer Time Alignment (v0.Y.21.1)
     void setLayerTranslationChangesTheLayersTranslation();
@@ -128,4 +133,10 @@ private slots:
     void importImageFilesSortsFilesAlphabeticallyWhenSequential();
     void importImageFilesSucceedsIfAtLeastOneFileImports();
     void importImageFilesFailsWhenNothingWasImported();
+
+    // UI Polish pass (v0.0.21.1)
+    void windowTitleIncludesTheProjectNameOnceOneExists();
+    void startPlaybackSetsThePlaybackPanelDuration();
+    void seekPlaybackMovesThePlaybackPosition();
+    void stopPlaybackResetsThePlaybackPanelPosition();
 };

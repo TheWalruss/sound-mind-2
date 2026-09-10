@@ -200,3 +200,56 @@ TEST_CASE("availableOutputDeviceNames is callable without crashing", "[core][pla
     // the call is well-formed.
     CHECK(names == engine.availableOutputDeviceNames());
 }
+
+TEST_CASE("A fresh PlaybackEngine reports no position or total samples", "[core][playback_engine]") {
+    const PlaybackEngine engine(AudioDeviceMode::None);
+    CHECK(engine.positionSamples() == 0);
+    CHECK(engine.totalSamples() == 0);
+}
+
+TEST_CASE("totalSamples reflects the loaded audio's own length", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    CHECK(engine.totalSamples() == 4);
+    CHECK(engine.sampleRateHz() == 44100);
+}
+
+TEST_CASE("positionSamples advances as renderBlock consumes audio", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    engine.play();
+
+    std::vector<float> left(2, 0.0f);
+    std::vector<float> right(2, 0.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 2);
+
+    CHECK(engine.positionSamples() == 2);
+}
+
+TEST_CASE("seek jumps playback to the given position", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+
+    engine.seek(2);
+    CHECK(engine.positionSamples() == 2);
+
+    engine.play();
+    std::vector<float> left(2, 0.0f);
+    std::vector<float> right(2, 0.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 2);
+
+    // Played samples 2 and 3 (0.3, 0.4), not 0 and 1.
+    CHECK(left[0] == 0.3f);
+    CHECK(left[1] == 0.4f);
+}
+
+TEST_CASE("seek clamps to totalSamples", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+
+    engine.seek(999);
+
+    CHECK(engine.positionSamples() == 4);
+}

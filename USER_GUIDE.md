@@ -82,17 +82,20 @@ imported at that resolution.
 
 ## The Main Window
 
-Once a project is open, the window has:
+Once a project is open, the title bar shows the project's name next to
+"Sound Mind Studio", and the window has:
 
 - **The canvas** (center) - shows the current spectrogram. See
   [Working with Layers](#working-with-layers) for exactly which layer
   that is.
 - **Layers panel** (right, by default) - lists every layer in the
-  project, top of the stack first.
-- **Playback / Record / Loop panels** - dockable panels, toggled from the
-  toolbar buttons next to **Pool Layer**; each is covered in its own
-  section below. They start hidden - click the matching toolbar button to
-  show one.
+  project, top of the stack first. Shown by default; toggled from the
+  **Layers** toolbar button.
+- **Playback / Record / Loop panels** - dockable panels, each toggled
+  from its own toolbar button; each is covered in its own section below.
+  Unlike Layers, these three start hidden - click the matching toolbar
+  button to show one. Whichever panels you have open (or closed) stays
+  that way across New/Open Project, within the same run of the Studio.
 - **File menu** - New/Open/Save/Save As, Import Audio/Image, Export
   Audio/Video.
 - **Pool Layer** toolbar button - see [Pooling a Layer](#pooling-a-layer).
@@ -137,14 +140,17 @@ automatically.
 
 ### Drag and Drop
 
-Dragging files onto the main window imports/opens them directly, by
-extension: `.wav` imports as audio (every split snippet, with no picker -
-use the File menu if you want to choose which ones), an image extension
-imports at **Rescale to fit project**, and `.smproj` opens that project
-(after confirming if your current project has unsaved changes). Anything
-else is ignored. If a dropped file fails to import, you'll see a message
-in the status bar rather than a popup - so one bad file in a multi-file
-drop doesn't interrupt the rest.
+Dragging files onto the main window imports/opens them, by extension, with
+the same choices the File menu offers: dropped images show the same
+scaling/sequencing picker **File → Import Image...** does; a dropped
+`.wav` with more than one computed snippet shows the same snippet picker
+**File → Import Audio...** does, one picker per such file; `.smproj` opens
+that project (after confirming if your current project has unsaved
+changes). Anything else is ignored. **Cancelling any one of these pickers
+cancels the whole drop** - nothing in it is imported or opened, even files
+unrelated to the dialog you cancelled. If a dropped file fails to import
+for some other reason, you'll see a message in the status bar rather than
+a popup, so one bad file in a multi-file drop doesn't interrupt the rest.
 
 ## Working with Layers
 
@@ -200,11 +206,18 @@ hear it composited).
 
 ## Playback
 
-The **Playback** panel has **Play**, **Pause**, and **Stop**, an output
-device picker, and a volume slider. It plays the topmost visible layer
-with content - see [the note above](#important-whats-actually-shown-right-now).
-Playback reflects the project as it currently stands; there's no separate
-"render" step.
+The **Playback** panel has **Play**, **Pause**, and **Stop**, a draggable
+position bar with an elapsed/total time label, an output device picker,
+and a volume slider. It plays the topmost visible layer with content -
+see [the note above](#important-whats-actually-shown-right-now). Playback
+reflects the project as it currently stands; there's no separate "render"
+step.
+
+While playing, a white line sweeps across the canvas in real time,
+tracking the current position - the same playhead line a video export
+would show, live. Drag the position bar (whether playing or paused) to
+seek to a different point; both the bar and the canvas playhead jump to
+match immediately.
 
 ## Recording
 
@@ -219,7 +232,7 @@ The **Loop** panel turns the Studio into a fixed-length loop pedal:
 **Start Loop** begins continuously capturing input in Duration-length
 passes, playing the previous pass back while it records the next. By
 default each new pass records over the last one, same as a standard loop
-pedal; check **Keep Looping** to freeze whatever's currently playing so it
+pedal; check **Freeze Loop** to freeze whatever's currently playing so it
 just repeats instead of being overwritten. Input and output devices are
 chosen the same way as Playback/Recording; a device change takes effect
 the next time you start the loop, not immediately.

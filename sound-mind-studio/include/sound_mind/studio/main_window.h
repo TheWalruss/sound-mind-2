@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -104,8 +105,10 @@ class RecordPanel;
  * `v0.Y.11.1`'s docs above flagged as this milestone's job. toggleLoopMode()
  * (renamed from toggleLiveMode()) creates a "Loop Input" layer (renamed
  * from "Live Input") the same way Live Mode's did; setKeepLooping()
- * forwards to `LoopEngine::setKeepLooping()` - the new "Keep looping"
- * toolbar checkbox's actual work. updateLoopLayer() (renamed from
+ * forwards to `LoopEngine::setKeepLooping()` - the new "Freeze Loop"
+ * (labeled "Keep Looping" until a later UI-wording pass renamed it, without
+ * touching this method or the rest of its API) toolbar checkbox's actual
+ * work. updateLoopLayer() (renamed from
  * updateLiveLayer()) additionally reports `LoopEngine::loopsBehind()` in
  * the status bar - the confirmed scope's "visible loop-delay indicator".
  *
@@ -115,7 +118,7 @@ class RecordPanel;
  * legacy Studio's own separate docks. The transport toolbar's three
  * remaining actions for these are pure show/hide toggles
  * (`QDockWidget::toggleViewAction()`), not transport controls themselves.
- * The "Keep Looping" checkbox mentioned above moved from the toolbar into
+ * The "Freeze Loop" checkbox mentioned above moved from the toolbar into
  * `loopPanel_`. Real input/output device selection
  * (`setLoopInputDevice()`/`setLoopOutputDevice()`/`setRecordInputDevice()`/
  * `setPlaybackOutputDevice()`) and an above-unity Playback volume control
@@ -248,11 +251,32 @@ public slots:
      */
     void startPlayback();
 
-    /// @brief Pauses playback; startPlayback() resumes from the same position.
+    /// @brief Pauses playback; startPlayback() resumes from the same
+    /// position. The position bar/playhead stay at their current position
+    /// (not cleared) - stopPlayback() is what resets them.
     void pausePlayback();
 
-    /// @brief Stops playback and rewinds to the beginning.
+    /// @brief Stops playback and rewinds to the beginning; resets the
+    /// Playback panel's position bar/time label and clears the canvas
+    /// playhead (`v0.0.21.1`, Playback position bar).
     void stopPlayback();
+
+    /**
+     * @brief Jumps playback to the given position - the actual work behind
+     *        the Playback panel's position bar being dragged
+     *        (`v0.0.21.1`).
+     *
+     * Does nothing if nothing is currently loaded for playback (no
+     * startPlayback() has run yet, or stopPlayback() reset it) - there's
+     * nothing to seek within. Updates the Playback panel's position bar/
+     * label and the canvas playhead immediately, not just on the next
+     * timer tick, so dragging while paused still shows the new position
+     * right away.
+     *
+     * @param positionSeconds The position to seek to, in seconds; clamped
+     *        to the loaded audio's own duration.
+     */
+    void seekPlayback(double positionSeconds);
 
     /**
      * @brief Switches `playbackEngine_` to the named output device, right
@@ -653,7 +677,7 @@ public:
     /// @return The underlying LoopEngine's isRunning().
     [[nodiscard]] bool isLoopModeRunning() const noexcept;
 
-    /// @brief The current "Keep Looping" state - see setKeepLooping()'s
+    /// @brief The current "Freeze Loop" state - see setKeepLooping()'s
     /// docs.
     /// @return The underlying LoopEngine's keepLooping(), or `false` if no
     ///         project has ever been opened yet (loopEngine_ doesn't exist).
@@ -844,18 +868,21 @@ public:
      *        `docs/sound-mind-roadmap.md`'s Drag & Drop Import milestone
      *        (`v0.Y.17.1`).
      *
-     * `.wav` goes to importAudioFile() (every snippet, no picker - the
-     * same quick, no-dialog behavior a menu-driven import would need a
-     * picker for only because Audio Import Snippets' own scope specifically
-     * asked for one there); the image extensions importImageFile() already
-     * accepts go to it with `ImageScalePickerDialog::Mode::RescaleToFitProject`
-     * (the same default the interactive picker itself pre-selects, applied
-     * directly rather than showing that dialog for a drop); `.smproj` goes
-     * to openProjectAt(), guarded by confirmDiscardUnsavedChanges() first -
-     * openProjectAt() itself already refuses (no dialog) while Loop Mode or
-     * Recording is active. Every other extension is silently ignored, not
-     * an error - a stray file dropped by accident shouldn't force anything
-     * onto the screen.
+     * `.wav` goes to importAudioSnippets() with whatever indices
+     * `audioSnippetSelections` gives that path, or - for a path with no
+     * entry there - the same "every computed snippet, no picker" behavior
+     * importAudioFile() always had; every image extension
+     * `importImageFiles()` accepts is collected and imported as one batch
+     * with `imageMode`/`importAsSequence`. dropEvent() is the one that
+     * actually decides all of this (via real `AudioSnippetPickerDialog`/
+     * `ImageScalePickerDialog` prompts, the same ones File → Import Audio/
+     * Image themselves show - confirmed with the user: a drop should offer
+     * the same choices those menu actions do), so this method itself stays
+     * non-prompting; `.smproj` goes to openProjectAt(), guarded by
+     * confirmDiscardUnsavedChanges() first - openProjectAt() itself already
+     * refuses (no dialog) while Loop Mode or Recording is active. Every
+     * other extension is silently ignored, not an error - a stray file
+     * dropped by accident shouldn't force anything onto the screen.
      *
      * A recognized file that fails to import or open reports it via the
      * status bar (non-modal), not a blocking dialog - deliberately gentler
@@ -867,8 +894,28 @@ public:
      * confirmDiscardUnsavedChanges()-guarded call site already has).
      *
      * @param paths The local file paths to route, in order.
+     * @param imageMode How to resize any image files among `paths` - see
+     *        `importImageFiles()`'s own docs; ignored if `paths` has none.
+     *        Defaults to the same `RescaleToFitProject` the interactive
+     *        picker itself pre-selects, so a caller that doesn't care about
+     *        this (every test predating this parameter, in particular)
+     *        gets the same result as before.
+     * @param importImagesAsSequence Whether to lay out any image files
+     *        among `paths` end-to-end in time instead of importing each
+     *        independently - see `importImageFiles()`'s own docs. Defaults
+     *        to `false`.
+     * @param audioSnippetSelections Which snippet indices to import for a
+     *        given `.wav` path among `paths` - see
+     *        `audioSnippetsForFile()`/`importAudioSnippets()`'s own docs. A
+     *        `.wav` path with no entry here imports every snippet it has,
+     *        the pre-existing default every test predating this parameter
+     *        still gets.
      */
-    void handleDroppedFiles(const std::vector<std::filesystem::path>& paths);
+    void handleDroppedFiles(
+        const std::vector<std::filesystem::path>& paths,
+        ImageScalePickerDialog::Mode imageMode = ImageScalePickerDialog::Mode::RescaleToFitProject,
+        bool importImagesAsSequence = false,
+        const std::map<std::filesystem::path, std::vector<std::size_t>>& audioSnippetSelections = {});
 
     /**
      * @brief Pools the topmost layer with content and writes its Stream
@@ -943,9 +990,41 @@ protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
 
     /**
-     * @brief Extracts every local file `event` carries and routes them via
-     *        handleDroppedFiles() - see its own docs for the actual
-     *        per-extension behavior.
+     * @brief Extracts every local file `event` carries, prompts for
+     *        whatever choices images/multi-snippet audio among them would
+     *        need from the matching File menu action, and routes all of
+     *        them via handleDroppedFiles() - see its own docs for the
+     *        actual per-extension behavior.
+     *
+     * A drop is meant to offer exactly the same choices File → Import
+     * Audio/Image would, confirmed with the user:
+     *
+     * - If `event` carries at least one image file, a single
+     *   `ImageScalePickerDialog` is shown once for the whole batch (with
+     *   its "Import as sequence" checkbox offered exactly when more than
+     *   one image was dropped, same as `importImage()`'s own file dialog).
+     * - Each `.wav` file among `event`'s files gets its own
+     *   `audioSnippetsForFile()` check; one with more than one snippet
+     *   shows its own `AudioSnippetPickerDialog`, exactly as
+     *   `importAudio()` would for that file alone - per-file, not batched,
+     *   since (unlike images) audio snippets aren't a cross-file concept.
+     *
+     * **Cancelling any one of these dialogs cancels the whole drop**,
+     * including every other file carried alongside it (images, other
+     * audio, `.smproj`) - confirmed with the user over the alternative of
+     * only skipping whatever that one dialog was for and still processing
+     * the rest.
+     *
+     * Untestable directly, like dragEnterEvent() - nothing can simulate a
+     * real OS-level drag gesture headlessly, and a real modal dialog would
+     * hang a headless test the same way every other undismissable dialog
+     * in this codebase's own test suite already does (see
+     * `docs/sound-mind-architecture.md`'s Decisions Made). The routing
+     * logic this delegates to, and the choices themselves, are
+     * independently tested via handleDroppedFiles()'s own optional
+     * parameters and `ImageScalePickerDialog`'s/`AudioSnippetPickerDialog`'s
+     * own test suites.
+     *
      * @param event The drop event; accepted if it carried at least one
      *        local file, ignored otherwise.
      */
@@ -989,6 +1068,13 @@ private:
     ///         is open or no layer in it has this id.
     [[nodiscard]] sound_mind::core::Layer* layerById(sound_mind::core::LayerId id);
 
+    /// @brief Sets the window title to "Sound Mind Studio v<version>",
+    /// plus " - <project name>" (currentPath_'s own file stem) once a
+    /// project has been saved/opened at a real path - called after every
+    /// currentPath_ assignment (createProjectAt()/openProjectAt()/
+    /// saveProjectAs()).
+    void updateWindowTitle();
+
     /// @brief Pushes the current project's layer stack into layersPanel_ -
     /// called after setProject() and after any action that adds, removes,
     /// reorders, renames, or changes a layer's visibility/opacity. An
@@ -1000,6 +1086,15 @@ private:
     /// loopEngine_->loopsBehind() in the status bar, while Loop Mode is
     /// running - see toggleLoopMode()'s docs.
     void updateLoopLayer();
+
+    /// @brief playbackUpdateTimer_'s slot (also called directly by
+    /// seekPlayback() for immediate feedback): pushes
+    /// playbackEngine_'s current positionSamples()/totalSamples() into the
+    /// Playback panel's position bar and the canvas playhead
+    /// (`v0.0.21.1`), and stops playbackUpdateTimer_ once playback has
+    /// naturally ended (`PlaybackEngine::isPlaying()` clears itself at the
+    /// end of the loaded audio - see its own docs).
+    void updatePlaybackPosition();
 
     /// @brief recordDrainTimer_'s slot: moves whatever's newly captured
     /// out of recordEngine_'s ring buffer, while Recording is running -
@@ -1021,15 +1116,24 @@ private:
     CanvasWidget* canvas_ = nullptr;
 
     /// @brief The Layers Panel dock - hidden until setProject() is first
-    /// called (see refreshLayersPanel()'s docs).
+    /// called (see refreshLayersPanel()'s docs), then shown automatically
+    /// exactly once (see layersPanelShownOnce_) and left to the toolbar's
+    /// own toggleViewAction() (set up in the constructor) after that.
     LayersPanel* layersPanel_ = nullptr;
 
+    /// @brief Whether layersPanel_ has already been auto-shown once this
+    /// session - setProject() only forces it visible the *first* time any
+    /// project exists, so a later manual hide (via the toolbar toggle)
+    /// isn't overridden by switching to a different project. See
+    /// setProject()'s own comment.
+    bool layersPanelShownOnce_ = false;
+
     /// @brief The Playback/Record/Loop transport panels (`v0.Y.16.1`) -
-    /// each hidden until setProject() is first called, matching
-    /// layersPanel_'s own treatment. The transport toolbar's
-    /// Playback/Record/Loop actions are each that panel's own
-    /// toggleViewAction() (set up in the constructor), not separate
-    /// members - see the constructor's own comments.
+    /// each hidden until setProject() is first called, and - unlike
+    /// layersPanel_ - never force-shown afterward either: they start OFF
+    /// by default and stay however the user last left them via the
+    /// transport toolbar's own toggleViewAction() (set up in the
+    /// constructor), confirmed with the user.
     PlaybackPanel* playbackPanel_ = nullptr;
     RecordPanel* recordPanel_ = nullptr;
     LoopPanel* loopPanel_ = nullptr;
@@ -1060,6 +1164,13 @@ private:
     /// `LiveEngine` member's simpler, always-default-constructed shape.
     std::unique_ptr<sound_mind::core::LoopEngine> loopEngine_;
     QTimer* loopUpdateTimer_ = nullptr;
+
+    /// @brief Polls playbackEngine_'s position (~30fps, matching
+    /// loopUpdateTimer_) while playing - see updatePlaybackPosition()'s
+    /// own docs. Started by startPlayback(), stopped by pausePlayback()/
+    /// stopPlayback() and by updatePlaybackPosition() itself once playback
+    /// naturally ends.
+    QTimer* playbackUpdateTimer_ = nullptr;
 
     /// @brief The layer currently being captured into, while Loop Mode is
     /// running - std::nullopt otherwise. An id, not a Layer*, since

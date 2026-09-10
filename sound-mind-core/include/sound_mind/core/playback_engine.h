@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -183,6 +185,44 @@ public:
     /// past unity but still a sane ceiling against accidental clipping/
     /// hearing damage from an unbounded slider.
     static constexpr float kMaxVolume = 2.0f;
+
+    /**
+     * @brief The current playback position, in samples into the loaded
+     *        audio - for a live position bar/playhead indicator.
+     * @return The same position renderBlock() is currently reading from;
+     *         `0` for a fresh or stopped engine, and never past
+     *         totalSamples().
+     * @note Real-time-safe (a plain atomic load), safely callable from
+     *       either thread - same as volume().
+     */
+    [[nodiscard]] std::size_t positionSamples() const noexcept;
+
+    /// @brief The loaded audio's own length, in samples - the upper bound
+    /// positionSamples() advances toward.
+    /// @return `0` if nothing has been loaded yet.
+    [[nodiscard]] std::size_t totalSamples() const noexcept;
+
+    /// @brief The loaded audio's own sample rate, in Hz - divide
+    /// positionSamples()/totalSamples() by this to get seconds.
+    /// @return The sample rate loadAudio()'s argument carried; `44100`
+    ///         (AudioBuffer's own default) if nothing has been loaded yet.
+    [[nodiscard]] std::uint32_t sampleRateHz() const noexcept;
+
+    /**
+     * @brief Jumps playback to an arbitrary position - for a seekable
+     *        position bar.
+     *
+     * Safe to call whether or not isPlaying() - a paused/stopped engine
+     * just resumes from the new position on the next play().
+     *
+     * @param sampleIndex The new position, in samples; clamped to
+     *        `[0, totalSamples()]`.
+     * @note Real-time-safe (a plain atomic store), safely callable from
+     *       either thread - same as setVolume(). A concurrent renderBlock()
+     *       call may still read the pre-seek position for that one block -
+     *       a benign, momentary race, not a correctness issue.
+     */
+    void seek(std::size_t sampleIndex) noexcept;
 
 private:
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData, int numInputChannels,

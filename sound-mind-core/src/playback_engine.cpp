@@ -81,6 +81,22 @@ float PlaybackEngine::volume() const noexcept {
     return volume_.load(std::memory_order_relaxed);
 }
 
+std::size_t PlaybackEngine::positionSamples() const noexcept {
+    return position_.load(std::memory_order_relaxed);
+}
+
+std::size_t PlaybackEngine::totalSamples() const noexcept {
+    return audio_.frameCount();
+}
+
+std::uint32_t PlaybackEngine::sampleRateHz() const noexcept {
+    return audio_.sampleRateHz;
+}
+
+void PlaybackEngine::seek(std::size_t sampleIndex) noexcept {
+    position_.store(std::min(sampleIndex, audio_.frameCount()), std::memory_order_relaxed);
+}
+
 void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputChannels, int numSamples) noexcept {
     if (numOutputChannels <= 0 || numSamples <= 0) {
         return;

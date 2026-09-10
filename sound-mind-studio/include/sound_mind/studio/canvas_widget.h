@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include <QWidget>
 
 #include "sound_mind/core/project.h"
@@ -17,6 +19,9 @@ namespace sound_mind::studio {
  * rectangle, sized to the project's configured canvas dimensions, when no
  * layer has any content yet (e.g. a fresh project with only its empty
  * Background layer).
+ *
+ * **As of `v0.0.21.1` (Playback position bar):** also draws a moving
+ * playhead line during Playback - see setPlayheadFraction()'s own docs.
  */
 class CanvasWidget : public QWidget {
     Q_OBJECT
@@ -36,6 +41,22 @@ public:
      */
     void setProject(const sound_mind::core::Project* project);
 
+    /**
+     * @brief Sets (or clears) the playhead line's horizontal position and
+     *        repaints - a vertical white line drawn over whatever the
+     *        canvas otherwise shows, matching
+     *        `sound_mind::codec::exportVideo()`'s own playhead exactly, so
+     *        live playback looks the same as the video it would export to.
+     *
+     * Independent of setProject()/layer state - drawn over the placeholder
+     * or a "no project" blank canvas too, not just real rendered content.
+     *
+     * @param fraction The playhead's position as a fraction of the
+     *        widget's own width, `[0, 1]`; `std::nullopt` draws no
+     *        playhead at all (the default).
+     */
+    void setPlayheadFraction(std::optional<double> fraction);
+
     /// @brief The widget's preferred size.
     /// @return The current project's configured canvas dimensions, or a
     ///         fallback size if no project is set.
@@ -49,6 +70,7 @@ protected:
 
 private:
     const sound_mind::core::Project* project_ = nullptr;
+    std::optional<double> playheadFraction_;
 };
 
 }  // namespace sound_mind::studio

@@ -1,6 +1,7 @@
 #include "test_playback_panel.h"
 
 #include <QComboBox>
+#include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QSlider>
@@ -88,4 +89,48 @@ void PlaybackPanelTest::setVolumePercentDoesNotEmitVolumePercentChanged() {
     auto* slider = panel.findChild<QSlider*>(QStringLiteral("volumeSlider"));
     QVERIFY(slider != nullptr);
     QCOMPARE(slider->value(), 150);
+}
+
+void PlaybackPanelTest::positionSliderStartsAtZero() {
+    PlaybackPanel panel;
+    auto* slider = panel.findChild<QSlider*>(QStringLiteral("positionSlider"));
+    QVERIFY(slider != nullptr);
+    QCOMPARE(slider->value(), 0);
+}
+
+void PlaybackPanelTest::movingThePositionSliderEmitsSeekRequested() {
+    PlaybackPanel panel;
+    panel.setDuration(10.0);
+    QSignalSpy spy(&panel, &PlaybackPanel::seekRequested);
+
+    auto* slider = panel.findChild<QSlider*>(QStringLiteral("positionSlider"));
+    QVERIFY(slider != nullptr);
+    slider->setValue(slider->maximum() / 2);  // halfway.
+
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(qAbs(spy.at(0).at(0).toDouble() - 5.0) < 0.01);
+}
+
+void PlaybackPanelTest::setPositionSecondsDoesNotEmitSeekRequested() {
+    PlaybackPanel panel;
+    panel.setDuration(10.0);
+    QSignalSpy spy(&panel, &PlaybackPanel::seekRequested);
+
+    panel.setPositionSeconds(5.0);
+
+    QCOMPARE(spy.count(), 0);
+    auto* slider = panel.findChild<QSlider*>(QStringLiteral("positionSlider"));
+    QVERIFY(slider != nullptr);
+    QCOMPARE(slider->value(), slider->maximum() / 2);
+}
+
+void PlaybackPanelTest::setPositionSecondsUpdatesTheTimeLabel() {
+    PlaybackPanel panel;
+    panel.setDuration(65.0);  // 1:05.
+
+    panel.setPositionSeconds(5.0);  // 0:05.
+
+    auto* label = panel.findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("0:05 / 1:05"));
 }

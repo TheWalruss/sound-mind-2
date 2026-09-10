@@ -55,6 +55,19 @@ void LoopPanelTest::keepLoopingCheckBoxEmitsKeepLoopingChanged() {
     QCOMPARE(spy.at(0).at(0).toBool(), true);
 }
 
+void LoopPanelTest::keepLoopingCheckBoxIsLabeledFreezeLoop() {
+    // The checkbox's internal name (keepLoopingCheckBox) and the
+    // setKeepLooping()/keepLoopingChanged() API it drives are unchanged -
+    // only the user-visible label was renamed, "Keep Looping" not being
+    // descriptive of what the checkbox actually does (confirmed with the
+    // user - "Freeze Loop" matches the standard loop-pedal term for
+    // freezing the current loop rather than recording over it).
+    LoopPanel panel;
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("keepLoopingCheckBox"));
+    QVERIFY(checkBox != nullptr);
+    QCOMPARE(checkBox->text(), QStringLiteral("Freeze Loop"));
+}
+
 void LoopPanelTest::setKeepLoopingCheckedDoesNotEmitKeepLoopingChanged() {
     LoopPanel panel;
     QSignalSpy spy(&panel, &LoopPanel::keepLoopingChanged);

@@ -11,4 +11,6 @@ private slots:
     void rendersALayersContentInsteadOfThePlaceholder();
     void skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt();
     void reflectsALayersTranslationColumns();
+    void drawsAPlayheadLineAtTheGivenFraction();
+    void drawsNoPlayheadByDefault();
 };

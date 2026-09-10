@@ -5,6 +5,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QPen>
 
 #include "sound_mind/core/compositor.h"
 
@@ -52,6 +53,11 @@ void CanvasWidget::setProject(const sound_mind::core::Project* project) {
     update();
 }
 
+void CanvasWidget::setPlayheadFraction(std::optional<double> fraction) {
+    playheadFraction_ = fraction;
+    update();
+}
+
 QSize CanvasWidget::sizeHint() const {
     if (project_ == nullptr) {
         return kFallbackSize;
@@ -64,22 +70,30 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
 
-    if (project_ == nullptr) {
-        return;
+    if (project_ != nullptr) {
+        if (const auto rendered = findTopmostRender(*project_); rendered.has_value()) {
+            painter.drawImage(rect(), toQImage(*rendered));
+        } else {
+            // No layer has any content yet - fall back to the placeholder
+            // that stood in for the whole canvas before Import existed.
+            const QRect canvasRect(0, 0, static_cast<int>(project_->settings().canvasWidth),
+                                    static_cast<int>(project_->settings().canvasHeight));
+            painter.fillRect(canvasRect.intersected(rect()), QColor(40, 40, 40));
+            painter.setPen(Qt::darkGray);
+            painter.drawRect(canvasRect.adjusted(0, 0, -1, -1));
+        }
     }
 
-    if (const auto rendered = findTopmostRender(*project_); rendered.has_value()) {
-        painter.drawImage(rect(), toQImage(*rendered));
-        return;
+    // The playhead (v0.0.21.1, Playback position bar) is drawn last, over
+    // whatever the canvas otherwise shows - independent of project_/layer
+    // state, matching video export's own playhead line
+    // (sound_mind::codec::exportVideo()) so live playback and an exported
+    // video look the same.
+    if (playheadFraction_.has_value()) {
+        const int x = static_cast<int>(*playheadFraction_ * rect().width());
+        painter.setPen(QPen(Qt::white, 1));
+        painter.drawLine(x, 0, x, rect().height());
     }
-
-    // No layer has any content yet - fall back to the placeholder that
-    // stood in for the whole canvas before Import existed.
-    const QRect canvasRect(0, 0, static_cast<int>(project_->settings().canvasWidth),
-                            static_cast<int>(project_->settings().canvasHeight));
-    painter.fillRect(canvasRect.intersected(rect()), QColor(40, 40, 40));
-    painter.setPen(Qt::darkGray);
-    painter.drawRect(canvasRect.adjusted(0, 0, -1, -1));
 }
 
 }  // namespace sound_mind::studio

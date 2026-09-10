@@ -5,6 +5,7 @@
 #include <fstream>
 #include <vector>
 
+#include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFile>
@@ -14,6 +15,7 @@
 #include <QSignalSpy>
 #include <QSlider>
 #include <QStatusBar>
+#include <QToolBar>
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/project_settings.h"
@@ -1233,7 +1235,11 @@ void MainWindowTest::toggleLoopModeGivesANewLoopInputLayerAPlaceholderContentImm
     window.toggleLoopMode();  // cleanup.
 }
 
-void MainWindowTest::panelsAreHiddenUntilAProjectExists() {
+void MainWindowTest::transportPanelsStayHiddenByDefaultEvenAfterAProjectExists() {
+    // Unlike the Layers panel (shown automatically the first time a
+    // project exists - see layersPanelIsHiddenUntilAProjectExists()),
+    // Playback/Record/Loop start OFF and stay OFF until the user
+    // explicitly toggles one on, confirmed with the user.
     MainWindow window;
     auto* loopPanel = window.findChild<LoopPanel*>();
     auto* recordPanel = window.findChild<RecordPanel*>();
@@ -1247,9 +1253,57 @@ void MainWindowTest::panelsAreHiddenUntilAProjectExists() {
 
     createFreshTestProject(window);
 
-    QVERIFY(!loopPanel->isHidden());
-    QVERIFY(!recordPanel->isHidden());
+    QVERIFY(loopPanel->isHidden());
+    QVERIFY(recordPanel->isHidden());
+    QVERIFY(playbackPanel->isHidden());
+}
+
+void MainWindowTest::panelVisibilityPersistsAcrossProjectSwitches() {
+    // Confirmed with the user: a manual show/hide choice persists across
+    // New/Open Project within the same session, rather than resetting to
+    // the OFF-by-default/ON-by-default state every time setProject() runs.
+    MainWindow window;
+    createFreshTestProject(window);
+    auto* playbackPanel = window.findChild<PlaybackPanel*>();
+    QVERIFY(playbackPanel != nullptr);
+    QVERIFY(playbackPanel->isHidden());
+
+    playbackPanel->show();  // simulate toggling it on via the toolbar.
     QVERIFY(!playbackPanel->isHidden());
+
+    createFreshTestProject(window);  // switch to a different project.
+
+    QVERIFY(!playbackPanel->isHidden());
+}
+
+void MainWindowTest::layersToggleActionShowsAndHidesTheLayersPanel() {
+    MainWindow window;
+    createFreshTestProject(window);
+    auto* panel = window.findChild<LayersPanel*>();
+    QVERIFY(panel != nullptr);
+    QVERIFY(!panel->isHidden());  // shown by default - see layersPanelIsHiddenUntilAProjectExists().
+
+    QAction* toggleAction = panel->toggleViewAction();
+    QVERIFY(toggleAction != nullptr);
+    QVERIFY(toggleAction->isCheckable());
+    auto* toolBar = window.findChild<QToolBar*>();
+    QVERIFY(toolBar != nullptr);
+    QVERIFY(toolBar->actions().contains(toggleAction));
+
+    // Not asserted here: that toggling toggleAction's checked state
+    // actually hides/shows the panel. Confirmed real under manual testing
+    // (Qt's own standard, widely-used QDockWidget::toggleViewAction()
+    // mechanism - the same one Playback/Record/Loop's own toolbar toggles
+    // already relied on before this test existed) but not reliably
+    // reproducible headlessly: QDockWidget syncs that action's checked
+    // state from its own Show/Hide *events*, which Qt only actually
+    // dispatches once a widget's whole ancestor chain is on screen -
+    // MainWindow is never shown() in this test suite, so the action's
+    // checked state can end up desynced from panel->isHidden() (itself an
+    // explicit flag, set correctly by direct show()/hide() regardless -
+    // see layersPanelIsHiddenUntilAProjectExists()) in a way a real,
+    // actually-shown application never hits. Same category of limitation
+    // as dropEvent()/dragEnterEvent() needing a real OS gesture.
 }
 
 void MainWindowTest::toggleLoopModeSyncsTheLoopPanelsRunningState() {
@@ -1718,6 +1772,79 @@ void MainWindowTest::handleDroppedFilesSmprojRefusesWhileLoopModeIsRunning() {
     window.toggleLoopMode();  // cleanup.
 }
 
+void MainWindowTest::handleDroppedFilesAppliesTheGivenImageMode() {
+    // dropEvent() (untestable directly - see its own docs) decides the
+    // mode/sequence via a real ImageScalePickerDialog and passes the
+    // result to handleDroppedFiles(); this proves handleDroppedFiles()
+    // itself actually honors whatever it's given, rather than always
+    // falling back to its own default (RescaleToFitProject) - a non-default
+    // mode's own dimensions (KeepNativeResolution's) prove it took effect.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-drop-image-mode.png";
+    writeImageScalingTestImage(path);  // 30x20.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-image-mode.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
+
+    window.handleDroppedFiles({path}, ImageScalePickerDialog::Mode::KeepNativeResolution, /*importAsSequence=*/false);
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    const auto& content = *window.project()->layers().back().content();
+    QCOMPARE(content.frameCount, static_cast<std::uint32_t>(30));      // native, not the canvas's 100.
+    QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(20));  // native, not the canvas's 50.
+}
+
+void MainWindowTest::handleDroppedFilesSequencesDroppedImagesWhenRequested() {
+    // Same cumulative-translation math as
+    // importImageFilesAppliesProportionalScalingAndCumulativeTranslationWhenSequential():
+    // 30x20 into a 100x50 canvas proportionally scales to width 75.
+    const auto pathA = std::filesystem::temp_directory_path() / "sound-mind-test-drop-seq-a.png";
+    const auto pathB = std::filesystem::temp_directory_path() / "sound-mind-test-drop-seq-b.png";
+    writeImageScalingTestImage(pathA);
+    writeImageScalingTestImage(pathB);
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-seq.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    window.handleDroppedFiles({pathA, pathB}, ImageScalePickerDialog::Mode::RescaleToFitProject,
+                               /*importAsSequence=*/true);
+    std::filesystem::remove(pathA);
+    std::filesystem::remove(pathB);
+    std::filesystem::remove(projectPath);
+
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
+    QCOMPARE(window.project()->layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(0));
+    QCOMPARE(window.project()->layers()[layerCountBefore + 1].translationColumns(), static_cast<std::int64_t>(75));
+}
+
+void MainWindowTest::handleDroppedFilesAppliesGivenAudioSnippetSelections() {
+    // dropEvent() (untestable directly) computes each dropped .wav's own
+    // audioSnippetsForFile() and, for one with more than one snippet, shows
+    // the same AudioSnippetPickerDialog importAudio() would - giving a drop
+    // parity with File -> Import Audio, confirmed with the user. This
+    // proves handleDroppedFiles() itself actually honors a given selection
+    // (only 2 of 4 snippets), rather than always falling back to its own
+    // default (every snippet).
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-drop-audio-snippets.wav";
+    constexpr std::size_t loopLengthSamples = 3528;  // 8 * 441 - see smallCanvasProjectSettings()'s docs.
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 4);  // 4 whole snippets: 0, 1, 2, 3.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-audio-snippets.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    window.handleDroppedFiles({path}, ImageScalePickerDialog::Mode::RescaleToFitProject,
+                               /*importAsSequence=*/false, {{path, {0, 2}}});
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);  // not all 4.
+}
+
 namespace {
 
 /// @brief Writes a solid-color PNG of the given size to `path` - like
@@ -1891,4 +2018,76 @@ void MainWindowTest::importImageFilesFailsWhenNothingWasImported() {
     QVERIFY(!ok);
     QVERIFY(!errorMessage.isEmpty());
     QCOMPARE(window.project()->layers().size(), layerCountBefore);
+}
+
+void MainWindowTest::windowTitleIncludesTheProjectNameOnceOneExists() {
+    MainWindow window;
+    QVERIFY(!window.windowTitle().contains(QStringLiteral(" - ")));  // no project yet.
+
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-window-title.smproj";
+    QVERIFY(window.createProjectAt(sound_mind::core::ProjectSettings{}, path));
+
+    QVERIFY(window.windowTitle().contains(QStringLiteral("sound-mind-test-window-title")));
+}
+
+void MainWindowTest::startPlaybackSetsThePlaybackPanelDuration() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-duration.wav";
+    writeTestWavFileWithFrameCount(path, 44100, 44100);  // exactly 1 second.
+
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.startPlayback();
+
+    auto* panel = window.findChild<PlaybackPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("0:00 / 0:01"));
+
+    window.stopPlayback();
+}
+
+void MainWindowTest::seekPlaybackMovesThePlaybackPosition() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-seek.wav";
+    writeTestWavFileWithFrameCount(path, 441000, 44100);  // exactly 10 seconds.
+
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.startPlayback();
+    window.seekPlayback(5.0);
+
+    auto* panel = window.findChild<PlaybackPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("0:05 / 0:10"));
+
+    window.stopPlayback();
+}
+
+void MainWindowTest::stopPlaybackResetsThePlaybackPanelPosition() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-stop.wav";
+    writeTestWavFileWithFrameCount(path, 441000, 44100);  // exactly 10 seconds.
+
+    MainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.startPlayback();
+    window.seekPlayback(5.0);
+
+    window.stopPlayback();
+
+    auto* panel = window.findChild<PlaybackPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("0:00 / 0:00"));
 }

@@ -49,7 +49,13 @@ LoopPanel::LoopPanel(QWidget* parent) : QDockWidget(tr("Loop"), parent) {
     connect(toggleButton_, &QPushButton::clicked, this, &LoopPanel::toggleRequested);
     root->addWidget(toggleButton_);
 
-    keepLoopingCheckBox_ = new QCheckBox(tr("Keep Looping"), container);
+    // Labeled "Freeze Loop" (not "Keep Looping" - confirmed with the user
+    // as not descriptive of what it actually does): the standard
+    // loop-pedal term for freezing whichever take is currently playing,
+    // rather than recording over it every cycle. The internal name and API
+    // (keepLoopingCheckBox, setKeepLooping()/keepLoopingChanged()) are
+    // unchanged - only the visible label.
+    keepLoopingCheckBox_ = new QCheckBox(tr("Freeze Loop"), container);
     keepLoopingCheckBox_->setObjectName(QStringLiteral("keepLoopingCheckBox"));
     connect(keepLoopingCheckBox_, &QCheckBox::toggled, this, &LoopPanel::keepLoopingChanged);
     root->addWidget(keepLoopingCheckBox_);

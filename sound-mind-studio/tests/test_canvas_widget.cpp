@@ -143,3 +143,24 @@ void CanvasWidgetTest::reflectsALayersTranslationColumns() {
     QCOMPARE(rendered.pixelColor(0, 0), QColor(0, 0, 0));
     QCOMPARE(rendered.pixelColor(3, 0).red(), 255);
 }
+
+void CanvasWidgetTest::drawsAPlayheadLineAtTheGivenFraction() {
+    CanvasWidget widget;
+    widget.resize(10, 10);
+    widget.setPlayheadFraction(0.5);
+
+    const QImage rendered = widget.grab().toImage();
+
+    QCOMPARE(rendered.pixelColor(5, 5), QColor(255, 255, 255));
+}
+
+void CanvasWidgetTest::drawsNoPlayheadByDefault() {
+    CanvasWidget widget;
+    widget.resize(10, 10);
+
+    const QImage rendered = widget.grab().toImage();
+
+    // No project set -> a plain black canvas; no playhead means no white
+    // line drawn anywhere over it.
+    QCOMPARE(rendered.pixelColor(5, 5), QColor(0, 0, 0));
+}

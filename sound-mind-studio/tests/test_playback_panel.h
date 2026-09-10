@@ -12,4 +12,8 @@ private slots:
     void volumeSliderStartsAtUnityAndAllowsAboveIt();
     void movingTheVolumeSliderEmitsVolumePercentChanged();
     void setVolumePercentDoesNotEmitVolumePercentChanged();
+    void positionSliderStartsAtZero();
+    void movingThePositionSliderEmitsSeekRequested();
+    void setPositionSecondsDoesNotEmitSeekRequested();
+    void setPositionSecondsUpdatesTheTimeLabel();
 };

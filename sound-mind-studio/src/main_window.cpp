@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
+#include <map>
 #include <memory>
 #include <exception>
 #include <sstream>
@@ -63,6 +64,25 @@ const char* kAudioFileFilter = "WAV Audio (*.wav)";
 const char* kImageFileFilter = "Images (*.png *.jpg *.jpeg *.bmp *.tga *.webp)";
 const char* kExportAudioFileFilter = "FLAC Audio (*.flac);;Ogg Vorbis Audio (*.ogg);;MP3 Audio (*.mp3)";
 const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
+
+/// @brief `path`'s extension, lowercased - the shared normalization both
+/// dropEvent() and handleDroppedFiles() need to recognize a dropped file's
+/// type case-insensitively (`.PNG` and `.png` are the same file type).
+[[nodiscard]] std::string lowercasedExtension(const std::filesystem::path& path) {
+    std::string extension = path.extension().string();
+    for (char& c : extension) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    return extension;
+}
+
+/// @brief Whether `lowercaseExtension` is one of the image extensions
+/// `ImageScalePickerDialog`/`importImageFiles()` accept - see
+/// kImageFileFilter above for the same list in QFileDialog's own syntax.
+[[nodiscard]] bool isImageExtension(const std::string& lowercaseExtension) {
+    return lowercaseExtension == ".png" || lowercaseExtension == ".jpg" || lowercaseExtension == ".jpeg" ||
+           lowercaseExtension == ".bmp" || lowercaseExtension == ".tga" || lowercaseExtension == ".webp";
+}
 
 /// @brief Converts a plain std::string device-name list (as the engines'
 /// availableXDeviceNames() methods return) into the QStringList a device
@@ -233,6 +253,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(playbackPanel_, &PlaybackPanel::stopRequested, this, &MainWindow::stopPlayback);
     connect(playbackPanel_, &PlaybackPanel::outputDeviceChanged, this, &MainWindow::setPlaybackOutputDevice);
     connect(playbackPanel_, &PlaybackPanel::volumePercentChanged, this, &MainWindow::setPlaybackVolume);
+    connect(playbackPanel_, &PlaybackPanel::seekRequested, this, &MainWindow::seekPlayback);
     playbackPanel_->setOutputDevices(toQStringList(playbackEngine_.availableOutputDeviceNames()));
 
     recordPanel_ = new RecordPanel(this);
@@ -300,6 +321,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // it stays in sync with the dock's actual visibility automatically, no
     // manual signal wiring needed (unlike a hand-rolled checkable QAction
     // would).
+    // The Layers panel gets the same kind of toggle - unlike the three
+    // above (OFF by default, see setProject()'s own docs), it's ON by
+    // default, matching its pre-existing "just show it" behavior; both are
+    // confirmed with the user, along with visibility persisting across
+    // project switches within a session rather than resetting every time.
+    transportToolBar->addAction(layersPanel_->toggleViewAction());
     transportToolBar->addAction(playbackPanel_->toggleViewAction());
     transportToolBar->addAction(recordPanel_->toggleViewAction());
     transportToolBar->addAction(loopPanel_->toggleViewAction());
@@ -311,6 +338,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     loopUpdateTimer_ = new QTimer(this);
     loopUpdateTimer_->setInterval(33);
     connect(loopUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLoopLayer);
+
+    // Same ~30fps cadence, for the same reason - a moving playhead/position
+    // bar that visibly stutters would undercut the point of having one.
+    playbackUpdateTimer_ = new QTimer(this);
+    playbackUpdateTimer_->setInterval(33);
+    connect(playbackUpdateTimer_, &QTimer::timeout, this, &MainWindow::updatePlaybackPosition);
 
     // Just needs to keep RecordEngine's ring buffer (~370ms of headroom at
     // its default capacity/sample rate) from ever filling up - unlike
@@ -370,30 +403,85 @@ void MainWindow::dropEvent(QDropEvent* event) {
     }
 
     event->acceptProposedAction();
-    handleDroppedFiles(paths);
+
+    std::vector<std::filesystem::path> imagePaths;
+    std::vector<std::filesystem::path> audioPaths;
+    for (const auto& path : paths) {
+        const std::string extension = lowercasedExtension(path);
+        if (isImageExtension(extension)) {
+            imagePaths.push_back(path);
+        } else if (extension == ".wav") {
+            audioPaths.push_back(path);
+        }
+    }
+
+    // Same choices File -> Import Audio/Image would offer, confirmed with
+    // the user - see this method's own docs for the full reasoning.
+    // Cancelling any one of these dialogs cancels the whole drop.
+    ImageScalePickerDialog::Mode imageMode = ImageScalePickerDialog::Mode::RescaleToFitProject;
+    bool importImagesAsSequence = false;
+    if (!imagePaths.empty()) {
+        ImageScalePickerDialog dialog(this, /*allowSequential=*/imagePaths.size() > 1);
+        if (dialog.exec() != QDialog::Accepted) {
+            return;
+        }
+        imageMode = dialog.selectedMode();
+        importImagesAsSequence = dialog.importAsSequence();
+    }
+
+    std::map<std::filesystem::path, std::vector<std::size_t>> audioSnippetSelections;
+    for (const auto& path : audioPaths) {
+        QString snippetsError;
+        const auto snippets = audioSnippetsForFile(path, &snippetsError);
+        if (snippets.size() <= 1) {
+            // 0 (unreadable - handleDroppedFiles() will report the real
+            // error when it actually tries to import) or 1 (no real choice
+            // to make) - no picker needed, same as importAudio()'s own
+            // logic for a single file.
+            continue;
+        }
+        AudioSnippetPickerDialog dialog(snippets, this);
+        if (dialog.exec() != QDialog::Accepted) {
+            return;
+        }
+        audioSnippetSelections[path] = dialog.selectedIndices();
+    }
+
+    handleDroppedFiles(paths, imageMode, importImagesAsSequence, audioSnippetSelections);
 }
 
-void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& paths) {
-    for (const std::filesystem::path& path : paths) {
-        std::string extension = path.extension().string();
-        for (char& c : extension) {
-            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& paths,
+                                     ImageScalePickerDialog::Mode imageMode, bool importImagesAsSequence,
+                                     const std::map<std::filesystem::path, std::vector<std::size_t>>& audioSnippetSelections) {
+    std::vector<std::filesystem::path> imagePaths;
+    for (const auto& path : paths) {
+        if (isImageExtension(lowercasedExtension(path))) {
+            imagePaths.push_back(path);
         }
+    }
+    if (!imagePaths.empty()) {
+        QString errorMessage;
+        if (!importImageFiles(imagePaths, imageMode, importImagesAsSequence, &errorMessage)) {
+            statusBar()->showMessage(tr("Could not import image(s): %1").arg(errorMessage), 5000);
+        }
+    }
+
+    for (const std::filesystem::path& path : paths) {
+        const std::string extension = lowercasedExtension(path);
 
         QString errorMessage;
         if (extension == ".wav") {
-            if (!importAudioFile(path, &errorMessage)) {
+            const auto selection = audioSnippetSelections.find(path);
+            const bool ok = selection != audioSnippetSelections.end()
+                                 ? importAudioSnippets(path, selection->second, &errorMessage)
+                                 : importAudioFile(path, &errorMessage);
+            if (!ok) {
                 statusBar()->showMessage(
                     tr("Could not import \"%1\": %2").arg(QString::fromStdString(path.filename().string()), errorMessage),
                     5000);
             }
-        } else if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" ||
-                   extension == ".tga" || extension == ".webp") {
-            if (!importImageFile(path, ImageScalePickerDialog::Mode::RescaleToFitProject, &errorMessage)) {
-                statusBar()->showMessage(
-                    tr("Could not import \"%1\": %2").arg(QString::fromStdString(path.filename().string()), errorMessage),
-                    5000);
-            }
+        } else if (isImageExtension(extension)) {
+            continue;  // already handled above, as a batch.
         } else if (extension == ".smproj") {
             // Same guard as openProject() - see its docs - before reaching
             // openProjectAt(), which enforces the Loop Mode/Recording
@@ -451,6 +539,9 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     recordDrainTimer_->stop();
     recordEngine_.stop();
     recordPanel_->setRecording(false);
+    playbackUpdateTimer_->stop();
+    playbackPanel_->setDuration(0.0);
+    canvas_->setPlayheadFraction(std::nullopt);
 
     project_ = std::move(project);
 
@@ -471,10 +562,15 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     playbackLoaded_ = false;
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
-    layersPanel_->show();
-    playbackPanel_->show();
-    recordPanel_->show();
-    loopPanel_->show();
+    // Layers is shown automatically the *first* time any project exists in
+    // this session, then left alone - a user's own show/hide choice
+    // (Playback/Record/Loop included, which start OFF and are never forced
+    // here at all) persists across New/Open Project rather than resetting
+    // every time, confirmed with the user.
+    if (!layersPanelShownOnce_) {
+        layersPanel_->show();
+        layersPanelShownOnce_ = true;
+    }
     refreshLayersPanel();
 }
 
@@ -502,6 +598,7 @@ bool MainWindow::createProjectAt(sound_mind::core::ProjectSettings settings, con
                                   QString* errorMessage) {
     setProject(sound_mind::core::Project::createNew(std::move(settings)));
     currentPath_ = path;
+    updateWindowTitle();
 
     try {
         project_->save(path);
@@ -549,6 +646,7 @@ bool MainWindow::openProjectAt(const std::filesystem::path& path, QString* error
     try {
         setProject(sound_mind::core::Project::load(path));
         currentPath_ = path;
+        updateWindowTitle();
         recentProjects_.add(path);
         landingPage_->setRecentProjects(recentProjects_.list());
         return true;
@@ -591,6 +689,7 @@ void MainWindow::saveProjectAs() {
     }
 
     currentPath_ = std::filesystem::path(fileName.toStdString());
+    updateWindowTitle();
     saveProject();
 }
 
@@ -1032,6 +1131,14 @@ sound_mind::core::Layer* MainWindow::layerById(sound_mind::core::LayerId id) {
     return nullptr;
 }
 
+void MainWindow::updateWindowTitle() {
+    QString title = QStringLiteral("Sound Mind Studio v" SOUND_MIND_VERSION);
+    if (currentPath_) {
+        title += QStringLiteral(" - ") + QString::fromStdString(currentPath_->stem().string());
+    }
+    setWindowTitle(title);
+}
+
 void MainWindow::refreshLayersPanel() {
     std::vector<LayersPanel::RowData> rows;
     if (project_) {
@@ -1177,18 +1284,69 @@ void MainWindow::startPlayback() {
         }
         playbackEngine_.loadAudio(sound_mind::codec::decode(*layer->content()));
         playbackLoaded_ = true;
+        // Duration only needs setting once per load, not on every resume -
+        // setDuration() also resets the displayed position to 0:00, which
+        // a mere pause/resume shouldn't do.
+        const auto sampleRate = playbackEngine_.sampleRateHz();
+        const double totalSeconds =
+            sampleRate > 0 ? static_cast<double>(playbackEngine_.totalSamples()) / sampleRate : 0.0;
+        playbackPanel_->setDuration(totalSeconds);
     }
 
     playbackEngine_.play();
+    playbackUpdateTimer_->start();
 }
 
 void MainWindow::pausePlayback() {
     playbackEngine_.pause();
+    // Position bar/playhead stay where they are - only stopPlayback()
+    // resets them, matching "startPlayback() resumes from the same
+    // position" - no point polling a position that isn't moving.
+    playbackUpdateTimer_->stop();
 }
 
 void MainWindow::stopPlayback() {
     playbackEngine_.stop();
     playbackLoaded_ = false;
+    playbackUpdateTimer_->stop();
+    playbackPanel_->setDuration(0.0);
+    canvas_->setPlayheadFraction(std::nullopt);
+}
+
+void MainWindow::seekPlayback(double positionSeconds) {
+    if (!playbackLoaded_) {
+        return;  // nothing loaded to seek within.
+    }
+    const auto sampleRate = playbackEngine_.sampleRateHz();
+    if (sampleRate == 0) {
+        return;
+    }
+    const auto sampleIndex = static_cast<std::size_t>(std::max(0.0, positionSeconds) * sampleRate);
+    playbackEngine_.seek(sampleIndex);
+    // Immediate feedback rather than waiting for the next timer tick - a
+    // drag that ends while paused (playbackUpdateTimer_ not running)
+    // should still show the new position right away.
+    updatePlaybackPosition();
+}
+
+void MainWindow::updatePlaybackPosition() {
+    const auto sampleRate = playbackEngine_.sampleRateHz();
+    const double totalSeconds =
+        sampleRate > 0 ? static_cast<double>(playbackEngine_.totalSamples()) / sampleRate : 0.0;
+    const double positionSeconds =
+        sampleRate > 0 ? static_cast<double>(playbackEngine_.positionSamples()) / sampleRate : 0.0;
+
+    playbackPanel_->setPositionSeconds(positionSeconds);
+    canvas_->setPlayheadFraction(totalSeconds > 0.0 ? std::optional<double>(positionSeconds / totalSeconds)
+                                                     : std::nullopt);
+
+    if (!playbackEngine_.isPlaying()) {
+        // Playback reached the end on its own (PlaybackEngine::isPlaying()
+        // clears itself there - see its own docs) - stop polling rather
+        // than continuing to tick against a position that's no longer
+        // advancing.
+        playbackUpdateTimer_->stop();
+    }
 }
 
 void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
