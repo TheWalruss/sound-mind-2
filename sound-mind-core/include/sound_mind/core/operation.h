@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <optional>
 
+#include <nlohmann/json.hpp>
+
 #include "sound_mind/core/layer.h"
 
 namespace sound_mind::core {
@@ -29,6 +31,13 @@ struct TimeFrequencyRect {
     /// @brief Highest frequency the operation's effect reaches, in Hz.
     double highFrequencyHz = 0.0;
 };
+
+/// @brief Serializes a rect to its JSON representation.
+void to_json(nlohmann::json& json, const TimeFrequencyRect& rect);
+
+/// @brief Parses a rect from its JSON representation.
+/// @throws nlohmann::json::exception on malformed or missing required data.
+void from_json(const nlohmann::json& json, TimeFrequencyRect& rect);
 
 /**
  * @brief Abstract base for every entry in a Project's OperationLog.

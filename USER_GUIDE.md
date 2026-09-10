@@ -17,13 +17,14 @@ in-app behavior is correct and this guide is due an update.
 6. [Working with Layers](#working-with-layers)
 7. [Painting](#painting)
 8. [Pick](#pick)
-9. [Playback](#playback)
-10. [Recording](#recording)
-11. [Loop Mode](#loop-mode)
-12. [Pooling a Layer](#pooling-a-layer)
-13. [Exporting](#exporting)
-14. [Saving and Project Files](#saving-and-project-files)
-15. [What's Not Here Yet](#whats-not-here-yet)
+9. [Selection and Fill](#selection-and-fill)
+10. [Playback](#playback)
+11. [Recording](#recording)
+12. [Loop Mode](#loop-mode)
+13. [Pooling a Layer](#pooling-a-layer)
+14. [Exporting](#exporting)
+15. [Saving and Project Files](#saving-and-project-files)
+16. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -292,6 +293,28 @@ Copying a picked stroke, and directly reshaping its underlying path (drag
 its own nodes and handles), aren't here yet - see
 [What's Not Here Yet](#whats-not-here-yet).
 
+## Selection and Fill
+
+Click the **Select** toolbar button (next to Paint/Pick) to switch the
+canvas into select mode; click it again (or Paint/Pick) to leave it.
+While it's on, drag a rectangle on the canvas to select that region -
+shown as a green outline. A selection stays active (and visible) even
+after switching to a different tool - it isn't tied to Select mode
+itself, only to having drawn one.
+
+- **Fill** it - **Edit → Fill Selection...** opens a color picker; the
+  picked color fills the selection at full strength, confined exactly to
+  its own boundary. The color's red channel controls how loud the left
+  channel is filled, green controls the right - the same convention
+  Painting's own Color control uses.
+- **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
+  actually dragging (a plain click) on the canvas while in Select mode.
+
+Filling is undoable (Ctrl+Z), the same as painting a stroke.
+
+Only rectangular selections exist today - see
+[What's Not Here Yet](#whats-not-here-yet) for what's still planned.
+
 ## Playback
 
 The **Playback** panel has **Play**, **Pause**, and **Stop**, a draggable
@@ -379,3 +402,14 @@ what's designed for it:
 - Pick can't **copy** a picked stroke, and can't reshape its underlying
   path directly (dragging its own individual nodes/handles) - only move,
   modify its brush settings, or delete it.
+
+Selection (see [Selection and Fill](#selection-and-fill) above) exists,
+but only a fraction of what's designed for it:
+
+- Only **Rectangle** selection - Lasso (freehand) and Wand (flood-fill by
+  amplitude similarity) aren't built yet, and there's no way yet to
+  combine multiple selections (add/subtract/intersect).
+- No **Cut**, **Copy**, or **Paste** - Fill is the only operation a
+  selection currently scopes.
+- Fill only ever produces a uniform color, not a real two-color gradient
+  across the selection - there's no UI yet to pick a second color.

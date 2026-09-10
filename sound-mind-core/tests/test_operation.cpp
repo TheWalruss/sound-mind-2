@@ -8,9 +8,10 @@ using sound_mind::core::Operation;
 using sound_mind::core::OperationId;
 using sound_mind::core::TimeFrequencyRect;
 
-/// Minimal concrete Operation for exercising the base class in isolation -
-/// Operation itself has no real subtypes yet (Paint/Filter/Generator/
-/// Transform/structural ones are future work).
+/// Minimal concrete Operation for exercising the base class in isolation,
+/// independent of any real subtype's own extra fields (PaintOperation,
+/// FillOperation - Filter/Generator/Transform/structural ones are still
+/// future work).
 class FakeOperation final : public Operation {
 public:
     // Not `using Operation::Operation;` - inherited constructors keep the
@@ -57,4 +58,16 @@ TEST_CASE("Operation::targetLayer() defaults to nullopt for a structural subtype
           "[core][operation]") {
     const FakeOperation op(1);
     REQUIRE_FALSE(op.targetLayer().has_value());
+}
+
+TEST_CASE("TimeFrequencyRect round-trips through JSON", "[core][operation]") {
+    const TimeFrequencyRect original{0.2, 0.5, 300.0, 900.0};
+
+    const nlohmann::json json = original;
+    const TimeFrequencyRect restored = json.get<TimeFrequencyRect>();
+
+    REQUIRE(restored.startTimeSeconds == original.startTimeSeconds);
+    REQUIRE(restored.endTimeSeconds == original.endTimeSeconds);
+    REQUIRE(restored.lowFrequencyHz == original.lowFrequencyHz);
+    REQUIRE(restored.highFrequencyHz == original.highFrequencyHz);
 }

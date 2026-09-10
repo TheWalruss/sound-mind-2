@@ -29,6 +29,7 @@
 #include "test_playback_panel.h"
 #include "test_record_panel.h"
 #include "test_recent_projects.h"
+#include "test_selection_controller.h"
 #include "test_theme.h"
 #include "test_tool_configuration_panel.h"
 
@@ -87,6 +88,9 @@ int main(int argc, char** argv) {
 
     PickControllerTest pickControllerTest;
     status |= QTest::qExec(&pickControllerTest, argc, argv);
+
+    SelectionControllerTest selectionControllerTest;
+    status |= QTest::qExec(&selectionControllerTest, argc, argv);
 
     ToolConfigurationPanelTest toolConfigurationPanelTest;
     status |= QTest::qExec(&toolConfigurationPanelTest, argc, argv);

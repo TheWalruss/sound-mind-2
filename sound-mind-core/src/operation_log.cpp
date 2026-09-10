@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <unordered_set>
 
+#include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/paint_operation.h"
 
 namespace sound_mind::core {
@@ -57,17 +58,18 @@ namespace {
 /// under `"kind"` - the only way to know which concrete subtype to
 /// reconstruct on load, since `Operation` itself is abstract.
 constexpr const char* kPaintOperationKind = "paint";
+constexpr const char* kFillOperationKind = "fill";
 
 }  // namespace
 
 void to_json(nlohmann::json& json, const OperationLog& log) {
     nlohmann::json operations = nlohmann::json::array();
     for (const auto& operation : log.operations_) {
-        // Only PaintOperation exists as a concrete subtype so far (see
-        // OperationLog's own docs) - a real dispatch (visitor, or a
-        // virtual toJson() every subtype implements) is needed once a
-        // second one does, tracked alongside that subtype's own arrival
-        // rather than speculatively built now.
+        // A plain if/else-if dispatch, not a visitor - two concrete
+        // subtypes so far (PaintOperation, FillOperation) is still few
+        // enough that a real dispatch mechanism would be speculative
+        // machinery for a problem this doesn't have yet; revisit once a
+        // third subtype makes the chain unwieldy.
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation.get())) {
             nlohmann::json entry;
             entry["kind"] = kPaintOperationKind;
@@ -78,6 +80,17 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
             entry["targetLayer"] = *paint->targetLayer();
             entry["path"] = paint->path();
             entry["config"] = paint->config();
+            operations.push_back(std::move(entry));
+        } else if (const auto* fill = dynamic_cast<const FillOperation*>(operation.get())) {
+            nlohmann::json entry;
+            entry["kind"] = kFillOperationKind;
+            entry["id"] = fill->id();
+            if (const auto supersedes = fill->supersedes(); supersedes.has_value()) {
+                entry["supersedes"] = *supersedes;
+            }
+            entry["targetLayer"] = *fill->targetLayer();
+            entry["bounds"] = fill->bounds();
+            entry["gradient"] = fill->gradient();
             operations.push_back(std::move(entry));
         }
     }
@@ -101,6 +114,16 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
                 ToolConfiguration config = entry.at("config").get<ToolConfiguration>();
                 log.operations_.push_back(std::make_unique<PaintOperation>(id, targetLayer, std::move(path),
                                                                             std::move(config), supersedes));
+            } else if (kind == kFillOperationKind) {
+                const OperationId id = entry.at("id").get<OperationId>();
+                const std::optional<OperationId> supersedes =
+                    entry.contains("supersedes") ? std::optional(entry.at("supersedes").get<OperationId>())
+                                                  : std::nullopt;
+                const LayerId targetLayer = entry.at("targetLayer").get<LayerId>();
+                TimeFrequencyRect bounds = entry.at("bounds").get<TimeFrequencyRect>();
+                Gradient gradient = entry.at("gradient").get<Gradient>();
+                log.operations_.push_back(std::make_unique<FillOperation>(id, targetLayer, bounds,
+                                                                            std::move(gradient), supersedes));
             } else {
                 throw std::invalid_argument("OperationLog: unrecognized operation kind \"" + kind + "\"");
             }

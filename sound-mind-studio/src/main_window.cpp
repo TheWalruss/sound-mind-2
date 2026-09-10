@@ -15,6 +15,7 @@
 
 #include <QAction>
 #include <QCloseEvent>
+#include <QColorDialog>
 #include <QCoreApplication>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -38,12 +39,14 @@
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/gradient.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/layer_export.h"
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/color_conversion.h"
 #include "sound_mind/studio/create_project_wizard.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/import_export.h"
@@ -256,6 +259,29 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         }
     });
 
+    // Selection & Fill (v0.Y.25.1) - shares paintController_'s own
+    // pre-paint base cache (see SelectionController's own docs), so it's
+    // constructed after paintController_ and holds a pointer to it. The
+    // same "canvas only ever emits already-converted points" shape
+    // paintController_/pickController_'s own wiring above already
+    // established.
+    selectionController_ = new SelectionController(paintController_, this);
+    connect(canvas_, &CanvasWidget::selectStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+            selectionController_->beginSelectionDrag(*layerId, point);
+        }
+    });
+    connect(canvas_, &CanvasWidget::selectStrokeContinued, this,
+            [this](sound_mind::core::TimeFrequencyPoint point) { selectionController_->continueSelectionDrag(point); });
+    connect(canvas_, &CanvasWidget::selectStrokeEnded, this, [this]() { selectionController_->endSelectionDrag(); });
+    connect(selectionController_, &SelectionController::boundsChanged, this,
+            [this]() { canvas_->setSelectionBounds(selectionController_->displayBounds()); });
+    connect(selectionController_, &SelectionController::contentChanged, this, [this](sound_mind::core::LayerId) {
+        canvas_->update();
+        hasUnsavedChanges_ = true;
+        refreshLayersPanel();
+    });
+
     toolConfigurationPanel_ = new ToolConfigurationPanel(this);
     toolConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, toolConfigurationPanel_);
@@ -365,6 +391,20 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     deleteAction->setShortcut(QKeySequence::Delete);
     connect(deleteAction, &QAction::triggered, this, &MainWindow::deletePickedObject);
 
+    editMenu->addSeparator();
+
+    // Selection & Fill (v0.Y.25.1): the standard "clear the current
+    // selection" shortcut/name every other image/vector editor already
+    // uses - a no-op, per deselect()'s own docs, when there isn't one.
+    QAction* deselectAction = editMenu->addAction(tr("D&eselect"));
+    deselectAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
+    connect(deselectAction, &QAction::triggered, this, &MainWindow::deselect);
+
+    // No standard shortcut for this one (unlike Delete/Deselect above) -
+    // matching Pool Layer's own no-shortcut toolbar action below.
+    QAction* fillAction = editMenu->addAction(tr("&Fill Selection..."));
+    connect(fillAction, &QAction::triggered, this, &MainWindow::fillSelection);
+
     QToolBar* transportToolBar = addToolBar(tr("Transport"));
     // Plain text actions rather than icons - no icon assets exist yet, and
     // these are unambiguous enough on their own for a first pass.
@@ -387,6 +427,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     pickAction_ = transportToolBar->addAction(tr("Pick"));
     pickAction_->setCheckable(true);
     connect(pickAction_, &QAction::toggled, this, &MainWindow::setPickModeEnabled);
+
+    // Selection & Fill (v0.Y.25.1): the same kind of plain checkable
+    // toggle as Paint/Pick above, for CanvasWidget::ToolMode::Select.
+    selectAction_ = transportToolBar->addAction(tr("Select"));
+    selectAction_->setCheckable(true);
+    connect(selectAction_, &QAction::toggled, this, &MainWindow::setSelectModeEnabled);
 
     // As of v0.Y.16.1 (Transport Panels): Play/Pause/Stop/Loop/Record are
     // no longer direct toolbar actions - each now lives inside its own
@@ -614,16 +660,18 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     playbackController_->stop();
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
-    // paintAction_/pickAction_->setChecked(false) alone wouldn't reset
-    // canvas_'s own tool mode if it was already unchecked (toggled() only
-    // fires on a real change) - setToolMode() directly is what actually
-    // guarantees this, the same "unconditional and idempotent" reasoning
-    // as every other reset above.
+    // paintAction_/pickAction_/selectAction_->setChecked(false) alone
+    // wouldn't reset canvas_'s own tool mode if it was already unchecked
+    // (toggled() only fires on a real change) - setToolMode() directly is
+    // what actually guarantees this, the same "unconditional and
+    // idempotent" reasoning as every other reset above.
     paintAction_->setChecked(false);
     pickAction_->setChecked(false);
+    selectAction_->setChecked(false);
     canvas_->setToolMode(CanvasWidget::ToolMode::None);
     canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     canvas_->setPickSelectionBounds(std::nullopt);
+    canvas_->setSelectionBounds(std::nullopt);
     // A stale selection from the *previous* project's own LayersPanel rows
     // could otherwise be mistaken for a real one in the new project - each
     // Project's own LayerIds start fresh, so a coincidental id match is a
@@ -648,6 +696,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     canvas_->setProject(&*project_);
     paintController_->setProject(&*project_);
     pickController_->setProject(&*project_);
+    selectionController_->setProject(&*project_);
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
     // Layers is shown automatically the *first* time any project exists in
@@ -1230,27 +1279,7 @@ void MainWindow::setPaintModeEnabled(bool enabled) {
         paintController_->cancelStroke();
         canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     }
-    canvas_->setToolMode(enabled ? CanvasWidget::ToolMode::Paint : CanvasWidget::ToolMode::None);
-
-    // Paint and Pick share one canvas tool mode and so can never both be
-    // active - enforced directly here (and in setPickModeEnabled()'s own
-    // mirror-image block below) rather than via a QActionGroup: a group's
-    // exclusivity would fire *two* toggled() signals per click (this
-    // action's own, and the now-unchecked sibling's), in an order Qt
-    // doesn't document as stable - two independent handlers each trusting
-    // their own late-arriving call could easily stomp on each other's
-    // canvas_->setToolMode() call above. Setting both actions' checked
-    // state directly, unconditionally, and *blocked* (so this doesn't
-    // recurse back into itself or into setPickModeEnabled()) sidesteps
-    // that entirely, and - unlike relying on the toggled() signal alone -
-    // also keeps the toolbar buttons correctly in sync when this method
-    // is called directly (e.g. by a test), not just via a real click.
-    const QSignalBlocker paintBlocker(paintAction_);
-    const QSignalBlocker pickBlocker(pickAction_);
-    paintAction_->setChecked(enabled);
-    if (enabled) {
-        pickAction_->setChecked(false);
-    }
+    setExclusiveToolMode(paintAction_, enabled, CanvasWidget::ToolMode::Paint);
 }
 
 void MainWindow::setPickModeEnabled(bool enabled) {
@@ -1258,16 +1287,37 @@ void MainWindow::setPickModeEnabled(bool enabled) {
         pickController_->clearSelection();
         canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     }
-    canvas_->setToolMode(enabled ? CanvasWidget::ToolMode::Pick : CanvasWidget::ToolMode::None);
+    setExclusiveToolMode(pickAction_, enabled, CanvasWidget::ToolMode::Pick);
+}
 
-    // The mirror image of setPaintModeEnabled()'s own block - see its
-    // docs above for why exclusivity is handled by hand here rather than
-    // via a QActionGroup.
+void MainWindow::setSelectModeEnabled(bool enabled) {
+    if (!enabled) {
+        selectionController_->cancelSelectionDrag();
+    }
+    setExclusiveToolMode(selectAction_, enabled, CanvasWidget::ToolMode::Select);
+}
+
+void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWidget::ToolMode mode) {
+    canvas_->setToolMode(enabled ? mode : CanvasWidget::ToolMode::None);
+
+    // Blocked so this doesn't recurse back into setPaintModeEnabled()/
+    // setPickModeEnabled()/setSelectModeEnabled() - see this method's own
+    // docs for why exclusivity is handled by hand here rather than via a
+    // QActionGroup.
     const QSignalBlocker paintBlocker(paintAction_);
     const QSignalBlocker pickBlocker(pickAction_);
-    pickAction_->setChecked(enabled);
+    const QSignalBlocker selectBlocker(selectAction_);
+    activated->setChecked(enabled);
     if (enabled) {
-        paintAction_->setChecked(false);
+        if (activated != paintAction_) {
+            paintAction_->setChecked(false);
+        }
+        if (activated != pickAction_) {
+            pickAction_->setChecked(false);
+        }
+        if (activated != selectAction_) {
+            selectAction_->setChecked(false);
+        }
     }
 }
 
@@ -1276,6 +1326,30 @@ void MainWindow::undo() { paintController_->undo(); }
 void MainWindow::redo() { paintController_->redo(); }
 
 void MainWindow::deletePickedObject() { pickController_->deleteSelection(); }
+
+void MainWindow::deselect() { selectionController_->clearSelection(); }
+
+void MainWindow::fillSelectionWith(QColor color) {
+    sound_mind::core::Gradient gradient;
+    auto stop = gradient.stops().front();
+    stop.leftIntensity = displayByteToDb(color.red());
+    stop.rightIntensity = displayByteToDb(color.green());
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    gradient.setStopValues(0, stop);
+    gradient.setStopValues(1, stop);
+    selectionController_->fill(gradient);
+}
+
+void MainWindow::fillSelection() {
+    if (!selectionController_->hasSelection()) {
+        return;
+    }
+    const QColor picked = QColorDialog::getColor(QColor(255, 255, 0), this, tr("Fill Selection"));
+    if (picked.isValid()) {
+        fillSelectionWith(picked);
+    }
+}
 
 void MainWindow::startPlayback() {
     if (!project_) {

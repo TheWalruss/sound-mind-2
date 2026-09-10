@@ -6,8 +6,10 @@ add_executable(sound-mind-core-tests
     test_path.cpp
     test_tool_configuration.cpp
     test_paint_operation.cpp
+    test_fill_operation.cpp
     test_operation_log.cpp
     test_paint_application.cpp
+    test_fill_application.cpp
     test_layer.cpp
     test_project_settings.cpp
     test_project.cpp

@@ -1,0 +1,179 @@
+#pragma once
+
+#include <optional>
+
+#include <QObject>
+
+#include "sound_mind/core/gradient.h"
+#include "sound_mind/core/operation.h"
+#include "sound_mind/core/path.h"
+#include "sound_mind/core/project.h"
+
+namespace sound_mind::studio {
+
+class PaintController;
+
+/**
+ * @brief Owns the current rectangular selection and turns Fill into a new,
+ *        non-destructive `FillOperation` - see `docs/sound-mind-design.md`'s
+ *        "Selection" ("Rectangle") and "Fill".
+ *
+ * A selection is deliberately *not* itself a logged `Operation` - it's
+ * ephemeral, per-session UI state (the same shape `PickController`'s own
+ * selection already established) that *scopes* other operations, per the
+ * design doc's own framing ("A selection scopes an operation... to a
+ * specific region of a layer"). It's tied to whichever layer it was drawn
+ * on (captured once, at the drag that created it), not re-derived from
+ * whatever the "currently active" layer happens to be later - the same
+ * "pinned at creation time" precedent `PickController`'s own selected
+ * object already follows.
+ *
+ * Shares `PaintController`'s own per-layer pre-paint base cache rather
+ * than keeping a second one, the same reason (and the same shared
+ * `rebuildLayerContent()` call) `PickController` already established.
+ *
+ * **Deliberately Rectangle-only, for now**: Lasso and Wand (and boolean
+ * combination between multiple selections) are real, designed features
+ * (`docs/sound-mind-design.md`'s own "Selection" section) not built yet -
+ * a plain `TimeFrequencyRect` is all a Rectangle-only selection needs to
+ * represent, so that's what this class uses rather than a more general
+ * (and, for now, unneeded) region/mask representation. Cut/Copy/Paste are
+ * designed too but also not yet implemented here - only Fill is, per this
+ * installment's own explicitly scoped-down first pass.
+ */
+class SelectionController : public QObject {
+    Q_OBJECT
+
+public:
+    /**
+     * @brief Constructs a controller with no project set and no selection.
+     * @param paintController The controller whose rebuildLayerContent()
+     *        this one calls after a Fill commits - see the class's own
+     *        docs on why the pre-paint base cache is shared, not
+     *        duplicated. Not owned; must outlive this object.
+     * @param parent The owning object, per Qt's normal parent-ownership
+     *        convention; may be `nullptr`.
+     */
+    explicit SelectionController(PaintController* paintController, QObject* parent = nullptr);
+
+    /**
+     * @brief Sets which project selection/fill targets.
+     *
+     * Clears the current selection and any in-progress drag - both are
+     * meaningless once the project they refer to is gone.
+     *
+     * @param project The project to select within; may be `nullptr`
+     *        (nothing selectable until a real one is set again).
+     */
+    void setProject(sound_mind::core::Project* project);
+
+    /**
+     * @brief Starts a new rectangular selection drag on `layer`, anchored
+     *        at `point`. Replaces (visually, until committed - see
+     *        endSelection()'s own docs) whatever selection already
+     *        existed.
+     * @param layer Which layer this selection will scope operations on.
+     * @param point The drag's own anchor corner, already converted to
+     *        time/frequency space.
+     */
+    void beginSelectionDrag(sound_mind::core::LayerId layer, sound_mind::core::TimeFrequencyPoint point);
+
+    /**
+     * @brief Continues an in-progress selection drag, live-updating the
+     *        rectangle between the original anchor and `point`. A no-op
+     *        if no drag is in progress.
+     *
+     * Emits boundsChanged() so the caller can redraw the live rectangle.
+     *
+     * @param point The cursor's current position, in time/frequency
+     *        space.
+     */
+    void continueSelectionDrag(sound_mind::core::TimeFrequencyPoint point);
+
+    /**
+     * @brief Ends an in-progress selection drag, committing its own
+     *        rectangle as the current selection - unless the drag never
+     *        really moved (a plain click, not a drag), in which case this
+     *        clears the selection instead (the same "click empty space to
+     *        deselect" convention `docs/sound-mind-design.md`'s "Pick"
+     *        already established, applied here to "drew nothing" rather
+     *        than "clicked nothing").
+     *
+     * A no-op if no drag is in progress. Emits boundsChanged(), and
+     * selectionChanged() if the committed selection actually changed.
+     */
+    void endSelectionDrag();
+
+    /// @brief Abandons an in-progress selection drag without committing
+    ///        or clearing anything - the previous selection (if any)
+    ///        reappears exactly as it was. A no-op if no drag is in
+    ///        progress. Emits boundsChanged() if a live preview was
+    ///        showing.
+    void cancelSelectionDrag();
+
+    /// @brief Clears the current selection ("Deselect") - a no-op if
+    ///        there isn't one. Emits boundsChanged() and
+    ///        selectionChanged().
+    void clearSelection();
+
+    /// @brief Whether a selection currently exists (committed - not
+    ///        mid-drag).
+    /// @return `true` if a selection is committed; `false` otherwise.
+    [[nodiscard]] bool hasSelection() const noexcept { return committedBounds_.has_value(); }
+
+    /**
+     * @brief What to actually draw as the selection overlay right now -
+     *        the in-progress drag's own live rectangle while one is
+     *        active, otherwise the committed selection.
+     * @return The bounds to display, or `std::nullopt` if there's
+     *         neither a drag in progress nor a committed selection.
+     */
+    [[nodiscard]] std::optional<sound_mind::core::TimeFrequencyRect> displayBounds() const;
+
+    /**
+     * @brief Fills the current committed selection with `gradient` - the
+     *        actual work behind Edit → Fill Selection. A no-op if there's
+     *        no committed selection (mid-drag doesn't count).
+     *
+     * Appends a new `FillOperation` (not superseding anything - a fill is
+     * a fresh, additive edit, the same as a new paint stroke, not a
+     * revision of an existing one) and rebuilds the target layer's
+     * content via `paintController_`.
+     *
+     * Emits contentChanged() for the affected layer.
+     *
+     * @param gradient The color (or gradient) to fill with.
+     */
+    void fill(const sound_mind::core::Gradient& gradient);
+
+signals:
+    /// @brief Emitted whenever displayBounds() would return something
+    ///        different - a drag updating live, a selection committed,
+    ///        a drag cancelled back to the prior selection, or a clear.
+    void boundsChanged();
+
+    /// @brief Emitted whenever the *committed* selection changes (a new
+    ///        one replacing the old, or a clear) - unlike boundsChanged(),
+    ///        not emitted for a drag's own live, not-yet-committed
+    ///        updates.
+    void selectionChanged();
+
+    /// @brief Emitted whenever a layer's own rendered content changes as
+    ///        a result of a committed Fill.
+    /// @param layer Which layer's content changed.
+    void contentChanged(sound_mind::core::LayerId layer);
+
+private:
+    PaintController* paintController_;
+    sound_mind::core::Project* project_ = nullptr;
+
+    std::optional<sound_mind::core::TimeFrequencyRect> committedBounds_;
+    sound_mind::core::LayerId selectionLayer_ = 0;
+
+    bool dragActive_ = false;
+    bool dragMoved_ = false;
+    sound_mind::core::TimeFrequencyPoint dragAnchor_;
+    sound_mind::core::TimeFrequencyRect dragPreviewBounds_;
+};
+
+}  // namespace sound_mind::studio

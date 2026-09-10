@@ -1,6 +1,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/gradient.h"
 #include "sound_mind/core/paint_application.h"
 
 using sound_mind::codec::StreamCodecConfig;
@@ -83,8 +85,9 @@ std::size_t pixelIndex(const StreamImage& content, int frame, int bin) {
     return static_cast<std::size_t>(bin) * content.frameCount + static_cast<std::size_t>(frame);
 }
 
-/// @brief A minimal non-Paint Operation, for exercising rebuildPaintedContent()'s
-/// own dispatch-skip behavior - Operation itself has no other real subtype yet.
+/// @brief A minimal Operation that isn't a PaintOperation or a
+/// FillOperation, for exercising rebuildPaintedContent()'s own
+/// dispatch-skip behavior on a genuinely unrecognized subtype.
 class FakeOperation final : public Operation {
 public:
     explicit FakeOperation(OperationId id) : Operation(id) {}
@@ -267,7 +270,8 @@ TEST_CASE("rebuildPaintedContent applies every PaintOperation in order, on top o
     }
 }
 
-TEST_CASE("rebuildPaintedContent skips any operation that isn't a PaintOperation", "[core][paint_application]") {
+TEST_CASE("rebuildPaintedContent skips any operation that isn't a PaintOperation or a FillOperation",
+          "[core][paint_application]") {
     const auto config = makeTestConfig();
     const StreamImage base = makeBlankContent(config, 100);
     const FakeOperation fake(1);
@@ -278,6 +282,37 @@ TEST_CASE("rebuildPaintedContent skips any operation that isn't a PaintOperation
     for (const float value : rebuilt.leftMagnitudeDb) {
         REQUIRE(value == 0.0f);
     }
+}
+
+TEST_CASE("rebuildPaintedContent also applies a FillOperation, mixed in with PaintOperations",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    const StreamImage base = makeBlankContent(config, 100);
+
+    const Path stroke = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);
+    const PaintOperation paint(1, LayerId{1}, stroke, makeCircleTool(0.05, 0.0f));
+
+    sound_mind::core::TimeFrequencyRect fillBounds;
+    fillBounds.startTimeSeconds = frameIndexToTime(60.0, config);
+    fillBounds.endTimeSeconds = frameIndexToTime(80.0, config);
+    fillBounds.lowFrequencyHz = binIndexToFrequency(10.0f, config);
+    fillBounds.highFrequencyHz = binIndexToFrequency(30.0f, config);
+    sound_mind::core::Gradient fillGradient;
+    auto stop = fillGradient.stops().front();
+    stop.leftIntensity = -5.0f;
+    stop.leftOpacity = 1.0f;
+    fillGradient.setStopValues(0, stop);
+    fillGradient.setStopValues(1, stop);
+    const sound_mind::core::FillOperation fill(2, LayerId{1}, fillBounds, fillGradient);
+
+    const std::vector<const Operation*> operations = {&paint, &fill};
+    const StreamImage rebuilt = rebuildPaintedContent(base, operations, 2000.0);
+
+    const int paintFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int paintBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, paintFrame, paintBin)] == -10.0f);
+
+    REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, 70, 20)] == Catch::Approx(-5.0f));
 }
 
 TEST_CASE("rebuildPaintedContent with no operations returns an unchanged copy of base",

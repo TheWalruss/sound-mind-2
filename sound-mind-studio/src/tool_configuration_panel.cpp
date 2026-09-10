@@ -1,8 +1,6 @@
 #include "sound_mind/studio/tool_configuration_panel.h"
 
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <utility>
 
 #include <QCheckBox>
@@ -18,35 +16,13 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "sound_mind/studio/color_conversion.h"
+
 namespace sound_mind::studio {
 
 namespace {
 
 using sound_mind::core::BrushTipShape;
-
-/// @brief `color_mapping.cpp`'s own dB<->display-byte range
-/// (`kDisplayMinDb`/`kDisplayMaxDb`) - not exported from there (an
-/// anonymous-namespace implementation detail of `sound-mind-codec`, which
-/// `sound-mind-studio` doesn't depend on for this), so the Color swatch
-/// re-derives it locally - the same "Codec's own formula is in a private
-/// header" precedent `paint_application.cpp`'s own
-/// frequencyToBinIndex()/timeToFrameIndex() already set (Decision #36).
-constexpr float kDisplayMinDb = -96.0f;
-constexpr float kDisplayMaxDb = 0.0f;
-
-/// @brief A gradient stop intensity (dB), as the 0-255 byte a color
-/// picker's own red/green channel shows for it.
-int dbToByteColor(float db) {
-    const float clamped = std::clamp(db, kDisplayMinDb, kDisplayMaxDb);
-    const float normalized = (clamped - kDisplayMinDb) / (kDisplayMaxDb - kDisplayMinDb);
-    return static_cast<int>(std::lround(normalized * 255.0f));
-}
-
-/// @brief The exact inverse of dbToByteColor().
-float byteToDbColor(int value) {
-    const float normalized = static_cast<float>(std::clamp(value, 0, 255)) / 255.0f;
-    return kDisplayMinDb + normalized * (kDisplayMaxDb - kDisplayMinDb);
-}
 
 /// @brief Every `BrushTipShape` paired with its display name, in the same
 /// order `docs/sound-mind-design.md`'s "Procedural Brushes" lists them -
@@ -212,13 +188,13 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
 
 QColor ToolConfigurationPanel::color() const {
     const auto& stop = config_.defaultGradient().stops().front();
-    return QColor(dbToByteColor(stop.leftIntensity), dbToByteColor(stop.rightIntensity), 0);
+    return QColor(dbToDisplayByte(stop.leftIntensity), dbToDisplayByte(stop.rightIntensity), 0);
 }
 
 void ToolConfigurationPanel::setColor(QColor color) {
     auto stop = config_.defaultGradient().stops().front();
-    stop.leftIntensity = byteToDbColor(color.red());
-    stop.rightIntensity = byteToDbColor(color.green());
+    stop.leftIntensity = displayByteToDb(color.red());
+    stop.rightIntensity = displayByteToDb(color.green());
     config_.defaultGradient().setStopValues(0, stop);
     config_.defaultGradient().setStopValues(1, stop);
     updateColorButtonAppearance();

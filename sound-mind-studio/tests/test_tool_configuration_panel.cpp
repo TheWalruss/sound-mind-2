@@ -120,8 +120,8 @@ void ToolConfigurationPanelTest::setColorSetsBothGradientStopsIntensityAndEmitsC
 
     QCOMPARE(spy.count(), 1);
     const auto& stops = panel.toolConfiguration().defaultGradient().stops();
-    // byteToDbColor(128) ~= -47.8 dB, byteToDbColor(64) ~= -71.9 dB, over
-    // the -96..0 dB display range dbToByteColor()/byteToDbColor() share
+    // displayByteToDb(128) ~= -47.8 dB, displayByteToDb(64) ~= -71.9 dB, over
+    // the -96..0 dB display range dbToDisplayByte()/displayByteToDb() share
     // with color_mapping.cpp's own (unexported) formula.
     QVERIFY(qAbs(stops.front().leftIntensity - (-47.8f)) < 1.0f);
     QVERIFY(qAbs(stops.front().rightIntensity - (-71.9f)) < 1.0f);
@@ -135,7 +135,7 @@ void ToolConfigurationPanelTest::colorRoundTripsThroughSetColor() {
     panel.setColor(QColor(200, 40, 0));
 
     // Round-trips exactly for red/green (blue is always 0 - see color()'s
-    // own docs) - dbToByteColor()/byteToDbColor() are exact inverses over
+    // own docs) - dbToDisplayByte()/displayByteToDb() are exact inverses over
     // the 0-255 byte range.
     QCOMPARE(panel.color(), QColor(200, 40, 0));
 }

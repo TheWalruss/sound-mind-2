@@ -22,6 +22,7 @@ add_library(sound-mind-core
     src/path.cpp
     src/tool_configuration.cpp
     src/paint_application.cpp
+    src/fill_application.cpp
     src/layer.cpp
     src/project_settings.cpp
     src/operation_log.cpp

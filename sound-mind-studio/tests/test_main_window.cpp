@@ -2602,3 +2602,117 @@ void MainWindowTest::pickingTheSameSpotTwiceSelectsTheOccludedStrokeUnderneath()
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
     QCOMPARE(sizeSpinBox->value(), 0.5);
 }
+
+void MainWindowTest::paintPickAndSelectToolbarActionsAreAllMutuallyExclusive() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+
+    window.setPaintModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Paint);
+
+    window.setSelectModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Select);
+
+    window.setPickModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Pick);
+
+    window.setSelectModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Select);
+}
+
+void MainWindowTest::drawingASelectionAndFillingItChangesTheLayersContent() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-select-fill.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    // Drawing onto the Background layer directly - no import needed, it's
+    // a real paintable/fillable canvas now (see docs/sound-mind-
+    // architecture.md's Decisions Made on why).
+    window.setSelectModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Select);
+
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    window.fillSelectionWith(QColor(255, 0, 0));  // pure red - loud left channel.
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    const auto& content = *window.project()->layers().back().content();
+    const bool anyFilled = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                        [](float value) { return value > -50.0f; });
+    QVERIFY(anyFilled);
+}
+
+void MainWindowTest::selectionPersistsAfterSwitchingAwayFromSelectMode() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-select-persist.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    // A selection scopes Fill independent of whichever tool is currently
+    // active - switching to Paint shouldn't clear it.
+    window.setPaintModeEnabled(true);
+    window.fillSelectionWith(QColor(0, 255, 0));
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+}
+
+void MainWindowTest::deselectClearsTheCurrentSelectionSoFillBecomesANoOp() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-deselect.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    window.deselect();
+    window.fillSelectionWith(QColor(0, 0, 255));
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}
+
+void MainWindowTest::fillSelectionWithIsANoOpWithNoSelection() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.fillSelectionWith(QColor(255, 0, 0));
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}
+
+void MainWindowTest::settingANewProjectResetsSelectModeToOff() {
+    const auto firstPath = std::filesystem::temp_directory_path() / "sound-mind-test-select-reset-1.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), firstPath));
+    std::filesystem::remove(firstPath);
+    window.setSelectModeEnabled(true);
+
+    const auto secondPath = std::filesystem::temp_directory_path() / "sound-mind-test-select-reset-2.smproj";
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), secondPath));
+    std::filesystem::remove(secondPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
+}

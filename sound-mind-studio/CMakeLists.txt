@@ -28,6 +28,7 @@ set(CMAKE_AUTORCC ON)
 add_library(sound-mind-studio-lib
     src/audio_snippet_picker_dialog.cpp
     src/canvas_widget.cpp
+    src/color_conversion.cpp
     src/create_project_wizard.cpp
     src/image_scale_picker_dialog.cpp
     src/import_export.cpp
@@ -43,10 +44,12 @@ add_library(sound-mind-studio-lib
     src/qt_image_conversion.cpp
     src/record_panel.cpp
     src/recent_projects.cpp
+    src/selection_controller.cpp
     src/theme.cpp
     src/tool_configuration_panel.cpp
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/canvas_widget.h
+    include/sound_mind/studio/color_conversion.h
     include/sound_mind/studio/create_project_wizard.h
     include/sound_mind/studio/image_scale_picker_dialog.h
     include/sound_mind/studio/import_export.h
@@ -62,6 +65,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/qt_image_conversion.h
     include/sound_mind/studio/record_panel.h
     include/sound_mind/studio/recent_projects.h
+    include/sound_mind/studio/selection_controller.h
     include/sound_mind/studio/theme.h
     include/sound_mind/studio/tool_configuration_panel.h
     assets/app.qrc

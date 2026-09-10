@@ -6,6 +6,40 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.25.1] - 2026-09-10
+
+The first installment of Phase 3's "Selection & Fill" milestone: a
+rectangular selection, and Fill (solid color, confined exactly to the
+selection). Scoped down by explicit choice - Lasso, Wand, boolean
+combination, and Cut/Copy/Paste come as follow-up installments.
+
+### Added
+
+- **A new "Select" toolbar button**, alongside Paint/Pick - drag on the
+  canvas to draw a rectangular selection (shown as a green outline,
+  always visible regardless of which tool is currently active - a
+  selection scopes Fill independent of the active tool, the same way it
+  would in any other image editor). Clicking without dragging clears the
+  selection.
+- **`sound_mind::core::FillOperation`** - the second concrete `Operation`
+  subtype (`PaintOperation` was the first), logged non-destructively like
+  any paint stroke. `applyFillOperation()` writes a color (or gradient)
+  across every cell strictly within the selection's own bounds - a hard-
+  edged solid write, not a brush stamp. `OperationLog`'s JSON persistence
+  now dispatches on two concrete kinds instead of one.
+- **`sound_mind::studio::SelectionController`** - owns the current
+  selection (ephemeral UI state, not itself logged) and turns Fill into a
+  new `FillOperation`. Shares `PaintController`'s own pre-paint base
+  cache, the same reuse `PickController` already established.
+- **Edit menu gained "Deselect" (Ctrl+D) and "Fill Selection..."** - the
+  latter opens a color picker and fills the current selection at full
+  opacity.
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes. Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.11] - 2026-09-10
 
 **Pick fix**, found via manual testing: a small object entirely behind a

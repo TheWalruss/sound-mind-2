@@ -619,3 +619,105 @@ void CanvasWidgetTest::setPickSelectionBoundsWithNoValueDrawsNothing() {
     const QImage rendered = widget.grab().toImage();
     QVERIFY(rendered.pixelColor(20, 10) != QColor(255, 255, 255));
 }
+
+void CanvasWidgetTest::mousePressInSelectModeEmitsSelectStrokeStartedWithAConvertedPoint() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Select);
+
+    std::optional<TimeFrequencyPoint> received;
+    QObject::connect(&widget, &CanvasWidget::selectStrokeStarted, [&](TimeFrequencyPoint point) { received = point; });
+
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QVERIFY(received.has_value());
+    const double expectedTime = sound_mind::core::frameIndexToTime(30.0, config);
+    const float expectedFrequency = sound_mind::core::binIndexToFrequency(40.0f, config);  // see the Paint-mode test's own comment.
+    QVERIFY(qAbs(received->timeSeconds - expectedTime) < 0.01);
+    QVERIFY(qAbs(received->frequencyHz - expectedFrequency) < 1.0);
+}
+
+void CanvasWidgetTest::mouseMoveAfterPressInSelectModeEmitsSelectStrokeContinued() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Select);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QSignalSpy spy(&widget, &CanvasWidget::selectStrokeContinued);
+
+    QTest::mouseMove(&widget, QPoint(40, 20));
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void CanvasWidgetTest::mouseReleaseInSelectModeEmitsSelectStrokeEndedAndEndsTheGesture() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Select);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QSignalSpy endedSpy(&widget, &CanvasWidget::selectStrokeEnded);
+
+    QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+    QCOMPARE(endedSpy.count(), 1);
+
+    QSignalSpy continuedSpy(&widget, &CanvasWidget::selectStrokeContinued);
+    QTest::mouseMove(&widget, QPoint(50, 30));
+    QCOMPARE(continuedSpy.count(), 0);
+}
+
+void CanvasWidgetTest::changingToolModeAwayFromSelectCancelsAnyActiveGesture() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Select);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    widget.setToolMode(CanvasWidget::ToolMode::None);
+    widget.setToolMode(CanvasWidget::ToolMode::Select);
+    QSignalSpy spy(&widget, &CanvasWidget::selectStrokeContinued);
+
+    QTest::mouseMove(&widget, QPoint(40, 20));
+
+    QCOMPARE(spy.count(), 0);
+}
+
+void CanvasWidgetTest::setSelectionBoundsDrawsAHighlight() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    sound_mind::core::TimeFrequencyRect bounds;
+    bounds.startTimeSeconds = sound_mind::core::frameIndexToTime(20.0, config);
+    bounds.endTimeSeconds = sound_mind::core::frameIndexToTime(80.0, config);
+    bounds.lowFrequencyHz = sound_mind::core::binIndexToFrequency(10.0f, config);
+    bounds.highFrequencyHz = sound_mind::core::binIndexToFrequency(40.0f, config);
+    widget.setSelectionBounds(bounds);
+
+    const QImage rendered = widget.grab().toImage();
+    QCOMPARE(rendered.pixelColor(20, 10), QColor(0, 255, 0));  // Qt::green.
+}
+
+void CanvasWidgetTest::setSelectionBoundsWithNoValueDrawsNothing() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    widget.setSelectionBounds(std::nullopt);
+
+    const QImage rendered = widget.grab().toImage();
+    QVERIFY(rendered.pixelColor(20, 10) != QColor(0, 255, 0));
+}

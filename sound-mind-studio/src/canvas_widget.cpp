@@ -83,6 +83,7 @@ void CanvasWidget::setToolMode(ToolMode mode) {
     toolMode_ = mode;
     paintStrokeActive_ = false;
     pickStrokeActive_ = false;
+    selectStrokeActive_ = false;
 }
 
 void CanvasWidget::setPaintPreviewPath(sound_mind::core::Path path) {
@@ -92,6 +93,11 @@ void CanvasWidget::setPaintPreviewPath(sound_mind::core::Path path) {
 
 void CanvasWidget::setPickSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds) {
     pickSelectionBounds_ = bounds;
+    update();
+}
+
+void CanvasWidget::setSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds) {
+    selectionBounds_ = bounds;
     update();
 }
 
@@ -163,6 +169,15 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         painter.setPen(QPen(Qt::white, 2));
         painter.drawRect(widgetRectFor(*pickSelectionBounds_));
     }
+
+    // The current rectangular selection (Select) - see
+    // setSelectionBounds()'s own docs. Independent of toolMode(), the
+    // same "a selection stays visible/usable after switching tools"
+    // reasoning that method's own docs describe.
+    if (project_ != nullptr && selectionBounds_.has_value()) {
+        painter.setPen(QPen(Qt::green, 2));
+        painter.drawRect(widgetRectFor(*selectionBounds_));
+    }
 }
 
 void CanvasWidget::drawOperationOverlays(QPainter& painter) const {
@@ -220,7 +235,8 @@ QRectF CanvasWidget::widgetRectFor(const sound_mind::core::TimeFrequencyRect& bo
 }
 
 void CanvasWidget::mousePressEvent(QMouseEvent* event) {
-    if (event->button() != Qt::LeftButton || (toolMode_ != ToolMode::Paint && toolMode_ != ToolMode::Pick)) {
+    if (event->button() != Qt::LeftButton ||
+        (toolMode_ != ToolMode::Paint && toolMode_ != ToolMode::Pick && toolMode_ != ToolMode::Select)) {
         QWidget::mousePressEvent(event);
         return;
     }
@@ -231,16 +247,20 @@ void CanvasWidget::mousePressEvent(QMouseEvent* event) {
     if (toolMode_ == ToolMode::Paint) {
         paintStrokeActive_ = true;
         emit paintStrokeStarted(*point);
-    } else {
+    } else if (toolMode_ == ToolMode::Pick) {
         pickStrokeActive_ = true;
         emit pickStrokeStarted(*point);
+    } else {
+        selectStrokeActive_ = true;
+        emit selectStrokeStarted(*point);
     }
 }
 
 void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
-    // Independent of toolMode()/paintStrokeActive_/pickStrokeActive_ - see
-    // cursorMoved()'s own docs; every move gets a position readout, not
-    // just ones that also continue an in-progress stroke/drag.
+    // Independent of toolMode()/paintStrokeActive_/pickStrokeActive_/
+    // selectStrokeActive_ - see cursorMoved()'s own docs; every move gets
+    // a position readout, not just ones that also continue an in-progress
+    // stroke/drag.
     emit cursorMoved(event->position(), widgetPointToTimeFrequency(event->position()));
 
     if (toolMode_ == ToolMode::Paint && paintStrokeActive_) {
@@ -252,6 +272,12 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
     if (toolMode_ == ToolMode::Pick && pickStrokeActive_) {
         if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
             emit pickStrokeContinued(*point);
+        }
+        return;
+    }
+    if (toolMode_ == ToolMode::Select && selectStrokeActive_) {
+        if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
+            emit selectStrokeContinued(*point);
         }
         return;
     }
@@ -273,6 +299,11 @@ void CanvasWidget::mouseReleaseEvent(QMouseEvent* event) {
     if (toolMode_ == ToolMode::Pick && pickStrokeActive_) {
         pickStrokeActive_ = false;
         emit pickStrokeEnded();
+        return;
+    }
+    if (toolMode_ == ToolMode::Select && selectStrokeActive_) {
+        selectStrokeActive_ = false;
+        emit selectStrokeEnded();
         return;
     }
     QWidget::mouseReleaseEvent(event);

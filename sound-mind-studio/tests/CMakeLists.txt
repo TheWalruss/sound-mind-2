@@ -15,6 +15,7 @@ add_executable(sound-mind-studio-tests
     test_paint_controller.cpp
     test_pick_controller.cpp
     test_playback_controller.cpp
+    test_selection_controller.cpp
     test_playback_panel.cpp
     test_record_panel.cpp
     test_recent_projects.cpp

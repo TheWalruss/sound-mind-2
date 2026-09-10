@@ -50,6 +50,7 @@ public:
         None,  ///< Mouse input does nothing - the default.
         Paint,  ///< Mouse drags/taps paint a freehand stroke.
         Pick,  ///< Mouse press selects a paint object; a drag moves it.
+        Select,  ///< Mouse drag draws a rectangular selection.
     };
 
     /// @brief Constructs an empty canvas, with no project set yet.
@@ -89,13 +90,14 @@ public:
      * `None` leaves ordinary mouse events unhandled (the pre-`v0.Y.24.1`
      * behavior, and still the default) - `Paint` makes a left-button
      * press/drag/release emit paintStrokeStarted()/paintStrokeContinued()/
-     * paintStrokeEnded() instead, and `Pick` makes the same gesture emit
-     * pickStrokeStarted()/pickStrokeContinued()/pickStrokeEnded() instead.
-     * Exactly one mode is active at a time; a future Selection mode
-     * extends this same enum rather than stacking independent flags.
-     * Switching away from `Paint`/`Pick` cancels whatever gesture was
-     * mid-flight in it (a real mouse-up may never arrive - e.g. the
-     * toolbar button was clicked instead).
+     * paintStrokeEnded() instead, `Pick` makes the same gesture emit
+     * pickStrokeStarted()/pickStrokeContinued()/pickStrokeEnded() instead,
+     * and `Select` makes it emit selectStrokeStarted()/
+     * selectStrokeContinued()/selectStrokeEnded() instead. Exactly one
+     * mode is active at a time. Switching away from `Paint`/`Pick`/
+     * `Select` cancels whatever gesture was mid-flight in it (a real
+     * mouse-up may never arrive - e.g. the toolbar button was clicked
+     * instead).
      *
      * @param mode The new tool mode.
      */
@@ -164,6 +166,23 @@ public:
      */
     void setPickSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds);
 
+    /**
+     * @brief Sets (or clears) the current rectangular selection's own
+     *        overlay and repaints - a distinct-colored (green) rectangle,
+     *        drawn over whatever the canvas otherwise shows, independent
+     *        of `toolMode()`: a selection scopes other operations (Fill,
+     *        in particular - see `docs/sound-mind-design.md`'s
+     *        "Selection") and so stays visible/usable even after
+     *        switching to a different tool, the same way it would in any
+     *        other image editor.
+     *
+     * @param bounds The selection to display - either a `SelectionController`'s
+     *        own in-progress drag preview or its committed selection (see
+     *        `SelectionController::displayBounds()`'s own docs for which);
+     *        `std::nullopt` draws nothing, clearing any previous overlay.
+     */
+    void setSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds);
+
     /// @brief The widget's preferred size.
     /// @return The current project's configured canvas dimensions, or a
     ///         fallback size if no project is set.
@@ -199,6 +218,20 @@ signals:
     /// @brief The in-progress pick gesture ended (`Pick` tool mode, left
     ///        button released).
     void pickStrokeEnded();
+
+    /// @brief A selection drag started (`Select` tool mode, left button
+    ///        pressed) - the drag's own anchor corner.
+    /// @param point The press position, converted to time/frequency space.
+    void selectStrokeStarted(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief The in-progress selection drag continued (`Select` tool
+    ///        mode, left button held and moved).
+    /// @param point The new position, converted to time/frequency space.
+    void selectStrokeContinued(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief The in-progress selection drag ended (`Select` tool mode,
+    ///        left button released).
+    void selectStrokeEnded();
 
     /**
      * @brief The mouse moved over the canvas - independent of toolMode(),
@@ -295,8 +328,10 @@ private:
     ToolMode toolMode_ = ToolMode::None;
     bool paintStrokeActive_ = false;
     bool pickStrokeActive_ = false;
+    bool selectStrokeActive_ = false;
     sound_mind::core::Path paintPreviewPath_;
     std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;
+    std::optional<sound_mind::core::TimeFrequencyRect> selectionBounds_;
     bool showBoundingBoxes_ = false;
     bool showPathGeometry_ = false;
 };

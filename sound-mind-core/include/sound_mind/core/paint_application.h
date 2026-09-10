@@ -122,12 +122,19 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
  *        the first time one does, per `Layer`'s own docs).
  * @param operations The operations to replay, in order - typically
  *        `OperationLog::activeOperationsTargeting()`'s own result for this
- *        layer. Any entry that isn't a `PaintOperation` is skipped (no
- *        other concrete `Operation` subtype exists yet to apply).
+ *        layer. Each entry is dispatched to whichever concrete apply
+ *        function matches its own runtime type (`applyPaintOperation()`
+ *        for a `PaintOperation`, `applyFillOperation()` for a
+ *        `FillOperation` - see `fill_application.h`); any other/future
+ *        `Operation` subtype is skipped rather than erroring, the same
+ *        forward-tolerant handling every other `dynamic_cast`-based
+ *        dispatch in this codebase already uses.
  * @param frequencyToTimeScale Passed through to applyPaintOperation() for
- *        each `PaintOperation` replayed - see its own docs.
- * @return A fresh `StreamImage`: `base`, with every paintable operation
- *         in `operations` applied on top, in order.
+ *        each `PaintOperation` replayed - see its own docs. `FillOperation`
+ *        has no equivalent need for it (see `applyFillOperation()`'s own
+ *        docs).
+ * @return A fresh `StreamImage`: `base`, with every operation in
+ *         `operations` applied on top, in order.
  */
 [[nodiscard]] sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::StreamImage& base,
                                                                      const std::vector<const Operation*>& operations,

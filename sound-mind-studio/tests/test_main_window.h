@@ -160,4 +160,10 @@ private slots:
     void deletingAPickedStrokeLeavesAnEmptyTombstone();
     void settingANewProjectResetsPickModeToOff();
     void pickingTheSameSpotTwiceSelectsTheOccludedStrokeUnderneath();
+    void paintPickAndSelectToolbarActionsAreAllMutuallyExclusive();
+    void drawingASelectionAndFillingItChangesTheLayersContent();
+    void selectionPersistsAfterSwitchingAwayFromSelectMode();
+    void deselectClearsTheCurrentSelectionSoFillBecomesANoOp();
+    void fillSelectionWithIsANoOpWithNoSelection();
+    void settingANewProjectResetsSelectModeToOff();
 };

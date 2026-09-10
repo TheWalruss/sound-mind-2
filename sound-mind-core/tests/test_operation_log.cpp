@@ -1,9 +1,14 @@
+#include <stdexcept>
+
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_operation.h"
 
+using sound_mind::core::FillOperation;
+using sound_mind::core::Gradient;
 using sound_mind::core::LayerId;
 using sound_mind::core::OperationId;
 using sound_mind::core::OperationLog;
@@ -12,6 +17,7 @@ using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
 using sound_mind::core::TimeFrequencyPoint;
+using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ToolConfiguration;
 
 namespace {
@@ -181,6 +187,33 @@ TEST_CASE("An OperationLog with real PaintOperations round-trips through JSON", 
     // reserveId() must not collide with what was already logged.
     const OperationId fresh = const_cast<OperationLog&>(roundTripped).reserveId();
     REQUIRE(fresh != original);
+}
+
+TEST_CASE("An OperationLog with a mix of PaintOperations and FillOperations round-trips through JSON",
+          "[core][operation_log]") {
+    OperationLog log;
+    const OperationId paintId = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(paintId, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    const OperationId fillId = log.reserveId();
+    log.append(std::make_unique<FillOperation>(fillId, LayerId{1}, TimeFrequencyRect{}, Gradient{}));
+
+    const nlohmann::json json = log;
+    const OperationLog roundTripped = json.get<OperationLog>();
+
+    REQUIRE(roundTripped.size() == 2);
+    const auto active = roundTripped.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 2);
+    REQUIRE(dynamic_cast<const PaintOperation*>(active[0]) != nullptr);
+    REQUIRE(dynamic_cast<const FillOperation*>(active[1]) != nullptr);
+}
+
+TEST_CASE("An OperationLog fails to load JSON with an unrecognized operation kind", "[core][operation_log]") {
+    const nlohmann::json malformed = nlohmann::json{
+        {"operations", nlohmann::json::array({nlohmann::json{{"kind", "not-a-real-kind"}, {"id", 1}}})},
+        {"activeCount", 1},
+        {"nextId", 2},
+    };
+    REQUIRE_THROWS_AS(malformed.get<OperationLog>(), std::invalid_argument);
 }
 
 TEST_CASE("An empty OperationLog's pre-v0.0.24.1 JSON shape (a bare empty array) still parses",

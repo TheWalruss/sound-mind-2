@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include "sound_mind/core/fill_application.h"
+#include "sound_mind/core/fill_operation.h"
+
 namespace sound_mind::core {
 
 namespace {
@@ -249,6 +252,8 @@ sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::St
     for (const Operation* operation : operations) {
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation)) {
             applyPaintOperation(*paint, frequencyToTimeScale, result);
+        } else if (const auto* fill = dynamic_cast<const FillOperation*>(operation)) {
+            applyFillOperation(*fill, result);
         }
     }
     return result;
