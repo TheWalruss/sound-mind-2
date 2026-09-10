@@ -14,9 +14,11 @@
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
+#include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/recent_projects.h"
 
+class QAction;
 class QCloseEvent;
 class QDragEnterEvent;
 class QDropEvent;
@@ -588,6 +590,36 @@ public slots:
      */
     void reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop);
 
+    /**
+     * @brief Turns the canvas's Paint tool on or off - the actual work
+     *        behind the toolbar's Paint toggle.
+     *
+     * Turning it off cancels any in-progress stroke (see
+     * `PaintController::cancelStroke()`'s own docs) rather than leaving
+     * it dangling; turning it on has no effect if no project is open.
+     *
+     * @param enabled `true` to accept freehand paint input on the canvas;
+     *        `false` to return to plain, non-interactive display.
+     */
+    void setPaintModeEnabled(bool enabled);
+
+    /**
+     * @brief Undoes the most recent paint stroke, if any - the actual
+     *        work behind the Edit menu's Undo action.
+     *
+     * Delegates to `PaintController::undo()`; a no-op if nothing is
+     * undoable (no project open, or nothing painted yet since the
+     * project's own paint history - session-only, see
+     * `PaintController`'s own docs - began).
+     */
+    void undo();
+
+    /// @brief Redoes the most recently undone paint stroke, if any - the
+    ///        actual work behind the Edit menu's Redo action. Delegates
+    ///        to `PaintController::redo()`; a no-op if nothing is
+    ///        redoable.
+    void redo();
+
 public:
     /**
      * @brief Opens the project at `path` as the current project, without
@@ -1084,6 +1116,23 @@ private:
     ///         is open or no layer in it has this id.
     [[nodiscard]] sound_mind::core::Layer* layerById(sound_mind::core::LayerId id);
 
+    /**
+     * @brief Which layer a freehand stroke started right now would paint
+     *        into.
+     *
+     * The topmost layer in the stack (`project_->layers().back()`),
+     * regardless of content or type - a real "which layer is currently
+     * selected for painting" concept doesn't exist yet (a natural future
+     * `LayersPanel` addition, tracked in `docs/sound-mind-architecture.md`'s
+     * Decisions Made rather than built speculatively here); this is a
+     * simple, predictable placeholder, not `topmostLayerWithContent()`
+     * (which requires existing content and would make a fresh, still-
+     * empty new layer unpaintable).
+     *
+     * @return That layer's id, or `std::nullopt` if no project is open.
+     */
+    [[nodiscard]] std::optional<sound_mind::core::LayerId> paintTargetLayerId() const;
+
     /// @brief Sets the window title to "Sound Mind Studio v<version>",
     /// plus " - <project name>" (currentPath_'s own file stem) once a
     /// project has been saved/opened at a real path - called after every
@@ -1168,6 +1217,25 @@ private:
     /// playbackPanel_/canvas_ both stay MainWindow's own job - see
     /// PlaybackController's own docs for why it doesn't know about either.
     PlaybackController* playbackController_ = nullptr;
+
+    /// @brief Owns an in-progress freehand stroke and turns it into a
+    /// real, undoable `PaintOperation` - see the Phase 3 "Basic Painting"
+    /// milestone (`v0.Y.24.1`). "Which layer to paint into" is
+    /// MainWindow's own decision (the topmost layer in the stack, for
+    /// now - see `paintTargetLayer()`'s own docs for why); wiring
+    /// `canvas_`'s mouse-derived signals to this, and this controller's
+    /// own `pathChanged()`/`contentChanged()` back to `canvas_`, is
+    /// MainWindow's own job too, the same shape `playbackController_`
+    /// already established.
+    PaintController* paintController_ = nullptr;
+
+    /// @brief The toolbar's Paint tool toggle - checked while the canvas
+    /// accepts freehand paint input (`CanvasWidget::ToolMode::Paint`).
+    /// Kept as a member (rather than a local in the constructor) so
+    /// setProject() can uncheck it when a new/different project is
+    /// opened, the same way it resets every other per-project session
+    /// state.
+    QAction* paintAction_ = nullptr;
 
     /// @brief `nullptr` until the first setProject() call - LoopEngine
     /// needs a real loop length (the project's own duration in samples)

@@ -13,4 +13,14 @@ private slots:
     void reflectsALayersTranslationColumns();
     void drawsAPlayheadLineAtTheGivenFraction();
     void drawsNoPlayheadByDefault();
+    void toolModeDefaultsToNone();
+    void setToolModeChangesTheMode();
+    void mousePressDoesNothingInNoneMode();
+    void mousePressInPaintModeEmitsPaintStrokeStartedWithAConvertedPoint();
+    void mouseMoveWithoutAPriorPressDoesNothingInPaintMode();
+    void mouseMoveAfterPressEmitsPaintStrokeContinued();
+    void mouseReleaseEmitsPaintStrokeEndedAndEndsTheStroke();
+    void changingToolModeAwayFromPaintCancelsAnyActiveStroke();
+    void setPaintPreviewPathDrawsItOverTheCanvas();
+    void setPaintPreviewPathWithNoNodesDrawsNothing();
 };

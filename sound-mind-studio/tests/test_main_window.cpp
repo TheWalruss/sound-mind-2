@@ -20,6 +20,7 @@
 
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
@@ -28,6 +29,7 @@
 #include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/record_panel.h"
 
+using sound_mind::studio::CanvasWidget;
 using sound_mind::studio::ImageScalePickerDialog;
 using sound_mind::studio::LandingPage;
 using sound_mind::studio::LayersPanel;
@@ -2125,4 +2127,81 @@ void MainWindowTest::stopPlaybackResetsThePlaybackPanelPosition() {
     auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
     QVERIFY(label != nullptr);
     QCOMPARE(label->text(), QStringLiteral("0:00 / 0:00"));
+}
+
+void MainWindowTest::paintModeIsOffByDefault() {
+    const TestMainWindow window;
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
+}
+
+void MainWindowTest::setPaintModeEnabledTogglesTheCanvasToolMode() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+
+    window.setPaintModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Paint);
+
+    window.setPaintModeEnabled(false);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
+}
+
+void MainWindowTest::paintingOnTheCanvasAppendsAPaintOperationToTheProjectsLog() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-paint-append.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->resize(100, 50);
+    window.setPaintModeEnabled(true);
+
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseMove(canvas, QPoint(50, 20));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(70, 25));
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+}
+
+void MainWindowTest::undoAndRedoDelegateToThePaintController() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-paint-undo-redo.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->resize(100, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QVERIFY(window.project()->operationLog().canUndo());
+    window.undo();
+    QVERIFY(!window.project()->operationLog().canUndo());
+    QVERIFY(window.project()->operationLog().canRedo());
+
+    window.redo();
+    QVERIFY(window.project()->operationLog().canUndo());
+    QVERIFY(!window.project()->operationLog().canRedo());
+}
+
+void MainWindowTest::settingANewProjectResetsPaintModeToOff() {
+    const auto firstPath = std::filesystem::temp_directory_path() / "sound-mind-test-paint-reset-1.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), firstPath));
+    std::filesystem::remove(firstPath);
+    window.setPaintModeEnabled(true);
+
+    const auto secondPath = std::filesystem::temp_directory_path() / "sound-mind-test-paint-reset-2.smproj";
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), secondPath));
+    std::filesystem::remove(secondPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
 }

@@ -176,6 +176,29 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     });
     playbackPanel_->setOutputDevices(toQStringList(playbackController_->availableOutputDeviceNames()));
 
+    // Basic Painting (v0.Y.24.1) - the same "purely presentational, every
+    // user action is a signal the owner connects to" shape
+    // playbackController_ already established. canvas_ only ever emits
+    // already-converted TimeFrequencyPoints; paintController_ never
+    // reaches into canvas_ directly, only back through pathChanged()/
+    // contentChanged() below.
+    paintController_ = new PaintController(this);
+    connect(canvas_, &CanvasWidget::paintStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+            paintController_->beginStroke(*layerId, point);
+        }
+    });
+    connect(canvas_, &CanvasWidget::paintStrokeContinued, this,
+            [this](sound_mind::core::TimeFrequencyPoint point) { paintController_->continueStroke(point); });
+    connect(canvas_, &CanvasWidget::paintStrokeEnded, this, [this]() { paintController_->endStroke(); });
+    connect(paintController_, &PaintController::pathChanged, this,
+            [this]() { canvas_->setPaintPreviewPath(paintController_->currentPreviewPath()); });
+    connect(paintController_, &PaintController::contentChanged, this, [this](sound_mind::core::LayerId) {
+        canvas_->update();
+        hasUnsavedChanges_ = true;
+        refreshLayersPanel();
+    });
+
     recordPanel_ = new RecordPanel(this);
     recordPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, recordPanel_);
@@ -227,11 +250,32 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* exportVideoAction = fileMenu->addAction(tr("Export &Video..."));
     connect(exportVideoAction, &QAction::triggered, this, &MainWindow::exportVideo);
 
+    // Basic Painting (v0.Y.24.1): Undo/Redo apply to paint strokes only so
+    // far - the same scope PaintController's own undo()/redo() already
+    // has (see its docs) - not a project-wide undo covering every kind of
+    // change yet.
+    QMenu* editMenu = menuBar()->addMenu(tr("&Edit"));
+    QAction* undoAction = editMenu->addAction(tr("&Undo"));
+    undoAction->setShortcut(QKeySequence::Undo);
+    connect(undoAction, &QAction::triggered, this, &MainWindow::undo);
+
+    QAction* redoAction = editMenu->addAction(tr("&Redo"));
+    redoAction->setShortcut(QKeySequence::Redo);
+    connect(redoAction, &QAction::triggered, this, &MainWindow::redo);
+
     QToolBar* transportToolBar = addToolBar(tr("Transport"));
     // Plain text actions rather than icons - no icon assets exist yet, and
     // these are unambiguous enough on their own for a first pass.
     QAction* poolAction = transportToolBar->addAction(tr("Pool Layer"));
     connect(poolAction, &QAction::triggered, this, &MainWindow::poolTopmostLayer);
+
+    // A plain checkable toggle, not toggleViewAction()-based like the
+    // panels below - this isn't a dock's own visibility, it's the
+    // canvas's current tool mode (see CanvasWidget::setToolMode()'s own
+    // docs).
+    paintAction_ = transportToolBar->addAction(tr("Paint"));
+    paintAction_->setCheckable(true);
+    connect(paintAction_, &QAction::toggled, this, &MainWindow::setPaintModeEnabled);
 
     // As of v0.Y.16.1 (Transport Panels): Play/Pause/Stop/Loop/Record are
     // no longer direct toolbar actions - each now lives inside its own
@@ -456,6 +500,14 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     playbackController_->stop();
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
+    // paintAction_->setChecked(false) alone wouldn't reset canvas_'s own
+    // tool mode if it was already unchecked (toggled() only fires on a
+    // real change) - setToolMode() directly is what actually guarantees
+    // this, the same "unconditional and idempotent" reasoning as every
+    // other reset above.
+    paintAction_->setChecked(false);
+    canvas_->setToolMode(CanvasWidget::ToolMode::None);
+    canvas_->setPaintPreviewPath(sound_mind::core::Path{});
 
     project_ = std::move(project);
 
@@ -472,6 +524,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     loopPanel_->setOutputDevices(toQStringList(loopEngine_->availableOutputDeviceNames()));
 
     canvas_->setProject(&*project_);
+    paintController_->setProject(&*project_);
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
     // Layers is shown automatically the *first* time any project exists in
@@ -871,6 +924,13 @@ sound_mind::core::Layer* MainWindow::layerById(sound_mind::core::LayerId id) {
     return nullptr;
 }
 
+std::optional<sound_mind::core::LayerId> MainWindow::paintTargetLayerId() const {
+    if (!project_ || project_->layers().empty()) {
+        return std::nullopt;
+    }
+    return project_->layers().back().id();
+}
+
 void MainWindow::updateWindowTitle() {
     QString title = QStringLiteral("Sound Mind Studio v" SOUND_MIND_VERSION);
     if (currentPath_) {
@@ -1006,6 +1066,18 @@ void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& new
     // reorderRequested()'s docs).
     refreshLayersPanel();
 }
+
+void MainWindow::setPaintModeEnabled(bool enabled) {
+    canvas_->setToolMode(enabled ? CanvasWidget::ToolMode::Paint : CanvasWidget::ToolMode::None);
+    if (!enabled) {
+        paintController_->cancelStroke();
+        canvas_->setPaintPreviewPath(sound_mind::core::Path{});
+    }
+}
+
+void MainWindow::undo() { paintController_->undo(); }
+
+void MainWindow::redo() { paintController_->redo(); }
 
 void MainWindow::startPlayback() {
     if (!project_) {

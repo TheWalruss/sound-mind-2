@@ -155,6 +155,24 @@ double timeToFrameIndex(double timeSeconds, const sound_mind::codec::StreamCodec
     return timeSeconds * static_cast<double>(config.sampleRateHz) / static_cast<double>(config.hopLength);
 }
 
+float binIndexToFrequency(float binIndex, const sound_mind::codec::StreamCodecConfig& config) noexcept {
+    const float maxFrequencyHz = std::min(config.maxFrequencyHz, static_cast<float>(config.sampleRateHz) / 2.0f);
+    if (config.binCount <= 1) {
+        return config.minFrequencyHz;
+    }
+    const float clamped = std::clamp(binIndex, 0.0f, static_cast<float>(config.binCount - 1));
+    const float t = clamped / static_cast<float>(config.binCount - 1);
+    const float logRange = std::log(maxFrequencyHz / config.minFrequencyHz);
+    return config.minFrequencyHz * std::exp(t * logRange);
+}
+
+double frameIndexToTime(double frameIndex, const sound_mind::codec::StreamCodecConfig& config) noexcept {
+    if (config.sampleRateHz == 0) {
+        return 0.0;
+    }
+    return frameIndex * static_cast<double>(config.hopLength) / static_cast<double>(config.sampleRateHz);
+}
+
 void applyPaintOperation(const PaintOperation& operation, double frequencyToTimeScale,
                           sound_mind::codec::StreamImage& content) {
     if (frequencyToTimeScale <= 0.0 || content.frameCount == 0 || content.config.binCount == 0) {

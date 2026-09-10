@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "sound_mind/core/paint_application.h"
@@ -5,7 +6,9 @@
 using sound_mind::codec::StreamCodecConfig;
 using sound_mind::codec::StreamImage;
 using sound_mind::core::applyPaintOperation;
+using sound_mind::core::binIndexToFrequency;
 using sound_mind::core::BrushTipShape;
+using sound_mind::core::frameIndexToTime;
 using sound_mind::core::frequencyToBinIndex;
 using sound_mind::core::LayerId;
 using sound_mind::core::Operation;
@@ -118,6 +121,36 @@ TEST_CASE("timeToFrameIndex scales linearly with sampleRateHz/hopLength", "[core
     // 441 samples/frame at 44100 Hz = exactly 100 frames/second.
     REQUIRE(timeToFrameIndex(1.0, config) == 100.0);
     REQUIRE(timeToFrameIndex(0.5, config) == 50.0);
+}
+
+TEST_CASE("binIndexToFrequency is the inverse of frequencyToBinIndex", "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    for (const float frequencyHz : {20.0f, 100.0f, 1000.0f, 10000.0f, 19999.0f}) {
+        const float index = frequencyToBinIndex(frequencyHz, config);
+        const float roundTripped = binIndexToFrequency(index, config);
+        REQUIRE(std::abs(roundTripped - frequencyHz) < 0.5f);
+    }
+}
+
+TEST_CASE("binIndexToFrequency maps bin 0 to minFrequencyHz and the last bin to maxFrequencyHz",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    REQUIRE(binIndexToFrequency(0.0f, config) == config.minFrequencyHz);
+    REQUIRE(std::abs(binIndexToFrequency(static_cast<float>(config.binCount - 1), config) - config.maxFrequencyHz) <
+            1.0f);
+}
+
+TEST_CASE("frameIndexToTime is the inverse of timeToFrameIndex", "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    for (const double timeSeconds : {0.0, 0.25, 1.0, 5.0}) {
+        const double index = timeToFrameIndex(timeSeconds, config);
+        REQUIRE(frameIndexToTime(index, config) == Catch::Approx(timeSeconds));
+    }
+}
+
+TEST_CASE("frameIndexToTime is 0 at frame 0", "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    REQUIRE(frameIndexToTime(0.0, config) == 0.0);
 }
 
 TEST_CASE("applyPaintOperation with a fresh (transparent) gradient leaves content untouched",

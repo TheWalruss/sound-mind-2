@@ -1,9 +1,12 @@
 #include "test_canvas_widget.h"
 
+#include <QSignalSpy>
 #include <QtTest/QtTest>
 
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/paint_application.h"
+#include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
@@ -11,9 +14,33 @@
 using sound_mind::codec::StreamImage;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
+using sound_mind::core::Path;
+using sound_mind::core::PathNode;
+using sound_mind::core::PathNodeType;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
+using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::studio::CanvasWidget;
+
+namespace {
+
+/// @brief A project whose canvas is exactly 100x50, with a real,
+/// distinct frequency range (20-2020 Hz) - matching
+/// test_paint_controller.cpp's own testSettings(), so a widget resized
+/// to this exact pixel size maps widget pixels to frame/bin indices 1:1,
+/// keeping expected mouse-to-domain conversions simple to state.
+ProjectSettings mouseConversionTestSettings() {
+    ProjectSettings settings;
+    settings.canvasWidth = 100;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;
+    settings.minFrequencyHz = 20.0f;
+    settings.maxFrequencyHz = 2020.0f;
+    settings.timestepMs = 10.0;  // 100 columns * 10ms = 1 second total duration.
+    return settings;
+}
+
+}  // namespace
 
 void CanvasWidgetTest::sizeHintFallsBackWithNoProject() {
     const CanvasWidget widget;
@@ -163,4 +190,155 @@ void CanvasWidgetTest::drawsNoPlayheadByDefault() {
     // No project set -> a plain black canvas; no playhead means no white
     // line drawn anywhere over it.
     QCOMPARE(rendered.pixelColor(5, 5), QColor(0, 0, 0));
+}
+
+void CanvasWidgetTest::toolModeDefaultsToNone() {
+    const CanvasWidget widget;
+    QCOMPARE(widget.toolMode(), CanvasWidget::ToolMode::None);
+}
+
+void CanvasWidgetTest::setToolModeChangesTheMode() {
+    CanvasWidget widget;
+    widget.setToolMode(CanvasWidget::ToolMode::Paint);
+    QCOMPARE(widget.toolMode(), CanvasWidget::ToolMode::Paint);
+}
+
+void CanvasWidgetTest::mousePressDoesNothingInNoneMode() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    QSignalSpy spy(&widget, &CanvasWidget::paintStrokeStarted);
+
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QCOMPARE(spy.count(), 0);
+}
+
+void CanvasWidgetTest::mousePressInPaintModeEmitsPaintStrokeStartedWithAConvertedPoint() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Paint);
+
+    std::optional<TimeFrequencyPoint> received;
+    QObject::connect(&widget, &CanvasWidget::paintStrokeStarted,
+                      [&](TimeFrequencyPoint point) { received = point; });
+
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QVERIFY(received.has_value());
+    const double expectedTime = sound_mind::core::frameIndexToTime(30.0, config);
+    const float expectedFrequency = sound_mind::core::binIndexToFrequency(10.0f, config);
+    QVERIFY(qAbs(received->timeSeconds - expectedTime) < 0.01);
+    QVERIFY(qAbs(received->frequencyHz - expectedFrequency) < 1.0);
+}
+
+void CanvasWidgetTest::mouseMoveWithoutAPriorPressDoesNothingInPaintMode() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Paint);
+    QSignalSpy spy(&widget, &CanvasWidget::paintStrokeContinued);
+
+    QTest::mouseMove(&widget, QPoint(40, 20));
+
+    QCOMPARE(spy.count(), 0);
+}
+
+void CanvasWidgetTest::mouseMoveAfterPressEmitsPaintStrokeContinued() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Paint);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QSignalSpy spy(&widget, &CanvasWidget::paintStrokeContinued);
+
+    QTest::mouseMove(&widget, QPoint(40, 20));
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void CanvasWidgetTest::mouseReleaseEmitsPaintStrokeEndedAndEndsTheStroke() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Paint);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QSignalSpy endedSpy(&widget, &CanvasWidget::paintStrokeEnded);
+
+    QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+    QCOMPARE(endedSpy.count(), 1);
+
+    // A further move, without a new press, shouldn't continue the
+    // already-ended stroke.
+    QSignalSpy continuedSpy(&widget, &CanvasWidget::paintStrokeContinued);
+    QTest::mouseMove(&widget, QPoint(50, 30));
+    QCOMPARE(continuedSpy.count(), 0);
+}
+
+void CanvasWidgetTest::changingToolModeAwayFromPaintCancelsAnyActiveStroke() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Paint);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    widget.setToolMode(CanvasWidget::ToolMode::None);
+    widget.setToolMode(CanvasWidget::ToolMode::Paint);  // back to Paint, but the old stroke is gone.
+    QSignalSpy spy(&widget, &CanvasWidget::paintStrokeContinued);
+
+    QTest::mouseMove(&widget, QPoint(40, 20));
+
+    QCOMPARE(spy.count(), 0);  // a move alone, with no fresh press, still doesn't continue anything.
+}
+
+void CanvasWidgetTest::setPaintPreviewPathDrawsItOverTheCanvas() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    // A straight horizontal line (both nodes at the same frequency, plain
+    // Corner nodes) - predictable to check: it should render at a fixed
+    // row, spanning the columns between its own two endpoints.
+    Path path;
+    PathNode start;
+    start.anchor = TimeFrequencyPoint{sound_mind::core::frameIndexToTime(10.0, sound_mind::core::streamCodecConfigFor(settings)),
+                                       sound_mind::core::binIndexToFrequency(25.0f, sound_mind::core::streamCodecConfigFor(settings))};
+    start.type = PathNodeType::Corner;
+    path.addNode(start);
+    PathNode end;
+    end.anchor = TimeFrequencyPoint{sound_mind::core::frameIndexToTime(90.0, sound_mind::core::streamCodecConfigFor(settings)),
+                                     start.anchor.frequencyHz};
+    end.type = PathNodeType::Corner;
+    path.addNode(end);
+
+    widget.setPaintPreviewPath(path);
+
+    const QImage rendered = widget.grab().toImage();
+    QCOMPARE(rendered.pixelColor(50, 25), QColor(255, 255, 0));  // Qt::yellow.
+}
+
+void CanvasWidgetTest::setPaintPreviewPathWithNoNodesDrawsNothing() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    widget.setPaintPreviewPath(Path{});
+
+    const QImage rendered = widget.grab().toImage();
+    // The placeholder's own dark-gray fill, not yellow anywhere.
+    QCOMPARE(rendered.pixelColor(50, 25), QColor(40, 40, 40));
 }

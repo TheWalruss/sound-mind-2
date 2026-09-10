@@ -139,4 +139,11 @@ private slots:
     void startPlaybackSetsThePlaybackPanelDuration();
     void seekPlaybackMovesThePlaybackPosition();
     void stopPlaybackResetsThePlaybackPanelPosition();
+
+    // Basic Painting (v0.Y.24.1)
+    void paintModeIsOffByDefault();
+    void setPaintModeEnabledTogglesTheCanvasToolMode();
+    void paintingOnTheCanvasAppendsAPaintOperationToTheProjectsLog();
+    void undoAndRedoDelegateToThePaintController();
+    void settingANewProjectResetsPaintModeToOff();
 };

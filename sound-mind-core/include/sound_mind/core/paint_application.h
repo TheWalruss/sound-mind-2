@@ -43,6 +43,31 @@ namespace sound_mind::core {
 [[nodiscard]] double timeToFrameIndex(double timeSeconds, const sound_mind::codec::StreamCodecConfig& config) noexcept;
 
 /**
+ * @brief The inverse of frequencyToBinIndex(): the frequency a fractional
+ *        bin (row) index corresponds to.
+ *
+ * Needed wherever a real position (a mouse click, a canvas pixel) has to
+ * be converted *into* time/frequency space rather than the other
+ * direction painting itself needs - see `sound-mind-studio`'s canvas
+ * mouse-to-domain conversion.
+ *
+ * @param binIndex The fractional bin index to convert; clamped to
+ *        `[0, config.binCount - 1]` first.
+ * @param config The project's own Stream codec configuration.
+ * @return The corresponding frequency, in Hz.
+ */
+[[nodiscard]] float binIndexToFrequency(float binIndex, const sound_mind::codec::StreamCodecConfig& config) noexcept;
+
+/**
+ * @brief The inverse of timeToFrameIndex(): the time a fractional frame
+ *        (column) index corresponds to.
+ * @param frameIndex The fractional frame index to convert.
+ * @param config The project's own Stream codec configuration.
+ * @return The corresponding time, in seconds.
+ */
+[[nodiscard]] double frameIndexToTime(double frameIndex, const sound_mind::codec::StreamCodecConfig& config) noexcept;
+
+/**
  * @brief Applies a `PaintOperation`'s own stroke directly onto a
  *        `StreamImage`'s amplitude planes, in place - the procedural
  *        brush's own DSP (see `docs/sound-mind-design.md`'s "Procedural

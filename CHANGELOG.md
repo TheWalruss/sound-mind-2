@@ -6,6 +6,47 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.5] - 2026-09-10
+
+Part 5 of the Phase 3 "Basic Painting" milestone - `CanvasWidget`/
+`MainWindow` wiring. **Painting is now actually usable end to end for
+the first time**: drag on the canvas with the new Paint toolbar toggle
+on to paint a stroke, Ctrl+Z/Ctrl+Y (Edit menu) to undo/redo it. The
+default tool configuration is still fully transparent (no visible
+effect) until the Tool Configuration Panel (the next installment)
+exists to set a real brush - painting a *visible* stroke isn't
+reachable from the UI quite yet, but the operation itself, its undo/
+redo, and its live preview path all are.
+
+### Added
+
+- **`CanvasWidget` gained a `ToolMode`** (`None`/`Paint`) and real mouse
+  handling: a left-button press/drag/release in `Paint` mode converts
+  each position (using the current project's own canvas geometry) into
+  time/frequency space and emits `paintStrokeStarted()`/
+  `paintStrokeContinued()`/`paintStrokeEnded()` - purely presentational,
+  same as every dock panel. `setPaintPreviewPath()` draws the live
+  in-progress stroke as a real cubic Bézier `QPainterPath` overlay.
+- **`MainWindow` wires `CanvasWidget` to the new `PaintController`**: a
+  checkable "Paint" toolbar toggle (`setPaintModeEnabled()`), an Edit
+  menu with Undo/Redo (`undo()`/`redo()`, `Ctrl+Z`/`Ctrl+Y`), and the
+  actual stroke-to-operation/preview/repaint signal wiring. Which layer
+  a stroke paints into is, for now, simply the topmost layer in the
+  stack (`paintTargetLayerId()`) - a real "selected layer for painting"
+  concept doesn't exist yet (see the architecture doc's Decision #38).
+  `setProject()` resets paint mode off and cancels any in-progress
+  stroke, the same as every other per-project session reset there.
+- **`sound_mind::core::binIndexToFrequency()`/`frameIndexToTime()`** -
+  the inverse of `frequencyToBinIndex()`/`timeToFrameIndex()`, needed to
+  convert a mouse position back into time/frequency space.
+
+Regression: `sound-mind-core-tests` (50609 assertions/185 cases, up
+from 50597/181) and the full `sound-mind-studio-tests` suite (15 new
+tests: 10 in `CanvasWidgetTest`, 5 in `MainWindowTest`) both pass.
+Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.4] - 2026-09-10
 
 Part 4 of the Phase 3 "Basic Painting" milestone - `sound_mind::studio::PaintController`,

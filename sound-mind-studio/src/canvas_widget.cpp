@@ -3,11 +3,15 @@
 #include <optional>
 
 #include <QImage>
+#include <QMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPaintEvent>
 #include <QPen>
 
 #include "sound_mind/core/compositor.h"
+#include "sound_mind/core/paint_application.h"
+#include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/qt_image_conversion.h"
 
 namespace sound_mind::studio {
@@ -52,6 +56,16 @@ void CanvasWidget::setPlayheadFraction(std::optional<double> fraction) {
     update();
 }
 
+void CanvasWidget::setToolMode(ToolMode mode) {
+    toolMode_ = mode;
+    paintStrokeActive_ = false;
+}
+
+void CanvasWidget::setPaintPreviewPath(sound_mind::core::Path path) {
+    paintPreviewPath_ = std::move(path);
+    update();
+}
+
 QSize CanvasWidget::sizeHint() const {
     if (project_ == nullptr) {
         return kFallbackSize;
@@ -88,6 +102,86 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         painter.setPen(QPen(Qt::white, 1));
         painter.drawLine(x, 0, x, rect().height());
     }
+
+    // The live paint-stroke preview (v0.Y.24.1, Basic Painting) - see
+    // setPaintPreviewPath()'s own docs. Drawn as a real cubic Bézier path
+    // via QPainterPath, matching Path's own segment shape exactly rather
+    // than approximating it with straight line segments.
+    if (project_ != nullptr && !paintPreviewPath_.nodes().empty()) {
+        const auto& nodes = paintPreviewPath_.nodes();
+        QPainterPath qPath;
+        qPath.moveTo(timeFrequencyToWidgetPoint(nodes.front().anchor));
+        for (std::size_t i = 0; i + 1 < nodes.size(); ++i) {
+            const auto& start = nodes[i];
+            const auto& end = nodes[i + 1];
+            const QPointF p1 = timeFrequencyToWidgetPoint(start.handleOut.value_or(start.anchor));
+            const QPointF p2 = timeFrequencyToWidgetPoint(end.handleIn.value_or(end.anchor));
+            qPath.cubicTo(p1, p2, timeFrequencyToWidgetPoint(end.anchor));
+        }
+        painter.setPen(QPen(Qt::yellow, 1));
+        painter.drawPath(qPath);
+    }
+}
+
+void CanvasWidget::mousePressEvent(QMouseEvent* event) {
+    if (toolMode_ != ToolMode::Paint || event->button() != Qt::LeftButton) {
+        QWidget::mousePressEvent(event);
+        return;
+    }
+    if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
+        paintStrokeActive_ = true;
+        emit paintStrokeStarted(*point);
+    }
+}
+
+void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
+    if (toolMode_ != ToolMode::Paint || !paintStrokeActive_) {
+        QWidget::mouseMoveEvent(event);
+        return;
+    }
+    if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
+        emit paintStrokeContinued(*point);
+    }
+}
+
+void CanvasWidget::mouseReleaseEvent(QMouseEvent* event) {
+    if (toolMode_ != ToolMode::Paint || !paintStrokeActive_ || event->button() != Qt::LeftButton) {
+        QWidget::mouseReleaseEvent(event);
+        return;
+    }
+    paintStrokeActive_ = false;
+    emit paintStrokeEnded();
+}
+
+std::optional<sound_mind::core::TimeFrequencyPoint> CanvasWidget::widgetPointToTimeFrequency(QPointF point) const {
+    if (project_ == nullptr || rect().width() <= 0 || rect().height() <= 0) {
+        return std::nullopt;
+    }
+    const auto& settings = project_->settings();
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    const double frameIndex = point.x() * static_cast<double>(settings.canvasWidth) / rect().width();
+    const double binIndex = point.y() * static_cast<double>(settings.binCount) / rect().height();
+
+    sound_mind::core::TimeFrequencyPoint result;
+    result.timeSeconds = sound_mind::core::frameIndexToTime(frameIndex, config);
+    result.frequencyHz = sound_mind::core::binIndexToFrequency(static_cast<float>(binIndex), config);
+    return result;
+}
+
+QPointF CanvasWidget::timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint point) const {
+    if (project_ == nullptr) {
+        return QPointF(0.0, 0.0);
+    }
+    const auto& settings = project_->settings();
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    const double frameIndex = sound_mind::core::timeToFrameIndex(point.timeSeconds, config);
+    const double binIndex = sound_mind::core::frequencyToBinIndex(static_cast<float>(point.frequencyHz), config);
+
+    const double x = frameIndex * rect().width() / static_cast<double>(settings.canvasWidth);
+    const double y = binIndex * rect().height() / static_cast<double>(settings.binCount);
+    return QPointF(x, y);
 }
 
 }  // namespace sound_mind::studio
