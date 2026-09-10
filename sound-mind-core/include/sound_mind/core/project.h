@@ -135,6 +135,29 @@ public:
     /// @return The layers this project currently holds.
     [[nodiscard]] std::vector<Layer>& layers() noexcept { return layers_; }
 
+    /**
+     * @brief Finds the layer with the given id, if one exists.
+     *
+     * A small, project-level lookup shared by every caller that needs
+     * "the layer this operation/selection/clipboard targets" from just an
+     * id - `sound-mind-studio`'s `MainWindow`, `PaintController`, and
+     * `SelectionController` each needed the identical few-line linear
+     * search independently before this existed here instead.
+     *
+     * @param id The layer to find.
+     * @return A pointer to that layer, or `nullptr` if no layer with this
+     *         id exists.
+     */
+    [[nodiscard]] const Layer* layerById(LayerId id) const noexcept;
+
+    /// @brief Mutable overload of layerById() - for in-place changes
+    ///        (setting content, renaming, opacity) that don't change the
+    ///        stack's own membership or order.
+    /// @param id The layer to find.
+    /// @return A mutable pointer to that layer, or `nullptr` if no layer
+    ///         with this id exists.
+    [[nodiscard]] Layer* layerById(LayerId id) noexcept;
+
     /// @brief This project's single, project-wide operation log.
     /// @return The operation log this project currently holds.
     [[nodiscard]] const OperationLog& operationLog() const noexcept { return operationLog_; }

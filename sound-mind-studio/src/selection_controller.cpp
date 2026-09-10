@@ -5,6 +5,7 @@
 
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/operation_log.h"
+#include "sound_mind/core/paste_application.h"
 #include "sound_mind/studio/paint_controller.h"
 
 namespace sound_mind::studio {
@@ -23,6 +24,28 @@ sound_mind::core::TimeFrequencyRect rectFromCorners(sound_mind::core::TimeFreque
     return rect;
 }
 
+/// @brief The "silence floor" dB value used throughout the codebase for
+/// "as quiet as this representation goes" - the same constant
+/// `color_conversion.h`'s own display range and Codec's Pool file
+/// quantization already use.
+constexpr float kSilenceDb = -96.0f;
+
+/// @brief An opaque, uniform gradient at the silence floor on both
+/// channels - what cutSelection() writes over its own source region,
+/// standing in for a dedicated "delete" Operation the same way
+/// PickController's own delete reuses an empty-effect PaintOperation.
+sound_mind::core::Gradient silenceGradient() {
+    sound_mind::core::Gradient gradient;
+    sound_mind::core::GradientStop stop;
+    stop.leftIntensity = kSilenceDb;
+    stop.rightIntensity = kSilenceDb;
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    gradient.setStopValues(0, stop);
+    gradient.setStopValues(1, stop);
+    return gradient;
+}
+
 }  // namespace
 
 SelectionController::SelectionController(PaintController* paintController, QObject* parent)
@@ -34,6 +57,8 @@ void SelectionController::setProject(sound_mind::core::Project* project) {
     dragMoved_ = false;
     const bool hadSelection = committedBounds_.has_value();
     committedBounds_.reset();
+    clipboard_.reset();
+    clipboardBounds_.reset();
     emit boundsChanged();
     if (hadSelection) {
         emit selectionChanged();
@@ -115,6 +140,62 @@ void SelectionController::fill(const sound_mind::core::Gradient& gradient) {
     log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_, gradient));
     paintController_->rebuildLayerContent(selectionLayer_);
     emit contentChanged(selectionLayer_);
+}
+
+void SelectionController::copySelection() {
+    if (!committedBounds_.has_value() || project_ == nullptr) {
+        return;
+    }
+    // Ensure selectionLayer_ has real content to capture from - a layer
+    // never painted on yet has none until rebuildLayerContent() lazily
+    // synthesizes its silent base, the same precedent PaintController's
+    // own docs already establish.
+    paintController_->rebuildLayerContent(selectionLayer_);
+    const sound_mind::core::Layer* layer = project_->layerById(selectionLayer_);
+    if (layer == nullptr || !layer->content().has_value()) {
+        return;
+    }
+
+    clipboard_ = sound_mind::core::captureClip(*layer->content(), *committedBounds_);
+    clipboardBounds_ = *committedBounds_;
+}
+
+void SelectionController::cutSelection() {
+    if (!committedBounds_.has_value() || project_ == nullptr) {
+        return;
+    }
+    copySelection();
+
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    const sound_mind::core::OperationId id = log.reserveId();
+    log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_,
+                                                                    silenceGradient()));
+    paintController_->rebuildLayerContent(selectionLayer_);
+    emit contentChanged(selectionLayer_);
+}
+
+void SelectionController::pasteInto(sound_mind::core::LayerId targetLayer) {
+    if (!clipboard_.has_value() || !clipboardBounds_.has_value() || project_ == nullptr) {
+        return;
+    }
+    // Ensure targetLayer has real content to paste onto - same reasoning
+    // as copySelection()'s own call.
+    paintController_->rebuildLayerContent(targetLayer);
+
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    const sound_mind::core::OperationId id = log.reserveId();
+    log.append(std::make_unique<sound_mind::core::PasteOperation>(id, targetLayer, *clipboardBounds_, *clipboard_));
+    paintController_->rebuildLayerContent(targetLayer);
+    emit contentChanged(targetLayer);
+
+    // The pasted region becomes the new committed selection, on the layer
+    // it was actually pasted onto - visual confirmation of both where it
+    // landed and (via selectionLayer_) which layer that was, the same way
+    // a freshly drawn selection would be.
+    selectionLayer_ = targetLayer;
+    committedBounds_ = *clipboardBounds_;
+    emit boundsChanged();
+    emit selectionChanged();
 }
 
 }  // namespace sound_mind::studio

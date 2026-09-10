@@ -4,6 +4,7 @@
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/paint_application.h"
+#include "sound_mind/core/paste_operation.h"
 
 using sound_mind::codec::StreamCodecConfig;
 using sound_mind::codec::StreamImage;
@@ -270,7 +271,7 @@ TEST_CASE("rebuildPaintedContent applies every PaintOperation in order, on top o
     }
 }
 
-TEST_CASE("rebuildPaintedContent skips any operation that isn't a PaintOperation or a FillOperation",
+TEST_CASE("rebuildPaintedContent skips any operation that isn't a recognized Operation subtype",
           "[core][paint_application]") {
     const auto config = makeTestConfig();
     const StreamImage base = makeBlankContent(config, 100);
@@ -313,6 +314,40 @@ TEST_CASE("rebuildPaintedContent also applies a FillOperation, mixed in with Pai
     REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, paintFrame, paintBin)] == -10.0f);
 
     REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, 70, 20)] == Catch::Approx(-5.0f));
+}
+
+TEST_CASE("rebuildPaintedContent also applies a PasteOperation, mixed in with Paint/FillOperations",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    const StreamImage base = makeBlankContent(config, 100);
+
+    const Path stroke = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);
+    const PaintOperation paint(1, LayerId{1}, stroke, makeCircleTool(0.05, 0.0f));
+
+    sound_mind::core::TimeFrequencyRect pasteBounds;
+    pasteBounds.startTimeSeconds = frameIndexToTime(60.0, config);
+    pasteBounds.endTimeSeconds = frameIndexToTime(61.0, config);
+    pasteBounds.lowFrequencyHz = binIndexToFrequency(10.0f, config);
+    pasteBounds.highFrequencyHz = binIndexToFrequency(11.0f, config);
+
+    sound_mind::core::Clip clip;
+    clip.frameCount = 2;
+    clip.binCount = 2;
+    clip.leftMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.rightMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.sharedPhaseRadians = {0.0f, 0.0f, 0.0f, 0.0f};
+    const sound_mind::core::PasteOperation paste(2, LayerId{1}, pasteBounds, clip);
+
+    const std::vector<const Operation*> operations = {&paint, &paste};
+    const StreamImage rebuilt = rebuildPaintedContent(base, operations, 2000.0);
+
+    const int paintFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int paintBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, paintFrame, paintBin)] == -10.0f);
+
+    // The clip's own [bin=0][frame=0] corner lands at the paste bounds' own low corner (frame 60, bin 10).
+    REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, 60, 10)] == -1.0f);
+    REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, 61, 11)] == -4.0f);
 }
 
 TEST_CASE("rebuildPaintedContent with no operations returns an unchanged copy of base",

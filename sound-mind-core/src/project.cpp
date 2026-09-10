@@ -97,6 +97,24 @@ LayerId Project::addLayer(Layer layer) {
     return newId;
 }
 
+const Layer* Project::layerById(LayerId id) const noexcept {
+    for (const Layer& layer : layers_) {
+        if (layer.id() == id) {
+            return &layer;
+        }
+    }
+    return nullptr;
+}
+
+Layer* Project::layerById(LayerId id) noexcept {
+    for (Layer& layer : layers_) {
+        if (layer.id() == id) {
+            return &layer;
+        }
+    }
+    return nullptr;
+}
+
 bool Project::removeLayer(LayerId id) {
     const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const Layer& layer) { return layer.id() == id; });
     if (it == layers_.end()) {

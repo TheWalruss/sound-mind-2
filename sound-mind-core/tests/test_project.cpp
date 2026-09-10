@@ -12,6 +12,7 @@
 using sound_mind::codec::PoolImage;
 using sound_mind::codec::StreamImage;
 using sound_mind::core::Layer;
+using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
@@ -81,6 +82,33 @@ TEST_CASE("addLayer appends a layer with a fresh, unique id", "[core][project]")
     CHECK(newId != backgroundId);
     CHECK(project.layers().back().id() == newId);
     CHECK(project.layers().back().name() == "Imported");
+}
+
+TEST_CASE("layerById finds the layer with a matching id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto newId = project.addLayer(Layer(999, "Imported", LayerType::Normal));
+
+    const Layer* found = project.layerById(newId);
+
+    REQUIRE(found != nullptr);
+    CHECK(found->name() == "Imported");
+}
+
+TEST_CASE("layerById returns nullptr for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+
+    REQUIRE(project.layerById(LayerId{999}) == nullptr);
+}
+
+TEST_CASE("layerById's mutable overload allows in-place edits", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto backgroundId = project.layers().front().id();
+
+    Layer* found = project.layerById(backgroundId);
+    REQUIRE(found != nullptr);
+    found->setOpacity(0.5f);
+
+    CHECK(project.layers().front().opacity() == 0.5f);
 }
 
 TEST_CASE("removeLayer removes the layer with the given id and returns true", "[core][project]") {

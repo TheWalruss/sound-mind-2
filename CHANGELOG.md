@@ -6,6 +6,51 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.25.2] - 2026-09-11
+
+The second installment of Phase 3's "Selection & Fill" milestone: Cut,
+Copy, and Paste. Lasso, Wand, and boolean combination remain follow-up
+installments.
+
+### Added
+
+- **Edit menu gained Cut (Ctrl+X)/Copy (Ctrl+C)/Paste (Ctrl+V)** - Copy
+  captures the current selection's own pixels onto an in-memory clipboard;
+  Cut does the same and then silences the source region (a same-bounds
+  `FillOperation` at the silence floor, reusing Fill rather than a
+  dedicated "delete" `Operation`); Paste writes the clipboard back at its
+  own originally-captured position, onto whichever layer is currently
+  active - **not necessarily the layer it was copied from**. A selection,
+  its source layer, and a paste's destination layer are three
+  independently-tracked references, never assumed to coincide.
+- **`sound_mind::core::Clip`/`PasteOperation`** - the third concrete
+  `Operation` subtype. `Clip` is a plain struct of raw amplitude/phase
+  arrays (deliberately not an embedded `sound_mind::codec::StreamImage`,
+  which has no JSON serialization and would have pulled a new dependency
+  into the otherwise JSON-free Codec module boundary). `captureClip()`/
+  `applyPasteOperation()` (new `paste_application.h`) capture a
+  rectangular snapshot and write it back as a direct overwrite - unlike
+  Paint/Fill, a paste is never gradient-blended. `rebuildPaintedContent()`
+  and `OperationLog`'s JSON persistence both now dispatch on three
+  concrete kinds.
+- **`sound_mind::studio::SelectionController` gained a clipboard** -
+  `copySelection()`/`cutSelection()`/`pasteInto(LayerId)`. `pasteInto()`
+  takes the target layer as an explicit argument, resolved by its own
+  caller (`MainWindow::paste()`, from the currently active layer)
+  independently of the clipboard's source layer. After a paste, the
+  committed selection updates to the pasted region, so the result is
+  visibly highlighted the same way a fresh selection would be.
+- **`sound_mind::core::Project::layerById()`** - a shared, project-level
+  "find a layer by id" lookup (const and mutable overloads), promoted out
+  of three independent copies (`MainWindow`, `PaintController`,
+  `SelectionController`'s new clipboard code) that had each reimplemented
+  the same linear search.
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes (257/257 ctest entries), including a dedicated cross-layer paste
+test (copy from one layer, paste onto another). Doxygen docs target
+rebuilds clean, 0 warnings.
+
 ## [0.0.25.1] - 2026-09-10
 
 The first installment of Phase 3's "Selection & Fill" milestone: a

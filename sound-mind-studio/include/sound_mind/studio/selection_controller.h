@@ -6,6 +6,7 @@
 
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/operation.h"
+#include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 
@@ -37,9 +38,23 @@ class PaintController;
  * (`docs/sound-mind-design.md`'s own "Selection" section) not built yet -
  * a plain `TimeFrequencyRect` is all a Rectangle-only selection needs to
  * represent, so that's what this class uses rather than a more general
- * (and, for now, unneeded) region/mask representation. Cut/Copy/Paste are
- * designed too but also not yet implemented here - only Fill is, per this
- * installment's own explicitly scoped-down first pass.
+ * (and, for now, unneeded) region/mask representation.
+ *
+ * **Cut/Copy/Paste, and cross-layer independence**: `copySelection()`/
+ * `cutSelection()` capture the committed selection's own pixels off
+ * `selectionLayer_` (whichever layer the selection was drawn on) into an
+ * owned `sound_mind::core::Clip` on this controller - the clipboard.
+ * `pasteInto()` then writes that clip onto whatever layer its own caller
+ * names, which may be a *different* layer than the one it was copied from
+ * - a `PasteOperation`'s own `targetLayer` is independent of both the
+ * clipboard's origin layer and the selection's own `selectionLayer_`, per
+ * `PasteOperation`'s own docs. `cutSelection()` is Copy plus a same-bounds
+ * `FillOperation` on `selectionLayer_` written with an opaque, ~-96dB
+ * ("silence floor", the same constant `color_conversion.h`'s own display
+ * range and Codec's Pool quantization already use) gradient on both
+ * channels - reusing `FillOperation` rather than inventing a dedicated
+ * "delete" `Operation` subtype, the same way `PickController`'s own delete
+ * reuses an empty-effect `PaintOperation`.
  */
 class SelectionController : public QObject {
     Q_OBJECT
@@ -59,8 +74,11 @@ public:
     /**
      * @brief Sets which project selection/fill targets.
      *
-     * Clears the current selection and any in-progress drag - both are
-     * meaningless once the project they refer to is gone.
+     * Clears the current selection, any in-progress drag, and the
+     * clipboard - all three are meaningless once the project they refer to
+     * is gone (a clipped clip's own pixel dimensions are tied to the
+     * project's own Stream config, which a different project need not
+     * share).
      *
      * @param project The project to select within; may be `nullptr`
      *        (nothing selectable until a real one is set again).
@@ -146,6 +164,60 @@ public:
      */
     void fill(const sound_mind::core::Gradient& gradient);
 
+    /// @brief Whether a clip is currently on the clipboard (from a prior
+    ///        copySelection()/cutSelection()).
+    /// @return `true` if a clip is available to paste.
+    [[nodiscard]] bool hasClipboard() const noexcept { return clipboard_.has_value(); }
+
+    /**
+     * @brief Copies the current committed selection's own pixels off
+     *        `selectionLayer_` onto the clipboard - the actual work behind
+     *        Edit → Copy. A no-op if there's no committed selection.
+     *
+     * Captures both the pixel data (via `captureClip()`) and the
+     * selection's own bounds (so a later pasteInto() lands exactly where
+     * the selection was, regardless of what's selected by then) - neither
+     * is re-derived from whatever the selection happens to be at paste
+     * time.
+     */
+    void copySelection();
+
+    /**
+     * @brief Copies the current committed selection (see copySelection())
+     *        and then clears its own source pixels on `selectionLayer_` -
+     *        the actual work behind Edit → Cut. A no-op if there's no
+     *        committed selection.
+     *
+     * The "clear" is a same-bounds `FillOperation` with an opaque,
+     * ~silence-floor gradient - see this class's own docs - appended and
+     * replayed the same way Fill's own `fill()` already is; it targets
+     * `selectionLayer_` specifically, independent of wherever a later
+     * pasteInto() writes to.
+     *
+     * Emits contentChanged() for `selectionLayer_`.
+     */
+    void cutSelection();
+
+    /**
+     * @brief Pastes the current clipboard onto `targetLayer`, at the
+     *        bounds it was originally copied from - the actual work behind
+     *        Edit → Paste. A no-op if hasClipboard() is `false`.
+     *
+     * `targetLayer` is resolved by the caller (typically "whichever layer
+     * is currently active"), independently of the clipboard's own source
+     * layer - the same "may not be the same layer" independence
+     * `PasteOperation`'s own docs describe. After pasting, the committed
+     * selection is updated to the pasted region on `targetLayer`, so the
+     * result is visibly highlighted the same way a fresh selection would
+     * be.
+     *
+     * Emits contentChanged() for `targetLayer`, boundsChanged(), and
+     * selectionChanged().
+     *
+     * @param targetLayer Which layer to paste onto.
+     */
+    void pasteInto(sound_mind::core::LayerId targetLayer);
+
 signals:
     /// @brief Emitted whenever displayBounds() would return something
     ///        different - a drag updating live, a selection committed,
@@ -169,6 +241,9 @@ private:
 
     std::optional<sound_mind::core::TimeFrequencyRect> committedBounds_;
     sound_mind::core::LayerId selectionLayer_ = 0;
+
+    std::optional<sound_mind::core::Clip> clipboard_;
+    std::optional<sound_mind::core::TimeFrequencyRect> clipboardBounds_;
 
     bool dragActive_ = false;
     bool dragMoved_ = false;

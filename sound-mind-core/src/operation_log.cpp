@@ -5,6 +5,7 @@
 
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/paint_operation.h"
+#include "sound_mind/core/paste_operation.h"
 
 namespace sound_mind::core {
 
@@ -59,17 +60,18 @@ namespace {
 /// reconstruct on load, since `Operation` itself is abstract.
 constexpr const char* kPaintOperationKind = "paint";
 constexpr const char* kFillOperationKind = "fill";
+constexpr const char* kPasteOperationKind = "paste";
 
 }  // namespace
 
 void to_json(nlohmann::json& json, const OperationLog& log) {
     nlohmann::json operations = nlohmann::json::array();
     for (const auto& operation : log.operations_) {
-        // A plain if/else-if dispatch, not a visitor - two concrete
-        // subtypes so far (PaintOperation, FillOperation) is still few
-        // enough that a real dispatch mechanism would be speculative
-        // machinery for a problem this doesn't have yet; revisit once a
-        // third subtype makes the chain unwieldy.
+        // A plain if/else-if dispatch, not a visitor - three concrete
+        // subtypes (PaintOperation, FillOperation, PasteOperation) is still
+        // few enough that a real dispatch mechanism would be speculative
+        // machinery for a problem this doesn't have yet; revisit if a
+        // fourth subtype makes the chain unwieldy.
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation.get())) {
             nlohmann::json entry;
             entry["kind"] = kPaintOperationKind;
@@ -91,6 +93,17 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
             entry["targetLayer"] = *fill->targetLayer();
             entry["bounds"] = fill->bounds();
             entry["gradient"] = fill->gradient();
+            operations.push_back(std::move(entry));
+        } else if (const auto* paste = dynamic_cast<const PasteOperation*>(operation.get())) {
+            nlohmann::json entry;
+            entry["kind"] = kPasteOperationKind;
+            entry["id"] = paste->id();
+            if (const auto supersedes = paste->supersedes(); supersedes.has_value()) {
+                entry["supersedes"] = *supersedes;
+            }
+            entry["targetLayer"] = *paste->targetLayer();
+            entry["placement"] = paste->bounds();
+            entry["clip"] = paste->clip();
             operations.push_back(std::move(entry));
         }
     }
@@ -124,6 +137,16 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
                 Gradient gradient = entry.at("gradient").get<Gradient>();
                 log.operations_.push_back(std::make_unique<FillOperation>(id, targetLayer, bounds,
                                                                             std::move(gradient), supersedes));
+            } else if (kind == kPasteOperationKind) {
+                const OperationId id = entry.at("id").get<OperationId>();
+                const std::optional<OperationId> supersedes =
+                    entry.contains("supersedes") ? std::optional(entry.at("supersedes").get<OperationId>())
+                                                  : std::nullopt;
+                const LayerId targetLayer = entry.at("targetLayer").get<LayerId>();
+                TimeFrequencyRect placement = entry.at("placement").get<TimeFrequencyRect>();
+                Clip clip = entry.at("clip").get<Clip>();
+                log.operations_.push_back(std::make_unique<PasteOperation>(id, targetLayer, placement,
+                                                                             std::move(clip), supersedes));
             } else {
                 throw std::invalid_argument("OperationLog: unrecognized operation kind \"" + kind + "\"");
             }

@@ -125,13 +125,14 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
  *        layer. Each entry is dispatched to whichever concrete apply
  *        function matches its own runtime type (`applyPaintOperation()`
  *        for a `PaintOperation`, `applyFillOperation()` for a
- *        `FillOperation` - see `fill_application.h`); any other/future
- *        `Operation` subtype is skipped rather than erroring, the same
- *        forward-tolerant handling every other `dynamic_cast`-based
+ *        `FillOperation` - see `fill_application.h` -, `applyPasteOperation()`
+ *        for a `PasteOperation` - see `paste_application.h`); any other/
+ *        future `Operation` subtype is skipped rather than erroring, the
+ *        same forward-tolerant handling every other `dynamic_cast`-based
  *        dispatch in this codebase already uses.
  * @param frequencyToTimeScale Passed through to applyPaintOperation() for
  *        each `PaintOperation` replayed - see its own docs. `FillOperation`
- *        has no equivalent need for it (see `applyFillOperation()`'s own
+ *        and `PasteOperation` have no equivalent need for it (see their own
  *        docs).
  * @return A fresh `StreamImage`: `base`, with every operation in
  *         `operations` applied on top, in order.

@@ -1,0 +1,86 @@
+#include <catch2/catch_test_macros.hpp>
+#include <nlohmann/json.hpp>
+
+#include "sound_mind/core/paste_operation.h"
+
+using sound_mind::core::Clip;
+using sound_mind::core::LayerId;
+using sound_mind::core::OperationId;
+using sound_mind::core::PasteOperation;
+using sound_mind::core::TimeFrequencyRect;
+
+namespace {
+
+TimeFrequencyRect makeTestBounds() {
+    TimeFrequencyRect bounds;
+    bounds.startTimeSeconds = 0.2;
+    bounds.endTimeSeconds = 0.5;
+    bounds.lowFrequencyHz = 300.0;
+    bounds.highFrequencyHz = 900.0;
+    return bounds;
+}
+
+Clip makeTestClip() {
+    Clip clip;
+    clip.frameCount = 2;
+    clip.binCount = 2;
+    clip.leftMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.rightMagnitudeDb = {-5.0f, -6.0f, -7.0f, -8.0f};
+    clip.sharedPhaseRadians = {0.1f, 0.2f, 0.3f, 0.4f};
+    return clip;
+}
+
+}  // namespace
+
+TEST_CASE("PasteOperation reports the id, target layer, bounds, and clip it was constructed with",
+          "[core][paste_operation]") {
+    const PasteOperation op(9, LayerId{4}, makeTestBounds(), makeTestClip());
+    REQUIRE(op.id() == OperationId{9});
+    REQUIRE(op.targetLayer().has_value());
+    REQUIRE(op.targetLayer().value() == LayerId{4});
+}
+
+TEST_CASE("PasteOperation has no supersedes reference unless one is given", "[core][paste_operation]") {
+    const PasteOperation op(1, LayerId{1}, makeTestBounds(), makeTestClip());
+    REQUIRE_FALSE(op.supersedes().has_value());
+}
+
+TEST_CASE("PasteOperation can record which prior operation it supersedes", "[core][paste_operation]") {
+    const PasteOperation op(2, LayerId{1}, makeTestBounds(), makeTestClip(), OperationId{1});
+    REQUIRE(op.supersedes().has_value());
+    REQUIRE(op.supersedes().value() == OperationId{1});
+}
+
+TEST_CASE("PasteOperation's bounds() is exactly what it was constructed with (its placement)",
+          "[core][paste_operation]") {
+    const TimeFrequencyRect bounds = makeTestBounds();
+    const PasteOperation op(1, LayerId{1}, bounds, makeTestClip());
+    const auto opBounds = op.bounds();
+    REQUIRE(opBounds.startTimeSeconds == bounds.startTimeSeconds);
+    REQUIRE(opBounds.endTimeSeconds == bounds.endTimeSeconds);
+    REQUIRE(opBounds.lowFrequencyHz == bounds.lowFrequencyHz);
+    REQUIRE(opBounds.highFrequencyHz == bounds.highFrequencyHz);
+}
+
+TEST_CASE("PasteOperation carries its own clip", "[core][paste_operation]") {
+    const Clip clip = makeTestClip();
+    const PasteOperation op(1, LayerId{1}, makeTestBounds(), clip);
+    REQUIRE(op.clip().frameCount == clip.frameCount);
+    REQUIRE(op.clip().binCount == clip.binCount);
+    REQUIRE(op.clip().leftMagnitudeDb == clip.leftMagnitudeDb);
+    REQUIRE(op.clip().rightMagnitudeDb == clip.rightMagnitudeDb);
+    REQUIRE(op.clip().sharedPhaseRadians == clip.sharedPhaseRadians);
+}
+
+TEST_CASE("A Clip round-trips through JSON", "[core][paste_operation]") {
+    const Clip clip = makeTestClip();
+
+    const nlohmann::json json = clip;
+    const Clip restored = json.get<Clip>();
+
+    REQUIRE(restored.frameCount == clip.frameCount);
+    REQUIRE(restored.binCount == clip.binCount);
+    REQUIRE(restored.leftMagnitudeDb == clip.leftMagnitudeDb);
+    REQUIRE(restored.rightMagnitudeDb == clip.rightMagnitudeDb);
+    REQUIRE(restored.sharedPhaseRadians == clip.sharedPhaseRadians);
+}

@@ -16,4 +16,14 @@ private slots:
     void fillAppendsAFillOperationOverTheCommittedSelection();
     void fillIsANoOpWithNoCommittedSelection();
     void setProjectClearsSelectionAndAnyInProgressDrag();
+    void freshControllerHasNoClipboard();
+    void copySelectionCapturesTheSelectionOntoTheClipboard();
+    void copySelectionIsANoOpWithNoCommittedSelection();
+    void cutSelectionCopiesThenSilencesTheSourceRegion();
+    void cutSelectionIsANoOpWithNoCommittedSelection();
+    void pasteIntoWritesTheClipboardOntoTheGivenLayer();
+    void pasteIntoCanTargetADifferentLayerThanItWasCopiedFrom();
+    void pasteIntoIsANoOpWithNoClipboard();
+    void pasteIntoUpdatesTheCommittedSelectionToThePastedRegion();
+    void setProjectClearsTheClipboardToo();
 };

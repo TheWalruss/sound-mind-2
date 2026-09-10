@@ -724,6 +724,35 @@ public slots:
      */
     void fillSelection();
 
+    /**
+     * @brief Copies the current selection's own pixels onto the clipboard -
+     *        the actual work behind the Edit menu's Copy action. Delegates
+     *        to `SelectionController::copySelection()`; a no-op if there's
+     *        no committed selection.
+     */
+    void copySelection();
+
+    /**
+     * @brief Copies the current selection (see copySelection()) and clears
+     *        its own source pixels - the actual work behind the Edit
+     *        menu's Cut action. Delegates to
+     *        `SelectionController::cutSelection()`; a no-op if there's no
+     *        committed selection.
+     */
+    void cutSelection();
+
+    /**
+     * @brief Pastes the clipboard onto whichever layer a freehand stroke
+     *        started right now would paint into (`paintTargetLayerId()`) -
+     *        the actual work behind the Edit menu's Paste action.
+     *
+     * The paste target is resolved independently of the clipboard's own
+     * source layer - per `SelectionController::pasteInto()`'s own docs, a
+     * copy from one layer can be pasted onto a completely different one.
+     * A no-op if there's nothing on the clipboard, or no project is open.
+     */
+    void paste();
+
 public:
     /**
      * @brief Opens the project at `path` as the current project, without

@@ -10,21 +10,6 @@
 
 namespace sound_mind::studio {
 
-namespace {
-
-/// @brief Finds a layer by id within `project`'s own layer stack.
-/// @return A pointer to the layer, or `nullptr` if no layer with that id exists.
-sound_mind::core::Layer* findLayer(sound_mind::core::Project& project, sound_mind::core::LayerId id) {
-    for (auto& layer : project.layers()) {
-        if (layer.id() == id) {
-            return &layer;
-        }
-    }
-    return nullptr;
-}
-
-}  // namespace
-
 PaintController::PaintController(QObject* parent) : QObject(parent) {}
 
 void PaintController::setProject(sound_mind::core::Project* project) {
@@ -142,7 +127,7 @@ void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {
     if (project_ == nullptr) {
         return;
     }
-    sound_mind::core::Layer* target = findLayer(*project_, layer);
+    sound_mind::core::Layer* target = project_->layerById(layer);
     if (target == nullptr) {
         return;
     }

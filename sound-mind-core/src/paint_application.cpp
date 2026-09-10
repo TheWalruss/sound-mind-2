@@ -5,6 +5,8 @@
 
 #include "sound_mind/core/fill_application.h"
 #include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/paste_application.h"
+#include "sound_mind/core/paste_operation.h"
 
 namespace sound_mind::core {
 
@@ -254,6 +256,8 @@ sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::St
             applyPaintOperation(*paint, frequencyToTimeScale, result);
         } else if (const auto* fill = dynamic_cast<const FillOperation*>(operation)) {
             applyFillOperation(*fill, result);
+        } else if (const auto* paste = dynamic_cast<const PasteOperation*>(operation)) {
+            applyPasteOperation(*paste, result);
         }
     }
     return result;

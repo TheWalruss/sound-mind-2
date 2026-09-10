@@ -307,10 +307,20 @@ itself, only to having drawn one.
   its own boundary. The color's red channel controls how loud the left
   channel is filled, green controls the right - the same convention
   Painting's own Color control uses.
+- **Copy** it - **Edit → Copy** (Ctrl+C) captures the selection's own
+  pixels onto the clipboard, leaving them in place.
+- **Cut** it - **Edit → Cut** (Ctrl+X) does the same as Copy, then
+  silences the selection's own region in place.
+- **Paste** the clipboard - **Edit → Paste** (Ctrl+V) writes it back at
+  the same position it was captured from, onto whichever layer is
+  currently active in the Layers panel - which doesn't have to be the
+  layer it was copied or cut from. Select a different layer's row first
+  to paste onto it instead.
 - **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
   actually dragging (a plain click) on the canvas while in Select mode.
 
-Filling is undoable (Ctrl+Z), the same as painting a stroke.
+Filling and pasting are both undoable (Ctrl+Z), the same as painting a
+stroke; so is Cut's own silencing of the source region.
 
 Only rectangular selections exist today - see
 [What's Not Here Yet](#whats-not-here-yet) for what's still planned.
@@ -409,7 +419,9 @@ but only a fraction of what's designed for it:
 - Only **Rectangle** selection - Lasso (freehand) and Wand (flood-fill by
   amplitude similarity) aren't built yet, and there's no way yet to
   combine multiple selections (add/subtract/intersect).
-- No **Cut**, **Copy**, or **Paste** - Fill is the only operation a
-  selection currently scopes.
+- **Paste** always lands back at the exact position it was copied/cut
+  from - there's no click-to-place gesture yet to paste somewhere else on
+  the same layer (pasting onto a *different* layer is supported today;
+  see [Selection and Fill](#selection-and-fill) above).
 - Fill only ever produces a uniform color, not a real two-color gradient
   across the selection - there's no UI yet to pick a second color.

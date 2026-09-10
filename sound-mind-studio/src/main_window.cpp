@@ -405,6 +405,26 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* fillAction = editMenu->addAction(tr("&Fill Selection..."));
     connect(fillAction, &QAction::triggered, this, &MainWindow::fillSelection);
 
+    editMenu->addSeparator();
+
+    // Cut/Copy/Paste (v0.Y.25.2): the standard shortcuts every other
+    // editor already uses. Cut/Copy are no-ops (per copySelection()'s/
+    // cutSelection()'s own docs) with no committed selection; Paste is a
+    // no-op with nothing on the clipboard - none of the three are enabled/
+    // disabled in sync with that state, the same "always present, no-op
+    // when inapplicable" choice deleteAction above already makes.
+    QAction* cutAction = editMenu->addAction(tr("Cu&t"));
+    cutAction->setShortcut(QKeySequence::Cut);
+    connect(cutAction, &QAction::triggered, this, &MainWindow::cutSelection);
+
+    QAction* copyAction = editMenu->addAction(tr("&Copy"));
+    copyAction->setShortcut(QKeySequence::Copy);
+    connect(copyAction, &QAction::triggered, this, &MainWindow::copySelection);
+
+    QAction* pasteAction = editMenu->addAction(tr("&Paste"));
+    pasteAction->setShortcut(QKeySequence::Paste);
+    connect(pasteAction, &QAction::triggered, this, &MainWindow::paste);
+
     QToolBar* transportToolBar = addToolBar(tr("Transport"));
     // Plain text actions rather than icons - no icon assets exist yet, and
     // these are unambiguous enough on their own for a first pass.
@@ -1088,12 +1108,7 @@ sound_mind::core::Layer* MainWindow::layerById(sound_mind::core::LayerId id) {
     if (!project_) {
         return nullptr;
     }
-    for (auto& layer : project_->layers()) {
-        if (layer.id() == id) {
-            return &layer;
-        }
-    }
-    return nullptr;
+    return project_->layerById(id);
 }
 
 std::optional<sound_mind::core::LayerId> MainWindow::paintTargetLayerId() const {
@@ -1348,6 +1363,19 @@ void MainWindow::fillSelection() {
     const QColor picked = QColorDialog::getColor(QColor(255, 255, 0), this, tr("Fill Selection"));
     if (picked.isValid()) {
         fillSelectionWith(picked);
+    }
+}
+
+void MainWindow::copySelection() { selectionController_->copySelection(); }
+
+void MainWindow::cutSelection() { selectionController_->cutSelection(); }
+
+void MainWindow::paste() {
+    // The paste target is resolved fresh, right now - independent of
+    // whichever layer the clipboard was originally copied from - per
+    // SelectionController::pasteInto()'s own docs.
+    if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+        selectionController_->pasteInto(*layerId);
     }
 }
 

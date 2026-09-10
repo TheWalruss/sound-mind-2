@@ -356,11 +356,13 @@ A plain procedural brush (tip shape + falloff, no harmonic model yet) painting i
 
 **Implemented as** ten separately-tested installments (`v0.0.24.1` through `v0.0.24.10`, see `CHANGELOG.md`/`docs/sound-mind-architecture.md`'s Decisions #34-45 for each one's own rationale), going beyond the roadmap sketch above per explicit user direction at the milestone's outset: the Core data model (`Path`/`Gradient`/`ToolConfiguration`), the procedural brush DSP, `PaintController`'s session orchestration, real canvas mouse painting with a live preview, a full dockable Tool Configuration Panel (tip shape, falloff, size, a Color swatch for stereo balance, opacity, and the "Show bounding boxes"/"Show path geometry" overlays) rather than just the roadmap's bare "plain procedural brush", a "+ Add Layer" button, a status-bar cursor position readout, the Background layer made genuinely paintable, and - the final piece - Pick (select/move/modify-via-panel/delete a painted stroke, all as new, non-destructive `PaintOperation`s superseding the one acted on). Still open, and explicitly out of this milestone's own scope: the Tool Configuration Wizard, every paintbrush type past Procedural, the non-brush painting tools (Smudge, Order/Chaos, Heal, Soften, Clone), and manual Path node/handle editing (deferred to `v0.Y.26.1`'s own Path tool, which Pick's own "modify" will extend to reuse once it exists).
 
-### v0.Y.25.1 - Selection & Fill
+### v0.Y.25.1 - Selection & Fill ✅
 
 Rectangle, Lasso, and Wand selection with boolean combination; cut/copy/paste; the Gradient model; Fill.
 
 **Demo:** select a region, cut it, paste it elsewhere, fill another region with a gradient.
+
+**Implemented as** two separately-tested installments (`v0.0.25.1`-`v0.0.25.2`, see `CHANGELOG.md`/`docs/sound-mind-architecture.md`'s Decisions #46-47), per explicit user-confirmed scope at the milestone's outset: Rectangle selection, Fill (color/gradient, confined exactly to the selection), and Cut/Copy/Paste (independently tracking a selection's source layer, what Cut clears, and Paste's destination layer as three potentially-different layers). The demo above is fully reachable with this scope. Still open, and explicitly out of this milestone's own confirmed scope: Lasso, Wand, and boolean combination between selections (`FillOperation`'s own `bounds()` stays a plain `TimeFrequencyRect` until one of these needs a real mask/region representation), and Rectangle's own rotate handle.
 
 ### v0.Y.26.1 - Paths & Grids
 

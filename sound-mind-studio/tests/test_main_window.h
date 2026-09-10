@@ -166,4 +166,9 @@ private slots:
     void deselectClearsTheCurrentSelectionSoFillBecomesANoOp();
     void fillSelectionWithIsANoOpWithNoSelection();
     void settingANewProjectResetsSelectModeToOff();
+    void copyThenPasteOnTheSameLayerReproducesTheSelection();
+    void cutClearsTheSourceRegionButPasteStillReproducesIt();
+    void pasteCanTargetADifferentLayerThanItWasCopiedFrom();
+    void pasteIsANoOpWithNoClipboard();
+    void copySelectionIsANoOpWithNoSelection();
 };

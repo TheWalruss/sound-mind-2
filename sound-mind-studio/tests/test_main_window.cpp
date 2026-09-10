@@ -2716,3 +2716,124 @@ void MainWindowTest::settingANewProjectResetsSelectModeToOff() {
     QVERIFY(canvas != nullptr);
     QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
 }
+
+namespace {
+
+/// @brief Whether any pixel in `content`'s own left channel is loud
+/// (above -50dB) - the same threshold drawingASelectionAndFillingItChanges
+/// TheLayersContent() already uses to confirm a Fill actually wrote
+/// something, reused here to confirm Cut/Copy/Paste moved real pixels.
+bool anyLoudLeftChannelPixel(const sound_mind::codec::StreamImage& content) {
+    return std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                        [](float value) { return value > -50.0f; });
+}
+
+}  // namespace
+
+void MainWindowTest::copyThenPasteOnTheSameLayerReproducesTheSelection() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-copy-paste-same-layer.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    window.fillSelectionWith(QColor(255, 0, 0));  // pure red - loud left channel.
+    window.copySelection();
+    window.fillSelectionWith(QColor(0, 0, 0));  // black - silences the same region again.
+
+    QVERIFY(!anyLoudLeftChannelPixel(*window.project()->layers().back().content()));
+
+    window.paste();
+
+    QVERIFY(anyLoudLeftChannelPixel(*window.project()->layers().back().content()));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{3});  // fill, fill, paste - copy logs nothing.
+}
+
+void MainWindowTest::cutClearsTheSourceRegionButPasteStillReproducesIt() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-cut-paste-same-layer.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    window.fillSelectionWith(QColor(255, 0, 0));
+    window.cutSelection();  // captures the loud pixels onto the clipboard, then silences them in place.
+
+    QVERIFY(!anyLoudLeftChannelPixel(*window.project()->layers().back().content()));
+
+    window.paste();
+
+    QVERIFY(anyLoudLeftChannelPixel(*window.project()->layers().back().content()));
+}
+
+void MainWindowTest::pasteCanTargetADifferentLayerThanItWasCopiedFrom() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-paste-cross-layer.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    const auto sourceLayerId = window.project()->layers().back().id();  // Background, still the only layer.
+
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+    window.fillSelectionWith(QColor(255, 0, 0));
+    window.cutSelection();
+
+    // Switch the active layer via a real "+ Add Layer" gesture - the same
+    // one addEmptyLayerAddsASilentLayerAndSelectsIt() covers - so
+    // paintTargetLayerId() (and therefore paste()) now resolves to a
+    // genuinely different layer than the one the clip was captured from.
+    auto* panel = window.findChild<LayersPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* addButton = panel->findChild<QPushButton*>(QStringLiteral("addLayerButton"));
+    QVERIFY(addButton != nullptr);
+    addButton->click();
+    const auto targetLayerId = window.project()->layers().back().id();
+    QVERIFY(targetLayerId != sourceLayerId);
+
+    window.paste();
+
+    // Landed on the *target* layer, not back on the source - and the
+    // source's own region stays silenced (Cut's own clear), not restored
+    // by pasting elsewhere.
+    QVERIFY(!anyLoudLeftChannelPixel(*window.project()->layerById(sourceLayerId)->content()));
+    QVERIFY(anyLoudLeftChannelPixel(*window.project()->layerById(targetLayerId)->content()));
+}
+
+void MainWindowTest::pasteIsANoOpWithNoClipboard() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.paste();
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}
+
+void MainWindowTest::copySelectionIsANoOpWithNoSelection() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.copySelection();
+    window.paste();  // nothing was ever copied, so this is a no-op too.
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}

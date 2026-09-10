@@ -6,13 +6,16 @@
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_operation.h"
+#include "sound_mind/core/paste_operation.h"
 
+using sound_mind::core::Clip;
 using sound_mind::core::FillOperation;
 using sound_mind::core::Gradient;
 using sound_mind::core::LayerId;
 using sound_mind::core::OperationId;
 using sound_mind::core::OperationLog;
 using sound_mind::core::PaintOperation;
+using sound_mind::core::PasteOperation;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
@@ -205,6 +208,39 @@ TEST_CASE("An OperationLog with a mix of PaintOperations and FillOperations roun
     REQUIRE(active.size() == 2);
     REQUIRE(dynamic_cast<const PaintOperation*>(active[0]) != nullptr);
     REQUIRE(dynamic_cast<const FillOperation*>(active[1]) != nullptr);
+}
+
+TEST_CASE("An OperationLog with a PasteOperation round-trips through JSON, targeting a different layer than "
+          "the clip's own bounds might suggest",
+          "[core][operation_log]") {
+    OperationLog log;
+    const OperationId paintId = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(paintId, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+
+    Clip clip;
+    clip.frameCount = 2;
+    clip.binCount = 2;
+    clip.leftMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.rightMagnitudeDb = {-5.0f, -6.0f, -7.0f, -8.0f};
+    clip.sharedPhaseRadians = {0.1f, 0.2f, 0.3f, 0.4f};
+    const OperationId pasteId = log.reserveId();
+    // Deliberately targets a *different* layer than the paint above - a
+    // paste's own target layer is independent of anything else in the log,
+    // per this installment's own "not necessarily the same layer" design.
+    log.append(std::make_unique<PasteOperation>(pasteId, LayerId{2}, TimeFrequencyRect{}, clip));
+
+    const nlohmann::json json = log;
+    const OperationLog roundTripped = json.get<OperationLog>();
+
+    REQUIRE(roundTripped.size() == 2);
+    const auto layerOneOps = roundTripped.activeOperationsTargeting(LayerId{1});
+    const auto layerTwoOps = roundTripped.activeOperationsTargeting(LayerId{2});
+    REQUIRE(layerOneOps.size() == 1);
+    REQUIRE(layerTwoOps.size() == 1);
+    REQUIRE(dynamic_cast<const PaintOperation*>(layerOneOps[0]) != nullptr);
+    const auto* restoredPaste = dynamic_cast<const PasteOperation*>(layerTwoOps[0]);
+    REQUIRE(restoredPaste != nullptr);
+    REQUIRE(restoredPaste->clip().leftMagnitudeDb == clip.leftMagnitudeDb);
 }
 
 TEST_CASE("An OperationLog fails to load JSON with an unrecognized operation kind", "[core][operation_log]") {
