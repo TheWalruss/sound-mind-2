@@ -166,10 +166,13 @@ jobs:
             artifacts/*.msi
           generate_release_notes: true
           body: |
-            Toolchain bring-up milestone (see CHANGELOG.md) - an empty
-            Sound Mind Studio window, proving the whole build chain
-            (CMake, vcpkg, MSVC, Qt, CI, packaging) works end to end, not
-            yet any real Studio functionality.
+            Sound Mind Studio treats sound as a picture - encoding audio
+            as a spectrogram you can import, layer, play back, loop, and
+            record onto, then decoding it back into audio with no extra
+            step. See `CHANGELOG.md` for exactly what's new in this
+            build, `USER_GUIDE.md` for every screen and control, and
+            `docs/sound-mind-roadmap.md` for what's planned next -
+            painting directly onto the spectrogram is still ahead.
 
             Two ways to get it, per architecture: a zip you extract and
             run directly, or an `.msi` installer (built with WiX) that
