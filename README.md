@@ -1,9 +1,29 @@
-# sound-mind-2
-The official Sound Mind Project
+# Sound Mind Studio
 
-See `docs/sound-mind-design.md` for what this is, and
-`docs/sound-mind-architecture.md` / `docs/tech-stack-decisions.md` for how
-it's being built.
+Sound Mind Studio treats sound as a picture. It encodes audio as a
+spectrogram — a time/frequency image — that you can import, layer, and
+(eventually) paint on directly, then decodes it back into audio with no
+extra step. Horizontal position is time, vertical position is frequency,
+brightness is loudness, and color separates the left and right channels.
+Import a recording and you're looking at it; import an image and you're
+listening to it.
+
+This is a from-scratch C++/Qt/JUCE rewrite of an earlier Python prototype,
+built incrementally and tracked openly - see `CHANGELOG.md` for exactly
+what's implemented so far and `docs/sound-mind-roadmap.md` for what's
+planned next. The full creative vision (painting, filters, MindWaves,
+generators, a VST plugin, and more) is recorded in
+`docs/sound-mind-design.md`, but most of it is still ahead of where the
+Studio actually is today - **the guides below describe only what you can
+actually do right now.**
+
+- **New to the Studio?** Start with [`QUICKSTART.md`](QUICKSTART.md) - one
+  page, from launching the app to your first saved project.
+- **Want the full picture?** [`USER_GUIDE.md`](USER_GUIDE.md) covers every
+  screen and control in the current build.
+- **Building from source, or curious how it's built?**
+  `docs/sound-mind-architecture.md` and `docs/tech-stack-decisions.md`
+  cover the technical design; keep reading below for build instructions.
 
 ## Building
 

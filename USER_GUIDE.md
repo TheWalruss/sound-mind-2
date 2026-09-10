@@ -1,0 +1,267 @@
+# Sound Mind Studio - User Guide
+
+This guide covers every screen and control in the current build. Sound
+Mind Studio is under active development - `CHANGELOG.md` lists exactly
+what's shipped, and the [What's Not Here Yet](#whats-not-here-yet) section
+at the end of this guide is honest about what's planned but not yet
+usable. If something described here doesn't match what you see, the
+in-app behavior is correct and this guide is due an update.
+
+## Contents
+
+1. [What Sound Mind Studio Is](#what-sound-mind-studio-is)
+2. [Starting Out](#starting-out)
+3. [Creating a Project](#creating-a-project)
+4. [The Main Window](#the-main-window)
+5. [Importing Media](#importing-media)
+6. [Working with Layers](#working-with-layers)
+7. [Playback](#playback)
+8. [Recording](#recording)
+9. [Loop Mode](#loop-mode)
+10. [Pooling a Layer](#pooling-a-layer)
+11. [Exporting](#exporting)
+12. [Saving and Project Files](#saving-and-project-files)
+13. [What's Not Here Yet](#whats-not-here-yet)
+
+## What Sound Mind Studio Is
+
+Sound Mind Studio encodes sound as a **spectrogram** - a picture of that
+sound - and can decode any spectrogram-shaped picture back into sound. The
+two are treated as one continuous thing, not a conversion with something
+lost in translation:
+
+- **Horizontal axis** - time, left to right.
+- **Vertical axis** - frequency, low at the bottom, high at the top.
+- **Brightness** - loudness at that frequency, at that moment.
+- **Color** - red is the left channel's loudness, green is the right
+  channel's, and blue carries phase (roughly, the fine detail that shapes
+  timbre rather than pitch or volume).
+
+Import an audio file and you'll see its spectrogram. Import an ordinary
+photo and the Studio will treat its pixels as amplitude/phase data and let
+you hear it - "sound and image are one continuous surface" is the
+project's own design principle for this, not a side effect.
+
+## Starting Out
+
+Launching the Studio shows the **start screen** with two buttons and a
+list:
+
+- **New Project...** - opens the [Create Project wizard](#creating-a-project).
+- **Open Project...** - browse to an existing `.smproj` file.
+- **Recent Projects** - your most recently opened projects, click one to
+  reopen it directly.
+
+## Creating a Project
+
+The Create Project wizard asks for:
+
+- **Name** - the project's display name and file name.
+- **Save Folder** - where the project file and its data folder are
+  created (use **Browse...** to pick one).
+- **Duration** - roughly how much time the canvas holds, in seconds. This
+  sets the canvas's width in practice - importing audio longer than this
+  splits it into duration-length pieces you choose from individually (see
+  [Importing Audio](#importing-audio)) rather than truncating it.
+
+Click **Advanced** to also set:
+
+- **Sample Rate** - the audio sample rate new imports/recordings are
+  encoded at (Hz).
+- **Min Frequency** / **Max Frequency** - the frequency range the
+  spectrogram covers. Content outside this range isn't represented.
+- **Bin Count** - how many frequency bins tall the spectrogram is - more
+  bins means finer vertical (pitch) resolution, at the cost of more data
+  per layer.
+- **Timestep** - milliseconds per horizontal pixel - smaller means finer
+  time resolution, and more columns for the same Duration.
+
+The defaults are reasonable for general use; there's no wrong answer to
+start with, and nothing here is locked in stone until real data is
+imported at that resolution.
+
+## The Main Window
+
+Once a project is open, the window has:
+
+- **The canvas** (center) - shows the current spectrogram. See
+  [Working with Layers](#working-with-layers) for exactly which layer
+  that is.
+- **Layers panel** (right, by default) - lists every layer in the
+  project, top of the stack first.
+- **Playback / Record / Loop panels** - dockable panels, toggled from the
+  toolbar buttons next to **Pool Layer**; each is covered in its own
+  section below. They start hidden - click the matching toolbar button to
+  show one.
+- **File menu** - New/Open/Save/Save As, Import Audio/Image, Export
+  Audio/Video.
+- **Pool Layer** toolbar button - see [Pooling a Layer](#pooling-a-layer).
+
+Every dock panel can be dragged to a different edge of the window, or
+floated, like any Qt dock widget.
+
+## Importing Media
+
+### Importing Audio
+
+**File → Import Audio...** prompts for a WAV file. If it's no longer than
+your project's Duration, it's imported directly as one new layer. If it's
+longer, it's split into consecutive Duration-length snippets and you're
+shown a list to check/uncheck - only the checked snippets become layers,
+named `<filename>_0000`, `<filename>_0001`, and so on.
+
+### Importing Images
+
+**File → Import Image...** lets you select one or more image files
+(PNG/JPG/JPEG/BMP/TGA/WebP), then asks how to fit each to the project's
+canvas dimensions:
+
+- **Rescale to fit project** - stretched to exactly fill the canvas,
+  ignoring the source's own aspect ratio. The default.
+- **Scale vertically to fit project, keep horizontal resolution** - height
+  matches the canvas; width stays the source's own native pixel width.
+- **Scale horizontally to fit project, keep vertical resolution** - the
+  mirror of the option above.
+- **Scale vertically to fit project, rescale horizontal in proportion** -
+  height matches the canvas; width scales to preserve the source's aspect
+  ratio.
+- **Keep native resolution** - no rescaling at all.
+
+If you selected more than one file, an **Import as sequence** checkbox
+also appears. Checking it disables the options above (a sequence always
+scales proportionally) and lays the images out end-to-end in time instead
+of stacking them independently - files are sequenced in alphabetical
+order regardless of the order you selected them in, which makes a set of
+files like `frame001.png`, `frame002.png`, ... land in the right order
+automatically.
+
+### Drag and Drop
+
+Dragging files onto the main window imports/opens them directly, by
+extension: `.wav` imports as audio (every split snippet, with no picker -
+use the File menu if you want to choose which ones), an image extension
+imports at **Rescale to fit project**, and `.smproj` opens that project
+(after confirming if your current project has unsaved changes). Anything
+else is ignored. If a dropped file fails to import, you'll see a message
+in the status bar rather than a popup - so one bad file in a multi-file
+drop doesn't interrupt the rest.
+
+## Working with Layers
+
+The **Layers** panel lists every layer, top of the stack first. Each row
+has:
+
+- A **drag handle** (⠿) to reorder it, or a **lock icon** (🔒) if it can't
+  be reordered or deleted - only the **Background** layer (always present,
+  bottom of the stack) is locked today.
+- A **visibility toggle** (●/○).
+- The layer's **name** - double-click to rename it.
+- A **type tag**, for any layer type other than the ordinary kind you get
+  from importing.
+- An **opacity slider**.
+- **Translation** and **rescale** spin boxes - see
+  [Layer Timing](#layer-timing) below.
+- A **delete** button (×), for any layer except the locked one(s).
+
+### Important: what's actually shown right now
+
+Sound Mind Studio's eventual design composites every visible layer
+together. **That compositing doesn't exist yet.** Right now, the canvas -
+and Playback, Recording's result, Loop Mode, Pooling, and video export -
+all show or use exactly one layer: the **topmost layer that's both
+visible and has content**, skipping hidden ones. This means:
+
+- The opacity slider doesn't currently have any visible effect - it's
+  there, and it's saved with the project, but nothing reads it yet.
+- Importing a new layer, or reordering one to the top, changes what's on
+  screen and what plays - even without touching visibility.
+- To compare two layers, toggle one's visibility off and the other's on,
+  rather than expecting to see both at once.
+
+### Layer Timing
+
+Two more controls, useful once you have multiple layers you want to line
+up in time:
+
+- **Translation** - shifts a layer's content earlier or later, in
+  spectrogram columns (roughly proportional to time - the exact column
+  width depends on your project's Timestep). Positive moves it later,
+  negative moves it earlier.
+- **Rescale** - stretches (`>1.0x`) or compresses (`<1.0x`) a layer's own
+  timeline, for matching the pacing of two clips that don't quite line
+  up.
+
+Both are visual/timing adjustments to the spectrogram only - they don't
+currently affect a layer's own audio when it's the one being played,
+recorded from, or exported (see the note above: only one layer is ever
+actually played at a time today, so "lining up" two layers is something
+you'll be able to see, by toggling visibility, before you'll be able to
+hear it composited).
+
+## Playback
+
+The **Playback** panel has **Play**, **Pause**, and **Stop**, an output
+device picker, and a volume slider. It plays the topmost visible layer
+with content - see [the note above](#important-whats-actually-shown-right-now).
+Playback reflects the project as it currently stands; there's no separate
+"render" step.
+
+## Recording
+
+The **Record** panel has an input device picker and a **Start
+Recording**/**Stop Recording** toggle. Recording captures from the chosen
+input device into a brand-new layer, encoded the same way an imported file
+would be, the moment you stop.
+
+## Loop Mode
+
+The **Loop** panel turns the Studio into a fixed-length loop pedal:
+**Start Loop** begins continuously capturing input in Duration-length
+passes, playing the previous pass back while it records the next. By
+default each new pass records over the last one, same as a standard loop
+pedal; check **Keep Looping** to freeze whatever's currently playing so it
+just repeats instead of being overwritten. Input and output devices are
+chosen the same way as Playback/Recording; a device change takes effect
+the next time you start the loop, not immediately.
+
+## Pooling a Layer
+
+The **Pool Layer** toolbar button runs the topmost visible layer with
+content through a full, lossless round-trip encode - a slower but
+higher-fidelity representation than the fast, approximate one every import
+and recording normally uses. There's no visible difference for most
+material; it matters most before an audio export you want to sound as
+close as possible to the original.
+
+## Exporting
+
+**File → Export Audio...** saves the topmost visible layer with content as
+FLAC, Ogg Vorbis, or MP3 (pick the format via the save dialog's file type).
+
+**File → Export Video...** saves it as an MP4: the spectrogram, animated
+with the audio played alongside it.
+
+Both act on the same "one layer" rule described above - see
+[the note above](#important-whats-actually-shown-right-now).
+
+## Saving and Project Files
+
+**Ctrl+S** (or **File → Save Project**) saves in place; **File → Save
+Project As...** saves a copy elsewhere. A project is a `.smproj` file plus
+a same-named folder next to it (a `media/` subfolder holding every layer's
+actual encoded data, and a `pool/` subfolder once you've pooled at least
+one layer) - keep the file and its folder together; moving or copying one
+without the other breaks the project.
+
+Closing the window, opening a different project, or starting a new one
+while you have unsaved changes prompts you to save first.
+
+## What's Not Here Yet
+
+The [design document](docs/sound-mind-design.md) describes the Studio's
+full intended scope - painting directly onto the spectrogram, filter
+layers, MindWave-driven modulation, generators, analysis tools, a
+Composer Mode track view, Sound Flower's polar view, MIDI import, chord/
+sequence generation, and a Sound Mind VST plugin, among others none of
+which exist in the Studio yet. `docs/sound-mind-roadmap.md` tracks what's
+actually being built next, in order; this guide will grow alongside it.
