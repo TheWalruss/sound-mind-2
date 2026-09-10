@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <optional>
 
+#include "sound_mind/core/layer.h"
+
 namespace sound_mind::core {
 
 /// @brief Opaque identifier for an Operation within a Project's OperationLog.
@@ -85,6 +87,22 @@ public:
      * @return This operation's time/frequency footprint.
      */
     [[nodiscard]] virtual TimeFrequencyRect bounds() const = 0;
+
+    /**
+     * @brief Which layer's raster content this operation affects, if any.
+     *
+     * Lets `OperationLog` filter to the operations relevant to rebuilding
+     * one layer's cache without needing to know about every concrete
+     * subtype - see `OperationLog::activeOperationsTargeting()`. A
+     * layer-content subtype (`PaintOperation` and friends) overrides this
+     * to return its own `targetLayer`; a structural subtype (e.g. a future
+     * `ReorderLayersOperation`, which targets the project's layer list
+     * itself, not any one layer's content) leaves the base default.
+     *
+     * @return The affected layer's id, or `std::nullopt` for a structural
+     *         operation with no single target layer.
+     */
+    [[nodiscard]] virtual std::optional<LayerId> targetLayer() const noexcept { return std::nullopt; }
 
 protected:
     /**

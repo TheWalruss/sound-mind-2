@@ -52,3 +52,9 @@ TEST_CASE("A concrete Operation subtype reports its own bounds", "[core][operati
     REQUIRE(bounds.lowFrequencyHz == 20.0);
     REQUIRE(bounds.highFrequencyHz == 20000.0);
 }
+
+TEST_CASE("Operation::targetLayer() defaults to nullopt for a structural subtype that doesn't override it",
+          "[core][operation]") {
+    const FakeOperation op(1);
+    REQUIRE_FALSE(op.targetLayer().has_value());
+}

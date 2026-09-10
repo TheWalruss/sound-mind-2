@@ -6,6 +6,47 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.2] - 2026-09-10
+
+Part 2 of the Phase 3 "Basic Painting" milestone - the first real
+`Operation` subtype, and the tool-configuration model painting a stroke
+needs. Still not yet paintable from the UI; the procedural brush's own
+amplitude-writing logic and every Studio-side piece come next.
+
+### Added
+
+- **`sound_mind::core::ToolConfiguration`/`ToolType`/`BrushTipShape`** - a
+  named, savable painting-tool setup (see `docs/sound-mind-design.md`'s
+  "Tool Configuration"). Only `Procedural`'s own parameters (tip shape,
+  falloff, size, a default `Gradient`) are real fields so far; the other
+  eight `ToolType` values exist as forward-declared groundwork for the
+  Tool Configuration Panel/Wizard's dynamic UI, not yet functional tools.
+- **`sound_mind::core::PaintOperation`** - the first concrete `Operation`
+  subtype: a `Path` and a `ToolConfiguration`, both owned snapshots (not
+  shared references), plus the `targetLayer` every layer-content
+  operation carries. `bounds()` is exactly its own `Path::bounds()`.
+- **`Operation::targetLayer()`** - a new virtual, defaulting to
+  `std::nullopt` for structural operations, overridden by layer-content
+  ones - lets `OperationLog` filter to one layer's own operations
+  generically, without knowing about every concrete subtype.
+- **`OperationLog` is now real** (previously a permanently-empty stub):
+  `reserveId()`/`append()`, `undo()`/`redo()` (a simple, linear high-water
+  mark - a fresh append past an undo() discards the abandoned redo tail,
+  standard undo-stack behavior, deliberately separate from `supersedes()`
+  which never removes anything), and `activeOperationsTargeting(layer)` -
+  the exact, in-order, non-superseded sequence a real replay consumes.
+  Full JSON round-trip for `PaintOperation` entries (a `"kind"`
+  discriminator, ready for future `Operation` subtypes), with a
+  backward-compatible read path for every existing project file's own
+  empty-array-shaped operation log.
+
+Regression: `sound-mind-core-tests` (582 assertions/167 cases, up from
+518/137) and the full `sound-mind-studio-tests` suite both pass (a full
+non-Debug-tests build confirms nothing else broke). Doxygen docs target
+rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.1] - 2026-09-10
 
 Part 1 of the Phase 3 "Basic Painting" milestone (`docs/sound-mind-roadmap.md`'s

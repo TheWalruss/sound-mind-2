@@ -139,6 +139,12 @@ public:
     /// @return The operation log this project currently holds.
     [[nodiscard]] const OperationLog& operationLog() const noexcept { return operationLog_; }
 
+    /// @brief Mutable access to this project's operation log, for
+    ///        appending new operations (painting and, eventually, every
+    ///        other loggable action) and undo()/redo().
+    /// @return The operation log this project currently holds.
+    [[nodiscard]] OperationLog& operationLog() noexcept { return operationLog_; }
+
     friend void to_json(nlohmann::json& json, const Project& project);
     friend void from_json(const nlohmann::json& json, Project& project);
 

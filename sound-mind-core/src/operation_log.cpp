@@ -1,21 +1,118 @@
 #include "sound_mind/core/operation_log.h"
 
 #include <stdexcept>
+#include <unordered_set>
+
+#include "sound_mind/core/paint_operation.h"
 
 namespace sound_mind::core {
 
-void to_json(nlohmann::json& json, const OperationLog& /*log*/) {
-    json = nlohmann::json::array();
+void OperationLog::append(std::unique_ptr<Operation> operation) {
+    // A fresh append past an undo() discards the redo tail - the vector
+    // itself is truncated (not just the high-water mark moved), since
+    // nothing can ever point at those discarded operations again (a
+    // brand-new operation can't have been constructed with a supersedes()
+    // referencing an id that's about to not exist).
+    operations_.resize(activeCount_);
+    operations_.push_back(std::move(operation));
+    activeCount_ = operations_.size();
 }
 
-void from_json(const nlohmann::json& json, OperationLog& /*log*/) {
-    if (!json.is_array()) {
-        throw std::invalid_argument("OperationLog JSON must be an array");
+void OperationLog::undo() noexcept {
+    if (canUndo()) {
+        --activeCount_;
     }
-    // Nothing to populate yet - see the class doc comment. A non-empty
-    // array here (from a newer file) is silently accepted rather than
-    // rejected, consistent with the forward-compatibility approach the
-    // Pool TIFF format already established.
+}
+
+void OperationLog::redo() noexcept {
+    if (canRedo()) {
+        ++activeCount_;
+    }
+}
+
+std::vector<const Operation*> OperationLog::activeOperationsTargeting(LayerId layer) const {
+    std::unordered_set<OperationId> supersededIds;
+    for (std::size_t i = 0; i < activeCount_; ++i) {
+        if (const auto supersedes = operations_[i]->supersedes(); supersedes.has_value()) {
+            supersededIds.insert(*supersedes);
+        }
+    }
+
+    std::vector<const Operation*> result;
+    for (std::size_t i = 0; i < activeCount_; ++i) {
+        const Operation& operation = *operations_[i];
+        if (supersededIds.contains(operation.id())) {
+            continue;  // a later active operation replaces this one - see this method's own docs.
+        }
+        if (operation.targetLayer() == layer) {
+            result.push_back(&operation);
+        }
+    }
+    return result;
+}
+
+namespace {
+
+/// @brief The discriminator each logged operation's own JSON carries,
+/// under `"kind"` - the only way to know which concrete subtype to
+/// reconstruct on load, since `Operation` itself is abstract.
+constexpr const char* kPaintOperationKind = "paint";
+
+}  // namespace
+
+void to_json(nlohmann::json& json, const OperationLog& log) {
+    nlohmann::json operations = nlohmann::json::array();
+    for (const auto& operation : log.operations_) {
+        // Only PaintOperation exists as a concrete subtype so far (see
+        // OperationLog's own docs) - a real dispatch (visitor, or a
+        // virtual toJson() every subtype implements) is needed once a
+        // second one does, tracked alongside that subtype's own arrival
+        // rather than speculatively built now.
+        if (const auto* paint = dynamic_cast<const PaintOperation*>(operation.get())) {
+            nlohmann::json entry;
+            entry["kind"] = kPaintOperationKind;
+            entry["id"] = paint->id();
+            if (const auto supersedes = paint->supersedes(); supersedes.has_value()) {
+                entry["supersedes"] = *supersedes;
+            }
+            entry["targetLayer"] = *paint->targetLayer();
+            entry["path"] = paint->path();
+            entry["config"] = paint->config();
+            operations.push_back(std::move(entry));
+        }
+    }
+    json = nlohmann::json{{"operations", operations}, {"activeCount", log.activeCount_}, {"nextId", log.nextId_}};
+}
+
+void from_json(const nlohmann::json& json, OperationLog& log) {
+    log.operations_.clear();
+
+    if (json.contains("operations")) {
+        // Current, real shape.
+        for (const auto& entry : json.at("operations")) {
+            const std::string kind = entry.at("kind").get<std::string>();
+            if (kind == kPaintOperationKind) {
+                const OperationId id = entry.at("id").get<OperationId>();
+                const std::optional<OperationId> supersedes =
+                    entry.contains("supersedes") ? std::optional(entry.at("supersedes").get<OperationId>())
+                                                  : std::nullopt;
+                const LayerId targetLayer = entry.at("targetLayer").get<LayerId>();
+                Path path = entry.at("path").get<Path>();
+                ToolConfiguration config = entry.at("config").get<ToolConfiguration>();
+                log.operations_.push_back(std::make_unique<PaintOperation>(id, targetLayer, std::move(path),
+                                                                            std::move(config), supersedes));
+            } else {
+                throw std::invalid_argument("OperationLog: unrecognized operation kind \"" + kind + "\"");
+            }
+        }
+        log.activeCount_ = json.at("activeCount").get<std::size_t>();
+        log.nextId_ = json.at("nextId").get<OperationId>();
+    } else {
+        // The pre-`v0.0.24.1` empty-array shape, before any concrete
+        // Operation subtype existed - an empty log either way.
+        log.activeCount_ = 0;
+        log.nextId_ = 1;
+    }
 }
 
 }  // namespace sound_mind::core

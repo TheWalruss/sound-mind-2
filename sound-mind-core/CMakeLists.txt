@@ -20,6 +20,7 @@ add_library(sound-mind-core
     src/operation.cpp
     src/gradient.cpp
     src/path.cpp
+    src/tool_configuration.cpp
     src/layer.cpp
     src/project_settings.cpp
     src/operation_log.cpp
