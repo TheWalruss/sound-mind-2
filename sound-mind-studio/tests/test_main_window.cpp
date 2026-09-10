@@ -9,9 +9,12 @@
 #include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCoreApplication>
+#include <QEvent>
 #include <QFile>
 #include <QImage>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QSlider>
@@ -2322,4 +2325,82 @@ void MainWindowTest::paintingTargetsTheSelectedLayerNotNecessarilyTheTopmostOne(
     const auto targetLayer = window.project()->operationLog().at(0).targetLayer();
     QVERIFY(targetLayer.has_value());
     QCOMPARE(*targetLayer, firstLayerId);
+}
+
+void MainWindowTest::addEmptyLayerAddsASilentLayerAndSelectsIt() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    const auto layerCountBefore = window.project()->layers().size();
+
+    auto* panel = window.findChild<LayersPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* addButton = panel->findChild<QPushButton*>(QStringLiteral("addLayerButton"));
+    QVERIFY(addButton != nullptr);
+    addButton->click();
+
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
+    const auto& newLayer = window.project()->layers().back();
+    QCOMPARE(newLayer.type(), sound_mind::core::LayerType::Normal);
+    QVERIFY(newLayer.content().has_value());  // a real, silent placeholder - see addEmptyLayer()'s own docs.
+
+    // Selected immediately - ready to paint into without an extra click.
+    QVERIFY(panel->selectedLayerId().has_value());
+    QCOMPARE(*panel->selectedLayerId(), newLayer.id());
+}
+
+void MainWindowTest::addEmptyLayerIsANoOpWithNoProjectOpen() {
+    TestMainWindow window;
+    // Nothing to find/click a real addLayerButton through with no project
+    // (and thus no LayersPanel content) yet - calling the testable core
+    // directly, the same way other "no project open" guards are tested
+    // elsewhere in this file, confirms it doesn't crash.
+    window.addEmptyLayer();
+    QVERIFY(window.project() == nullptr);
+}
+
+void MainWindowTest::movingTheMouseOverTheCanvasUpdatesTheCursorPositionLabel() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-cursor-position.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    auto* label = window.findChild<QLabel*>(QStringLiteral("cursorPositionLabel"));
+    QVERIFY(label != nullptr);
+    QVERIFY(label->text().isEmpty());  // nothing shown before the mouse ever moves over it.
+
+    // A hand-built QMouseEvent, sent directly to canvas - see
+    // CanvasWidgetTest::mouseMoveEmitsCursorMovedRegardlessOfToolMode()'s
+    // own comment for why QTest::mouseMove() alone (with no button held,
+    // and no window ever shown()) wouldn't actually reach canvas.
+    QMouseEvent moveEvent(QEvent::MouseMove, QPointF(30, 10), canvas->mapToGlobal(QPoint(30, 10)), Qt::NoButton,
+                          Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(canvas, &moveEvent);
+
+    QVERIFY(!label->text().isEmpty());
+    QVERIFY(label->text().contains(QStringLiteral("30")));
+    QVERIFY(label->text().contains(QStringLiteral("px")));
+    QVERIFY(label->text().contains(QStringLiteral("s,")));  // the time/frequency half is present too.
+}
+
+void MainWindowTest::leavingTheCanvasClearsTheCursorPositionLabel() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    auto* label = window.findChild<QLabel*>(QStringLiteral("cursorPositionLabel"));
+    QVERIFY(label != nullptr);
+
+    QMouseEvent moveEvent(QEvent::MouseMove, QPointF(5, 5), canvas->mapToGlobal(QPoint(5, 5)), Qt::NoButton,
+                          Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(canvas, &moveEvent);
+    QVERIFY(!label->text().isEmpty());
+
+    QEvent leaveEvent(QEvent::Leave);
+    QCoreApplication::sendEvent(canvas, &leaveEvent);
+
+    QVERIFY(label->text().isEmpty());
 }

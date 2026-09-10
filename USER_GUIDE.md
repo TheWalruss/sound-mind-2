@@ -100,6 +100,11 @@ Once a project is open, the title bar shows the project's name next to
 - **File menu** - New/Open/Save/Save As, Import Audio/Image, Export
   Audio/Video.
 - **Pool Layer** toolbar button - see [Pooling a Layer](#pooling-a-layer).
+- **Status bar** (bottom) - the left side shows the mouse cursor's
+  position while it's over the canvas, both in pixels and in time/
+  frequency (e.g. `30, 10 px   |   0.300 s, 523 Hz`), clearing once the
+  cursor leaves. A temporary message (e.g. "Imported ...") briefly covers
+  it when one is shown.
 
 Every dock panel can be dragged to a different edge of the window, or
 floated, like any Qt dock widget.
@@ -155,8 +160,10 @@ a popup, so one bad file in a multi-file drop doesn't interrupt the rest.
 
 ## Working with Layers
 
-The **Layers** panel lists every layer, top of the stack first. Each row
-has:
+The **Layers** panel lists every layer, top of the stack first. A **+ Add
+Layer** button above the list adds a new, empty (silent) layer and
+selects it immediately - the only way to get a layer to paint onto from
+scratch, rather than from an import. Each row has:
 
 - A **drag handle** (⠿) to reorder it, or a **lock icon** (🔒) if it can't
   be reordered or deleted - only the **Background** layer (always present,
@@ -229,9 +236,16 @@ settings:
 - **Falloff** - how soft the stroke's edge is, from a hard edge (`0`) to
   fully soft (`1`).
 - **Brush Size**.
-- **Intensity** and **Opacity** - how loud, and how strongly, the stroke
-  paints. The panel's own defaults (0 dB, 100%) paint at full strength
-  right away, no setup required.
+- **Color** - a swatch button; click it to open a color picker. This is
+  how loud the stroke paints, *and* its stereo balance, at once: the
+  picked color's red channel sets the left channel's loudness, green
+  sets the right channel's - full red with no green paints loud on the
+  left and silent on the right, and so on. The swatch shows the color's
+  hex code as well as its fill. The panel's own default (bright yellow -
+  full red and green) paints loud on both channels equally.
+- **Opacity** - how strongly the stroke's color is actually applied,
+  regardless of what it is. The panel's own default (100%) paints at
+  full strength right away, no setup required.
 
 Two checkboxes at the top of the panel, both off by default:
 
@@ -332,10 +346,5 @@ what's designed for it:
 - No **Tool Configuration Wizard** or **Tool Preset** drop-down - the
   Panel described above is the only way to set brush parameters today,
   and there's no way yet to save/reuse/export a particular brush setup.
-- No **color** (stereo balance) control - a stroke's intensity is the
-  same in both channels; there's no way yet to paint one channel louder
-  than the other.
-- No way to add a new, empty layer to paint onto from scratch - every
-  layer today comes from importing audio or an image.
 - No **Pick** tool - a painted stroke can be undone/redone, but not yet
   individually selected, moved, or deleted after the fact.

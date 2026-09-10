@@ -26,4 +26,6 @@ private slots:
     void showBoundingBoxesDrawsNothingWhenOff();
     void showBoundingBoxesDrawsAnActiveOperationsBoundingBox();
     void showPathGeometryDrawsAnActiveOperationsPath();
+    void mouseMoveEmitsCursorMovedRegardlessOfToolMode();
+    void leavingTheCanvasEmitsCursorLeft();
 };

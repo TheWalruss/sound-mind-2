@@ -8,6 +8,7 @@
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 
+class QEvent;
 class QMouseEvent;
 class QPainter;
 
@@ -34,7 +35,9 @@ namespace sound_mind::studio {
  * emits already-converted `TimeFrequencyPoint`s (see
  * `docs/sound-mind-design.md`'s "Freehand Path Capture") - turning those
  * into a real, undoable stroke is `PaintController`'s job, wired up by
- * `MainWindow`, not this widget's own.
+ * `MainWindow`, not this widget's own. Also emits cursorMoved()/
+ * cursorLeft() on every mouse move/exit, regardless of toolMode() - see
+ * their own docs.
  */
 class CanvasWidget : public QWidget {
     Q_OBJECT
@@ -158,6 +161,29 @@ signals:
     ///        button released).
     void paintStrokeEnded();
 
+    /**
+     * @brief The mouse moved over the canvas - independent of toolMode(),
+     *        unlike paintStrokeContinued() (which only fires while
+     *        actively painting). For a status-bar-style "where's the
+     *        cursor" readout - see `MainWindow`'s own status bar label.
+     *
+     * Requires `setMouseTracking(true)` (set in the constructor) to fire
+     * without a button held, unlike every mousePressEvent()-gated signal
+     * above.
+     *
+     * @param widgetPixel The cursor's widget-local pixel position.
+     * @param domainPoint The same position converted to time/frequency
+     *        space, or `std::nullopt` if no project is set (matching
+     *        widgetPointToTimeFrequency()'s own contract).
+     */
+    void cursorMoved(QPointF widgetPixel, std::optional<sound_mind::core::TimeFrequencyPoint> domainPoint);
+
+    /// @brief The mouse left the canvas entirely - pairs with
+    ///        cursorMoved() so a caller can clear its own "where's the
+    ///        cursor" display rather than leaving it showing a stale
+    ///        position.
+    void cursorLeft();
+
 protected:
     /// @brief Repaints the canvas - see the class's own docs for what's
     ///        actually drawn.
@@ -177,6 +203,10 @@ protected:
     ///        docs.
     /// @param event The release event.
     void mouseReleaseEvent(QMouseEvent* event) override;
+
+    /// @brief Emits cursorLeft() - see its own docs.
+    /// @param event Unused; required by QWidget's override signature.
+    void leaveEvent(QEvent* event) override;
 
 private:
     /// @brief Converts a widget-local pixel position into time/frequency

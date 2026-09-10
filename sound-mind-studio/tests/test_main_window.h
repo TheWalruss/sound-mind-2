@@ -149,4 +149,8 @@ private slots:
     void paintingWithTheDefaultToolConfigurationActuallyPaintsSomethingVisible();
     void toggleToolConfigurationPanelShowsAndHidesIt();
     void paintingTargetsTheSelectedLayerNotNecessarilyTheTopmostOne();
+    void addEmptyLayerAddsASilentLayerAndSelectsIt();
+    void addEmptyLayerIsANoOpWithNoProjectOpen();
+    void movingTheMouseOverTheCanvasUpdatesTheCursorPositionLabel();
+    void leavingTheCanvasClearsTheCursorPositionLabel();
 };

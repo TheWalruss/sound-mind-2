@@ -22,6 +22,7 @@
 #include <QImage>
 #include <QInputDialog>
 #include <QKeySequence>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
 #include <QMenuBar>
@@ -78,6 +79,25 @@ const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
         result.append(QString::fromStdString(name));
     }
     return result;
+}
+
+/// @brief Formats a cursor position for the status bar's own
+/// cursorPositionLabel_ - both widget pixels and, when a project is open
+/// (`domainPoint` has a value), the same point in time/frequency space.
+/// Frequency switches from Hz to kHz above 1000 Hz purely for
+/// readability - the underlying value is unaffected.
+[[nodiscard]] QString formatCursorPosition(QPointF widgetPixel,
+                                            std::optional<sound_mind::core::TimeFrequencyPoint> domainPoint) {
+    QString text = QStringLiteral("%1, %2 px")
+                        .arg(static_cast<int>(std::lround(widgetPixel.x())))
+                        .arg(static_cast<int>(std::lround(widgetPixel.y())));
+    if (domainPoint.has_value()) {
+        const QString frequencyText = domainPoint->frequencyHz >= 1000.0
+                                           ? QStringLiteral("%1 kHz").arg(domainPoint->frequencyHz / 1000.0, 0, 'f', 2)
+                                           : QStringLiteral("%1 Hz").arg(domainPoint->frequencyHz, 0, 'f', 0);
+        text += QStringLiteral("   |   %1 s, %2").arg(domainPoint->timeSeconds, 0, 'f', 3).arg(frequencyText);
+    }
+    return text;
 }
 
 /// @brief Shows `message` in `bar` and forces an immediate repaint.
@@ -146,6 +166,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layersPanel_, &LayersPanel::renameRequested, this, &MainWindow::renameLayer);
     connect(layersPanel_, &LayersPanel::deleteRequested, this, &MainWindow::deleteLayer);
     connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
+    connect(layersPanel_, &LayersPanel::addLayerRequested, this, &MainWindow::addEmptyLayer);
 
     // Playback/Record/Loop each get their own dockable panel (v0.Y.16.1) -
     // hidden until setProject(), matching layersPanel_'s own "nothing to
@@ -213,6 +234,19 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             &CanvasWidget::setShowBoundingBoxes);
     connect(toolConfigurationPanel_, &ToolConfigurationPanel::showPathGeometryChanged, canvas_,
             &CanvasWidget::setShowPathGeometry);
+
+    // A permanent (not showMessage()'s own temporary-message) label in the
+    // status bar's normal (left-hand) area - see cursorPositionLabel_'s
+    // own docs for why a temporary status message can still cover it
+    // briefly, and why that's an accepted tradeoff rather than a bug.
+    cursorPositionLabel_ = new QLabel(this);
+    cursorPositionLabel_->setObjectName(QStringLiteral("cursorPositionLabel"));
+    statusBar()->addWidget(cursorPositionLabel_);
+    connect(canvas_, &CanvasWidget::cursorMoved, this,
+            [this](QPointF widgetPixel, std::optional<sound_mind::core::TimeFrequencyPoint> domainPoint) {
+                cursorPositionLabel_->setText(formatCursorPosition(widgetPixel, domainPoint));
+            });
+    connect(canvas_, &CanvasWidget::cursorLeft, this, [this]() { cursorPositionLabel_->clear(); });
 
     recordPanel_ = new RecordPanel(this);
     recordPanel_->hide();
@@ -1086,6 +1120,30 @@ void MainWindow::deleteLayer(sound_mind::core::LayerId id) {
         canvas_->update();
         refreshLayersPanel();
     }
+}
+
+void MainWindow::addEmptyLayer() {
+    if (!project_) {
+        return;
+    }
+    sound_mind::core::Layer layer(0, tr("New Layer").toStdString(), sound_mind::core::LayerType::Normal);
+    // A silent, correctly-dimensioned placeholder - the same one a fresh
+    // Loop Input layer gets (startLoopMode()'s own comment) - so there's
+    // real content to paint onto (and to render/play, like any other
+    // layer) immediately, rather than nothing at all until the first
+    // stroke. loopEngine_ is already guaranteed to exist for any open
+    // project (constructed fresh in setProject()), and its emptyImage()
+    // already knows this project's real dimensions/config, so there's no
+    // reason to duplicate that math here.
+    layer.setContent(loopEngine_->emptyImage());
+    const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
+    hasUnsavedChanges_ = true;
+    playbackController_->invalidate();
+    canvas_->update();
+    refreshLayersPanel();
+    // Selected immediately - ready to paint into without an extra click,
+    // the whole point of adding it in the first place.
+    layersPanel_->selectLayer(id);
 }
 
 void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {

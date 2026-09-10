@@ -266,6 +266,17 @@ LayersPanel::LayersPanel(QWidget* parent) : QDockWidget(tr("Layers"), parent) {
     setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     setMinimumWidth(260);
 
+    auto* container = new QWidget();
+    auto* layout = new QVBoxLayout(container);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    auto* addLayerButton = new QPushButton(tr("+ Add Layer"));
+    addLayerButton->setObjectName(QStringLiteral("addLayerButton"));
+    addLayerButton->setToolTip(tr("Add a new, empty layer to paint onto"));
+    connect(addLayerButton, &QPushButton::clicked, this, &LayersPanel::addLayerRequested);
+    layout->addWidget(addLayerButton);
+
     list_ = new QListWidget();
     list_->setObjectName(QStringLiteral("layersList"));
     list_->setSelectionMode(QListWidget::SingleSelection);
@@ -274,8 +285,9 @@ LayersPanel::LayersPanel(QWidget* parent) : QDockWidget(tr("Layers"), parent) {
     list_->setDropIndicatorShown(true);
     list_->setDragDropMode(QListWidget::InternalMove);
     connect(list_->model(), &QAbstractItemModel::rowsMoved, this, &LayersPanel::handleRowsMoved);
+    layout->addWidget(list_, 1);
 
-    setWidget(list_);
+    setWidget(container);
 }
 
 void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
@@ -335,7 +347,7 @@ void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
         connect(row, &LayerRowWidget::rescaleChanged, this, &LayersPanel::rescaleChanged);
         connect(row, &LayerRowWidget::renameRequested, this, &LayersPanel::renameRequested);
         connect(row, &LayerRowWidget::deleteRequested, this, &LayersPanel::deleteRequested);
-        connect(row, &LayerRowWidget::selected, this, &LayersPanel::selectRow);
+        connect(row, &LayerRowWidget::selected, this, &LayersPanel::selectLayer);
 
         // Restores the selection highlight across this refresh, for the
         // (already-verified-still-present, above) previously-selected id.
@@ -345,15 +357,17 @@ void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
     }
 }
 
-void LayersPanel::selectRow(sound_mind::core::LayerId id) {
-    selectedLayerId_ = id;
+void LayersPanel::selectLayer(sound_mind::core::LayerId id) {
     for (int i = 0; i < list_->count(); ++i) {
         QListWidgetItem* item = list_->item(i);
         if (static_cast<sound_mind::core::LayerId>(item->data(Qt::UserRole).toULongLong()) == id) {
+            selectedLayerId_ = id;
             list_->setCurrentItem(item);
-            break;
+            return;
         }
     }
+    // No row has this id - a no-op, per this method's own docs, rather
+    // than setting selectedLayerId_ to an id with no matching row.
 }
 
 void LayersPanel::clearSelection() {

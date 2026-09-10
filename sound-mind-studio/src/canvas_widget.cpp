@@ -61,7 +61,12 @@ const QSize kFallbackSize(400, 300);
 
 }  // namespace
 
-CanvasWidget::CanvasWidget(QWidget* parent) : QWidget(parent) {}
+CanvasWidget::CanvasWidget(QWidget* parent) : QWidget(parent) {
+    // cursorMoved() needs mouseMoveEvent() to fire on every move, not just
+    // while a button is held (QWidget's default) - see that signal's own
+    // docs.
+    setMouseTracking(true);
+}
 
 void CanvasWidget::setProject(const sound_mind::core::Project* project) {
     project_ = project;
@@ -207,6 +212,11 @@ void CanvasWidget::mousePressEvent(QMouseEvent* event) {
 }
 
 void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
+    // Independent of toolMode()/paintStrokeActive_ - see cursorMoved()'s
+    // own docs; every move gets a position readout, not just ones that
+    // also continue an in-progress stroke.
+    emit cursorMoved(event->position(), widgetPointToTimeFrequency(event->position()));
+
     if (toolMode_ != ToolMode::Paint || !paintStrokeActive_) {
         QWidget::mouseMoveEvent(event);
         return;
@@ -215,6 +225,8 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
         emit paintStrokeContinued(*point);
     }
 }
+
+void CanvasWidget::leaveEvent(QEvent* /*event*/) { emit cursorLeft(); }
 
 void CanvasWidget::mouseReleaseEvent(QMouseEvent* event) {
     if (toolMode_ != ToolMode::Paint || !paintStrokeActive_ || event->button() != Qt::LeftButton) {

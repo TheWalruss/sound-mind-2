@@ -23,6 +23,7 @@ class QAction;
 class QCloseEvent;
 class QDragEnterEvent;
 class QDropEvent;
+class QLabel;
 class QStackedWidget;
 class QString;
 class QTimer;
@@ -574,6 +575,19 @@ public slots:
      * @param id The layer to delete.
      */
     void deleteLayer(sound_mind::core::LayerId id);
+
+    /**
+     * @brief Adds a new, empty `Normal` layer to the current project - the
+     *        actual work behind `LayersPanel`'s "+ Add Layer" button.
+     *
+     * The only way to get a paintable layer that isn't an import: a
+     * silent, project-dimensioned placeholder (`loopEngine_->emptyImage()`
+     * - the same one a fresh Loop Input layer gets), added to the top of
+     * the stack, selected immediately via `LayersPanel::selectLayer()` so
+     * it can be painted into without an extra click. A no-op if no
+     * project is open.
+     */
+    void addEmptyLayer();
 
     /**
      * @brief Reorders the current project's layer stack - the actual work
@@ -1171,6 +1185,17 @@ private:
     QStackedWidget* stack_ = nullptr;
     LandingPage* landingPage_ = nullptr;
     CanvasWidget* canvas_ = nullptr;
+
+    /// @brief Shows the cursor's position (widget pixels and, when a
+    /// project is open, time/frequency) in the status bar's normal
+    /// (left-hand) area, live - added via `statusBar()->addWidget()`, not
+    /// `addPermanentWidget()`, in the constructor. Kept up to date by
+    /// `canvas_`'s `cursorMoved()`/`cursorLeft()` signals; can be
+    /// temporarily covered by a `statusBar()->showMessage()` call
+    /// elsewhere in this class (e.g. "Imported ...") - an accepted,
+    /// standard `QStatusBar` behavior (temporary messages sit in front of
+    /// the normal-area widgets), not a bug.
+    QLabel* cursorPositionLabel_ = nullptr;
 
     /// @brief The Layers Panel dock - hidden until setProject() is first
     /// called (see refreshLayersPanel()'s docs), then shown automatically

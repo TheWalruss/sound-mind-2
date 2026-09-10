@@ -11,8 +11,10 @@ private slots:
     void changingTheTipShapeEmitsToolConfigurationChanged();
     void changingFalloffEmitsToolConfigurationChanged();
     void changingSizeEmitsToolConfigurationChanged();
-    void changingIntensitySetsBothGradientStopsIntensity();
     void changingOpacitySetsBothGradientStopsOpacity();
     void togglingShowBoundingBoxesEmitsItsOwnSignal();
     void togglingShowPathGeometryEmitsItsOwnSignal();
+    void setColorSetsBothGradientStopsIntensityAndEmitsChange();
+    void colorRoundTripsThroughSetColor();
+    void colorButtonExistsForOpeningTheRealDialog();
 };

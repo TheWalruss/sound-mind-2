@@ -19,7 +19,10 @@ namespace sound_mind::studio {
  *        (`v0.Y.13.1`).
  *
  * Adapted from the legacy Studio's Layers panel (drag-handle reorder,
- * per-row visibility toggle, name, opacity, add/delete), scoped down to
+ * per-row visibility toggle, name, opacity, add/delete - the "add" half
+ * is a "+ Add Layer" button above the list, added once painting existed
+ * to give a new layer content; see `MainWindow::addEmptyLayer()`'s own
+ * docs), scoped down to
  * what `sound_mind::core::Layer` actually supports today: no blend-mode
  * combo, no MindWave-link combo, and no settings/gear button - none of
  * those concepts exist in the engine yet. As of `v0.Y.21.1` (Layer Time
@@ -111,6 +114,14 @@ public:
     ///        why a caller switching `Project`s must call this itself.
     void clearSelection();
 
+    /// @brief Selects `id` as if its row had been clicked - a no-op if no
+    ///        row currently has that id. Used by `MainWindow` to
+    ///        immediately select a layer it just added (see
+    ///        addLayerRequested()'s own docs), without requiring an extra
+    ///        click before it can be painted into.
+    /// @param id The layer to select.
+    void selectLayer(sound_mind::core::LayerId id);
+
 signals:
     /// @brief A row's visibility toggle was clicked.
     void visibilityToggled(sound_mind::core::LayerId id, bool visible);
@@ -131,6 +142,12 @@ signals:
 
     /// @brief A row's delete button was clicked.
     void deleteRequested(sound_mind::core::LayerId id);
+
+    /// @brief The "+ Add Layer" button was clicked - `MainWindow` responds
+    ///        by adding a new, silent, project-sized `Normal` layer (see
+    ///        `MainWindow::addEmptyLayer()`'s own docs) and selecting it
+    ///        via selectLayer(), ready to paint into immediately.
+    void addLayerRequested();
 
     /**
      * @brief A drag-reorder finished with a valid result (a locked
@@ -153,12 +170,6 @@ private slots:
     void handleRowsMoved();
 
 private:
-    /// @brief Marks `id`'s row as the selection (native highlight, via
-    ///        `list_->setCurrentItem()`) and records it in
-    ///        selectedLayerId_ - a row's own `LayerRowWidget::selected()`
-    ///        handler.
-    void selectRow(sound_mind::core::LayerId id);
-
     QListWidget* list_ = nullptr;
 
     /// @brief The rows as of the last setLayers() call, bottom-to-top -

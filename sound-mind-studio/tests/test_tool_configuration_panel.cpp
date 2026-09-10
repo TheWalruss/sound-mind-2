@@ -1,8 +1,10 @@
 #include "test_tool_configuration_panel.h"
 
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
@@ -18,6 +20,10 @@ void ToolConfigurationPanelTest::freshPanelIsAnOpaqueCircularBrush() {
     QCOMPARE(config.tipShape(), BrushTipShape::Circle);
     QCOMPARE(config.defaultGradient().stops().front().leftOpacity, 1.0f);
     QCOMPARE(config.defaultGradient().stops().front().rightOpacity, 1.0f);
+    // 0 dB on both channels is byte 255 on both red and green - a bright
+    // yellow (no blue - painting doesn't touch phase yet) - see color()'s
+    // own docs.
+    QCOMPARE(panel.color(), QColor(255, 255, 0));
 }
 
 void ToolConfigurationPanelTest::freshPanelHasBothOverlayCheckboxesOff() {
@@ -70,20 +76,6 @@ void ToolConfigurationPanelTest::changingSizeEmitsToolConfigurationChanged() {
     QCOMPARE(panel.toolConfiguration().size(), 2.5);
 }
 
-void ToolConfigurationPanelTest::changingIntensitySetsBothGradientStopsIntensity() {
-    ToolConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("intensitySpinBox"));
-    QVERIFY(spinBox != nullptr);
-
-    spinBox->setValue(-20.0);
-
-    const auto& stops = panel.toolConfiguration().defaultGradient().stops();
-    QCOMPARE(stops.front().leftIntensity, -20.0f);
-    QCOMPARE(stops.front().rightIntensity, -20.0f);
-    QCOMPARE(stops.back().leftIntensity, -20.0f);
-    QCOMPARE(stops.back().rightIntensity, -20.0f);
-}
-
 void ToolConfigurationPanelTest::changingOpacitySetsBothGradientStopsOpacity() {
     ToolConfigurationPanel panel;
     auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"));
@@ -118,4 +110,42 @@ void ToolConfigurationPanelTest::togglingShowPathGeometryEmitsItsOwnSignal() {
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).toBool(), true);
+}
+
+void ToolConfigurationPanelTest::setColorSetsBothGradientStopsIntensityAndEmitsChange() {
+    ToolConfigurationPanel panel;
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    panel.setColor(QColor(128, 64, 255));  // blue is ignored - painting doesn't touch phase yet.
+
+    QCOMPARE(spy.count(), 1);
+    const auto& stops = panel.toolConfiguration().defaultGradient().stops();
+    // byteToDbColor(128) ~= -47.8 dB, byteToDbColor(64) ~= -71.9 dB, over
+    // the -96..0 dB display range dbToByteColor()/byteToDbColor() share
+    // with color_mapping.cpp's own (unexported) formula.
+    QVERIFY(qAbs(stops.front().leftIntensity - (-47.8f)) < 1.0f);
+    QVERIFY(qAbs(stops.front().rightIntensity - (-71.9f)) < 1.0f);
+    QCOMPARE(stops.back().leftIntensity, stops.front().leftIntensity);
+    QCOMPARE(stops.back().rightIntensity, stops.front().rightIntensity);
+}
+
+void ToolConfigurationPanelTest::colorRoundTripsThroughSetColor() {
+    ToolConfigurationPanel panel;
+
+    panel.setColor(QColor(200, 40, 0));
+
+    // Round-trips exactly for red/green (blue is always 0 - see color()'s
+    // own docs) - dbToByteColor()/byteToDbColor() are exact inverses over
+    // the 0-255 byte range.
+    QCOMPARE(panel.color(), QColor(200, 40, 0));
+}
+
+void ToolConfigurationPanelTest::colorButtonExistsForOpeningTheRealDialog() {
+    const ToolConfigurationPanel panel;
+    auto* button = panel.findChild<QPushButton*>(QStringLiteral("colorButton"));
+    QVERIFY(button != nullptr);
+    // Its own displayed swatch already matches color() - see
+    // updateColorButtonAppearance()'s own docs - checked via the hex text
+    // it sets alongside the background fill, not by parsing a stylesheet.
+    QCOMPARE(button->text(), panel.color().name());
 }

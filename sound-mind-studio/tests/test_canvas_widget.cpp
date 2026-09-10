@@ -1,5 +1,10 @@
 #include "test_canvas_widget.h"
 
+#include <optional>
+
+#include <QCoreApplication>
+#include <QEvent>
+#include <QMouseEvent>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
@@ -453,4 +458,57 @@ void CanvasWidgetTest::showPathGeometryDrawsAnActiveOperationsPath() {
         }
     }
     QVERIFY(foundNearby);
+}
+
+void CanvasWidgetTest::mouseMoveEmitsCursorMovedRegardlessOfToolMode() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    // toolMode() stays None (the default) - cursorMoved() must still fire,
+    // unlike paintStrokeContinued(), which requires Paint mode and an
+    // active stroke - see cursorMoved()'s own docs.
+    QCOMPARE(widget.toolMode(), CanvasWidget::ToolMode::None);
+
+    std::optional<QPointF> receivedPixel;
+    std::optional<TimeFrequencyPoint> receivedDomain;
+    QObject::connect(&widget, &CanvasWidget::cursorMoved, [&](QPointF pixel, std::optional<TimeFrequencyPoint> domain) {
+        receivedPixel = pixel;
+        receivedDomain = domain;
+    });
+
+    // A hand-built QMouseEvent, sent directly to the widget, rather than
+    // QTest::mouseMove(): with no button held, QTest::mouseMove() routes
+    // through real window-under-cursor resolution, which has nothing to
+    // resolve to in this headless suite's own established convention of
+    // never calling show() - a mousePress-then-move works instead only
+    // because the press implicitly grabs the mouse for that widget.
+    // sendEvent() bypasses that routing entirely.
+    QMouseEvent moveEvent(QEvent::MouseMove, QPointF(30, 10), widget.mapToGlobal(QPoint(30, 10)), Qt::NoButton,
+                          Qt::NoButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(&widget, &moveEvent);
+
+    QVERIFY(receivedPixel.has_value());
+    QCOMPARE(receivedPixel->toPoint(), QPoint(30, 10));
+    QVERIFY(receivedDomain.has_value());
+    const double expectedTime = sound_mind::core::frameIndexToTime(30.0, config);
+    // Bin index rises bottom-to-top on screen - see
+    // widgetPointToTimeFrequency()'s own docs - so widget y=10 (out of a
+    // 50px-tall, 50-bin widget) is bin (50 - 10) = 40, not bin 10.
+    const float expectedFrequency = sound_mind::core::binIndexToFrequency(40.0f, config);
+    QVERIFY(qAbs(receivedDomain->timeSeconds - expectedTime) < 0.01);
+    QVERIFY(qAbs(receivedDomain->frequencyHz - expectedFrequency) < 1.0);
+}
+
+void CanvasWidgetTest::leavingTheCanvasEmitsCursorLeft() {
+    CanvasWidget widget;
+    QSignalSpy spy(&widget, &CanvasWidget::cursorLeft);
+
+    QEvent leaveEvent(QEvent::Leave);
+    QCoreApplication::sendEvent(&widget, &leaveEvent);
+
+    QCOMPARE(spy.count(), 1);
 }

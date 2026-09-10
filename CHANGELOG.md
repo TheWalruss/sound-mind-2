@@ -6,6 +6,42 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.8] - 2026-09-10
+
+Three requested follow-ups to `v0.0.24.7`'s bug fixes, before starting
+the Pick tool.
+
+### Added
+
+- **`LayersPanel` gained a "+ Add Layer" button**, above the layer list -
+  the "add" half of the legacy panel's own add/delete pair, deliberately
+  left out until now (see `docs/sound-mind-architecture.md` Decision
+  #39) since there was nothing yet to give a new layer content. Emits
+  `addLayerRequested()`.
+- **`MainWindow::addEmptyLayer()`** - the handler behind it. Adds a new
+  `Normal` layer with a real, silent, project-dimensioned placeholder
+  (`LoopEngine::emptyImage()`, the same one a fresh Loop Input layer
+  gets), and immediately selects it via the new `LayersPanel::
+  selectLayer()`, ready to paint into without an extra click.
+- **The status bar shows the mouse cursor's position while it's over the
+  canvas** - both widget pixels and time/frequency, clearing when the
+  cursor leaves. `CanvasWidget` gained `cursorMoved()`/`cursorLeft()`
+  signals (independent of `toolMode()` - they fire regardless of Paint
+  mode) and now tracks the mouse continuously (`setMouseTracking(true)`).
+- **`ToolConfigurationPanel`'s "Intensity" dB spin box is now a "Color"
+  swatch button**, opening a color picker - per `docs/sound-mind-
+  design.md`'s own "Color - stereo balance" framing, the picked color's
+  red channel sets the brush's left-channel intensity, green sets the
+  right channel's, so a stroke can now be louder on one channel than the
+  other rather than always identical on both. New `ToolConfigurationPanel
+  ::setColor()`/`color()`, with `setColor()` as the testable core behind
+  the real, dialog-showing button handler.
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes. Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.7] - 2026-09-10
 
 Two real bugs found during manual testing of `v0.0.24.6`'s newly-visible

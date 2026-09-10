@@ -281,3 +281,37 @@ void LayersPanelTest::clearSelectionDropsTheSelectionAndItsHighlight() {
     auto* list = panel.findChild<QListWidget*>(QStringLiteral("layersList"));
     QCOMPARE(list->currentRow(), -1);
 }
+
+void LayersPanelTest::addLayerButtonEmitsAddLayerRequested() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    QSignalSpy spy(&panel, &LayersPanel::addLayerRequested);
+
+    auto* button = panel.findChild<QPushButton*>(QStringLiteral("addLayerButton"));
+    QVERIFY(button != nullptr);
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void LayersPanelTest::selectLayerSelectsAMatchingRow() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom".
+
+    QVERIFY(panel.selectedLayerId().has_value());
+    QCOMPARE(*panel.selectedLayerId(), static_cast<LayerId>(1));
+    auto* list = panel.findChild<QListWidget*>(QStringLiteral("layersList"));
+    QVERIFY(list != nullptr);
+    QCOMPARE(list->currentRow(), 1);  // "Bottom" is displayed second.
+}
+
+void LayersPanelTest::selectLayerIsANoOpForAnUnknownId() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+
+    panel.selectLayer(static_cast<LayerId>(999));
+
+    QVERIFY(!panel.selectedLayerId().has_value());
+}
