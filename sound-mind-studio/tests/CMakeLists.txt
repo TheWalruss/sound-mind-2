@@ -6,6 +6,7 @@ add_executable(sound-mind-studio-tests
     test_canvas_widget.cpp
     test_create_project_wizard.cpp
     test_image_scale_picker_dialog.cpp
+    test_import_export.cpp
     test_import_helpers.cpp
     test_landing_page.cpp
     test_layers_panel.cpp

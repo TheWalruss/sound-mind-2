@@ -18,6 +18,7 @@
 #include <QToolBar>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/landing_page.h"
@@ -36,6 +37,29 @@ using sound_mind::studio::PlaybackPanel;
 using sound_mind::studio::RecordPanel;
 
 namespace {
+
+/// @brief The `MainWindow` this whole test file actually constructs -
+/// identical in every other respect, just always attached with
+/// `AudioDeviceMode::None` instead of `MainWindow`'s own real-device
+/// default.
+///
+/// Before this existed, every `MainWindow` construction in this file - all
+/// ~115 of them, regardless of what that particular test actually
+/// exercised - opened and closed two real system audio devices (one in via
+/// `recordEngine_`, one out via `playbackController_`), since neither had
+/// any way to be told otherwise. That's real device driver I/O on every
+/// single test, the dominant cost behind this suite's own slowness (found
+/// while investigating why `ctest` took over 12 minutes on this one
+/// binary). None of this file's tests depend on real device
+/// enumeration/behavior (grep-confirmed before making this change) - the
+/// few that exercise device-preference forwarding
+/// (`setLoopInputDevice()`/`setRecordInputDevice()`/etc.) only check that a
+/// caller-given name round-trips as a stored *preference* string, never
+/// that a real device by that name exists.
+class TestMainWindow : public MainWindow {
+public:
+    TestMainWindow() : MainWindow(nullptr, sound_mind::core::AudioDeviceMode::None) {}
+};
 
 void appendUint32(std::vector<char>& bytes, std::uint32_t value) {
     for (int i = 0; i < 4; ++i) {
@@ -155,7 +179,7 @@ void createFreshTestProject(MainWindow& window) {
 
 void MainWindowTest::hasARealWindowIconNotTheDefaultOne() {
     // Per the Visual Identity milestone (v0.Y.14.1) - see theme.h.
-    const MainWindow window;
+    const TestMainWindow window;
     QVERIFY(!window.windowIcon().isNull());
 }
 
@@ -163,7 +187,7 @@ void MainWindowTest::startsWithNoProjectOpen() {
     // Per the Landing Page milestone (v0.Y.9.1): the Studio no longer
     // silently creates an in-memory project at startup - the Landing Page
     // is shown until New/Open Project actually creates or loads one.
-    const MainWindow window;
+    const TestMainWindow window;
     QVERIFY(window.project() == nullptr);
 }
 
@@ -172,7 +196,7 @@ void MainWindowTest::newProjectShowsTheCanvasInsteadOfTheLandingPage() {
     // once its wizard is accepted (see its own docs) - not newProject()
     // directly, which would now block on a real dialog under this
     // headless test platform.
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.isShowingLandingPage());
 
     createFreshTestProject(window);
@@ -189,12 +213,12 @@ void MainWindowTest::openProjectAtOpensAndRecordsARecentProject() {
     // real "open a project someone else saved" scenario would find on
     // disk (a window's own currentPath_ isn't involved either way).
     {
-        MainWindow writer;
+        TestMainWindow writer;
         createFreshTestProject(writer);
         const_cast<sound_mind::core::Project*>(writer.project())->save(projectPath);
     }
 
-    MainWindow window;
+    TestMainWindow window;
     const bool ok = window.openProjectAt(projectPath);
 
     QVERIFY(ok);
@@ -217,7 +241,7 @@ void MainWindowTest::openProjectAtOpensAndRecordsARecentProject() {
 }
 
 void MainWindowTest::openProjectAtFailsGracefullyForAMissingFile() {
-    MainWindow window;
+    TestMainWindow window;
     const bool ok = window.openProjectAt(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.smproj");
 
     QVERIFY(!ok);
@@ -238,12 +262,12 @@ void MainWindowTest::openProjectAtFailsGracefullyForAMissingFile() {
 void MainWindowTest::landingPageRecentProjectRequestedOpensThatPath() {
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-landing-recent.smproj";
     {
-        MainWindow writer;
+        TestMainWindow writer;
         createFreshTestProject(writer);
         const_cast<sound_mind::core::Project*>(writer.project())->save(projectPath);
     }
 
-    MainWindow window;
+    TestMainWindow window;
     // Populate the list the same way a real recent-project entry would get
     // there - via a prior successful open, not by reaching into internals.
     QVERIFY(window.openProjectAt(projectPath));
@@ -276,7 +300,7 @@ void MainWindowTest::newProjectReplacesTheCurrentOne() {
     // actually matters is that the *contents* are a fresh project
     // afterwards, which is what this checks. Via createProjectAt() (see
     // createFreshTestProject()'s docs for why, not newProject() directly).
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.project() != nullptr);
 
@@ -290,7 +314,7 @@ void MainWindowTest::importAudioFileAddsANewLayer() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const bool ok = window.importAudioFile(path);
     std::filesystem::remove(path);
@@ -306,7 +330,7 @@ void MainWindowTest::importImageFileAddsANewLayer() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import.png";
     QVERIFY(image.save(QString::fromStdString(path.string())));
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     // KeepNativeResolution - matches this test's own pre-existing intent
     // (does importing add a layer at all) rather than exercising scaling.
@@ -321,7 +345,7 @@ void MainWindowTest::importImageFileAddsANewLayer() {
 }
 
 void MainWindowTest::importAudioFileFailsGracefullyForAMissingFile() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const bool ok = window.importAudioFile(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.wav");
 
@@ -331,7 +355,7 @@ void MainWindowTest::importAudioFileFailsGracefullyForAMissingFile() {
 
 void MainWindowTest::startPlaybackDoesNothingWithNoContent() {
     // A fresh project's only layer (Background) has no content yet.
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     window.startPlayback();
     QVERIFY(!window.isPlaying());
@@ -341,7 +365,7 @@ void MainWindowTest::startPlaybackPlaysAnImportedLayer() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -354,7 +378,7 @@ void MainWindowTest::pauseAndResumePlayback() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-pause.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -373,7 +397,7 @@ void MainWindowTest::stopPlaybackStopsIt() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-stop.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -387,7 +411,7 @@ void MainWindowTest::stopPlaybackStopsIt() {
 
 void MainWindowTest::poolTopmostLayerNowFailsGracefullyWithNoContent() {
     // A fresh project's only layer (Background) has no content yet.
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(!window.poolTopmostLayerNow());
 }
@@ -396,7 +420,7 @@ void MainWindowTest::poolTopmostLayerNowPoolsAnImportedLayer() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-pool.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -418,7 +442,7 @@ void MainWindowTest::poolTopmostLayerNowPoolsAnImportedLayer() {
 
 void MainWindowTest::exportTopmostLayerAudioNowFailsGracefullyWithNoContent() {
     // A fresh project's only layer (Background) has no content yet.
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export.flac";
     QVERIFY(!window.exportTopmostLayerAudioNow(path));
@@ -429,7 +453,7 @@ void MainWindowTest::exportTopmostLayerAudioNowExportsAnImportedLayer() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-audio.wav";
     writeTestWavFile(wavPath);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(wavPath));
     std::filesystem::remove(wavPath);
@@ -446,7 +470,7 @@ void MainWindowTest::exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension()
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-audio2.wav";
     writeTestWavFile(wavPath);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(wavPath));
     std::filesystem::remove(wavPath);
@@ -459,7 +483,7 @@ void MainWindowTest::exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension()
 
 void MainWindowTest::exportTopmostLayerVideoNowFailsGracefullyWithNoContent() {
     // A fresh project's only layer (Background) has no content yet.
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export.mp4";
     QVERIFY(!window.exportTopmostLayerVideoNow(path));
@@ -477,7 +501,7 @@ void MainWindowTest::exportTopmostLayerVideoNowExportsAnImportedLayer() {
     // default-sized canvas here would make this test encode a real,
     // needlessly large video just to confirm exporting works at all.
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-video.smproj";
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
     QVERIFY(window.importAudioFile(wavPath));
     std::filesystem::remove(wavPath);
@@ -494,7 +518,7 @@ void MainWindowTest::importAudioFileShowsProgressThenCompletionInTheStatusBar() 
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-status-import.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QSignalSpy spy(window.statusBar(), &QStatusBar::messageChanged);
 
@@ -512,7 +536,7 @@ void MainWindowTest::poolTopmostLayerNowShowsProgressThenCompletionInTheStatusBa
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-status-pool.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -533,7 +557,7 @@ void MainWindowTest::exportTopmostLayerAudioNowShowsProgressThenCompletionInTheS
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-status-export.wav";
     writeTestWavFile(wavPath);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(wavPath));
     std::filesystem::remove(wavPath);
@@ -553,7 +577,7 @@ void MainWindowTest::aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMe
     // itself never shows dialogs (see its docs) - it should still leave the
     // status bar clean rather than stuck on an "Exporting..." message that
     // never actually completed.
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-status-fail.flac";
 
@@ -562,7 +586,7 @@ void MainWindowTest::aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMe
 }
 
 void MainWindowTest::toggleLoopModeAddsALayerAndStartsTheEngine() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -576,7 +600,7 @@ void MainWindowTest::toggleLoopModeAddsALayerAndStartsTheEngine() {
 }
 
 void MainWindowTest::toggleLoopModeStopsARunningCapture() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     window.toggleLoopMode();
     QVERIFY(window.isLoopModeRunning());
@@ -590,7 +614,7 @@ void MainWindowTest::startPlaybackDoesNothingWhileLoopModeIsRunning() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-loop-playback-guard.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -605,7 +629,7 @@ void MainWindowTest::startPlaybackDoesNothingWhileLoopModeIsRunning() {
 }
 
 void MainWindowTest::toggleRecordingStartsAndStopsWithoutAddingALayerWhenNothingWasCaptured() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -623,7 +647,7 @@ void MainWindowTest::startPlaybackDoesNothingWhileRecordingIsRunning() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-record-playback-guard.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -638,7 +662,7 @@ void MainWindowTest::startPlaybackDoesNothingWhileRecordingIsRunning() {
 }
 
 void MainWindowTest::toggleLoopModeDoesNothingWhileRecordingIsRunning() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     window.toggleRecording();
     QVERIFY(window.isRecording());
@@ -650,7 +674,7 @@ void MainWindowTest::toggleLoopModeDoesNothingWhileRecordingIsRunning() {
 }
 
 void MainWindowTest::toggleRecordingDoesNothingWhileLoopModeIsRunning() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     window.toggleLoopMode();
     QVERIFY(window.isLoopModeRunning());
@@ -662,7 +686,7 @@ void MainWindowTest::toggleRecordingDoesNothingWhileLoopModeIsRunning() {
 }
 
 void MainWindowTest::newProjectStartsWithNoUnsavedChanges() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(!window.hasUnsavedChanges());
 }
@@ -671,7 +695,7 @@ void MainWindowTest::importAudioFileMarksUnsavedChanges() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-lifecycle-import.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(!window.hasUnsavedChanges());
 
@@ -685,7 +709,7 @@ void MainWindowTest::poolTopmostLayerNowMarksUnsavedChanges() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-lifecycle-pool.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -700,7 +724,7 @@ void MainWindowTest::poolTopmostLayerNowMarksUnsavedChanges() {
 }
 
 void MainWindowTest::toggleLoopModeMarksUnsavedChangesWhenItStarts() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(!window.hasUnsavedChanges());
 
@@ -715,7 +739,7 @@ void MainWindowTest::savingProjectClearsUnsavedChanges() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-lifecycle-save.wav";
     writeTestWavFile(wavPath);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     // Project::save() directly, not saveProjectAs() - see
     // openProjectAtOpensAndRecordsARecentProject()'s comment for why:
@@ -739,12 +763,12 @@ void MainWindowTest::openProjectAtClearsUnsavedChangesFromThePreviousProject() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-lifecycle-switch.wav";
     writeTestWavFile(wavPath);
     {
-        MainWindow writer;
+        TestMainWindow writer;
         createFreshTestProject(writer);
         const_cast<sound_mind::core::Project*>(writer.project())->save(projectPath);
     }
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(wavPath));
     std::filesystem::remove(wavPath);
@@ -761,7 +785,7 @@ void MainWindowTest::openProjectAtClearsUnsavedChangesFromThePreviousProject() {
 }
 
 void MainWindowTest::closeAcceptsWhenThereAreNoUnsavedChanges() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(!window.hasUnsavedChanges());
 
@@ -769,7 +793,7 @@ void MainWindowTest::closeAcceptsWhenThereAreNoUnsavedChanges() {
 }
 
 void MainWindowTest::closeRefusesWhileLoopModeIsRunning() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     window.toggleLoopMode();
     QVERIFY(window.isLoopModeRunning());
@@ -783,7 +807,7 @@ void MainWindowTest::closeRefusesWhileLoopModeIsRunning() {
 }
 
 void MainWindowTest::newProjectRefusesWhileLoopModeIsRunning() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     window.toggleLoopMode();
     QVERIFY(window.isLoopModeRunning());
@@ -801,7 +825,7 @@ void MainWindowTest::newProjectRefusesWhileLoopModeIsRunning() {
 }
 
 void MainWindowTest::openProjectRefusesWhileRecordingIsRunning() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     window.toggleRecording();
     QVERIFY(window.isRecording());
@@ -816,7 +840,7 @@ void MainWindowTest::openProjectRefusesWhileRecordingIsRunning() {
 }
 
 void MainWindowTest::openProjectAtRefusesWhileLoopModeIsRunning() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     window.toggleLoopMode();
     QVERIFY(window.isLoopModeRunning());
@@ -839,7 +863,7 @@ void MainWindowTest::createProjectAtSavesImmediatelyAndBecomesCurrent() {
     // separate Save.
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-create-project.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     const bool ok = window.createProjectAt(sound_mind::core::ProjectSettings{}, path);
 
     QVERIFY(ok);
@@ -858,7 +882,7 @@ void MainWindowTest::createProjectAtAppliesGivenSettings() {
     settings.sampleRateHz = 48000;
     settings.binCount = 256;
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(settings, path));
 
     QCOMPARE(window.project()->settings().sampleRateHz, settings.sampleRateHz);
@@ -872,7 +896,7 @@ void MainWindowTest::createProjectAtFailsGracefullyForAnUnwritableLocation() {
     const auto path =
         std::filesystem::temp_directory_path() / "sound-mind-test-nonexistent-dir" / "project.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QString errorMessage;
     const bool ok = window.createProjectAt(sound_mind::core::ProjectSettings{}, path, &errorMessage);
 
@@ -893,7 +917,7 @@ void MainWindowTest::importAudioFileUsesTheProjectsConfiguredCodecSettings() {
     sound_mind::core::ProjectSettings settings;
     settings.binCount = 128;  // Deliberately not StreamCodecConfig{}'s own default (512).
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(settings, projectPath));
 
     QVERIFY(window.importAudioFile(path));
@@ -907,7 +931,7 @@ void MainWindowTest::layersPanelIsHiddenUntilAProjectExists() {
     // isHidden(), not isVisible() - see LayersPanel's own tests for why
     // (the dialog/window chain is never actually shown in this headless
     // test, but hide()/show() still set each widget's own explicit flag).
-    MainWindow window;
+    TestMainWindow window;
     auto* panel = window.findChild<LayersPanel*>();
     QVERIFY(panel != nullptr);
     QVERIFY(panel->isHidden());
@@ -921,7 +945,7 @@ void MainWindowTest::refreshLayersPanelReflectsTheCurrentLayers() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layers-refresh.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -941,7 +965,7 @@ void MainWindowTest::toggleLayerVisibilityHidesALayerFromTopmostLookup() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layers-visibility.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -958,7 +982,7 @@ void MainWindowTest::toggleLayerVisibilityHidesALayerFromTopmostLookup() {
 }
 
 void MainWindowTest::toggleLayerVisibilityMarksUnsavedChanges() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto backgroundId = window.project()->layers().front().id();
     QVERIFY(!window.hasUnsavedChanges());
@@ -969,7 +993,7 @@ void MainWindowTest::toggleLayerVisibilityMarksUnsavedChanges() {
 }
 
 void MainWindowTest::setLayerOpacityChangesTheLayersOpacity() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto backgroundId = window.project()->layers().front().id();
 
@@ -980,7 +1004,7 @@ void MainWindowTest::setLayerOpacityChangesTheLayersOpacity() {
 }
 
 void MainWindowTest::setLayerTranslationChangesTheLayersTranslation() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto backgroundId = window.project()->layers().front().id();
 
@@ -991,7 +1015,7 @@ void MainWindowTest::setLayerTranslationChangesTheLayersTranslation() {
 }
 
 void MainWindowTest::setLayerRescaleChangesTheLayersRescale() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto backgroundId = window.project()->layers().front().id();
 
@@ -1002,7 +1026,7 @@ void MainWindowTest::setLayerRescaleChangesTheLayersRescale() {
 }
 
 void MainWindowTest::renameLayerToRenamesTheLayer() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto backgroundId = window.project()->layers().front().id();
 
@@ -1014,7 +1038,7 @@ void MainWindowTest::renameLayerToRenamesTheLayer() {
 }
 
 void MainWindowTest::renameLayerToFailsForAnEmptyName() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto backgroundId = window.project()->layers().front().id();
 
@@ -1025,7 +1049,7 @@ void MainWindowTest::renameLayerToFailsForAnEmptyName() {
 }
 
 void MainWindowTest::renameLayerToFailsForAnUnknownId() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
 
     QVERIFY(!window.renameLayerTo(999999, QStringLiteral("Nope")));
@@ -1035,7 +1059,7 @@ void MainWindowTest::deleteLayerRemovesANormalLayer() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layers-delete.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -1048,7 +1072,7 @@ void MainWindowTest::deleteLayerRemovesANormalLayer() {
 }
 
 void MainWindowTest::deleteLayerRefusesToDeleteTheBackgroundLayer() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto backgroundId = window.project()->layers().front().id();
     const std::size_t countBefore = window.project()->layers().size();
@@ -1062,7 +1086,7 @@ void MainWindowTest::reorderLayersAppliesAValidPermutation() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layers-reorder.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -1077,7 +1101,7 @@ void MainWindowTest::reorderLayersAppliesAValidPermutation() {
 }
 
 void MainWindowTest::reorderLayersRejectsAnInvalidPermutation() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const auto backgroundId = window.project()->layers().front().id();
 
@@ -1102,8 +1126,17 @@ void MainWindowTest::changingARealRowsOpacitySliderDoesNotCrash() {
     // shares the identical setLayers() call and isn't separately
     // exercised here only because it needs a real QInputDialog, which
     // would block this headless test - see importAudioFile()'s docs.
-    MainWindow window;
+    //
+    // A fresh project's only layer is its Background one, which (per
+    // Decisions Made #30) has no opacity slider at all any more - a real
+    // Normal layer, imported here, is what this test actually needs a
+    // slider from.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-opacity-slider-crash.wav";
+    writeTestWavFile(path);
+    TestMainWindow window;
     createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
 
     auto* panel = window.findChild<LayersPanel*>();
     QVERIFY(panel != nullptr);
@@ -1112,15 +1145,17 @@ void MainWindowTest::changingARealRowsOpacitySliderDoesNotCrash() {
 
     slider->setValue(42);  // Emits valueChanged() for real, synchronously.
 
-    // If this line is reached at all, the process didn't crash.
-    QCOMPARE(window.project()->layers().front().opacity(), 0.42f);
+    // If this line is reached at all, the process didn't crash. The
+    // imported layer is the topmost (last) one - the Background layer
+    // beneath it has no opacity slider to have driven in the first place.
+    QCOMPARE(window.project()->layers().back().opacity(), 0.42f);
 }
 
 void MainWindowTest::toggleLoopModeDoesNothingWithNoProjectOpen() {
     // loopEngine_ doesn't exist until setProject() has been called at
     // least once (see the class docs' v0.Y.12.1 note) - toggling before
     // that must be a plain no-op, not a null-dereference crash.
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(!window.isLoopModeRunning());
 
     window.toggleLoopMode();
@@ -1139,7 +1174,7 @@ void MainWindowTest::settingProjectReconfiguresTheLoopEngineForItsOwnSettings() 
     // consequence instead: Loop Mode still starts and adds a layer
     // normally on a *second* project, with different settings (and so a
     // different loop length) than the first.
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     window.toggleLoopMode();
     QVERIFY(window.isLoopModeRunning());
@@ -1161,7 +1196,7 @@ void MainWindowTest::settingProjectReconfiguresTheLoopEngineForItsOwnSettings() 
 }
 
 void MainWindowTest::setKeepLoopingForwardsToTheLoopEngine() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(!window.keepLooping());
 
@@ -1173,7 +1208,7 @@ void MainWindowTest::setKeepLoopingForwardsToTheLoopEngine() {
 }
 
 void MainWindowTest::setKeepLoopingDoesNothingWithNoProjectOpen() {
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(!window.keepLooping());
 
     window.setKeepLooping(true);  // must not crash - loopEngine_ is still null.
@@ -1187,7 +1222,7 @@ void MainWindowTest::toggleLoopModeReusesAnExistingLoopInputLayerInsteadOfCreati
     // (or reopening a project that already captured one) piled up
     // duplicates instead of continuing to build on the same one - see
     // toggleLoopMode()'s own docs.
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1221,7 +1256,7 @@ void MainWindowTest::toggleLoopModeGivesANewLoopInputLayerAPlaceholderContentImm
     // isn't capturing anything". toggleLoopMode() now seeds it with
     // LoopEngine::emptyImage() immediately, before any real capture has
     // happened.
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
 
     window.toggleLoopMode();
@@ -1240,7 +1275,7 @@ void MainWindowTest::transportPanelsStayHiddenByDefaultEvenAfterAProjectExists()
     // project exists - see layersPanelIsHiddenUntilAProjectExists()),
     // Playback/Record/Loop start OFF and stay OFF until the user
     // explicitly toggles one on, confirmed with the user.
-    MainWindow window;
+    TestMainWindow window;
     auto* loopPanel = window.findChild<LoopPanel*>();
     auto* recordPanel = window.findChild<RecordPanel*>();
     auto* playbackPanel = window.findChild<PlaybackPanel*>();
@@ -1262,7 +1297,7 @@ void MainWindowTest::panelVisibilityPersistsAcrossProjectSwitches() {
     // Confirmed with the user: a manual show/hide choice persists across
     // New/Open Project within the same session, rather than resetting to
     // the OFF-by-default/ON-by-default state every time setProject() runs.
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     auto* playbackPanel = window.findChild<PlaybackPanel*>();
     QVERIFY(playbackPanel != nullptr);
@@ -1277,7 +1312,7 @@ void MainWindowTest::panelVisibilityPersistsAcrossProjectSwitches() {
 }
 
 void MainWindowTest::layersToggleActionShowsAndHidesTheLayersPanel() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     auto* panel = window.findChild<LayersPanel*>();
     QVERIFY(panel != nullptr);
@@ -1307,7 +1342,7 @@ void MainWindowTest::layersToggleActionShowsAndHidesTheLayersPanel() {
 }
 
 void MainWindowTest::toggleLoopModeSyncsTheLoopPanelsRunningState() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     auto* button = window.findChild<QPushButton*>(QStringLiteral("loopToggleButton"));
     QVERIFY(button != nullptr);
@@ -1323,7 +1358,7 @@ void MainWindowTest::toggleLoopModeSyncsTheLoopPanelsRunningState() {
 }
 
 void MainWindowTest::toggleRecordingSyncsTheRecordPanelsRecordingState() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     auto* button = window.findChild<QPushButton*>(QStringLiteral("recordToggleButton"));
     QVERIFY(button != nullptr);
@@ -1339,7 +1374,7 @@ void MainWindowTest::toggleRecordingSyncsTheRecordPanelsRecordingState() {
 }
 
 void MainWindowTest::setKeepLoopingSyncsTheLoopPanelsCheckBox() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     auto* checkBox = window.findChild<QCheckBox*>(QStringLiteral("keepLoopingCheckBox"));
     QVERIFY(checkBox != nullptr);
@@ -1352,7 +1387,7 @@ void MainWindowTest::setKeepLoopingSyncsTheLoopPanelsCheckBox() {
 }
 
 void MainWindowTest::setLoopInputDeviceForwardsToTheLoopEngine() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.loopInputDevice().isEmpty());
 
@@ -1361,7 +1396,7 @@ void MainWindowTest::setLoopInputDeviceForwardsToTheLoopEngine() {
 }
 
 void MainWindowTest::setLoopOutputDeviceForwardsToTheLoopEngine() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.loopOutputDevice().isEmpty());
 
@@ -1370,7 +1405,7 @@ void MainWindowTest::setLoopOutputDeviceForwardsToTheLoopEngine() {
 }
 
 void MainWindowTest::setRecordInputDeviceForwardsToTheRecordEngine() {
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.recordInputDevice().isEmpty());
 
     window.setRecordInputDevice(QStringLiteral("Some Microphone"));
@@ -1378,7 +1413,7 @@ void MainWindowTest::setRecordInputDeviceForwardsToTheRecordEngine() {
 }
 
 void MainWindowTest::setPlaybackVolumeForwardsToThePlaybackEngine() {
-    MainWindow window;
+    TestMainWindow window;
     QCOMPARE(window.playbackVolume(), 1.0f);
 
     window.setPlaybackVolume(150);
@@ -1388,7 +1423,7 @@ void MainWindowTest::setPlaybackVolumeForwardsToThePlaybackEngine() {
 void MainWindowTest::loopPanelToggleButtonStartsAndStopsTheRealEngine() {
     // End-to-end wiring check, driving the real embedded button rather
     // than calling toggleLoopMode() directly.
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     auto* button = window.findChild<QPushButton*>(QStringLiteral("loopToggleButton"));
     QVERIFY(button != nullptr);
@@ -1406,7 +1441,7 @@ void MainWindowTest::playbackPanelButtonsDriveRealPlayback() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-panel-buttons.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -1427,7 +1462,7 @@ void MainWindowTest::audioSnippetsForFileReturnsOneSnippetForAudioNoLongerThanTh
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-snippets-short.wav";
     writeTestWavFile(path);  // 4 samples - far shorter than any project's own duration.
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
 
     const auto snippets = window.audioSnippetsForFile(path);
@@ -1444,7 +1479,7 @@ void MainWindowTest::audioSnippetsForFileSplitsLongerAudioIntoProjectLengthSegme
     writeTestWavFileWithFrameCount(path, loopLengthSamples * 7 / 2);  // 3.5 loops - a shorter final snippet.
 
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-snippets-long.smproj";
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
 
     const auto snippets = window.audioSnippetsForFile(path);
@@ -1465,7 +1500,7 @@ void MainWindowTest::audioSnippetsForFileSplitsLongerAudioIntoProjectLengthSegme
 }
 
 void MainWindowTest::audioSnippetsForFileFailsGracefullyWithNoProjectOpen() {
-    MainWindow window;
+    TestMainWindow window;
     const auto snippets =
         window.audioSnippetsForFile(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.wav");
     QVERIFY(snippets.empty());
@@ -1477,7 +1512,7 @@ void MainWindowTest::importAudioFileImportsEveryComputedSnippetForLongAudio() {
     writeTestWavFileWithFrameCount(path, loopLengthSamples * 3);  // exactly 3 whole snippets.
 
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-all.smproj";
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1502,7 +1537,7 @@ void MainWindowTest::importAudioSnippetsImportsOnlyTheRequestedSubset() {
     writeTestWavFileWithFrameCount(path, loopLengthSamples * 4);  // 4 whole snippets: 0, 1, 2, 3.
 
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-subset.smproj";
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1527,7 +1562,7 @@ void MainWindowTest::importAudioSnippetsSkipsOutOfRangeIndicesGracefully() {
     writeTestWavFileWithFrameCount(path, loopLengthSamples * 2);  // exactly 2 snippets: 0, 1.
 
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-range.smproj";
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1543,7 +1578,7 @@ void MainWindowTest::importAudioSnippetsFailsWhenNothingWasImported() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-snippets-none.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1573,7 +1608,7 @@ void MainWindowTest::importImageFileRescaleToFitProjectStretchesBothAxes() {
     writeImageScalingTestImage(path);
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-fit.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
 
     const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::RescaleToFitProject);
@@ -1591,7 +1626,7 @@ void MainWindowTest::importImageFileScaleVerticalKeepHorizontalKeepsNativeWidth(
     writeImageScalingTestImage(path);
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-v.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
 
     const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::ScaleVerticalKeepHorizontal);
@@ -1609,7 +1644,7 @@ void MainWindowTest::importImageFileScaleHorizontalKeepVerticalKeepsNativeHeight
     writeImageScalingTestImage(path);
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-h.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
 
     const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::ScaleHorizontalKeepVertical);
@@ -1628,7 +1663,7 @@ void MainWindowTest::importImageFileScaleVerticalProportionalPreservesAspectRati
     const auto projectPath =
         std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-proportional.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
 
     const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::ScaleVerticalProportional);
@@ -1646,7 +1681,7 @@ void MainWindowTest::importImageFileKeepNativeResolutionDoesNotRescale() {
     writeImageScalingTestImage(path);
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-image-scale-native.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
 
     const bool ok = window.importImageFile(path, ImageScalePickerDialog::Mode::KeepNativeResolution);
@@ -1663,7 +1698,7 @@ void MainWindowTest::handleDroppedFilesImportsAWavFile() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-drop.wav";
     writeTestWavFile(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1677,7 +1712,7 @@ void MainWindowTest::handleDroppedFilesImportsAnImageFile() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-drop.png";
     writeImageScalingTestImage(path);
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1692,11 +1727,11 @@ void MainWindowTest::handleDroppedFilesOpensASmprojFile() {
     {
         // A separate window just to create the file on disk - dropped onto
         // a second, fresh window below.
-        MainWindow writer;
+        TestMainWindow writer;
         QVERIFY(writer.createProjectAt(sound_mind::core::ProjectSettings{}, projectPath));
     }
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.isShowingLandingPage());
 
     window.handleDroppedFiles({projectPath});
@@ -1706,7 +1741,7 @@ void MainWindowTest::handleDroppedFilesOpensASmprojFile() {
 }
 
 void MainWindowTest::handleDroppedFilesIgnoresUnrecognizedExtensions() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1735,7 +1770,7 @@ void MainWindowTest::handleDroppedFilesRoutesMultipleFilesInOrder() {
         stream << "ignored";
     }
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1750,7 +1785,7 @@ void MainWindowTest::handleDroppedFilesRoutesMultipleFilesInOrder() {
 }
 
 void MainWindowTest::handleDroppedFilesSmprojRefusesWhileLoopModeIsRunning() {
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     window.toggleLoopMode();
     QVERIFY(window.isLoopModeRunning());
@@ -1783,7 +1818,7 @@ void MainWindowTest::handleDroppedFilesAppliesTheGivenImageMode() {
     writeImageScalingTestImage(path);  // 30x20.
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-image-mode.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
 
     window.handleDroppedFiles({path}, ImageScalePickerDialog::Mode::KeepNativeResolution, /*importAsSequence=*/false);
@@ -1805,7 +1840,7 @@ void MainWindowTest::handleDroppedFilesSequencesDroppedImagesWhenRequested() {
     writeImageScalingTestImage(pathB);
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-seq.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1833,7 +1868,7 @@ void MainWindowTest::handleDroppedFilesAppliesGivenAudioSnippetSelections() {
     writeTestWavFileWithFrameCount(path, loopLengthSamples * 4);  // 4 whole snippets: 0, 1, 2, 3.
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-audio-snippets.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1867,7 +1902,7 @@ void MainWindowTest::importImageFilesImportsEachFileIndependentlyWhenNotSequenti
     writeImageScalingTestImage(pathB);
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-independent.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1897,7 +1932,7 @@ void MainWindowTest::importImageFilesAppliesProportionalScalingAndCumulativeTran
     writeSizedTestImage(pathB, 40, 50);
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-cumulative.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1936,7 +1971,7 @@ void MainWindowTest::importImageFilesWrapsCumulativeOffsetPastCanvasWidth() {
     writeImageScalingTestImage(pathC);
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-wrap.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1960,7 +1995,7 @@ void MainWindowTest::importImageFilesSortsFilesAlphabeticallyWhenSequential() {
     writeImageScalingTestImage(pathB);
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-sort.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -1987,7 +2022,7 @@ void MainWindowTest::importImageFilesSucceedsIfAtLeastOneFileImports() {
     const auto badPath = std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.png";
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-partial.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -2006,7 +2041,7 @@ void MainWindowTest::importImageFilesFailsWhenNothingWasImported() {
     const auto badPathB = std::filesystem::temp_directory_path() / "sound-mind-does-not-exist-b.png";
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-all-fail.smproj";
 
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
     const std::size_t layerCountBefore = window.project()->layers().size();
 
@@ -2021,7 +2056,7 @@ void MainWindowTest::importImageFilesFailsWhenNothingWasImported() {
 }
 
 void MainWindowTest::windowTitleIncludesTheProjectNameOnceOneExists() {
-    MainWindow window;
+    TestMainWindow window;
     QVERIFY(!window.windowTitle().contains(QStringLiteral(" - ")));  // no project yet.
 
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-window-title.smproj";
@@ -2034,7 +2069,7 @@ void MainWindowTest::startPlaybackSetsThePlaybackPanelDuration() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-duration.wav";
     writeTestWavFileWithFrameCount(path, 44100, 44100);  // exactly 1 second.
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -2054,7 +2089,7 @@ void MainWindowTest::seekPlaybackMovesThePlaybackPosition() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-seek.wav";
     writeTestWavFileWithFrameCount(path, 441000, 44100);  // exactly 10 seconds.
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
@@ -2075,7 +2110,7 @@ void MainWindowTest::stopPlaybackResetsThePlaybackPanelPosition() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-stop.wav";
     writeTestWavFileWithFrameCount(path, 441000, 44100);  // exactly 10 seconds.
 
-    MainWindow window;
+    TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);

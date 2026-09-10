@@ -143,7 +143,21 @@ public:
     ///        `QApplication` level in `main.cpp`, not per-window here.
     /// @param parent The owning widget, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
-    explicit MainWindow(QWidget* parent = nullptr);
+    /// @param audioDeviceMode Threaded through to every real-device-capable
+    ///        member constructed here or later in setProject()
+    ///        (`playbackController_`, `recordEngine_`, `loopEngine_`) -
+    ///        `Real` (the default) attaches each to the system's actual
+    ///        audio hardware, same as leaving this argument off entirely.
+    ///        `None` exists specifically for tests: previously every
+    ///        `MainWindow` - regardless of what it actually tested - opened
+    ///        and closed two real system audio devices (one in, one out) on
+    ///        construction alone, since `recordEngine_`/`playbackController_`
+    ///        both defaulted to `AudioDeviceMode::Real` with no way for
+    ///        `MainWindow` to say otherwise. `sound-mind-studio-tests`'s own
+    ///        `TestMainWindow` helper (`test_main_window.cpp`) passes `None`
+    ///        here for exactly this reason - see its own docs.
+    explicit MainWindow(QWidget* parent = nullptr,
+                         sound_mind::core::AudioDeviceMode audioDeviceMode = sound_mind::core::AudioDeviceMode::Real);
 
     /**
      * @brief The currently open project, if any.
@@ -825,9 +839,11 @@ public:
      *        (`v0.Y.22.1`).
      *
      * When `importAsSequence` is `false`, every path is imported
-     * independently via importImageFile(), each with `mode` and no
-     * translation (`translationColumns()` stays `0`) - equivalent to
-     * calling importImageFile() once per path. When `true`, `mode` is
+     * independently, each with `mode` and no translation
+     * (`translationColumns()` stays `0`) - the same effect as calling
+     * importImageFile() once per path (as of `v0.Y.23.1`, both delegate to
+     * the same underlying `sound_mind::studio::importImageFileInto()`).
+     * When `true`, `mode` is
      * ignored entirely: every file is imported with
      * `ImageScalePickerDialog::Mode::ScaleVerticalProportional`, sorted by
      * path first (deterministic - the natural choice for numbered frame
@@ -1138,6 +1154,13 @@ private:
                          QStringLiteral("SoundMindStudio")};
     RecentProjects recentProjects_{settings_};
 
+    /// @brief The `AudioDeviceMode` this window was constructed with - see
+    /// the constructor's own docs. Stored so setProject() can construct
+    /// each project's `loopEngine_` with the same mode `playbackController_`/
+    /// `recordEngine_` already used, rather than that one construction site
+    /// silently reverting to the `Real` default.
+    sound_mind::core::AudioDeviceMode audioDeviceMode_ = sound_mind::core::AudioDeviceMode::Real;
+
     /// @brief Owns the PlaybackEngine and its position-polling timer -
     /// extracted from a plain member + free-standing timer/flag as part of
     /// the Phase 2.5 Refactor & Clean Up milestone (`v0.Y.23.1`). "Which
@@ -1163,7 +1186,10 @@ private:
     /// pointer held across such a call - see layerById().
     std::optional<sound_mind::core::LayerId> loopLayerId_;
 
-    sound_mind::core::RecordEngine recordEngine_{sound_mind::codec::StreamCodecConfig{}.sampleRateHz};
+    /// @brief Constructed in the member-initializer list (not a fixed
+    /// in-class default) since it needs `audioDeviceMode_`'s value, which
+    /// is only known once the constructor's own parameter is available.
+    sound_mind::core::RecordEngine recordEngine_;
     QTimer* recordDrainTimer_ = nullptr;
 };
 

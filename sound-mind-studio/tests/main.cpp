@@ -17,6 +17,7 @@
 #include "test_canvas_widget.h"
 #include "test_create_project_wizard.h"
 #include "test_image_scale_picker_dialog.h"
+#include "test_import_export.h"
 #include "test_import_helpers.h"
 #include "test_landing_page.h"
 #include "test_layers_panel.h"
@@ -86,6 +87,9 @@ int main(int argc, char** argv) {
 
     ImportHelpersTest importHelpersTest;
     status |= QTest::qExec(&importHelpersTest, argc, argv);
+
+    ImportExportTest importExportTest;
+    status |= QTest::qExec(&importExportTest, argc, argv);
 
     return status;
 }

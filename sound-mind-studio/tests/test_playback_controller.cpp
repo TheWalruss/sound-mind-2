@@ -6,6 +6,7 @@
 #include "sound_mind/studio/playback_controller.h"
 
 using sound_mind::codec::AudioBuffer;
+using sound_mind::core::AudioDeviceMode;
 using sound_mind::studio::PlaybackController;
 
 namespace {
@@ -26,19 +27,19 @@ AudioBuffer makeTestAudio() {
 }  // namespace
 
 void PlaybackControllerTest::freshControllerIsNotLoadedOrPlaying() {
-    const PlaybackController controller;
+    const PlaybackController controller(nullptr, AudioDeviceMode::None);
     QVERIFY(!controller.isLoaded());
     QVERIFY(!controller.isPlaying());
 }
 
 void PlaybackControllerTest::loadMarksItLoaded() {
-    PlaybackController controller;
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
     controller.load(makeTestAudio());
     QVERIFY(controller.isLoaded());
 }
 
 void PlaybackControllerTest::invalidateClearsLoadedWithoutStoppingPlayback() {
-    PlaybackController controller;
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
     controller.load(makeTestAudio());
     controller.play();
 
@@ -51,7 +52,7 @@ void PlaybackControllerTest::invalidateClearsLoadedWithoutStoppingPlayback() {
 }
 
 void PlaybackControllerTest::loadEmitsDurationChanged() {
-    PlaybackController controller;
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
     QSignalSpy spy(&controller, &PlaybackController::durationChanged);
 
     controller.load(makeTestAudio());
@@ -62,7 +63,7 @@ void PlaybackControllerTest::loadEmitsDurationChanged() {
 }
 
 void PlaybackControllerTest::playStartsPlayback() {
-    PlaybackController controller;
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
     controller.load(makeTestAudio());
 
     controller.play();
@@ -73,7 +74,7 @@ void PlaybackControllerTest::playStartsPlayback() {
 }
 
 void PlaybackControllerTest::pauseStopsPlaybackButKeepsItLoaded() {
-    PlaybackController controller;
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
     controller.load(makeTestAudio());
     controller.play();
 
@@ -84,7 +85,7 @@ void PlaybackControllerTest::pauseStopsPlaybackButKeepsItLoaded() {
 }
 
 void PlaybackControllerTest::stopClearsLoadedAndPlaying() {
-    PlaybackController controller;
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
     controller.load(makeTestAudio());
     controller.play();
 
@@ -95,7 +96,7 @@ void PlaybackControllerTest::stopClearsLoadedAndPlaying() {
 }
 
 void PlaybackControllerTest::seekEmitsPositionChangedImmediately() {
-    PlaybackController controller;
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
     controller.load(makeTestAudio());
     QSignalSpy spy(&controller, &PlaybackController::positionChanged);
 
@@ -106,7 +107,7 @@ void PlaybackControllerTest::seekEmitsPositionChangedImmediately() {
 }
 
 void PlaybackControllerTest::seekDoesNothingWhenNotLoaded() {
-    PlaybackController controller;
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
     QSignalSpy spy(&controller, &PlaybackController::positionChanged);
 
     controller.seek(0.5);  // nothing loaded - should be a harmless no-op.
@@ -116,13 +117,13 @@ void PlaybackControllerTest::seekDoesNothingWhenNotLoaded() {
 }
 
 void PlaybackControllerTest::setVolumeChangesVolume() {
-    PlaybackController controller;
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
     controller.setVolume(150);
     QVERIFY(qFuzzyCompare(controller.volume(), 1.5f));
 }
 
 void PlaybackControllerTest::outputDeviceMethodsAreCallableWithoutCrashing() {
-    PlaybackController controller;
+    PlaybackController controller;  // real device mode (the default) - this test needs it.
     // Populate the device manager's device types first - see
     // PlaybackEngine::setPreferredOutputDevice()'s own docs for why this
     // real JUCE quirk needs a real device query before a bogus name is

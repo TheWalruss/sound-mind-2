@@ -6,7 +6,8 @@
 
 namespace sound_mind::studio {
 
-PlaybackController::PlaybackController(QObject* parent) : QObject(parent) {
+PlaybackController::PlaybackController(QObject* parent, sound_mind::core::AudioDeviceMode deviceMode)
+    : QObject(parent), engine_(deviceMode) {
     // ~30fps - matches MainWindow's own loopUpdateTimer_ cadence: frequent
     // enough for a moving position bar/playhead to read as smooth, without
     // repainting so often it competes noticeably for CPU time.

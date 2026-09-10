@@ -30,6 +30,7 @@ add_library(sound-mind-studio-lib
     src/canvas_widget.cpp
     src/create_project_wizard.cpp
     src/image_scale_picker_dialog.cpp
+    src/import_export.cpp
     src/import_helpers.cpp
     src/landing_page.cpp
     src/layers_panel.cpp
@@ -45,6 +46,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/create_project_wizard.h
     include/sound_mind/studio/image_scale_picker_dialog.h
+    include/sound_mind/studio/import_export.h
     include/sound_mind/studio/import_helpers.h
     include/sound_mind/studio/landing_page.h
     include/sound_mind/studio/layers_panel.h

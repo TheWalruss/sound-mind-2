@@ -6,6 +6,96 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.23.2] - 2026-09-10
+
+Test-only/internal - no user-visible behavior change. `ctest`'s
+`sound-mind-studio-tests` entry took 766 seconds on its own (778 seconds
+for the whole regression suite); root cause: `MainWindow`'s constructor
+unconditionally opened two real system audio devices (`recordEngine_` in,
+`playbackController_` out) regardless of what a given test actually
+exercised, since neither had any way to be told not to.
+
+### Changed
+
+- `MainWindow` and `PlaybackController` both gained an `AudioDeviceMode`
+  constructor parameter (default `Real`, so the real app is unaffected) -
+  the same enum `PlaybackEngine`/`RecordEngine`/`LoopEngine` already used
+  for exactly this purpose, threaded one level further out. `MainWindow`
+  passes it to `recordEngine_`, `playbackController_`, and the
+  `loopEngine_` it later constructs in `setProject()`.
+- `test_main_window.cpp` gained a `TestMainWindow : public MainWindow`
+  helper whose default constructor passes `AudioDeviceMode::None`; all
+  ~115 `MainWindow` constructions in the file now use it (mechanical
+  rename, confirmed beforehand that no test in the file depends on real
+  device enumeration/behavior - the few exercising device-preference
+  forwarding only check that a caller-given name round-trips as a stored
+  string). `test_playback_controller.cpp`: 10 of its 11 tests now
+  construct with `AudioDeviceMode::None` too; the one that genuinely
+  tests real-device behavior (`outputDeviceMethodsAreCallableWithoutCrashing`)
+  keeps the real-device default.
+- Result: the full regression suite (137 `ctest` entries) now takes
+  ~64 seconds total, down from ~779 seconds (~12x).
+
+### Fixed
+
+- **A real, pre-existing test regression found while isolating the slow
+  suite**: `MainWindowTest::changingARealRowsOpacitySliderDoesNotCrash()`
+  assumed a fresh project's only layer (its Background one) has an
+  `opacitySlider` - true before `v0.0.21.2`'s Background-controls fix
+  (Decisions Made #30), not after. Fixed by importing a real Normal layer
+  first and checking its opacity instead.
+
+Regression: `sound-mind-core-tests` (413/102, unaffected) and the full
+`sound-mind-studio-tests` suite (all 14 classes) both pass. Doxygen docs
+target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy until the accompanying `v0.0.23.1`
+commit, per the user's own go-ahead to push both once regression passed.
+
+## [0.0.23.1] - 2026-09-10
+
+Part 2 of the Phase 2.5 "Refactor & Clean Up" milestone
+(`docs/sound-mind-roadmap.md`'s `v0.Y.23.1`) - purely internal code
+quality work, no user-visible behavior change. Extracts the
+Import/Export cluster `MainWindow` had grown (audio snippet
+splitting/importing, image importing, layer audio/video export) into
+its own module. The roadmap heading still stays unmarked - Loop Mode,
+Recording, and project lifecycle remain directly in `MainWindow`,
+candidates for further installments of the same milestone.
+
+### Changed
+
+- **New `sound_mind::studio::import_export` free functions**
+  (`audioSnippetsForFile()`, `importAudioSnippetsInto()`,
+  `importImageFileInto()`, `importImageFilesInto()`,
+  `exportLayerAudioNow()`, `exportLayerVideoNow()`), with their own
+  `test_import_export.cpp` (13 tests). Free functions rather than a
+  stateful controller class (unlike `PlaybackController`) - there's no
+  persistent engine/timer to own here, just logic operating on a
+  `Project&`/`Layer` passed in each call, the same shape
+  `sound-mind-core`'s own `layer_export.h` already uses one level
+  down. Deliberately UI-free: no status bar messages, no
+  `canvas_->update()`, no `hasUnsavedChanges_` - `MainWindow`'s own
+  wrapper methods (unchanged signatures) still own all of that,
+  calling these in between.
+- Every `MainWindow` import/export method (`audioSnippetsForFile()`,
+  `importAudioSnippets()`, `importImageFile()`, `importImageFiles()`,
+  `exportTopmostLayerAudioNow()`, `exportTopmostLayerVideoNow()`)
+  keeps its exact pre-refactor signature, now a thin delegating body.
+  `importImageFiles()` no longer loops over the sibling
+  `importImageFile()` member internally - it delegates to
+  `importImageFilesInto()`'s own internal loop instead, and now shows
+  one consolidated "Imported N file(s)." status message at the end
+  rather than one message per file; no test depended on the
+  per-file message.
+
+Regression: `sound-mind-core-tests` (413 assertions/102 cases,
+unaffected) and the full `sound-mind-studio-tests` suite (all 14 test
+classes, one of them new) both pass. Doxygen docs target rebuilds
+clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.22.1] - 2026-09-10
 
 Part 1 of the Phase 2.5 "Refactor & Clean Up" milestone

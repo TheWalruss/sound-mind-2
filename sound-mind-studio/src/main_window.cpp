@@ -36,7 +36,6 @@
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
-#include "sound_mind/codec/wav_file.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/layer_export.h"
 #include "sound_mind/core/pooling.h"
@@ -45,6 +44,7 @@
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/create_project_wizard.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
+#include "sound_mind/studio/import_export.h"
 #include "sound_mind/studio/import_helpers.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
@@ -103,7 +103,10 @@ void showBusyStatus(QStatusBar* bar, const QString& message) {
 
 }  // namespace
 
-MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
+MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioDeviceMode)
+    : QMainWindow(parent),
+      audioDeviceMode_(audioDeviceMode),
+      recordEngine_(sound_mind::codec::StreamCodecConfig{}.sampleRateHz, audioDeviceMode) {
     setWindowTitle(QStringLiteral("Sound Mind Studio v" SOUND_MIND_VERSION));
     setWindowIcon(studioWindowIcon());
     resize(800, 600);
@@ -164,7 +167,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     // slot directly (an exact signature match, no lambda needed);
     // positionChanged() -> a lambda, since the canvas playhead needs a
     // *fraction* (position/total), not the raw position alone.
-    playbackController_ = new PlaybackController(this);
+    playbackController_ = new PlaybackController(this, audioDeviceMode_);
     connect(playbackController_, &PlaybackController::durationChanged, playbackPanel_, &PlaybackPanel::setDuration);
     connect(playbackController_, &PlaybackController::positionChanged, this, [this](double positionSeconds) {
         playbackPanel_->setPositionSeconds(positionSeconds);
@@ -464,7 +467,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     const sound_mind::core::ProjectSettings& settings = project_->settings();
     const auto config = sound_mind::core::streamCodecConfigFor(settings);
     const auto loopLengthSamples = static_cast<std::size_t>(settings.canvasWidth) * config.hopLength;
-    loopEngine_ = std::make_unique<sound_mind::core::LoopEngine>(config, loopLengthSamples);
+    loopEngine_ = std::make_unique<sound_mind::core::LoopEngine>(config, loopLengthSamples, audioDeviceMode_);
     loopPanel_->setInputDevices(toQStringList(loopEngine_->availableInputDeviceNames()));
     loopPanel_->setOutputDevices(toQStringList(loopEngine_->availableOutputDeviceNames()));
 
@@ -703,41 +706,7 @@ std::vector<AudioSnippetPickerDialog::RowData> MainWindow::audioSnippetsForFile(
         }
         return {};
     }
-
-    try {
-        const auto audio = sound_mind::codec::readWavFile(path);
-        const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
-        const auto loopLengthSamples =
-            static_cast<std::size_t>(project_->settings().canvasWidth) * static_cast<std::size_t>(config.hopLength);
-        if (loopLengthSamples == 0 || audio.sampleRateHz == 0) {
-            if (errorMessage != nullptr) {
-                *errorMessage = tr("The project's own duration is zero - nothing to split against.");
-            }
-            return {};
-        }
-
-        const std::size_t totalSamples = audio.frameCount();
-        const std::size_t snippetCount =
-            std::max<std::size_t>((totalSamples + loopLengthSamples - 1) / loopLengthSamples, std::size_t{1});
-
-        std::vector<AudioSnippetPickerDialog::RowData> result;
-        result.reserve(snippetCount);
-        for (std::size_t index = 0; index < snippetCount; ++index) {
-            const std::size_t start = index * loopLengthSamples;
-            const std::size_t end = std::min(start + loopLengthSamples, totalSamples);
-            AudioSnippetPickerDialog::RowData row;
-            row.index = index;
-            row.startSeconds = static_cast<double>(start) / static_cast<double>(audio.sampleRateHz);
-            row.endSeconds = static_cast<double>(end) / static_cast<double>(audio.sampleRateHz);
-            result.push_back(row);
-        }
-        return result;
-    } catch (const std::exception& e) {
-        if (errorMessage != nullptr) {
-            *errorMessage = QString::fromStdString(e.what());
-        }
-        return {};
-    }
+    return sound_mind::studio::audioSnippetsForFile(*project_, path, errorMessage);
 }
 
 bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const std::vector<std::size_t>& snippetIndices,
@@ -750,81 +719,23 @@ bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const st
     }
 
     showBusyStatus(statusBar(), tr("Importing audio..."));
-    try {
-        const auto audio = sound_mind::codec::readWavFile(path);
-        const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
-        const auto loopLengthSamples =
-            static_cast<std::size_t>(project_->settings().canvasWidth) * static_cast<std::size_t>(config.hopLength);
-        const std::size_t totalSamples = audio.frameCount();
-        const std::size_t snippetCount = loopLengthSamples > 0
-                                              ? std::max<std::size_t>((totalSamples + loopLengthSamples - 1) / loopLengthSamples,
-                                                                       std::size_t{1})
-                                              : 1;
-
-        // Sorted, de-duplicated so layers land in the project in ascending
-        // snippet order regardless of the order the caller listed indices
-        // in - a snippet picker's checked order needn't match position
-        // order.
-        std::vector<std::size_t> sortedIndices = snippetIndices;
-        std::sort(sortedIndices.begin(), sortedIndices.end());
-        sortedIndices.erase(std::unique(sortedIndices.begin(), sortedIndices.end()), sortedIndices.end());
-
-        const std::string stem = path.stem().string();
-        int importedCount = 0;
-        for (const std::size_t index : sortedIndices) {
-            if (index >= snippetCount) {
-                continue;  // silently skipped - see this method's own docs.
-            }
-            const std::size_t start = loopLengthSamples > 0 ? index * loopLengthSamples : 0;
-            const std::size_t end =
-                loopLengthSamples > 0 ? std::min(start + loopLengthSamples, totalSamples) : totalSamples;
-            if (start > end) {
-                continue;
-            }
-
-            sound_mind::codec::AudioBuffer snippet;
-            snippet.sampleRateHz = audio.sampleRateHz;
-            snippet.left.assign(audio.left.begin() + static_cast<std::ptrdiff_t>(start),
-                                 audio.left.begin() + static_cast<std::ptrdiff_t>(end));
-            snippet.right.assign(audio.right.begin() + static_cast<std::ptrdiff_t>(start),
-                                  audio.right.begin() + static_cast<std::ptrdiff_t>(end));
-
-            const auto content = sound_mind::codec::encode(snippet, config);
-            const std::string layerName =
-                snippetCount > 1 ? stem + "_" + formatSnippetIndex(index) : path.filename().string();
-
-            sound_mind::core::Layer layer(0, layerName, sound_mind::core::LayerType::Normal);
-            layer.setContent(content);
-            project_->addLayer(std::move(layer));
-            ++importedCount;
-        }
-
-        if (importedCount == 0) {
-            statusBar()->clearMessage();
-            if (errorMessage != nullptr) {
-                *errorMessage = tr("No snippets were imported.");
-            }
-            return false;
-        }
-
-        canvas_->update();
-        // The topmost layer just changed - the next startPlayback() should
-        // pick up the newly imported one instead of whatever was loaded
-        // before, rather than silently keep playing stale content.
-        playbackController_->invalidate();
-        hasUnsavedChanges_ = true;
-        refreshLayersPanel();
-        statusBar()->showMessage(
-            tr("Imported %1 layer(s) from \"%2\".").arg(importedCount).arg(QString::fromStdString(path.filename().string())),
-            5000);
-        return true;
-    } catch (const std::exception& e) {
+    const int importedCount = sound_mind::studio::importAudioSnippetsInto(*project_, path, snippetIndices, errorMessage);
+    if (importedCount == 0) {
         statusBar()->clearMessage();
-        if (errorMessage != nullptr) {
-            *errorMessage = QString::fromStdString(e.what());
-        }
         return false;
     }
+
+    canvas_->update();
+    // The topmost layer just changed - the next startPlayback() should
+    // pick up the newly imported one instead of whatever was loaded
+    // before, rather than silently keep playing stale content.
+    playbackController_->invalidate();
+    hasUnsavedChanges_ = true;
+    refreshLayersPanel();
+    statusBar()->showMessage(
+        tr("Imported %1 layer(s) from \"%2\".").arg(importedCount).arg(QString::fromStdString(path.filename().string())),
+        5000);
+    return true;
 }
 
 bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePickerDialog::Mode mode,
@@ -836,38 +747,18 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePi
         return false;
     }
 
-    const QImage sourceImage(QString::fromStdString(path.string()));
-    if (sourceImage.isNull()) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("Could not load the image file.");
-        }
-        return false;
-    }
-
     showBusyStatus(statusBar(), tr("Importing image..."));
-    try {
-        const auto& settings = project_->settings();
-        const QImage scaledImage = scaleImageForImport(sourceImage, mode, static_cast<int>(settings.canvasWidth),
-                                                        static_cast<int>(settings.canvasHeight));
-        const auto rgbImage = toRgbImage(scaledImage);
-        const auto content = sound_mind::codec::fromRgbImage(rgbImage, sound_mind::core::streamCodecConfigFor(settings));
-
-        sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
-        layer.setContent(content);
-        project_->addLayer(std::move(layer));
-        canvas_->update();
-        playbackController_->invalidate();
-        hasUnsavedChanges_ = true;
-        refreshLayersPanel();
-        statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
-        return true;
-    } catch (const std::exception& e) {
+    if (!sound_mind::studio::importImageFileInto(*project_, path, mode, errorMessage)) {
         statusBar()->clearMessage();
-        if (errorMessage != nullptr) {
-            *errorMessage = QString::fromStdString(e.what());
-        }
         return false;
     }
+
+    canvas_->update();
+    playbackController_->invalidate();
+    hasUnsavedChanges_ = true;
+    refreshLayersPanel();
+    statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
+    return true;
 }
 
 bool MainWindow::importImageFiles(const std::vector<std::filesystem::path>& paths, ImageScalePickerDialog::Mode mode,
@@ -878,69 +769,20 @@ bool MainWindow::importImageFiles(const std::vector<std::filesystem::path>& path
         }
         return false;
     }
-    if (paths.empty()) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("No files to import.");
-        }
-        return false;
-    }
 
-    std::vector<std::filesystem::path> orderedPaths = paths;
-    if (importAsSequence) {
-        // Deterministic - the natural choice for numbered frame sequences
-        // (frame001.png, frame002.png, ...) regardless of the file dialog's
-        // own selection/return order, confirmed with the user before
-        // implementing.
-        std::sort(orderedPaths.begin(), orderedPaths.end());
-    }
-
-    const auto canvasWidth = static_cast<std::int64_t>(project_->settings().canvasWidth);
-    std::int64_t cumulativeTranslation = 0;
-    int importedCount = 0;
-    QString firstError;
-
-    for (const auto& path : orderedPaths) {
-        const auto fileMode = importAsSequence ? ImageScalePickerDialog::Mode::ScaleVerticalProportional : mode;
-        QString thisError;
-        if (!importImageFile(path, fileMode, &thisError)) {
-            if (firstError.isEmpty()) {
-                firstError = thisError;
-            }
-            continue;
-        }
-        ++importedCount;
-
-        if (importAsSequence) {
-            // Wrap back to column 0 once the running total reaches
-            // canvasWidth - matches the legacy Studio's own
-            // cumulative-offset placement exactly (confirmed with the user
-            // before implementing) rather than just letting later layers
-            // keep extending past canvasWidth (which renderLayer() would
-            // crop anyway, per its own Decision #25 padding/cropping).
-            if (canvasWidth > 0 && cumulativeTranslation >= canvasWidth) {
-                cumulativeTranslation = 0;
-            }
-            sound_mind::core::Layer& justImported = project_->layers().back();
-            justImported.setTranslationColumns(cumulativeTranslation);
-            const std::int64_t thisWidth =
-                justImported.content().has_value() ? static_cast<std::int64_t>(justImported.content()->frameCount) : 0;
-            cumulativeTranslation += thisWidth;
-        }
-    }
-
+    showBusyStatus(statusBar(), tr("Importing image..."));
+    const int importedCount =
+        sound_mind::studio::importImageFilesInto(*project_, paths, mode, importAsSequence, errorMessage);
     if (importedCount == 0) {
-        if (errorMessage != nullptr) {
-            *errorMessage = firstError.isEmpty() ? tr("No files were imported.") : firstError;
-        }
+        statusBar()->clearMessage();
         return false;
     }
-    if (importAsSequence) {
-        // Each importImageFile() call above already refreshed the canvas/
-        // Layers Panel for its own layer - this just makes sure the final
-        // translationColumns() changes made afterward are reflected too.
-        canvas_->update();
-        refreshLayersPanel();
-    }
+
+    canvas_->update();
+    playbackController_->invalidate();
+    hasUnsavedChanges_ = true;
+    refreshLayersPanel();
+    statusBar()->showMessage(tr("Imported %1 file(s).").arg(importedCount), 5000);
     return true;
 }
 
@@ -977,29 +819,13 @@ bool MainWindow::exportTopmostLayerAudioNow(const std::filesystem::path& path, Q
         return false;
     }
 
-    const auto format = audioFormatFromExtension(path);
-    if (!format.has_value()) {
-        if (errorMessage != nullptr) {
-            *errorMessage = tr("Unrecognized audio file extension - use .flac, .ogg, or .mp3.");
-        }
-        return false;
-    }
-
     showBusyStatus(statusBar(), tr("Exporting audio..."));
-    try {
-        if (!sound_mind::core::exportLayerAudio(*layer, path, *format)) {
-            statusBar()->clearMessage();
-            return false;
-        }
-        statusBar()->showMessage(tr("Exported audio to \"%1\".").arg(QString::fromStdString(path.string())), 5000);
-        return true;
-    } catch (const std::exception& e) {
+    if (!sound_mind::studio::exportLayerAudioNow(*layer, path, errorMessage)) {
         statusBar()->clearMessage();
-        if (errorMessage != nullptr) {
-            *errorMessage = QString::fromStdString(e.what());
-        }
         return false;
     }
+    statusBar()->showMessage(tr("Exported audio to \"%1\".").arg(QString::fromStdString(path.string())), 5000);
+    return true;
 }
 
 bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, QString* errorMessage) {
@@ -1012,20 +838,12 @@ bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, Q
     }
 
     showBusyStatus(statusBar(), tr("Exporting video..."));
-    try {
-        if (!sound_mind::core::exportLayerVideo(*layer, path, project_->settings().canvasWidth)) {
-            statusBar()->clearMessage();
-            return false;
-        }
-        statusBar()->showMessage(tr("Exported video to \"%1\".").arg(QString::fromStdString(path.string())), 5000);
-        return true;
-    } catch (const std::exception& e) {
+    if (!sound_mind::studio::exportLayerVideoNow(*layer, path, project_->settings().canvasWidth, errorMessage)) {
         statusBar()->clearMessage();
-        if (errorMessage != nullptr) {
-            *errorMessage = QString::fromStdString(e.what());
-        }
         return false;
     }
+    statusBar()->showMessage(tr("Exported video to \"%1\".").arg(QString::fromStdString(path.string())), 5000);
+    return true;
 }
 
 sound_mind::core::Layer* MainWindow::topmostLayerWithContent() {

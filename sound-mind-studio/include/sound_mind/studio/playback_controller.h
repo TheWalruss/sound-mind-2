@@ -32,13 +32,19 @@ class PlaybackController : public QObject {
     Q_OBJECT
 
 public:
-    /// @brief Constructs a controller with nothing loaded, attached to the
-    ///        system's real default output device (or gracefully falling
-    ///        back - see `PlaybackEngine::isDeviceAvailable()`'s docs - if
-    ///        none exists).
+    /// @brief Constructs a controller with nothing loaded.
     /// @param parent The owning object, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
-    explicit PlaybackController(QObject* parent = nullptr);
+    /// @param deviceMode `Real` (the default) attaches to the system's
+    ///        real default output device (or gracefully falls back - see
+    ///        `PlaybackEngine::isDeviceAvailable()`'s docs - if none
+    ///        exists). `None` never attaches to one at all - for hermetic
+    ///        tests that don't care about real device I/O (most of them:
+    ///        load()/play()/pause()/stop()/seek() all work identically
+    ///        either way), so they don't pay the real device open/close
+    ///        cost on every construction.
+    explicit PlaybackController(QObject* parent = nullptr,
+                                 sound_mind::core::AudioDeviceMode deviceMode = sound_mind::core::AudioDeviceMode::Real);
 
     /**
      * @brief Loads new audio to play, replacing anything previously
