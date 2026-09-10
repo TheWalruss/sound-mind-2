@@ -6,6 +6,48 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.10] - 2026-09-10
+
+**Pick** - the last piece of the Phase 3 "Basic Painting" milestone,
+which this closes out. A painted stroke is no longer only editable
+through undo: click it to select it, drag to move it, reopen Tool
+Configuration to change its brush settings after the fact, or delete
+it - all without repainting from scratch.
+
+### Added
+
+- **A new "Pick" toolbar toggle**, alongside Paint - `CanvasWidget`
+  gained a `Pick` tool mode and `pickStrokeStarted()`/
+  `pickStrokeContinued()`/`pickStrokeEnded()` signals (the same shape
+  as Paint's own). Paint and Pick can never both be active; toggling
+  either off (including by clicking the active one again) returns to
+  plain, non-interactive display.
+- **`sound_mind::studio::PickController`** - hit-tests a click against
+  every active `PaintOperation` targeting the current layer (padded by
+  each one's own brush size, so even a single-tap stroke stays
+  clickable), and turns move/modify/delete into new operations that
+  `supersedes()` the one picked - nothing is ever mutated in place.
+  Shares `PaintController`'s own pre-paint base cache.
+- **The selected object's bounding box is always highlighted** (white),
+  regardless of the "Show bounding boxes" setting - the same "what
+  you're interacting with is always visible" precedent the live paint
+  preview already established.
+- **Reopening Tool Configuration while something is Picked pre-fills its
+  own settings**, and any further edit re-applies them to the selection
+  (`ToolConfigurationPanel::setToolConfiguration()`) - alongside still
+  updating what a brand new stroke would use.
+- **A new Edit menu "Delete" action** (the Delete key) removes the
+  current selection.
+- **`sound_mind::core::Path::translated()`** and
+  **`frequencyToTimeScaleFor()`** (promoted from a `PaintController`-
+  private method to a shared `sound_mind::core::project_settings.h`
+  function) - both reused by `PickController`, not reimplemented.
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes. Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.9] - 2026-09-10
 
 The Background layer is now a real, paintable canvas.

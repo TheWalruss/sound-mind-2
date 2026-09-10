@@ -28,6 +28,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTimer>
@@ -220,6 +221,41 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         refreshLayersPanel();
     });
 
+    // Pick (v0.Y.24.1) - shares paintController_'s own pre-paint base
+    // cache (see PickController's own docs), so it's constructed after
+    // paintController_ and holds a pointer to it. The same "canvas only
+    // ever emits already-converted points, this controller never reaches
+    // into canvas_ directly" shape paintController_'s own wiring above
+    // already established.
+    pickController_ = new PickController(paintController_, this);
+    connect(canvas_, &CanvasWidget::pickStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+            pickController_->pick(*layerId, point);
+        }
+    });
+    connect(canvas_, &CanvasWidget::pickStrokeContinued, this,
+            [this](sound_mind::core::TimeFrequencyPoint point) { pickController_->continueMove(point); });
+    connect(canvas_, &CanvasWidget::pickStrokeEnded, this, [this]() { pickController_->endMove(); });
+    connect(pickController_, &PickController::pathChanged, this,
+            [this]() { canvas_->setPaintPreviewPath(pickController_->currentPreviewPath()); });
+    connect(pickController_, &PickController::contentChanged, this, [this](sound_mind::core::LayerId) {
+        canvas_->update();
+        hasUnsavedChanges_ = true;
+        refreshLayersPanel();
+    });
+    connect(pickController_, &PickController::selectionChanged, this, [this]() {
+        canvas_->setPickSelectionBounds(pickController_->selectionBounds());
+        // Pre-fills the panel with the newly-picked object's own
+        // settings, ready to reopen and adjust - see docs/sound-mind-
+        // design.md's "Pick". Left showing whatever it last displayed on
+        // a deselect (clicking empty space, deleting the selection) -
+        // reverting to some prior "default" isn't attempted; the panel's
+        // job is "the current brush settings", picked or not.
+        if (const auto config = pickController_->selectedConfiguration(); config.has_value()) {
+            toolConfigurationPanel_->setToolConfiguration(*config);
+        }
+    });
+
     toolConfigurationPanel_ = new ToolConfigurationPanel(this);
     toolConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, toolConfigurationPanel_);
@@ -229,7 +265,16 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // ever opening the panel still paints something visible.
     paintController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration());
     connect(toolConfigurationPanel_, &ToolConfigurationPanel::toolConfigurationChanged, this,
-            [this](const sound_mind::core::ToolConfiguration& config) { paintController_->setToolConfiguration(config); });
+            [this](const sound_mind::core::ToolConfiguration& config) {
+                paintController_->setToolConfiguration(config);
+                // Also applies to whatever's currently Picked, if
+                // anything - see PickController::applyToolConfiguration()'s
+                // own docs on why this is safe to do unconditionally
+                // alongside updating the pending default above.
+                if (pickController_->hasSelection()) {
+                    pickController_->applyToolConfiguration(config);
+                }
+            });
     connect(toolConfigurationPanel_, &ToolConfigurationPanel::showBoundingBoxesChanged, canvas_,
             &CanvasWidget::setShowBoundingBoxes);
     connect(toolConfigurationPanel_, &ToolConfigurationPanel::showPathGeometryChanged, canvas_,
@@ -312,6 +357,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     redoAction->setShortcut(QKeySequence::Redo);
     connect(redoAction, &QAction::triggered, this, &MainWindow::redo);
 
+    // Pick (v0.Y.24.1): deletes whatever's currently selected - a no-op,
+    // per deletePickedObject()'s own docs, when nothing is (rather than
+    // disabling/enabling this action in sync with the selection, which
+    // would need its own extra wiring for no real benefit here).
+    QAction* deleteAction = editMenu->addAction(tr("&Delete"));
+    deleteAction->setShortcut(QKeySequence::Delete);
+    connect(deleteAction, &QAction::triggered, this, &MainWindow::deletePickedObject);
+
     QToolBar* transportToolBar = addToolBar(tr("Transport"));
     // Plain text actions rather than icons - no icon assets exist yet, and
     // these are unambiguous enough on their own for a first pass.
@@ -325,6 +378,15 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     paintAction_ = transportToolBar->addAction(tr("Paint"));
     paintAction_->setCheckable(true);
     connect(paintAction_, &QAction::toggled, this, &MainWindow::setPaintModeEnabled);
+
+    // Pick (v0.Y.24.1): the same kind of plain checkable toggle as Paint
+    // above, for CanvasWidget::ToolMode::Pick. Deliberately *not* grouped
+    // with paintAction_ via QActionGroup - see setPaintModeEnabled()'s own
+    // docs on why mutual exclusivity is instead handled directly, by hand,
+    // in setPaintModeEnabled()/setPickModeEnabled() themselves.
+    pickAction_ = transportToolBar->addAction(tr("Pick"));
+    pickAction_->setCheckable(true);
+    connect(pickAction_, &QAction::toggled, this, &MainWindow::setPickModeEnabled);
 
     // As of v0.Y.16.1 (Transport Panels): Play/Pause/Stop/Loop/Record are
     // no longer direct toolbar actions - each now lives inside its own
@@ -552,14 +614,16 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     playbackController_->stop();
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
-    // paintAction_->setChecked(false) alone wouldn't reset canvas_'s own
-    // tool mode if it was already unchecked (toggled() only fires on a
-    // real change) - setToolMode() directly is what actually guarantees
-    // this, the same "unconditional and idempotent" reasoning as every
-    // other reset above.
+    // paintAction_/pickAction_->setChecked(false) alone wouldn't reset
+    // canvas_'s own tool mode if it was already unchecked (toggled() only
+    // fires on a real change) - setToolMode() directly is what actually
+    // guarantees this, the same "unconditional and idempotent" reasoning
+    // as every other reset above.
     paintAction_->setChecked(false);
+    pickAction_->setChecked(false);
     canvas_->setToolMode(CanvasWidget::ToolMode::None);
     canvas_->setPaintPreviewPath(sound_mind::core::Path{});
+    canvas_->setPickSelectionBounds(std::nullopt);
     // A stale selection from the *previous* project's own LayersPanel rows
     // could otherwise be mistaken for a real one in the new project - each
     // Project's own LayerIds start fresh, so a coincidental id match is a
@@ -583,6 +647,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
 
     canvas_->setProject(&*project_);
     paintController_->setProject(&*project_);
+    pickController_->setProject(&*project_);
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
     // Layers is shown automatically the *first* time any project exists in
@@ -1161,16 +1226,56 @@ void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& new
 }
 
 void MainWindow::setPaintModeEnabled(bool enabled) {
-    canvas_->setToolMode(enabled ? CanvasWidget::ToolMode::Paint : CanvasWidget::ToolMode::None);
     if (!enabled) {
         paintController_->cancelStroke();
         canvas_->setPaintPreviewPath(sound_mind::core::Path{});
+    }
+    canvas_->setToolMode(enabled ? CanvasWidget::ToolMode::Paint : CanvasWidget::ToolMode::None);
+
+    // Paint and Pick share one canvas tool mode and so can never both be
+    // active - enforced directly here (and in setPickModeEnabled()'s own
+    // mirror-image block below) rather than via a QActionGroup: a group's
+    // exclusivity would fire *two* toggled() signals per click (this
+    // action's own, and the now-unchecked sibling's), in an order Qt
+    // doesn't document as stable - two independent handlers each trusting
+    // their own late-arriving call could easily stomp on each other's
+    // canvas_->setToolMode() call above. Setting both actions' checked
+    // state directly, unconditionally, and *blocked* (so this doesn't
+    // recurse back into itself or into setPickModeEnabled()) sidesteps
+    // that entirely, and - unlike relying on the toggled() signal alone -
+    // also keeps the toolbar buttons correctly in sync when this method
+    // is called directly (e.g. by a test), not just via a real click.
+    const QSignalBlocker paintBlocker(paintAction_);
+    const QSignalBlocker pickBlocker(pickAction_);
+    paintAction_->setChecked(enabled);
+    if (enabled) {
+        pickAction_->setChecked(false);
+    }
+}
+
+void MainWindow::setPickModeEnabled(bool enabled) {
+    if (!enabled) {
+        pickController_->clearSelection();
+        canvas_->setPaintPreviewPath(sound_mind::core::Path{});
+    }
+    canvas_->setToolMode(enabled ? CanvasWidget::ToolMode::Pick : CanvasWidget::ToolMode::None);
+
+    // The mirror image of setPaintModeEnabled()'s own block - see its
+    // docs above for why exclusivity is handled by hand here rather than
+    // via a QActionGroup.
+    const QSignalBlocker paintBlocker(paintAction_);
+    const QSignalBlocker pickBlocker(pickAction_);
+    pickAction_->setChecked(enabled);
+    if (enabled) {
+        paintAction_->setChecked(false);
     }
 }
 
 void MainWindow::undo() { paintController_->undo(); }
 
 void MainWindow::redo() { paintController_->redo(); }
+
+void MainWindow::deletePickedObject() { pickController_->deleteSelection(); }
 
 void MainWindow::startPlayback() {
     if (!project_) {

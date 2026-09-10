@@ -16,13 +16,14 @@ in-app behavior is correct and this guide is due an update.
 5. [Importing Media](#importing-media)
 6. [Working with Layers](#working-with-layers)
 7. [Painting](#painting)
-8. [Playback](#playback)
-9. [Recording](#recording)
-10. [Loop Mode](#loop-mode)
-11. [Pooling a Layer](#pooling-a-layer)
-12. [Exporting](#exporting)
-13. [Saving and Project Files](#saving-and-project-files)
-14. [What's Not Here Yet](#whats-not-here-yet)
+8. [Pick](#pick)
+9. [Playback](#playback)
+10. [Recording](#recording)
+11. [Loop Mode](#loop-mode)
+12. [Pooling a Layer](#pooling-a-layer)
+13. [Exporting](#exporting)
+14. [Saving and Project Files](#saving-and-project-files)
+15. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -264,6 +265,27 @@ Only the **Procedural** brush exists today - see
 [What's Not Here Yet](#whats-not-here-yet) for the rest of what's
 planned around painting.
 
+## Pick
+
+Click the **Pick** toolbar button (next to Paint) to switch the canvas
+into pick mode; click it again (or Paint) to leave it. While it's on,
+clicking a painted stroke selects it - shown with a white outline around
+it, regardless of the "Show bounding boxes" setting - ready to:
+
+- **Move** it - click and drag it to a new position.
+- **Modify** it - open **Tool Configuration** (if it isn't already);
+  it's pre-filled with exactly the settings the stroke was painted with.
+  Change anything (tip shape, falloff, size, color, opacity) and the
+  selected stroke updates to match.
+- **Delete** it - **Edit → Delete** (or the Delete key).
+
+Clicking empty canvas space deselects. Every one of these is undoable
+(Ctrl+Z), the same as painting a new stroke.
+
+Copying a picked stroke, and directly reshaping its underlying path (drag
+its own nodes and handles), aren't here yet - see
+[What's Not Here Yet](#whats-not-here-yet).
+
 ## Playback
 
 The **Playback** panel has **Play**, **Pause**, and **Stop**, a draggable
@@ -348,5 +370,6 @@ what's designed for it:
 - No **Tool Configuration Wizard** or **Tool Preset** drop-down - the
   Panel described above is the only way to set brush parameters today,
   and there's no way yet to save/reuse/export a particular brush setup.
-- No **Pick** tool - a painted stroke can be undone/redone, but not yet
-  individually selected, moved, or deleted after the fact.
+- Pick can't **copy** a picked stroke, and can't reshape its underlying
+  path directly (dragging its own individual nodes/handles) - only move,
+  modify its brush settings, or delete it.

@@ -512,3 +512,110 @@ void CanvasWidgetTest::leavingTheCanvasEmitsCursorLeft() {
 
     QCOMPARE(spy.count(), 1);
 }
+
+void CanvasWidgetTest::mousePressInPickModeEmitsPickStrokeStartedWithAConvertedPoint() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Pick);
+
+    std::optional<TimeFrequencyPoint> received;
+    QObject::connect(&widget, &CanvasWidget::pickStrokeStarted, [&](TimeFrequencyPoint point) { received = point; });
+
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QVERIFY(received.has_value());
+    const double expectedTime = sound_mind::core::frameIndexToTime(30.0, config);
+    const float expectedFrequency = sound_mind::core::binIndexToFrequency(40.0f, config);  // see the Paint-mode test's own comment.
+    QVERIFY(qAbs(received->timeSeconds - expectedTime) < 0.01);
+    QVERIFY(qAbs(received->frequencyHz - expectedFrequency) < 1.0);
+}
+
+void CanvasWidgetTest::mouseMoveAfterPressInPickModeEmitsPickStrokeContinued() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Pick);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QSignalSpy spy(&widget, &CanvasWidget::pickStrokeContinued);
+
+    QTest::mouseMove(&widget, QPoint(40, 20));
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void CanvasWidgetTest::mouseReleaseInPickModeEmitsPickStrokeEndedAndEndsTheGesture() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Pick);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QSignalSpy endedSpy(&widget, &CanvasWidget::pickStrokeEnded);
+
+    QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+    QCOMPARE(endedSpy.count(), 1);
+
+    // A further move, without a new press, shouldn't continue the
+    // already-ended gesture.
+    QSignalSpy continuedSpy(&widget, &CanvasWidget::pickStrokeContinued);
+    QTest::mouseMove(&widget, QPoint(50, 30));
+    QCOMPARE(continuedSpy.count(), 0);
+}
+
+void CanvasWidgetTest::changingToolModeAwayFromPickCancelsAnyActiveGesture() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Pick);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    widget.setToolMode(CanvasWidget::ToolMode::None);
+    widget.setToolMode(CanvasWidget::ToolMode::Pick);  // back to Pick, but the old gesture is gone.
+    QSignalSpy spy(&widget, &CanvasWidget::pickStrokeContinued);
+
+    QTest::mouseMove(&widget, QPoint(40, 20));
+
+    QCOMPARE(spy.count(), 0);  // a move alone, with no fresh press, still doesn't continue anything.
+}
+
+void CanvasWidgetTest::setPickSelectionBoundsDrawsAHighlight() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    sound_mind::core::TimeFrequencyRect bounds;
+    bounds.startTimeSeconds = sound_mind::core::frameIndexToTime(20.0, config);
+    bounds.endTimeSeconds = sound_mind::core::frameIndexToTime(80.0, config);
+    bounds.lowFrequencyHz = sound_mind::core::binIndexToFrequency(10.0f, config);
+    bounds.highFrequencyHz = sound_mind::core::binIndexToFrequency(40.0f, config);
+    widget.setPickSelectionBounds(bounds);
+
+    const QImage rendered = widget.grab().toImage();
+    // The highlight's own top-left corner - highFrequencyHz (bin 40) is
+    // the *smaller* y (near the top) - see widgetPointToTimeFrequency()'s
+    // own docs.
+    QCOMPARE(rendered.pixelColor(20, 10), QColor(255, 255, 255));  // Qt::white.
+}
+
+void CanvasWidgetTest::setPickSelectionBoundsWithNoValueDrawsNothing() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    widget.setPickSelectionBounds(std::nullopt);
+
+    const QImage rendered = widget.grab().toImage();
+    QVERIFY(rendered.pixelColor(20, 10) != QColor(255, 255, 255));
+}

@@ -55,7 +55,8 @@ void PaintController::continueStroke(sound_mind::core::TimeFrequencyPoint point)
         // Cheap enough to refit on every sample - see this method's own
         // docs; fitPathToPoints() only ever runs over the current
         // stroke's own point count, not anything session-length.
-        previewPath_ = sound_mind::core::fitPathToPoints(strokePoints_, frequencyToTimeScale(), /*simplifyToleranceSeconds=*/0.01);
+        previewPath_ = sound_mind::core::fitPathToPoints(
+            strokePoints_, sound_mind::core::frequencyToTimeScaleFor(project_->settings()), /*simplifyToleranceSeconds=*/0.01);
     }
     emit pathChanged();
 }
@@ -83,8 +84,8 @@ void PaintController::endStroke() {
         node.type = sound_mind::core::PathNodeType::Corner;
         finalPath.addNode(node);
     } else {
-        finalPath =
-            sound_mind::core::fitPathToPoints(strokePoints_, frequencyToTimeScale(), /*simplifyToleranceSeconds=*/0.01);
+        finalPath = sound_mind::core::fitPathToPoints(
+            strokePoints_, sound_mind::core::frequencyToTimeScaleFor(project_->settings()), /*simplifyToleranceSeconds=*/0.01);
     }
     // Seed the new stroke's own gradient from the tool's default - see
     // ToolConfiguration::defaultGradient()'s own docs.
@@ -162,24 +163,11 @@ void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {
     }
 
     const auto activeOperations = project_->operationLog().activeOperationsTargeting(layer);
-    sound_mind::codec::StreamImage rebuilt =
-        sound_mind::core::rebuildPaintedContent(baseContent_.at(layer), activeOperations, frequencyToTimeScale());
+    sound_mind::codec::StreamImage rebuilt = sound_mind::core::rebuildPaintedContent(
+        baseContent_.at(layer), activeOperations, sound_mind::core::frequencyToTimeScaleFor(project_->settings()));
     target->setContent(std::move(rebuilt));
 
     emit contentChanged(layer);
-}
-
-double PaintController::frequencyToTimeScale() const noexcept {
-    if (project_ == nullptr) {
-        return 1000.0;  // an arbitrary, always-positive fallback - never actually used (callers all guard on project_).
-    }
-    const auto& settings = project_->settings();
-    const double durationSeconds = static_cast<double>(settings.canvasWidth) * settings.timestepMs / 1000.0;
-    const double frequencyRangeHz = static_cast<double>(settings.maxFrequencyHz) - static_cast<double>(settings.minFrequencyHz);
-    if (durationSeconds <= 0.0) {
-        return 1000.0;
-    }
-    return frequencyRangeHz / durationSeconds;
 }
 
 }  // namespace sound_mind::studio

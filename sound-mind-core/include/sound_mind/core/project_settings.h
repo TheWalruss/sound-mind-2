@@ -140,4 +140,23 @@ void from_json(const nlohmann::json& json, ProjectSettings& settings);
  */
 [[nodiscard]] sound_mind::codec::StreamImage silentContentFor(const ProjectSettings& settings);
 
+/**
+ * @brief The per-project normalization scale `sound_mind::core::
+ *        applyPaintOperation()`/`fitPathToPoints()`/hit-testing a Picked
+ *        object all need to compare a time (seconds) distance and a
+ *        frequency (Hz) distance on equal footing - see those functions'
+ *        own docs for why a Path's own geometry needs one shared unit
+ *        rather than mixing seconds and Hz directly.
+ *
+ * Derived from the project's own canvas geometry: its total duration in
+ * seconds against its total encoded frequency range in Hz. Falls back to
+ * an arbitrary, always-positive `1000.0` for a degenerate (zero or
+ * negative duration) project, so callers never have to guard against a
+ * division by zero themselves.
+ *
+ * @param settings The project settings to derive the scale from.
+ * @return The frequency-to-time scale, in Hz per second-equivalent.
+ */
+[[nodiscard]] double frequencyToTimeScaleFor(const ProjectSettings& settings) noexcept;
+
 }  // namespace sound_mind::core

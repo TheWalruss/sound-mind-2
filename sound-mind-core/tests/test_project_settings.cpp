@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
@@ -115,6 +116,25 @@ TEST_CASE("silentContentFor produces a StreamImage sized to the project's own ca
 
     REQUIRE(content.frameCount == settings.canvasWidth);
     REQUIRE(content.config.binCount == settings.binCount);
+}
+
+TEST_CASE("frequencyToTimeScaleFor derives Hz-per-second from canvas duration and frequency range",
+          "[core][project_settings]") {
+    ProjectSettings settings;
+    settings.canvasWidth = 100;
+    settings.timestepMs = 10.0;  // 100 * 10ms = 1 second total duration.
+    settings.minFrequencyHz = 20.0f;
+    settings.maxFrequencyHz = 2020.0f;  // a round 2000 Hz range.
+
+    REQUIRE(sound_mind::core::frequencyToTimeScaleFor(settings) == Catch::Approx(2000.0));
+}
+
+TEST_CASE("frequencyToTimeScaleFor falls back to a positive default for a degenerate (zero-duration) project",
+          "[core][project_settings]") {
+    ProjectSettings settings;
+    settings.canvasWidth = 0;
+
+    REQUIRE(sound_mind::core::frequencyToTimeScaleFor(settings) == Catch::Approx(1000.0));
 }
 
 TEST_CASE("silentContentFor is genuinely silent, not full-scale", "[core][project_settings]") {

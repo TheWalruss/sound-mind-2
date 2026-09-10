@@ -148,6 +148,20 @@ public:
     [[nodiscard]] Gradient& gradient() noexcept { return gradient_; }
 
     /**
+     * @brief A copy of this path with every node's anchor and handles
+     *        shifted by a fixed offset, gradient and node types/count
+     *        unchanged - moving a Picked paint object (see
+     *        `docs/sound-mind-design.md`'s "Pick") is exactly this, since
+     *        a move never changes the object's own shape or coloring.
+     * @param deltaTimeSeconds How far to shift every point along the
+     *        timeline.
+     * @param deltaFrequencyHz How far to shift every point along the
+     *        frequency axis.
+     * @return The translated path.
+     */
+    [[nodiscard]] Path translated(double deltaTimeSeconds, double deltaFrequencyHz) const;
+
+    /**
      * @brief This path's time/frequency extent, for hit-testing (see the
      *        design doc's "Pick") and Composer Mode's own track boxes.
      *

@@ -154,4 +154,9 @@ private slots:
     void movingTheMouseOverTheCanvasUpdatesTheCursorPositionLabel();
     void leavingTheCanvasClearsTheCursorPositionLabel();
     void paintingTheBackgroundLayerActuallyPaintsSomethingVisible();
+    void pickAndPaintToolbarActionsAreMutuallyExclusive();
+    void pickingAPaintedStrokeLoadsItsSettingsIntoThePanel();
+    void movingAPickedStrokeCommitsATranslatedOperation();
+    void deletingAPickedStrokeLeavesAnEmptyTombstone();
+    void settingANewProjectResetsPickModeToOff();
 };

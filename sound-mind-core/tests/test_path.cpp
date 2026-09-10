@@ -130,6 +130,54 @@ TEST_CASE("bounds() also spans handle points, not just anchors", "[core][path]")
     REQUIRE(rect.lowFrequencyHz == 50.0);
 }
 
+TEST_CASE("translated() shifts every node's anchor by the given offset", "[core][path]") {
+    Path path;
+    path.addNode(cornerNodeAt(1.0, 300.0));
+    path.addNode(cornerNodeAt(3.0, 100.0));
+
+    const Path moved = path.translated(0.5, -50.0);
+
+    REQUIRE(moved.nodes().size() == 2);
+    REQUIRE(moved.nodes().at(0).anchor.timeSeconds == 1.5);
+    REQUIRE(moved.nodes().at(0).anchor.frequencyHz == 250.0);
+    REQUIRE(moved.nodes().at(1).anchor.timeSeconds == 3.5);
+    REQUIRE(moved.nodes().at(1).anchor.frequencyHz == 50.0);
+}
+
+TEST_CASE("translated() shifts a Smooth node's handles too, not just its anchor", "[core][path]") {
+    Path path;
+    PathNode smooth;
+    smooth.anchor = TimeFrequencyPoint{1.0, 100.0};
+    smooth.type = PathNodeType::Smooth;
+    smooth.handleIn = TimeFrequencyPoint{0.5, 50.0};
+    smooth.handleOut = TimeFrequencyPoint{1.5, 150.0};
+    path.addNode(smooth);
+
+    const Path moved = path.translated(1.0, 10.0);
+
+    const auto& node = moved.nodes().at(0);
+    REQUIRE(node.anchor.timeSeconds == 2.0);
+    REQUIRE(node.anchor.frequencyHz == 110.0);
+    REQUIRE(node.handleIn->timeSeconds == 1.5);
+    REQUIRE(node.handleIn->frequencyHz == 60.0);
+    REQUIRE(node.handleOut->timeSeconds == 2.5);
+    REQUIRE(node.handleOut->frequencyHz == 160.0);
+}
+
+TEST_CASE("translated() leaves the gradient and node types/count unchanged", "[core][path]") {
+    Path path;
+    path.addNode(cornerNodeAt(1.0, 300.0));
+    auto stop = path.gradient().stops().front();
+    stop.leftIntensity = -20.0f;
+    path.gradient().setStopValues(0, stop);
+
+    const Path moved = path.translated(5.0, 5.0);
+
+    REQUIRE(moved.nodes().size() == path.nodes().size());
+    REQUIRE(moved.nodes().at(0).type == PathNodeType::Corner);
+    REQUIRE(moved.gradient().stops().front().leftIntensity == -20.0f);
+}
+
 TEST_CASE("A Path round-trips through JSON, including Smooth handles", "[core][path]") {
     Path path;
     path.addNode(cornerNodeAt(0.0, 0.0));

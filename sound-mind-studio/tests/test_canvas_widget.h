@@ -28,4 +28,10 @@ private slots:
     void showPathGeometryDrawsAnActiveOperationsPath();
     void mouseMoveEmitsCursorMovedRegardlessOfToolMode();
     void leavingTheCanvasEmitsCursorLeft();
+    void mousePressInPickModeEmitsPickStrokeStartedWithAConvertedPoint();
+    void mouseMoveAfterPressInPickModeEmitsPickStrokeContinued();
+    void mouseReleaseInPickModeEmitsPickStrokeEndedAndEndsTheGesture();
+    void changingToolModeAwayFromPickCancelsAnyActiveGesture();
+    void setPickSelectionBoundsDrawsAHighlight();
+    void setPickSelectionBoundsWithNoValueDrawsNothing();
 };

@@ -145,18 +145,6 @@ public:
     ///        is `false`.
     void redo();
 
-signals:
-    /// @brief Emitted whenever the in-progress stroke's own live preview
-    ///        Path changes (continueStroke()), and once more when it's
-    ///        cleared (endStroke()/cancelStroke()).
-    void pathChanged();
-
-    /// @brief Emitted whenever a layer's own rendered content changes as
-    ///        a result of painting, undo(), or redo().
-    /// @param layer Which layer's content changed.
-    void contentChanged(sound_mind::core::LayerId layer);
-
-private:
     /**
      * @brief Rebuilds one layer's own painted content from scratch and
      *        emits contentChanged() for it.
@@ -176,16 +164,29 @@ private:
      * that's an acceptable, standard limitation (undo history doesn't
      * survive a save/reload in most creative software either).
      *
+     * Public since `v0.Y.24.1`'s Pick installment: `PickController`
+     * appends its own new (move/modify/delete) operations directly to the
+     * project's `OperationLog`, then calls back into this same method -
+     * through this same controller, so the replay uses the identical
+     * cached pre-paint base a plain paint stroke would - rather than
+     * duplicating the rebuild logic in a second place.
+     *
      * @param layer Which layer to rebuild.
      */
     void rebuildLayerContent(sound_mind::core::LayerId layer);
 
-    /// @brief The per-project normalization scale `applyPaintOperation()`/
-    /// `fitPathToPoints()` both need (see their own docs) - derived from
-    /// the current project's own canvas geometry: its total duration in
-    /// seconds against its total encoded frequency range in Hz.
-    [[nodiscard]] double frequencyToTimeScale() const noexcept;
+signals:
+    /// @brief Emitted whenever the in-progress stroke's own live preview
+    ///        Path changes (continueStroke()), and once more when it's
+    ///        cleared (endStroke()/cancelStroke()).
+    void pathChanged();
 
+    /// @brief Emitted whenever a layer's own rendered content changes as
+    ///        a result of painting, undo(), or redo().
+    /// @param layer Which layer's content changed.
+    void contentChanged(sound_mind::core::LayerId layer);
+
+private:
     sound_mind::core::Project* project_ = nullptr;
     sound_mind::core::ToolConfiguration toolConfig_;
 

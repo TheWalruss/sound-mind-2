@@ -37,6 +37,7 @@ add_library(sound-mind-studio-lib
     src/loop_panel.cpp
     src/main_window.cpp
     src/paint_controller.cpp
+    src/pick_controller.cpp
     src/playback_controller.cpp
     src/playback_panel.cpp
     src/qt_image_conversion.cpp
@@ -55,6 +56,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/loop_panel.h
     include/sound_mind/studio/main_window.h
     include/sound_mind/studio/paint_controller.h
+    include/sound_mind/studio/pick_controller.h
     include/sound_mind/studio/playback_controller.h
     include/sound_mind/studio/playback_panel.h
     include/sound_mind/studio/qt_image_conversion.h

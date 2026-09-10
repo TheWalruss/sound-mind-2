@@ -3,6 +3,7 @@
 #include <optional>
 
 #include <QPainterPath>
+#include <QRectF>
 #include <QWidget>
 
 #include "sound_mind/core/path.h"
@@ -48,6 +49,7 @@ public:
     enum class ToolMode {
         None,  ///< Mouse input does nothing - the default.
         Paint,  ///< Mouse drags/taps paint a freehand stroke.
+        Pick,  ///< Mouse press selects a paint object; a drag moves it.
     };
 
     /// @brief Constructs an empty canvas, with no project set yet.
@@ -87,9 +89,13 @@ public:
      * `None` leaves ordinary mouse events unhandled (the pre-`v0.Y.24.1`
      * behavior, and still the default) - `Paint` makes a left-button
      * press/drag/release emit paintStrokeStarted()/paintStrokeContinued()/
-     * paintStrokeEnded() instead. Exactly one mode is active at a time;
-     * future tool modes (Pick, Selection) extend this same enum rather
-     * than stacking independent flags.
+     * paintStrokeEnded() instead, and `Pick` makes the same gesture emit
+     * pickStrokeStarted()/pickStrokeContinued()/pickStrokeEnded() instead.
+     * Exactly one mode is active at a time; a future Selection mode
+     * extends this same enum rather than stacking independent flags.
+     * Switching away from `Paint`/`Pick` cancels whatever gesture was
+     * mid-flight in it (a real mouse-up may never arrive - e.g. the
+     * toolbar button was clicked instead).
      *
      * @param mode The new tool mode.
      */
@@ -141,6 +147,23 @@ public:
      */
     void setPaintPreviewPath(sound_mind::core::Path path);
 
+    /**
+     * @brief Sets (or clears) the Picked object's own selection highlight
+     *        and repaints - a distinct-colored (white) rectangle, drawn
+     *        over whatever the canvas otherwise shows.
+     *
+     * Always drawn when set, regardless of setShowBoundingBoxes()'s own
+     * state - the same "what you're actively interacting with is always
+     * visible" precedent setPaintPreviewPath() already established, since
+     * there'd otherwise be no visual indication at all of *which* object
+     * is selected while Show bounding boxes is off.
+     *
+     * @param bounds The selected object's own current bounds, per
+     *        `sound_mind::core::Operation::bounds()`; `std::nullopt`
+     *        draws nothing, clearing any previous highlight.
+     */
+    void setPickSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds);
+
     /// @brief The widget's preferred size.
     /// @return The current project's configured canvas dimensions, or a
     ///         fallback size if no project is set.
@@ -160,6 +183,22 @@ signals:
     /// @brief The in-progress paint stroke ended (`Paint` tool mode, left
     ///        button released).
     void paintStrokeEnded();
+
+    /// @brief A pick gesture started (`Pick` tool mode, left button
+    ///        pressed) - also the anchor point for a potential drag, if
+    ///        the press continues into one.
+    /// @param point The press position, converted to time/frequency space.
+    void pickStrokeStarted(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief The in-progress pick gesture continued (`Pick` tool mode,
+    ///        left button held and moved) - a drag, moving whatever was
+    ///        selected at pickStrokeStarted().
+    /// @param point The new position, converted to time/frequency space.
+    void pickStrokeContinued(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief The in-progress pick gesture ended (`Pick` tool mode, left
+    ///        button released).
+    void pickStrokeEnded();
 
     /**
      * @brief The mouse moved over the canvas - independent of toolMode(),
@@ -242,11 +281,22 @@ private:
     ///        to an empty QPainterPath.
     [[nodiscard]] QPainterPath toPainterPath(const sound_mind::core::Path& path) const;
 
+    /// @brief Converts a `TimeFrequencyRect` into a normalized, widget-
+    ///        pixel-space `QRectF`, via timeFrequencyToWidgetPoint() - the
+    ///        shared geometry behind the "Show bounding boxes" overlay and
+    ///        the Pick selection highlight. `.normalized()` guards against
+    ///        the rendered image's own top-is-highest-frequency corner
+    ///        order - see widgetPointToTimeFrequency()'s own docs.
+    /// @param bounds The rectangle to convert.
+    [[nodiscard]] QRectF widgetRectFor(const sound_mind::core::TimeFrequencyRect& bounds) const;
+
     const sound_mind::core::Project* project_ = nullptr;
     std::optional<double> playheadFraction_;
     ToolMode toolMode_ = ToolMode::None;
     bool paintStrokeActive_ = false;
+    bool pickStrokeActive_ = false;
     sound_mind::core::Path paintPreviewPath_;
+    std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;
     bool showBoundingBoxes_ = false;
     bool showPathGeometry_ = false;
 };

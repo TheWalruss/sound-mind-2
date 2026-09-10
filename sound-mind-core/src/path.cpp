@@ -102,6 +102,24 @@ bool Path::setNode(std::size_t index, PathNode node) {
     return true;
 }
 
+Path Path::translated(double deltaTimeSeconds, double deltaFrequencyHz) const {
+    Path result = *this;
+    const auto shift = [&](TimeFrequencyPoint& point) {
+        point.timeSeconds += deltaTimeSeconds;
+        point.frequencyHz += deltaFrequencyHz;
+    };
+    for (PathNode& node : result.nodes_) {
+        shift(node.anchor);
+        if (node.handleIn) {
+            shift(*node.handleIn);
+        }
+        if (node.handleOut) {
+            shift(*node.handleOut);
+        }
+    }
+    return result;
+}
+
 TimeFrequencyRect Path::bounds() const noexcept {
     if (nodes_.empty()) {
         return TimeFrequencyRect{};

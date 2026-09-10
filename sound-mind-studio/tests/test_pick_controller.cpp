@@ -1,0 +1,359 @@
+#include "test_pick_controller.h"
+
+#include <memory>
+
+#include <QSignalSpy>
+#include <QtTest/QtTest>
+
+#include "sound_mind/core/operation_log.h"
+#include "sound_mind/core/paint_operation.h"
+#include "sound_mind/core/project.h"
+#include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/paint_controller.h"
+#include "sound_mind/studio/pick_controller.h"
+
+using sound_mind::core::Layer;
+using sound_mind::core::LayerId;
+using sound_mind::core::LayerType;
+using sound_mind::core::OperationId;
+using sound_mind::core::PaintOperation;
+using sound_mind::core::Path;
+using sound_mind::core::PathNode;
+using sound_mind::core::PathNodeType;
+using sound_mind::core::Project;
+using sound_mind::core::ProjectSettings;
+using sound_mind::core::TimeFrequencyPoint;
+using sound_mind::core::ToolConfiguration;
+using sound_mind::studio::PaintController;
+using sound_mind::studio::PickController;
+
+namespace {
+
+/// @brief Small, fast project settings - matching test_paint_controller.cpp's
+/// own testSettings(), so frequencyToTimeScaleFor() derives the same
+/// sensible, checkable value (2000 Hz per second-equivalent).
+ProjectSettings testSettings() {
+    ProjectSettings settings;
+    settings.canvasWidth = 100;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;
+    settings.minFrequencyHz = 20.0f;
+    settings.maxFrequencyHz = 2020.0f;
+    settings.timestepMs = 10.0;
+    return settings;
+}
+
+/// @brief A Normal layer, added to `project`, with real (blank) content -
+/// matching test_paint_controller.cpp's own addBlankNormalLayer(), so
+/// rebuildLayerContent() (called by every PickController commit) always
+/// has a real base to replay onto.
+LayerId addBlankNormalLayer(Project& project) {
+    Layer layer(0, "Test Layer", LayerType::Normal);
+    sound_mind::codec::StreamImage content;
+    content.config = sound_mind::core::streamCodecConfigFor(project.settings());
+    content.frameCount = project.settings().canvasWidth;
+    const std::size_t pixelCount = std::size_t{content.config.binCount} * content.frameCount;
+    content.leftMagnitudeDb.assign(pixelCount, 0.0f);
+    content.rightMagnitudeDb.assign(pixelCount, 0.0f);
+    content.sharedPhaseRadians.assign(pixelCount, 0.0f);
+    layer.setContent(content);
+    return project.addLayer(std::move(layer));
+}
+
+/// @brief A Procedural tool configuration with a real, distinctly-sized
+/// brush - matching test_paint_controller.cpp's own makeOpaqueTool().
+ToolConfiguration makeOpaqueTool(double size = 0.02, float falloff = 0.0f, float intensity = -10.0f) {
+    ToolConfiguration config;
+    config.setSize(size);
+    config.setFalloff(falloff);
+    auto stop = config.defaultGradient().stops().front();
+    stop.leftIntensity = intensity;
+    stop.rightIntensity = intensity;
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    config.defaultGradient().setStopValues(0, stop);
+    config.defaultGradient().setStopValues(1, stop);
+    return config;
+}
+
+/// @brief Appends a real, two-Corner-node diagonal PaintOperation directly
+/// to `project`'s own OperationLog - the "already painted, ready to be
+/// Picked" starting state every test here needs.
+OperationId addPaintOperation(Project& project, LayerId layer, double startTime, double startFrequency,
+                               double endTime, double endFrequency, const ToolConfiguration& config) {
+    Path path;
+    PathNode start;
+    start.anchor = TimeFrequencyPoint{startTime, startFrequency};
+    start.type = PathNodeType::Corner;
+    path.addNode(start);
+    PathNode end;
+    end.anchor = TimeFrequencyPoint{endTime, endFrequency};
+    end.type = PathNodeType::Corner;
+    path.addNode(end);
+
+    auto& log = project.operationLog();
+    const OperationId id = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(id, layer, std::move(path), config));
+    return id;
+}
+
+}  // namespace
+
+void PickControllerTest::freshControllerHasNoSelection() {
+    PaintController paintController;
+    const PickController controller(&paintController);
+    QVERIFY(!controller.hasSelection());
+    QVERIFY(!controller.selectedConfiguration().has_value());
+    QVERIFY(!controller.selectionBounds().has_value());
+    QVERIFY(controller.currentPreviewPath().nodes().empty());
+}
+
+void PickControllerTest::pickSelectsAnOperationUnderThePoint() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    const bool picked = controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0});
+
+    QVERIFY(picked);
+    QVERIFY(controller.hasSelection());
+    QVERIFY(controller.selectedConfiguration().has_value());
+    QCOMPARE(controller.selectedConfiguration()->size(), config.size());
+    QVERIFY(controller.selectionBounds().has_value());
+}
+
+void PickControllerTest::pickReturnsFalseAndClearsSelectionWhenNothingIsUnderThePoint() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));  // select something first.
+
+    const bool picked = controller.pick(layerId, TimeFrequencyPoint{0.9, 1900.0});  // far away.
+
+    QVERIFY(!picked);
+    QVERIFY(!controller.hasSelection());
+}
+
+void PickControllerTest::pickPrefersTheMostRecentOverlappingOperation() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto olderConfig = makeOpaqueTool(0.01);
+    const auto newerConfig = makeOpaqueTool(0.03);  // a distinct size, to tell them apart.
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, olderConfig);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, newerConfig);  // same footprint, painted later.
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    QCOMPARE(controller.selectedConfiguration()->size(), newerConfig.size());
+}
+
+void PickControllerTest::pickPadsHitTestingByTheOperationsOwnBrushSize() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.1);  // a real, sizable brush radius.
+
+    // A single-tap (one-node) Path - its own raw bounds() is a single,
+    // zero-area point, per Path::bounds()'s own docs - so this only picks
+    // at all if hit-testing pads by the brush's own size.
+    Path path;
+    PathNode tap;
+    tap.anchor = TimeFrequencyPoint{0.3, 500.0};
+    tap.type = PathNodeType::Corner;
+    path.addNode(tap);
+    auto& log = project.operationLog();
+    const OperationId id = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(id, layerId, std::move(path), config));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    // 0.05s away from the tap's own single point - within the 0.1s
+    // brush-size padding, but well outside the raw (zero-area) bounds.
+    const bool picked = controller.pick(layerId, TimeFrequencyPoint{0.35, 500.0});
+
+    QVERIFY(picked);
+}
+
+void PickControllerTest::continueMoveUpdatesTheLivePreviewPath() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QSignalSpy spy(&controller, &PickController::pathChanged);
+
+    controller.continueMove(TimeFrequencyPoint{0.4, 600.0});  // +0.1s, +100Hz from the pick point.
+
+    QCOMPARE(spy.count(), 1);
+    const auto& nodes = controller.currentPreviewPath().nodes();
+    QCOMPARE(nodes.size(), std::size_t{2});
+    QCOMPARE(nodes.at(0).anchor.timeSeconds, 0.3);   // 0.2 + 0.1 delta.
+    QCOMPARE(nodes.at(0).anchor.frequencyHz, 500.0);  // 400 + 100 delta.
+}
+
+void PickControllerTest::endMoveCommitsATranslatedSupersedingOperationAndKeepsItSelected() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    const OperationId originalId = addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QSignalSpy contentSpy(&controller, &PickController::contentChanged);
+    QSignalSpy selectionSpy(&controller, &PickController::selectionChanged);
+
+    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});  // +0.1s, +200Hz.
+    controller.endMove();
+
+    QCOMPARE(project.operationLog().size(), std::size_t{2});
+    QCOMPARE(contentSpy.count(), 1);
+    QCOMPARE(selectionSpy.count(), 1);
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* moved = dynamic_cast<const PaintOperation*>(active.front());
+    QVERIFY(moved != nullptr);
+    QVERIFY(moved->supersedes().has_value());
+    QCOMPARE(*moved->supersedes(), originalId);
+    QCOMPARE(moved->path().nodes().at(0).anchor.timeSeconds, 0.3);
+    QCOMPARE(moved->path().nodes().at(0).anchor.frequencyHz, 600.0);
+
+    // Still selected - now the new, moved operation.
+    QVERIFY(controller.hasSelection());
+    QCOMPARE(controller.selectedConfiguration()->size(), config.size());
+}
+
+void PickControllerTest::endMoveWithoutAnyRealMovementDoesNotCommitAnything() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.endMove();  // no continueMove() call in between - a plain click.
+
+    QCOMPARE(project.operationLog().size(), std::size_t{1});
+    QVERIFY(controller.hasSelection());  // still selected, unchanged.
+}
+
+void PickControllerTest::applyToolConfigurationCommitsANewOperationWithTheSameGeometry() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    const OperationId originalId = addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    const auto newConfig = makeOpaqueTool(0.09, 0.5f, -3.0f);
+    controller.applyToolConfiguration(newConfig);
+
+    QCOMPARE(project.operationLog().size(), std::size_t{2});
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* modified = dynamic_cast<const PaintOperation*>(active.front());
+    QVERIFY(modified != nullptr);
+    QVERIFY(modified->supersedes().has_value());
+    QCOMPARE(*modified->supersedes(), originalId);
+    QCOMPARE(modified->config().size(), newConfig.size());
+    // Same geometry - unaffected by a tool-configuration-only edit.
+    QCOMPARE(modified->path().nodes().at(0).anchor.timeSeconds, 0.2);
+    QCOMPARE(modified->path().nodes().at(0).anchor.frequencyHz, 400.0);
+}
+
+void PickControllerTest::deleteSelectionCommitsATombstoneAndClearsSelection() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.deleteSelection();
+
+    QCOMPARE(project.operationLog().size(), std::size_t{2});
+    QVERIFY(!controller.hasSelection());
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* tombstone = dynamic_cast<const PaintOperation*>(active.front());
+    QVERIFY(tombstone != nullptr);
+    QVERIFY(tombstone->path().nodes().empty());
+}
+
+void PickControllerTest::clearSelectionEmitsSelectionChangedOnlyWhenSomethingWasSelected() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    QSignalSpy spy(&controller, &PickController::selectionChanged);
+    controller.clearSelection();  // nothing selected yet.
+    QCOMPARE(spy.count(), 0);
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QCOMPARE(spy.count(), 1);
+
+    controller.clearSelection();
+    QCOMPARE(spy.count(), 2);
+}
+
+void PickControllerTest::setProjectClearsSelection() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.setProject(nullptr);
+
+    QVERIFY(!controller.hasSelection());
+}

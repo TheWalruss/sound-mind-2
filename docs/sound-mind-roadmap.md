@@ -348,11 +348,13 @@ A dedicated pass over everything Phase 2.5 (UI Foundations - Landing Page throug
 
 ## Phase 3 - Painting & Editing
 
-### v0.Y.24.1 - Basic Painting
+### v0.Y.24.1 - Basic Painting ✅
 
 A plain procedural brush (tip shape + falloff, no harmonic model yet) painting into a layer's amplitude as logged `PaintOperation`s; undo/redo via the operation log (first real exercise of the `supersedes` mechanism). Also: re-confirm Phase 2's Pool/Export/Loop/Record pipeline still works, and still meets its performance targets, with real painted content flowing through it for the first time.
 
 **Demo:** paint a stroke, hear the difference on playback, undo it - then pool and export the result.
+
+**Implemented as** ten separately-tested installments (`v0.0.24.1` through `v0.0.24.10`, see `CHANGELOG.md`/`docs/sound-mind-architecture.md`'s Decisions #34-45 for each one's own rationale), going beyond the roadmap sketch above per explicit user direction at the milestone's outset: the Core data model (`Path`/`Gradient`/`ToolConfiguration`), the procedural brush DSP, `PaintController`'s session orchestration, real canvas mouse painting with a live preview, a full dockable Tool Configuration Panel (tip shape, falloff, size, a Color swatch for stereo balance, opacity, and the "Show bounding boxes"/"Show path geometry" overlays) rather than just the roadmap's bare "plain procedural brush", a "+ Add Layer" button, a status-bar cursor position readout, the Background layer made genuinely paintable, and - the final piece - Pick (select/move/modify-via-panel/delete a painted stroke, all as new, non-destructive `PaintOperation`s superseding the one acted on). Still open, and explicitly out of this milestone's own scope: the Tool Configuration Wizard, every paintbrush type past Procedural, the non-brush painting tools (Smudge, Order/Chaos, Heal, Soften, Clone), and manual Path node/handle editing (deferred to `v0.Y.26.1`'s own Path tool, which Pick's own "modify" will extend to reuse once it exists).
 
 ### v0.Y.25.1 - Selection & Fill
 

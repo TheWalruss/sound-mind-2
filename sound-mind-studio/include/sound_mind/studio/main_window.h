@@ -15,6 +15,7 @@
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/paint_controller.h"
+#include "sound_mind/studio/pick_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/recent_projects.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
@@ -613,10 +614,45 @@ public slots:
      * `PaintController::cancelStroke()`'s own docs) rather than leaving
      * it dangling; turning it on has no effect if no project is open.
      *
+     * Also unchecks pickAction_ (blocked, so this doesn't recurse into
+     * setPickModeEnabled()) whenever `enabled` is `true` - Paint and Pick
+     * share one canvas tool mode (`CanvasWidget::ToolMode`) and so can
+     * never both be active. Deliberately hand-managed here rather than
+     * via a `QActionGroup`: a group's own exclusivity would fire *two*
+     * `toggled()` calls per click (this action's, and the now-unchecked
+     * sibling's) in an order Qt doesn't document as stable, and each
+     * handler trusting only its own late-arriving call could stomp on the
+     * other's `canvas_->setToolMode()` result. Setting both actions'
+     * checked state directly and unconditionally also keeps the toolbar
+     * buttons correctly in sync when this is called directly (e.g. by a
+     * test), not just via a real click.
+     *
      * @param enabled `true` to accept freehand paint input on the canvas;
      *        `false` to return to plain, non-interactive display.
      */
     void setPaintModeEnabled(bool enabled);
+
+    /**
+     * @brief Toggles between Pick and plain (`ToolMode::None`) canvas
+     *        interaction - the actual work behind the toolbar's Pick
+     *        toggle.
+     *
+     * Paint and Pick can never both be active, matching `CanvasWidget::
+     * ToolMode`'s own single-active-value contract - enforced directly
+     * here (and mirrored in setPaintModeEnabled()), not via a
+     * `QActionGroup`; see setPaintModeEnabled()'s own docs for why.
+     * *Neither* being checked (`ToolMode::None`) is still a valid,
+     * reachable state - toggling the active one off, via either action,
+     * lands there.
+     *
+     * Turning it off clears the current selection (see `PickController::
+     * clearSelection()`'s own docs) rather than leaving it dangling;
+     * turning it on has no effect if no project is open.
+     *
+     * @param enabled `true` to accept Pick input on the canvas; `false`
+     *        to return to plain, non-interactive display.
+     */
+    void setPickModeEnabled(bool enabled);
 
     /**
      * @brief Undoes the most recent paint stroke, if any - the actual
@@ -634,6 +670,12 @@ public slots:
     ///        to `PaintController::redo()`; a no-op if nothing is
     ///        redoable.
     void redo();
+
+    /// @brief Deletes the currently Picked paint object, if any - the
+    ///        actual work behind the Edit menu's Delete action. Delegates
+    ///        to `PickController::deleteSelection()`; a no-op if nothing
+    ///        is selected.
+    void deletePickedObject();
 
 public:
     /**
@@ -1262,6 +1304,23 @@ private:
     /// opened, the same way it resets every other per-project session
     /// state.
     QAction* paintAction_ = nullptr;
+
+    /// @brief Owns the currently Picked paint object and turns move/
+    /// modify/delete gestures into new operations superseding it - see
+    /// the Phase 3 "Basic Painting" milestone's Pick installment
+    /// (`v0.Y.24.1`). Shares `paintController_`'s own per-layer pre-paint
+    /// base cache (see `PickController`'s own docs) rather than keeping a
+    /// second one, so it's constructed after `paintController_` and holds
+    /// a pointer to it.
+    PickController* pickController_ = nullptr;
+
+    /// @brief The toolbar's Pick tool toggle - checked while the canvas
+    /// accepts Pick input (`CanvasWidget::ToolMode::Pick`). Shares an
+    /// `ExclusiveOptional` `QActionGroup` with paintAction_ (set up in the
+    /// constructor) so the two can never both be checked at once; kept as
+    /// a member for the same setProject()-resets-it reason as
+    /// paintAction_.
+    QAction* pickAction_ = nullptr;
 
     /// @brief The dockable panel exposing the current paint tool's own
     /// parameters - see its own class docs for what's deliberately not

@@ -24,6 +24,7 @@
 #include "test_loop_panel.h"
 #include "test_main_window.h"
 #include "test_paint_controller.h"
+#include "test_pick_controller.h"
 #include "test_playback_controller.h"
 #include "test_playback_panel.h"
 #include "test_record_panel.h"
@@ -83,6 +84,9 @@ int main(int argc, char** argv) {
 
     PaintControllerTest paintControllerTest;
     status |= QTest::qExec(&paintControllerTest, argc, argv);
+
+    PickControllerTest pickControllerTest;
+    status |= QTest::qExec(&pickControllerTest, argc, argv);
 
     ToolConfigurationPanelTest toolConfigurationPanelTest;
     status |= QTest::qExec(&toolConfigurationPanelTest, argc, argv);

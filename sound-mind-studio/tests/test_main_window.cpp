@@ -10,6 +10,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDoubleSpinBox>
 #include <QEvent>
 #include <QFile>
 #include <QImage>
@@ -22,6 +23,7 @@
 #include <QToolBar>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
@@ -2436,4 +2438,128 @@ void MainWindowTest::paintingTheBackgroundLayerActuallyPaintsSomethingVisible() 
     const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
                                          [](float value) { return value > -50.0f; });
     QVERIFY(anyPainted);
+}
+
+void MainWindowTest::pickAndPaintToolbarActionsAreMutuallyExclusive() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+
+    window.setPaintModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Paint);
+
+    window.setPickModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Pick);
+
+    window.setPaintModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Paint);
+}
+
+void MainWindowTest::pickingAPaintedStrokeLoadsItsSettingsIntoThePanel() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-pick-load-panel.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    // Painting the Background layer directly - no import needed, it's a
+    // real paintable canvas now (see docs/sound-mind-architecture.md's
+    // Decisions Made on why).
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+
+    auto* panel = window.findChild<ToolConfigurationPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    QVERIFY(sizeSpinBox != nullptr);
+    // Changes the "current brush" default away from what the stroke above
+    // was actually painted with (ToolConfiguration's own default, 1.0) -
+    // so reverting to 1.0 below can only mean the pick genuinely loaded
+    // the stroke's own stored settings back in, not just left the panel
+    // showing whatever it already had.
+    sizeSpinBox->setValue(5.0);
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QCOMPARE(sizeSpinBox->value(), 1.0);
+}
+
+void MainWindowTest::movingAPickedStrokeCommitsATranslatedOperation() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-pick-move.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseMove(canvas, QPoint(60, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 10));
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
+    const auto layerId = window.project()->layers().back().id();
+    const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});  // the original is superseded, not still active alongside the move.
+}
+
+void MainWindowTest::deletingAPickedStrokeLeavesAnEmptyTombstone() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-pick-delete.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    window.deletePickedObject();
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
+    const auto layerId = window.project()->layers().back().id();
+    const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* tombstone = dynamic_cast<const sound_mind::core::PaintOperation*>(active.front());
+    QVERIFY(tombstone != nullptr);
+    QVERIFY(tombstone->path().nodes().empty());
+}
+
+void MainWindowTest::settingANewProjectResetsPickModeToOff() {
+    const auto firstPath = std::filesystem::temp_directory_path() / "sound-mind-test-pick-reset-1.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), firstPath));
+    std::filesystem::remove(firstPath);
+    window.setPickModeEnabled(true);
+
+    const auto secondPath = std::filesystem::temp_directory_path() / "sound-mind-test-pick-reset-2.smproj";
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), secondPath));
+    std::filesystem::remove(secondPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
 }

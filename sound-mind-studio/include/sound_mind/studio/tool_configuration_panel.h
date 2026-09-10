@@ -65,6 +65,24 @@ public:
     }
 
     /**
+     * @brief Loads a configuration into the panel's own controls -
+     *        reopening Tool Configuration pre-filled with a Picked
+     *        object's own settings (see `docs/sound-mind-design.md`'s
+     *        "Pick") is exactly this.
+     *
+     * Deliberately does *not* emit toolConfigurationChanged(): loading an
+     * existing configuration is a sync *from* some other source (a Picked
+     * object), not a user edit - emitting here would make `MainWindow`'s
+     * own wiring indistinguishable from a real change and re-apply the
+     * unchanged configuration right back onto whatever was just picked,
+     * spamming the operation log with no-op edits on every single click.
+     * The very next real control interaction still emits normally.
+     *
+     * @param config The configuration to display.
+     */
+    void setToolConfiguration(const sound_mind::core::ToolConfiguration& config);
+
+    /**
      * @brief Sets the brush's color (stereo balance) directly - the
      *        testable core behind the "Color" swatch button's own
      *        QColorDialog, per `docs/sound-mind-design.md`'s "Color -

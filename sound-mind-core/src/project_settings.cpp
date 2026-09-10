@@ -53,6 +53,15 @@ sound_mind::codec::StreamCodecConfig streamCodecConfigFor(const ProjectSettings&
     return config;
 }
 
+double frequencyToTimeScaleFor(const ProjectSettings& settings) noexcept {
+    const double durationSeconds = static_cast<double>(settings.canvasWidth) * settings.timestepMs / 1000.0;
+    const double frequencyRangeHz = static_cast<double>(settings.maxFrequencyHz) - static_cast<double>(settings.minFrequencyHz);
+    if (durationSeconds <= 0.0) {
+        return 1000.0;
+    }
+    return frequencyRangeHz / durationSeconds;
+}
+
 sound_mind::codec::StreamImage silentContentFor(const ProjectSettings& settings) {
     const sound_mind::codec::StreamCodecConfig config = streamCodecConfigFor(settings);
     sound_mind::codec::AudioBuffer silence;

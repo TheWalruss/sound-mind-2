@@ -13,6 +13,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QVariant>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -180,6 +181,34 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent) : QDockWidget(tr
 }
 
 void ToolConfigurationPanel::emitConfigChanged() { emit toolConfigurationChanged(config_); }
+
+void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolConfiguration& config) {
+    config_ = config;
+
+    // Each control's own valueChanged/currentIndexChanged handler both
+    // mutates config_ (redundant here, already set above) and calls
+    // emitConfigChanged() - QSignalBlocker suppresses both side effects
+    // while only the *display* is meant to change, per this method's own
+    // "does not emit toolConfigurationChanged()" contract.
+    {
+        const QSignalBlocker blocker(tipShapeCombo_);
+        const int index = tipShapeCombo_->findData(QVariant::fromValue(static_cast<int>(config_.tipShape())));
+        tipShapeCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    }
+    {
+        const QSignalBlocker blocker(falloffSpinBox_);
+        falloffSpinBox_->setValue(config_.falloff());
+    }
+    {
+        const QSignalBlocker blocker(sizeSpinBox_);
+        sizeSpinBox_->setValue(config_.size());
+    }
+    {
+        const QSignalBlocker blocker(opacitySpinBox_);
+        opacitySpinBox_->setValue(static_cast<double>(config_.defaultGradient().stops().front().leftOpacity) * 100.0);
+    }
+    updateColorButtonAppearance();
+}
 
 QColor ToolConfigurationPanel::color() const {
     const auto& stop = config_.defaultGradient().stops().front();

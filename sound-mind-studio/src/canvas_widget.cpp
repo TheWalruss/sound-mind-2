@@ -82,10 +82,16 @@ void CanvasWidget::setPlayheadFraction(std::optional<double> fraction) {
 void CanvasWidget::setToolMode(ToolMode mode) {
     toolMode_ = mode;
     paintStrokeActive_ = false;
+    pickStrokeActive_ = false;
 }
 
 void CanvasWidget::setPaintPreviewPath(sound_mind::core::Path path) {
     paintPreviewPath_ = std::move(path);
+    update();
+}
+
+void CanvasWidget::setPickSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds) {
+    pickSelectionBounds_ = bounds;
     update();
 }
 
@@ -147,6 +153,16 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         painter.setPen(QPen(Qt::yellow, 1));
         painter.drawPath(toPainterPath(paintPreviewPath_));
     }
+
+    // The Picked object's own selection highlight (Pick) - see
+    // setPickSelectionBounds()'s own docs. Always drawn when set,
+    // regardless of Show bounding boxes' own setting, for the same reason
+    // the live paint preview above always draws regardless of Show path
+    // geometry.
+    if (project_ != nullptr && pickSelectionBounds_.has_value()) {
+        painter.setPen(QPen(Qt::white, 2));
+        painter.drawRect(widgetRectFor(*pickSelectionBounds_));
+    }
 }
 
 void CanvasWidget::drawOperationOverlays(QPainter& painter) const {
@@ -159,17 +175,7 @@ void CanvasWidget::drawOperationOverlays(QPainter& painter) const {
     if (showBoundingBoxes_) {
         painter.setPen(QPen(Qt::cyan, 1));
         for (const sound_mind::core::Operation* operation : operations) {
-            const auto bounds = operation->bounds();
-            // .normalized() guards against bin 0 mapping to the *top* of
-            // the widget (see widgetPointToTimeFrequency()'s own docs) -
-            // highFrequencyHz's own corner lands at a numerically *larger*
-            // y than lowFrequencyHz's, the opposite of what a plain
-            // QRectF(topLeft, bottomRight) construction assumes.
-            const QPointF corner1 = timeFrequencyToWidgetPoint(
-                sound_mind::core::TimeFrequencyPoint{bounds.startTimeSeconds, bounds.highFrequencyHz});
-            const QPointF corner2 = timeFrequencyToWidgetPoint(
-                sound_mind::core::TimeFrequencyPoint{bounds.endTimeSeconds, bounds.lowFrequencyHz});
-            painter.drawRect(QRectF(corner1, corner2).normalized());
+            painter.drawRect(widgetRectFor(operation->bounds()));
         }
     }
 
@@ -200,41 +206,76 @@ QPainterPath CanvasWidget::toPainterPath(const sound_mind::core::Path& path) con
     return qPath;
 }
 
+QRectF CanvasWidget::widgetRectFor(const sound_mind::core::TimeFrequencyRect& bounds) const {
+    // .normalized() guards against bin 0 mapping to the *top* of the
+    // widget (see widgetPointToTimeFrequency()'s own docs) -
+    // highFrequencyHz's own corner lands at a numerically *larger* y than
+    // lowFrequencyHz's, the opposite of what a plain QRectF(topLeft,
+    // bottomRight) construction assumes.
+    const QPointF corner1 = timeFrequencyToWidgetPoint(
+        sound_mind::core::TimeFrequencyPoint{bounds.startTimeSeconds, bounds.highFrequencyHz});
+    const QPointF corner2 = timeFrequencyToWidgetPoint(
+        sound_mind::core::TimeFrequencyPoint{bounds.endTimeSeconds, bounds.lowFrequencyHz});
+    return QRectF(corner1, corner2).normalized();
+}
+
 void CanvasWidget::mousePressEvent(QMouseEvent* event) {
-    if (toolMode_ != ToolMode::Paint || event->button() != Qt::LeftButton) {
+    if (event->button() != Qt::LeftButton || (toolMode_ != ToolMode::Paint && toolMode_ != ToolMode::Pick)) {
         QWidget::mousePressEvent(event);
         return;
     }
-    if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
+    const auto point = widgetPointToTimeFrequency(event->position());
+    if (!point.has_value()) {
+        return;
+    }
+    if (toolMode_ == ToolMode::Paint) {
         paintStrokeActive_ = true;
         emit paintStrokeStarted(*point);
+    } else {
+        pickStrokeActive_ = true;
+        emit pickStrokeStarted(*point);
     }
 }
 
 void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
-    // Independent of toolMode()/paintStrokeActive_ - see cursorMoved()'s
-    // own docs; every move gets a position readout, not just ones that
-    // also continue an in-progress stroke.
+    // Independent of toolMode()/paintStrokeActive_/pickStrokeActive_ - see
+    // cursorMoved()'s own docs; every move gets a position readout, not
+    // just ones that also continue an in-progress stroke/drag.
     emit cursorMoved(event->position(), widgetPointToTimeFrequency(event->position()));
 
-    if (toolMode_ != ToolMode::Paint || !paintStrokeActive_) {
-        QWidget::mouseMoveEvent(event);
+    if (toolMode_ == ToolMode::Paint && paintStrokeActive_) {
+        if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
+            emit paintStrokeContinued(*point);
+        }
         return;
     }
-    if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
-        emit paintStrokeContinued(*point);
+    if (toolMode_ == ToolMode::Pick && pickStrokeActive_) {
+        if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
+            emit pickStrokeContinued(*point);
+        }
+        return;
     }
+    QWidget::mouseMoveEvent(event);
 }
 
 void CanvasWidget::leaveEvent(QEvent* /*event*/) { emit cursorLeft(); }
 
 void CanvasWidget::mouseReleaseEvent(QMouseEvent* event) {
-    if (toolMode_ != ToolMode::Paint || !paintStrokeActive_ || event->button() != Qt::LeftButton) {
+    if (event->button() != Qt::LeftButton) {
         QWidget::mouseReleaseEvent(event);
         return;
     }
-    paintStrokeActive_ = false;
-    emit paintStrokeEnded();
+    if (toolMode_ == ToolMode::Paint && paintStrokeActive_) {
+        paintStrokeActive_ = false;
+        emit paintStrokeEnded();
+        return;
+    }
+    if (toolMode_ == ToolMode::Pick && pickStrokeActive_) {
+        pickStrokeActive_ = false;
+        emit pickStrokeEnded();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
 }
 
 std::optional<sound_mind::core::TimeFrequencyPoint> CanvasWidget::widgetPointToTimeFrequency(QPointF point) const {
