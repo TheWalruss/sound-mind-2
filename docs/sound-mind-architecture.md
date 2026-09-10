@@ -95,6 +95,7 @@ classDiagram
         Layer[] layers
         MindWave[] mindWaves
         SoundMindInstrument[] instruments
+        ToolConfiguration[] toolConfigurations
         OperationLog opLog
     }
     class Layer {
@@ -119,6 +120,8 @@ classDiagram
     }
     class PaintOperation {
         LayerId targetLayer
+        Path path
+        ToolConfiguration config
     }
     class FilterOperation {
         LayerId targetLayer
@@ -157,17 +160,50 @@ classDiagram
         NoteEvent[] resolvedNotes
     }
 
+    class Path {
+        PathNode[] nodes
+        Gradient gradient
+    }
+    class PathNode {
+        Point anchor
+        NodeType type
+        Point handleIn
+        Point handleOut
+    }
+    class Gradient {
+        GradientStop[] stops
+    }
+    class GradientStop {
+        float t
+        float leftIntensity
+        float rightIntensity
+        float leftOpacity
+        float rightOpacity
+    }
+    class ToolConfiguration {
+        string name
+        ToolType type
+        ParamSet params
+    }
+
     Project "1" --> "*" Layer
     Project "1" --> "1" OperationLog
     Project "1" --> "*" MindWave
     Project "1" --> "*" SoundMindInstrument
+    Project "1" --> "*" ToolConfiguration
     OperationLog "1" --> "*" Operation
     PaintOperation ..> SoundMindInstrument : may target
     PaintOperation ..> MindShot : may target
     PaintOperation ..> MindGrain : may target
+    PaintOperation "1" --> "1" ToolConfiguration : painted with
+    PaintOperation "1" --> "1" Path : follows
+    Path "1" --> "*" PathNode
+    Path "1" --> "1" Gradient
+    Gradient "1" --> "2..*" GradientStop
     FilterOperation ..> MindWave : params may bind to
     Layer ..> MindWave : opacity may bind to
     Sequence ..> PaintOperation : generates
+    ToolConfiguration ..> Gradient : params may include
 ```
 
 A few things worth calling out about this sketch before it becomes real classes:
@@ -178,6 +214,9 @@ A few things worth calling out about this sketch before it becomes real classes:
 - **`SoundMindInstrument`, `MindShot`, and `MindGrain` are peers**: anything a `PaintOperation` can target. A `Sequence` doesn't produce audio directly — it resolves to a list of `PaintOperation`s against one of these, which is what keeps a stamped chord or sequence non-destructively editable.
 - **`Layer.cache` (sketched above as `RasterCache`) is concretely a `std::optional<codec::StreamImage>`, as of `v0.0.3.1`.** No new type was needed - per *Decisions Made*'s "raster cache persistence format" entry, a layer's cache already *is* a Stream file's in-memory representation, so `Layer::content()` just holds one directly rather than wrapping it in a separate `RasterCache` type. It's `std::optional` (absent until the layer is first imported into or painted on) and deliberately not part of `Layer`'s JSON serialization - `Project::save()`/`load()` read and write it as its own file under the project's `media/` folder instead, exactly as *File Formats & Portable Resources* describes. A first, single-layer, no-blending-yet `Compositor` (`sound_mind::core::renderLayer()`) now exists too, turning that cache into displayable pixels via `sound_mind::codec::toRgbImage()` - real multi-layer compositing (blend modes, opacity, MindWave-bound parameters) is still future work.
 - **Pooling, as of `v0.0.5.1`, is a plain in-place mutation, not yet an `Operation`.** `Layer` gained a second, parallel cache - `poolContent()`, an `std::optional<codec::PoolImage>`, persisted the same way as `content()` but under the project's `pool/` folder - and `sound_mind::core::poolLayer()` replaces both a layer's Pool and Stream content directly (re-deriving the Stream copy from the pooled result, per the design doc's "resulting Pool file converted to a light-weight Stream copy"). This is deliberately simpler than the design doc's "hide-not-delete, recorded as an undoable operation" description: that needs the first concrete `Operation` subtype, which - per `OperationLog`'s own docs - doesn't exist until Basic Painting. Once it does, Pooling should be revisited to become a real, undoable `Operation` instead of a direct mutation.
+- **`PaintOperation` gained a mandatory `Path` and a mandatory `ToolConfiguration`**, added to fit the design doc's Tool Configuration Wizard/Panel strategy and its "every stroke ends up as a Path, freehand or deliberate" clarification (both confirmed with the user). `Path` is mandatory, not optional, on every `PaintOperation` - a freehand stroke's raw input is curve-fit into one in real time (see the design doc's *Freehand Path Capture*), it isn't a Path-tool-only concept. `Path` doesn't carry its own `targetLayer`/timing - it's pure geometry (`PathNode[]` - anchor, handle-in, handle-out, smooth-vs-corner) plus the `Gradient` painted along it; a `Path` only becomes a `PaintOperation` (with a target layer and a moment in the log) once something is actually painted with it, matching the design doc's own "picking a paint object brings its nodes and handles back" framing - the geometry and the act of painting with it are the same object once painted, not two objects kept in sync.
+- **`Gradient`/`GradientStop` are their own types, shared by `Path` and `ToolConfiguration`** (a tool's own default gradient, and/or a filled selection's, per the design doc's *Gradients* section - not sketched separately here since Selection & Fill isn't this pass's concern) rather than each owning a parallel copy of the same stop-list shape. `GradientStop`'s five fields (`t`, plus independent left/right intensity and opacity) match the design doc's *Stop Values* exactly; `Gradient "1" --> "2..*" GradientStop` encodes the "always at least two stops, at t=0 and t=1" rule directly in the multiplicity rather than leaving it as prose a caller could violate.
+- **`ToolConfiguration` is a peer of `MindWave`/`SoundMindInstrument`**: project-scoped, named, saved, and independently exportable/importable, per the design doc's *Tool Configuration* section. Its `type` (`ToolType`) is the discriminator the design doc's dynamic Wizard/Panel keys off of (Procedural, Instrument, Mind Shot, Mind Grain, Smudge, Order/Chaos, Heal, Soften, Clone) - deliberately *not* modeled as a `ToolConfiguration` subclass hierarchy mirroring `Operation`'s: unlike `Operation`'s subtypes (each with a genuinely different `apply()`), every tool type's configuration is just a differently-shaped bag of parameters applied by the same `PaintOperation`, so a single class with a type tag and an opaque `ParamSet` (the same placeholder `MindWave.params` already uses for its own per-generator-type shape) fits without forcing a parallel type hierarchy that would have to be kept in lockstep with `ToolType`'s own list every time a tool type is added. Which concrete parameters live in that `ParamSet` per `ToolType` is intentionally left unspecified here - real, per-tool-type parameter structs are an implementation-time decision once each tool (starting with the plain procedural brush, `v0.Y.24.1`) actually gets built, not a data-modeling one to pre-commit to now.
 
 # Composer Mode Fit
 
@@ -187,11 +226,11 @@ A few things worth calling out about this sketch before it becomes real classes:
 - **Editing an existing operation (retime it, move it to another layer) needs to be a logged action, not a mutation.** Composer Mode explicitly wants to "re-order or retime" operations and "move them between layers." Given the append-only, replayable log this architecture already commits to, an in-place edit can't just change a past log entry — that would break replay determinism for anything computed after it. The resolution added above, consistent with how Pooling already works (hides the original, inserts the result "in its stead"): `Operation` now carries an optional `supersedes` reference to the operation it replaces. Editing appends a *new* operation pointing back at the old one; the old one becomes inactive (hidden, not deleted) rather than mutated. Replay honours only the non-superseded operation at each point in a layer's history.
 - **Track backgrounds (Clean / Amplitude / Thumbnail) are derived views, not stored state.** All three are computable from a layer's existing `RasterCache` — a plain re-render, a per-column amplitude summary, or a squashed thumbnail — so none of them need a new persisted field. Which background a track is currently showing is Studio view-state, not project data.
 
-Composer Mode needing the first two isn't a flaw specific to it — both would eventually surface from the plain canvas view too (any overlay or picking interaction needs *some* operation bounding box; re-editing a placed operation is implied by the legacy "Pick tool" idea even though the current design doc doesn't yet describe an equivalent). Both are folded into the Core Data Model above rather than treated as Composer-Mode-only additions.
+Composer Mode needing the first two isn't a flaw specific to it — both would eventually surface from the plain canvas view too, and now do: the design doc's own **Pick** section (added alongside the Tool Configuration Wizard/Panel strategy) is exactly the legacy "Pick tool" equivalent this section used to flag as undescribed. `Operation::bounds()` is what a Pick click hit-tests against on the plain canvas, the same extent Composer Mode draws as a track box - one capability, two consumers, confirming the "any overlay or picking interaction needs *some* operation bounding box" prediction this section made before Pick existed. One real refinement Pick's design added beyond the legacy "show op geometry" idea (a single dashed-outline overlay): **bounding box** and **path geometry** are now two *separate* overlays, independently toggleable (see `sound-mind-design.md`'s *Tool Configuration*) - a `PaintOperation`'s `bounds()` rectangle is coarse and cheap (useful for hit-testing and a quick sense of where everything is), while its `Path`'s actual nodes/handles are the finer, editable geometry Pick reveals once an object is actually selected. Both are folded into the Core Data Model above rather than treated as Composer-Mode-only additions.
 
 # File Formats & Portable Resources
 
-Four things need concrete on-disk shape: the project file itself, the two codec file formats it builds on (Pool, Stream), and the standalone resource files that let a MindWave, a Sound Mind Instrument, or a Mind Shot travel between projects. All of this is a first-cut sketch, consistent with the design doc's stance that a formal, versioned project schema is a near-beta concern — nothing here is meant to be locked in yet.
+Four things need concrete on-disk shape: the project file itself, the two codec file formats it builds on (Pool, Stream), and the standalone resource files that let a MindWave, a Sound Mind Instrument, a Mind Shot, or a Tool Configuration travel between projects. All of this is a first-cut sketch, consistent with the design doc's stance that a formal, versioned project schema is a near-beta concern — nothing here is meant to be locked in yet.
 
 ### Project File & Folder
 
@@ -211,7 +250,7 @@ The project file itself holds:
 - **Project settings** — the codec defaults new layers inherit (sample rate, frequency scale and its parameters, timestep, canvas duration/dimensions), plus project-wide preferences (tuning reference, default tempo).
 - **The layer list**, in composite order — each entry's id, name, type, blend mode, opacity, MindWave link, transform, and a reference to its cached render in `media/` (absent until the layer has been rendered at least once).
 - **The operation log** — the single, project-wide, ordered sequence described above, each entry serialized with its own parameters, its `targetLayer` (or structural target), its seed where applicable, and its `supersedes` reference where it replaces an earlier one.
-- **Resource libraries** — MindWave and Sound Mind Instrument definitions stored inline (they're small and purely parametric); Mind Shot entries stored as metadata plus a path into `mindshots/` (the spectrogram data itself is binary and doesn't belong in a JSON file); Mind Grain definitions stored inline too, since a Mind Grain is only ever a reference to a layer in the *same* project (see below) — there's no external asset for it to point to.
+- **Resource libraries** — MindWave and Sound Mind Instrument definitions stored inline (they're small and purely parametric); Mind Shot entries stored as metadata plus a path into `mindshots/` (the spectrogram data itself is binary and doesn't belong in a JSON file); Mind Grain definitions stored inline too, since a Mind Grain is only ever a reference to a layer in the *same* project (see below) — there's no external asset for it to point to. Tool Configuration definitions stored inline too, the same reasoning as MindWave/Sound Mind Instrument - small, purely parametric (a `ToolType` tag plus its `ParamSet`), nothing binary to keep out of the JSON.
 - **Sequences** — the notation string, inline, plus whatever resolved note events are cached from it.
 
 A project is meant to be self-contained: once a resource is imported, it's copied in and becomes ordinary project data — nothing inside a project ever points at a file outside its own folder.
@@ -245,12 +284,13 @@ A Mind Shot, specifically, is *just* a Stream file with its provenance metadata 
 
 ### Portable Resource Files
 
-Three of the design doc's "shareable resources" get their own standalone file type; a fourth deliberately doesn't:
+Three of the design doc's "shareable resources" get their own standalone file type; a fourth deliberately doesn't. Tool Configuration (added alongside the Tool Configuration Wizard/Panel strategy) is the same shape as MindWave/Sound Mind Instrument - a small, purely parametric definition - so it gets one too:
 
 | Resource | Portable file | Contents |
 |---|---|---|
 | MindWave | `.smwave` (proposed) | Generator type, parameters (including any nested MindWave-bound sub-parameters), superposition stack, field-operator chain — the same JSON shape used inline in a project's resource library, just saved standalone. |
 | Sound Mind Instrument | `.sminst` (proposed) | Harmonics, inharmonicity, noise model, body resonance, ADSR envelope — likewise, an extracted copy of the same inline shape. |
+| Tool Configuration | `.smtool` (proposed) | `ToolType` tag, its `ParamSet`, and, where applicable, a default `Gradient` — the same inline shape a project's own `toolConfigurations` list holds, saved standalone. Deliberately excludes the `Path` any particular `PaintOperation` used it with - a tool configuration is reusable *across* strokes precisely because it isn't tied to any one Path. |
 | Mind Shot | *(none needed)* | A Stream file, as above — already portable on its own. |
 | Mind Grain | *(none — see below)* | — |
 

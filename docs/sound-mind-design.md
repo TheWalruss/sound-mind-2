@@ -216,7 +216,7 @@ This is one step toward a real interaction-design pass for building and combinin
 
 ## Paths
 
-A **Path** is a segmented cubic Bézier curve that a brush stamps along its length, rather than following the raw mouse motion. It is ideal for melodic lines, precise spectral contours, and rhythmically-timed patterns that would be hard to draw freehand.
+A **Path** is a segmented cubic Bézier curve that a brush stamps along its length. Every stroke ends up with one, one way or another — see [Painting](#painting) for how a freehand stroke gets there automatically, in real time, as opposed to the Path tool's own deliberate, node-by-node route described below. Whichever way a Path was built, it's ideal for melodic lines, precise spectral contours, and rhythmically-timed patterns that would be hard to hold steady by hand alone.
 
 ### Placing and Editing
 
@@ -228,6 +228,8 @@ Every node is one of two types:
 - **Corner** nodes have no handles; the path simply meets at a sharp kink.
 
 The type used for newly placed nodes is a standing default that can be flipped at any time, and an existing node can also be converted from one type to the other after the fact, which updates that default to match. This means a whole path can be placed quickly with one node type, then selectively broken at just the nodes that need a corner instead.
+
+A freehand-captured Path reaches this same edit phase too, just later: its nodes are placed automatically, by curve-fitting rather than by hand (see [Freehand Path Capture](#freehand-path-capture)), and aren't individually editable while the stroke is still being drawn — but once the stroke ends, [Picking](#pick) it opens the identical node/handle editing described here. A freehand stroke and a deliberately-placed Path end up exactly as editable as each other, just reached by different routes.
 
 ### Path Gradient
 
@@ -266,6 +268,31 @@ New gradients start fully transparent (zero intensity and opacity at both stops)
 Painting is how sound is sculpted directly: every brush writes into the amplitude and/or phase of the active layer, and every stroke is recorded as a non-destructive operation rather than a pixel change (see [Non-destructive Processing](#non-destructive-processing)). A stroke can either follow the raw motion of the cursor, or be stamped along a previously-drawn [Path](#paths) for precise, repeatable placement — the same brush and gradient settings apply either way.
 
 A mouse or trackpad is the baseline input device; support for a pressure-sensitive tablet is a desirable addition, not a hard requirement.
+
+### Freehand Path Capture
+
+A freehand stroke doesn't just record raw motion — its raw mouse/tablet input is curve-fitted into a genuine [Path](#paths) in real time, continuously, as the cursor moves: a sparse set of smooth Bézier nodes tracking the actual motion, the same representation the Path tool's own deliberate node placement produces, just arrived at automatically instead. The Path is rendered live as it's captured, growing with the stroke, so the artist always sees exactly what geometry the stroke is turning into, not just a raw ink trail.
+
+Capturing and rendering that Path stays perfectly responsive to the cursor no matter what — the motion itself must never feel laggy. Actually *applying* the paint along the Path is allowed to trail the cursor by a small, barely-perceptible delay if that's what keeps the capture and its live preview smooth; the felt responsiveness of the stroke's motion takes priority over the painted result appearing the instant the cursor does.
+
+Placing a Path by hand, node by node (see [Placing and Editing](#placing-and-editing)), is the same underlying capability reached more slowly and deliberately — for melodic lines, precise spectral contours, and rhythmically-timed patterns exact freehand motion can't reliably reproduce, at the cost of not being drawn in one continuous motion.
+
+### Tool Configuration
+
+Every painting tool — each of the paintbrush types below (Procedural, Instrument, Mind Shot, Mind Grain), plus Smudge, Order/Chaos, Heal, Soften, and Clone — is configured through two parallel, equivalent interfaces: a step-by-step **Tool Configuration Wizard**, and an at-a-glance **Tool Configuration Panel**. Both edit the exact same underlying tool configuration; neither is a reduced version of the other, just a different pace for reaching the same settings — the Wizard for building one up deliberately, a step at a time, the Panel for seeing and adjusting everything at once.
+
+The Panel is a dockable panel, opened and closed by its own toolbar button, the same way the Layers/Playback/Record/Loop panels already are — off by default. At the top of the Panel sit the Wizard button (opens the Wizard, pre-filled with the Panel's current settings) and a **Tool Preset** drop-down listing every tool configuration saved in the current project. Selecting a preset loads all of its parameters into the Panel at once, ready to paint with immediately, exactly reproducing a paintbrush used before — or as a starting point to adjust further, with or without saving the result back.
+
+Because a Procedural brush, a Sound Mind Instrument, a Mind Shot, a Mind Grain, and each of Smudge/Order-Chaos/Heal/Soften/Clone all expose a genuinely different set of parameters, both the Wizard and the Panel are dynamic: only the parameters that actually apply to whichever tool is currently selected are shown, in either interface — never a single flat form with the rest merely grayed out.
+
+A tool configuration can be named and saved into the project, the same way a Sound Mind Instrument can (see [Sound Mind Instruments](#sound-mind-instruments)) — and, like one, is a portable item in its own right: exportable and importable independent of the project it was saved in, and independent of any paint stroke that happens to use it.
+
+Two checkboxes sit alongside the Wizard button and Preset drop-down, both off by default:
+
+- **Show bounding boxes** — draws every paint object's bounding box on the canvas (see [Pick](#pick)).
+- **Show path geometry** — draws every paint object's underlying Path (its nodes and handles) on the canvas, not just its bounding box.
+
+Both stay off by default so ordinary use shows only the rendered result, uncluttered by past strokes' geometry — but path geometry is always rendered live while a path is actively being drawn, freehand or with the Path tool (see [Freehand Path Capture](#freehand-path-capture)), regardless of this checkbox's own state: the artist always needs to see what's being drawn in the moment, even when they don't want every already-painted stroke's geometry cluttering the view afterward.
 
 ### Procedural Brushes
 
@@ -309,6 +336,12 @@ Radial blur — softens a region uniformly in every direction, rather than along
 ### Clone
 
 Copies pixels from a source point to the cursor as you paint, offset consistently as the stroke moves.
+
+### Pick
+
+Every stroke — a paintbrush stamp or a Smudge/Order-Chaos/Heal/Soften/Clone pass, freehand or Path-driven — becomes a **paint object**: the same non-destructive operation described in [Non-destructive Processing](#non-destructive-processing), now made directly interactive on the canvas rather than only editable through undo. Picking a paint object selects it by clicking within its bounding box (the same box [Show bounding boxes](#tool-configuration) can make visible for every object at once, used here for hit-testing a single click) — once picked, it can be copied, moved, modified, or deleted, independent of any pixel-region [Selection](#selection).
+
+Modifying a picked object means either of two things, and both are available at once: reopening its own tool configuration (the Panel or Wizard, pre-filled with exactly the settings it was painted with — see [Tool Configuration](#tool-configuration)) to change brush parameters or its gradient after the fact, or editing its Path directly — picking a paint object brings its nodes and handles back onto the canvas exactly as if it were still being drawn (see [Placing and Editing](#placing-and-editing)), so its shape can be reworked without repainting it from scratch.
 
 ### Selection
 
