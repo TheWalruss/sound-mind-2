@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <vector>
 
 #include <QAction>
@@ -2216,11 +2217,10 @@ void MainWindowTest::paintingWithTheDefaultToolConfigurationActuallyPaintsSometh
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
     std::filesystem::remove(projectPath);
 
-    // Painting targets the topmost layer in the stack (paintTargetLayerId()'s
-    // own docs) - importing an image first gives that layer real content
-    // to paint onto, exactly matching canvas->resize() below, and matches
-    // the topmost-layer-is-freshest precedent every other import already
-    // establishes.
+    // Painting targets paintTargetLayerId()'s own choice - with no row ever
+    // selected in the LayersPanel, that falls back to the topmost layer,
+    // so importing an image first gives *that* layer real content to paint
+    // onto, exactly matching canvas->resize() below.
     QVERIFY(window.importImageFile(imagePath, ImageScalePickerDialog::Mode::RescaleToFitProject));
     std::filesystem::remove(imagePath);
 
@@ -2274,4 +2274,52 @@ void MainWindowTest::toggleToolConfigurationPanelShowsAndHidesIt() {
 
     toggleAction->trigger();
     QVERIFY(panel->isHidden());
+}
+
+void MainWindowTest::paintingTargetsTheSelectedLayerNotNecessarilyTheTopmostOne() {
+    const auto imagePathA = std::filesystem::temp_directory_path() / "sound-mind-test-paint-target-a.png";
+    const auto imagePathB = std::filesystem::temp_directory_path() / "sound-mind-test-paint-target-b.png";
+    writeImageScalingTestImage(imagePathA);
+    writeImageScalingTestImage(imagePathB);
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-paint-target.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(window.importImageFile(imagePathA, ImageScalePickerDialog::Mode::RescaleToFitProject));
+    const auto firstLayerId = window.project()->layers().back().id();
+    QVERIFY(window.importImageFile(imagePathB, ImageScalePickerDialog::Mode::RescaleToFitProject));
+    std::filesystem::remove(imagePathA);
+    std::filesystem::remove(imagePathB);
+    const auto secondLayerId = window.project()->layers().back().id();
+    QVERIFY(firstLayerId != secondLayerId);
+
+    // The first-imported layer is no longer topmost (the second import sits
+    // above it) - selecting its row should still make it the paint target,
+    // not the now-topmost second layer.
+    auto* panel = window.findChild<LayersPanel*>();
+    QVERIFY(panel != nullptr);
+    // Lets each of the two imports' own refreshLayersPanel() -> setLayers()
+    // calls actually deleteLater() its predecessor's row widgets first -
+    // see refreshLayersPanelReflectsTheCurrentLayers()'s own comment for
+    // why, and setLayers()'s own docs for the underlying Qt gotcha.
+    QTest::qWait(0);
+    const auto nameLabels = panel->findChildren<QLabel*>(QStringLiteral("nameLabel"));
+    QCOMPARE(nameLabels.size(), 3);  // Background, plus the two imported layers.
+    QTest::mouseClick(nameLabels.at(1), Qt::LeftButton);  // index 0 = topmost (second import); 1 = first import.
+    QVERIFY(panel->selectedLayerId().has_value());
+    QCOMPARE(*panel->selectedLayerId(), firstLayerId);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setPaintModeEnabled(true);
+
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    const auto targetLayer = window.project()->operationLog().at(0).targetLayer();
+    QVERIFY(targetLayer.has_value());
+    QCOMPARE(*targetLayer, firstLayerId);
 }

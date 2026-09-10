@@ -237,7 +237,11 @@ void CanvasWidgetTest::mousePressInPaintModeEmitsPaintStrokeStartedWithAConverte
 
     QVERIFY(received.has_value());
     const double expectedTime = sound_mind::core::frameIndexToTime(30.0, config);
-    const float expectedFrequency = sound_mind::core::binIndexToFrequency(10.0f, config);
+    // Bin index rises bottom-to-top on screen (widget y=0 is the highest
+    // bin) - see widgetPointToTimeFrequency()'s own docs - so a press at
+    // widget y=10 out of a 50px-tall, 50-bin widget lands on bin
+    // (50 - 10) = 40, not bin 10.
+    const float expectedFrequency = sound_mind::core::binIndexToFrequency(40.0f, config);
     QVERIFY(qAbs(received->timeSeconds - expectedTime) < 0.01);
     QVERIFY(qAbs(received->frequencyHz - expectedFrequency) < 1.0);
 }
@@ -430,6 +434,23 @@ void CanvasWidgetTest::showPathGeometryDrawsAnActiveOperationsPath() {
     widget.setShowPathGeometry(true);
 
     const QImage rendered = widget.grab().toImage();
-    // The path's own start node, at (frame 20, bin 10).
-    QCOMPARE(rendered.pixelColor(20, 10), QColor(255, 0, 255));  // Qt::magenta.
+    // The path's own start node, at (frame 20, bin 10) - bin 10 is a *low*
+    // bin (near the low-frequency end), which renders near the *bottom* of
+    // the widget (widget y = (binCount - bin) * height / binCount = 40),
+    // not near the top - see widgetPointToTimeFrequency()'s own docs for
+    // why screen y and bin index move in opposite directions. Checked as
+    // "somewhere in the 3x3 neighborhood", not the exact pixel: unlike the
+    // bounding box's axis-aligned edges above (which land on an exact
+    // pixel reliably), a diagonal line's own endpoint is a sub-pixel
+    // rasterization/antialiasing rounding call - confirmed empirically to
+    // land 1px off (at (20, 39), not (20, 40)) for this exact geometry.
+    bool foundNearby = false;
+    for (int dy = -1; dy <= 1 && !foundNearby; ++dy) {
+        for (int dx = -1; dx <= 1 && !foundNearby; ++dx) {
+            if (rendered.pixelColor(20 + dx, 40 + dy) == QColor(255, 0, 255)) {
+                foundNearby = true;
+            }
+        }
+    }
+    QVERIFY(foundNearby);
 }

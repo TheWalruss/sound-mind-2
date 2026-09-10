@@ -526,6 +526,12 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     paintAction_->setChecked(false);
     canvas_->setToolMode(CanvasWidget::ToolMode::None);
     canvas_->setPaintPreviewPath(sound_mind::core::Path{});
+    // A stale selection from the *previous* project's own LayersPanel rows
+    // could otherwise be mistaken for a real one in the new project - each
+    // Project's own LayerIds start fresh, so a coincidental id match is a
+    // real risk, not a theoretical one - see LayersPanel::clearSelection()'s
+    // own docs.
+    layersPanel_->clearSelection();
 
     project_ = std::move(project);
 
@@ -945,6 +951,17 @@ sound_mind::core::Layer* MainWindow::layerById(sound_mind::core::LayerId id) {
 std::optional<sound_mind::core::LayerId> MainWindow::paintTargetLayerId() const {
     if (!project_ || project_->layers().empty()) {
         return std::nullopt;
+    }
+    // A real row selection (LayersPanel's own "active layer" - see its
+    // class docs) wins whenever there is one; layersPanel_->setLayers()
+    // (called from refreshLayersPanel()) already drops a selection whose
+    // id no longer exists in project_, so no extra validity check is
+    // needed here. Falls back to the topmost layer, unchanged from this
+    // method's original placeholder behavior, whenever nothing is
+    // selected - e.g. a project that was just opened/created and never
+    // had a row clicked in it yet.
+    if (const auto selected = layersPanel_->selectedLayerId(); selected.has_value()) {
+        return selected;
     }
     return project_->layers().back().id();
 }

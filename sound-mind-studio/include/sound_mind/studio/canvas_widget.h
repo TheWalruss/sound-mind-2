@@ -181,6 +181,10 @@ protected:
 private:
     /// @brief Converts a widget-local pixel position into time/frequency
     ///        space, using the current project's own canvas geometry.
+    ///        Accounts for the rendered image's own top-is-highest-
+    ///        frequency convention (`color_mapping.cpp`'s `toRgbImage()`),
+    ///        so a point over a visible feature on screen converts to the
+    ///        same bin that feature actually lives in.
     /// @param point The widget-local pixel position.
     /// @return The converted point, or `std::nullopt` if no project is set.
     [[nodiscard]] std::optional<sound_mind::core::TimeFrequencyPoint> widgetPointToTimeFrequency(

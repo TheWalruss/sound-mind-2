@@ -81,8 +81,13 @@ private:
     QListWidget* list_;
 };
 
-/// @brief A QLabel that emits doubleClicked() - used for a row's name, to
-/// trigger renameRequested() the same way the legacy panel's name label did.
+/// @brief A QLabel that emits clicked()/doubleClicked() - used for a row's
+/// name, to trigger selection/renameRequested() the same way the legacy
+/// panel's name label did for rename. A real double-click delivers both a
+/// press and a doubleClick per Qt's own event sequence, so clicked() fires
+/// once (harmlessly re-selecting an already-selected row) immediately
+/// before doubleClicked() does - selecting the row you're about to rename
+/// is the natural behavior anyway, not a conflict to guard against.
 class ClickableNameLabel : public QLabel {
     Q_OBJECT
 
@@ -90,9 +95,15 @@ public:
     using QLabel::QLabel;
 
 signals:
+    void clicked();
     void doubleClicked();
 
 protected:
+    void mousePressEvent(QMouseEvent* event) override {
+        emit clicked();
+        QLabel::mousePressEvent(event);
+    }
+
     void mouseDoubleClickEvent(QMouseEvent* event) override {
         emit doubleClicked();
         QLabel::mouseDoubleClickEvent(event);
@@ -152,6 +163,7 @@ public:
         auto* nameLabel = new ClickableNameLabel(data.name);
         nameLabel->setObjectName(QStringLiteral("nameLabel"));
         nameLabel->setMinimumWidth(60);
+        connect(nameLabel, &ClickableNameLabel::clicked, this, [this]() { emit selected(id_); });
         connect(nameLabel, &ClickableNameLabel::doubleClicked, this, [this]() { emit renameRequested(id_); });
         layout->addWidget(nameLabel, 1);
 
@@ -232,6 +244,7 @@ signals:
     void rescaleChanged(sound_mind::core::LayerId id, double rescaleFactor);
     void renameRequested(sound_mind::core::LayerId id);
     void deleteRequested(sound_mind::core::LayerId id);
+    void selected(sound_mind::core::LayerId id);
 
 private:
     sound_mind::core::LayerId id_;
@@ -267,6 +280,18 @@ LayersPanel::LayersPanel(QWidget* parent) : QDockWidget(tr("Layers"), parent) {
 
 void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
     currentRows_ = layersBottomToTop;
+
+    // A selected row that no longer exists in the new rows (deleted, or a
+    // stale selection left over from a project clearSelection() should
+    // have been called for but wasn't) can't stay selected - see
+    // selectedLayerId()'s own docs on paintTargetLayerId() trusting this.
+    if (selectedLayerId_.has_value()) {
+        const bool stillPresent = std::any_of(layersBottomToTop.begin(), layersBottomToTop.end(),
+                                               [this](const RowData& row) { return row.id == *selectedLayerId_; });
+        if (!stillPresent) {
+            selectedLayerId_.reset();
+        }
+    }
 
     // QListWidget::clear() deletes the QListWidgetItems but *not* the
     // LayerRowWidgets set via setItemWidget() on them (a real, easy-to-miss
@@ -310,7 +335,30 @@ void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
         connect(row, &LayerRowWidget::rescaleChanged, this, &LayersPanel::rescaleChanged);
         connect(row, &LayerRowWidget::renameRequested, this, &LayersPanel::renameRequested);
         connect(row, &LayerRowWidget::deleteRequested, this, &LayersPanel::deleteRequested);
+        connect(row, &LayerRowWidget::selected, this, &LayersPanel::selectRow);
+
+        // Restores the selection highlight across this refresh, for the
+        // (already-verified-still-present, above) previously-selected id.
+        if (selectedLayerId_.has_value() && *selectedLayerId_ == it->id) {
+            list_->setCurrentItem(item);
+        }
     }
+}
+
+void LayersPanel::selectRow(sound_mind::core::LayerId id) {
+    selectedLayerId_ = id;
+    for (int i = 0; i < list_->count(); ++i) {
+        QListWidgetItem* item = list_->item(i);
+        if (static_cast<sound_mind::core::LayerId>(item->data(Qt::UserRole).toULongLong()) == id) {
+            list_->setCurrentItem(item);
+            break;
+        }
+    }
+}
+
+void LayersPanel::clearSelection() {
+    selectedLayerId_.reset();
+    list_->setCurrentItem(nullptr);
 }
 
 void LayersPanel::handleRowsMoved() {

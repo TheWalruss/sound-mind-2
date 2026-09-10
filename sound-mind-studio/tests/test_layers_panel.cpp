@@ -2,6 +2,7 @@
 
 #include <QDoubleSpinBox>
 #include <QLabel>
+#include <QListWidget>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QSlider>
@@ -218,4 +219,65 @@ void LayersPanelTest::nonNormalLayersShowATypeTag() {
     panel.setLayers(twoNormalLayers());
     QTest::qWait(0);  // let the Background row's deleteLater() actually happen - see setLayersReplacesThePreviousRows().
     QVERIFY(panel.findChild<QLabel*>(QStringLiteral("typeTagLabel")) == nullptr);
+}
+
+void LayersPanelTest::freshPanelHasNoSelection() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+
+    QVERIFY(!panel.selectedLayerId().has_value());
+}
+
+void LayersPanelTest::clickingANameSelectsItsLayer() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+
+    const auto nameLabels = panel.findChildren<QLabel*>(QStringLiteral("nameLabel"));
+    QCOMPARE(nameLabels.size(), 2);
+    QTest::mouseClick(nameLabels.at(0), Qt::LeftButton);  // "Top" (id 2).
+
+    QVERIFY(panel.selectedLayerId().has_value());
+    QCOMPARE(*panel.selectedLayerId(), static_cast<LayerId>(2));
+
+    auto* list = panel.findChild<QListWidget*>(QStringLiteral("layersList"));
+    QVERIFY(list != nullptr);
+    QCOMPARE(list->currentRow(), 0);  // "Top" is displayed first.
+}
+
+void LayersPanelTest::selectionSurvivesASetLayersRefreshOfTheSameLayers() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    QTest::mouseClick(panel.findChildren<QLabel*>(QStringLiteral("nameLabel")).at(0), Qt::LeftButton);
+
+    panel.setLayers(twoNormalLayers());  // e.g. an opacity change elsewhere triggering a refresh.
+
+    QVERIFY(panel.selectedLayerId().has_value());
+    QCOMPARE(*panel.selectedLayerId(), static_cast<LayerId>(2));
+    auto* list = panel.findChild<QListWidget*>(QStringLiteral("layersList"));
+    QCOMPARE(list->currentRow(), 0);
+}
+
+void LayersPanelTest::selectionIsDroppedWhenTheSelectedLayerIsGoneFromANewSetLayersCall() {
+    LayersPanel panel;
+    const auto layers = twoNormalLayers();
+    panel.setLayers(layers);
+    QTest::mouseClick(panel.findChildren<QLabel*>(QStringLiteral("nameLabel")).at(0), Qt::LeftButton);  // "Top" (id 2).
+    QVERIFY(panel.selectedLayerId().has_value());
+
+    panel.setLayers({layers.front()});  // "Top" (id 2) deleted - only "Bottom" (id 1) remains.
+
+    QVERIFY(!panel.selectedLayerId().has_value());
+}
+
+void LayersPanelTest::clearSelectionDropsTheSelectionAndItsHighlight() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    QTest::mouseClick(panel.findChildren<QLabel*>(QStringLiteral("nameLabel")).at(0), Qt::LeftButton);
+    QVERIFY(panel.selectedLayerId().has_value());
+
+    panel.clearSelection();
+
+    QVERIFY(!panel.selectedLayerId().has_value());
+    auto* list = panel.findChild<QListWidget*>(QStringLiteral("layersList"));
+    QCOMPARE(list->currentRow(), -1);
 }

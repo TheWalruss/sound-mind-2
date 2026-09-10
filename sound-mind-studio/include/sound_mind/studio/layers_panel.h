@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include <QDockWidget>
@@ -42,6 +43,23 @@ namespace sound_mind::studio {
  * "locked bottom layer" treatment) and no opacity slider or transform
  * controls at all (confirmed with the user: neither concept applies to
  * the always-opaque, always-first-in-time floor of the stack).
+ *
+ * As of Basic Painting's layer-selection fix, a single row can be the
+ * "active layer" - clicking a row's name selects it (single-click, not
+ * the existing double-click-to-rename), shown via the list's own native
+ * selection highlight. Unlike every other row action above, this is
+ * *not* forwarded as a signal for `MainWindow` to apply to the `Project`
+ * - there's nothing in `Project`/`Layer` for a selection to mutate, it's
+ * purely local UI state a caller (`MainWindow::paintTargetLayerId()`)
+ * reads back via selectedLayerId(). setLayers() preserves it across a
+ * refresh as long as the same id is still present in the new rows, and
+ * drops it (back to `std::nullopt`) the moment it isn't - e.g. the
+ * selected layer was just deleted. A caller switching to an entirely
+ * different `Project` must still call clearSelection() itself *before*
+ * the switch's own setLayers() call, since a new project's own
+ * `LayerId`s can coincidentally reuse values from the old one - a
+ * same-numbered id in the new rows would otherwise be mistaken for the
+ * old selection surviving the switch, rather than a fresh coincidence.
  */
 class LayersPanel : public QDockWidget {
     Q_OBJECT
@@ -83,6 +101,15 @@ public:
      *        bottom-to-top order - displayed reversed (top layer first).
      */
     void setLayers(const std::vector<RowData>& layersBottomToTop);
+
+    /// @brief The currently selected row's layer id, if any - see the
+    ///        class's own docs on what "selected" means here.
+    /// @return That layer's id, or `std::nullopt` if no row is selected.
+    [[nodiscard]] std::optional<sound_mind::core::LayerId> selectedLayerId() const { return selectedLayerId_; }
+
+    /// @brief Clears the current selection - see the class's own docs on
+    ///        why a caller switching `Project`s must call this itself.
+    void clearSelection();
 
 signals:
     /// @brief A row's visibility toggle was clicked.
@@ -126,6 +153,12 @@ private slots:
     void handleRowsMoved();
 
 private:
+    /// @brief Marks `id`'s row as the selection (native highlight, via
+    ///        `list_->setCurrentItem()`) and records it in
+    ///        selectedLayerId_ - a row's own `LayerRowWidget::selected()`
+    ///        handler.
+    void selectRow(sound_mind::core::LayerId id);
+
     QListWidget* list_ = nullptr;
 
     /// @brief The rows as of the last setLayers() call, bottom-to-top -
@@ -134,6 +167,9 @@ private:
     /// visual order (the QListWidgetItems themselves carry the id via
     /// Qt::UserRole, but not the type - see handleRowsMoved()'s impl).
     std::vector<RowData> currentRows_;
+
+    /// @brief See selectedLayerId()'s own docs.
+    std::optional<sound_mind::core::LayerId> selectedLayerId_;
 };
 
 }  // namespace sound_mind::studio

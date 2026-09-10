@@ -1121,14 +1121,14 @@ private:
      * @brief Which layer a freehand stroke started right now would paint
      *        into.
      *
-     * The topmost layer in the stack (`project_->layers().back()`),
-     * regardless of content or type - a real "which layer is currently
-     * selected for painting" concept doesn't exist yet (a natural future
-     * `LayersPanel` addition, tracked in `docs/sound-mind-architecture.md`'s
-     * Decisions Made rather than built speculatively here); this is a
-     * simple, predictable placeholder, not `topmostLayerWithContent()`
-     * (which requires existing content and would make a fresh, still-
-     * empty new layer unpaintable).
+     * `layersPanel_`'s own selected row (LayersPanel::selectedLayerId()),
+     * if any - the "active layer" a user has actually clicked. Falls back
+     * to the topmost layer in the stack (`project_->layers().back()`),
+     * regardless of content or type, whenever nothing is selected (a
+     * fresh project, or a selection that was cleared) - the same
+     * predictable placeholder this method always used, not
+     * `topmostLayerWithContent()` (which requires existing content and
+     * would make a fresh, still-empty new layer unpaintable).
      *
      * @return That layer's id, or `std::nullopt` if no project is open.
      */

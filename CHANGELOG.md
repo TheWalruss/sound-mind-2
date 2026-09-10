@@ -6,6 +6,41 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.7] - 2026-09-10
+
+Two real bugs found during manual testing of `v0.0.24.6`'s newly-visible
+painting, both fixed.
+
+### Fixed
+
+- **A painted stroke landed in the wrong place on screen, vertically
+  mirrored from where it was actually dragged.** `CanvasWidget`'s
+  widget-pixel-to-bin conversion treated widget `y=0` as bin 0 (the
+  lowest frequency); the rendered spectrogram image itself puts the
+  *highest* bin at `y=0` (`color_mapping.cpp`'s `toRgbImage()`, "row 0 =
+  highest frequency"). The two conversions disagreeing meant a stroke's
+  own stored frequency values were wrong relative to what was on screen,
+  even though the bounding-box/path overlays (which round-trip through
+  the same, consistently-wrong conversion) still drew back exactly where
+  the cursor had been - self-consistent, but not matching the actual
+  spectrogram underneath. `widgetPointToTimeFrequency()`/
+  `timeFrequencyToWidgetPoint()` now flip the bin axis to match. See
+  `docs/sound-mind-architecture.md` Decision #40.
+- **Painting always targeted the topmost layer, regardless of which
+  layer's row (if any) was selected in the Layers panel.** `LayersPanel`
+  had no selection concept at all until now (a placeholder called out
+  explicitly in Decision #38) - it gained one: clicking a row's name
+  selects it (its own native highlight), queryable via
+  `selectedLayerId()`. `MainWindow::paintTargetLayerId()` now prefers
+  that selection, still falling back to the topmost layer when nothing
+  is selected (a fresh project, or a selection that was cleared),
+  unchanged from before.
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.6] - 2026-09-10
 
 Part 6 of the Phase 3 "Basic Painting" milestone - the Tool

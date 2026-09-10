@@ -148,4 +148,5 @@ private slots:
     void settingANewProjectResetsPaintModeToOff();
     void paintingWithTheDefaultToolConfigurationActuallyPaintsSomethingVisible();
     void toggleToolConfigurationPanelShowsAndHidesIt();
+    void paintingTargetsTheSelectedLayerNotNecessarilyTheTopmostOne();
 };

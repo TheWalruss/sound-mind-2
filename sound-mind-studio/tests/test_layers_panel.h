@@ -19,4 +19,9 @@ private slots:
     void lockedLayersHaveNoDeleteButton();
     void lockedLayersHaveALockIconInsteadOfADragHandle();
     void nonNormalLayersShowATypeTag();
+    void freshPanelHasNoSelection();
+    void clickingANameSelectsItsLayer();
+    void selectionSurvivesASetLayersRefreshOfTheSameLayers();
+    void selectionIsDroppedWhenTheSelectedLayerIsGoneFromANewSetLayersCall();
+    void clearSelectionDropsTheSelectionAndItsHighlight();
 };

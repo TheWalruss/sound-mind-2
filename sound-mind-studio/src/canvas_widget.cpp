@@ -232,8 +232,16 @@ std::optional<sound_mind::core::TimeFrequencyPoint> CanvasWidget::widgetPointToT
     const auto& settings = project_->settings();
     const auto config = sound_mind::core::streamCodecConfigFor(settings);
 
+    // Bin index rises bottom-to-top on screen, not top-to-bottom - see
+    // this method's own docs (and color_mapping.cpp's toRgbImage(), the
+    // actual rendered image's "row 0 = highest frequency"/highest bin
+    // convention this has to match). Flipping here, rather than changing
+    // frequencyToBinIndex()/binIndexToFrequency() themselves, keeps those
+    // shared with paint_application.cpp's own frequency-domain math,
+    // which has no notion of screen pixels at all.
     const double frameIndex = point.x() * static_cast<double>(settings.canvasWidth) / rect().width();
-    const double binIndex = point.y() * static_cast<double>(settings.binCount) / rect().height();
+    const double binIndex =
+        static_cast<double>(settings.binCount) - (point.y() * static_cast<double>(settings.binCount) / rect().height());
 
     sound_mind::core::TimeFrequencyPoint result;
     result.timeSeconds = sound_mind::core::frameIndexToTime(frameIndex, config);
@@ -251,8 +259,11 @@ QPointF CanvasWidget::timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequency
     const double frameIndex = sound_mind::core::timeToFrameIndex(point.timeSeconds, config);
     const double binIndex = sound_mind::core::frequencyToBinIndex(static_cast<float>(point.frequencyHz), config);
 
+    // The exact inverse of widgetPointToTimeFrequency()'s own flip - see
+    // its comment above.
     const double x = frameIndex * rect().width() / static_cast<double>(settings.canvasWidth);
-    const double y = binIndex * rect().height() / static_cast<double>(settings.binCount);
+    const double y =
+        (static_cast<double>(settings.binCount) - binIndex) * rect().height() / static_cast<double>(settings.binCount);
     return QPointF(x, y);
 }
 

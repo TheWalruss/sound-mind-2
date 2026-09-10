@@ -15,13 +15,14 @@ in-app behavior is correct and this guide is due an update.
 4. [The Main Window](#the-main-window)
 5. [Importing Media](#importing-media)
 6. [Working with Layers](#working-with-layers)
-7. [Playback](#playback)
-8. [Recording](#recording)
-9. [Loop Mode](#loop-mode)
-10. [Pooling a Layer](#pooling-a-layer)
-11. [Exporting](#exporting)
-12. [Saving and Project Files](#saving-and-project-files)
-13. [What's Not Here Yet](#whats-not-here-yet)
+7. [Painting](#painting)
+8. [Playback](#playback)
+9. [Recording](#recording)
+10. [Loop Mode](#loop-mode)
+11. [Pooling a Layer](#pooling-a-layer)
+12. [Exporting](#exporting)
+13. [Saving and Project Files](#saving-and-project-files)
+14. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -161,7 +162,9 @@ has:
   be reordered or deleted - only the **Background** layer (always present,
   bottom of the stack) is locked today.
 - A **visibility toggle** (●/○).
-- The layer's **name** - double-click to rename it.
+- The layer's **name** - click once to select it (see [Painting](#painting)
+  below - the selected layer is the one a brush stroke paints into), or
+  double-click to rename it.
 - A **type tag**, for any layer type other than the ordinary kind you get
   from importing.
 - An **opacity slider**, and **translation**/**rescale** spin boxes (see
@@ -204,6 +207,46 @@ recorded from, or exported (see the note above: only one layer is ever
 actually played at a time today, so "lining up" two layers is something
 you'll be able to see, by toggling visibility, before you'll be able to
 hear it composited).
+
+## Painting
+
+Click the **Paint** toolbar button to switch the canvas into paint mode;
+click it again (or switch tools) to leave it. While it's on, dragging on
+the canvas draws a stroke - you'll see it live as a yellow outline while
+drawing, and it's applied to the spectrogram once you release the mouse.
+
+**Which layer gets painted**: whichever layer's name you last clicked in
+the Layers panel (see [Working with Layers](#working-with-layers)). If
+you haven't clicked one yet, painting targets the topmost layer.
+
+The **Tool Configuration** toolbar button opens a dockable panel (off by
+default, alongside Layers/Playback/Record/Loop) with the brush's own
+settings:
+
+- **Tip Shape** - the stroke's cross-section (Circle, Square, Diamond,
+  and others - only Circle/Square/Diamond have a distinct shape so far;
+  the rest currently paint the same as Circle).
+- **Falloff** - how soft the stroke's edge is, from a hard edge (`0`) to
+  fully soft (`1`).
+- **Brush Size**.
+- **Intensity** and **Opacity** - how loud, and how strongly, the stroke
+  paints. The panel's own defaults (0 dB, 100%) paint at full strength
+  right away, no setup required.
+
+Two checkboxes at the top of the panel, both off by default:
+
+- **Show bounding boxes** - outlines (cyan) every stroke's overall extent
+  on the currently-shown layer.
+- **Show path geometry** - traces (magenta) every stroke's own drawn
+  path. A stroke actively being drawn is always traced, regardless of
+  this checkbox.
+
+**Undo** (Ctrl+Z) and **Redo** (Ctrl+Y), in the new **Edit** menu, apply
+to paint strokes.
+
+Only the **Procedural** brush exists today - see
+[What's Not Here Yet](#whats-not-here-yet) for the rest of what's
+planned around painting.
 
 ## Playback
 
@@ -273,9 +316,26 @@ while you have unsaved changes prompts you to save first.
 ## What's Not Here Yet
 
 The [design document](docs/sound-mind-design.md) describes the Studio's
-full intended scope - painting directly onto the spectrogram, filter
-layers, MindWave-driven modulation, generators, analysis tools, a
-Composer Mode track view, Sound Flower's polar view, MIDI import, chord/
-sequence generation, and a Sound Mind VST plugin, among others none of
-which exist in the Studio yet. `docs/sound-mind-roadmap.md` tracks what's
-actually being built next, in order; this guide will grow alongside it.
+full intended scope - filter layers, MindWave-driven modulation,
+generators, analysis tools, a Composer Mode track view, Sound Flower's
+polar view, MIDI import, chord/sequence generation, and a Sound Mind VST
+plugin, among others none of which exist in the Studio yet.
+`docs/sound-mind-roadmap.md` tracks what's actually being built next, in
+order; this guide will grow alongside it.
+
+Painting (see [Painting](#painting) above) exists, but only a fraction of
+what's designed for it:
+
+- Only the **Procedural** brush - the other paintbrush types (Sound Mind
+  Instrument, Mind Shot, Mind Grain) and other painting tools (Smudge,
+  Order/Chaos, Heal, Soften, Clone) aren't built yet.
+- No **Tool Configuration Wizard** or **Tool Preset** drop-down - the
+  Panel described above is the only way to set brush parameters today,
+  and there's no way yet to save/reuse/export a particular brush setup.
+- No **color** (stereo balance) control - a stroke's intensity is the
+  same in both channels; there's no way yet to paint one channel louder
+  than the other.
+- No way to add a new, empty layer to paint onto from scratch - every
+  layer today comes from importing audio or an image.
+- No **Pick** tool - a painted stroke can be undone/redone, but not yet
+  individually selected, moved, or deleted after the fact.
