@@ -39,7 +39,9 @@ namespace sound_mind::studio {
  * locked: a lock icon instead of a drag handle (so they can't be
  * reordered), no delete button, and - for `Background` specifically - a
  * disabled, always-on visibility toggle (matching the legacy panel's own
- * "locked bottom layer" treatment).
+ * "locked bottom layer" treatment) and no opacity slider or transform
+ * controls at all (confirmed with the user: neither concept applies to
+ * the always-opaque, always-first-in-time floor of the stack).
  */
 class LayersPanel : public QDockWidget {
     Q_OBJECT

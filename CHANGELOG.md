@@ -6,6 +6,44 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.21.2] - 2026-09-10
+
+Two real bugs found via the user's own manual testing of `v0.0.21.1`,
+both fixed here.
+
+### Fixed
+
+- **The Layers toolbar button didn't actually toggle the panel.** Two
+  compounding causes, both real: `setProject()`'s direct
+  `layersPanel_->show()` call never updated `toggleViewAction()`'s own
+  checked state (now explicitly synced right after), and -  the actual
+  reason clicking it did nothing even once checked-state was correct -
+  `LayersPanel`'s constructor left `QDockWidget::DockWidgetClosable`
+  out of its feature set, which `QDockWidget` requires before
+  `toggleViewAction()` will actually hide the dock at all. Playback/
+  Record/Loop's own panels never restricted their features, which is
+  why only Layers was affected. See
+  `docs/sound-mind-architecture.md`'s Decisions Made #28 (corrected -
+  its first version wrongly called this an unreproducible headless-
+  test artifact; it wasn't).
+- **The Background layer no longer shows an opacity slider or
+  translation/rescale controls** in the Layers panel - neither concept
+  applies to the always-opaque, always-first-in-time floor of the
+  stack. UI-presentation only: the underlying model/methods
+  (`setLayerOpacity()` etc.) still work against it unchanged. See
+  Decisions Made #30.
+
+### Notes
+
+- **No Y bump.** Both fixes are presentational; no project file format
+  change.
+
+Regression: `sound-mind-core-tests` (413 assertions/102 cases,
+unaffected) and the full `sound-mind-studio-tests` suite (all 12 test
+classes) both pass. Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.21.1] - 2026-09-10
 
 A UI polish pass across several already-shipped milestones (Drag & Drop

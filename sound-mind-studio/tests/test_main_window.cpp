@@ -1286,24 +1286,24 @@ void MainWindowTest::layersToggleActionShowsAndHidesTheLayersPanel() {
     QAction* toggleAction = panel->toggleViewAction();
     QVERIFY(toggleAction != nullptr);
     QVERIFY(toggleAction->isCheckable());
+    QVERIFY(toggleAction->isChecked());  // synced to match - see setProject()'s own comment for the bug this guards.
     auto* toolBar = window.findChild<QToolBar*>();
     QVERIFY(toolBar != nullptr);
     QVERIFY(toolBar->actions().contains(toggleAction));
 
-    // Not asserted here: that toggling toggleAction's checked state
-    // actually hides/shows the panel. Confirmed real under manual testing
-    // (Qt's own standard, widely-used QDockWidget::toggleViewAction()
-    // mechanism - the same one Playback/Record/Loop's own toolbar toggles
-    // already relied on before this test existed) but not reliably
-    // reproducible headlessly: QDockWidget syncs that action's checked
-    // state from its own Show/Hide *events*, which Qt only actually
-    // dispatches once a widget's whole ancestor chain is on screen -
-    // MainWindow is never shown() in this test suite, so the action's
-    // checked state can end up desynced from panel->isHidden() (itself an
-    // explicit flag, set correctly by direct show()/hide() regardless -
-    // see layersPanelIsHiddenUntilAProjectExists()) in a way a real,
-    // actually-shown application never hits. Same category of limitation
-    // as dropEvent()/dragEnterEvent() needing a real OS gesture.
+    // The real bug this whole test was actually chasing (found via manual
+    // testing, and only reproduced once realizing it had nothing to do
+    // with this suite's usual "MainWindow is never shown()" limitation):
+    // QDockWidget::toggleViewAction()'s checked state can be freely
+    // flipped either way regardless, but the dock only actually hides
+    // when QDockWidget::DockWidgetClosable is one of its own features -
+    // LayersPanel's constructor originally left it out. See
+    // LayersPanel::LayersPanel()'s own comment for the fix.
+    toggleAction->trigger();
+    QVERIFY(panel->isHidden());
+
+    toggleAction->trigger();
+    QVERIFY(!panel->isHidden());
 }
 
 void MainWindowTest::toggleLoopModeSyncsTheLoopPanelsRunningState() {

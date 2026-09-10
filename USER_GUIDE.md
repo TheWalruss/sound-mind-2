@@ -164,9 +164,10 @@ has:
 - The layer's **name** - double-click to rename it.
 - A **type tag**, for any layer type other than the ordinary kind you get
   from importing.
-- An **opacity slider**.
-- **Translation** and **rescale** spin boxes - see
-  [Layer Timing](#layer-timing) below.
+- An **opacity slider**, and **translation**/**rescale** spin boxes (see
+  [Layer Timing](#layer-timing) below) - except on the **Background**
+  layer's row, which has none of these: it's always fully opaque and
+  always first in time, so neither applies to it.
 - A **delete** button (×), for any layer except the locked one(s).
 
 ### Important: what's actually shown right now

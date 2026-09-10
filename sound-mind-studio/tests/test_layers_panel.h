@@ -10,6 +10,7 @@ private slots:
     void setLayersReplacesThePreviousRows();
     void visibilityButtonEmitsVisibilityToggled();
     void backgroundVisibilityButtonIsDisabled();
+    void backgroundLayerHasNoOpacityOrTransformControls();
     void opacitySliderEmitsOpacityChanged();
     void translationSpinBoxEmitsTranslationChanged();
     void rescaleSpinBoxEmitsRescaleChanged();

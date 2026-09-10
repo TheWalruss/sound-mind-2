@@ -569,6 +569,19 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // every time, confirmed with the user.
     if (!layersPanelShownOnce_) {
         layersPanel_->show();
+        // A real bug, found via manual testing: show() called directly
+        // (bypassing toggleViewAction()) never updates that action's own
+        // checked state - QDockWidget only syncs it *from* the action
+        // (toggled(bool) -> show()/hide()), not the other way around, and
+        // toggleViewAction() was already lazily created (checked false,
+        // matching layersPanel_'s hidden state at the time) back in the
+        // constructor when it was first added to the toolbar. Left
+        // unsynced, the toolbar button's first click would silently no-op
+        // (checked false -> true means "show", already shown) instead of
+        // actually toggling anything - explicitly setting it here is what
+        // keeps the button and the panel's real visibility in agreement
+        // from this point on.
+        layersPanel_->toggleViewAction()->setChecked(true);
         layersPanelShownOnce_ = true;
     }
     refreshLayersPanel();

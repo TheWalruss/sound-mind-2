@@ -96,6 +96,24 @@ void LayersPanelTest::backgroundVisibilityButtonIsDisabled() {
     QVERIFY(!buttons.at(0)->isEnabled());
 }
 
+void LayersPanelTest::backgroundLayerHasNoOpacityOrTransformControls() {
+    // Confirmed with the user: opacity and the Layer Time Alignment
+    // controls (translation/rescale) don't make sense for the Background
+    // layer - it's always the floor of the stack, always fully opaque,
+    // with nothing else beneath it to line up against in time.
+    LayersPanel::RowData background;
+    background.id = 1;
+    background.name = QStringLiteral("Background");
+    background.type = LayerType::Background;
+
+    LayersPanel panel;
+    panel.setLayers({background});
+
+    QVERIFY(panel.findChild<QSlider*>(QStringLiteral("opacitySlider")) == nullptr);
+    QVERIFY(panel.findChild<QSpinBox*>(QStringLiteral("translationSpinBox")) == nullptr);
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")) == nullptr);
+}
+
 void LayersPanelTest::opacitySliderEmitsOpacityChanged() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());

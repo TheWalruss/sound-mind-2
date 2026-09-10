@@ -101,7 +101,9 @@ protected:
 
 /// @brief One row's worth of widgets - see the class docs on LayersPanel
 /// for the row layout this builds (lock/drag handle, visibility toggle,
-/// name, type tag, opacity slider, delete).
+/// name, type tag, opacity slider, transform controls, delete) - the
+/// opacity/transform controls are omitted entirely for a Background row,
+/// see their own construction site below for why.
 class LayerRowWidget : public QWidget {
     Q_OBJECT
 
@@ -161,46 +163,55 @@ public:
             layout->addWidget(typeTag);
         }
 
-        auto* opacitySlider = new QSlider(Qt::Horizontal);
-        opacitySlider->setObjectName(QStringLiteral("opacitySlider"));
-        opacitySlider->setRange(0, 100);
-        opacitySlider->setValue(static_cast<int>(data.opacity * 100.0f));
-        opacitySlider->setFixedWidth(60);
-        opacitySlider->setToolTip(tr("Layer opacity"));
-        connect(opacitySlider, &QSlider::valueChanged, this,
-                [this](int value) { emit opacityChanged(id_, static_cast<float>(value) / 100.0f); });
-        layout->addWidget(opacitySlider);
+        // Opacity and the Layer Time Alignment transform controls below are
+        // omitted entirely (not just disabled) for the Background layer -
+        // confirmed with the user: it's always the floor of the stack,
+        // always fully opaque, with nothing beneath it to line up against
+        // in time, so neither concept applies to it the way it does to
+        // every other layer type.
+        if (data.type != LayerType::Background) {
+            auto* opacitySlider = new QSlider(Qt::Horizontal);
+            opacitySlider->setObjectName(QStringLiteral("opacitySlider"));
+            opacitySlider->setRange(0, 100);
+            opacitySlider->setValue(static_cast<int>(data.opacity * 100.0f));
+            opacitySlider->setFixedWidth(60);
+            opacitySlider->setToolTip(tr("Layer opacity"));
+            connect(opacitySlider, &QSlider::valueChanged, this,
+                    [this](int value) { emit opacityChanged(id_, static_cast<float>(value) / 100.0f); });
+            layout->addWidget(opacitySlider);
 
-        // Time Alignment (v0.Y.21.1): two per-layer horizontal transform
-        // controls - see sound_mind::core::Layer::translationColumns()/
-        // rescaleFactor()'s own docs for what each does. QSpinBox's range is
-        // a plain `int`, not Layer's `std::int64_t` - a UI-level limit, the
-        // same shape as opacitySlider's own float-via-0..100-int range
-        // above; a shift of ±2^31 columns (millions of seconds at any
-        // realistic hop length) is far beyond anything this control needs
-        // to reach.
-        auto* translationSpinBox = new QSpinBox();
-        translationSpinBox->setObjectName(QStringLiteral("translationSpinBox"));
-        translationSpinBox->setRange(-1'000'000, 1'000'000);
-        translationSpinBox->setValue(static_cast<int>(data.translationColumns));
-        translationSpinBox->setFixedWidth(70);
-        translationSpinBox->setToolTip(tr("Shift this layer's content earlier/later in time, in spectrogram columns"));
-        connect(translationSpinBox, &QSpinBox::valueChanged, this,
-                [this](int value) { emit translationChanged(id_, static_cast<std::int64_t>(value)); });
-        layout->addWidget(translationSpinBox);
+            // Time Alignment (v0.Y.21.1): two per-layer horizontal transform
+            // controls - see sound_mind::core::Layer::translationColumns()/
+            // rescaleFactor()'s own docs for what each does. QSpinBox's range is
+            // a plain `int`, not Layer's `std::int64_t` - a UI-level limit, the
+            // same shape as opacitySlider's own float-via-0..100-int range
+            // above; a shift of ±2^31 columns (millions of seconds at any
+            // realistic hop length) is far beyond anything this control needs
+            // to reach.
+            auto* translationSpinBox = new QSpinBox();
+            translationSpinBox->setObjectName(QStringLiteral("translationSpinBox"));
+            translationSpinBox->setRange(-1'000'000, 1'000'000);
+            translationSpinBox->setValue(static_cast<int>(data.translationColumns));
+            translationSpinBox->setFixedWidth(70);
+            translationSpinBox->setToolTip(
+                tr("Shift this layer's content earlier/later in time, in spectrogram columns"));
+            connect(translationSpinBox, &QSpinBox::valueChanged, this,
+                    [this](int value) { emit translationChanged(id_, static_cast<std::int64_t>(value)); });
+            layout->addWidget(translationSpinBox);
 
-        auto* rescaleSpinBox = new QDoubleSpinBox();
-        rescaleSpinBox->setObjectName(QStringLiteral("rescaleSpinBox"));
-        rescaleSpinBox->setRange(0.1, 10.0);
-        rescaleSpinBox->setSingleStep(0.05);
-        rescaleSpinBox->setDecimals(2);
-        rescaleSpinBox->setSuffix(QStringLiteral("x"));
-        rescaleSpinBox->setValue(data.rescaleFactor);
-        rescaleSpinBox->setFixedWidth(60);
-        rescaleSpinBox->setToolTip(tr("Stretch/compress this layer's own timeline"));
-        connect(rescaleSpinBox, &QDoubleSpinBox::valueChanged, this,
-                [this](double value) { emit rescaleChanged(id_, value); });
-        layout->addWidget(rescaleSpinBox);
+            auto* rescaleSpinBox = new QDoubleSpinBox();
+            rescaleSpinBox->setObjectName(QStringLiteral("rescaleSpinBox"));
+            rescaleSpinBox->setRange(0.1, 10.0);
+            rescaleSpinBox->setSingleStep(0.05);
+            rescaleSpinBox->setDecimals(2);
+            rescaleSpinBox->setSuffix(QStringLiteral("x"));
+            rescaleSpinBox->setValue(data.rescaleFactor);
+            rescaleSpinBox->setFixedWidth(60);
+            rescaleSpinBox->setToolTip(tr("Stretch/compress this layer's own timeline"));
+            connect(rescaleSpinBox, &QDoubleSpinBox::valueChanged, this,
+                    [this](double value) { emit rescaleChanged(id_, value); });
+            layout->addWidget(rescaleSpinBox);
+        }
 
         if (!locked) {
             auto* deleteButton = new QPushButton(QStringLiteral("×"));
@@ -229,7 +240,17 @@ private:
 }  // namespace
 
 LayersPanel::LayersPanel(QWidget* parent) : QDockWidget(tr("Layers"), parent) {
-    setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    // DockWidgetClosable included, unlike this dock's original feature set
+    // (Movable | Floatable only) - a real bug, found via manual testing:
+    // QDockWidget's toggleViewAction() can flip its own checked state
+    // freely either way, but only actually hides the dock (calls hide())
+    // when DockWidgetClosable is one of its features - without it, the
+    // toolbar's Layers toggle button visibly changes state but the panel
+    // itself never responds. Playback/Record/Loop's own panels never call
+    // setFeatures() at all, keeping Qt's default full feature set
+    // (Closable included), which is exactly why their own toolbar toggles
+    // already worked correctly before this fix.
+    setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
     setMinimumWidth(260);
 
     list_ = new QListWidget();
