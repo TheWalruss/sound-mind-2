@@ -234,7 +234,7 @@ A lumped UI-polish milestone, per explicit go-ahead to bundle smaller UI changes
 
 **No Y bump.** Purely visual - no project file, public API, or codec format is touched.
 
-### v0.Y.17.1 - Drag & Drop Import
+### v0.Y.17.1 - Drag & Drop Import ✅
 
 Dropping files onto the main window imports them, similar to the legacy Studio's own `dragEnterEvent`/`dropEvent`/`_route_dropped_files` handling - routed by extension, reusing the File menu's existing import paths rather than adding a separate code path for it. Narrower than the legacy routing table: no MIDI, no standalone-TIFF silent import, no per-drop import wizard - none of those concepts exist in this codebase yet, or (TIFF) never carried over as their own standalone-file idea in `v0.Y.12.1`'s notes.
 
@@ -245,6 +245,10 @@ Dropping files onto the main window imports them, similar to the legacy Studio's
 **Demo:** drag a `.wav` onto the canvas and see a new layer appear; with unsaved changes in the current project, drag a `.smproj` onto the window and confirm the same discard-changes prompt Open Project already shows, rather than silently losing the change.
 
 **No Y bump expected** - no project-file-format change; this is a new entry point onto import/open methods that already exist.
+
+**Implemented as `MainWindow::dragEnterEvent()`/`dropEvent()`** (thin `QWidget` overrides, accepting any drag carrying at least one local file URL) **plus a new testable core, `handleDroppedFiles()`** - the actual per-extension routing, split out the same way every other interactive/testable pair in this codebase is, since nothing can simulate a real OS-level drag gesture headlessly. `.wav` routes to `importAudioFile()` (every snippet, no picker, by design - a drop is a quick action, not the File menu's own richer flow); the image extensions route to `importImageFile()` with `ImageScalePickerDialog::Mode::RescaleToFitProject` (the same default that picker itself pre-selects, applied directly rather than shown as a dialog); `.smproj` routes to `openProjectAt()`, guarded by `confirmDiscardUnsavedChanges()` first, exactly matching the existing Recent Projects click handler's own pattern.
+
+**One deliberate deviation from the File menu's own failure handling, confirmed while implementing:** a recognized file that fails to import/open reports it via the status bar (non-modal), not a blocking `QMessageBox`, unlike `importAudio()`/`importImage()`/`openProject()`. Two reasons: a multi-file drop shouldn't stop and demand attention partway through over one bad file, and - just as importantly - it keeps `handleDroppedFiles()` itself unconditionally headless-testable, the same reasoning every other testable core in this codebase already follows. The `.smproj` + genuine unsaved changes case is the one remaining real dialog, and it's the identical, already-accepted exception `confirmDiscardUnsavedChanges()`'s own callers all share.
 
 ### v0.Y.18.1 - Transport Panels ✅
 

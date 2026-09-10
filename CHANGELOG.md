@@ -6,6 +6,44 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.18.1] - 2026-09-10
+
+The "Drag & Drop Import" milestone from `docs/sound-mind-roadmap.md`
+(Phase 2.5): dropping local files onto the main window imports/opens
+them by extension, reusing the File menu's existing import/open
+methods rather than a separate code path.
+
+### Added
+
+- **`MainWindow::dragEnterEvent()`/`dropEvent()`**: thin `QWidget`
+  overrides accepting any drag carrying at least one local file URL.
+- **`MainWindow::handleDroppedFiles()`**: the actual per-extension
+  routing, split out as a testable core since nothing can simulate a
+  real OS-level drag gesture headlessly. `.wav` routes to
+  `importAudioFile()` (every snippet, no picker); the image extensions
+  route to `importImageFile()` with
+  `ImageScalePickerDialog::Mode::RescaleToFitProject`; `.smproj` routes
+  to `openProjectAt()`, guarded by `confirmDiscardUnsavedChanges()`
+  first. Every other extension is silently ignored.
+
+### Notes
+
+- **One deliberate deviation from the File menu's own failure
+  handling, confirmed while implementing**: a recognized file that
+  fails to import/open reports it via the status bar (non-modal), not
+  a blocking `QMessageBox` - a multi-file drop shouldn't stop and
+  demand attention partway through over one bad file, and it keeps
+  `handleDroppedFiles()` itself unconditionally headless-testable. See
+  `docs/sound-mind-architecture.md`'s Decisions Made #24.
+- **No Y bump.** A new entry point onto import/open methods that
+  already exist; no project file format change.
+
+Full regression suite: `sound-mind-core-tests` unaffected (no
+`sound-mind-core` changes this milestone); `sound-mind-studio-tests`
+gains 6 new `MainWindow` tests covering `handleDroppedFiles()`'s
+routing, multi-file ordering, unrecognized-extension handling, and the
+Loop-Mode-running refusal path.
+
 ## [0.0.17.1] - 2026-09-09
 
 The "Image Import Scaling" milestone from `docs/sound-mind-roadmap.md`

@@ -108,4 +108,12 @@ private slots:
     void importImageFileScaleHorizontalKeepVerticalKeepsNativeHeight();
     void importImageFileScaleVerticalProportionalPreservesAspectRatio();
     void importImageFileKeepNativeResolutionDoesNotRescale();
+
+    // Drag & Drop Import (v0.Y.17.1)
+    void handleDroppedFilesImportsAWavFile();
+    void handleDroppedFilesImportsAnImageFile();
+    void handleDroppedFilesOpensASmprojFile();
+    void handleDroppedFilesIgnoresUnrecognizedExtensions();
+    void handleDroppedFilesRoutesMultipleFilesInOrder();
+    void handleDroppedFilesSmprojRefusesWhileLoopModeIsRunning();
 };

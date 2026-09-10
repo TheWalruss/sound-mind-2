@@ -1575,3 +1575,116 @@ void MainWindowTest::importImageFileKeepNativeResolutionDoesNotRescale() {
     QCOMPARE(content.frameCount, static_cast<std::uint32_t>(30));     // the source image's own native width.
     QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(20));  // the source image's own native height.
 }
+
+void MainWindowTest::handleDroppedFilesImportsAWavFile() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-drop.wav";
+    writeTestWavFile(path);
+
+    MainWindow window;
+    createFreshTestProject(window);
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    window.handleDroppedFiles({path});
+    std::filesystem::remove(path);
+
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
+}
+
+void MainWindowTest::handleDroppedFilesImportsAnImageFile() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-drop.png";
+    writeImageScalingTestImage(path);
+
+    MainWindow window;
+    createFreshTestProject(window);
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    window.handleDroppedFiles({path});
+    std::filesystem::remove(path);
+
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
+}
+
+void MainWindowTest::handleDroppedFilesOpensASmprojFile() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-open.smproj";
+    {
+        // A separate window just to create the file on disk - dropped onto
+        // a second, fresh window below.
+        MainWindow writer;
+        QVERIFY(writer.createProjectAt(sound_mind::core::ProjectSettings{}, projectPath));
+    }
+
+    MainWindow window;
+    QVERIFY(window.isShowingLandingPage());
+
+    window.handleDroppedFiles({projectPath});
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(!window.isShowingLandingPage());
+}
+
+void MainWindowTest::handleDroppedFilesIgnoresUnrecognizedExtensions() {
+    MainWindow window;
+    createFreshTestProject(window);
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    // A real file (so any accidental "try to read/import it" path would
+    // have something to fail on) with an extension nothing routes on.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-drop-ignored.txt";
+    {
+        std::ofstream stream(path);
+        stream << "not audio, not an image, not a project";
+    }
+
+    window.handleDroppedFiles({path});
+    std::filesystem::remove(path);
+
+    QCOMPARE(window.project()->layers().size(), layerCountBefore);
+}
+
+void MainWindowTest::handleDroppedFilesRoutesMultipleFilesInOrder() {
+    const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-multi.wav";
+    writeTestWavFile(wavPath);
+    const auto imagePath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-multi.png";
+    writeImageScalingTestImage(imagePath);
+    const auto ignoredPath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-multi.txt";
+    {
+        std::ofstream stream(ignoredPath);
+        stream << "ignored";
+    }
+
+    MainWindow window;
+    createFreshTestProject(window);
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    window.handleDroppedFiles({wavPath, ignoredPath, imagePath});
+    std::filesystem::remove(wavPath);
+    std::filesystem::remove(imagePath);
+    std::filesystem::remove(ignoredPath);
+
+    // Both the audio and image files became layers; the ignored one
+    // contributed nothing - exactly two new layers, not three.
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
+}
+
+void MainWindowTest::handleDroppedFilesSmprojRefusesWhileLoopModeIsRunning() {
+    MainWindow window;
+    createFreshTestProject(window);
+    window.toggleLoopMode();
+    QVERIFY(window.isLoopModeRunning());
+    // toggleLoopMode() itself marks hasUnsavedChanges() - clear it with a
+    // real save first, so handleDroppedFiles()'s own
+    // confirmDiscardUnsavedChanges() call returns immediately below
+    // instead of blocking on a real QMessageBox (this test's own real bug,
+    // caught by a genuine 300s timeout the first time this test ran).
+    window.saveProject();
+    QVERIFY(!window.hasUnsavedChanges());
+
+    // openProjectAt() itself refuses (no dialog) while Loop Mode is
+    // running - handleDroppedFiles() must not crash propagating that,
+    // and must leave the current project (and Loop Mode) untouched.
+    window.handleDroppedFiles({std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.smproj"});
+
+    QVERIFY(window.isLoopModeRunning());
+
+    window.toggleLoopMode();  // cleanup.
+}

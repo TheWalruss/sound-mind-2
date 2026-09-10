@@ -17,6 +17,8 @@
 #include "sound_mind/studio/recent_projects.h"
 
 class QCloseEvent;
+class QDragEnterEvent;
+class QDropEvent;
 class QStackedWidget;
 class QString;
 class QTimer;
@@ -119,6 +121,11 @@ class RecordPanel;
  * `setPlaybackOutputDevice()`) and an above-unity Playback volume control
  * (`setPlaybackVolume()`) - all previously-deferred scope across Playback/
  * Live Mode/Record's own original milestones - land on these panels too.
+ *
+ * **As of `v0.Y.17.1` (Drag & Drop Import):** dropping local files onto
+ * the window imports/opens them via handleDroppedFiles() - see its own
+ * docs for the per-extension routing and why failures report through the
+ * status bar rather than a blocking dialog.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -752,6 +759,41 @@ public:
                           QString* errorMessage = nullptr);
 
     /**
+     * @brief Routes a list of dropped local file paths to the matching
+     *        import/open method by extension - the actual work behind
+     *        dropEvent(), split out so it's callable directly by a test
+     *        without needing a real OS-level drag gesture (which nothing
+     *        can simulate headlessly) - see
+     *        `docs/sound-mind-roadmap.md`'s Drag & Drop Import milestone
+     *        (`v0.Y.17.1`).
+     *
+     * `.wav` goes to importAudioFile() (every snippet, no picker - the
+     * same quick, no-dialog behavior a menu-driven import would need a
+     * picker for only because Audio Import Snippets' own scope specifically
+     * asked for one there); the image extensions importImageFile() already
+     * accepts go to it with `ImageScalePickerDialog::Mode::RescaleToFitProject`
+     * (the same default the interactive picker itself pre-selects, applied
+     * directly rather than showing that dialog for a drop); `.smproj` goes
+     * to openProjectAt(), guarded by confirmDiscardUnsavedChanges() first -
+     * openProjectAt() itself already refuses (no dialog) while Loop Mode or
+     * Recording is active. Every other extension is silently ignored, not
+     * an error - a stray file dropped by accident shouldn't force anything
+     * onto the screen.
+     *
+     * A recognized file that fails to import or open reports it via the
+     * status bar (non-modal), not a blocking dialog - deliberately gentler
+     * than the equivalent File menu actions, both because a multi-file drop
+     * shouldn't stop and demand attention partway through, and because it
+     * keeps this method itself unconditionally headless-testable (the one
+     * exception is `.smproj` with genuine unsaved changes to confirm - the
+     * same real, interactive-gesture-only exception every
+     * confirmDiscardUnsavedChanges()-guarded call site already has).
+     *
+     * @param paths The local file paths to route, in order.
+     */
+    void handleDroppedFiles(const std::vector<std::filesystem::path>& paths);
+
+    /**
      * @brief Pools the topmost layer with content and writes its Stream
      *        and Pool renders as PNG files, without showing any dialog -
      *        the actual work behind poolTopmostLayer(), split out for the
@@ -814,6 +856,23 @@ protected:
      * @param event The close event; accepted or ignored per the above.
      */
     void closeEvent(QCloseEvent* event) override;
+
+    /**
+     * @brief Accepts a drag carrying at least one local file - see
+     *        `docs/sound-mind-roadmap.md`'s Drag & Drop Import milestone
+     *        (`v0.Y.17.1`).
+     * @param event The drag-enter event; accepted or ignored per the above.
+     */
+    void dragEnterEvent(QDragEnterEvent* event) override;
+
+    /**
+     * @brief Extracts every local file `event` carries and routes them via
+     *        handleDroppedFiles() - see its own docs for the actual
+     *        per-extension behavior.
+     * @param event The drop event; accepted if it carried at least one
+     *        local file, ignored otherwise.
+     */
+    void dropEvent(QDropEvent* event) override;
 
 private:
     void setProject(sound_mind::core::Project project);

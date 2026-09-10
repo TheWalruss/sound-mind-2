@@ -15,6 +15,8 @@
 #include <QAction>
 #include <QCloseEvent>
 #include <QCoreApplication>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QImage>
 #include <QInputDialog>
@@ -23,10 +25,12 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QTimer>
 #include <QToolBar>
+#include <QUrl>
 
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/rgb_image.h"
@@ -180,6 +184,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     setWindowTitle(QStringLiteral("Sound Mind Studio v" SOUND_MIND_VERSION));
     setWindowIcon(studioWindowIcon());
     resize(800, 600);
+    setAcceptDrops(true);  // see dragEnterEvent()/dropEvent()'s own docs.
 
     landingPage_ = new LandingPage(this);
     landingPage_->setRecentProjects(recentProjects_.list());
@@ -339,6 +344,71 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         return;
     }
     event->accept();
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent* event) {
+    std::vector<std::filesystem::path> paths;
+    for (const QUrl& url : event->mimeData()->urls()) {
+        if (url.isLocalFile()) {
+            paths.emplace_back(url.toLocalFile().toStdString());
+        }
+    }
+
+    if (paths.empty()) {
+        event->ignore();
+        return;
+    }
+
+    event->acceptProposedAction();
+    handleDroppedFiles(paths);
+}
+
+void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& paths) {
+    for (const std::filesystem::path& path : paths) {
+        std::string extension = path.extension().string();
+        for (char& c : extension) {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+
+        QString errorMessage;
+        if (extension == ".wav") {
+            if (!importAudioFile(path, &errorMessage)) {
+                statusBar()->showMessage(
+                    tr("Could not import \"%1\": %2").arg(QString::fromStdString(path.filename().string()), errorMessage),
+                    5000);
+            }
+        } else if (extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".bmp" ||
+                   extension == ".tga" || extension == ".webp") {
+            if (!importImageFile(path, ImageScalePickerDialog::Mode::RescaleToFitProject, &errorMessage)) {
+                statusBar()->showMessage(
+                    tr("Could not import \"%1\": %2").arg(QString::fromStdString(path.filename().string()), errorMessage),
+                    5000);
+            }
+        } else if (extension == ".smproj") {
+            // Same guard as openProject() - see its docs - before reaching
+            // openProjectAt(), which enforces the Loop Mode/Recording
+            // refusal on its own but never prompts about unsaved changes
+            // itself.
+            if (!confirmDiscardUnsavedChanges()) {
+                continue;
+            }
+            if (!openProjectAt(path, &errorMessage)) {
+                statusBar()->showMessage(
+                    tr("Could not open \"%1\": %2").arg(QString::fromStdString(path.filename().string()), errorMessage),
+                    5000);
+            }
+        }
+        // Every other extension is silently ignored - see this method's
+        // own docs.
+    }
 }
 
 bool MainWindow::confirmDiscardUnsavedChanges() {
