@@ -6,6 +6,43 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.1] - 2026-09-10
+
+Part 1 of the Phase 3 "Basic Painting" milestone (`docs/sound-mind-roadmap.md`'s
+`v0.Y.24.1`) - the foundational data model underneath painting, not yet
+anything paintable. Confirmed scope with the user beforehand: this
+milestone builds the full Tool Configuration Wizard/Panel and Pick
+system alongside a plain procedural brush (not deferred to a later
+installment), per the design doc's own "Freehand Path Capture"/"Tool
+Configuration"/"Pick" sections (also added this session, alongside the
+architecture doc's supporting Core Data Model additions).
+
+### Added
+
+- **`Gradient`/`GradientStop`** (`sound_mind::core`) - the shared model
+  behind `docs/sound-mind-design.md`'s *Gradients*: an ordered, always-
+  ≥2-stop list interpolated linearly between neighbors, `insertStop()`/
+  `removeStop()` (endpoints protected), `evaluate(t)`, and a
+  `linkChannels` UI-convenience flag. A fresh `Gradient` starts fully
+  transparent at both endpoints, matching the design doc's "nothing is
+  painted by accident."
+- **`Path`/`PathNode`/`TimeFrequencyPoint`** (`sound_mind::core`) - a
+  segmented cubic Bézier curve (smooth-vs-corner nodes, each carrying its
+  own `Gradient`), plus **`fitPathToPoints()`**: curve-fits a freehand
+  stroke's dense raw samples into a sparse, smooth `Path` in real time via
+  Ramer-Douglas-Peucker simplification and Catmull-Rom-derived Bézier
+  handles - see the design doc's *Freehand Path Capture*. `Path::bounds()`
+  returns a `TimeFrequencyRect` (reusing `Operation`'s own type) spanning
+  every node's anchor *and* handle points - deliberately coarse/cheap, not
+  the tighter exact curve extent, matching the "bounding box" the design
+  doc's *Pick*/*Tool Configuration* sections describe.
+
+Regression: `sound-mind-core-tests` (518 assertions/137 cases, up from
+413/102 - `sound-mind-studio-tests` unaffected, not yet touched by this
+installment) all pass. Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.23.2] - 2026-09-10
 
 Test-only/internal - no user-visible behavior change. `ctest`'s

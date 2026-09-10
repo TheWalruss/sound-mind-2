@@ -2,6 +2,8 @@ find_package(Catch2 3 CONFIG REQUIRED)
 
 add_executable(sound-mind-core-tests
     test_operation.cpp
+    test_gradient.cpp
+    test_path.cpp
     test_layer.cpp
     test_project_settings.cpp
     test_project.cpp

@@ -18,6 +18,8 @@ find_package(nlohmann_json CONFIG REQUIRED)
 
 add_library(sound-mind-core
     src/operation.cpp
+    src/gradient.cpp
+    src/path.cpp
     src/layer.cpp
     src/project_settings.cpp
     src/operation_log.cpp
