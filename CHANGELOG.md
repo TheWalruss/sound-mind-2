@@ -6,6 +6,38 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.3] - 2026-09-10
+
+Part 3 of the Phase 3 "Basic Painting" milestone - the procedural
+brush's own DSP: turning a `PaintOperation` into real amplitude writes.
+Still not paintable from the UI; Studio-side canvas capture is next.
+
+### Added
+
+- **`sound_mind::core::applyPaintOperation()`** - stamps a `PaintOperation`'s
+  brush tip repeatedly along its own `Path`, densely enough to blend into
+  a continuous stroke. Each stamp blends every pixel within the tip's
+  radius toward the `Path`'s own `Gradient`-evaluated target intensity
+  (written directly as the new dB value), weighted by that stop's opacity
+  *and* the tip's own per-pixel falloff. `Circle`/`Square`/`Diamond` tip
+  shapes have real, distinct footprints; every other `BrushTipShape`
+  currently falls back to `Circle`'s.
+- **`sound_mind::core::rebuildPaintedContent()`** - replays a layer's own
+  active operations (typically `OperationLog::activeOperationsTargeting()`'s
+  result) onto a copy of its pre-paint base content, so undo()/redo() is
+  actually reflected in what's rendered/played, not just in which
+  operations are logged as active.
+- **`frequencyToBinIndex()`/`timeToFrameIndex()`** - the same Hz->bin
+  (log-scale) and seconds->frame (linear) mappings `sound_mind::codec::encode()`
+  uses internally, re-derived here so painting targets the exact pixel a
+  given frequency/time would actually be stored at.
+
+Regression: `sound-mind-core-tests` (50597 assertions/181 cases, up from
+582/167) and the full `sound-mind-studio-tests` suite both pass. Doxygen
+docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.2] - 2026-09-10
 
 Part 2 of the Phase 3 "Basic Painting" milestone - the first real
