@@ -11,4 +11,11 @@ private slots:
     void selectingScaleHorizontalKeepVerticalUpdatesSelectedMode();
     void selectingScaleVerticalProportionalUpdatesSelectedMode();
     void selectingKeepNativeResolutionUpdatesSelectedMode();
+
+    // Image Sequence Import (v0.Y.22.1)
+    void sequentialCheckBoxIsAbsentByDefault();
+    void sequentialCheckBoxExistsWhenAllowed();
+    void sequentialCheckBoxStartsUnchecked();
+    void checkingSequentialCheckBoxSetsImportAsSequence();
+    void checkingSequentialCheckBoxDisablesTheModeRadios();
 };

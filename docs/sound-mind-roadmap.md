@@ -324,13 +324,15 @@ Two new per-layer transform controls: horizontal translation (shifts a layer's c
 
 **Narrower than stated above, in one more respect**: the transform is visual/spectrogram-only - it does not affect `decodeLayerForExport()` or playback audio in any way, since real multi-layer audio mixing still doesn't exist anywhere in the codebase (Playback/Loop Mode/Record all still only ever play the single topmost layer with content, unmixed - the same deferral `v0.Y.8.1`'s Live Mode and `v0.Y.14.1`'s Loop Mode notes already describe). "Lining up" and "matching timing" are demonstrated visually (toggling layer visibility to compare), not by ear.
 
-### v0.Y.22.1 - Image Sequence Import 🔜 Next
+### v0.Y.22.1 - Image Sequence Import ✅
 
 When importing multiple images at once, an "import as sequence" option applies `v0.Y.20.1`'s "scale vertically to fit project, rescale horizontal in proportion" mode to each one, and automatically places each subsequent image's layer immediately after the previous one in time via `v0.Y.21.1`'s horizontal translation control - matching the legacy Studio's own cumulative-offset placement for multi-image imports.
 
 **Demo:** select five images at once, check "import as sequence", and see five layers laid out end-to-end in time, each scaled to the project's own bin count.
 
 **No Y bump expected.** Depends on `v0.Y.20.1`/`v0.Y.21.1` already existing - sequenced after both per Sequencing principle #4 (dependency order), matching the order these five points were given in.
+
+**Implemented as:** checked against the legacy Studio's own `import_wizard.py`/`app.py` before implementing (this codebase's `../sound-mind/` reference), which settled several points the roadmap text above left open, each confirmed with the user: (1) "Import as sequence" is a checkbox in `ImageScalePickerDialog` (not a 6th `Mode` value), shown only when `MainWindow::importImage()`'s now-multi-select file dialog returned more than one file, and checking it disables the five mode radios (a sequence import always applies `ScaleVerticalProportional`, ignoring whatever radio was previously selected); (2) the running horizontal offset **wraps back to column `0`** once it reaches the project's own `canvasWidth`, matching the legacy Studio's own behavior exactly rather than just letting later layers extend past it (which `renderLayer()` would crop anyway, per architecture.md's Decision #25); (3) files are sorted by path before sequencing, regardless of the file dialog's own selection order - deterministic, and the natural choice for numbered frame sequences; (4) `MainWindow::importImageFiles()` (the new multi-file testable core `importImage()` delegates to, sitting between it and the existing single-file `importImageFile()`) succeeds if at least one file imported, matching `importAudioSnippets()`'s and `handleDroppedFiles()`'s own "don't let one bad file block everything" precedent.
 
 ### v0.Y.23.1 - Refactor & Clean Up
 

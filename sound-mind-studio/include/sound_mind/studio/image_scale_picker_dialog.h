@@ -19,6 +19,10 @@ namespace sound_mind::studio {
  * `AudioSnippetPickerDialog`/`LayersPanel`: `MainWindow` reads
  * `selectedMode()` back after `exec()` returns `QDialog::Accepted` and
  * does the actual resizing itself - no image I/O happens in this class.
+ *
+ * As of `v0.Y.22.1` (Image Sequence Import), the dialog can also offer an
+ * "Import as sequence" checkbox - see the `allowSequential` constructor
+ * parameter and importAsSequence()'s own docs.
  */
 class ImageScalePickerDialog : public QDialog {
     Q_OBJECT
@@ -60,14 +64,45 @@ public:
     ///        per this milestone's confirmed default.
     /// @param parent The owning widget, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
-    explicit ImageScalePickerDialog(QWidget* parent = nullptr);
+    /// @param allowSequential Whether to show the "Import as sequence"
+    ///        checkbox at all - `MainWindow::importImage()` passes `true`
+    ///        only when more than one file was selected, matching the
+    ///        legacy Studio's own "only meaningful for multiple files"
+    ///        gating. Defaults to `false` so every pre-`v0.Y.22.1` call
+    ///        site (single-file import, and every existing test) keeps
+    ///        constructing an identical dialog with no source changes
+    ///        needed.
+    explicit ImageScalePickerDialog(QWidget* parent = nullptr, bool allowSequential = false);
 
     /// @brief The currently selected mode.
+    ///
+    /// Meaningless while importAsSequence() is `true` - the mode radios are
+    /// disabled in that state (see the class docs) and the caller should
+    /// consult importAsSequence() first, not this.
+    ///
     /// @return The mode whose radio button is currently checked.
     [[nodiscard]] Mode selectedMode() const;
 
+    /**
+     * @brief Whether "Import as sequence" is checked - see
+     *        `docs/sound-mind-roadmap.md`'s Image Sequence Import milestone
+     *        (`v0.Y.22.1`).
+     *
+     * Always `false` when the dialog was built with `allowSequential` set
+     * to `false` (the checkbox doesn't exist in that case, so there's
+     * nothing to check). When `true`, the caller should ignore
+     * selectedMode() entirely - `MainWindow::importImageFiles()` always
+     * applies `Mode::ScaleVerticalProportional` to every file in a
+     * sequence, regardless of whichever mode radio was last selected
+     * before the checkbox disabled them.
+     *
+     * @return Whether sequential import was requested.
+     */
+    [[nodiscard]] bool importAsSequence() const;
+
 private:
     Mode selectedMode_ = Mode::RescaleToFitProject;
+    bool importAsSequence_ = false;
 };
 
 }  // namespace sound_mind::studio

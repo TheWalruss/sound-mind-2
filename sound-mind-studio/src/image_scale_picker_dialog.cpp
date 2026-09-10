@@ -1,13 +1,14 @@
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 
 #include <QButtonGroup>
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QRadioButton>
 #include <QVBoxLayout>
 
 namespace sound_mind::studio {
 
-ImageScalePickerDialog::ImageScalePickerDialog(QWidget* parent) : QDialog(parent) {
+ImageScalePickerDialog::ImageScalePickerDialog(QWidget* parent, bool allowSequential) : QDialog(parent) {
     setWindowTitle(tr("Choose How to Scale This Image"));
 
     auto* root = new QVBoxLayout(this);
@@ -67,6 +68,27 @@ ImageScalePickerDialog::ImageScalePickerDialog(QWidget* parent) : QDialog(parent
         }
     });
 
+    // Image Sequence Import (v0.Y.22.1): only offered when importing more
+    // than one file at once (allowSequential) - see this constructor's own
+    // docs. Checking it overrides/disables the five mode radios above
+    // rather than coexisting with them, since a sequence import always
+    // applies ScaleVerticalProportional to every file regardless of
+    // whatever mode was selected before.
+    if (allowSequential) {
+        auto* sequentialCheckBox = new QCheckBox(tr("Import as sequence"), this);
+        sequentialCheckBox->setObjectName(QStringLiteral("sequentialCheckBox"));
+        sequentialCheckBox->setToolTip(
+            tr("Lay the selected files out end-to-end in time instead of importing each independently"));
+        connect(sequentialCheckBox, &QCheckBox::toggled, this, [this, group](bool checked) {
+            importAsSequence_ = checked;
+            const auto buttons = group->buttons();
+            for (auto* button : buttons) {
+                button->setEnabled(!checked);
+            }
+        });
+        root->addWidget(sequentialCheckBox);
+    }
+
     auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     buttonBox->setObjectName(QStringLiteral("buttonBox"));
     connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
@@ -76,6 +98,10 @@ ImageScalePickerDialog::ImageScalePickerDialog(QWidget* parent) : QDialog(parent
 
 ImageScalePickerDialog::Mode ImageScalePickerDialog::selectedMode() const {
     return selectedMode_;
+}
+
+bool ImageScalePickerDialog::importAsSequence() const {
+    return importAsSequence_;
 }
 
 }  // namespace sound_mind::studio

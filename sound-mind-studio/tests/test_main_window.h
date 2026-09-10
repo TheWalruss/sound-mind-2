@@ -120,4 +120,12 @@ private slots:
     // Layer Time Alignment (v0.Y.21.1)
     void setLayerTranslationChangesTheLayersTranslation();
     void setLayerRescaleChangesTheLayersRescale();
+
+    // Image Sequence Import (v0.Y.22.1)
+    void importImageFilesImportsEachFileIndependentlyWhenNotSequential();
+    void importImageFilesAppliesProportionalScalingAndCumulativeTranslationWhenSequential();
+    void importImageFilesWrapsCumulativeOffsetPastCanvasWidth();
+    void importImageFilesSortsFilesAlphabeticallyWhenSequential();
+    void importImageFilesSucceedsIfAtLeastOneFileImports();
+    void importImageFilesFailsWhenNothingWasImported();
 };

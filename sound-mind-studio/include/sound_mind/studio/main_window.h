@@ -214,16 +214,21 @@ public slots:
     void importAudio();
 
     /**
-     * @brief Prompts for an image file, then how to scale it, and imports
-     *        it as a new layer - see `docs/sound-mind-roadmap.md`'s Image
-     *        Import Scaling milestone (`v0.Y.20.1`).
+     * @brief Prompts for one or more image files, then how to scale them,
+     *        and imports each as a new layer - see
+     *        `docs/sound-mind-roadmap.md`'s Image Import Scaling
+     *        (`v0.Y.20.1`) and Image Sequence Import (`v0.Y.22.1`)
+     *        milestones.
      *
-     * Always shows an `ImageScalePickerDialog` after the file is chosen -
-     * unlike Audio Import Snippets' picker, there's no "trivial, skip the
-     * dialog" case here (every image import has a real scaling choice to
-     * make). Cancelling that dialog cancels the whole import. Progress and
-     * completion are reported via the status bar (non-modal) - see
-     * poolTopmostLayer()'s docs for why only failure shows a modal.
+     * Always shows an `ImageScalePickerDialog` after the file(s) are
+     * chosen - unlike Audio Import Snippets' picker, there's no "trivial,
+     * skip the dialog" case here (every image import has a real scaling
+     * choice to make). The dialog's "Import as sequence" checkbox is only
+     * offered when more than one file was selected (see
+     * `ImageScalePickerDialog`'s own constructor docs); cancelling the
+     * dialog cancels the whole import. Progress and completion are
+     * reported via the status bar (non-modal) - see poolTopmostLayer()'s
+     * docs for why only failure shows a modal.
      */
     void importImage();
 
@@ -788,6 +793,47 @@ public:
      */
     bool importImageFile(const std::filesystem::path& path, ImageScalePickerDialog::Mode mode,
                           QString* errorMessage = nullptr);
+
+    /**
+     * @brief Imports several image files at once - the multi-file testable
+     *        core behind `importImage()`'s file dialog - see
+     *        `docs/sound-mind-roadmap.md`'s Image Sequence Import milestone
+     *        (`v0.Y.22.1`).
+     *
+     * When `importAsSequence` is `false`, every path is imported
+     * independently via importImageFile(), each with `mode` and no
+     * translation (`translationColumns()` stays `0`) - equivalent to
+     * calling importImageFile() once per path. When `true`, `mode` is
+     * ignored entirely: every file is imported with
+     * `ImageScalePickerDialog::Mode::ScaleVerticalProportional`, sorted by
+     * path first (deterministic - the natural choice for numbered frame
+     * sequences), and given a cumulative `translationColumns()` so each
+     * layer starts immediately after the previous one's own (proportional)
+     * width ends - matching the legacy Studio's own cumulative-offset
+     * placement, including its wrap-back-to-`0` behavior once the running
+     * total reaches the project's own `canvasWidth` (confirmed with the
+     * user before implementing, over the alternative of just letting later
+     * layers keep extending past `canvasWidth` - renderLayer() would have
+     * cropped those anyway, but the wrap was chosen to match the legacy
+     * behavior exactly rather than deviate from it here).
+     *
+     * A failure importing one file doesn't stop the rest - matching
+     * importAudioSnippets()'s and handleDroppedFiles()'s own "don't let one
+     * bad file block everything" precedent; this only returns `false` if
+     * *nothing* was imported.
+     *
+     * @param paths The image files to import.
+     * @param mode How to resize each image - ignored when
+     *        `importAsSequence` is `true`.
+     * @param importAsSequence Whether to lay the files out end-to-end in
+     *        time instead of importing each independently.
+     * @param errorMessage If non-null and this returns `false`, set to the
+     *        first failure's own message.
+     * @return `true` if at least one file was imported; `false` if no
+     *         project is open, `paths` is empty, or every file failed.
+     */
+    bool importImageFiles(const std::vector<std::filesystem::path>& paths, ImageScalePickerDialog::Mode mode,
+                           bool importAsSequence, QString* errorMessage = nullptr);
 
     /**
      * @brief Routes a list of dropped local file paths to the matching

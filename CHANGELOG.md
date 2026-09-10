@@ -6,6 +6,60 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.20.1] - 2026-09-10
+
+The "Image Sequence Import" milestone from `docs/sound-mind-roadmap.md`
+(Phase 2.5): importing multiple images at once can now lay them out
+end-to-end in time instead of importing each independently. Checked
+against the legacy Studio's own equivalent (`import_wizard.py`/
+`app.py`) before implementing, with every real divergence point
+confirmed with the user.
+
+### Added
+
+- **`MainWindow::importImage()`** now shows a multi-file picker
+  (`QFileDialog::getOpenFileNames`) instead of a single-file one.
+- **`ImageScalePickerDialog`** gained a `sequentialCheckBox`
+  ("Import as sequence"), shown only when more than one file was
+  selected (`allowSequential` constructor parameter, default `false` -
+  every existing call site is unaffected). Checking it disables the
+  five mode radios rather than coexisting with them - a sequence
+  import always applies `ScaleVerticalProportional` regardless of
+  whichever mode was last selected. New `importAsSequence()` accessor.
+- **`MainWindow::importImageFiles()`**: the new multi-file testable
+  core `importImage()` delegates to. Not sequential: loops
+  `importImageFile()` per path independently. Sequential: sorts paths
+  first (deterministic, for numbered frame sequences), forces
+  `ScaleVerticalProportional` on every file, and gives each layer a
+  cumulative `translationColumns()` - each starting right after the
+  previous layer's own (proportional) width ends, wrapping back to `0`
+  once the running total reaches the project's `canvasWidth` (matching
+  the legacy Studio's own cumulative-offset behavior exactly).
+
+### Notes
+
+- **Two real decisions confirmed with the user, both resolved in favor
+  of the legacy Studio's own precedent over this codebase's newer
+  idiom**: the checkbox-vs-6th-mode-value design (matching legacy's own
+  radio-button layout, despite the roadmap text's "check... 'import as
+  sequence'" wording suggesting a checkbox was already the plan), and
+  the wrap-at-`canvasWidth` behavior (over just letting `renderLayer()`
+  crop anything past it, which would have worked too but wasn't what
+  the legacy Studio actually did). See
+  `docs/sound-mind-architecture.md`'s Decisions Made #26.
+- **A batch failure doesn't block the rest**: `importImageFiles()`
+  returns `true` if at least one file imported, matching
+  `importAudioSnippets()`'s and `handleDroppedFiles()`'s own precedent.
+- **No Y bump.** Depended on `v0.Y.20.1`/`v0.Y.21.1` (both already
+  shipped); no project file format change - sequencing is just another
+  use of `translationColumns()`'s own already-lenient field.
+
+Regression: `sound-mind-core-tests` (404 assertions/97 cases,
+unaffected) and the full `sound-mind-studio-tests` suite (all 12 test
+classes) both pass. Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.19.1] - 2026-09-10
 
 The "Layer Time Alignment" milestone from `docs/sound-mind-roadmap.md`

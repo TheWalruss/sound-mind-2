@@ -633,18 +633,25 @@ void MainWindow::importAudio() {
 }
 
 void MainWindow::importImage() {
-    const QString fileName = QFileDialog::getOpenFileName(this, tr("Import Image"), QString(), tr(kImageFileFilter));
-    if (fileName.isEmpty()) {
+    const QStringList fileNames =
+        QFileDialog::getOpenFileNames(this, tr("Import Image(s)"), QString(), tr(kImageFileFilter));
+    if (fileNames.isEmpty()) {
         return;
     }
 
-    ImageScalePickerDialog dialog(this);
+    std::vector<std::filesystem::path> paths;
+    paths.reserve(static_cast<std::size_t>(fileNames.size()));
+    for (const QString& fileName : fileNames) {
+        paths.emplace_back(fileName.toStdString());
+    }
+
+    ImageScalePickerDialog dialog(this, /*allowSequential=*/paths.size() > 1);
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
     QString errorMessage;
-    if (!importImageFile(std::filesystem::path(fileName.toStdString()), dialog.selectedMode(), &errorMessage)) {
+    if (!importImageFiles(paths, dialog.selectedMode(), dialog.importAsSequence(), &errorMessage)) {
         QMessageBox::critical(this, tr("Import Image Failed"), errorMessage);
     }
 }
@@ -840,6 +847,80 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePi
         }
         return false;
     }
+}
+
+bool MainWindow::importImageFiles(const std::vector<std::filesystem::path>& paths, ImageScalePickerDialog::Mode mode,
+                                   bool importAsSequence, QString* errorMessage) {
+    if (!project_) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No project is open.");
+        }
+        return false;
+    }
+    if (paths.empty()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No files to import.");
+        }
+        return false;
+    }
+
+    std::vector<std::filesystem::path> orderedPaths = paths;
+    if (importAsSequence) {
+        // Deterministic - the natural choice for numbered frame sequences
+        // (frame001.png, frame002.png, ...) regardless of the file dialog's
+        // own selection/return order, confirmed with the user before
+        // implementing.
+        std::sort(orderedPaths.begin(), orderedPaths.end());
+    }
+
+    const auto canvasWidth = static_cast<std::int64_t>(project_->settings().canvasWidth);
+    std::int64_t cumulativeTranslation = 0;
+    int importedCount = 0;
+    QString firstError;
+
+    for (const auto& path : orderedPaths) {
+        const auto fileMode = importAsSequence ? ImageScalePickerDialog::Mode::ScaleVerticalProportional : mode;
+        QString thisError;
+        if (!importImageFile(path, fileMode, &thisError)) {
+            if (firstError.isEmpty()) {
+                firstError = thisError;
+            }
+            continue;
+        }
+        ++importedCount;
+
+        if (importAsSequence) {
+            // Wrap back to column 0 once the running total reaches
+            // canvasWidth - matches the legacy Studio's own
+            // cumulative-offset placement exactly (confirmed with the user
+            // before implementing) rather than just letting later layers
+            // keep extending past canvasWidth (which renderLayer() would
+            // crop anyway, per its own Decision #25 padding/cropping).
+            if (canvasWidth > 0 && cumulativeTranslation >= canvasWidth) {
+                cumulativeTranslation = 0;
+            }
+            sound_mind::core::Layer& justImported = project_->layers().back();
+            justImported.setTranslationColumns(cumulativeTranslation);
+            const std::int64_t thisWidth =
+                justImported.content().has_value() ? static_cast<std::int64_t>(justImported.content()->frameCount) : 0;
+            cumulativeTranslation += thisWidth;
+        }
+    }
+
+    if (importedCount == 0) {
+        if (errorMessage != nullptr) {
+            *errorMessage = firstError.isEmpty() ? tr("No files were imported.") : firstError;
+        }
+        return false;
+    }
+    if (importAsSequence) {
+        // Each importImageFile() call above already refreshed the canvas/
+        // Layers Panel for its own layer - this just makes sure the final
+        // translationColumns() changes made afterward are reflected too.
+        canvas_->update();
+        refreshLayersPanel();
+    }
+    return true;
 }
 
 void MainWindow::exportAudio() {

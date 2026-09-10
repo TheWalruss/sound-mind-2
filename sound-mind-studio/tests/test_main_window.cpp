@@ -1717,3 +1717,178 @@ void MainWindowTest::handleDroppedFilesSmprojRefusesWhileLoopModeIsRunning() {
 
     window.toggleLoopMode();  // cleanup.
 }
+
+namespace {
+
+/// @brief Writes a solid-color PNG of the given size to `path` - like
+/// writeImageScalingTestImage() above, but with a caller-chosen size, for
+/// Image Sequence Import's tests, which need multiple distinctly-sized
+/// images to make each one's own proportional-scaling contribution to the
+/// cumulative offset unambiguous.
+void writeSizedTestImage(const std::filesystem::path& path, int width, int height) {
+    QImage image(width, height, QImage::Format_RGB32);
+    image.fill(Qt::blue);
+    QVERIFY2(image.save(QString::fromStdString(path.string())), "failed to write the test PNG");
+}
+
+}  // namespace
+
+void MainWindowTest::importImageFilesImportsEachFileIndependentlyWhenNotSequential() {
+    const auto pathA = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-a.png";
+    const auto pathB = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-b.png";
+    writeImageScalingTestImage(pathA);
+    writeImageScalingTestImage(pathB);
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-independent.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    const bool ok = window.importImageFiles({pathA, pathB}, ImageScalePickerDialog::Mode::KeepNativeResolution,
+                                             /*importAsSequence=*/false);
+    std::filesystem::remove(pathA);
+    std::filesystem::remove(pathB);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
+    // Neither file was translated - each imported independently, per its
+    // own explicitly-chosen mode (KeepNativeResolution here).
+    QCOMPARE(window.project()->layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(0));
+    QCOMPARE(window.project()->layers()[layerCountBefore + 1].translationColumns(), static_cast<std::int64_t>(0));
+}
+
+void MainWindowTest::importImageFilesAppliesProportionalScalingAndCumulativeTranslationWhenSequential() {
+    // canvasWidth=100/canvasHeight=50 (imageScalingTestProjectSettings()) -
+    // image A is 30x20 (aspect 3:2, proportional width round(30*50/20)=75),
+    // image B is 40x50 (aspect 4:5, proportional width round(40*50/50)=40).
+    // Neither offset reaches canvasWidth, so no wrap here - see
+    // importImageFilesWrapsCumulativeOffsetPastCanvasWidth() for that.
+    const auto pathA = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-cum-a.png";
+    const auto pathB = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-cum-b.png";
+    writeImageScalingTestImage(pathA);  // 30x20.
+    writeSizedTestImage(pathB, 40, 50);
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-cumulative.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    // Mode is ignored when importAsSequence is true - ScaleVerticalProportional
+    // always applies regardless, so pass a different mode to prove that.
+    const bool ok = window.importImageFiles({pathA, pathB}, ImageScalePickerDialog::Mode::KeepNativeResolution,
+                                             /*importAsSequence=*/true);
+    std::filesystem::remove(pathA);
+    std::filesystem::remove(pathB);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
+
+    const auto& layerA = window.project()->layers()[layerCountBefore];
+    QCOMPARE(layerA.translationColumns(), static_cast<std::int64_t>(0));
+    QCOMPARE(layerA.content()->frameCount, static_cast<std::uint32_t>(75));
+
+    const auto& layerB = window.project()->layers()[layerCountBefore + 1];
+    QCOMPARE(layerB.translationColumns(), static_cast<std::int64_t>(75));  // starts right after A's own width.
+    QCOMPARE(layerB.content()->frameCount, static_cast<std::uint32_t>(40));
+}
+
+void MainWindowTest::importImageFilesWrapsCumulativeOffsetPastCanvasWidth() {
+    // Three 30x20 images (each 75 columns wide once proportionally scaled -
+    // see the test above) into a canvasWidth=100 project: A starts at 0
+    // (0 < 100), B starts at 75 (75 < 100), and by the time C is placed the
+    // running total (150) has already reached canvasWidth, so it wraps back
+    // to 0 - matching the legacy Studio's own cumulative-offset behavior,
+    // confirmed with the user before implementing.
+    const auto pathA = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-wrap-a.png";
+    const auto pathB = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-wrap-b.png";
+    const auto pathC = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-wrap-c.png";
+    writeImageScalingTestImage(pathA);
+    writeImageScalingTestImage(pathB);
+    writeImageScalingTestImage(pathC);
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-wrap.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    const bool ok = window.importImageFiles({pathA, pathB, pathC}, ImageScalePickerDialog::Mode::RescaleToFitProject,
+                                             /*importAsSequence=*/true);
+    std::filesystem::remove(pathA);
+    std::filesystem::remove(pathB);
+    std::filesystem::remove(pathC);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    QCOMPARE(window.project()->layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(0));
+    QCOMPARE(window.project()->layers()[layerCountBefore + 1].translationColumns(), static_cast<std::int64_t>(75));
+    QCOMPARE(window.project()->layers()[layerCountBefore + 2].translationColumns(), static_cast<std::int64_t>(0));
+}
+
+void MainWindowTest::importImageFilesSortsFilesAlphabeticallyWhenSequential() {
+    const auto pathA = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-sort-a.png";
+    const auto pathB = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-sort-b.png";
+    writeImageScalingTestImage(pathA);
+    writeImageScalingTestImage(pathB);
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-sort.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    // Passed in reverse (B, A) - sequential import must still place them in
+    // filename order (A first, translation 0; B second, translation 75).
+    const bool ok = window.importImageFiles({pathB, pathA}, ImageScalePickerDialog::Mode::RescaleToFitProject,
+                                             /*importAsSequence=*/true);
+    std::filesystem::remove(pathA);
+    std::filesystem::remove(pathB);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    const auto& firstImported = window.project()->layers()[layerCountBefore];
+    const auto& secondImported = window.project()->layers()[layerCountBefore + 1];
+    QCOMPARE(firstImported.name(), pathA.filename().string());
+    QCOMPARE(secondImported.name(), pathB.filename().string());
+    QCOMPARE(firstImported.translationColumns(), static_cast<std::int64_t>(0));
+    QCOMPARE(secondImported.translationColumns(), static_cast<std::int64_t>(75));
+}
+
+void MainWindowTest::importImageFilesSucceedsIfAtLeastOneFileImports() {
+    const auto goodPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-partial-good.png";
+    writeImageScalingTestImage(goodPath);
+    const auto badPath = std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.png";
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-partial.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    QString errorMessage;
+    const bool ok = window.importImageFiles({badPath, goodPath}, ImageScalePickerDialog::Mode::KeepNativeResolution,
+                                             /*importAsSequence=*/false, &errorMessage);
+    std::filesystem::remove(goodPath);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(ok);
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
+}
+
+void MainWindowTest::importImageFilesFailsWhenNothingWasImported() {
+    const auto badPathA = std::filesystem::temp_directory_path() / "sound-mind-does-not-exist-a.png";
+    const auto badPathB = std::filesystem::temp_directory_path() / "sound-mind-does-not-exist-b.png";
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-imgseq-all-fail.smproj";
+
+    MainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    QString errorMessage;
+    const bool ok = window.importImageFiles({badPathA, badPathB}, ImageScalePickerDialog::Mode::KeepNativeResolution,
+                                             /*importAsSequence=*/false, &errorMessage);
+    std::filesystem::remove(projectPath);
+
+    QVERIFY(!ok);
+    QVERIFY(!errorMessage.isEmpty());
+    QCOMPARE(window.project()->layers().size(), layerCountBefore);
+}
