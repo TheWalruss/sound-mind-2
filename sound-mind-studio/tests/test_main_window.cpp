@@ -2563,3 +2563,42 @@ void MainWindowTest::settingANewProjectResetsPickModeToOff() {
     QVERIFY(canvas != nullptr);
     QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
 }
+
+void MainWindowTest::pickingTheSameSpotTwiceSelectsTheOccludedStrokeUnderneath() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-pick-occluded.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    auto* panel = window.findChild<ToolConfigurationPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    QVERIFY(sizeSpinBox != nullptr);
+
+    // Two taps at the exact same spot - the second (larger-brushed) one
+    // fully occludes the first, the scenario a plain "topmost always
+    // wins" pick() could never select past.
+    window.setPaintModeEnabled(true);
+    sizeSpinBox->setValue(0.5);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    sizeSpinBox->setValue(2.0);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QCOMPARE(sizeSpinBox->value(), 2.0);  // the topmost (most recently painted) stroke, first.
+
+    // Clicking the exact same, already-selected spot again cycles to the
+    // occluded stroke underneath.
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QCOMPARE(sizeSpinBox->value(), 0.5);
+}

@@ -1,6 +1,8 @@
 #include "sound_mind/studio/pick_controller.h"
 
+#include <algorithm>
 #include <memory>
+#include <vector>
 
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_operation.h"
@@ -41,9 +43,11 @@ bool PickController::pick(sound_mind::core::LayerId layer, sound_mind::core::Tim
     const auto operations = project_->operationLog().activeOperationsTargeting(layer);
     const double scale = sound_mind::core::frequencyToTimeScaleFor(project_->settings());
 
-    // Most-recent-first, so an overlapping newer stroke wins over an
-    // older one underneath it - activeOperationsTargeting() returns them
-    // in log (oldest-first) order.
+    // Every candidate under this point, most-recent-first (an overlapping
+    // newer stroke ordinarily wins over an older one underneath it) -
+    // activeOperationsTargeting() itself returns them in log (oldest-
+    // first) order.
+    std::vector<const sound_mind::core::PaintOperation*> candidates;
     for (auto it = operations.rbegin(); it != operations.rend(); ++it) {
         const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(*it);
         if (paint == nullptr) {
@@ -51,24 +55,44 @@ bool PickController::pick(sound_mind::core::LayerId layer, sound_mind::core::Tim
         }
         const double timePadding = paint->config().size();
         const double frequencyPadding = timePadding * scale;
-        if (!containsPoint(paint->bounds(), point, timePadding, frequencyPadding)) {
-            continue;
+        if (containsPoint(paint->bounds(), point, timePadding, frequencyPadding)) {
+            candidates.push_back(paint);
         }
-
-        pickedOperationId_ = paint->id();
-        pickedLayer_ = layer;
-        pickedPath_ = paint->path();
-        pickedConfig_ = paint->config();
-        dragAnchor_ = point;
-        dragCurrent_ = point;
-        dragMoved_ = false;
-        previewPath_ = sound_mind::core::Path{};
-        emit selectionChanged();
-        return true;
     }
 
-    clearSelection();
-    return false;
+    if (candidates.empty()) {
+        clearSelection();
+        return false;
+    }
+
+    // Clicking a fresh spot selects whatever's topmost there, same as
+    // always - but if the *currently selected* object is itself among
+    // this click's own candidates, clicking it again cycles to the next
+    // one underneath instead of re-selecting the same topmost object
+    // every time, which is the only way an object entirely occluded by a
+    // larger one on top of it could ever be reached at all. Wraps back to
+    // the topmost after the last (occluded-most) candidate.
+    const sound_mind::core::PaintOperation* toSelect = candidates.front();
+    if (pickedOperationId_.has_value()) {
+        const auto currentIt =
+            std::find_if(candidates.begin(), candidates.end(),
+                          [this](const sound_mind::core::PaintOperation* op) { return op->id() == *pickedOperationId_; });
+        if (currentIt != candidates.end()) {
+            const auto nextIt = std::next(currentIt);
+            toSelect = (nextIt != candidates.end()) ? *nextIt : candidates.front();
+        }
+    }
+
+    pickedOperationId_ = toSelect->id();
+    pickedLayer_ = layer;
+    pickedPath_ = toSelect->path();
+    pickedConfig_ = toSelect->config();
+    dragAnchor_ = point;
+    dragCurrent_ = point;
+    dragMoved_ = false;
+    previewPath_ = sound_mind::core::Path{};
+    emit selectionChanged();
+    return true;
 }
 
 void PickController::clearSelection() {

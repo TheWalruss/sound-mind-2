@@ -159,4 +159,5 @@ private slots:
     void movingAPickedStrokeCommitsATranslatedOperation();
     void deletingAPickedStrokeLeavesAnEmptyTombstone();
     void settingANewProjectResetsPickModeToOff();
+    void pickingTheSameSpotTwiceSelectsTheOccludedStrokeUnderneath();
 };

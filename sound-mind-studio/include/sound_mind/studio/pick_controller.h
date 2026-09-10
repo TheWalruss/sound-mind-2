@@ -80,8 +80,19 @@ public:
      * size()`, converted via `frequencyToTimeScaleFor()`) so a single-tap
      * stroke - whose raw Path bounds are a single, zero-area point - is
      * still actually clickable, matching how far its stamp really
-     * painted. Candidates are checked most-recent-first, so an
-     * overlapping newer stroke wins over an older one underneath it.
+     * painted.
+     *
+     * Ordinarily selects whichever candidate is most recent (an
+     * overlapping newer stroke wins over an older one underneath it) -
+     * *except* when the currently-selected object is itself one of this
+     * click's own candidates, in which case this selects the *next* one
+     * underneath it instead (wrapping back to the topmost after the
+     * occluded-most one). This is the only way to ever reach an object
+     * entirely occluded by a larger one on top of it: a plain click alone
+     * would otherwise always re-select the same topmost candidate no
+     * matter how many times it's clicked, since nothing about a single
+     * click's own geometry distinguishes "select the top one" from
+     * "cycle to the one under it".
      *
      * Clears the current selection (emitting selectionChanged()) if
      * nothing is hit, or if no project is set.

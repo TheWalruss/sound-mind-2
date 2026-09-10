@@ -164,6 +164,64 @@ void PickControllerTest::pickPrefersTheMostRecentOverlappingOperation() {
     QCOMPARE(controller.selectedConfiguration()->size(), newerConfig.size());
 }
 
+void PickControllerTest::pickOnAnAlreadySelectedOperationCyclesToTheOccludedOneUnderneath() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto bottomConfig = makeOpaqueTool(0.01);
+    const auto middleConfig = makeOpaqueTool(0.02);
+    const auto topConfig = makeOpaqueTool(0.03);
+    // Three fully-overlapping strokes (same footprint), oldest to newest -
+    // painted one directly behind the other, the exact scenario a plain
+    // "topmost always wins" pick() could never see past.
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, bottomConfig);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, middleConfig);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, topConfig);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    const TimeFrequencyPoint clickPoint{0.3, 500.0};
+    QVERIFY(controller.pick(layerId, clickPoint));
+    QCOMPARE(controller.selectedConfiguration()->size(), topConfig.size());
+
+    QVERIFY(controller.pick(layerId, clickPoint));  // same spot - the already-selected object clicked again.
+    QCOMPARE(controller.selectedConfiguration()->size(), middleConfig.size());
+
+    QVERIFY(controller.pick(layerId, clickPoint));
+    QCOMPARE(controller.selectedConfiguration()->size(), bottomConfig.size());
+
+    QVERIFY(controller.pick(layerId, clickPoint));  // wraps back to the topmost after the occluded-most one.
+    QCOMPARE(controller.selectedConfiguration()->size(), topConfig.size());
+}
+
+void PickControllerTest::pickOnADifferentUnselectedOperationDoesNotCycle() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto stackedBottomConfig = makeOpaqueTool(0.01);
+    const auto stackedTopConfig = makeOpaqueTool(0.02);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, stackedBottomConfig);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, stackedTopConfig);
+    const auto elsewhereConfig = makeOpaqueTool(0.01);
+    addPaintOperation(project, layerId, 0.7, 1500.0, 0.8, 1700.0, elsewhereConfig);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QCOMPARE(controller.selectedConfiguration()->size(), stackedTopConfig.size());
+
+    // A different, non-overlapping stroke elsewhere - not the same object
+    // clicked again, so this selects it directly rather than cycling
+    // through the first click's own stack.
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.75, 1600.0}));
+
+    QCOMPARE(controller.selectedConfiguration()->size(), elsewhereConfig.size());
+}
+
 void PickControllerTest::pickPadsHitTestingByTheOperationsOwnBrushSize() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);

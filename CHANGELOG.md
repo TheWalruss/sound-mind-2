@@ -6,6 +6,27 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.11] - 2026-09-10
+
+**Pick fix**, found via manual testing: a small object entirely behind a
+larger one couldn't be selected at all - clicking always hit the larger,
+more recent stroke on top of it.
+
+### Fixed
+
+- **`PickController::pick()` now cycles through every occluded candidate
+  under a click, not just the topmost one.** Clicking a fresh spot still
+  selects whichever stroke is most recent there, same as before - but
+  clicking the *already-selected* stroke again now selects whatever's
+  underneath it instead (wrapping back to the topmost after the last,
+  most-occluded one). This is the only way to reach an object entirely
+  covered by a larger one on top of it.
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes. Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.10] - 2026-09-10
 
 **Pick** - the last piece of the Phase 3 "Basic Painting" milestone,

@@ -10,6 +10,8 @@ private slots:
     void pickSelectsAnOperationUnderThePoint();
     void pickReturnsFalseAndClearsSelectionWhenNothingIsUnderThePoint();
     void pickPrefersTheMostRecentOverlappingOperation();
+    void pickOnAnAlreadySelectedOperationCyclesToTheOccludedOneUnderneath();
+    void pickOnADifferentUnselectedOperationDoesNotCycle();
     void pickPadsHitTestingByTheOperationsOwnBrushSize();
     void continueMoveUpdatesTheLivePreviewPath();
     void endMoveCommitsATranslatedSupersedingOperationAndKeepsItSelected();

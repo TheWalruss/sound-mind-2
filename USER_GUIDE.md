@@ -279,8 +279,14 @@ it, regardless of the "Show bounding boxes" setting - ready to:
   selected stroke updates to match.
 - **Delete** it - **Edit → Delete** (or the Delete key).
 
-Clicking empty canvas space deselects. Every one of these is undoable
-(Ctrl+Z), the same as painting a new stroke.
+Clicking empty canvas space deselects. If a stroke is entirely covered by
+another one on top of it, click the already-selected (covering) stroke
+again to select the one underneath - each further click on the same spot
+cycles to the next one down, wrapping back to the topmost once you reach
+the bottom.
+
+Every one of these is undoable (Ctrl+Z), the same as painting a new
+stroke.
 
 Copying a picked stroke, and directly reshaping its underlying path (drag
 its own nodes and handles), aren't here yet - see
