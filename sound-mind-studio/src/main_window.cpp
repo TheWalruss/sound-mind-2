@@ -45,10 +45,13 @@
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/create_project_wizard.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
+#include "sound_mind/studio/import_helpers.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/loop_panel.h"
+#include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/playback_panel.h"
+#include "sound_mind/studio/qt_image_conversion.h"
 #include "sound_mind/studio/record_panel.h"
 #include "sound_mind/studio/theme.h"
 
@@ -65,25 +68,6 @@ const char* kImageFileFilter = "Images (*.png *.jpg *.jpeg *.bmp *.tga *.webp)";
 const char* kExportAudioFileFilter = "FLAC Audio (*.flac);;Ogg Vorbis Audio (*.ogg);;MP3 Audio (*.mp3)";
 const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
 
-/// @brief `path`'s extension, lowercased - the shared normalization both
-/// dropEvent() and handleDroppedFiles() need to recognize a dropped file's
-/// type case-insensitively (`.PNG` and `.png` are the same file type).
-[[nodiscard]] std::string lowercasedExtension(const std::filesystem::path& path) {
-    std::string extension = path.extension().string();
-    for (char& c : extension) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return extension;
-}
-
-/// @brief Whether `lowercaseExtension` is one of the image extensions
-/// `ImageScalePickerDialog`/`importImageFiles()` accept - see
-/// kImageFileFilter above for the same list in QFileDialog's own syntax.
-[[nodiscard]] bool isImageExtension(const std::string& lowercaseExtension) {
-    return lowercaseExtension == ".png" || lowercaseExtension == ".jpg" || lowercaseExtension == ".jpeg" ||
-           lowercaseExtension == ".bmp" || lowercaseExtension == ".tga" || lowercaseExtension == ".webp";
-}
-
 /// @brief Converts a plain std::string device-name list (as the engines'
 /// availableXDeviceNames() methods return) into the QStringList a device
 /// picker combo box actually wants.
@@ -94,36 +78,6 @@ const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
         result.append(QString::fromStdString(name));
     }
     return result;
-}
-
-/// @brief Zero-pads a snippet index to four digits ("0000", "0001", ...) -
-/// matching the legacy Studio's own `name_0000`/`name_0001`/... naming
-/// convention for a multi-snippet audio import.
-[[nodiscard]] std::string formatSnippetIndex(std::size_t index) {
-    std::ostringstream stream;
-    stream << std::setw(4) << std::setfill('0') << index;
-    return stream.str();
-}
-
-/// @brief Maps a destination path's extension to a compressed audio format.
-/// @return The matching format, or `std::nullopt` for an unrecognized
-///         extension.
-[[nodiscard]] std::optional<sound_mind::codec::CompressedAudioFormat> audioFormatFromExtension(
-    const std::filesystem::path& path) {
-    std::string extension = path.extension().string();
-    for (char& c : extension) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    if (extension == ".flac") {
-        return sound_mind::codec::CompressedAudioFormat::Flac;
-    }
-    if (extension == ".ogg") {
-        return sound_mind::codec::CompressedAudioFormat::Ogg;
-    }
-    if (extension == ".mp3") {
-        return sound_mind::codec::CompressedAudioFormat::Mp3;
-    }
-    return std::nullopt;
 }
 
 /// @brief Shows `message` in `bar` and forces an immediate repaint.
@@ -139,63 +93,12 @@ void showBusyStatus(QStatusBar* bar, const QString& message) {
     QCoreApplication::processEvents();
 }
 
-/// @brief Converts a QImage to codec::RgbImage, forcing a consistent 3-byte-
-/// per-pixel layout first regardless of the source file's own format.
-[[nodiscard]] sound_mind::codec::RgbImage toRgbImage(const QImage& source) {
-    const QImage rgb888 = source.convertToFormat(QImage::Format_RGB888);
-
-    sound_mind::codec::RgbImage image;
-    image.width = static_cast<std::uint32_t>(rgb888.width());
-    image.height = static_cast<std::uint32_t>(rgb888.height());
-    image.pixels.resize(image.pixelCount() * 3);
-
-    for (int y = 0; y < rgb888.height(); ++y) {
-        const uchar* line = rgb888.constScanLine(y);
-        std::memcpy(image.pixels.data() + static_cast<std::size_t>(y) * image.width * 3, line,
-                    static_cast<std::size_t>(image.width) * 3);
-    }
-    return image;
-}
-
-/// @brief Resizes `source` to the project's canvas dimensions according to
-/// `mode` - see `ImageScalePickerDialog::Mode`'s own docs for exactly what
-/// each value means. `Qt::IgnoreAspectRatio` is used throughout, including
-/// for `ScaleVerticalProportional`, since that mode's own proportional
-/// width is already computed by hand below - asking Qt to *also* fit an
-/// aspect ratio on top would risk a slightly different rounding than the
-/// one this method's own docs promise.
-[[nodiscard]] QImage scaleImageForImport(const QImage& source, sound_mind::studio::ImageScalePickerDialog::Mode mode,
-                                          int canvasWidth, int canvasHeight) {
-    using Mode = sound_mind::studio::ImageScalePickerDialog::Mode;
-    switch (mode) {
-        case Mode::RescaleToFitProject:
-            return source.scaled(canvasWidth, canvasHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        case Mode::ScaleVerticalKeepHorizontal:
-            return source.scaled(source.width(), canvasHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        case Mode::ScaleHorizontalKeepVertical:
-            return source.scaled(canvasWidth, source.height(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        case Mode::ScaleVerticalProportional: {
-            const int proportionalWidth =
-                source.height() > 0
-                    ? std::max(1, static_cast<int>(std::lround(static_cast<double>(source.width()) * canvasHeight /
-                                                                source.height())))
-                    : canvasWidth;
-            return source.scaled(proportionalWidth, canvasHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        }
-        case Mode::KeepNativeResolution:
-            return source;
-    }
-    return source;  // unreachable - every Mode value is handled above.
-}
-
 /// @brief Converts a codec::RgbImage to a QImage, copying the pixel data
 /// so the result stays valid independent of the source's own lifetime
 /// (unlike CanvasWidget's paintEvent(), where the source stays alive for
 /// the whole synchronous paint call and a copy would be wasted work).
 [[nodiscard]] QImage toQImage(const sound_mind::codec::RgbImage& image) {
-    return QImage(image.pixels.data(), static_cast<int>(image.width), static_cast<int>(image.height),
-                  static_cast<int>(image.width) * 3, QImage::Format_RGB888)
-        .copy();
+    return toQImageView(image).copy();
 }
 
 }  // namespace
@@ -243,7 +146,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
 
     // Playback/Record/Loop each get their own dockable panel (v0.Y.16.1) -
     // hidden until setProject(), matching layersPanel_'s own "nothing to
-    // control yet" treatment, even though playbackEngine_/recordEngine_
+    // control yet" treatment, even though playbackController_/recordEngine_
     // themselves exist regardless of project state.
     playbackPanel_ = new PlaybackPanel(this);
     playbackPanel_->hide();
@@ -254,7 +157,21 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     connect(playbackPanel_, &PlaybackPanel::outputDeviceChanged, this, &MainWindow::setPlaybackOutputDevice);
     connect(playbackPanel_, &PlaybackPanel::volumePercentChanged, this, &MainWindow::setPlaybackVolume);
     connect(playbackPanel_, &PlaybackPanel::seekRequested, this, &MainWindow::seekPlayback);
-    playbackPanel_->setOutputDevices(toQStringList(playbackEngine_.availableOutputDeviceNames()));
+
+    // Extracted as its own class (v0.Y.23.1, Refactor & Clean Up) - see its
+    // own docs. MainWindow's job is just wiring its signals to whatever
+    // needs to reflect them: durationChanged() -> playbackPanel_'s own
+    // slot directly (an exact signature match, no lambda needed);
+    // positionChanged() -> a lambda, since the canvas playhead needs a
+    // *fraction* (position/total), not the raw position alone.
+    playbackController_ = new PlaybackController(this);
+    connect(playbackController_, &PlaybackController::durationChanged, playbackPanel_, &PlaybackPanel::setDuration);
+    connect(playbackController_, &PlaybackController::positionChanged, this, [this](double positionSeconds) {
+        playbackPanel_->setPositionSeconds(positionSeconds);
+        const double total = playbackController_->totalSeconds();
+        canvas_->setPlayheadFraction(total > 0.0 ? std::optional<double>(positionSeconds / total) : std::nullopt);
+    });
+    playbackPanel_->setOutputDevices(toQStringList(playbackController_->availableOutputDeviceNames()));
 
     recordPanel_ = new RecordPanel(this);
     recordPanel_->hide();
@@ -338,12 +255,6 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     loopUpdateTimer_ = new QTimer(this);
     loopUpdateTimer_->setInterval(33);
     connect(loopUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLoopLayer);
-
-    // Same ~30fps cadence, for the same reason - a moving playhead/position
-    // bar that visibly stutters would undercut the point of having one.
-    playbackUpdateTimer_ = new QTimer(this);
-    playbackUpdateTimer_->setInterval(33);
-    connect(playbackUpdateTimer_, &QTimer::timeout, this, &MainWindow::updatePlaybackPosition);
 
     // Just needs to keep RecordEngine's ring buffer (~370ms of headroom at
     // its default capacity/sample rate) from ever filling up - unlike
@@ -539,7 +450,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     recordDrainTimer_->stop();
     recordEngine_.stop();
     recordPanel_->setRecording(false);
-    playbackUpdateTimer_->stop();
+    playbackController_->stop();
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
 
@@ -558,8 +469,6 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     loopPanel_->setOutputDevices(toQStringList(loopEngine_->availableOutputDeviceNames()));
 
     canvas_->setProject(&*project_);
-    playbackEngine_.stop();
-    playbackLoaded_ = false;
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
     // Layers is shown automatically the *first* time any project exists in
@@ -902,7 +811,7 @@ bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const st
         // The topmost layer just changed - the next startPlayback() should
         // pick up the newly imported one instead of whatever was loaded
         // before, rather than silently keep playing stale content.
-        playbackLoaded_ = false;
+        playbackController_->invalidate();
         hasUnsavedChanges_ = true;
         refreshLayersPanel();
         statusBar()->showMessage(
@@ -947,7 +856,7 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePi
         layer.setContent(content);
         project_->addLayer(std::move(layer));
         canvas_->update();
-        playbackLoaded_ = false;
+        playbackController_->invalidate();
         hasUnsavedChanges_ = true;
         refreshLayersPanel();
         statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
@@ -1178,7 +1087,7 @@ void MainWindow::toggleLayerVisibility(sound_mind::core::LayerId id, bool visibl
     }
     layer->setVisible(visible);
     hasUnsavedChanges_ = true;
-    playbackLoaded_ = false;  // "topmost layer with content" may have changed.
+    playbackController_->invalidate();  // "topmost layer with content" may have changed.
     canvas_->update();
     refreshLayersPanel();
 }
@@ -1260,7 +1169,7 @@ void MainWindow::deleteLayer(sound_mind::core::LayerId id) {
 
     if (project_->removeLayer(id)) {
         hasUnsavedChanges_ = true;
-        playbackLoaded_ = false;
+        playbackController_->invalidate();
         canvas_->update();
         refreshLayersPanel();
     }
@@ -1290,76 +1199,39 @@ void MainWindow::startPlayback() {
         return;
     }
 
-    if (!playbackLoaded_) {
+    if (!playbackController_->isLoaded()) {
         const sound_mind::core::Layer* layer = topmostLayerWithContent();
         if (layer == nullptr) {
             return;
         }
-        playbackEngine_.loadAudio(sound_mind::codec::decode(*layer->content()));
-        playbackLoaded_ = true;
-        // Duration only needs setting once per load, not on every resume -
-        // setDuration() also resets the displayed position to 0:00, which
-        // a mere pause/resume shouldn't do.
-        const auto sampleRate = playbackEngine_.sampleRateHz();
-        const double totalSeconds =
-            sampleRate > 0 ? static_cast<double>(playbackEngine_.totalSamples()) / sampleRate : 0.0;
-        playbackPanel_->setDuration(totalSeconds);
+        // load() itself emits durationChanged() (connected in the
+        // constructor to playbackPanel_->setDuration()) - only needs
+        // doing once per load, not on every resume, which load() already
+        // guarantees since this whole branch is skipped once isLoaded().
+        playbackController_->load(sound_mind::codec::decode(*layer->content()));
     }
 
-    playbackEngine_.play();
-    playbackUpdateTimer_->start();
+    playbackController_->play();
 }
 
 void MainWindow::pausePlayback() {
-    playbackEngine_.pause();
     // Position bar/playhead stay where they are - only stopPlayback()
     // resets them, matching "startPlayback() resumes from the same
     // position" - no point polling a position that isn't moving.
-    playbackUpdateTimer_->stop();
+    playbackController_->pause();
 }
 
 void MainWindow::stopPlayback() {
-    playbackEngine_.stop();
-    playbackLoaded_ = false;
-    playbackUpdateTimer_->stop();
+    playbackController_->stop();
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
 }
 
 void MainWindow::seekPlayback(double positionSeconds) {
-    if (!playbackLoaded_) {
-        return;  // nothing loaded to seek within.
-    }
-    const auto sampleRate = playbackEngine_.sampleRateHz();
-    if (sampleRate == 0) {
-        return;
-    }
-    const auto sampleIndex = static_cast<std::size_t>(std::max(0.0, positionSeconds) * sampleRate);
-    playbackEngine_.seek(sampleIndex);
-    // Immediate feedback rather than waiting for the next timer tick - a
-    // drag that ends while paused (playbackUpdateTimer_ not running)
-    // should still show the new position right away.
-    updatePlaybackPosition();
-}
-
-void MainWindow::updatePlaybackPosition() {
-    const auto sampleRate = playbackEngine_.sampleRateHz();
-    const double totalSeconds =
-        sampleRate > 0 ? static_cast<double>(playbackEngine_.totalSamples()) / sampleRate : 0.0;
-    const double positionSeconds =
-        sampleRate > 0 ? static_cast<double>(playbackEngine_.positionSamples()) / sampleRate : 0.0;
-
-    playbackPanel_->setPositionSeconds(positionSeconds);
-    canvas_->setPlayheadFraction(totalSeconds > 0.0 ? std::optional<double>(positionSeconds / totalSeconds)
-                                                     : std::nullopt);
-
-    if (!playbackEngine_.isPlaying()) {
-        // Playback reached the end on its own (PlaybackEngine::isPlaying()
-        // clears itself there - see its own docs) - stop polling rather
-        // than continuing to tick against a position that's no longer
-        // advancing.
-        playbackUpdateTimer_->stop();
-    }
+    // Immediate feedback rather than waiting for the next timer tick (seek()
+    // emits positionChanged() itself, synchronously) - a drag that ends
+    // while paused should still show the new position right away.
+    playbackController_->seek(positionSeconds);
 }
 
 void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
@@ -1367,13 +1239,13 @@ void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
     // start()), PlaybackEngine's device is open for its whole lifetime, so
     // this switches immediately - see PlaybackEngine::setPreferredOutputDevice()'s
     // own docs.
-    if (!playbackEngine_.setPreferredOutputDevice(deviceName.toStdString())) {
+    if (!playbackController_->setOutputDevice(deviceName)) {
         statusBar()->showMessage(tr("Could not switch to the selected output device."), 5000);
     }
 }
 
 void MainWindow::setPlaybackVolume(int percent) {
-    playbackEngine_.setVolume(static_cast<float>(percent) / 100.0f);
+    playbackController_->setVolume(percent);
 }
 
 void MainWindow::toggleLoopMode() {
@@ -1493,7 +1365,7 @@ void MainWindow::updateLoopLayer() {
 }
 
 bool MainWindow::isPlaying() const noexcept {
-    return playbackEngine_.isPlaying();
+    return playbackController_->isPlaying();
 }
 
 bool MainWindow::isLoopModeRunning() const noexcept {
@@ -1521,7 +1393,7 @@ QString MainWindow::recordInputDevice() const {
 }
 
 float MainWindow::playbackVolume() const noexcept {
-    return playbackEngine_.volume();
+    return playbackController_->volume();
 }
 
 void MainWindow::toggleRecording() {
@@ -1547,7 +1419,7 @@ void MainWindow::toggleRecording() {
             layer.setContent(content);
             project_->addLayer(std::move(layer));
             canvas_->update();
-            playbackLoaded_ = false;
+            playbackController_->invalidate();
             hasUnsavedChanges_ = true;
             refreshLayersPanel();
             statusBar()->showMessage(tr("Recording added as a new layer."), 5000);
@@ -1621,7 +1493,7 @@ bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPa
         // The layer's content was just replaced with a fresh, pool-derived
         // Stream copy - the next startPlayback() should pick that up
         // rather than continue playing whatever was loaded before.
-        playbackLoaded_ = false;
+        playbackController_->invalidate();
         hasUnsavedChanges_ = true;
 
         const QString base = QString::fromStdString((std::filesystem::temp_directory_path() / "sound-mind-pool-compare").string());

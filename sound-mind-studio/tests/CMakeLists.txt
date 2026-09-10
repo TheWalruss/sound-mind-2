@@ -6,10 +6,12 @@ add_executable(sound-mind-studio-tests
     test_canvas_widget.cpp
     test_create_project_wizard.cpp
     test_image_scale_picker_dialog.cpp
+    test_import_helpers.cpp
     test_landing_page.cpp
     test_layers_panel.cpp
     test_loop_panel.cpp
     test_main_window.cpp
+    test_playback_controller.cpp
     test_playback_panel.cpp
     test_record_panel.cpp
     test_recent_projects.cpp

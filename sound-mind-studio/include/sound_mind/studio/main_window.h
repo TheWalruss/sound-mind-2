@@ -10,11 +10,11 @@
 #include <QSettings>
 
 #include "sound_mind/core/loop_engine.h"
-#include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
+#include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/recent_projects.h"
 
 class QCloseEvent;
@@ -279,16 +279,16 @@ public slots:
     void seekPlayback(double positionSeconds);
 
     /**
-     * @brief Switches `playbackEngine_` to the named output device, right
-     *        now - the actual work behind the Playback panel's device
-     *        picker (`v0.Y.16.1`).
+     * @brief Switches `playbackController_` to the named output device,
+     *        right now - the actual work behind the Playback panel's
+     *        device picker (`v0.Y.16.1`).
      *
-     * Forwards to `PlaybackEngine::setPreferredOutputDevice()` - see its
-     * own docs for why this takes effect immediately rather than on a
-     * later start(), unlike Loop/Record's device pickers. Reports a
-     * failed switch via the status bar (the previously open device, if
-     * any, stays open); does nothing silently on success beyond the
-     * switch itself.
+     * Forwards to `PlaybackEngine::setPreferredOutputDevice()` (via
+     * `playbackController_`) - see its own docs for why this takes effect
+     * immediately rather than on a later start(), unlike Loop/Record's
+     * device pickers. Reports a failed switch via the status bar (the
+     * previously open device, if any, stays open); does nothing silently
+     * on success beyond the switch itself.
      *
      * @param deviceName The device to switch to, or empty for the system
      *        default.
@@ -296,8 +296,8 @@ public slots:
     void setPlaybackOutputDevice(const QString& deviceName);
 
     /**
-     * @brief Sets `playbackEngine_`'s output gain - the actual work behind
-     *        the Playback panel's volume slider (`v0.Y.16.1`).
+     * @brief Sets `playbackController_`'s output gain - the actual work
+     *        behind the Playback panel's volume slider (`v0.Y.16.1`).
      * @param percent `[0, PlaybackPanel::kMaxVolumePercent]` (200) - `100`
      *        is unity gain; above `100` is a real boost past it, per the
      *        confirmed scope for this milestone.
@@ -1087,15 +1087,6 @@ private:
     /// running - see toggleLoopMode()'s docs.
     void updateLoopLayer();
 
-    /// @brief playbackUpdateTimer_'s slot (also called directly by
-    /// seekPlayback() for immediate feedback): pushes
-    /// playbackEngine_'s current positionSamples()/totalSamples() into the
-    /// Playback panel's position bar and the canvas playhead
-    /// (`v0.0.21.1`), and stops playbackUpdateTimer_ once playback has
-    /// naturally ended (`PlaybackEngine::isPlaying()` clears itself at the
-    /// end of the loaded audio - see its own docs).
-    void updatePlaybackPosition();
-
     /// @brief recordDrainTimer_'s slot: moves whatever's newly captured
     /// out of recordEngine_'s ring buffer, while Recording is running -
     /// see RecordEngine::drainAvailable()'s docs for why this needs to
@@ -1147,13 +1138,13 @@ private:
                          QStringLiteral("SoundMindStudio")};
     RecentProjects recentProjects_{settings_};
 
-    sound_mind::core::PlaybackEngine playbackEngine_;
-
-    /// @brief Whether playbackEngine_ already has the current topmost
-    /// layer's audio loaded - so startPlayback() knows to just resume
-    /// rather than re-decode and restart from the beginning. Cleared by
-    /// stopPlayback() and whenever the project (or its content) changes.
-    bool playbackLoaded_ = false;
+    /// @brief Owns the PlaybackEngine and its position-polling timer -
+    /// extracted from a plain member + free-standing timer/flag as part of
+    /// the Phase 2.5 Refactor & Clean Up milestone (`v0.Y.23.1`). "Which
+    /// layer to play" (topmostLayerWithContent()) and wiring its signals to
+    /// playbackPanel_/canvas_ both stay MainWindow's own job - see
+    /// PlaybackController's own docs for why it doesn't know about either.
+    PlaybackController* playbackController_ = nullptr;
 
     /// @brief `nullptr` until the first setProject() call - LoopEngine
     /// needs a real loop length (the project's own duration in samples)
@@ -1164,13 +1155,6 @@ private:
     /// `LiveEngine` member's simpler, always-default-constructed shape.
     std::unique_ptr<sound_mind::core::LoopEngine> loopEngine_;
     QTimer* loopUpdateTimer_ = nullptr;
-
-    /// @brief Polls playbackEngine_'s position (~30fps, matching
-    /// loopUpdateTimer_) while playing - see updatePlaybackPosition()'s
-    /// own docs. Started by startPlayback(), stopped by pausePlayback()/
-    /// stopPlayback() and by updatePlaybackPosition() itself once playback
-    /// naturally ends.
-    QTimer* playbackUpdateTimer_ = nullptr;
 
     /// @brief The layer currently being captured into, while Loop Mode is
     /// running - std::nullopt otherwise. An id, not a Layer*, since

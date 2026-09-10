@@ -8,6 +8,7 @@
 #include <QPen>
 
 #include "sound_mind/core/compositor.h"
+#include "sound_mind/studio/qt_image_conversion.h"
 
 namespace sound_mind::studio {
 
@@ -34,13 +35,6 @@ const QSize kFallbackSize(400, 300);
         }
     }
     return std::nullopt;
-}
-
-/// @brief Wraps an RgbImage's pixel data as a QImage, valid only as long as
-/// the RgbImage itself stays alive - no copy is made.
-[[nodiscard]] QImage toQImage(const sound_mind::codec::RgbImage& image) {
-    return QImage(image.pixels.data(), static_cast<int>(image.width), static_cast<int>(image.height),
-                  static_cast<int>(image.width) * 3, QImage::Format_RGB888);
 }
 
 }  // namespace
@@ -72,7 +66,7 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
 
     if (project_ != nullptr) {
         if (const auto rendered = findTopmostRender(*project_); rendered.has_value()) {
-            painter.drawImage(rect(), toQImage(*rendered));
+            painter.drawImage(rect(), toQImageView(*rendered));
         } else {
             // No layer has any content yet - fall back to the placeholder
             // that stood in for the whole canvas before Import existed.

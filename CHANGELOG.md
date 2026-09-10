@@ -6,6 +6,63 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.22.1] - 2026-09-10
+
+Part 1 of the Phase 2.5 "Refactor & Clean Up" milestone
+(`docs/sound-mind-roadmap.md`'s `v0.Y.23.1`) - purely internal code
+quality work, no user-visible behavior change. `MainWindow` had grown
+the largest and most direct responsibility of any class in the
+codebase across all eight of Phase 2.5's real feature milestones (per
+that roadmap entry's own note); this installment extracts the two
+lowest-risk, clearest-value pieces of it, confirmed with the user
+before starting. The roadmap heading stays unmarked - Loop Mode,
+Recording, Import/Export, and project lifecycle are still directly in
+`MainWindow`, candidates for later installments of the same milestone.
+
+### Changed
+
+- **New `PlaybackController` class** (its own public API, its own
+  `test_playback_controller.cpp`) now owns the `PlaybackEngine` and its
+  position-polling timer, previously three separate `MainWindow`
+  members plus logic spread across five of its methods.
+  Project/layer-agnostic (plays whatever `load()` is given; "which
+  layer to play" stays `MainWindow`'s job) and UI-agnostic (only ever
+  emits `durationChanged()`/`positionChanged()` - `MainWindow` still
+  does all the panel-to-panel wiring, unchanged). Every `MainWindow`
+  playback method (`startPlayback()`, `isPlaying()`, etc.) keeps its
+  exact pre-refactor signature, now a thin delegating body.
+- **New `sound_mind::studio::import_helpers`/`qt_image_conversion`
+  free functions** - the pure, previously-private helpers behind
+  import/export (extension/format detection, image scaling, the
+  `QImage`/`RgbImage` bridge) relocated to their own files with their
+  own `test_import_helpers.cpp`, no logic changes.
+
+### Fixed
+
+- **A real cross-file duplication**: `CanvasWidget` and `MainWindow`
+  each had their own, near-identical `RgbImage`-to-`QImage` conversion
+  (one copying, one not, both for good reason - see
+  `docs/sound-mind-architecture.md`'s Decisions Made #31). Now one
+  shared non-copying `toQImageView()`, with `MainWindow` wrapping it in
+  a one-line `.copy()` locally to keep its own exact prior behavior.
+- **A real semantic gap found while extracting `PlaybackController`**:
+  several call sites needed to mark loaded playback audio stale
+  *without* stopping whatever was currently playing (the topmost layer
+  changing shouldn't cut off audio that was already playing before the
+  change). Added `PlaybackController::invalidate()` specifically to
+  preserve that - a plain `stop()` would have been a real, unwanted
+  behavior change.
+
+Regression: `sound-mind-core-tests` (413 assertions/102 cases,
+unaffected) and the full `sound-mind-studio-tests` suite (all 13 test
+classes, two of them new) both pass. Doxygen docs target rebuilds
+clean, 0 warnings.
+
+No Y bump - purely internal restructuring; no project file format
+change.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.21.2] - 2026-09-10
 
 Two real bugs found via the user's own manual testing of `v0.0.21.1`,

@@ -17,10 +17,12 @@
 #include "test_canvas_widget.h"
 #include "test_create_project_wizard.h"
 #include "test_image_scale_picker_dialog.h"
+#include "test_import_helpers.h"
 #include "test_landing_page.h"
 #include "test_layers_panel.h"
 #include "test_loop_panel.h"
 #include "test_main_window.h"
+#include "test_playback_controller.h"
 #include "test_playback_panel.h"
 #include "test_record_panel.h"
 #include "test_recent_projects.h"
@@ -73,11 +75,17 @@ int main(int argc, char** argv) {
     PlaybackPanelTest playbackPanelTest;
     status |= QTest::qExec(&playbackPanelTest, argc, argv);
 
+    PlaybackControllerTest playbackControllerTest;
+    status |= QTest::qExec(&playbackControllerTest, argc, argv);
+
     AudioSnippetPickerDialogTest audioSnippetPickerDialogTest;
     status |= QTest::qExec(&audioSnippetPickerDialogTest, argc, argv);
 
     ImageScalePickerDialogTest imageScalePickerDialogTest;
     status |= QTest::qExec(&imageScalePickerDialogTest, argc, argv);
+
+    ImportHelpersTest importHelpersTest;
+    status |= QTest::qExec(&importHelpersTest, argc, argv);
 
     return status;
 }
