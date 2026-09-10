@@ -342,6 +342,8 @@ A dedicated pass over everything Phase 2.5 (UI Foundations - Landing Page throug
 
 **No Y bump expected.**
 
+**Implemented as:** two installments (`v0.0.22.1`, `v0.0.23.1` - see `docs/sound-mind-architecture.md`'s Decisions Made #31/#32), each with its own tests-first pass and dedicated test file: `PlaybackController` (owns the `PlaybackEngine` and its position-polling timer) and `sound_mind::studio::import_export` (free functions - audio snippet splitting/importing, image importing, layer audio/video export). Both extracted out of `MainWindow` with `MainWindow`'s own methods kept as thin, exact-signature delegating bodies. Loop Mode, Recording, and project-lifecycle decomposition were scoped out explicitly (confirmed with the user each time) and were **not** ultimately pursued further in this pass - `MainWindow` still owns them directly. The phase is closed here regardless: the two extractions done were the highest-value/lowest-risk ones identified, `MainWindow`'s size is meaningfully reduced (2844 → 2544 combined header+source lines), and further decomposition of the remaining clusters isn't blocking Phase 3 - it can be picked up as its own pass later if `MainWindow`'s size becomes a problem again. A real, unrelated pre-existing test regression (`changingARealRowsOpacitySliderDoesNotCrash()`, stale since the Background-layer-controls fix) and a real test-suite performance bug (`MainWindow` opening real audio devices on every construction, regardless of what a test needed) were both found and fixed along the way - see `v0.0.23.2`'s `CHANGELOG.md` entry.
+
 ---
 
 ## Phase 3 - Painting & Editing
