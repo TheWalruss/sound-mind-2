@@ -6,6 +6,70 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.19.1] - 2026-09-10
+
+The "Layer Time Alignment" milestone from `docs/sound-mind-roadmap.md`
+(Phase 2.5): two new per-layer horizontal transform controls -
+translation (shift earlier/later in time) and rescale (stretch/
+compress the layer's own timeline) - for lining up and matching timing
+between layers.
+
+### Added
+
+- **`Layer::translationColumns()`/`setTranslationColumns()`**: a raw
+  spectrogram-column shift (`std::int64_t`, default `0`). Columns, not
+  seconds - no sample-rate/hop-length conversion needed at render time.
+- **`Layer::rescaleFactor()`/`setRescaleFactor()`**: a plain ratio
+  (`double`, default `1.0`), `> 1.0` stretches/slows the layer's own
+  timeline, `< 1.0` compresses/speeds it up - unclamped, matching
+  `opacity()`'s own precedent. Both fields are additive and lenient in
+  `Layer`'s JSON (de)serialization, same treatment as `visible`.
+- **`renderLayer()` now takes a required `canvasWidth`** and always
+  applies rescale then translation before padding/cropping (black) to
+  exactly that width, rather than rendering at a layer's own native
+  content width - see `docs/sound-mind-architecture.md`'s Decisions
+  Made #25 for the reasoning (every layer's render now lines up
+  column-for-column with the project's time axis, ahead of real
+  multi-layer compositing). `exportLayerVideo()` gained the same
+  `canvasWidth` parameter, threaded through to its own `renderLayer()`
+  call.
+- **`LayersPanel`**: two new per-row controls, `translationSpinBox`
+  (`QSpinBox`) and `rescaleSpinBox` (`QDoubleSpinBox`), wired live -
+  unlike `opacitySlider`'s edits, which currently have no visible
+  effect (real multi-layer blending doesn't exist yet), editing either
+  of these repaints the canvas immediately, since they directly change
+  `renderLayer()`'s pixel output.
+- **`MainWindow::setLayerTranslation()`/`setLayerRescale()`**: the
+  actual work behind the two new spin boxes, mirroring
+  `setLayerOpacity()`'s shape.
+
+### Notes
+
+- **Visual/spectrogram-only, confirmed narrower than the roadmap
+  entry's own wording**: neither control affects
+  `decodeLayerForExport()` or any real playback path - real
+  multi-layer audio mixing still doesn't exist anywhere in the
+  codebase (Playback/Loop Mode/Record all still only ever play the
+  single topmost layer with content), so "lining up" and "matching
+  timing" are demonstrated visually, not by ear.
+- **A real, if narrow, breaking signature change**: `renderLayer()`'s
+  new `canvasWidth` parameter has no default, so every existing caller
+  needed updating (`CanvasWidget`, `exportLayerVideo()`, and both
+  functions' own test suites). No behavioral regression for any
+  existing layer - every import path already produces content at (or
+  very near) the project's own `canvasWidth` - but `exportTopmostLayerVideoNow()`
+  now encodes at the full project canvas resolution rather than a
+  layer's own (sometimes much smaller) native resolution, a deliberate
+  cost increase for correctness and future-readiness.
+- **No Y bump.** A new, additive per-layer field pair, deserialized
+  leniently - a project file saved before this milestone still loads.
+
+Regression: `sound-mind-core-tests` (404 assertions/97 cases) and the
+full `sound-mind-studio-tests` suite (all 12 test classes) both pass.
+Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.18.1] - 2026-09-10
 
 The "Drag & Drop Import" milestone from `docs/sound-mind-roadmap.md`

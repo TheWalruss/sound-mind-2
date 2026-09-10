@@ -9,6 +9,8 @@ void to_json(nlohmann::json& json, const Layer& layer) {
         {"type", layer.type_},
         {"opacity", layer.opacity_},
         {"visible", layer.visible_},
+        {"translationColumns", layer.translationColumns_},
+        {"rescaleFactor", layer.rescaleFactor_},
     };
 }
 
@@ -23,6 +25,12 @@ void from_json(const nlohmann::json& json, Layer& layer) {
     // ProjectSettings' own new fields used in v0.Y.11.1 - a layer saved
     // before this milestone was implicitly always visible anyway.
     layer.visible_ = json.value("visible", true);
+    // Lenient (defaults to untranslated/unrescaled if absent), same
+    // reasoning as visible_ above - didn't exist before v0.Y.21.1 (Layer
+    // Time Alignment); a layer saved before this milestone was implicitly
+    // untranslated and unrescaled anyway.
+    layer.translationColumns_ = json.value("translationColumns", std::int64_t{0});
+    layer.rescaleFactor_ = json.value("rescaleFactor", 1.0);
 }
 
 }  // namespace sound_mind::core

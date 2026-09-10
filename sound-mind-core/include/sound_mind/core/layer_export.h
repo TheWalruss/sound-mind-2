@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 
@@ -48,6 +49,10 @@ bool exportLayerAudio(const Layer& layer, const std::filesystem::path& path,
  *
  * @param layer The layer to export.
  * @param path Destination path.
+ * @param canvasWidth The project's canvas width - passed straight through
+ *        to `renderLayer()`, so the exported video reflects the layer's
+ *        own translation/rescale (`v0.Y.21.1`, Layer Time Alignment) the
+ *        same way the on-screen canvas does.
  * @param frameRate Video frame rate, in frames per second - see
  *        `sound_mind::codec::exportVideo()`.
  * @return `true` if exported; `false` if the layer had no content to
@@ -55,6 +60,7 @@ bool exportLayerAudio(const Layer& layer, const std::filesystem::path& path,
  * @throws std::runtime_error if the underlying codec export fails (see
  *         `sound_mind::codec::exportVideo()`'s docs).
  */
-bool exportLayerVideo(const Layer& layer, const std::filesystem::path& path, int frameRate = 30);
+bool exportLayerVideo(const Layer& layer, const std::filesystem::path& path, std::uint32_t canvasWidth,
+                       int frameRate = 30);
 
 }  // namespace sound_mind::core

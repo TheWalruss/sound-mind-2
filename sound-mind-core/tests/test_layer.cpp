@@ -45,10 +45,34 @@ TEST_CASE("A Layer's visibility can be changed", "[core][layer]") {
     REQUIRE_FALSE(layer.visible());
 }
 
+TEST_CASE("A Layer defaults to no horizontal translation", "[core][layer]") {
+    const Layer layer(1, "Untitled", LayerType::Normal);
+    REQUIRE(layer.translationColumns() == 0);
+}
+
+TEST_CASE("A Layer's horizontal translation can be changed", "[core][layer]") {
+    Layer layer(1, "Untitled", LayerType::Normal);
+    layer.setTranslationColumns(-50);
+    REQUIRE(layer.translationColumns() == -50);
+}
+
+TEST_CASE("A Layer defaults to no horizontal rescale", "[core][layer]") {
+    const Layer layer(1, "Untitled", LayerType::Normal);
+    REQUIRE(layer.rescaleFactor() == 1.0);
+}
+
+TEST_CASE("A Layer's horizontal rescale can be changed", "[core][layer]") {
+    Layer layer(1, "Untitled", LayerType::Normal);
+    layer.setRescaleFactor(2.5);
+    REQUIRE(layer.rescaleFactor() == 2.5);
+}
+
 TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     Layer original(42, "Vocals", LayerType::Background);
     original.setOpacity(0.75f);
     original.setVisible(false);
+    original.setTranslationColumns(120);
+    original.setRescaleFactor(1.5);
 
     const nlohmann::json json = original;
     const Layer restored = json.get<Layer>();
@@ -58,6 +82,8 @@ TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     REQUIRE(restored.type() == original.type());
     REQUIRE(restored.opacity() == original.opacity());
     REQUIRE(restored.visible() == original.visible());
+    REQUIRE(restored.translationColumns() == original.translationColumns());
+    REQUIRE(restored.rescaleFactor() == original.rescaleFactor());
 }
 
 TEST_CASE("A Layer loads from JSON missing visible (a layer saved before v0.Y.13.1) as visible",
@@ -69,6 +95,19 @@ TEST_CASE("A Layer loads from JSON missing visible (a layer saved before v0.Y.13
     const Layer restored = json.get<Layer>();
 
     REQUIRE(restored.visible());
+}
+
+TEST_CASE("A Layer loads from JSON missing translationColumns/rescaleFactor "
+          "(a layer saved before v0.Y.21.1) as untranslated and unrescaled",
+          "[core][layer]") {
+    const nlohmann::json json{
+        {"id", 1}, {"name", "Untitled"}, {"type", "normal"}, {"opacity", 1.0f}, {"visible", true},
+    };
+
+    const Layer restored = json.get<Layer>();
+
+    REQUIRE(restored.translationColumns() == 0);
+    REQUIRE(restored.rescaleFactor() == 1.0);
 }
 
 TEST_CASE("A Layer has no content by default", "[core][layer]") {

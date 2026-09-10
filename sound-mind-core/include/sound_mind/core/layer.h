@@ -40,12 +40,16 @@ NLOHMANN_JSON_SERIALIZE_ENUM(LayerType, {
  * See `docs/sound-mind-design.md`'s "Layers" and
  * `docs/sound-mind-architecture.md`'s Core Data Model.
  *
- * @note Deliberately minimal for now: blend mode, MindWave linkage,
- *       transform, and the cached raster result are not yet represented
- *       here - each depends on a type (`BlendMode`, `MindWave`,
- *       `RasterCache`) that hasn't been designed in code yet. Adding
- *       placeholder members for them now would just mean redesigning
- *       this class again as soon as those types exist.
+ * @note Deliberately minimal for now: blend mode, MindWave linkage, and
+ *       the cached raster result are not yet represented here - each
+ *       depends on a type (`BlendMode`, `MindWave`, `RasterCache`) that
+ *       hasn't been designed in code yet. Adding placeholder members for
+ *       them now would just mean redesigning this class again as soon as
+ *       those types exist. As of `v0.Y.21.1` (Layer Time Alignment), a
+ *       narrow slice of "transform" *is* represented - translationColumns()
+ *       and rescaleFactor(), the horizontal-axis-only subset described
+ *       there - not the legacy Studio's full affine transform (no
+ *       vertical translation, scale, or rotation).
  */
 class Layer {
 public:
@@ -107,6 +111,35 @@ public:
     [[nodiscard]] bool visible() const noexcept { return visible_; }
 
     /**
+     * @brief This layer's horizontal time-axis shift, in spectrogram
+     *        columns - see `docs/sound-mind-roadmap.md`'s Layer Time
+     *        Alignment milestone (`v0.Y.21.1`).
+     *
+     * Applied by `sound_mind::core::renderLayer()`, not baked into
+     * content(): a positive value shifts the layer's rendered content
+     * later in time (right), a negative value shifts it earlier (left).
+     * Columns, not seconds - a raw spectrogram-column count needs no
+     * sample-rate/hop-length conversion at render time, unlike a
+     * seconds-based value would.
+     *
+     * @return The current shift; `0` (the default) means untranslated.
+     */
+    [[nodiscard]] std::int64_t translationColumns() const noexcept { return translationColumns_; }
+
+    /**
+     * @brief This layer's horizontal timeline stretch/compress ratio - see
+     *        translationColumns()'s docs for the milestone this belongs to.
+     *
+     * Applied by `sound_mind::core::renderLayer()` before translation:
+     * `> 1.0` stretches (slows) the layer's own timeline, `< 1.0`
+     * compresses (speeds it up). Not clamped or validated here, same as
+     * opacity().
+     *
+     * @return The current ratio; `1.0` (the default) means unrescaled.
+     */
+    [[nodiscard]] double rescaleFactor() const noexcept { return rescaleFactor_; }
+
+    /**
      * @brief Reassigns the layer's id.
      *
      * Not needed for normal use - a Layer's id is meant to be set once at
@@ -139,6 +172,16 @@ public:
      *        it), not a `Layer`-level invariant.
      */
     void setVisible(bool visible) noexcept { visible_ = visible; }
+
+    /// @brief Sets this layer's horizontal time-axis shift.
+    /// @param columns The new shift, in spectrogram columns - see
+    ///        translationColumns()'s docs.
+    void setTranslationColumns(std::int64_t columns) noexcept { translationColumns_ = columns; }
+
+    /// @brief Sets this layer's horizontal timeline stretch/compress ratio.
+    /// @param factor The new ratio - see rescaleFactor()'s docs. Intended
+    ///        to be positive; not clamped or validated here.
+    void setRescaleFactor(double factor) noexcept { rescaleFactor_ = factor; }
 
     /**
      * @brief This layer's cached Stream-encoded content, if it's been
@@ -187,6 +230,8 @@ private:
     LayerType type_ = LayerType::Normal;
     float opacity_ = 1.0f;
     bool visible_ = true;
+    std::int64_t translationColumns_ = 0;
+    double rescaleFactor_ = 1.0;
     std::optional<sound_mind::codec::StreamImage> content_;
     std::optional<sound_mind::codec::PoolImage> poolContent_;
 };

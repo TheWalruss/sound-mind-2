@@ -468,8 +468,15 @@ void MainWindowTest::exportTopmostLayerVideoNowExportsAnImportedLayer() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-video.wav";
     writeTestWavFile(wavPath);
 
+    // A small canvasWidth, not createFreshTestProject()'s default 1024 - as
+    // of v0.Y.21.1 (Layer Time Alignment), renderLayer() (which
+    // exportLayerVideo() uses) always renders at the project's own
+    // canvasWidth rather than the layer's native content width, so a
+    // default-sized canvas here would make this test encode a real,
+    // needlessly large video just to confirm exporting works at all.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-video.smproj";
     MainWindow window;
-    createFreshTestProject(window);
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
     QVERIFY(window.importAudioFile(wavPath));
     std::filesystem::remove(wavPath);
 
@@ -967,6 +974,28 @@ void MainWindowTest::setLayerOpacityChangesTheLayersOpacity() {
     window.setLayerOpacity(backgroundId, 0.5f);
 
     QCOMPARE(window.project()->layers().front().opacity(), 0.5f);
+    QVERIFY(window.hasUnsavedChanges());
+}
+
+void MainWindowTest::setLayerTranslationChangesTheLayersTranslation() {
+    MainWindow window;
+    createFreshTestProject(window);
+    const auto backgroundId = window.project()->layers().front().id();
+
+    window.setLayerTranslation(backgroundId, 150);
+
+    QCOMPARE(window.project()->layers().front().translationColumns(), static_cast<std::int64_t>(150));
+    QVERIFY(window.hasUnsavedChanges());
+}
+
+void MainWindowTest::setLayerRescaleChangesTheLayersRescale() {
+    MainWindow window;
+    createFreshTestProject(window);
+    const auto backgroundId = window.project()->layers().front().id();
+
+    window.setLayerRescale(backgroundId, 2.0);
+
+    QCOMPARE(window.project()->layers().front().rescaleFactor(), 2.0);
     QVERIFY(window.hasUnsavedChanges());
 }
 

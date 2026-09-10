@@ -33,7 +33,13 @@ void CanvasWidgetTest::sizeHintMatchesProjectCanvasDimensions() {
 }
 
 void CanvasWidgetTest::rendersALayersContentInsteadOfThePlaceholder() {
-    Project project = Project::createNew(ProjectSettings{});
+    // canvasWidth matches the content's own frameCount below - as of
+    // v0.Y.21.1 (Layer Time Alignment), renderLayer() always pads/crops to
+    // the project's canvasWidth, so a mismatch here would put the sampled
+    // center pixel in black padding rather than the layer's own content.
+    ProjectSettings settings;
+    settings.canvasWidth = 2;
+    Project project = Project::createNew(settings);
 
     // A deliberately distinctive, easy-to-check color: left = 0 dB (full
     // scale) -> red 255, right = -96 dB (the floor) -> green 0, phase = 0
@@ -64,7 +70,11 @@ void CanvasWidgetTest::rendersALayersContentInsteadOfThePlaceholder() {
 void CanvasWidgetTest::skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt() {
     // Per the Layers Panel milestone (v0.Y.13.1) - toggling a layer hidden
     // should actually change what's on screen, not just its own row icon.
-    Project project = Project::createNew(ProjectSettings{});
+    // canvasWidth matches both layers' frameCount below - see the same note
+    // in rendersALayersContentInsteadOfThePlaceholder() above.
+    ProjectSettings settings;
+    settings.canvasWidth = 2;
+    Project project = Project::createNew(settings);
 
     // Bottom (visible): full-scale red/no-green/mid-blue, same recipe as
     // rendersALayersContentInsteadOfThePlaceholder() above.
@@ -101,4 +111,35 @@ void CanvasWidgetTest::skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt() {
 
     QCOMPARE(centerPixel.red(), 255);
     QCOMPARE(centerPixel.green(), 0);
+}
+
+void CanvasWidgetTest::reflectsALayersTranslationColumns() {
+    // v0.Y.21.1 (Layer Time Alignment): translationColumns() shifts a
+    // layer's rendered content later in time - a wide-enough canvas with a
+    // narrow, translated layer should show black at the untranslated start
+    // and the layer's own color only past the shift.
+    ProjectSettings settings;
+    settings.canvasWidth = 4;
+    Project project = Project::createNew(settings);
+
+    StreamImage content;
+    content.config.binCount = 1;
+    content.frameCount = 2;
+    content.leftMagnitudeDb.assign(2, 0.0f);
+    content.rightMagnitudeDb.assign(2, -96.0f);
+    content.sharedPhaseRadians.assign(2, 0.0f);
+
+    Layer layer(0, "Imported", LayerType::Normal);
+    layer.setContent(content);
+    layer.setTranslationColumns(2);  // content now occupies canvas columns [2, 4).
+    project.addLayer(std::move(layer));
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(4, 1);
+
+    const QImage rendered = widget.grab().toImage();
+
+    QCOMPARE(rendered.pixelColor(0, 0), QColor(0, 0, 0));
+    QCOMPARE(rendered.pixelColor(3, 0).red(), 255);
 }

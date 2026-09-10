@@ -10,4 +10,5 @@ private slots:
     void sizeHintMatchesProjectCanvasDimensions();
     void rendersALayersContentInsteadOfThePlaceholder();
     void skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt();
+    void reflectsALayersTranslationColumns();
 };

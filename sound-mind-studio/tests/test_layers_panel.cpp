@@ -1,9 +1,11 @@
 #include "test_layers_panel.h"
 
+#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QSlider>
+#include <QSpinBox>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/layers_panel.h"
@@ -106,6 +108,34 @@ void LayersPanelTest::opacitySliderEmitsOpacityChanged() {
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(1));
     QCOMPARE(spy.at(0).at(1).toFloat(), 0.25f);
+}
+
+void LayersPanelTest::translationSpinBoxEmitsTranslationChanged() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    QSignalSpy spy(&panel, &LayersPanel::translationChanged);
+
+    const auto spinBoxes = panel.findChildren<QSpinBox*>(QStringLiteral("translationSpinBox"));
+    QCOMPARE(spinBoxes.size(), 2);
+    spinBoxes.at(1)->setValue(150);  // "Bottom" (id 1).
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(1));
+    QCOMPARE(spy.at(0).at(1).value<qint64>(), static_cast<qint64>(150));
+}
+
+void LayersPanelTest::rescaleSpinBoxEmitsRescaleChanged() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    QSignalSpy spy(&panel, &LayersPanel::rescaleChanged);
+
+    const auto spinBoxes = panel.findChildren<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox"));
+    QCOMPARE(spinBoxes.size(), 2);
+    spinBoxes.at(1)->setValue(2.0);  // "Bottom" (id 1).
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(1));
+    QCOMPARE(spy.at(0).at(1).toDouble(), 2.0);
 }
 
 void LayersPanelTest::doubleClickingNameEmitsRenameRequested() {

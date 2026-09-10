@@ -3,12 +3,14 @@
 #include <algorithm>
 
 #include <QApplication>
+#include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSlider>
+#include <QSpinBox>
 #include <QVBoxLayout>
 #include <QVariant>
 
@@ -169,6 +171,37 @@ public:
                 [this](int value) { emit opacityChanged(id_, static_cast<float>(value) / 100.0f); });
         layout->addWidget(opacitySlider);
 
+        // Time Alignment (v0.Y.21.1): two per-layer horizontal transform
+        // controls - see sound_mind::core::Layer::translationColumns()/
+        // rescaleFactor()'s own docs for what each does. QSpinBox's range is
+        // a plain `int`, not Layer's `std::int64_t` - a UI-level limit, the
+        // same shape as opacitySlider's own float-via-0..100-int range
+        // above; a shift of ±2^31 columns (millions of seconds at any
+        // realistic hop length) is far beyond anything this control needs
+        // to reach.
+        auto* translationSpinBox = new QSpinBox();
+        translationSpinBox->setObjectName(QStringLiteral("translationSpinBox"));
+        translationSpinBox->setRange(-1'000'000, 1'000'000);
+        translationSpinBox->setValue(static_cast<int>(data.translationColumns));
+        translationSpinBox->setFixedWidth(70);
+        translationSpinBox->setToolTip(tr("Shift this layer's content earlier/later in time, in spectrogram columns"));
+        connect(translationSpinBox, &QSpinBox::valueChanged, this,
+                [this](int value) { emit translationChanged(id_, static_cast<std::int64_t>(value)); });
+        layout->addWidget(translationSpinBox);
+
+        auto* rescaleSpinBox = new QDoubleSpinBox();
+        rescaleSpinBox->setObjectName(QStringLiteral("rescaleSpinBox"));
+        rescaleSpinBox->setRange(0.1, 10.0);
+        rescaleSpinBox->setSingleStep(0.05);
+        rescaleSpinBox->setDecimals(2);
+        rescaleSpinBox->setSuffix(QStringLiteral("x"));
+        rescaleSpinBox->setValue(data.rescaleFactor);
+        rescaleSpinBox->setFixedWidth(60);
+        rescaleSpinBox->setToolTip(tr("Stretch/compress this layer's own timeline"));
+        connect(rescaleSpinBox, &QDoubleSpinBox::valueChanged, this,
+                [this](double value) { emit rescaleChanged(id_, value); });
+        layout->addWidget(rescaleSpinBox);
+
         if (!locked) {
             auto* deleteButton = new QPushButton(QStringLiteral("×"));
             deleteButton->setObjectName(QStringLiteral("deleteButton"));
@@ -184,6 +217,8 @@ public:
 signals:
     void visibilityToggled(sound_mind::core::LayerId id, bool visible);
     void opacityChanged(sound_mind::core::LayerId id, float opacity);
+    void translationChanged(sound_mind::core::LayerId id, std::int64_t translationColumns);
+    void rescaleChanged(sound_mind::core::LayerId id, double rescaleFactor);
     void renameRequested(sound_mind::core::LayerId id);
     void deleteRequested(sound_mind::core::LayerId id);
 
@@ -250,6 +285,8 @@ void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
         auto* row = qobject_cast<LayerRowWidget*>(list_->itemWidget(item));
         connect(row, &LayerRowWidget::visibilityToggled, this, &LayersPanel::visibilityToggled);
         connect(row, &LayerRowWidget::opacityChanged, this, &LayersPanel::opacityChanged);
+        connect(row, &LayerRowWidget::translationChanged, this, &LayersPanel::translationChanged);
+        connect(row, &LayerRowWidget::rescaleChanged, this, &LayersPanel::rescaleChanged);
         connect(row, &LayerRowWidget::renameRequested, this, &LayersPanel::renameRequested);
         connect(row, &LayerRowWidget::deleteRequested, this, &LayersPanel::deleteRequested);
     }

@@ -20,8 +20,11 @@ namespace sound_mind::studio {
  * Adapted from the legacy Studio's Layers panel (drag-handle reorder,
  * per-row visibility toggle, name, opacity, add/delete), scoped down to
  * what `sound_mind::core::Layer` actually supports today: no blend-mode
- * combo, no MindWave-link combo, no transform controls, and no settings/
- * gear button - none of those concepts exist in the engine yet.
+ * combo, no MindWave-link combo, and no settings/gear button - none of
+ * those concepts exist in the engine yet. As of `v0.Y.21.1` (Layer Time
+ * Alignment), two transform controls *do* exist - translation and
+ * rescale, both horizontal-axis-only (see `sound_mind::core::Layer`'s own
+ * docs for the narrower-than-legacy scope).
  *
  * Purely presentational, the same division of responsibility as
  * `LandingPage`: every row action is a signal `MainWindow` connects to
@@ -59,6 +62,12 @@ public:
 
         /// @brief Mirrors `sound_mind::core::Layer::visible()`.
         bool visible = true;
+
+        /// @brief Mirrors `sound_mind::core::Layer::translationColumns()`.
+        std::int64_t translationColumns = 0;
+
+        /// @brief Mirrors `sound_mind::core::Layer::rescaleFactor()`.
+        double rescaleFactor = 1.0;
     };
 
     /// @brief Builds the panel with an initially-empty layer list.
@@ -79,6 +88,14 @@ signals:
 
     /// @brief A row's opacity slider changed.
     void opacityChanged(sound_mind::core::LayerId id, float opacity);
+
+    /// @brief A row's translation spin box changed - see
+    /// `sound_mind::core::Layer::translationColumns()`'s docs.
+    void translationChanged(sound_mind::core::LayerId id, std::int64_t translationColumns);
+
+    /// @brief A row's rescale spin box changed - see
+    /// `sound_mind::core::Layer::rescaleFactor()`'s docs.
+    void rescaleChanged(sound_mind::core::LayerId id, double rescaleFactor);
 
     /// @brief A row's name was double-clicked.
     void renameRequested(sound_mind::core::LayerId id);

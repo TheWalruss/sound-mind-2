@@ -472,6 +472,37 @@ public slots:
     void setLayerOpacity(sound_mind::core::LayerId id, float opacity);
 
     /**
+     * @brief Sets the horizontal translation of the layer with the given
+     *        id - the actual work behind `LayersPanel`'s translation spin
+     *        box. See `docs/sound-mind-roadmap.md`'s Layer Time Alignment
+     *        milestone (`v0.Y.21.1`).
+     *
+     * Marks hasUnsavedChanges() and refreshes both the canvas and the
+     * Layers Panel - unlike setLayerOpacity(), this one's canvas refresh is
+     * not a no-op: translation directly changes renderLayer()'s pixel
+     * output (see its own docs), where opacity currently has no visible
+     * effect at all (real multi-layer blending doesn't exist yet). Does
+     * nothing if no layer with this id exists.
+     *
+     * @param id The layer to change.
+     * @param translationColumns The new shift, in spectrogram columns - see
+     *        `sound_mind::core::Layer::translationColumns()`'s docs.
+     */
+    void setLayerTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns);
+
+    /**
+     * @brief Sets the horizontal rescale of the layer with the given id -
+     *        the actual work behind `LayersPanel`'s rescale spin box. See
+     *        setLayerTranslation()'s docs for the milestone this belongs to
+     *        and why this refreshes the canvas, unlike setLayerOpacity().
+     *
+     * @param id The layer to change.
+     * @param rescaleFactor The new ratio - see
+     *        `sound_mind::core::Layer::rescaleFactor()`'s docs.
+     */
+    void setLayerRescale(sound_mind::core::LayerId id, double rescaleFactor);
+
+    /**
      * @brief Prompts for a new name and applies it - the actual work
      *        behind `LayersPanel`'s double-click-to-rename, split into an
      *        interactive slot (this one) and renameLayerTo() (the

@@ -28,7 +28,7 @@ const QSize kFallbackSize(400, 300);
         if (!it->visible()) {
             continue;
         }
-        if (auto rendered = sound_mind::core::renderLayer(*it); rendered.has_value()) {
+        if (auto rendered = sound_mind::core::renderLayer(*it, project.settings().canvasWidth); rendered.has_value()) {
             return rendered;
         }
     }

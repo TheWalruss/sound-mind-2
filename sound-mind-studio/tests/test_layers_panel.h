@@ -11,6 +11,8 @@ private slots:
     void visibilityButtonEmitsVisibilityToggled();
     void backgroundVisibilityButtonIsDisabled();
     void opacitySliderEmitsOpacityChanged();
+    void translationSpinBoxEmitsTranslationChanged();
+    void rescaleSpinBoxEmitsRescaleChanged();
     void doubleClickingNameEmitsRenameRequested();
     void deleteButtonEmitsDeleteRequestedForNormalLayers();
     void lockedLayersHaveNoDeleteButton();

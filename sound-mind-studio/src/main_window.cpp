@@ -215,6 +215,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
     addDockWidget(Qt::RightDockWidgetArea, layersPanel_);
     connect(layersPanel_, &LayersPanel::visibilityToggled, this, &MainWindow::toggleLayerVisibility);
     connect(layersPanel_, &LayersPanel::opacityChanged, this, &MainWindow::setLayerOpacity);
+    connect(layersPanel_, &LayersPanel::translationChanged, this, &MainWindow::setLayerTranslation);
+    connect(layersPanel_, &LayersPanel::rescaleChanged, this, &MainWindow::setLayerRescale);
     connect(layersPanel_, &LayersPanel::renameRequested, this, &MainWindow::renameLayer);
     connect(layersPanel_, &LayersPanel::deleteRequested, this, &MainWindow::deleteLayer);
     connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
@@ -909,7 +911,7 @@ bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, Q
 
     showBusyStatus(statusBar(), tr("Exporting video..."));
     try {
-        if (!sound_mind::core::exportLayerVideo(*layer, path)) {
+        if (!sound_mind::core::exportLayerVideo(*layer, path, project_->settings().canvasWidth)) {
             statusBar()->clearMessage();
             return false;
         }
@@ -960,6 +962,8 @@ void MainWindow::refreshLayersPanel() {
             row.type = layer.type();
             row.opacity = layer.opacity();
             row.visible = layer.visible();
+            row.translationColumns = layer.translationColumns();
+            row.rescaleFactor = layer.rescaleFactor();
             rows.push_back(row);
         }
     }
@@ -985,6 +989,28 @@ void MainWindow::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
     }
     layer->setOpacity(opacity);
     hasUnsavedChanges_ = true;
+    refreshLayersPanel();
+}
+
+void MainWindow::setLayerTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    layer->setTranslationColumns(translationColumns);
+    hasUnsavedChanges_ = true;
+    canvas_->update();
+    refreshLayersPanel();
+}
+
+void MainWindow::setLayerRescale(sound_mind::core::LayerId id, double rescaleFactor) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    layer->setRescaleFactor(rescaleFactor);
+    hasUnsavedChanges_ = true;
+    canvas_->update();
     refreshLayersPanel();
 }
 

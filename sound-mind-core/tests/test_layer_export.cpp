@@ -98,7 +98,7 @@ TEST_CASE("exportLayerVideo does nothing for a layer with no content", "[core][l
     const Layer layer(1, "Untitled", LayerType::Normal);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layer-export.mp4";
 
-    CHECK_FALSE(exportLayerVideo(layer, path));
+    CHECK_FALSE(exportLayerVideo(layer, path, /*canvasWidth=*/64));
     CHECK_FALSE(std::filesystem::exists(path));
 }
 
@@ -107,7 +107,7 @@ TEST_CASE("exportLayerVideo writes a real file for a layer with content", "[core
     layer.setContent(encode(makeSineTone(1000.0f, 0.25f, 44100), StreamCodecConfig{}));
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layer-export.mp4";
 
-    const bool exported = exportLayerVideo(layer, path, /*frameRate=*/24);
+    const bool exported = exportLayerVideo(layer, path, /*canvasWidth=*/64, /*frameRate=*/24);
     const bool exists = std::filesystem::exists(path);
     std::filesystem::remove(path);
 

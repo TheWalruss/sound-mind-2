@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <optional>
 
 #include "sound_mind/codec/rgb_image.h"
@@ -8,7 +9,8 @@
 namespace sound_mind::core {
 
 /**
- * @brief Renders a single layer's cached content as displayable pixels.
+ * @brief Renders a single layer's cached content as displayable pixels,
+ *        placed onto a `canvasWidth`-wide time axis.
  *
  * A first, minimal version of the Compositor sketched in
  * `docs/sound-mind-architecture.md`'s Core Data Model - single-layer only,
@@ -20,10 +22,28 @@ namespace sound_mind::core {
  * is where that conversion actually happens; this is the Core-level entry
  * point that ties a Layer to it.
  *
+ * As of `v0.Y.21.1` (Layer Time Alignment), this also applies the layer's
+ * own horizontal transform - `layer.rescaleFactor()` (stretches/compresses
+ * the content's own timeline, applied first) then `layer.translationColumns()`
+ * (shifts the result earlier/later, applied second) - and always returns an
+ * image exactly `canvasWidth` columns wide: a gap left by translation, or a
+ * layer narrower than `canvasWidth` even with no transform at all, is
+ * padded with black columns; anything that would fall outside
+ * `[0, canvasWidth)` is cropped. Rendering directly onto the canvas's own
+ * time axis, rather than at the layer's native width, is deliberate ahead
+ * of real multi-layer compositing (`docs/sound-mind-architecture.md`'s
+ * Decisions Made) - every layer's render already lines up column-for-column
+ * with every other's, so a later composite loop can composite them
+ * directly without each caller re-deriving this placement itself.
+ *
  * @param layer The layer to render.
- * @return The rendered RGB composite, or `std::nullopt` if the layer has no
- *         cached content yet (`layer.content()` is empty).
+ * @param canvasWidth The project's canvas width, in pixels/columns - see
+ *        `sound_mind::core::ProjectSettings::canvasWidth`.
+ * @return The rendered RGB composite, exactly `canvasWidth` columns wide,
+ *         or `std::nullopt` if the layer has no cached content yet
+ *         (`layer.content()` is empty).
  */
-[[nodiscard]] std::optional<sound_mind::codec::RgbImage> renderLayer(const Layer& layer);
+[[nodiscard]] std::optional<sound_mind::codec::RgbImage> renderLayer(const Layer& layer,
+                                                                      std::uint32_t canvasWidth);
 
 }  // namespace sound_mind::core

@@ -310,7 +310,7 @@ When importing an image, offer a choice of how it's resized to the project's can
 
 **`ScaleVerticalProportional`'s width is computed by hand, not via `QImage::scaled()`'s own aspect-ratio modes**: `Qt::KeepAspectRatio` fits *within* a bounding box rather than hitting an exact height, so the proportional width is computed directly (`sourceWidth * canvasHeight / sourceHeight`, rounded) and then applied via `Qt::IgnoreAspectRatio` - guaranteeing the exact, documented result rather than whatever Qt's own fitting logic happens to produce.
 
-### v0.Y.21.1 - Layer Time Alignment
+### v0.Y.21.1 - Layer Time Alignment ✅
 
 Two new per-layer transform controls: horizontal translation (shifts a layer's content earlier/later in time, for lining up audio between layers) and horizontal rescaling (stretches/compresses a layer's own timeline, for matching timing between layers) - adapted from the legacy Studio's per-layer transform, narrowed per explicit instruction.
 
@@ -320,7 +320,11 @@ Two new per-layer transform controls: horizontal translation (shifts a layer's c
 
 **No Y bump expected** - a new, additive per-layer field (translation/rescale offsets), deserialized leniently like every other optional field added so far - a project file saved before this milestone still loads.
 
-### v0.Y.22.1 - Image Sequence Import
+**Implemented as:** `Layer` gains `translationColumns()` (a raw `int64_t` spectrogram-column count, not seconds - no sample-rate/hop-length conversion needed at render time) and `rescaleFactor()` (a plain `double` ratio, `1.0` = unrescaled, matching `opacity()`'s own unclamped-float precedent) - both confirmed with the user before implementing, along with a third decision: `renderLayer()` (see architecture.md's Decision #25) now always renders onto a `canvasWidth`-wide window rather than at a layer's own native content width, applying rescale then translation before padding/cropping to fit. `LayersPanel` gained the two spin box controls the "Demo" above calls for, wired live (editing either repaints the canvas immediately - unlike `opacitySlider`, whose edits currently have no visible effect, since real multi-layer blending doesn't exist yet).
+
+**Narrower than stated above, in one more respect**: the transform is visual/spectrogram-only - it does not affect `decodeLayerForExport()` or playback audio in any way, since real multi-layer audio mixing still doesn't exist anywhere in the codebase (Playback/Loop Mode/Record all still only ever play the single topmost layer with content, unmixed - the same deferral `v0.Y.8.1`'s Live Mode and `v0.Y.14.1`'s Loop Mode notes already describe). "Lining up" and "matching timing" are demonstrated visually (toggling layer visibility to compare), not by ear.
+
+### v0.Y.22.1 - Image Sequence Import 🔜 Next
 
 When importing multiple images at once, an "import as sequence" option applies `v0.Y.20.1`'s "scale vertically to fit project, rescale horizontal in proportion" mode to each one, and automatically places each subsequent image's layer immediately after the previous one in time via `v0.Y.21.1`'s horizontal translation control - matching the legacy Studio's own cumulative-offset placement for multi-image imports.
 

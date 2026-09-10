@@ -27,12 +27,13 @@ bool exportLayerAudio(const Layer& layer, const std::filesystem::path& path,
     return true;
 }
 
-bool exportLayerVideo(const Layer& layer, const std::filesystem::path& path, int frameRate) {
+bool exportLayerVideo(const Layer& layer, const std::filesystem::path& path, std::uint32_t canvasWidth,
+                       int frameRate) {
     const auto audio = decodeLayerForExport(layer);
     if (!audio.has_value()) {
         return false;
     }
-    const auto canvas = renderLayer(layer);
+    const auto canvas = renderLayer(layer, canvasWidth);
     if (!canvas.has_value()) {
         // decodeLayerForExport() found content but renderLayer() didn't -
         // shouldn't happen given both read from the same layer state, but
