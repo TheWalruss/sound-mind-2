@@ -2404,3 +2404,36 @@ void MainWindowTest::leavingTheCanvasClearsTheCursorPositionLabel() {
 
     QVERIFY(label->text().isEmpty());
 }
+
+void MainWindowTest::paintingTheBackgroundLayerActuallyPaintsSomethingVisible() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-paint-background.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
+    std::filesystem::remove(projectPath);
+    // The Background layer - content-less by construction
+    // (Project::createNew()'s own docs) - is the project's only layer
+    // here, so it's paintTargetLayerId()'s own default with nothing ever
+    // selected.
+    QVERIFY(!window.project()->layers().back().content().has_value());
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setPaintModeEnabled(true);
+
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    QVERIFY(window.project()->layers().back().content().has_value());
+    const auto& content = *window.project()->layers().back().content();
+    // Unlike an imported image (which can already start at the brush's
+    // own target on one channel - see paintingWithTheDefaultTool
+    // ConfigurationActuallyPaintsSomethingVisible()'s own comment), the
+    // Background's synthesized silent base (silentContentFor()) starts
+    // near the floor on *both* channels, so either one shows a real
+    // change here.
+    const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                         [](float value) { return value > -50.0f; });
+    QVERIFY(anyPainted);
+}

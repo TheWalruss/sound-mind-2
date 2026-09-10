@@ -119,4 +119,25 @@ void from_json(const nlohmann::json& json, ProjectSettings& settings);
  */
 [[nodiscard]] sound_mind::codec::StreamCodecConfig streamCodecConfigFor(const ProjectSettings& settings);
 
+/**
+ * @brief A real, silent (all-zero) `StreamImage`, sized to exactly fill a
+ *        project's own canvas - `canvasWidth` columns' worth of true
+ *        digital silence, run through the same `sound_mind::codec::
+ *        encode()` pipeline any other imported/recorded audio goes
+ *        through (not a raw-zeroed buffer skipping encoding), so it
+ *        behaves exactly like any other layer's own content under
+ *        decode()/export/further painting.
+ *
+ * Gives a layer real content immediately rather than leaving it
+ * `std::nullopt` - used wherever a layer needs to start as a real,
+ * already-paintable/-playable canvas rather than an empty placeholder
+ * (e.g. `PaintController`'s lazy fill-in for a content-less layer's first
+ * stroke - see `docs/sound-mind-architecture.md`'s Decisions Made for
+ * why the Background layer specifically needs this).
+ *
+ * @param settings The project settings to size/encode the silence with.
+ * @return The encoded silent StreamImage.
+ */
+[[nodiscard]] sound_mind::codec::StreamImage silentContentFor(const ProjectSettings& settings);
+
 }  // namespace sound_mind::core

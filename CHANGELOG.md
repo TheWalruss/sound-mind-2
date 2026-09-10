@@ -6,6 +6,28 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.24.9] - 2026-09-10
+
+The Background layer is now a real, paintable canvas.
+
+### Fixed
+
+- **Painting the Background layer silently did nothing.** `Project::
+  createNew()` deliberately leaves the Background layer content-less
+  (nothing to render/play/pool until something gives it real content),
+  but `PaintController` required a layer to *already* have content
+  before it would paint onto it - a stroke on Background would append
+  to the operation log, then silently fail to render anything at all.
+  `PaintController::rebuildLayerContent()` now synthesizes a real,
+  silent, project-sized base (new `sound_mind::core::silentContentFor()`)
+  for any content-less layer's first stroke, Background included, so it
+  behaves exactly like an imported/recorded layer from that point on.
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes. Doxygen docs target rebuilds clean, 0 warnings.
+
+Held from push per Commit & Push Policy.
+
 ## [0.0.24.8] - 2026-09-10
 
 Three requested follow-ups to `v0.0.24.7`'s bug fixes, before starting

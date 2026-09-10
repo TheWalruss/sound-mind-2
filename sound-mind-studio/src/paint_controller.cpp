@@ -6,6 +6,7 @@
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
+#include "sound_mind/core/project_settings.h"
 
 namespace sound_mind::studio {
 
@@ -146,12 +147,18 @@ void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {
     }
 
     // Capture this layer's pre-paint base exactly once - see this
-    // method's own docs.
+    // method's own docs. A layer with no content yet (the Background
+    // layer, in particular - Project::createNew() deliberately leaves it
+    // content-less, see docs/sound-mind-architecture.md's Decisions Made)
+    // gets a real, silent, project-sized base synthesized on the spot
+    // instead of being unpaintable: every layer is a real canvas the
+    // moment something is actually painted onto it, whether or not it
+    // already had content from an import/recording.
     if (!baseContent_.contains(layer)) {
-        if (!target->content().has_value()) {
-            return;  // nothing to paint onto yet (never imported/rendered).
-        }
-        baseContent_.emplace(layer, *target->content());
+        const sound_mind::codec::StreamImage base = target->content().has_value()
+                                                          ? *target->content()
+                                                          : sound_mind::core::silentContentFor(project_->settings());
+        baseContent_.emplace(layer, base);
     }
 
     const auto activeOperations = project_->operationLog().activeOperationsTargeting(layer);

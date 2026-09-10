@@ -16,6 +16,7 @@ private slots:
     void endStrokeAppendsAPaintOperationAndEmitsContentChanged();
     void endStrokeWithOnlyOnePointStillPaintsATap();
     void endStrokeActuallyChangesTheLayersStoredContent();
+    void endStrokeSynthesizesASilentBaseForAContentLessLayer();
     void cancelStrokeDiscardsTheStrokeWithoutAppendingAnOperation();
     void undoRevertsTheLayersContentAndRedoReappliesIt();
     void setProjectClearsAnyInProgressStroke();

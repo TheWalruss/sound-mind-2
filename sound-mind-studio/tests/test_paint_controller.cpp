@@ -34,8 +34,10 @@ ProjectSettings testSettings() {
 }
 
 /// @brief A Normal layer, added to `project`, with real (blank) content -
-/// PaintController needs a layer with *some* content already (imported or
-/// otherwise rendered) to capture as its own pre-paint base.
+/// most tests use this rather than relying on PaintController's own
+/// lazy silent-base synthesis (see rebuildLayerContent()'s own docs) so
+/// the "known starting content" they assert against is exact and
+/// predictable, not whatever silentContentFor() happens to produce.
 LayerId addBlankNormalLayer(Project& project) {
     Layer layer(0, "Test Layer", LayerType::Normal);
     sound_mind::codec::StreamImage content;
@@ -178,6 +180,31 @@ void PaintControllerTest::endStrokeActuallyChangesTheLayersStoredContent() {
     const auto& content = *project.layers().back().content();
     const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
                                          [](float value) { return value != 0.0f; });
+    QVERIFY(anyPainted);
+}
+
+void PaintControllerTest::endStrokeSynthesizesASilentBaseForAContentLessLayer() {
+    // Project::createNew()'s own Background layer - content-less by
+    // construction (see docs/sound-mind-architecture.md's Decisions
+    // Made) - is exactly the case this test exercises: painting it
+    // should work, not silently do nothing.
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    QVERIFY(!project.layers().front().content().has_value());
+    PaintController controller;
+    controller.setProject(&project);
+    controller.setToolConfiguration(makeOpaqueTool());
+
+    controller.beginStroke(backgroundId, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    QVERIFY(project.layers().front().content().has_value());
+    const auto& content = *project.layers().front().content();
+    // makeOpaqueTool()'s own default intensity (-10 dB) is well above the
+    // silent base's own floor (well below -40 dB) - see silentContentFor()'s
+    // own docs.
+    const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                         [](float value) { return value > -40.0f; });
     QVERIFY(anyPainted);
 }
 

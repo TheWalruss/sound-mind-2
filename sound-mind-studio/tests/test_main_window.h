@@ -153,4 +153,5 @@ private slots:
     void addEmptyLayerIsANoOpWithNoProjectOpen();
     void movingTheMouseOverTheCanvasUpdatesTheCursorPositionLabel();
     void leavingTheCanvasClearsTheCursorPositionLabel();
+    void paintingTheBackgroundLayerActuallyPaintsSomethingVisible();
 };

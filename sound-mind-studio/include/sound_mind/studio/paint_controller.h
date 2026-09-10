@@ -162,14 +162,19 @@ private:
      *        emits contentChanged() for it.
      *
      * The first time this is called for a given layer, that layer's
-     * *current* content() is captured as its permanent pre-paint base -
-     * every later rebuild replays on top of that same base, never the
-     * result of a previous replay, so undo()/redo() stay correct no
-     * matter how many times painting revisits this layer. This base is
-     * session-only (not persisted) - see
-     * `docs/sound-mind-architecture.md`'s Decisions Made for why that's
-     * an acceptable, standard limitation (undo history doesn't survive a
-     * save/reload in most creative software either).
+     * *current* content() is captured as its permanent pre-paint base - or,
+     * if it has none yet (`std::nullopt` - the Background layer, in
+     * particular, which `Project::createNew()` deliberately leaves
+     * content-less), a real, silent, project-sized base is synthesized on
+     * the spot (`sound_mind::core::silentContentFor()`) so every layer is
+     * a genuinely paintable canvas, not just ones that happened to be
+     * imported/recorded into already. Every later rebuild replays on top
+     * of that same base, never the result of a previous replay, so
+     * undo()/redo() stay correct no matter how many times painting
+     * revisits this layer. This base is session-only (not persisted) -
+     * see `docs/sound-mind-architecture.md`'s Decisions Made for why
+     * that's an acceptable, standard limitation (undo history doesn't
+     * survive a save/reload in most creative software either).
      *
      * @param layer Which layer to rebuild.
      */

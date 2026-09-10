@@ -224,7 +224,9 @@ drawing, and it's applied to the spectrogram once you release the mouse.
 
 **Which layer gets painted**: whichever layer's name you last clicked in
 the Layers panel (see [Working with Layers](#working-with-layers)). If
-you haven't clicked one yet, painting targets the topmost layer.
+you haven't clicked one yet, painting targets the topmost layer - which,
+in a brand new project, is the **Background** layer itself: it's a real,
+paintable canvas like any other, not just a fixed floor to import onto.
 
 The **Tool Configuration** toolbar button opens a dockable panel (off by
 default, alongside Layers/Playback/Record/Loop) with the brush's own

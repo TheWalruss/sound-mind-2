@@ -1,6 +1,7 @@
 #include "sound_mind/core/project_settings.h"
 
 #include <cmath>
+#include <cstddef>
 
 namespace sound_mind::core {
 
@@ -50,6 +51,16 @@ sound_mind::codec::StreamCodecConfig streamCodecConfigFor(const ProjectSettings&
     config.minFrequencyHz = settings.minFrequencyHz;
     config.maxFrequencyHz = settings.maxFrequencyHz;
     return config;
+}
+
+sound_mind::codec::StreamImage silentContentFor(const ProjectSettings& settings) {
+    const sound_mind::codec::StreamCodecConfig config = streamCodecConfigFor(settings);
+    sound_mind::codec::AudioBuffer silence;
+    silence.sampleRateHz = config.sampleRateHz;
+    const auto sampleCount = static_cast<std::size_t>(settings.canvasWidth) * config.hopLength;
+    silence.left.assign(sampleCount, 0.0f);
+    silence.right.assign(sampleCount, 0.0f);
+    return sound_mind::codec::encode(silence, config);
 }
 
 }  // namespace sound_mind::core

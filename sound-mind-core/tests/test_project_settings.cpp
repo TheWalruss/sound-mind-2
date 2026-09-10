@@ -105,3 +105,29 @@ TEST_CASE("FrequencyScale serializes to a readable string", "[core][project_sett
     const nlohmann::json json = FrequencyScale::Log;
     REQUIRE(json == "log");
 }
+
+TEST_CASE("silentContentFor produces a StreamImage sized to the project's own canvas", "[core][project_settings]") {
+    ProjectSettings settings;
+    settings.canvasWidth = 64;
+    settings.binCount = 32;
+
+    const auto content = sound_mind::core::silentContentFor(settings);
+
+    REQUIRE(content.frameCount == settings.canvasWidth);
+    REQUIRE(content.config.binCount == settings.binCount);
+}
+
+TEST_CASE("silentContentFor is genuinely silent, not full-scale", "[core][project_settings]") {
+    ProjectSettings settings;
+    settings.canvasWidth = 16;
+    settings.binCount = 8;
+
+    const auto content = sound_mind::core::silentContentFor(settings);
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value < -40.0f);
+    }
+    for (const float value : content.rightMagnitudeDb) {
+        REQUIRE(value < -40.0f);
+    }
+}
