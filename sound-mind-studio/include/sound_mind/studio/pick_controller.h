@@ -6,6 +6,7 @@
 #include <QObject>
 
 #include "sound_mind/core/operation.h"
+#include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/tool_configuration.h"
@@ -230,6 +231,39 @@ public:
     void deleteSelection();
 
     /**
+     * @brief Moves the selected object to the very top of its own layer's
+     *        stack - "Bring to Front". A no-op if nothing is selected, or
+     *        it's already topmost.
+     *
+     * Unlike move/modify/delete, this never appends anything to the
+     * `OperationLog` - see `OperationLog::bringToFront()`'s own docs for
+     * why reordering isn't a logged, `supersedes()`-based edit. The
+     * selection itself (which id is picked) never changes, only where it
+     * renders.
+     *
+     * Emits contentChanged() for the affected layer if the stack actually
+     * changed.
+     */
+    void bringToFront();
+
+    /// @brief Moves the selected object to the very bottom of its own
+    ///        layer's stack - "Send to Back". See bringToFront()'s own
+    ///        docs for the shared reasoning/preconditions.
+    void sendToBack();
+
+    /// @brief Swaps the selected object with whichever active object on
+    ///        its own layer sits immediately above it - "Bring Forward".
+    ///        See bringToFront()'s own docs for the shared reasoning/
+    ///        preconditions.
+    void bringForward();
+
+    /// @brief Swaps the selected object with whichever active object on
+    ///        its own layer sits immediately below it - "Send Backward".
+    ///        See bringToFront()'s own docs for the shared reasoning/
+    ///        preconditions.
+    void sendBackward();
+
+    /**
      * @brief The in-progress move's own live preview.
      *
      * A translated copy of the selected object's own Path, if it's a
@@ -268,6 +302,16 @@ private:
     ///        `pickedOperation_` to the newly-appended entry.
     /// @return The new operation's own id.
     sound_mind::core::OperationId commitReplacement(std::unique_ptr<sound_mind::core::Operation> replacement);
+
+    /// @brief The shared implementation behind bringToFront()/
+    ///        sendToBack()/bringForward()/sendBackward(): a no-op if
+    ///        nothing is selected; otherwise calls `reorder` on the
+    ///        project's own OperationLog with the current selection's id,
+    ///        and - only if it actually changed anything - rebuilds the
+    ///        affected layer and emits contentChanged().
+    /// @param reorder Which of `OperationLog`'s own reorder methods to
+    ///        call.
+    void reorderSelection(bool (sound_mind::core::OperationLog::*reorder)(sound_mind::core::OperationId));
 
     PaintController* paintController_;
     sound_mind::core::Project* project_ = nullptr;

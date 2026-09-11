@@ -3054,3 +3054,40 @@ void MainWindowTest::modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionS
     QVERIFY(dynamic_cast<const PaintOperation*>(active[0]) != nullptr);  // the modified stroke, still...
     QVERIFY(dynamic_cast<const FillOperation*>(active[1]) != nullptr);   // ...below the cut's own silence fill.
 }
+
+void MainWindowTest::bringPickedObjectToFrontMovesItAboveLaterStrokesOnTheSameLayer() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-bring-to-front.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    auto* panel = window.findChild<ToolConfigurationPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    QVERIFY(sizeSpinBox != nullptr);
+    sizeSpinBox->setValue(0.01);  // small and precise - see pickPadsHitTestingByTheOperationsOwnBrushSize's own docs.
+
+    // Two separate, non-overlapping strokes - A painted first, B second.
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(90, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(90, 10));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));  // A.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+
+    window.bringPickedObjectToFront();
+
+    const auto layerId = window.project()->layers().back().id();
+    const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{2});
+    QCOMPARE(active.front()->id(), window.project()->operationLog().at(1).id());  // B, now at the back.
+    QCOMPARE(active.back()->id(), window.project()->operationLog().at(0).id());   // A, now on top.
+}

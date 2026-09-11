@@ -86,6 +86,88 @@ std::vector<const Operation*> OperationLog::activeOperationsTargeting(LayerId la
     return result;
 }
 
+bool OperationLog::bringToFront(OperationId id) { return reorderActiveOperation(id, ReorderDirection::ToFront); }
+
+bool OperationLog::sendToBack(OperationId id) { return reorderActiveOperation(id, ReorderDirection::ToBack); }
+
+bool OperationLog::bringForward(OperationId id) { return reorderActiveOperation(id, ReorderDirection::Forward); }
+
+bool OperationLog::sendBackward(OperationId id) { return reorderActiveOperation(id, ReorderDirection::Backward); }
+
+bool OperationLog::reorderActiveOperation(OperationId id, ReorderDirection direction) {
+    const Operation* target = nullptr;
+    for (const auto& operation : operations_) {
+        if (operation->id() == id) {
+            target = operation.get();
+            break;
+        }
+    }
+    if (target == nullptr || !target->targetLayer().has_value()) {
+        return false;
+    }
+
+    // The current stack order among just this id's own layer's currently
+    // active operations - exactly what a reorder gesture needs to permute
+    // (other layers, and any of this layer's own inactive entries, are
+    // left entirely alone).
+    std::vector<OperationId> ids;
+    for (const Operation* operation : activeOperationsTargeting(*target->targetLayer())) {
+        ids.push_back(operation->id());
+    }
+    const std::unordered_set<OperationId> members(ids.begin(), ids.end());
+
+    const auto it = std::find(ids.begin(), ids.end(), id);
+    if (it == ids.end()) {
+        return false;  // not currently active - nothing to reorder.
+    }
+    const auto index = static_cast<std::size_t>(std::distance(ids.begin(), it));
+
+    bool changed = false;
+    switch (direction) {
+        case ReorderDirection::ToFront:
+            if (index + 1 != ids.size()) {
+                std::rotate(ids.begin() + static_cast<std::ptrdiff_t>(index),
+                            ids.begin() + static_cast<std::ptrdiff_t>(index) + 1, ids.end());
+                changed = true;
+            }
+            break;
+        case ReorderDirection::ToBack:
+            if (index != 0) {
+                std::rotate(ids.begin(), ids.begin() + static_cast<std::ptrdiff_t>(index),
+                            ids.begin() + static_cast<std::ptrdiff_t>(index) + 1);
+                changed = true;
+            }
+            break;
+        case ReorderDirection::Forward:
+            if (index + 1 != ids.size()) {
+                std::swap(ids[index], ids[index + 1]);
+                changed = true;
+            }
+            break;
+        case ReorderDirection::Backward:
+            if (index != 0) {
+                std::swap(ids[index], ids[index - 1]);
+                changed = true;
+            }
+            break;
+    }
+    if (!changed) {
+        return false;
+    }
+
+    // Reassigns the same absolute stackOrder_ slots this layer's active
+    // ids already occupied, now carrying the newly-permuted order -
+    // every other entry (a different layer, or one no longer active)
+    // stays exactly where it was.
+    std::size_t nextIndex = 0;
+    for (OperationId& slot : stackOrder_) {
+        if (members.contains(slot)) {
+            slot = ids[nextIndex++];
+        }
+    }
+    return true;
+}
+
 namespace {
 
 /// @brief The discriminator each logged operation's own JSON carries,

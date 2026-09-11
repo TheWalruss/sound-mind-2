@@ -6,6 +6,33 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.3] - 2026-09-11
+
+Explicit stack-order controls for Pick, built directly on the
+`stackOrder_` mechanism `v0.0.26.2` introduced.
+
+### Added
+
+- **Edit menu gained Bring to Front (Ctrl+Shift+]), Send to Back
+  (Ctrl+Shift+[), Bring Forward (Ctrl+]), and Send Backward (Ctrl+[)** -
+  the standard Illustrator/Photoshop shortcuts. Each moves the currently
+  Picked object within its own layer's stack without changing what it is
+  or where it geometrically sits; no-ops with nothing Picked, or when
+  already at the requested end.
+- **`sound_mind::core::OperationLog` gained `bringToFront()`/
+  `sendToBack()`/`bringForward()`/`sendBackward()`** - each scoped to
+  just the given operation's own layer, among its own currently active
+  operations, leaving every other layer's (and every inactive operation's
+  own) stack position entirely undisturbed. Deliberately *not* a logged,
+  undo-able edit - reordering doesn't change what any operation does,
+  only where it renders relative to others on the same layer, the same
+  way a Layer's own opacity/visibility already aren't logged operations
+  either.
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes (276/276 ctest entries). Doxygen docs target rebuilds clean, 0
+warnings.
+
 ## [0.0.26.2] - 2026-09-11
 
 A cross-cutting bug-fix release: Pick's own move/modify/delete could

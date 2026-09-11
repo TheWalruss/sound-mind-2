@@ -232,6 +232,24 @@ void PickController::deleteSelection() {
     clearSelection();
 }
 
+void PickController::bringToFront() { reorderSelection(&sound_mind::core::OperationLog::bringToFront); }
+
+void PickController::sendToBack() { reorderSelection(&sound_mind::core::OperationLog::sendToBack); }
+
+void PickController::bringForward() { reorderSelection(&sound_mind::core::OperationLog::bringForward); }
+
+void PickController::sendBackward() { reorderSelection(&sound_mind::core::OperationLog::sendBackward); }
+
+void PickController::reorderSelection(bool (sound_mind::core::OperationLog::*reorder)(sound_mind::core::OperationId)) {
+    if (!pickedOperationId_.has_value()) {
+        return;
+    }
+    if ((project_->operationLog().*reorder)(*pickedOperationId_)) {
+        paintController_->rebuildLayerContent(pickedLayer_);
+        emit contentChanged(pickedLayer_);
+    }
+}
+
 sound_mind::core::OperationId PickController::commitReplacement(
     std::unique_ptr<sound_mind::core::Operation> replacement) {
     sound_mind::core::OperationLog& log = project_->operationLog();

@@ -701,6 +701,34 @@ public slots:
     ///        is selected.
     void deletePickedObject();
 
+    /// @brief Moves the currently Picked object to the top of its own
+    ///        layer's stack - the actual work behind the Edit menu's
+    ///        "Bring to Front" action. Delegates to
+    ///        `PickController::bringToFront()`; a no-op if nothing is
+    ///        selected, or it's already topmost.
+    void bringPickedObjectToFront();
+
+    /// @brief Moves the currently Picked object to the bottom of its own
+    ///        layer's stack - the actual work behind the Edit menu's
+    ///        "Send to Back" action. Delegates to
+    ///        `PickController::sendToBack()`; a no-op if nothing is
+    ///        selected, or it's already at the back.
+    void sendPickedObjectToBack();
+
+    /// @brief Swaps the currently Picked object with whichever active
+    ///        object on its own layer sits immediately above it - the
+    ///        actual work behind the Edit menu's "Bring Forward" action.
+    ///        Delegates to `PickController::bringForward()`; a no-op if
+    ///        nothing is selected, or it's already topmost.
+    void bringPickedObjectForward();
+
+    /// @brief Swaps the currently Picked object with whichever active
+    ///        object on its own layer sits immediately below it - the
+    ///        actual work behind the Edit menu's "Send Backward" action.
+    ///        Delegates to `PickController::sendBackward()`; a no-op if
+    ///        nothing is selected, or it's already at the back.
+    void sendPickedObjectBackward();
+
     /// @brief Clears the current rectangular selection - the actual work
     ///        behind the Edit menu's Deselect action. Delegates to
     ///        `SelectionController::clearSelection()`; a no-op if there

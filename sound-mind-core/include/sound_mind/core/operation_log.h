@@ -63,7 +63,13 @@ namespace sound_mind::core {
  *   purposes at once - see `docs/sound-mind-architecture.md`'s Decisions
  *   Made). Entries for ids that are no longer active (superseded, or
  *   undone) are simply skipped when read, never pruned - undo()/redo()
- *   needs no awareness of `stackOrder_` at all as a result.
+ *   needs no awareness of `stackOrder_` at all as a result. A user can
+ *   also deliberately rearrange `stackOrder_` directly -
+ *   bringToFront()/sendToBack()/bringForward()/sendBackward() - without
+ *   appending anything: reordering isn't an edit to *what* an operation
+ *   does, only to where it renders relative to others on the same layer,
+ *   so it doesn't need (and doesn't get) a logged, `supersedes()`-based
+ *   history entry of its own.
  */
 class OperationLog {
 public:
@@ -147,10 +153,62 @@ public:
      */
     [[nodiscard]] std::vector<const Operation*> activeOperationsTargeting(LayerId layer) const;
 
+    /**
+     * @brief Moves `id` to the very top (front) of its own layer's stack -
+     *        "Bring to Front".
+     *
+     * Only ever reorders *among* `id`'s own layer's currently active
+     * operations - other layers' own entries, and any of this layer's own
+     * entries that aren't currently active, are entirely undisturbed.
+     * Every other reorder method here follows the same scoping.
+     *
+     * @param id The operation to move; must currently be active (see
+     *        activeOperationsTargeting()) and target a real layer.
+     * @return `true` and reorders if `id` is active and not already
+     *         topmost; `false` (no change) otherwise.
+     */
+    bool bringToFront(OperationId id);
+
+    /// @brief Moves `id` to the very bottom (back) of its own layer's
+    ///        stack - "Send to Back". See bringToFront()'s own docs for
+    ///        the shared scoping/preconditions.
+    /// @param id The operation to move.
+    /// @return `true` and reorders if `id` is active and not already at
+    ///         the back; `false` (no change) otherwise.
+    bool sendToBack(OperationId id);
+
+    /// @brief Swaps `id` with whichever active operation on its own layer
+    ///        sits immediately above it - "Bring Forward". See
+    ///        bringToFront()'s own docs for the shared scoping/
+    ///        preconditions.
+    /// @param id The operation to move.
+    /// @return `true` and reorders if `id` is active and not already
+    ///         topmost; `false` (no change) otherwise.
+    bool bringForward(OperationId id);
+
+    /// @brief Swaps `id` with whichever active operation on its own layer
+    ///        sits immediately below it - "Send Backward". See
+    ///        bringToFront()'s own docs for the shared scoping/
+    ///        preconditions.
+    /// @param id The operation to move.
+    /// @return `true` and reorders if `id` is active and not already at
+    ///         the back; `false` (no change) otherwise.
+    bool sendBackward(OperationId id);
+
     friend void to_json(nlohmann::json& json, const OperationLog& log);
     friend void from_json(const nlohmann::json& json, OperationLog& log);
 
 private:
+    /// @brief Which direction reorderActiveOperation() should move an
+    ///        operation in - the shared implementation behind
+    ///        bringToFront()/sendToBack()/bringForward()/sendBackward().
+    enum class ReorderDirection { ToFront, ToBack, Forward, Backward };
+
+    /// @brief The shared implementation behind bringToFront()/
+    ///        sendToBack()/bringForward()/sendBackward() - see their own
+    ///        docs for the exact per-direction behavior.
+    bool reorderActiveOperation(OperationId id, ReorderDirection direction);
+
     std::vector<std::unique_ptr<Operation>> operations_;
     std::size_t activeCount_ = 0;
     OperationId nextId_ = 1;

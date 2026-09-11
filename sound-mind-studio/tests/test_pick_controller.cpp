@@ -1,6 +1,7 @@
 #include "test_pick_controller.h"
 
 #include <memory>
+#include <vector>
 
 #include <QSignalSpy>
 #include <QtTest/QtTest>
@@ -710,4 +711,135 @@ void PickControllerTest::deleteSelectionPreservesStackPositionOfOperationsAboveI
     QVERIFY(active[0]->supersedes().has_value());
     QCOMPARE(*active[0]->supersedes(), aId);  // A's own tombstone, still in A's old slot.
     QVERIFY(!active[1]->supersedes().has_value());  // B, unaffected.
+}
+
+void PickControllerTest::bringToFrontMovesTheSelectionToTheTopOfItsStack() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.01);
+    const OperationId aId = addPaintOperation(project, layerId, 0.1, 300.0, 0.12, 320.0, config);
+    const OperationId bId = addPaintOperation(project, layerId, 0.4, 300.0, 0.42, 320.0, config);
+    const OperationId cId = addPaintOperation(project, layerId, 0.7, 300.0, 0.72, 320.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.11, 310.0}));  // A.
+    QSignalSpy contentSpy(&controller, &PickController::contentChanged);
+
+    controller.bringToFront();
+
+    QCOMPARE(contentSpy.count(), 1);
+    QVERIFY(controller.hasSelection());  // still selected - same object, just moved.
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    std::vector<OperationId> ids;
+    for (const auto* op : active) ids.push_back(op->id());
+    QCOMPARE(ids, (std::vector<OperationId>{bId, cId, aId}));
+}
+
+void PickControllerTest::sendToBackMovesTheSelectionToTheBottomOfItsStack() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.01);
+    const OperationId aId = addPaintOperation(project, layerId, 0.1, 300.0, 0.12, 320.0, config);
+    const OperationId bId = addPaintOperation(project, layerId, 0.4, 300.0, 0.42, 320.0, config);
+    const OperationId cId = addPaintOperation(project, layerId, 0.7, 300.0, 0.72, 320.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.71, 310.0}));  // C.
+
+    controller.sendToBack();
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    std::vector<OperationId> ids;
+    for (const auto* op : active) ids.push_back(op->id());
+    QCOMPARE(ids, (std::vector<OperationId>{cId, aId, bId}));
+}
+
+void PickControllerTest::bringForwardSwapsTheSelectionWithTheOneAboveIt() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.01);
+    const OperationId aId = addPaintOperation(project, layerId, 0.1, 300.0, 0.12, 320.0, config);
+    const OperationId bId = addPaintOperation(project, layerId, 0.4, 300.0, 0.42, 320.0, config);
+    const OperationId cId = addPaintOperation(project, layerId, 0.7, 300.0, 0.72, 320.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.11, 310.0}));  // A.
+
+    controller.bringForward();
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    std::vector<OperationId> ids;
+    for (const auto* op : active) ids.push_back(op->id());
+    QCOMPARE(ids, (std::vector<OperationId>{bId, aId, cId}));
+}
+
+void PickControllerTest::sendBackwardSwapsTheSelectionWithTheOneBelowIt() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.01);
+    const OperationId aId = addPaintOperation(project, layerId, 0.1, 300.0, 0.12, 320.0, config);
+    const OperationId bId = addPaintOperation(project, layerId, 0.4, 300.0, 0.42, 320.0, config);
+    const OperationId cId = addPaintOperation(project, layerId, 0.7, 300.0, 0.72, 320.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.71, 310.0}));  // C.
+
+    controller.sendBackward();
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    std::vector<OperationId> ids;
+    for (const auto* op : active) ids.push_back(op->id());
+    QCOMPARE(ids, (std::vector<OperationId>{aId, cId, bId}));
+}
+
+void PickControllerTest::reorderMethodsAreNoOpsWithNoSelection() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.1, 300.0, 0.12, 320.0, makeOpaqueTool(0.01));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QSignalSpy contentSpy(&controller, &PickController::contentChanged);
+
+    controller.bringToFront();
+    controller.sendToBack();
+    controller.bringForward();
+    controller.sendBackward();
+
+    QCOMPARE(contentSpy.count(), 0);
+}
+
+void PickControllerTest::reorderMethodsEmitNoContentChangedWhenAlreadyAtTheRequestedEnd() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.01);
+    addPaintOperation(project, layerId, 0.1, 300.0, 0.12, 320.0, config);
+    addPaintOperation(project, layerId, 0.4, 300.0, 0.42, 320.0, config);
+    addPaintOperation(project, layerId, 0.7, 300.0, 0.72, 320.0, config);  // C, already topmost.
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.71, 310.0}));  // C.
+    QSignalSpy contentSpy(&controller, &PickController::contentChanged);
+
+    controller.bringToFront();  // already topmost - no change.
+    controller.bringForward();  // already topmost - no change.
+
+    QCOMPARE(contentSpy.count(), 0);
 }

@@ -422,6 +422,30 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
 
     editMenu->addSeparator();
 
+    // Stack order (v0.0.26.2): moves the Picked object within its own
+    // layer's stack, without changing what it is or where it geometrically
+    // sits - see PickController::bringToFront()'s own docs. Shortcuts
+    // match the common Illustrator/Photoshop convention for the same four
+    // actions; no-ops (same "always present" choice deleteAction makes)
+    // with nothing Picked, or when already at the requested end.
+    QAction* bringToFrontAction = editMenu->addAction(tr("Bring to &Front"));
+    bringToFrontAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_BracketRight));
+    connect(bringToFrontAction, &QAction::triggered, this, &MainWindow::bringPickedObjectToFront);
+
+    QAction* sendToBackAction = editMenu->addAction(tr("Send to &Back"));
+    sendToBackAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_BracketLeft));
+    connect(sendToBackAction, &QAction::triggered, this, &MainWindow::sendPickedObjectToBack);
+
+    QAction* bringForwardAction = editMenu->addAction(tr("Bring &Forward"));
+    bringForwardAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketRight));
+    connect(bringForwardAction, &QAction::triggered, this, &MainWindow::bringPickedObjectForward);
+
+    QAction* sendBackwardAction = editMenu->addAction(tr("Send Back&ward"));
+    sendBackwardAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
+    connect(sendBackwardAction, &QAction::triggered, this, &MainWindow::sendPickedObjectBackward);
+
+    editMenu->addSeparator();
+
     // Selection & Fill (v0.Y.25.1): the standard "clear the current
     // selection" shortcut/name every other image/vector editor already
     // uses - a no-op, per deselect()'s own docs, when there isn't one.
@@ -1412,6 +1436,14 @@ void MainWindow::undo() { paintController_->undo(); }
 void MainWindow::redo() { paintController_->redo(); }
 
 void MainWindow::deletePickedObject() { pickController_->deleteSelection(); }
+
+void MainWindow::bringPickedObjectToFront() { pickController_->bringToFront(); }
+
+void MainWindow::sendPickedObjectToBack() { pickController_->sendToBack(); }
+
+void MainWindow::bringPickedObjectForward() { pickController_->bringForward(); }
+
+void MainWindow::sendPickedObjectBackward() { pickController_->sendBackward(); }
 
 void MainWindow::deselect() { selectionController_->clearSelection(); }
 

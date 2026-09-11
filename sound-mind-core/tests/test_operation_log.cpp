@@ -1,4 +1,6 @@
+#include <array>
 #include <stdexcept>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
@@ -370,4 +372,139 @@ TEST_CASE("An empty OperationLog's pre-v0.0.24.1 JSON shape (a bare empty array)
     const nlohmann::json legacyEmpty = nlohmann::json::array();
     const OperationLog log = legacyEmpty.get<OperationLog>();
     REQUIRE(log.size() == 0);
+}
+
+namespace {
+
+/// @brief Three real, distinct PaintOperations on the same layer, appended
+/// bottom-to-top - the common starting stack every reorder test below needs.
+std::array<OperationId, 3> appendThreeStacked(OperationLog& log, LayerId layer) {
+    const OperationId a = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(a, layer, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    const OperationId b = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(b, layer, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    const OperationId c = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(c, layer, makeTestPath(2.0, 3.0), ToolConfiguration{}));
+    return {a, b, c};
+}
+
+std::vector<OperationId> idsOf(const std::vector<const sound_mind::core::Operation*>& operations) {
+    std::vector<OperationId> ids;
+    ids.reserve(operations.size());
+    for (const auto* operation : operations) {
+        ids.push_back(operation->id());
+    }
+    return ids;
+}
+
+}  // namespace
+
+TEST_CASE("bringToFront moves an operation to the top of its own layer's stack", "[core][operation_log]") {
+    OperationLog log;
+    const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
+
+    REQUIRE(log.bringToFront(a));
+
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{b, c, a});
+}
+
+TEST_CASE("bringToFront is a no-op when the operation is already topmost", "[core][operation_log]") {
+    OperationLog log;
+    const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
+
+    REQUIRE_FALSE(log.bringToFront(c));
+
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{a, b, c});
+}
+
+TEST_CASE("sendToBack moves an operation to the bottom of its own layer's stack", "[core][operation_log]") {
+    OperationLog log;
+    const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
+
+    REQUIRE(log.sendToBack(c));
+
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{c, a, b});
+}
+
+TEST_CASE("sendToBack is a no-op when the operation is already at the back", "[core][operation_log]") {
+    OperationLog log;
+    const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
+
+    REQUIRE_FALSE(log.sendToBack(a));
+
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{a, b, c});
+}
+
+TEST_CASE("bringForward swaps an operation with the one immediately above it", "[core][operation_log]") {
+    OperationLog log;
+    const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
+
+    REQUIRE(log.bringForward(a));
+
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{b, a, c});
+}
+
+TEST_CASE("bringForward is a no-op when the operation is already topmost", "[core][operation_log]") {
+    OperationLog log;
+    const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
+
+    REQUIRE_FALSE(log.bringForward(c));
+
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{a, b, c});
+}
+
+TEST_CASE("sendBackward swaps an operation with the one immediately below it", "[core][operation_log]") {
+    OperationLog log;
+    const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
+
+    REQUIRE(log.sendBackward(c));
+
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{a, c, b});
+}
+
+TEST_CASE("sendBackward is a no-op when the operation is already at the back", "[core][operation_log]") {
+    OperationLog log;
+    const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
+
+    REQUIRE_FALSE(log.sendBackward(a));
+
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{a, b, c});
+}
+
+TEST_CASE("Reordering one layer's stack never disturbs another layer's own entries", "[core][operation_log]") {
+    OperationLog log;
+    const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
+    const OperationId x = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(x, LayerId{2}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    const OperationId y = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(y, LayerId{2}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+
+    REQUIRE(log.bringToFront(a));
+
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{b, c, a});
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{2})) == std::vector<OperationId>{x, y});
+}
+
+TEST_CASE("Reordering an unknown or inactive operation id is a no-op", "[core][operation_log]") {
+    OperationLog log;
+    appendThreeStacked(log, LayerId{1});
+
+    REQUIRE_FALSE(log.bringToFront(OperationId{999}));
+    REQUIRE_FALSE(log.sendToBack(OperationId{999}));
+    REQUIRE_FALSE(log.bringForward(OperationId{999}));
+    REQUIRE_FALSE(log.sendBackward(OperationId{999}));
+}
+
+TEST_CASE("A reorder survives a subsequent Pick-style superseding append", "[core][operation_log]") {
+    // Reordering then editing (moving/modifying) must compose correctly -
+    // the edit's own replacement still lands in the *reordered* slot, not
+    // wherever the id would have originally sat.
+    OperationLog log;
+    const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
+    REQUIRE(log.bringToFront(a));  // now: b, c, a.
+
+    const OperationId aMoved = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(aMoved, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}, a));
+
+    REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{b, c, aMoved});
 }

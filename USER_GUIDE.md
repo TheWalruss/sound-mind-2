@@ -286,6 +286,11 @@ regardless of the "Show bounding boxes" setting - ready to:
   reopen this way - a filled selection or a pasted region can still be
   moved and deleted, just not "modified" through this panel.
 - **Delete** it - **Edit → Delete** (or the Delete key).
+- **Restack** it within its own layer - **Edit → Bring to Front**
+  (Ctrl+Shift+]), **Send to Back** (Ctrl+Shift+[), **Bring Forward**
+  (Ctrl+]), or **Send Backward** (Ctrl+[). This only changes which
+  object renders on top where they overlap - it doesn't move, modify, or
+  select anything else.
 
 Clicking empty canvas space deselects. If an object is entirely covered
 by another one on top of it, click the already-selected (covering)
@@ -293,8 +298,9 @@ object again to select the one underneath - each further click on the
 same spot cycles to the next one down, wrapping back to the topmost once
 you reach the bottom.
 
-Every one of these is undoable (Ctrl+Z), the same as painting a new
-stroke.
+Move/Modify/Delete are all undoable (Ctrl+Z), the same as painting a new
+stroke. Restacking currently isn't - if you bring something to front and
+change your mind, restack it back rather than pressing Ctrl+Z.
 
 Copying a picked object, and directly reshaping a stroke's underlying
 path (drag its own nodes and handles), aren't here yet - see
@@ -445,10 +451,10 @@ what's designed for it:
   and there's no way yet to save/reuse/export a particular brush setup.
 - Pick can't **copy** a picked object, and can't reshape a stroke's
   underlying path directly (dragging its own individual nodes/handles) -
-  only move, modify a stroke's own brush settings, or delete it.
-- No **"send to front/back"**-style controls yet for reordering painted
-  objects within a layer by hand - moving or modifying one always keeps
-  it exactly where it already was in the stack.
+  only move, modify a stroke's own brush settings, delete it, or restack
+  it within its own layer.
+- Restacking (Bring to Front/Send to Back/Bring Forward/Send Backward)
+  isn't undoable (Ctrl+Z) yet - see [Pick](#pick) above.
 
 Selection (see [Selection and Fill](#selection-and-fill) above) exists,
 but only a fraction of what's designed for it:

@@ -31,4 +31,10 @@ private slots:
     void deleteSelectionOnAPasteOperationCommitsASilenceFillTombstone();
     void endMovePreservesTheMovedOperationsOwnStackPosition();
     void deleteSelectionPreservesStackPositionOfOperationsAboveIt();
+    void bringToFrontMovesTheSelectionToTheTopOfItsStack();
+    void sendToBackMovesTheSelectionToTheBottomOfItsStack();
+    void bringForwardSwapsTheSelectionWithTheOneAboveIt();
+    void sendBackwardSwapsTheSelectionWithTheOneBelowIt();
+    void reorderMethodsAreNoOpsWithNoSelection();
+    void reorderMethodsEmitNoContentChangedWhenAlreadyAtTheRequestedEnd();
 };
