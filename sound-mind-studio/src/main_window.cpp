@@ -337,6 +337,13 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(toolConfigurationPanel_, &ToolConfigurationPanel::showPathGeometryChanged, canvas_,
             &CanvasWidget::setShowPathGeometry);
 
+    gridPanel_ = new GridPanel(this);
+    gridPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, gridPanel_);
+    connect(gridPanel_, &GridPanel::verticalAxisLabelModeChanged, canvas_, &CanvasWidget::setVerticalAxisLabelMode);
+    connect(gridPanel_, &GridPanel::horizontalAxisLabelModeChanged, canvas_,
+            &CanvasWidget::setHorizontalAxisLabelMode);
+
     // A permanent (not showMessage()'s own temporary-message) label in the
     // status bar's normal (left-hand) area - see cursorPositionLabel_'s
     // own docs for why a temporary status message can still cover it
@@ -575,6 +582,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // Off by default, the same as Playback/Record/Loop above - see
     // toolConfigurationPanel_'s own docs.
     transportToolBar->addAction(toolConfigurationPanel_->toggleViewAction());
+    // Off by default, same reasoning - see gridPanel_'s own docs.
+    transportToolBar->addAction(gridPanel_->toggleViewAction());
 
     // ~30fps - frequent enough for each completed loop's spectrogram
     // update to read as prompt, without repainting so often it competes

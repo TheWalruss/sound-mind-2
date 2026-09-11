@@ -30,6 +30,8 @@ using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::studio::CanvasWidget;
+using sound_mind::studio::HorizontalAxisLabelMode;
+using sound_mind::studio::VerticalAxisLabelMode;
 
 namespace {
 
@@ -842,4 +844,48 @@ void CanvasWidgetTest::mouseReleaseInPathModeDoesNotEmitPathNodePlacedAgain() {
     QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
 
     QCOMPARE(spy.count(), 0);
+}
+
+void CanvasWidgetTest::setVerticalAxisLabelModeChangesWhatsDrawnNearTheLeftEdge() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    const QImage before = widget.grab().toImage();
+
+    widget.setVerticalAxisLabelMode(VerticalAxisLabelMode::BinIndex);
+    const QImage after = widget.grab().toImage();
+
+    bool foundDifference = false;
+    for (int y = 0; y < 50 && !foundDifference; ++y) {
+        for (int x = 0; x < 20; ++x) {
+            if (before.pixelColor(x, y) != after.pixelColor(x, y)) {
+                foundDifference = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundDifference);
+}
+
+void CanvasWidgetTest::setHorizontalAxisLabelModeChangesWhatsDrawnNearTheBottomEdge() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    const QImage before = widget.grab().toImage();
+
+    widget.setHorizontalAxisLabelMode(HorizontalAxisLabelMode::Seconds);
+    const QImage after = widget.grab().toImage();
+
+    bool foundDifference = false;
+    for (int x = 0; x < 100 && !foundDifference; ++x) {
+        for (int y = 30; y < 50; ++y) {
+            if (before.pixelColor(x, y) != after.pixelColor(x, y)) {
+                foundDifference = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundDifference);
 }

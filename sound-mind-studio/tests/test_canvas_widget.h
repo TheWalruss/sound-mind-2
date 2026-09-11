@@ -45,4 +45,6 @@ private slots:
     void mousePressInPathModeEmitsPathNodePlacedWithAConvertedPoint();
     void mouseMoveAfterPressInPathModeDoesNotEmitPathNodePlacedAgain();
     void mouseReleaseInPathModeDoesNotEmitPathNodePlacedAgain();
+    void setVerticalAxisLabelModeChangesWhatsDrawnNearTheLeftEdge();
+    void setHorizontalAxisLabelModeChangesWhatsDrawnNearTheBottomEdge();
 };

@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.9] - 2026-09-11
+
+The first installment of Phase 3's "Paths & Grids" milestone's second half - Axis Labels, a genuinely new addition beyond the milestone's own original roadmap sketch (Overlay Grids/Snap to Grid/pitch quantising, and configurable stamp intervals along a Path, remain open for later installments of the same milestone).
+
+### Added
+
+- **A new dockable **Grid** panel** (toolbar button, off by default) - **Vertical axis (frequency)**: Off, Hz, Notes (against the project's own tuning reference), or Bin index. **Horizontal axis (time)**: Off, Seconds, Milliseconds, or Frame index. Drawn as tick marks and labels along the canvas's own left/bottom edges, thinning themselves out (fewer, wider-spaced ticks) rather than crowding together - a pure display aid, like every Overlay Grid line: never affects encoding, decoding, or any stored pixel data.
+- `sound_mind::core::noteNameForFrequency()` - the nearest standard 12-TET note name for a frequency, against a given tuning reference (e.g. `"A4"`, `"C#5"`) - shared groundwork for the Frequency Grid's own note grid, still to come.
+
+### Fixed
+
+- **`docs/sound-mind-design.md`'s "Overlay Grids" section had its own Frequency Grid/Timing Grid line orientation backwards** ("vertical" for frequency, "horizontal" for timing) - confirmed against the legacy Python Studio's own actual drawing code (which draws the opposite of its own prose, and of the legacy user guide's own matching wording) that this was a documentation-only inversion, not an intentional convention: a frequency grid line (pinned to one frequency, spanning across time) is horizontal, and a timing grid line (pinned to one moment, spanning across frequency) is vertical, given this canvas's own established time-horizontal/frequency-vertical convention. Corrected before implementing anything against it.
+
+Studio regression: 284/284 passing. Doxygen: 0 warnings.
+
 ## [0.0.26.8] - 2026-09-11
 
 ### Fixed

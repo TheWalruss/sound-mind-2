@@ -3,8 +3,10 @@ find_package(Qt6 REQUIRED COMPONENTS Test)
 add_executable(sound-mind-studio-tests
     main.cpp
     test_audio_snippet_picker_dialog.cpp
+    test_axis_labels.cpp
     test_canvas_widget.cpp
     test_create_project_wizard.cpp
+    test_grid_panel.cpp
     test_image_scale_picker_dialog.cpp
     test_import_export.cpp
     test_import_helpers.cpp

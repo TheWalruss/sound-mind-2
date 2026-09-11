@@ -14,8 +14,10 @@
 #include <QtTest/QtTest>
 
 #include "test_audio_snippet_picker_dialog.h"
+#include "test_axis_labels.h"
 #include "test_canvas_widget.h"
 #include "test_create_project_wizard.h"
+#include "test_grid_panel.h"
 #include "test_image_scale_picker_dialog.h"
 #include "test_import_export.h"
 #include "test_import_helpers.h"
@@ -110,6 +112,12 @@ int main(int argc, char** argv) {
 
     ImportExportTest importExportTest;
     status |= QTest::qExec(&importExportTest, argc, argv);
+
+    AxisLabelsTest axisLabelsTest;
+    status |= QTest::qExec(&axisLabelsTest, argc, argv);
+
+    GridPanelTest gridPanelTest;
+    status |= QTest::qExec(&gridPanelTest, argc, argv);
 
     return status;
 }

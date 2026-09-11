@@ -373,7 +373,7 @@ Overlay grids are visual reference lines drawn on the canvas — they never affe
 
 ### Frequency Grid
 
-Vertical reference lines marking specific frequencies, built from any combination of:
+Horizontal reference lines, each marking one specific frequency — spanning across the time axis, since the canvas's own convention runs time left-to-right and frequency bottom-to-top (see [Axis Labels](#axis-labels) below) — built from any combination of:
 
 - a **note grid**, anchored to a tuning reference (concert pitch at 440 Hz by default, with common alternate historical and philosophical tunings available as presets);
 - a **harmonic series** grid, at integer multiples of a chosen fundamental;
@@ -383,7 +383,7 @@ The same grid can also drive **pitch quantising** while painting — snapping a 
 
 ### Timing Grid
 
-Horizontal reference lines marking moments in time, either at a fixed interval or as a beat/bar grid derived from a project tempo, with subdivisions down to the finest rhythmic value in use.
+Vertical reference lines, each marking one specific moment in time — spanning across the frequency axis — either at a fixed interval or as a beat/bar grid derived from a project tempo, with subdivisions down to the finest rhythmic value in use.
 
 ### Chord Overlay
 
@@ -392,6 +392,15 @@ When a chord or arpeggio is selected in the Chord Generator (see [Chords/Arpeggi
 ### Snap to Grid
 
 An optional mode where any position a tool would otherwise place freely — a pasted region, a selection, a text box, a Path node, a layer transform handle — snaps instead to the nearest line of whichever active grid is finest at that point. With no grid active, snapping has nothing to snap to and behaves as if it were off.
+
+### Axis Labels
+
+Independent of any Overlay Grid line, the canvas's own two axes can be labeled directly — tick marks and text along the canvas's own left edge (frequency) and bottom edge (time), always legible regardless of a project's own duration or frequency range, never overlapping: labels thin themselves out (fewer, more widely spaced ticks) rather than crowd together.
+
+- **Frequency axis**: off, Hz values, note names (against the project's own tuning reference — the same one the Frequency Grid's own note grid uses), or raw frequency-bin index.
+- **Time axis**: off, seconds, milliseconds, or raw frame index.
+
+Purely a display aid, the same as an Overlay Grid line — never affects encoding, decoding, or any stored pixel data, and no bearing on Snap to Grid (which snaps to *grid lines*, not axis labels).
 
 ## Generators
 

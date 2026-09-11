@@ -15,6 +15,7 @@
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/grid_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/path_controller.h"
@@ -1577,6 +1578,13 @@ private:
     /// by default, matching Playback/Record/Loop's own "off until shown"
     /// convention (not Layers', which is shown automatically once).
     ToolConfigurationPanel* toolConfigurationPanel_ = nullptr;
+
+    /// @brief The dockable panel exposing canvas-overlay settings - Axis
+    /// Labels for now, growing into Overlay Grids/Snap to Grid in later
+    /// installments of this same milestone (see its own class docs).
+    /// Hidden by default, the same "off until shown" convention
+    /// toolConfigurationPanel_ already follows.
+    GridPanel* gridPanel_ = nullptr;
 
     /// @brief `nullptr` until the first setProject() call - LoopEngine
     /// needs a real loop length (the project's own duration in samples)

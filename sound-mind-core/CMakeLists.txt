@@ -25,6 +25,7 @@ add_library(sound-mind-core
     src/fill_application.cpp
     src/paste_operation.cpp
     src/paste_application.cpp
+    src/music_theory.cpp
     src/layer.cpp
     src/project_settings.cpp
     src/operation_log.cpp

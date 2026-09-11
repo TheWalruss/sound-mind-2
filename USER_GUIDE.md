@@ -19,13 +19,14 @@ in-app behavior is correct and this guide is due an update.
 8. [Pick](#pick)
 9. [Selection and Fill](#selection-and-fill)
 10. [Path Tool](#path-tool)
-11. [Playback](#playback)
-12. [Recording](#recording)
-13. [Loop Mode](#loop-mode)
-14. [Pooling a Layer](#pooling-a-layer)
-15. [Exporting](#exporting)
-16. [Saving and Project Files](#saving-and-project-files)
-17. [What's Not Here Yet](#whats-not-here-yet)
+11. [Axis Labels](#axis-labels)
+12. [Playback](#playback)
+13. [Recording](#recording)
+14. [Loop Mode](#loop-mode)
+15. [Pooling a Layer](#pooling-a-layer)
+16. [Exporting](#exporting)
+17. [Saving and Project Files](#saving-and-project-files)
+18. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -391,10 +392,30 @@ A path placed this way becomes a real paint object once finished, exactly
 like a freehand stroke - it's selectable/movable/modifiable/deletable
 with [Pick](#pick) afterward, the same as anything painted by hand.
 
-Reshaping an already-placed path's own nodes and handles - dragging one
-into a new position, pulling a curve out of a smooth node, inserting or
-removing a node - isn't here yet; see
+Reshaping an already-placed path's own nodes and handles is [Pick](#pick)'s
+own job, not the Path tool's - see its own "Edit its own path" bullet.
+Inserting a node (other than at either end, by placing a new path that
+starts/ends where the old one did) isn't here yet; see
 [What's Not Here Yet](#whats-not-here-yet).
+
+## Axis Labels
+
+The **Grid** toolbar button opens a dockable panel (off by default) with
+two drop-downs, one per canvas axis:
+
+- **Vertical axis (frequency)** - **Off** (the default), **Hz** (round
+  frequency values), **Notes** (the nearest note name, e.g. `A4`, `C#5`,
+  against the project's own tuning reference), or **Bin index** (the
+  raw row number the layer's own data is actually stored at).
+- **Horizontal axis (time)** - **Off** (the default), **Seconds**,
+  **Milliseconds**, or **Frame index** (the raw column number).
+
+Labels appear as small tick marks and text along the canvas's own left
+edge (frequency) and bottom edge (time), thinning themselves out - fewer,
+more widely spaced ticks - so they never crowd together and stay legible
+regardless of a project's own duration or frequency range. Purely a
+display aid, like everything else in this panel eventually will be: axis
+labels never affect encoding, decoding, or any stored pixel data.
 
 ## Playback
 
@@ -511,9 +532,16 @@ a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,
 - Inserting or removing a node from an already-placed path (other than
   deleting the single selected node) still isn't here - see the Pick
   section above.
-- No **Overlay Grids** (frequency or timing reference lines), pitch
-  quantising, or **Snap to Grid** - a placed node lands exactly where you
-  click, with nothing to snap it to a note, beat, or custom reference yet.
+- No **Overlay Grids** (frequency or timing reference lines) or pitch
+  quantising yet - [Axis Labels](#axis-labels) (see above) is a separate,
+  simpler feature (labeling the canvas's own two axes) that shipped
+  first; the Grid panel it lives in will grow real grid lines in a later
+  update.
+- No **Snap to Grid** - a placed node lands exactly where you click, with
+  nothing to snap it to a note, beat, or custom reference yet (Overlay
+  Grids' own dependency, per above).
+- No way yet to stamp a brush at set intervals along a path, rather than
+  painting it as one continuous stroke.
 - No dedicated Path Gradient UI - a finished path uses the current
   Painting brush's own Color/Opacity settings (the same uniform-color
   shortcut Fill Selection's own picker uses), not a real multi-stop

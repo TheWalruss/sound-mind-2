@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include <QFontMetrics>
 #include <QImage>
 #include <QMouseEvent>
 #include <QPainter>
@@ -106,6 +107,16 @@ void CanvasWidget::setSelectionBounds(std::optional<sound_mind::core::TimeFreque
     update();
 }
 
+void CanvasWidget::setVerticalAxisLabelMode(VerticalAxisLabelMode mode) {
+    verticalAxisLabelMode_ = mode;
+    update();
+}
+
+void CanvasWidget::setHorizontalAxisLabelMode(HorizontalAxisLabelMode mode) {
+    horizontalAxisLabelMode_ = mode;
+    update();
+}
+
 void CanvasWidget::setShowBoundingBoxes(bool shown) {
     showBoundingBoxes_ = shown;
     update();
@@ -205,6 +216,68 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     if (project_ != nullptr && selectionBounds_.has_value()) {
         painter.setPen(QPen(Qt::green, 2));
         painter.drawRect(widgetRectFor(*selectionBounds_));
+    }
+
+    // Axis Labels (see setVerticalAxisLabelMode()'s/
+    // setHorizontalAxisLabelMode()'s own docs) - drawn last, over
+    // everything else, the same "always legible" precedent the playhead
+    // and every Pick/Selection highlight above already established.
+    if (project_ != nullptr) {
+        drawAxisLabels(painter);
+    }
+}
+
+void CanvasWidget::drawAxisLabels(QPainter& painter) const {
+    // How far a tick mark extends from the canvas's own edge, and how
+    // much breathing room its own label text gets around it - small
+    // enough not to eat into the canvas itself, big enough to read.
+    constexpr int kTickLength = 4;
+    constexpr int kTextPadding = 2;
+    // A translucent backing behind each label - like the halo technique
+    // drawPreviewPathNodes() uses for node dots, but simpler for text:
+    // a dark backing plate reads clearly over any painted color or
+    // pattern, without needing a second color to cover the opposite
+    // case.
+    const QColor kLabelBackground(0, 0, 0, 170);
+
+    const auto& settings = project_->settings();
+    const QFontMetrics metrics(painter.font());
+
+    if (verticalAxisLabelMode_ != VerticalAxisLabelMode::Off) {
+        const auto ticks = verticalAxisTicks(verticalAxisLabelMode_, settings, rect().height());
+        for (const auto& tick : ticks) {
+            const double y =
+                timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint{0.0, tick.domainValue}).y();
+            painter.setPen(QPen(Qt::lightGray, 1));
+            painter.drawLine(QPointF(0.0, y), QPointF(kTickLength, y));
+
+            const QRect textBounds = metrics.boundingRect(tick.label);
+            const QRectF backing(kTickLength + kTextPadding, y - textBounds.height() / 2.0 - kTextPadding,
+                                   textBounds.width() + 2 * kTextPadding, textBounds.height() + 2 * kTextPadding);
+            painter.fillRect(backing, kLabelBackground);
+            painter.setPen(Qt::lightGray);
+            painter.drawText(QPointF(backing.left() + kTextPadding, y + textBounds.height() / 2.0 - metrics.descent()),
+                              tick.label);
+        }
+    }
+
+    if (horizontalAxisLabelMode_ != HorizontalAxisLabelMode::Off) {
+        const auto ticks = horizontalAxisTicks(horizontalAxisLabelMode_, settings, rect().width());
+        const double bottom = rect().height();
+        for (const auto& tick : ticks) {
+            const double x =
+                timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint{tick.domainValue, 0.0}).x();
+            painter.setPen(QPen(Qt::lightGray, 1));
+            painter.drawLine(QPointF(x, bottom), QPointF(x, bottom - kTickLength));
+
+            const QRect textBounds = metrics.boundingRect(tick.label);
+            const QRectF backing(x + kTextPadding, bottom - kTickLength - kTextPadding - textBounds.height(),
+                                   textBounds.width() + 2 * kTextPadding, textBounds.height() + 2 * kTextPadding);
+            painter.fillRect(backing, kLabelBackground);
+            painter.setPen(Qt::lightGray);
+            painter.drawText(QPointF(backing.left() + kTextPadding, backing.bottom() - kTextPadding - metrics.descent()),
+                              tick.label);
+        }
     }
 }
 

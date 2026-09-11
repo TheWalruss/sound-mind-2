@@ -8,6 +8,7 @@
 
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
+#include "sound_mind/studio/axis_labels.h"
 
 class QEvent;
 class QMouseEvent;
@@ -215,6 +216,33 @@ public:
      */
     void setSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds);
 
+    /**
+     * @brief Sets what the frequency (vertical) axis's own labels show,
+     *        and repaints - see `docs/sound-mind-design.md`'s "Axis
+     *        Labels".
+     *
+     * Drawn along the canvas's own left edge, independent of every other
+     * overlay this widget draws - a pure display aid, like every Overlay
+     * Grid line, with no effect on encoding, decoding, or any stored
+     * pixel data.
+     *
+     * @param mode Which labeling scheme to draw; `Off` (the default)
+     *        draws nothing.
+     */
+    void setVerticalAxisLabelMode(VerticalAxisLabelMode mode);
+
+    /**
+     * @brief Sets what the time (horizontal) axis's own labels show, and
+     *        repaints - see `docs/sound-mind-design.md`'s "Axis Labels".
+     *
+     * Drawn along the canvas's own bottom edge - see
+     * setVerticalAxisLabelMode()'s own docs for the rest.
+     *
+     * @param mode Which labeling scheme to draw; `Off` (the default)
+     *        draws nothing.
+     */
+    void setHorizontalAxisLabelMode(HorizontalAxisLabelMode mode);
+
     /// @brief The widget's preferred size.
     /// @return The current project's configured canvas dimensions, or a
     ///         fallback size if no project is set.
@@ -382,6 +410,18 @@ private:
     ///        paintEvent().
     void drawPreviewPathNodes(QPainter& painter) const;
 
+    /// @brief Draws the frequency/time axis labels (see
+    ///        setVerticalAxisLabelMode()'s/setHorizontalAxisLabelMode()'s
+    ///        own docs) along the canvas's own left/bottom edges - a
+    ///        small tick plus its own text at each of verticalAxisTicks()'/
+    ///        horizontalAxisTicks()'s own returned positions, converted
+    ///        to widget pixels via timeFrequencyToWidgetPoint(). A no-op
+    ///        for whichever axis is currently `Off`, or if no project is
+    ///        set.
+    /// @param painter The painter to draw with - already set up by
+    ///        paintEvent().
+    void drawAxisLabels(QPainter& painter) const;
+
     const sound_mind::core::Project* project_ = nullptr;
     std::optional<double> playheadFraction_;
     ToolMode toolMode_ = ToolMode::None;
@@ -394,6 +434,8 @@ private:
     std::optional<sound_mind::core::TimeFrequencyRect> selectionBounds_;
     bool showBoundingBoxes_ = false;
     bool showPathGeometry_ = false;
+    VerticalAxisLabelMode verticalAxisLabelMode_ = VerticalAxisLabelMode::Off;
+    HorizontalAxisLabelMode horizontalAxisLabelMode_ = HorizontalAxisLabelMode::Off;
 };
 
 }  // namespace sound_mind::studio
