@@ -24,6 +24,7 @@
 #include "test_loop_panel.h"
 #include "test_main_window.h"
 #include "test_paint_controller.h"
+#include "test_path_controller.h"
 #include "test_pick_controller.h"
 #include "test_playback_controller.h"
 #include "test_playback_panel.h"
@@ -88,6 +89,9 @@ int main(int argc, char** argv) {
 
     PickControllerTest pickControllerTest;
     status |= QTest::qExec(&pickControllerTest, argc, argv);
+
+    PathControllerTest pathControllerTest;
+    status |= QTest::qExec(&pathControllerTest, argc, argv);
 
     SelectionControllerTest selectionControllerTest;
     status |= QTest::qExec(&selectionControllerTest, argc, argv);

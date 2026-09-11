@@ -6,6 +6,41 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.1] - 2026-09-11
+
+The first installment of Phase 3's "Paths & Grids" milestone: the Path
+(Bézier) tool's deliberate, node-by-node placement. Scoped down by
+explicit choice - node/handle editing after the fact (including Pick's
+own "Edit Path" reuse) and Overlay Grids/Snap to Grid come as follow-up
+installments.
+
+### Added
+
+- **A new "Path" toolbar button**, alongside Paint/Pick/Select - each
+  click on the canvas places one more node, building a Path one node at a
+  time (a live yellow rubber-band line always shows the path built so
+  far, plus a segment out to the cursor). **Edit menu → Finish Path**
+  commits the result as a new, undoable paint object, exactly like a
+  freehand stroke; **Cancel Path** discards it instead.
+- **A "Smooth Nodes" toolbar toggle** - the standing default for which
+  node type the Path tool places next (`Corner`, unmarked, by default;
+  `Smooth` while checked), flippable mid-placement.
+- **`sound_mind::studio::PathController`** - the deliberate counterpart
+  to `PaintController`'s own freehand capture: builds a `Path` node by
+  node instead of curve-fitting continuous raw motion, then commits it
+  the same way `PaintController::endStroke()` does. Shares
+  `PaintController`'s own pre-paint base cache, the same reuse
+  `PickController`/`SelectionController` already established.
+
+No Core changes were needed for this installment - `Path`'s own
+`addNode()`/`insertNode()`/`removeNode()`/`setNode()` API (built in
+`v0.0.24.1`) already covers everything a deliberate placement session
+needs.
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes (257/257 ctest entries). Doxygen docs target rebuilds clean, 0
+warnings.
+
 ## [0.0.25.2] - 2026-09-11
 
 The second installment of Phase 3's "Selection & Fill" milestone: Cut,

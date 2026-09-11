@@ -36,6 +36,8 @@
 #include "sound_mind/studio/record_panel.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
+using sound_mind::core::PaintOperation;
+using sound_mind::core::PathNodeType;
 using sound_mind::studio::CanvasWidget;
 using sound_mind::studio::ImageScalePickerDialog;
 using sound_mind::studio::LandingPage;
@@ -2618,6 +2620,9 @@ void MainWindowTest::paintPickAndSelectToolbarActionsAreAllMutuallyExclusive() {
     window.setPickModeEnabled(true);
     QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Pick);
 
+    window.setPathModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Path);
+
     window.setSelectModeEnabled(true);
     QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Select);
 }
@@ -2836,4 +2841,98 @@ void MainWindowTest::copySelectionIsANoOpWithNoSelection() {
     window.paste();  // nothing was ever copied, so this is a no-op too.
 
     QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}
+
+void MainWindowTest::clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-path-tool.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setPathModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Path);
+
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    window.finishPath();
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    const auto* painted = dynamic_cast<const PaintOperation*>(&window.project()->operationLog().at(0));
+    QVERIFY(painted != nullptr);
+    QCOMPARE(painted->path().nodes().size(), std::size_t{3});
+}
+
+void MainWindowTest::cancelPathDiscardsInProgressPlacementWithoutCommittingAnything() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setPathModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+
+    window.cancelPath();
+    window.finishPath();  // nothing left to finish - a no-op.
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}
+
+void MainWindowTest::smoothNodesToggleAffectsSubsequentlyPlacedNodes() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-path-smooth.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setPathModeEnabled(true);
+
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));  // still Corner.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    window.setPathPlacesSmoothNodes(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));  // now Smooth.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+
+    window.finishPath();
+
+    const auto* painted = dynamic_cast<const PaintOperation*>(&window.project()->operationLog().at(0));
+    QVERIFY(painted != nullptr);
+    QCOMPARE(painted->path().nodes().size(), std::size_t{2});
+    QCOMPARE(painted->path().nodes().at(0).type, PathNodeType::Corner);
+    QCOMPARE(painted->path().nodes().at(1).type, PathNodeType::Smooth);
+}
+
+void MainWindowTest::finishPathWithNoNodesPlacedIsANoOp() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.finishPath();
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}
+
+void MainWindowTest::settingANewProjectResetsPathModeToOff() {
+    const auto firstPath = std::filesystem::temp_directory_path() / "sound-mind-test-path-reset-1.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), firstPath));
+    std::filesystem::remove(firstPath);
+    window.setPathModeEnabled(true);
+
+    const auto secondPath = std::filesystem::temp_directory_path() / "sound-mind-test-path-reset-2.smproj";
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), secondPath));
+    std::filesystem::remove(secondPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
 }

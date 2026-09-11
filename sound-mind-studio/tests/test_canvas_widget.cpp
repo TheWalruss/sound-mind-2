@@ -721,3 +721,55 @@ void CanvasWidgetTest::setSelectionBoundsWithNoValueDrawsNothing() {
     const QImage rendered = widget.grab().toImage();
     QVERIFY(rendered.pixelColor(20, 10) != QColor(0, 255, 0));
 }
+
+void CanvasWidgetTest::mousePressInPathModeEmitsPathNodePlacedWithAConvertedPoint() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Path);
+
+    std::optional<TimeFrequencyPoint> received;
+    QObject::connect(&widget, &CanvasWidget::pathNodePlaced, [&](TimeFrequencyPoint point) { received = point; });
+
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QVERIFY(received.has_value());
+    const double expectedTime = sound_mind::core::frameIndexToTime(30.0, config);
+    const float expectedFrequency = sound_mind::core::binIndexToFrequency(40.0f, config);  // see the Paint-mode test's own comment.
+    QVERIFY(qAbs(received->timeSeconds - expectedTime) < 0.01);
+    QVERIFY(qAbs(received->frequencyHz - expectedFrequency) < 1.0);
+}
+
+void CanvasWidgetTest::mouseMoveAfterPressInPathModeDoesNotEmitPathNodePlacedAgain() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Path);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QSignalSpy spy(&widget, &CanvasWidget::pathNodePlaced);
+
+    // Path mode has no drag continuation - see pathNodePlaced()'s own
+    // docs - so moving with the button held places nothing further.
+    QTest::mouseMove(&widget, QPoint(40, 20));
+
+    QCOMPARE(spy.count(), 0);
+}
+
+void CanvasWidgetTest::mouseReleaseInPathModeDoesNotEmitPathNodePlacedAgain() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Path);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QSignalSpy spy(&widget, &CanvasWidget::pathNodePlaced);
+
+    QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QCOMPARE(spy.count(), 0);
+}

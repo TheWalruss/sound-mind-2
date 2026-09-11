@@ -236,7 +236,8 @@ QRectF CanvasWidget::widgetRectFor(const sound_mind::core::TimeFrequencyRect& bo
 
 void CanvasWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton ||
-        (toolMode_ != ToolMode::Paint && toolMode_ != ToolMode::Pick && toolMode_ != ToolMode::Select)) {
+        (toolMode_ != ToolMode::Paint && toolMode_ != ToolMode::Pick && toolMode_ != ToolMode::Select &&
+         toolMode_ != ToolMode::Path)) {
         QWidget::mousePressEvent(event);
         return;
     }
@@ -250,9 +251,13 @@ void CanvasWidget::mousePressEvent(QMouseEvent* event) {
     } else if (toolMode_ == ToolMode::Pick) {
         pickStrokeActive_ = true;
         emit pickStrokeStarted(*point);
-    } else {
+    } else if (toolMode_ == ToolMode::Select) {
         selectStrokeActive_ = true;
         emit selectStrokeStarted(*point);
+    } else {
+        // Path mode: no "active" bookkeeping - see pathNodePlaced()'s own
+        // docs for why a single press is the whole gesture.
+        emit pathNodePlaced(*point);
     }
 }
 

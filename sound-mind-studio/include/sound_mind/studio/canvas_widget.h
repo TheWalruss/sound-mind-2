@@ -51,6 +51,7 @@ public:
         Paint,  ///< Mouse drags/taps paint a freehand stroke.
         Pick,  ///< Mouse press selects a paint object; a drag moves it.
         Select,  ///< Mouse drag draws a rectangular selection.
+        Path,  ///< Each mouse press places one more Path node.
     };
 
     /// @brief Constructs an empty canvas, with no project set yet.
@@ -92,12 +93,16 @@ public:
      * press/drag/release emit paintStrokeStarted()/paintStrokeContinued()/
      * paintStrokeEnded() instead, `Pick` makes the same gesture emit
      * pickStrokeStarted()/pickStrokeContinued()/pickStrokeEnded() instead,
-     * and `Select` makes it emit selectStrokeStarted()/
-     * selectStrokeContinued()/selectStrokeEnded() instead. Exactly one
-     * mode is active at a time. Switching away from `Paint`/`Pick`/
-     * `Select` cancels whatever gesture was mid-flight in it (a real
-     * mouse-up may never arrive - e.g. the toolbar button was clicked
-     * instead).
+     * `Select` makes it emit selectStrokeStarted()/selectStrokeContinued()/
+     * selectStrokeEnded() instead, and `Path` makes each individual left-
+     * button press (no drag/release counterpart - see pathNodePlaced()'s
+     * own docs) emit pathNodePlaced() instead. Exactly one mode is active
+     * at a time. Switching away from `Paint`/`Pick`/`Select` cancels
+     * whatever gesture was mid-flight in it (a real mouse-up may never
+     * arrive - e.g. the toolbar button was clicked instead); `Path` has no
+     * such in-widget state to cancel (see pathNodePlaced()'s own docs) -
+     * its own in-progress node sequence lives in `PathController` instead,
+     * cancelled from there.
      *
      * @param mode The new tool mode.
      */
@@ -232,6 +237,24 @@ signals:
     /// @brief The in-progress selection drag ended (`Select` tool mode,
     ///        left button released).
     void selectStrokeEnded();
+
+    /**
+     * @brief A new Path node was placed (`Path` tool mode, left button
+     *        pressed).
+     *
+     * Unlike Paint/Pick/Select's own Started/Continued/Ended triples, a
+     * single press is the *whole* gesture - dragging before release, or
+     * the eventual release itself, changes nothing (`mouseMoveEvent()`/
+     * `mouseReleaseEvent()` do nothing extra for `Path` mode beyond the
+     * unconditional cursorMoved() every mode already gets). Placing many
+     * nodes across many separate presses, and deciding when the whole
+     * path is finished or cancelled, is `PathController`'s own job, not
+     * this widget's - the same "purely presentational, already-converted
+     * points only" split every other tool mode already follows.
+     *
+     * @param point The press position, converted to time/frequency space.
+     */
+    void pathNodePlaced(sound_mind::core::TimeFrequencyPoint point);
 
     /**
      * @brief The mouse moved over the canvas - independent of toolMode(),

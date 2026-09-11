@@ -282,6 +282,33 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         refreshLayersPanel();
     });
 
+    // Paths & Grids (v0.Y.26.1), Path tool placement - shares
+    // paintController_'s own pre-paint base cache (see PathController's
+    // own docs), so it's constructed after paintController_ and holds a
+    // pointer to it. Reuses canvas_'s own existing live-preview overlay
+    // (setPaintPreviewPath()) rather than a second one - Paint/Pick/Path
+    // are mutually exclusive tool modes, so only one of them ever has a
+    // real preview to show at once.
+    pathController_ = new PathController(paintController_, this);
+    connect(canvas_, &CanvasWidget::pathNodePlaced, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+            pathController_->placeNode(*layerId, point);
+        }
+    });
+    connect(canvas_, &CanvasWidget::cursorMoved, this,
+            [this](QPointF, std::optional<sound_mind::core::TimeFrequencyPoint> domainPoint) {
+                if (domainPoint.has_value()) {
+                    pathController_->updateCursor(*domainPoint);
+                }
+            });
+    connect(pathController_, &PathController::pathChanged, this,
+            [this]() { canvas_->setPaintPreviewPath(pathController_->currentPreviewPath()); });
+    connect(pathController_, &PathController::contentChanged, this, [this](sound_mind::core::LayerId) {
+        canvas_->update();
+        hasUnsavedChanges_ = true;
+        refreshLayersPanel();
+    });
+
     toolConfigurationPanel_ = new ToolConfigurationPanel(this);
     toolConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, toolConfigurationPanel_);
@@ -290,9 +317,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // the panel's own docs) - applied here so a stroke painted before
     // ever opening the panel still paints something visible.
     paintController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration());
+    pathController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration());
     connect(toolConfigurationPanel_, &ToolConfigurationPanel::toolConfigurationChanged, this,
             [this](const sound_mind::core::ToolConfiguration& config) {
                 paintController_->setToolConfiguration(config);
+                pathController_->setToolConfiguration(config);
                 // Also applies to whatever's currently Picked, if
                 // anything - see PickController::applyToolConfiguration()'s
                 // own docs on why this is safe to do unconditionally
@@ -425,6 +454,19 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     pasteAction->setShortcut(QKeySequence::Paste);
     connect(pasteAction, &QAction::triggered, this, &MainWindow::paste);
 
+    editMenu->addSeparator();
+
+    // Paths & Grids (v0.Y.26.1): ends/discards the Path tool's own in-
+    // progress node placement - see finishPath()'s/cancelPath()'s own
+    // docs. No standard shortcut for either (matching Fill Selection's
+    // own no-shortcut choice above); both are no-ops when nothing's being
+    // placed, the same "always present" choice deleteAction makes.
+    QAction* finishPathAction = editMenu->addAction(tr("&Finish Path"));
+    connect(finishPathAction, &QAction::triggered, this, &MainWindow::finishPath);
+
+    QAction* cancelPathAction = editMenu->addAction(tr("Cance&l Path"));
+    connect(cancelPathAction, &QAction::triggered, this, &MainWindow::cancelPath);
+
     QToolBar* transportToolBar = addToolBar(tr("Transport"));
     // Plain text actions rather than icons - no icon assets exist yet, and
     // these are unambiguous enough on their own for a first pass.
@@ -453,6 +495,21 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     selectAction_ = transportToolBar->addAction(tr("Select"));
     selectAction_->setCheckable(true);
     connect(selectAction_, &QAction::toggled, this, &MainWindow::setSelectModeEnabled);
+
+    // Paths & Grids (v0.Y.26.1): the same kind of plain checkable toggle
+    // as Paint/Pick/Select above, for CanvasWidget::ToolMode::Path.
+    pathAction_ = transportToolBar->addAction(tr("Path"));
+    pathAction_->setCheckable(true);
+    connect(pathAction_, &QAction::toggled, this, &MainWindow::setPathModeEnabled);
+
+    // The Path tool's own "standing default" node type (see
+    // PathController::setDefaultNodeType()'s own docs) - deliberately
+    // independent of tool-mode exclusivity (not reset by
+    // setExclusiveToolMode(), not affected by switching tools) since it's
+    // a placement preference, not a mode of its own.
+    smoothNodesAction_ = transportToolBar->addAction(tr("Smooth Nodes"));
+    smoothNodesAction_->setCheckable(true);
+    connect(smoothNodesAction_, &QAction::toggled, this, &MainWindow::setPathPlacesSmoothNodes);
 
     // As of v0.Y.16.1 (Transport Panels): Play/Pause/Stop/Loop/Record are
     // no longer direct toolbar actions - each now lives inside its own
@@ -680,14 +737,15 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     playbackController_->stop();
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
-    // paintAction_/pickAction_/selectAction_->setChecked(false) alone
-    // wouldn't reset canvas_'s own tool mode if it was already unchecked
-    // (toggled() only fires on a real change) - setToolMode() directly is
-    // what actually guarantees this, the same "unconditional and
-    // idempotent" reasoning as every other reset above.
+    // paintAction_/pickAction_/selectAction_/pathAction_->setChecked(false)
+    // alone wouldn't reset canvas_'s own tool mode if it was already
+    // unchecked (toggled() only fires on a real change) - setToolMode()
+    // directly is what actually guarantees this, the same "unconditional
+    // and idempotent" reasoning as every other reset above.
     paintAction_->setChecked(false);
     pickAction_->setChecked(false);
     selectAction_->setChecked(false);
+    pathAction_->setChecked(false);
     canvas_->setToolMode(CanvasWidget::ToolMode::None);
     canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     canvas_->setPickSelectionBounds(std::nullopt);
@@ -717,6 +775,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     paintController_->setProject(&*project_);
     pickController_->setProject(&*project_);
     selectionController_->setProject(&*project_);
+    pathController_->setProject(&*project_);
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
     // Layers is shown automatically the *first* time any project exists in
@@ -1312,16 +1371,25 @@ void MainWindow::setSelectModeEnabled(bool enabled) {
     setExclusiveToolMode(selectAction_, enabled, CanvasWidget::ToolMode::Select);
 }
 
+void MainWindow::setPathModeEnabled(bool enabled) {
+    if (!enabled) {
+        pathController_->cancelPath();
+        canvas_->setPaintPreviewPath(sound_mind::core::Path{});
+    }
+    setExclusiveToolMode(pathAction_, enabled, CanvasWidget::ToolMode::Path);
+}
+
 void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWidget::ToolMode mode) {
     canvas_->setToolMode(enabled ? mode : CanvasWidget::ToolMode::None);
 
     // Blocked so this doesn't recurse back into setPaintModeEnabled()/
-    // setPickModeEnabled()/setSelectModeEnabled() - see this method's own
-    // docs for why exclusivity is handled by hand here rather than via a
-    // QActionGroup.
+    // setPickModeEnabled()/setSelectModeEnabled()/setPathModeEnabled() -
+    // see this method's own docs for why exclusivity is handled by hand
+    // here rather than via a QActionGroup.
     const QSignalBlocker paintBlocker(paintAction_);
     const QSignalBlocker pickBlocker(pickAction_);
     const QSignalBlocker selectBlocker(selectAction_);
+    const QSignalBlocker pathBlocker(pathAction_);
     activated->setChecked(enabled);
     if (enabled) {
         if (activated != paintAction_) {
@@ -1333,6 +1401,9 @@ void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWi
         if (activated != selectAction_) {
             selectAction_->setChecked(false);
         }
+        if (activated != pathAction_) {
+            pathAction_->setChecked(false);
+        }
     }
 }
 
@@ -1343,6 +1414,15 @@ void MainWindow::redo() { paintController_->redo(); }
 void MainWindow::deletePickedObject() { pickController_->deleteSelection(); }
 
 void MainWindow::deselect() { selectionController_->clearSelection(); }
+
+void MainWindow::finishPath() { pathController_->finishPath(); }
+
+void MainWindow::cancelPath() { pathController_->cancelPath(); }
+
+void MainWindow::setPathPlacesSmoothNodes(bool smooth) {
+    pathController_->setDefaultNodeType(smooth ? sound_mind::core::PathNodeType::Smooth
+                                                : sound_mind::core::PathNodeType::Corner);
+}
 
 void MainWindow::fillSelectionWith(QColor color) {
     sound_mind::core::Gradient gradient;

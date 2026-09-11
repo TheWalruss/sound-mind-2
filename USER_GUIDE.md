@@ -18,13 +18,14 @@ in-app behavior is correct and this guide is due an update.
 7. [Painting](#painting)
 8. [Pick](#pick)
 9. [Selection and Fill](#selection-and-fill)
-10. [Playback](#playback)
-11. [Recording](#recording)
-12. [Loop Mode](#loop-mode)
-13. [Pooling a Layer](#pooling-a-layer)
-14. [Exporting](#exporting)
-15. [Saving and Project Files](#saving-and-project-files)
-16. [What's Not Here Yet](#whats-not-here-yet)
+10. [Path Tool](#path-tool)
+11. [Playback](#playback)
+12. [Recording](#recording)
+13. [Loop Mode](#loop-mode)
+14. [Pooling a Layer](#pooling-a-layer)
+15. [Exporting](#exporting)
+16. [Saving and Project Files](#saving-and-project-files)
+17. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -325,6 +326,33 @@ stroke; so is Cut's own silencing of the source region.
 Only rectangular selections exist today - see
 [What's Not Here Yet](#whats-not-here-yet) for what's still planned.
 
+## Path Tool
+
+Click the **Path** toolbar button (next to Select) to switch the canvas
+into Path mode; click it again (or Paint/Pick/Select) to leave it. While
+it's on, each click on the canvas places one more node, building a path
+one node at a time - a live line always shows the path built so far, plus
+a segment out to wherever the cursor currently is.
+
+- **Finish** it - **Edit → Finish Path** commits the path as a new,
+  undoable paint object (using the current Painting brush's own color/
+  opacity settings), exactly like a freehand stroke.
+- **Cancel** it - **Edit → Cancel Path** discards everything placed so
+  far instead.
+- **Smooth Nodes** - the toolbar checkbox next to Path controls which
+  node type the *next* click places: unchecked (the default) places a
+  sharp-cornered node, checked places a smooth one. Flip it mid-path to
+  mix both kinds in the same path.
+
+A path placed this way becomes a real paint object once finished, exactly
+like a freehand stroke - it's selectable/movable/modifiable/deletable
+with [Pick](#pick) afterward, the same as anything painted by hand.
+
+Reshaping an already-placed path's own nodes and handles - dragging one
+into a new position, pulling a curve out of a smooth node, inserting or
+removing a node - isn't here yet; see
+[What's Not Here Yet](#whats-not-here-yet).
+
 ## Playback
 
 The **Playback** panel has **Play**, **Pause**, and **Stop**, a draggable
@@ -425,3 +453,18 @@ but only a fraction of what's designed for it:
   see [Selection and Fill](#selection-and-fill) above).
 - Fill only ever produces a uniform color, not a real two-color gradient
   across the selection - there's no UI yet to pick a second color.
+
+The [Path Tool](#path-tool) (see above) only places new paths today, not
+Overlay Grids or reshaping:
+
+- No reshaping an already-placed path - moving a node, dragging a handle
+  to pull a curve out of a smooth node, inserting or removing a node, or
+  converting a node's type after the fact. Pick's own "modify" doesn't
+  reopen node/handle editing either yet, for the same reason.
+- No **Overlay Grids** (frequency or timing reference lines), pitch
+  quantising, or **Snap to Grid** - a placed node lands exactly where you
+  click, with nothing to snap it to a note, beat, or custom reference yet.
+- No dedicated Path Gradient UI - a finished path uses the current
+  Painting brush's own Color/Opacity settings (the same uniform-color
+  shortcut Fill Selection's own picker uses), not a real multi-stop
+  gradient along the path's own length.

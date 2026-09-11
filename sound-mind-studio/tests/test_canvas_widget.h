@@ -40,4 +40,7 @@ private slots:
     void changingToolModeAwayFromSelectCancelsAnyActiveGesture();
     void setSelectionBoundsDrawsAHighlight();
     void setSelectionBoundsWithNoValueDrawsNothing();
+    void mousePressInPathModeEmitsPathNodePlacedWithAConvertedPoint();
+    void mouseMoveAfterPressInPathModeDoesNotEmitPathNodePlacedAgain();
+    void mouseReleaseInPathModeDoesNotEmitPathNodePlacedAgain();
 };

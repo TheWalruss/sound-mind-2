@@ -17,6 +17,7 @@
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/paint_controller.h"
+#include "sound_mind/studio/path_controller.h"
 #include "sound_mind/studio/pick_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/recent_projects.h"
@@ -616,11 +617,11 @@ public slots:
      * `PaintController::cancelStroke()`'s own docs) rather than leaving
      * it dangling; turning it on has no effect if no project is open.
      *
-     * Paint/Pick/Select share one canvas tool mode (`CanvasWidget::
+     * Paint/Pick/Select/Path share one canvas tool mode (`CanvasWidget::
      * ToolMode`) and so can never have more than one active - enforced by
      * setExclusiveToolMode() (see its own docs for why that's hand-managed
      * rather than a `QActionGroup`), not repeated here or in
-     * setPickModeEnabled()/setSelectModeEnabled().
+     * setPickModeEnabled()/setSelectModeEnabled()/setPathModeEnabled().
      *
      * @param enabled `true` to accept freehand paint input on the canvas;
      *        `false` to return to plain, non-interactive display.
@@ -636,7 +637,7 @@ public slots:
      * clearSelection()`'s own docs) rather than leaving it dangling;
      * turning it on has no effect if no project is open. See
      * setPaintModeEnabled()'s own docs for the shared exclusivity with
-     * Paint/Select.
+     * Paint/Select/Path.
      *
      * @param enabled `true` to accept Pick input on the canvas; `false`
      *        to return to plain, non-interactive display.
@@ -651,16 +652,31 @@ public slots:
      * Turning it off cancels any in-progress selection drag (see
      * `SelectionController::cancelSelectionDrag()`'s own docs) - a
      * *committed* selection stays exactly as it is, since it scopes
-     * Fill/future-Cut/Copy/Paste independent of which tool is currently
-     * active (`docs/sound-mind-design.md`'s own "Selection" framing);
-     * turning it on has no effect if no project is open. See
-     * setPaintModeEnabled()'s own docs for the shared exclusivity with
-     * Paint/Pick.
+     * Fill/Cut/Copy/Paste independent of which tool is currently active
+     * (`docs/sound-mind-design.md`'s own "Selection" framing); turning it
+     * on has no effect if no project is open. See setPaintModeEnabled()'s
+     * own docs for the shared exclusivity with Paint/Pick/Path.
      *
      * @param enabled `true` to accept Select input on the canvas; `false`
      *        to return to plain, non-interactive display.
      */
     void setSelectModeEnabled(bool enabled);
+
+    /**
+     * @brief Toggles between Path and plain (`ToolMode::None`) canvas
+     *        interaction - the actual work behind the toolbar's Path
+     *        toggle.
+     *
+     * Turning it off cancels any in-progress node placement (see
+     * `PathController::cancelPath()`'s own docs) - discarded, not
+     * committed; turning it on has no effect if no project is open. See
+     * setPaintModeEnabled()'s own docs for the shared exclusivity with
+     * Paint/Pick/Select.
+     *
+     * @param enabled `true` to accept Path input on the canvas; `false` to
+     *        return to plain, non-interactive display.
+     */
+    void setPathModeEnabled(bool enabled);
 
     /**
      * @brief Undoes the most recent paint stroke, if any - the actual
@@ -752,6 +768,35 @@ public slots:
      * A no-op if there's nothing on the clipboard, or no project is open.
      */
     void paste();
+
+    /**
+     * @brief Finishes the Path tool's own in-progress node placement,
+     *        committing it as a new paint object - the actual work behind
+     *        the Edit menu's "Finish Path" action. Delegates to
+     *        `PathController::finishPath()`; a no-op if no placement is in
+     *        progress.
+     */
+    void finishPath();
+
+    /// @brief Discards the Path tool's own in-progress node placement
+    ///        without committing anything - the actual work behind the
+    ///        Edit menu's "Cancel Path" action. Delegates to
+    ///        `PathController::cancelPath()`; a no-op if no placement is
+    ///        in progress.
+    void cancelPath();
+
+    /**
+     * @brief Sets which node type the Path tool places next - the actual
+     *        work behind the toolbar's "Smooth Nodes" checkable toggle.
+     *
+     * Delegates to `PathController::setDefaultNodeType()` - see its own
+     * docs (the design doc's own "standing default that can be flipped at
+     * any time"). Affects only nodes placed after this call.
+     *
+     * @param smooth `true` for `PathNodeType::Smooth`; `false` for
+     *        `PathNodeType::Corner` (the default).
+     */
+    void setPathPlacesSmoothNodes(bool smooth);
 
 public:
     /**
@@ -1226,18 +1271,19 @@ private:
      * Deliberately hand-managed rather than a `QActionGroup`: a group's
      * own exclusivity would fire *two* `toggled()` calls per click (the
      * newly-checked action's own, and the now-unchecked previous one's)
-     * in an order Qt doesn't document as stable, and each of the three
+     * in an order Qt doesn't document as stable, and each of the four
      * handlers above trusting only its own late-arriving call could stomp
      * on another's `canvas_->setToolMode()` result depending on that
      * order - a real bug, caught before it shipped (see
      * `docs/sound-mind-architecture.md`'s Decisions Made). Setting every
      * action's checked state directly and unconditionally (blocked, so
-     * this doesn't recurse back into any of the three callers) also keeps
+     * this doesn't recurse back into any of the four callers) also keeps
      * the toolbar buttons correctly in sync when one of them is called
      * directly (e.g. by a test), not just via a real click.
      *
      * @param activated Which action to leave checked when `enabled` is
-     *        `true` - `paintAction_`, `pickAction_`, or `selectAction_`.
+     *        `true` - `paintAction_`, `pickAction_`, `selectAction_`, or
+     *        `pathAction_`.
      * @param enabled Whether `activated`'s own tool mode should become
      *        active.
      * @param mode The tool mode `activated` corresponds to.
@@ -1422,9 +1468,10 @@ private:
 
     /// @brief The toolbar's Pick tool toggle - checked while the canvas
     /// accepts Pick input (`CanvasWidget::ToolMode::Pick`). Kept mutually
-    /// exclusive with paintAction_/selectAction_ by setExclusiveToolMode()
-    /// (see its own docs), not a `QActionGroup`; kept as a member for the
-    /// same setProject()-resets-it reason as paintAction_.
+    /// exclusive with paintAction_/selectAction_/pathAction_ by
+    /// setExclusiveToolMode() (see its own docs), not a `QActionGroup`;
+    /// kept as a member for the same setProject()-resets-it reason as
+    /// paintAction_.
     QAction* pickAction_ = nullptr;
 
     /// @brief Owns the current rectangular selection and turns Fill into
@@ -1437,10 +1484,31 @@ private:
 
     /// @brief The toolbar's Select tool toggle - checked while the canvas
     /// accepts Select input (`CanvasWidget::ToolMode::Select`). Kept
-    /// mutually exclusive with paintAction_/pickAction_ by
+    /// mutually exclusive with paintAction_/pickAction_/pathAction_ by
     /// setExclusiveToolMode(); kept as a member for the same
     /// setProject()-resets-it reason as paintAction_.
     QAction* selectAction_ = nullptr;
+
+    /// @brief Owns an in-progress, deliberately node-by-node-placed Path
+    /// and turns it into a new paint object - see the Phase 3 "Paths &
+    /// Grids" milestone's first installment (`v0.Y.26.1`). Shares
+    /// `paintController_`'s own per-layer pre-paint base cache (see
+    /// `PathController`'s own docs), so it's constructed after
+    /// `paintController_` and holds a pointer to it.
+    PathController* pathController_ = nullptr;
+
+    /// @brief The toolbar's Path tool toggle - checked while the canvas
+    /// accepts Path input (`CanvasWidget::ToolMode::Path`). Kept mutually
+    /// exclusive with paintAction_/pickAction_/selectAction_ by
+    /// setExclusiveToolMode(); kept as a member for the same
+    /// setProject()-resets-it reason as paintAction_.
+    QAction* pathAction_ = nullptr;
+
+    /// @brief The toolbar's "Smooth Nodes" checkable toggle - the Path
+    /// tool's own standing default node type (see
+    /// `PathController::setDefaultNodeType()`'s own docs), independent of
+    /// (and not reset by) which tool mode is currently active.
+    QAction* smoothNodesAction_ = nullptr;
 
     /// @brief The dockable panel exposing the current paint tool's own
     /// parameters - see its own class docs for what's deliberately not
