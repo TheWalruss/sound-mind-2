@@ -214,6 +214,41 @@ void PickControllerTest::pickSelectsAnOperationUnderThePoint() {
     QVERIFY(controller.selectionBounds().has_value());
 }
 
+void PickControllerTest::selectOperationSelectsAKnownOperationByIdWithNoClickPointNeeded() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    const OperationId id = addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    const bool selected = controller.selectOperation(layerId, id);
+
+    QVERIFY(selected);
+    QVERIFY(controller.hasSelection());
+    QVERIFY(controller.selectionBounds().has_value());
+}
+
+void PickControllerTest::selectOperationFailsAndClearsSelectionForAnUnknownId() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));  // select something first.
+
+    const bool selected = controller.selectOperation(layerId, OperationId{999});
+
+    QVERIFY(!selected);
+    QVERIFY(!controller.hasSelection());
+}
+
 void PickControllerTest::pickReturnsFalseAndClearsSelectionWhenNothingIsUnderThePoint() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);
@@ -629,6 +664,40 @@ void PickControllerTest::endMoveOnAPasteOperationCommitsATranslatedSupersedingPa
     QVERIFY(moved->supersedes().has_value());
     QCOMPARE(*moved->supersedes(), originalId);
     QCOMPARE(moved->clip().leftMagnitudeDb.size(), std::size_t{4});  // the clip itself carries over unchanged.
+}
+
+void PickControllerTest::continueMoveOnAPasteOperationShowsCorrectlyTranslatedOutlineCorners() {
+    // Closes a real test gap: the existing endMove-commits-a-translated-
+    // Paste test never checked the resulting bounds() (or, here, the
+    // live preview's own corners) actually reflect the drag's own delta
+    // on *both* axes - just that some new PasteOperation got committed.
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPasteOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});  // delta (0.1, 200.0).
+
+    // A closed, 5-node rectangular outline tracing the *translated*
+    // bounds - (0.3, 600), (0.5, 600), (0.5, 800), (0.3, 800), closed
+    // back to (0.3, 600) - see outlinePathFor()'s own docs.
+    const auto& nodes = controller.currentPreviewPath().nodes();
+    QCOMPARE(nodes.size(), std::size_t{5});
+    QCOMPARE(nodes[0].anchor.timeSeconds, 0.3);
+    QCOMPARE(nodes[0].anchor.frequencyHz, 600.0);
+    QCOMPARE(nodes[1].anchor.timeSeconds, 0.5);
+    QCOMPARE(nodes[1].anchor.frequencyHz, 600.0);
+    QCOMPARE(nodes[2].anchor.timeSeconds, 0.5);
+    QCOMPARE(nodes[2].anchor.frequencyHz, 800.0);
+    QCOMPARE(nodes[3].anchor.timeSeconds, 0.3);
+    QCOMPARE(nodes[3].anchor.frequencyHz, 800.0);
+    QCOMPARE(nodes[4].anchor.timeSeconds, 0.3);
+    QCOMPARE(nodes[4].anchor.frequencyHz, 600.0);
 }
 
 void PickControllerTest::continueMoveOnAFillOperationShowsARectangularOutlinePreview() {

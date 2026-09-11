@@ -2964,11 +2964,21 @@ void MainWindowTest::pastedContentIsPickableAndMovable() {
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);
     canvas->setFixedSize(100, 50);
+    auto* panel = window.findChild<ToolConfigurationPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    QVERIFY(sizeSpinBox != nullptr);
 
     // Paint, select it, copy, then paste - lands back at the same spot,
     // onto the same active layer (see SelectionController::pasteInto()'s
-    // own docs) - a second, independent object on top of the paint.
+    // own docs) - a second, independent object on top of the paint. A
+    // small, precise brush size keeps the stroke's own *padded* pick
+    // bounds from ballooning across the whole tiny test canvas (padding
+    // scales with brush size - see PickController::pick()'s own docs),
+    // which would otherwise make it indistinguishable from the paste
+    // below.
     window.setPaintModeEnabled(true);
+    sizeSpinBox->setValue(0.01);
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
     QTest::mouseMove(canvas, QPoint(60, 30));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
@@ -2982,11 +2992,11 @@ void MainWindowTest::pastedContentIsPickableAndMovable() {
     window.paste();
     QCOMPARE(window.project()->operationLog().size(), std::size_t{2});  // paint, paste.
 
-    // Pick the pasted region (its own bounds are the whole selection, so
-    // this point is unambiguously inside it) and move it - this is the
-    // actual reported bug: a paste used to be entirely invisible to Pick.
-    window.setSelectModeEnabled(false);
-    window.setPickModeEnabled(true);
+    // paste() itself already switched to Pick and selected the pasted
+    // region (see MainWindow::paste()'s own docs) - no separate switch-
+    // to-Pick-and-click-it step needed to move it, unlike before. This is
+    // the actual reported bug: a paste used to be entirely invisible to
+    // Pick, let alone already selected there.
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(45, 20));
     QTest::mouseMove(canvas, QPoint(80, 5));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(80, 5));
@@ -2998,6 +3008,29 @@ void MainWindowTest::pastedContentIsPickableAndMovable() {
     const bool anyPasteActive =
         std::any_of(active.begin(), active.end(), [](const auto* op) { return dynamic_cast<const PasteOperation*>(op) != nullptr; });
     QVERIFY(anyPasteActive);
+}
+
+void MainWindowTest::pasteSwitchesToPickModeAndSelectsThePastedRegionImmediately() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-paste-auto-pick.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 5));
+    QTest::mouseMove(canvas, QPoint(70, 35));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(70, 35));
+    window.copySelection();
+
+    window.paste();
+
+    // Switched out of Select and into Pick on its own - the user never
+    // touched the Pick toolbar button.
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Pick);
 }
 
 void MainWindowTest::modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionSilenced() {

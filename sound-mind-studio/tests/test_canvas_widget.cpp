@@ -639,6 +639,45 @@ void CanvasWidgetTest::setPickSelectionBoundsDrawsAHighlight() {
     QCOMPARE(rendered.pixelColor(20, 10), QColor(255, 255, 255));  // Qt::white.
 }
 
+void CanvasWidgetTest::setPickSelectionBoundsIsHiddenWhileALivePreviewIsShowing() {
+    // setPickSelectionBounds() only ever updates on selectionChanged(),
+    // which a whole-object move/path edit in progress doesn't emit - so
+    // it would otherwise sit frozen at the pre-drag position for the
+    // entire gesture, out of step with the live preview path actually
+    // tracking the drag (reported as the bounding box's own top corners
+    // "not updated properly when moved").
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    sound_mind::core::TimeFrequencyRect bounds;
+    bounds.startTimeSeconds = sound_mind::core::frameIndexToTime(20.0, config);
+    bounds.endTimeSeconds = sound_mind::core::frameIndexToTime(80.0, config);
+    bounds.lowFrequencyHz = sound_mind::core::binIndexToFrequency(10.0f, config);
+    bounds.highFrequencyHz = sound_mind::core::binIndexToFrequency(40.0f, config);
+    widget.setPickSelectionBounds(bounds);
+
+    Path previewPath;
+    PathNode node;
+    node.anchor = TimeFrequencyPoint{sound_mind::core::frameIndexToTime(50.0, config),
+                                       sound_mind::core::binIndexToFrequency(25.0f, config)};
+    node.type = PathNodeType::Corner;
+    previewPath.addNode(node);
+    widget.setPaintPreviewPath(previewPath);
+
+    const QImage rendered = widget.grab().toImage();
+    QVERIFY(rendered.pixelColor(20, 10) != QColor(255, 255, 255));  // the stale highlight is hidden...
+
+    widget.setPaintPreviewPath(Path{});  // ...and comes back once the preview clears.
+
+    const QImage restored = widget.grab().toImage();
+    QCOMPARE(restored.pixelColor(20, 10), QColor(255, 255, 255));
+}
+
 void CanvasWidgetTest::setPickSelectionBoundsWithNoValueDrawsNothing() {
     const Project project = Project::createNew(mouseConversionTestSettings());
     CanvasWidget widget;

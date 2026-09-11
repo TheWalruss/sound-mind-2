@@ -1515,7 +1515,13 @@ void MainWindow::paste() {
     // whichever layer the clipboard was originally copied from - per
     // SelectionController::pasteInto()'s own docs.
     if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
-        selectionController_->pasteInto(*layerId);
+        if (const auto pastedId = selectionController_->pasteInto(*layerId); pastedId.has_value()) {
+            // Immediately Pickable - move/modify/delete/restack all work
+            // right away, with no separate switch-to-Pick-and-click-it
+            // step needed to find it again.
+            setPickModeEnabled(true);
+            pickController_->selectOperation(*layerId, *pastedId);
+        }
     }
 }
 

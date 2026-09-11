@@ -244,6 +244,35 @@ bool PickController::pick(sound_mind::core::LayerId layer, sound_mind::core::Tim
     return true;
 }
 
+bool PickController::selectOperation(sound_mind::core::LayerId layer, sound_mind::core::OperationId id) {
+    if (project_ == nullptr) {
+        clearSelection();
+        return false;
+    }
+
+    const auto operations = project_->operationLog().activeOperationsTargeting(layer);
+    const auto it = std::find_if(operations.begin(), operations.end(),
+                                   [id](const sound_mind::core::Operation* op) { return op->id() == id; });
+    if (it == operations.end()) {
+        clearSelection();
+        return false;
+    }
+
+    pickedOperationId_ = id;
+    pickedLayer_ = layer;
+    pickedOperation_ = *it;
+    // No real click point to arm a drag from - the same "nothing to
+    // preview yet" state a fresh pick() itself starts in.
+    dragAnchor_ = sound_mind::core::TimeFrequencyPoint{};
+    dragCurrent_ = dragAnchor_;
+    dragMoved_ = false;
+    previewPath_ = sound_mind::core::Path{};
+    pathEditActive_ = false;
+    selectedNodeIndex_.reset();
+    emit selectionChanged();
+    return true;
+}
+
 void PickController::clearSelection() {
     const bool hadSelection = pickedOperationId_.has_value();
     pickedOperationId_.reset();

@@ -34,6 +34,7 @@ private slots:
     void mouseReleaseInPickModeEmitsPickStrokeEndedAndEndsTheGesture();
     void changingToolModeAwayFromPickCancelsAnyActiveGesture();
     void setPickSelectionBoundsDrawsAHighlight();
+    void setPickSelectionBoundsIsHiddenWhileALivePreviewIsShowing();
     void setPickSelectionBoundsWithNoValueDrawsNothing();
     void mousePressInSelectModeEmitsSelectStrokeStartedWithAConvertedPoint();
     void mouseMoveAfterPressInSelectModeEmitsSelectStrokeContinued();

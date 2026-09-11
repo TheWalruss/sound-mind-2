@@ -6,6 +6,29 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.7] - 2026-09-11
+
+### Fixed
+
+- **A Picked object's own white bounding-box highlight no longer sits
+  frozen at its pre-drag position throughout a whole-object move or an
+  active path edit** - reported as the box's own top corners "not
+  updated properly when moved." It only ever refreshed on a genuine
+  selection change, not on every drag step, so it visibly fell out of
+  step with the live preview outline actually tracking the drag; it's
+  now hidden for the gesture's own duration, since the live preview
+  already shows the object's current extent more accurately anyway.
+
+### Added
+
+- **A freshly pasted region is now immediately Pickable** - Edit → Paste
+  switches to Pick and selects the new paste there on its own, so it can
+  be moved/modified/deleted/restacked right away with no separate
+  switch-to-Pick-and-click-it-to-find-it-again step, regardless of
+  whatever tool mode was active before pasting.
+
+Studio regression: 276/276 passing. Doxygen: 0 warnings.
+
 ## [0.0.26.6] - 2026-09-11
 
 Three more follow-up fixes to Pick's Edit Path work, from testing `v0.0.26.5`.

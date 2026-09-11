@@ -177,6 +177,7 @@ private slots:
     void finishPathWithNoNodesPlacedIsANoOp();
     void settingANewProjectResetsPathModeToOff();
     void pastedContentIsPickableAndMovable();
+    void pasteSwitchesToPickModeAndSelectsThePastedRegionImmediately();
     void modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionSilenced();
     void bringPickedObjectToFrontMovesItAboveLaterStrokesOnTheSameLayer();
     void editingAPickedStrokesPathMovesANodeAndCommitsOnApply();

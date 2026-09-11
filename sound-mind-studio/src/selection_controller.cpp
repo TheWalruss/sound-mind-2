@@ -152,9 +152,9 @@ void SelectionController::cutSelection() {
     emit contentChanged(selectionLayer_);
 }
 
-void SelectionController::pasteInto(sound_mind::core::LayerId targetLayer) {
+std::optional<sound_mind::core::OperationId> SelectionController::pasteInto(sound_mind::core::LayerId targetLayer) {
     if (!clipboard_.has_value() || !clipboardBounds_.has_value() || project_ == nullptr) {
-        return;
+        return std::nullopt;
     }
     // Ensure targetLayer has real content to paste onto - same reasoning
     // as copySelection()'s own call.
@@ -174,6 +174,8 @@ void SelectionController::pasteInto(sound_mind::core::LayerId targetLayer) {
     committedBounds_ = *clipboardBounds_;
     emit boundsChanged();
     emit selectionChanged();
+
+    return id;
 }
 
 }  // namespace sound_mind::studio

@@ -153,6 +153,30 @@ public:
      */
     bool pick(sound_mind::core::LayerId layer, sound_mind::core::TimeFrequencyPoint point);
 
+    /**
+     * @brief Selects `id` on `layer` directly, by identity - no click
+     *        point or hit-testing involved, unlike pick() above.
+     *
+     * For a caller that already knows exactly which operation it wants
+     * selected, because it just created it - `MainWindow::paste()`, in
+     * particular, so a freshly pasted region is immediately Pickable
+     * (movable/modifiable/deletable) without the user having to switch
+     * to Pick and click it themselves to find it again. `id` must
+     * currently be active and targeting `layer` (see
+     * `OperationLog::activeOperationsTargeting()`); this is *not* a
+     * general "select by id regardless of where it is" lookup.
+     *
+     * A no-op path edit session, if one happens to be active, is ended
+     * the same way pick() ends one on a fresh whole-object pick.
+     *
+     * @param layer Which layer `id` targets.
+     * @param id The operation to select.
+     * @return `true` if `id` was found active on `layer` and selected;
+     *         `false` otherwise (clearing the current selection, same as
+     *         pick() finding nothing under a click point).
+     */
+    bool selectOperation(sound_mind::core::LayerId layer, sound_mind::core::OperationId id);
+
     /// @brief Clears the current selection and any in-progress move,
     ///        without committing anything - a no-op if nothing is
     ///        selected. Also discards (without committing) any active

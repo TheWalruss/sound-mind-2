@@ -179,11 +179,21 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     }
 
     // The Picked object's own selection highlight (Pick) - see
-    // setPickSelectionBounds()'s own docs. Always drawn when set,
-    // regardless of Show bounding boxes' own setting, for the same reason
-    // the live paint preview above always draws regardless of Show path
-    // geometry.
-    if (project_ != nullptr && pickSelectionBounds_.has_value()) {
+    // setPickSelectionBounds()'s own docs. Drawn when set, regardless of
+    // Show bounding boxes' own setting, for the same reason the live
+    // paint preview above always draws regardless of Show path geometry -
+    // *except* while a live preview is itself showing (a whole-object
+    // move, or a path edit session): setPickSelectionBounds() only ever
+    // updates on selectionChanged(), which a move/edit-in-progress
+    // doesn't emit, so this rectangle would otherwise sit frozen at the
+    // picked object's own *pre*-drag position for the entire gesture,
+    // visibly out of step with the live preview actually tracking the
+    // drag (reported as the bounding box's own top corners "not updated
+    // properly when moved" - true of the whole box, but the top edge is
+    // the one most visibly wrong while dragging down and to the right).
+    // The live preview itself already shows the object's current extent
+    // more accurately than this rectangle ever could mid-drag.
+    if (project_ != nullptr && pickSelectionBounds_.has_value() && paintPreviewPath_.nodes().empty()) {
         painter.setPen(QPen(Qt::white, 2));
         painter.drawRect(widgetRectFor(*pickSelectionBounds_));
     }

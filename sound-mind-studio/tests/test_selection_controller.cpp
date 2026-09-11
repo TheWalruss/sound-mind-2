@@ -373,12 +373,16 @@ void SelectionControllerTest::pasteIntoWritesTheClipboardOntoTheGivenLayer() {
     controller.clearSelection();
     QSignalSpy contentSpy(&controller, &SelectionController::contentChanged);
 
-    controller.pasteInto(layerId);
+    const auto pastedId = controller.pasteInto(layerId);
 
     QCOMPARE(contentSpy.count(), 1);
     QCOMPARE(contentSpy.takeFirst().at(0).value<LayerId>(), layerId);
     QCOMPARE(project.operationLog().size(), std::size_t{1});
     QCOMPARE(readPixel(project, layerId, 25, 10), -3.0f);
+    // The new PasteOperation's own id - so a caller can immediately
+    // select it in Pick (see PickController::selectOperation()).
+    QVERIFY(pastedId.has_value());
+    QCOMPARE(*pastedId, project.operationLog().at(0).id());
 }
 
 void SelectionControllerTest::pasteIntoCanTargetADifferentLayerThanItWasCopiedFrom() {
@@ -416,9 +420,10 @@ void SelectionControllerTest::pasteIntoIsANoOpWithNoClipboard() {
     SelectionController controller(&paintController);
     controller.setProject(&project);
 
-    controller.pasteInto(layerId);
+    const auto pastedId = controller.pasteInto(layerId);
 
     QCOMPARE(project.operationLog().size(), std::size_t{0});
+    QVERIFY(!pastedId.has_value());
 }
 
 void SelectionControllerTest::pasteIntoUpdatesTheCommittedSelectionToThePastedRegion() {

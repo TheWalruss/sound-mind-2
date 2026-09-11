@@ -8,6 +8,8 @@ class PickControllerTest : public QObject {
 private slots:
     void freshControllerHasNoSelection();
     void pickSelectsAnOperationUnderThePoint();
+    void selectOperationSelectsAKnownOperationByIdWithNoClickPointNeeded();
+    void selectOperationFailsAndClearsSelectionForAnUnknownId();
     void pickReturnsFalseAndClearsSelectionWhenNothingIsUnderThePoint();
     void pickPrefersTheMostRecentOverlappingOperation();
     void pickOnAnAlreadySelectedOperationCyclesToTheOccludedOneUnderneath();
@@ -26,6 +28,7 @@ private slots:
     void selectedConfigurationIsNullForAFillOrPasteSelection();
     void endMoveOnAFillOperationCommitsATranslatedSupersedingFillOperation();
     void endMoveOnAPasteOperationCommitsATranslatedSupersedingPasteOperation();
+    void continueMoveOnAPasteOperationShowsCorrectlyTranslatedOutlineCorners();
     void continueMoveOnAFillOperationShowsARectangularOutlinePreview();
     void applyToolConfigurationIsANoOpWhenAFillOperationIsSelected();
     void deleteSelectionOnAFillOperationCommitsASilenceFillTombstone();

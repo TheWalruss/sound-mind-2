@@ -821,6 +821,12 @@ public slots:
      * source layer - per `SelectionController::pasteInto()`'s own docs, a
      * copy from one layer can be pasted onto a completely different one.
      * A no-op if there's nothing on the clipboard, or no project is open.
+     *
+     * On success, switches to Pick mode and selects the newly pasted
+     * region there (`PickController::selectOperation()`) - immediately
+     * movable/modifiable/deletable/restackable with no separate switch-
+     * to-Pick-and-click-it step needed to find it again, regardless of
+     * whatever tool mode was active before pasting.
      */
     void paste();
 

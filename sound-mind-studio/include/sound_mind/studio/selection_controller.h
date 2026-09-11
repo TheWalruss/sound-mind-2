@@ -215,8 +215,14 @@ public:
      * selectionChanged().
      *
      * @param targetLayer Which layer to paste onto.
+     * @return The newly appended `PasteOperation`'s own id - so a caller
+     *         (`MainWindow`, in particular - see its own paste()) can
+     *         hand it straight to `PickController::selectOperation()`,
+     *         making the pasted result immediately Pickable without a
+     *         separate click to find it again. `std::nullopt` if this
+     *         was a no-op (no clipboard).
      */
-    void pasteInto(sound_mind::core::LayerId targetLayer);
+    std::optional<sound_mind::core::OperationId> pasteInto(sound_mind::core::LayerId targetLayer);
 
 signals:
     /// @brief Emitted whenever displayBounds() would return something

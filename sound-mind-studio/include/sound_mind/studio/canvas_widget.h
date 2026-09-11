@@ -180,11 +180,17 @@ public:
      *        and repaints - a distinct-colored (white) rectangle, drawn
      *        over whatever the canvas otherwise shows.
      *
-     * Always drawn when set, regardless of setShowBoundingBoxes()'s own
-     * state - the same "what you're actively interacting with is always
-     * visible" precedent setPaintPreviewPath() already established, since
-     * there'd otherwise be no visual indication at all of *which* object
-     * is selected while Show bounding boxes is off.
+     * Drawn when set, regardless of setShowBoundingBoxes()'s own state -
+     * the same "what you're actively interacting with is always visible"
+     * precedent setPaintPreviewPath() already established, since there'd
+     * otherwise be no visual indication at all of *which* object is
+     * selected while Show bounding boxes is off - *except* while
+     * setPaintPreviewPath() itself currently has a live preview showing
+     * (a whole-object move or an active path edit session in progress):
+     * this rectangle only ever updates when the picked object's own
+     * selection genuinely changes, not on every drag step, so it would
+     * otherwise sit frozen at the pre-drag position for the entire
+     * gesture - visibly wrong once the live preview itself has moved on.
      *
      * @param bounds The selected object's own current bounds, per
      *        `sound_mind::core::Operation::bounds()`; `std::nullopt`

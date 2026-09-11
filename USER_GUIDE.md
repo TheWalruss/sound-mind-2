@@ -357,7 +357,9 @@ itself, only to having drawn one.
   the same position it was captured from, onto whichever layer is
   currently active in the Layers panel - which doesn't have to be the
   layer it was copied or cut from. Select a different layer's row first
-  to paste onto it instead.
+  to paste onto it instead. Switches straight to [Pick](#pick) and
+  selects the newly pasted result there - move, modify, delete, or
+  restack it right away, with no separate click needed to find it again.
 - **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
   actually dragging (a plain click) on the canvas while in Select mode.
 
