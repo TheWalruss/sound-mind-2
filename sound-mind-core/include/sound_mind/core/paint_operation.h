@@ -57,10 +57,11 @@ public:
     [[nodiscard]] const ToolConfiguration& config() const noexcept { return config_; }
 
     /// @copydoc Operation::translatedCopy()
-    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double deltaTimeSeconds,
-                                                              double deltaFrequencyHz) const override {
-        return std::make_unique<PaintOperation>(newId, targetLayer_, path_.translated(deltaTimeSeconds, deltaFrequencyHz),
-                                                  config_, id());
+    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(
+        OperationId newId, double deltaTimeSeconds, double deltaFrequencyBins,
+        const sound_mind::codec::StreamCodecConfig& config) const override {
+        return std::make_unique<PaintOperation>(
+            newId, targetLayer_, path_.translated(deltaTimeSeconds, deltaFrequencyBins, config), config_, id());
     }
 
 private:

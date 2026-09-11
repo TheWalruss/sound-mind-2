@@ -3010,6 +3010,56 @@ void MainWindowTest::pastedContentIsPickableAndMovable() {
     QVERIFY(anyPasteActive);
 }
 
+void MainWindowTest::movingAPastedRegionPreservesItsOwnVerticalShapeAndOrientation() {
+    // The frequency axis is log-scaled (see translateFrequencyByBins()'s
+    // own docs) - translating a rect/path by a raw Hz delta doesn't
+    // preserve its own on-screen (bin-space) shape, and can even drive a
+    // bound negative near minFrequencyHz. Reported as "the vertical
+    // position of the top corners (and top edge) of a pasted object is
+    // still wrong" after moving it.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-paste-move-vertical.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+
+    // A thin loud strip at the *top* (widgetY 5-9) of an otherwise-silent
+    // block (widgetY 5-35) - lets a move preserve or distort the strip's
+    // own position *within* the pasted block be checked directly, not
+    // just the block's own outer bounds.
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 5));
+    QTest::mouseMove(canvas, QPoint(70, 9));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(70, 9));
+    window.fillSelectionWith(QColor(255, 0, 0));
+
+    // Select the *whole* block and copy it.
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 5));
+    QTest::mouseMove(canvas, QPoint(70, 35));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(70, 35));
+    window.copySelection();
+
+    window.paste();  // lands back at (20,5)-(70,35); auto-Picked.
+
+    // Move it straight down by 10 widget pixels.
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(45, 20));
+    QTest::mouseMove(canvas, QPoint(45, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(45, 30));
+
+    // The loud strip should now sit at widgetY 15-19 - still 10 pixels
+    // from the pasted block's own top (widgetY 15), exactly tracking the
+    // drag - not distorted or shifted to some other position by the
+    // log-scaled frequency axis.
+    const auto& content = *window.project()->layers().back().content();
+    QVERIFY(leftDbAtWidgetPixel(content, 45, 14) < -50.0f);  // just above the strip: still silent.
+    QVERIFY(leftDbAtWidgetPixel(content, 45, 15) > -50.0f);
+    QVERIFY(leftDbAtWidgetPixel(content, 45, 19) > -50.0f);
+    QVERIFY(leftDbAtWidgetPixel(content, 45, 20) < -50.0f);  // just below the strip: silent again.
+}
+
 void MainWindowTest::pasteSwitchesToPickModeAndSelectsThePastedRegionImmediately() {
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-paste-auto-pick.smproj";
     TestMainWindow window;

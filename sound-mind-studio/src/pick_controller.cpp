@@ -9,6 +9,7 @@
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/operation_log.h"
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/paint_controller.h"
@@ -82,6 +83,23 @@ double normalizedDistanceSquared(sound_mind::core::TimeFrequencyPoint a, sound_m
     const double dt = a.timeSeconds - b.timeSeconds;
     const double df = (a.frequencyHz - b.frequencyHz) / scale;
     return dt * dt + df * df;
+}
+
+/// @brief The bin-space distance between `from` and `to`'s own
+/// frequencies - what a mouse drag's own frequency delta needs to be
+/// measured in, not raw Hz, before handing it to `Path::translated()`/
+/// `sound_mind::core::translated(TimeFrequencyRect, ...)`/
+/// `Operation::translatedCopy()`. The frequency axis is log-scaled (see
+/// `frequencyToBinIndex()`'s own docs), so a fixed Hz difference between
+/// two mouse positions doesn't correspond to the same on-screen distance
+/// everywhere in the frequency range - only the bin-space distance does,
+/// which is what keeps a dragged object tracking the mouse 1:1 instead of
+/// visibly changing its own shape (or, near `minFrequencyHz`, even
+/// inverting a bound past zero) as it moves vertically.
+double frequencyBinDelta(sound_mind::core::TimeFrequencyPoint from, sound_mind::core::TimeFrequencyPoint to,
+                          const sound_mind::codec::StreamCodecConfig& config) {
+    return sound_mind::core::frequencyToBinIndex(static_cast<float>(to.frequencyHz), config) -
+           sound_mind::core::frequencyToBinIndex(static_cast<float>(from.frequencyHz), config);
 }
 
 /// @brief How far a freshly-Smoothed corner's own handles extend from its
@@ -316,14 +334,15 @@ void PickController::continueMove(sound_mind::core::TimeFrequencyPoint point) {
     }
     dragMoved_ = true;
     dragCurrent_ = point;
+    const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
     const double deltaTimeSeconds = point.timeSeconds - dragAnchor_.timeSeconds;
-    const double deltaFrequencyHz = point.frequencyHz - dragAnchor_.frequencyHz;
+    const double deltaFrequencyBins = frequencyBinDelta(dragAnchor_, point, config);
 
     if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_)) {
-        previewPath_ = paint->path().translated(deltaTimeSeconds, deltaFrequencyHz);
+        previewPath_ = paint->path().translated(deltaTimeSeconds, deltaFrequencyBins, config);
     } else {
-        previewPath_ =
-            outlinePathFor(sound_mind::core::translated(pickedOperation_->bounds(), deltaTimeSeconds, deltaFrequencyHz));
+        previewPath_ = outlinePathFor(
+            sound_mind::core::translated(pickedOperation_->bounds(), deltaTimeSeconds, deltaFrequencyBins, config));
     }
     emit pathChanged();
 }
@@ -344,12 +363,13 @@ void PickController::endMove() {
         return;
     }
 
+    const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
     const double deltaTimeSeconds = dragCurrent_.timeSeconds - dragAnchor_.timeSeconds;
-    const double deltaFrequencyHz = dragCurrent_.frequencyHz - dragAnchor_.frequencyHz;
+    const double deltaFrequencyBins = frequencyBinDelta(dragAnchor_, dragCurrent_, config);
 
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId newId = log.reserveId();
-    commitReplacement(pickedOperation_->translatedCopy(newId, deltaTimeSeconds, deltaFrequencyHz));
+    commitReplacement(pickedOperation_->translatedCopy(newId, deltaTimeSeconds, deltaFrequencyBins, config));
 
     dragMoved_ = false;
     previewPath_ = sound_mind::core::Path{};
@@ -496,8 +516,19 @@ void PickController::continuePathNodeDrag(sound_mind::core::TimeFrequencyPoint p
     if (!selectedNodeIndex_.has_value()) {
         return;
     }
+    const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
     const double deltaTimeSeconds = point.timeSeconds - dragAnchor_.timeSeconds;
-    const double deltaFrequencyHz = point.frequencyHz - dragAnchor_.frequencyHz;
+    const double deltaFrequencyBins = frequencyBinDelta(dragAnchor_, point, config);
+    // Shifts one point by the drag's own delta - time linearly, frequency
+    // via its own bin position (see frequencyBinDelta()'s/
+    // translateFrequencyByBins()'s own docs for why a raw Hz offset isn't
+    // enough).
+    const auto shifted = [&](sound_mind::core::TimeFrequencyPoint original) {
+        return sound_mind::core::TimeFrequencyPoint{
+            original.timeSeconds + deltaTimeSeconds,
+            sound_mind::core::translateFrequencyByBins(static_cast<float>(original.frequencyHz), deltaFrequencyBins,
+                                                          config)};
+    };
 
     const sound_mind::core::PathNode originalNode = pathEditDragStart_.nodes().at(*selectedNodeIndex_);
     sound_mind::core::PathNode node = originalNode;
@@ -506,17 +537,12 @@ void PickController::continuePathNodeDrag(sound_mind::core::TimeFrequencyPoint p
         case NodePart::Anchor:
             // Moving the anchor carries both handles along with it, by
             // the same delta - see continueMove()'s own docs.
-            node.anchor.timeSeconds = originalNode.anchor.timeSeconds + deltaTimeSeconds;
-            node.anchor.frequencyHz = originalNode.anchor.frequencyHz + deltaFrequencyHz;
+            node.anchor = shifted(originalNode.anchor);
             if (originalNode.handleIn.has_value()) {
-                node.handleIn = sound_mind::core::TimeFrequencyPoint{
-                    originalNode.handleIn->timeSeconds + deltaTimeSeconds,
-                    originalNode.handleIn->frequencyHz + deltaFrequencyHz};
+                node.handleIn = shifted(*originalNode.handleIn);
             }
             if (originalNode.handleOut.has_value()) {
-                node.handleOut = sound_mind::core::TimeFrequencyPoint{
-                    originalNode.handleOut->timeSeconds + deltaTimeSeconds,
-                    originalNode.handleOut->frequencyHz + deltaFrequencyHz};
+                node.handleOut = shifted(*originalNode.handleOut);
             }
             break;
         case NodePart::HandleOut:
@@ -525,8 +551,7 @@ void PickController::continuePathNodeDrag(sound_mind::core::TimeFrequencyPoint p
             const sound_mind::core::TimeFrequencyPoint originalHandle =
                 draggingOut ? originalNode.handleOut.value_or(originalNode.anchor)
                             : originalNode.handleIn.value_or(originalNode.anchor);
-            const sound_mind::core::TimeFrequencyPoint draggedHandle{originalHandle.timeSeconds + deltaTimeSeconds,
-                                                                       originalHandle.frequencyHz + deltaFrequencyHz};
+            const sound_mind::core::TimeFrequencyPoint draggedHandle = shifted(originalHandle);
             (draggingOut ? node.handleOut : node.handleIn) = draggedHandle;
             // The opposite handle always mirrors through the anchor, to
             // keep the tangent smooth - no detach-to-corner gesture yet,

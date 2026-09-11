@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/layer.h"
 
 namespace sound_mind::core {
@@ -41,18 +42,36 @@ void to_json(nlohmann::json& json, const TimeFrequencyRect& rect);
 void from_json(const nlohmann::json& json, TimeFrequencyRect& rect);
 
 /**
- * @brief A copy of `rect`, shifted by a fixed time/frequency offset - the
- *        `TimeFrequencyRect` counterpart to `Path::translated()`, needed
- *        so a rect-bounded `Operation` (`FillOperation`, `PasteOperation`)
- *        can be moved the same way a `Path`-bounded one already can.
+ * @brief A copy of `rect`, shifted by a fixed time offset and a fixed
+ *        *bin*-space frequency offset - the `TimeFrequencyRect`
+ *        counterpart to `Path::translated()`, needed so a rect-bounded
+ *        `Operation` (`FillOperation`, `PasteOperation`) can be moved the
+ *        same way a `Path`-bounded one already can.
+ *
+ * `deltaFrequencyBins`, not a raw Hz offset: the frequency axis is
+ * log-scaled (see `frequencyToBinIndex()`'s own docs), so shifting
+ * `lowFrequencyHz` and `highFrequencyHz` by the same *Hz* amount doesn't
+ * shift them by the same *bin* (screen-pixel-equivalent) amount - the
+ * rect would visibly change its own on-screen height every time it
+ * moved, and near `minFrequencyHz` a large enough Hz shift can drive a
+ * bound negative entirely. Converting each bound to its own bin position
+ * first, shifting *that* by a shared bin delta, then converting back to
+ * Hz keeps the rect's own screen-space shape intact and tracks a mouse
+ * drag - itself measured in screen-space pixels/bins - 1:1, regardless
+ * of where in the frequency range the rect sits.
  *
  * @param rect The rectangle to shift.
  * @param deltaTimeSeconds How far to shift along the timeline.
- * @param deltaFrequencyHz How far to shift along the frequency axis.
+ * @param deltaFrequencyBins How far to shift along the frequency axis,
+ *        in bins (see `frequencyToBinIndex()`'s own docs) - not Hz.
+ * @param config Interprets `rect`'s own Hz bounds against `config`'s
+ *        own frequency range/bin count, the same config every other
+ *        Hz/bin conversion in Core already uses.
  * @return The shifted rectangle.
  */
 [[nodiscard]] TimeFrequencyRect translated(const TimeFrequencyRect& rect, double deltaTimeSeconds,
-                                            double deltaFrequencyHz) noexcept;
+                                            double deltaFrequencyBins,
+                                            const sound_mind::codec::StreamCodecConfig& config) noexcept;
 
 /**
  * @brief Abstract base for every entry in a Project's OperationLog.
@@ -129,23 +148,35 @@ public:
     [[nodiscard]] virtual std::optional<LayerId> targetLayer() const noexcept { return std::nullopt; }
 
     /**
-     * @brief A copy of this operation, shifted by a fixed time/frequency
-     *        offset, with a new id and supersedes() pointing back at this
-     *        one - the shared "move" primitive Pick's own move gesture
-     *        uses, regardless of which concrete subtype is being moved
-     *        (see `docs/sound-mind-design.md`'s "Pick": "it can be...
-     *        moved... independent of" which kind of paint object it is).
+     * @brief A copy of this operation, shifted by a fixed time offset and
+     *        a fixed bin-space frequency offset, with a new id and
+     *        supersedes() pointing back at this one - the shared "move"
+     *        primitive Pick's own move gesture uses, regardless of which
+     *        concrete subtype is being moved (see
+     *        `docs/sound-mind-design.md`'s "Pick": "it can be... moved...
+     *        independent of" which kind of paint object it is).
+     *
+     * `deltaFrequencyBins`, not a raw Hz offset - see the free
+     * `translated(TimeFrequencyRect, ...)` function's own docs for why:
+     * the same reasoning applies here, to whatever geometry a concrete
+     * subtype's own bounds actually are (a `Path`'s nodes/handles, or a
+     * plain rect).
      *
      * Every other field (gradient, tool configuration, clip pixel data)
      * carries over unchanged - only the geometry shifts.
      *
      * @param newId Identity to give the translated copy.
      * @param deltaTimeSeconds How far to shift along the timeline.
-     * @param deltaFrequencyHz How far to shift along the frequency axis.
+     * @param deltaFrequencyBins How far to shift along the frequency
+     *        axis, in bins - not Hz.
+     * @param config Interprets Hz values against `config`'s own frequency
+     *        range/bin count - the same config every other Hz/bin
+     *        conversion in Core already uses.
      * @return The translated copy, superseding this operation.
      */
-    [[nodiscard]] virtual std::unique_ptr<Operation> translatedCopy(OperationId newId, double deltaTimeSeconds,
-                                                                     double deltaFrequencyHz) const = 0;
+    [[nodiscard]] virtual std::unique_ptr<Operation> translatedCopy(
+        OperationId newId, double deltaTimeSeconds, double deltaFrequencyBins,
+        const sound_mind::codec::StreamCodecConfig& config) const = 0;
 
 protected:
     /**

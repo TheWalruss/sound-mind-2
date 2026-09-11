@@ -4,6 +4,8 @@
 #include <cmath>
 #include <limits>
 
+#include "sound_mind/core/paint_application.h"
+
 namespace sound_mind::core {
 
 namespace {
@@ -102,11 +104,15 @@ bool Path::setNode(std::size_t index, PathNode node) {
     return true;
 }
 
-Path Path::translated(double deltaTimeSeconds, double deltaFrequencyHz) const {
+Path Path::translated(double deltaTimeSeconds, double deltaFrequencyBins,
+                        const sound_mind::codec::StreamCodecConfig& config) const {
     Path result = *this;
+    // Each point's own frequency shifts via its own bin position - see
+    // translateFrequencyByBins()'s own docs for why that, not a shared
+    // Hz offset, is what keeps the path's own shape intact.
     const auto shift = [&](TimeFrequencyPoint& point) {
         point.timeSeconds += deltaTimeSeconds;
-        point.frequencyHz += deltaFrequencyHz;
+        point.frequencyHz = translateFrequencyByBins(static_cast<float>(point.frequencyHz), deltaFrequencyBins, config);
     };
     for (PathNode& node : result.nodes_) {
         shift(node.anchor);

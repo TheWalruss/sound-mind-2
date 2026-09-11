@@ -3,8 +3,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/path.h"
 
+using sound_mind::codec::StreamCodecConfig;
 using sound_mind::core::fitPathToPoints;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
@@ -21,6 +23,18 @@ PathNode cornerNodeAt(double timeSeconds, double frequencyHz) {
 }
 
 bool approximatelyEqual(double a, double b, double epsilon = 1e-6) { return std::abs(a - b) < epsilon; }
+
+/// @brief Matching test_paint_application.cpp's own makeTestConfig() -
+/// see Path::translated()'s own docs for why it needs one at all now.
+StreamCodecConfig makeTestConfig() {
+    StreamCodecConfig config;
+    config.sampleRateHz = 44100;
+    config.hopLength = 441;
+    config.binCount = 100;
+    config.minFrequencyHz = 20.0f;
+    config.maxFrequencyHz = 20000.0f;
+    return config;
+}
 
 }  // namespace
 
@@ -130,21 +144,34 @@ TEST_CASE("bounds() also spans handle points, not just anchors", "[core][path]")
     REQUIRE(rect.lowFrequencyHz == 50.0);
 }
 
-TEST_CASE("translated() shifts every node's anchor by the given offset", "[core][path]") {
+TEST_CASE("translated() shifts every node's anchor by the given bin-space offset", "[core][path]") {
+    // A raw Hz offset isn't enough - the frequency axis is log-scaled, so
+    // each node's own frequency has to convert to its own bin position
+    // first, get shifted there, then convert back (see this method's own
+    // docs on why); expected values here are computed via the same real
+    // conversion functions, not a hand-derived Hz number, since the
+    // log-scaled math isn't meant to be reproduced by hand.
+    const StreamCodecConfig config = makeTestConfig();
     Path path;
     path.addNode(cornerNodeAt(1.0, 300.0));
     path.addNode(cornerNodeAt(3.0, 100.0));
 
-    const Path moved = path.translated(0.5, -50.0);
+    const Path moved = path.translated(0.5, -5.0, config);
+
+    const float expectedFrequency0 =
+        sound_mind::core::binIndexToFrequency(sound_mind::core::frequencyToBinIndex(300.0f, config) - 5.0f, config);
+    const float expectedFrequency1 =
+        sound_mind::core::binIndexToFrequency(sound_mind::core::frequencyToBinIndex(100.0f, config) - 5.0f, config);
 
     REQUIRE(moved.nodes().size() == 2);
     REQUIRE(moved.nodes().at(0).anchor.timeSeconds == 1.5);
-    REQUIRE(moved.nodes().at(0).anchor.frequencyHz == 250.0);
+    REQUIRE(approximatelyEqual(moved.nodes().at(0).anchor.frequencyHz, expectedFrequency0, 1e-3));
     REQUIRE(moved.nodes().at(1).anchor.timeSeconds == 3.5);
-    REQUIRE(moved.nodes().at(1).anchor.frequencyHz == 50.0);
+    REQUIRE(approximatelyEqual(moved.nodes().at(1).anchor.frequencyHz, expectedFrequency1, 1e-3));
 }
 
 TEST_CASE("translated() shifts a Smooth node's handles too, not just its anchor", "[core][path]") {
+    const StreamCodecConfig config = makeTestConfig();
     Path path;
     PathNode smooth;
     smooth.anchor = TimeFrequencyPoint{1.0, 100.0};
@@ -153,25 +180,33 @@ TEST_CASE("translated() shifts a Smooth node's handles too, not just its anchor"
     smooth.handleOut = TimeFrequencyPoint{1.5, 150.0};
     path.addNode(smooth);
 
-    const Path moved = path.translated(1.0, 10.0);
+    const Path moved = path.translated(1.0, 10.0, config);
+
+    const float expectedAnchor =
+        sound_mind::core::binIndexToFrequency(sound_mind::core::frequencyToBinIndex(100.0f, config) + 10.0f, config);
+    const float expectedHandleIn =
+        sound_mind::core::binIndexToFrequency(sound_mind::core::frequencyToBinIndex(50.0f, config) + 10.0f, config);
+    const float expectedHandleOut =
+        sound_mind::core::binIndexToFrequency(sound_mind::core::frequencyToBinIndex(150.0f, config) + 10.0f, config);
 
     const auto& node = moved.nodes().at(0);
     REQUIRE(node.anchor.timeSeconds == 2.0);
-    REQUIRE(node.anchor.frequencyHz == 110.0);
+    REQUIRE(approximatelyEqual(node.anchor.frequencyHz, expectedAnchor, 1e-3));
     REQUIRE(node.handleIn->timeSeconds == 1.5);
-    REQUIRE(node.handleIn->frequencyHz == 60.0);
+    REQUIRE(approximatelyEqual(node.handleIn->frequencyHz, expectedHandleIn, 1e-3));
     REQUIRE(node.handleOut->timeSeconds == 2.5);
-    REQUIRE(node.handleOut->frequencyHz == 160.0);
+    REQUIRE(approximatelyEqual(node.handleOut->frequencyHz, expectedHandleOut, 1e-3));
 }
 
 TEST_CASE("translated() leaves the gradient and node types/count unchanged", "[core][path]") {
+    const StreamCodecConfig config = makeTestConfig();
     Path path;
     path.addNode(cornerNodeAt(1.0, 300.0));
     auto stop = path.gradient().stops().front();
     stop.leftIntensity = -20.0f;
     path.gradient().setStopValues(0, stop);
 
-    const Path moved = path.translated(5.0, 5.0);
+    const Path moved = path.translated(5.0, 5.0, config);
 
     REQUIRE(moved.nodes().size() == path.nodes().size());
     REQUIRE(moved.nodes().at(0).type == PathNodeType::Corner);

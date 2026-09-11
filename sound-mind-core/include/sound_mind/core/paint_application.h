@@ -59,6 +59,31 @@ namespace sound_mind::core {
 [[nodiscard]] float binIndexToFrequency(float binIndex, const sound_mind::codec::StreamCodecConfig& config) noexcept;
 
 /**
+ * @brief `frequencyHz`, shifted by `deltaBins` in the log-scaled bin
+ *        space `frequencyToBinIndex()`/`binIndexToFrequency()` establish
+ *        - not a raw Hz shift.
+ *
+ * The frequency axis is log-scaled, so adding a fixed Hz amount to two
+ * different frequencies doesn't shift them by the same *bin* (on-screen
+ * pixel-equivalent) amount - a whole-object move (`Path::translated()`,
+ * `sound_mind::core::translated(TimeFrequencyRect, ...)`) or a path node/
+ * handle drag (`PickController::continuePathNodeDrag()`) built from a
+ * raw Hz delta would visibly distort the moved shape instead of just
+ * translating it, worse the wider a frequency range it spans - and near
+ * `minFrequencyHz`, can drive a bound negative entirely. Converting
+ * `frequencyHz` to its own bin position first, shifting *that*, then
+ * converting back keeps a dragged object's own on-screen shape intact
+ * and tracks the mouse - itself moving in screen-space pixels - 1:1.
+ *
+ * @param frequencyHz The frequency to shift.
+ * @param deltaBins How far to shift, in bins - not Hz.
+ * @param config The project's own Stream codec configuration.
+ * @return The shifted frequency, in Hz.
+ */
+[[nodiscard]] float translateFrequencyByBins(float frequencyHz, double deltaBins,
+                                               const sound_mind::codec::StreamCodecConfig& config) noexcept;
+
+/**
  * @brief The inverse of timeToFrameIndex(): the time a fractional frame
  *        (column) index corresponds to.
  * @param frameIndex The fractional frame index to convert.

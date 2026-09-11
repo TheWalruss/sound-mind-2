@@ -1,5 +1,7 @@
 #include "sound_mind/core/operation.h"
 
+#include "sound_mind/core/paint_application.h"
+
 namespace sound_mind::core {
 
 // Defined out-of-line (rather than `= default` in the header) so the
@@ -23,13 +25,17 @@ void from_json(const nlohmann::json& json, TimeFrequencyRect& rect) {
     json.at("highFrequencyHz").get_to(rect.highFrequencyHz);
 }
 
-TimeFrequencyRect translated(const TimeFrequencyRect& rect, double deltaTimeSeconds,
-                              double deltaFrequencyHz) noexcept {
+TimeFrequencyRect translated(const TimeFrequencyRect& rect, double deltaTimeSeconds, double deltaFrequencyBins,
+                              const sound_mind::codec::StreamCodecConfig& config) noexcept {
+    // Each bound's own frequency shifts via its own bin position - see
+    // translateFrequencyByBins()'s own docs for why that, not a shared Hz
+    // offset, is what keeps the rect's own screen-space shape intact.
     TimeFrequencyRect result = rect;
     result.startTimeSeconds += deltaTimeSeconds;
     result.endTimeSeconds += deltaTimeSeconds;
-    result.lowFrequencyHz += deltaFrequencyHz;
-    result.highFrequencyHz += deltaFrequencyHz;
+    result.lowFrequencyHz = translateFrequencyByBins(static_cast<float>(rect.lowFrequencyHz), deltaFrequencyBins, config);
+    result.highFrequencyHz =
+        translateFrequencyByBins(static_cast<float>(rect.highFrequencyHz), deltaFrequencyBins, config);
     return result;
 }
 

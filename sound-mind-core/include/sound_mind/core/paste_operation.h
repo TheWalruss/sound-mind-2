@@ -103,11 +103,11 @@ public:
     [[nodiscard]] const Clip& clip() const noexcept { return clip_; }
 
     /// @copydoc Operation::translatedCopy()
-    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double deltaTimeSeconds,
-                                                              double deltaFrequencyHz) const override {
-        return std::make_unique<PasteOperation>(newId, targetLayer_,
-                                                  translated(placement_, deltaTimeSeconds, deltaFrequencyHz), clip_,
-                                                  id());
+    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(
+        OperationId newId, double deltaTimeSeconds, double deltaFrequencyBins,
+        const sound_mind::codec::StreamCodecConfig& config) const override {
+        return std::make_unique<PasteOperation>(
+            newId, targetLayer_, translated(placement_, deltaTimeSeconds, deltaFrequencyBins, config), clip_, id());
     }
 
 private:

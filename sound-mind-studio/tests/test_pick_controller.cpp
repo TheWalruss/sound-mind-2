@@ -10,6 +10,7 @@
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/operation_log.h"
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/project.h"
@@ -52,6 +53,23 @@ ProjectSettings testSettings() {
     settings.maxFrequencyHz = 2020.0f;
     settings.timestepMs = 10.0;
     return settings;
+}
+
+/// @brief The frequency a Pick move/drag actually lands `originalHz` at
+/// after being shifted by the same bin delta a mouse drag from
+/// `anchorHz` to `currentHz` produces - see
+/// PickController::continueMove()'s own docs (and, more fully,
+/// translateFrequencyByBins()'s) for why this isn't just
+/// `originalHz + (currentHz - anchorHz)`: the frequency axis is log-
+/// scaled, so a raw Hz delta doesn't correspond to the same on-screen
+/// shift everywhere in the range. Tests that used to hand-add a Hz
+/// amount to their own expected values now compute the real expected
+/// result this way instead, using testSettings()'s own config.
+double expectedTranslatedFrequency(double originalHz, double anchorHz, double currentHz) {
+    const auto config = sound_mind::core::streamCodecConfigFor(testSettings());
+    const double deltaBins = sound_mind::core::frequencyToBinIndex(static_cast<float>(currentHz), config) -
+                              sound_mind::core::frequencyToBinIndex(static_cast<float>(anchorHz), config);
+    return sound_mind::core::translateFrequencyByBins(static_cast<float>(originalHz), deltaBins, config);
 }
 
 /// @brief A Normal layer, added to `project`, with real (blank) content -
@@ -385,13 +403,13 @@ void PickControllerTest::continueMoveUpdatesTheLivePreviewPath() {
     QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
     QSignalSpy spy(&controller, &PickController::pathChanged);
 
-    controller.continueMove(TimeFrequencyPoint{0.4, 600.0});  // +0.1s, +100Hz from the pick point.
+    controller.continueMove(TimeFrequencyPoint{0.4, 600.0});  // +0.1s from the pick point; +100Hz-at-the-click-point.
 
     QCOMPARE(spy.count(), 1);
     const auto& nodes = controller.currentPreviewPath().nodes();
     QCOMPARE(nodes.size(), std::size_t{2});
-    QCOMPARE(nodes.at(0).anchor.timeSeconds, 0.3);   // 0.2 + 0.1 delta.
-    QCOMPARE(nodes.at(0).anchor.frequencyHz, 500.0);  // 400 + 100 delta.
+    QCOMPARE(nodes.at(0).anchor.timeSeconds, 0.3);  // 0.2 + 0.1 delta.
+    QCOMPARE(nodes.at(0).anchor.frequencyHz, expectedTranslatedFrequency(400.0, 500.0, 600.0));
 }
 
 void PickControllerTest::endMoveCommitsATranslatedSupersedingOperationAndKeepsItSelected() {
@@ -408,7 +426,7 @@ void PickControllerTest::endMoveCommitsATranslatedSupersedingOperationAndKeepsIt
     QSignalSpy contentSpy(&controller, &PickController::contentChanged);
     QSignalSpy selectionSpy(&controller, &PickController::selectionChanged);
 
-    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});  // +0.1s, +200Hz.
+    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});  // +0.1s from the pick point; +200Hz-at-the-click-point.
     controller.endMove();
 
     QCOMPARE(project.operationLog().size(), std::size_t{2});
@@ -422,7 +440,7 @@ void PickControllerTest::endMoveCommitsATranslatedSupersedingOperationAndKeepsIt
     QVERIFY(moved->supersedes().has_value());
     QCOMPARE(*moved->supersedes(), originalId);
     QCOMPARE(moved->path().nodes().at(0).anchor.timeSeconds, 0.3);
-    QCOMPARE(moved->path().nodes().at(0).anchor.frequencyHz, 600.0);
+    QCOMPARE(moved->path().nodes().at(0).anchor.frequencyHz, expectedTranslatedFrequency(400.0, 500.0, 700.0));
 
     // Still selected - now the new, moved operation.
     QVERIFY(controller.hasSelection());
@@ -626,7 +644,7 @@ void PickControllerTest::endMoveOnAFillOperationCommitsATranslatedSupersedingFil
     controller.setProject(&project);
     QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
 
-    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});  // +0.1s, +200Hz.
+    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});  // +0.1s from the pick point; +200Hz-at-the-click-point.
     controller.endMove();
 
     QCOMPARE(project.operationLog().size(), std::size_t{2});
@@ -637,7 +655,7 @@ void PickControllerTest::endMoveOnAFillOperationCommitsATranslatedSupersedingFil
     QVERIFY(moved->supersedes().has_value());
     QCOMPARE(*moved->supersedes(), originalId);
     QCOMPARE(moved->bounds().startTimeSeconds, 0.3);
-    QCOMPARE(moved->bounds().lowFrequencyHz, 600.0);
+    QCOMPARE(moved->bounds().lowFrequencyHz, expectedTranslatedFrequency(400.0, 500.0, 700.0));
 
     // Still selected - now the new, moved operation.
     QVERIFY(controller.hasSelection());
@@ -681,23 +699,27 @@ void PickControllerTest::continueMoveOnAPasteOperationShowsCorrectlyTranslatedOu
     controller.setProject(&project);
     QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
 
-    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});  // delta (0.1, 200.0).
+    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});  // +0.1s from the pick point; +200Hz-at-the-click-point.
 
     // A closed, 5-node rectangular outline tracing the *translated*
-    // bounds - (0.3, 600), (0.5, 600), (0.5, 800), (0.3, 800), closed
-    // back to (0.3, 600) - see outlinePathFor()'s own docs.
+    // bounds - each of the original (0.3, 600)/(0.5, 800)-style corners
+    // shifted 0.1s in time and by the drag's own *bin* delta in
+    // frequency (not a flat +200Hz - see translateFrequencyByBins()'s
+    // own docs) - see outlinePathFor()'s own docs for the corner order.
+    const double expectedLowFrequency = expectedTranslatedFrequency(400.0, 500.0, 700.0);
+    const double expectedHighFrequency = expectedTranslatedFrequency(600.0, 500.0, 700.0);
     const auto& nodes = controller.currentPreviewPath().nodes();
     QCOMPARE(nodes.size(), std::size_t{5});
     QCOMPARE(nodes[0].anchor.timeSeconds, 0.3);
-    QCOMPARE(nodes[0].anchor.frequencyHz, 600.0);
+    QCOMPARE(nodes[0].anchor.frequencyHz, expectedLowFrequency);
     QCOMPARE(nodes[1].anchor.timeSeconds, 0.5);
-    QCOMPARE(nodes[1].anchor.frequencyHz, 600.0);
+    QCOMPARE(nodes[1].anchor.frequencyHz, expectedLowFrequency);
     QCOMPARE(nodes[2].anchor.timeSeconds, 0.5);
-    QCOMPARE(nodes[2].anchor.frequencyHz, 800.0);
+    QCOMPARE(nodes[2].anchor.frequencyHz, expectedHighFrequency);
     QCOMPARE(nodes[3].anchor.timeSeconds, 0.3);
-    QCOMPARE(nodes[3].anchor.frequencyHz, 800.0);
+    QCOMPARE(nodes[3].anchor.frequencyHz, expectedHighFrequency);
     QCOMPARE(nodes[4].anchor.timeSeconds, 0.3);
-    QCOMPARE(nodes[4].anchor.frequencyHz, 600.0);
+    QCOMPARE(nodes[4].anchor.frequencyHz, expectedLowFrequency);
 }
 
 void PickControllerTest::continueMoveOnAFillOperationShowsARectangularOutlinePreview() {
@@ -1070,17 +1092,24 @@ void PickControllerTest::draggingASelectedNodesAnchorMovesItAndItsHandles() {
     QVERIFY(controller.pick(layerId, anchor));  // selects node 0's own anchor.
     QCOMPARE(*controller.selectedPathNodeIndex(), std::size_t{0});
 
-    controller.continueMove(TimeFrequencyPoint{anchor.timeSeconds + 0.1, anchor.frequencyHz + 100.0});
+    const double draggedToFrequency = anchor.frequencyHz + 100.0;
+    controller.continueMove(TimeFrequencyPoint{anchor.timeSeconds + 0.1, draggedToFrequency});
 
+    // Each of the anchor/handleIn/handleOut shifts by the same *bin*
+    // delta the drag itself produced (measured at the anchor's own
+    // original frequency) - not the same flat Hz amount each - see
+    // translateFrequencyByBins()'s own docs.
     const auto& node = controller.currentPreviewPath().nodes().front();
     QCOMPARE(node.anchor.timeSeconds, anchor.timeSeconds + 0.1);
-    QCOMPARE(node.anchor.frequencyHz, anchor.frequencyHz + 100.0);
+    QCOMPARE(node.anchor.frequencyHz, expectedTranslatedFrequency(anchor.frequencyHz, anchor.frequencyHz, draggedToFrequency));
     QVERIFY(node.handleIn.has_value());
     QCOMPARE(node.handleIn->timeSeconds, handleIn.timeSeconds + 0.1);
-    QCOMPARE(node.handleIn->frequencyHz, handleIn.frequencyHz + 100.0);
+    QCOMPARE(node.handleIn->frequencyHz,
+             expectedTranslatedFrequency(handleIn.frequencyHz, anchor.frequencyHz, draggedToFrequency));
     QVERIFY(node.handleOut.has_value());
     QCOMPARE(node.handleOut->timeSeconds, handleOut.timeSeconds + 0.1);
-    QCOMPARE(node.handleOut->frequencyHz, handleOut.frequencyHz + 100.0);
+    QCOMPARE(node.handleOut->frequencyHz,
+             expectedTranslatedFrequency(handleOut.frequencyHz, anchor.frequencyHz, draggedToFrequency));
 }
 
 void PickControllerTest::draggingASelectedSmoothNodesHandleMirrorsTheOppositeHandle() {

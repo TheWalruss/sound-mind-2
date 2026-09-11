@@ -1,7 +1,10 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
 
+using sound_mind::codec::StreamCodecConfig;
 using sound_mind::core::LayerId;
 using sound_mind::core::OperationId;
 using sound_mind::core::PaintOperation;
@@ -24,6 +27,20 @@ Path makeTestPath() {
     end.type = PathNodeType::Corner;
     path.addNode(end);
     return path;
+}
+
+/// @brief Matching test_paint_application.cpp's own makeTestConfig() -
+/// a real config translatedCopy()/Path::translated() need to interpret
+/// each node's own frequency against (see those methods' own docs on why
+/// a bin-space delta, not a raw Hz one, needs one at all).
+StreamCodecConfig makeTestConfig() {
+    StreamCodecConfig config;
+    config.sampleRateHz = 44100;
+    config.hopLength = 441;
+    config.binCount = 100;
+    config.minFrequencyHz = 20.0f;
+    config.maxFrequencyHz = 20000.0f;
+    return config;
 }
 
 }  // namespace
@@ -71,8 +88,9 @@ TEST_CASE("PaintOperation::translatedCopy() shifts the path, keeps everything el
     ToolConfiguration config;
     config.setName("My Brush");
     const PaintOperation original(5, LayerId{2}, makeTestPath(), config);
+    const StreamCodecConfig codecConfig = makeTestConfig();
 
-    const auto copy = original.translatedCopy(OperationId{9}, 0.5, 100.0);
+    const auto copy = original.translatedCopy(OperationId{9}, 0.5, 5.0, codecConfig);
 
     REQUIRE(copy != nullptr);
     REQUIRE(copy->id() == OperationId{9});
@@ -80,13 +98,22 @@ TEST_CASE("PaintOperation::translatedCopy() shifts the path, keeps everything el
     REQUIRE(*copy->supersedes() == OperationId{5});
     REQUIRE(copy->targetLayer() == LayerId{2});
 
+    // Each node's own frequency shifts by the same *bin* delta, not the
+    // same Hz amount - see Path::translated()'s own docs. Computed via
+    // the real conversion functions, not a hand-derived Hz number, since
+    // the log-scaled math isn't meant to be reproduced by hand here.
+    const float expectedFrequency0 = sound_mind::core::binIndexToFrequency(
+        sound_mind::core::frequencyToBinIndex(100.0f, codecConfig) + 5.0f, codecConfig);
+    const float expectedFrequency1 = sound_mind::core::binIndexToFrequency(
+        sound_mind::core::frequencyToBinIndex(500.0f, codecConfig) + 5.0f, codecConfig);
+
     const auto* paintCopy = dynamic_cast<const PaintOperation*>(copy.get());
     REQUIRE(paintCopy != nullptr);
     REQUIRE(paintCopy->config().name() == "My Brush");
     REQUIRE(paintCopy->path().nodes().at(0).anchor.timeSeconds == 0.5);
-    REQUIRE(paintCopy->path().nodes().at(0).anchor.frequencyHz == 200.0);
+    REQUIRE(paintCopy->path().nodes().at(0).anchor.frequencyHz == Catch::Approx(expectedFrequency0));
     REQUIRE(paintCopy->path().nodes().at(1).anchor.timeSeconds == 1.5);
-    REQUIRE(paintCopy->path().nodes().at(1).anchor.frequencyHz == 600.0);
+    REQUIRE(paintCopy->path().nodes().at(1).anchor.frequencyHz == Catch::Approx(expectedFrequency1));
 
     // The original is untouched - translatedCopy() never mutates.
     REQUIRE(original.path().nodes().at(0).anchor.timeSeconds == 0.0);

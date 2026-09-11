@@ -171,6 +171,12 @@ float binIndexToFrequency(float binIndex, const sound_mind::codec::StreamCodecCo
     return config.minFrequencyHz * std::exp(t * logRange);
 }
 
+float translateFrequencyByBins(float frequencyHz, double deltaBins,
+                                 const sound_mind::codec::StreamCodecConfig& config) noexcept {
+    const float bin = frequencyToBinIndex(frequencyHz, config);
+    return binIndexToFrequency(static_cast<float>(static_cast<double>(bin) + deltaBins), config);
+}
+
 double frameIndexToTime(double frameIndex, const sound_mind::codec::StreamCodecConfig& config) noexcept {
     if (config.sampleRateHz == 0) {
         return 0.0;

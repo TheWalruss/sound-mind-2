@@ -93,7 +93,8 @@ class FakeOperation final : public Operation {
 public:
     explicit FakeOperation(OperationId id) : Operation(id) {}
     [[nodiscard]] TimeFrequencyRect bounds() const override { return TimeFrequencyRect{}; }
-    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double, double) const override {
+    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double, double,
+                                                              const sound_mind::codec::StreamCodecConfig&) const override {
         return std::make_unique<FakeOperation>(newId);
     }
 };

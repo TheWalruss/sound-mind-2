@@ -153,13 +153,26 @@ public:
      *        unchanged - moving a Picked paint object (see
      *        `docs/sound-mind-design.md`'s "Pick") is exactly this, since
      *        a move never changes the object's own shape or coloring.
+     *
+     * `deltaFrequencyBins`, not a raw Hz offset - see the free
+     * `sound_mind::core::translated(TimeFrequencyRect, ...)` function's
+     * own docs for why: the frequency axis is log-scaled, so every
+     * point's own frequency converts to its own bin position first, is
+     * shifted there, then converts back - not a single Hz amount added to
+     * every point alike, which would distort the path's own shape (worse
+     * the wider a frequency range its own nodes/handles span) instead of
+     * translating it.
+     *
      * @param deltaTimeSeconds How far to shift every point along the
      *        timeline.
-     * @param deltaFrequencyHz How far to shift every point along the
-     *        frequency axis.
+     * @param deltaFrequencyBins How far to shift every point along the
+     *        frequency axis, in bins - not Hz.
+     * @param config Interprets every point's own Hz value against
+     *        `config`'s own frequency range/bin count.
      * @return The translated path.
      */
-    [[nodiscard]] Path translated(double deltaTimeSeconds, double deltaFrequencyHz) const;
+    [[nodiscard]] Path translated(double deltaTimeSeconds, double deltaFrequencyBins,
+                                    const sound_mind::codec::StreamCodecConfig& config) const;
 
     /**
      * @brief This path's time/frequency extent, for hit-testing (see the

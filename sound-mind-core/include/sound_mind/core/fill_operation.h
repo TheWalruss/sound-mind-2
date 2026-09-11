@@ -56,10 +56,11 @@ public:
     [[nodiscard]] const Gradient& gradient() const noexcept { return gradient_; }
 
     /// @copydoc Operation::translatedCopy()
-    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double deltaTimeSeconds,
-                                                              double deltaFrequencyHz) const override {
-        return std::make_unique<FillOperation>(newId, targetLayer_, translated(bounds_, deltaTimeSeconds, deltaFrequencyHz),
-                                                 gradient_, id());
+    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(
+        OperationId newId, double deltaTimeSeconds, double deltaFrequencyBins,
+        const sound_mind::codec::StreamCodecConfig& config) const override {
+        return std::make_unique<FillOperation>(
+            newId, targetLayer_, translated(bounds_, deltaTimeSeconds, deltaFrequencyBins, config), gradient_, id());
     }
 
 private:

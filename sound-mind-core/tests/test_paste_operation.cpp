@@ -2,8 +2,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paste_operation.h"
 
+using sound_mind::codec::StreamCodecConfig;
 using sound_mind::core::Clip;
 using sound_mind::core::LayerId;
 using sound_mind::core::OperationId;
@@ -19,6 +21,19 @@ TimeFrequencyRect makeTestBounds() {
     bounds.lowFrequencyHz = 300.0;
     bounds.highFrequencyHz = 900.0;
     return bounds;
+}
+
+/// @brief Matching test_paint_application.cpp's own makeTestConfig() -
+/// see test_paint_operation.cpp's own copy of this helper for why
+/// translatedCopy() needs one at all now.
+StreamCodecConfig makeTestConfig() {
+    StreamCodecConfig config;
+    config.sampleRateHz = 44100;
+    config.hopLength = 441;
+    config.binCount = 100;
+    config.minFrequencyHz = 20.0f;
+    config.maxFrequencyHz = 20000.0f;
+    return config;
 }
 
 Clip makeTestClip() {
@@ -77,8 +92,16 @@ TEST_CASE("PasteOperation::translatedCopy() shifts the placement, keeps the clip
           "[core][paste_operation]") {
     const Clip clip = makeTestClip();
     const PasteOperation original(5, LayerId{2}, makeTestBounds(), clip);
+    const StreamCodecConfig codecConfig = makeTestConfig();
 
-    const auto copy = original.translatedCopy(OperationId{9}, 0.1, 100.0);
+    const auto copy = original.translatedCopy(OperationId{9}, 0.1, 5.0, codecConfig);
+
+    // Each bound's own frequency shifts by the same *bin* delta, not the
+    // same Hz amount - see translated(TimeFrequencyRect, ...)'s own docs.
+    const float expectedLowFrequency = sound_mind::core::binIndexToFrequency(
+        sound_mind::core::frequencyToBinIndex(300.0f, codecConfig) + 5.0f, codecConfig);
+    const float expectedHighFrequency = sound_mind::core::binIndexToFrequency(
+        sound_mind::core::frequencyToBinIndex(900.0f, codecConfig) + 5.0f, codecConfig);
 
     REQUIRE(copy != nullptr);
     REQUIRE(copy->id() == OperationId{9});
@@ -87,8 +110,8 @@ TEST_CASE("PasteOperation::translatedCopy() shifts the placement, keeps the clip
     REQUIRE(copy->targetLayer() == LayerId{2});
     REQUIRE(copy->bounds().startTimeSeconds == Catch::Approx(0.3));
     REQUIRE(copy->bounds().endTimeSeconds == Catch::Approx(0.6));
-    REQUIRE(copy->bounds().lowFrequencyHz == Catch::Approx(400.0));
-    REQUIRE(copy->bounds().highFrequencyHz == Catch::Approx(1000.0));
+    REQUIRE(copy->bounds().lowFrequencyHz == Catch::Approx(expectedLowFrequency));
+    REQUIRE(copy->bounds().highFrequencyHz == Catch::Approx(expectedHighFrequency));
 
     const auto* pasteCopy = dynamic_cast<const PasteOperation*>(copy.get());
     REQUIRE(pasteCopy != nullptr);

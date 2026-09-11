@@ -6,6 +6,35 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.8] - 2026-09-11
+
+### Fixed
+
+- **Moving a Picked object (or dragging a path node/handle) no longer
+  distorts its own vertical shape or position** - reported as the top
+  corners/edge of a moved pasted object still being wrong even after
+  `v0.0.26.7`'s bounding-box highlight fix. The frequency axis is
+  log-scaled, but Pick's own move/drag translated geometry by a raw *Hz*
+  offset applied uniformly to every point - which doesn't correspond to
+  the same on-screen shift everywhere in the frequency range, so a
+  dragged object visibly stretched or shrank vertically instead of just
+  moving, and near the bottom of the frequency range could even flip a
+  bound negative. Every translate path (`Path::translated()`,
+  `sound_mind::core::translated(TimeFrequencyRect, ...)`,
+  `Operation::translatedCopy()`, and path node/handle dragging) now
+  shifts each point by the drag's own *bin*-space delta instead - each
+  point's own frequency converts to its own bin position, shifts there,
+  then converts back - which tracks the mouse 1:1 and keeps a moved
+  object's own on-screen shape intact regardless of where in the
+  frequency range it sits.
+
+Studio regression: 276/276 passing (1 new end-to-end MainWindow test
+verifying a moved paste's own internal vertical structure is preserved;
+several existing Core/Studio tests' hand-computed Hz-delta expectations
+replaced with the real bin-conversion math they now exercise). Core
+regression: 51,110 assertions across 241 test cases, all passing.
+Doxygen: 0 warnings.
+
 ## [0.0.26.7] - 2026-09-11
 
 ### Fixed

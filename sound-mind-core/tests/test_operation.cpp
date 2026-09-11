@@ -28,7 +28,8 @@ public:
 
     // Never actually exercised for real geometry - FakeOperation has none
     // - only present to satisfy the abstract interface.
-    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double, double) const override {
+    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double, double,
+                                                              const sound_mind::codec::StreamCodecConfig&) const override {
         return std::make_unique<FakeOperation>(newId, id());
     }
 };

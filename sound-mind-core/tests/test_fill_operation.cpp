@@ -2,7 +2,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/paint_application.h"
 
+using sound_mind::codec::StreamCodecConfig;
 using sound_mind::core::FillOperation;
 using sound_mind::core::Gradient;
 using sound_mind::core::LayerId;
@@ -18,6 +20,19 @@ TimeFrequencyRect makeTestBounds() {
     bounds.lowFrequencyHz = 300.0;
     bounds.highFrequencyHz = 900.0;
     return bounds;
+}
+
+/// @brief Matching test_paint_application.cpp's own makeTestConfig() -
+/// see test_paint_operation.cpp's own copy of this helper for why
+/// translatedCopy() needs one at all now.
+StreamCodecConfig makeTestConfig() {
+    StreamCodecConfig config;
+    config.sampleRateHz = 44100;
+    config.hopLength = 441;
+    config.binCount = 100;
+    config.minFrequencyHz = 20.0f;
+    config.maxFrequencyHz = 20000.0f;
+    return config;
 }
 
 }  // namespace
@@ -67,8 +82,16 @@ TEST_CASE("FillOperation::translatedCopy() shifts bounds, keeps the gradient, an
     stop.leftIntensity = -12.0f;
     gradient.setStopValues(0, stop);
     const FillOperation original(5, LayerId{2}, makeTestBounds(), gradient);
+    const StreamCodecConfig codecConfig = makeTestConfig();
 
-    const auto copy = original.translatedCopy(OperationId{9}, 0.1, 100.0);
+    const auto copy = original.translatedCopy(OperationId{9}, 0.1, 5.0, codecConfig);
+
+    // Each bound's own frequency shifts by the same *bin* delta, not the
+    // same Hz amount - see translated(TimeFrequencyRect, ...)'s own docs.
+    const float expectedLowFrequency = sound_mind::core::binIndexToFrequency(
+        sound_mind::core::frequencyToBinIndex(300.0f, codecConfig) + 5.0f, codecConfig);
+    const float expectedHighFrequency = sound_mind::core::binIndexToFrequency(
+        sound_mind::core::frequencyToBinIndex(900.0f, codecConfig) + 5.0f, codecConfig);
 
     REQUIRE(copy != nullptr);
     REQUIRE(copy->id() == OperationId{9});
@@ -77,8 +100,8 @@ TEST_CASE("FillOperation::translatedCopy() shifts bounds, keeps the gradient, an
     REQUIRE(copy->targetLayer() == LayerId{2});
     REQUIRE(copy->bounds().startTimeSeconds == Catch::Approx(0.3));
     REQUIRE(copy->bounds().endTimeSeconds == Catch::Approx(0.6));
-    REQUIRE(copy->bounds().lowFrequencyHz == Catch::Approx(400.0));
-    REQUIRE(copy->bounds().highFrequencyHz == Catch::Approx(1000.0));
+    REQUIRE(copy->bounds().lowFrequencyHz == Catch::Approx(expectedLowFrequency));
+    REQUIRE(copy->bounds().highFrequencyHz == Catch::Approx(expectedHighFrequency));
 
     const auto* fillCopy = dynamic_cast<const FillOperation*>(copy.get());
     REQUIRE(fillCopy != nullptr);
