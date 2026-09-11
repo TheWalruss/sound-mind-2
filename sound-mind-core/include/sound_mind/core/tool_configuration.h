@@ -180,7 +180,7 @@ private:
     std::string name_;
     BrushTipShape tipShape_ = BrushTipShape::Circle;
     float falloff_ = 0.5f;
-    double size_ = 1.0;
+    double size_ = 0.2;
     Gradient defaultGradient_;
 };
 

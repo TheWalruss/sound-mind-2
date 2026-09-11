@@ -93,6 +93,13 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent) : QDockWidget(tr
     sizeSpinBox_->setSingleStep(0.01);
     sizeSpinBox_->setDecimals(3);
     sizeSpinBox_->setValue(config_.size());
+    // Not a screen-pixel radius - see ToolConfiguration::size()'s own
+    // docs. Spelled out here since the unit isn't otherwise visible
+    // anywhere in the UI itself.
+    sizeSpinBox_->setToolTip(
+        tr("The brush tip's own radius: in seconds on the time axis, and "
+           "the equivalent frequency span on the frequency axis (using "
+           "this project's own Hz-per-second scale)."));
     connect(sizeSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
         config_.setSize(value);
         emitConfigChanged();

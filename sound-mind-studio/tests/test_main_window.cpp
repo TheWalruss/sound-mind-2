@@ -2484,8 +2484,8 @@ void MainWindowTest::pickingAPaintedStrokeLoadsItsSettingsIntoThePanel() {
     auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
     QVERIFY(sizeSpinBox != nullptr);
     // Changes the "current brush" default away from what the stroke above
-    // was actually painted with (ToolConfiguration's own default, 1.0) -
-    // so reverting to 1.0 below can only mean the pick genuinely loaded
+    // was actually painted with (ToolConfiguration's own default, 0.2) -
+    // so reverting to 0.2 below can only mean the pick genuinely loaded
     // the stroke's own stored settings back in, not just left the panel
     // showing whatever it already had.
     sizeSpinBox->setValue(5.0);
@@ -2495,7 +2495,7 @@ void MainWindowTest::pickingAPaintedStrokeLoadsItsSettingsIntoThePanel() {
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
 
-    QCOMPARE(sizeSpinBox->value(), 1.0);
+    QCOMPARE(sizeSpinBox->value(), 0.2);
 }
 
 void MainWindowTest::movingAPickedStrokeCommitsATranslatedOperation() {

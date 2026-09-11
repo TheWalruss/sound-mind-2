@@ -6,6 +6,37 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.6] - 2026-09-11
+
+Three more follow-up fixes to Pick's Edit Path work, from testing `v0.0.26.5`.
+
+### Changed
+
+- **Node/handle click tolerance doubled** (`0.015` to `0.03`, in
+  `pick_controller.cpp`'s own seconds-equivalent normalized space) -
+  selecting a node or a curve handle while editing a path was reported
+  as "very difficult."
+- **Converting a `Corner` node to `Smooth` (Edit → Toggle Node Type) now
+  extends its own two handles a comfortable distance out**, instead of
+  leaving them collapsed exactly onto the node's own anchor. They extend
+  along the tangent that rounds the corner symmetrically between its own
+  two neighboring nodes - perpendicular to the angle the two neighboring
+  edges form, not toward either one - so a sharp corner visibly rounds
+  out the moment it's converted, and its own handles are immediately
+  their own separately clickable targets rather than needing to be
+  dragged out first from directly on top of the anchor. An isolated
+  single-node path (no neighbor to take a direction from) still
+  collapses onto the anchor, for lack of a better direction.
+- **The default brush size changed from `1.0` to `0.2`** - `1.0` (a full
+  second-equivalent radius) painted uncomfortably large on a typical
+  project. The **Brush Size** field in Tool Configuration now also has a
+  tooltip spelling out its own unit (a radius, in seconds on the time
+  axis and the frequency-equivalent of that same span on the frequency
+  axis) - not otherwise documented anywhere in the UI itself, and not
+  the screen-pixel radius it might look like at a glance.
+
+Studio regression: 276/276 passing. Doxygen: 0 warnings.
+
 ## [0.0.26.5] - 2026-09-11
 
 Three follow-up fixes from testing `v0.0.26.4`'s Pick and Edit Path work.

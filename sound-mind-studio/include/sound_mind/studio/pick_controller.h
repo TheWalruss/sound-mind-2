@@ -372,11 +372,20 @@ public:
      *        `Smooth` - a no-op if a path edit isn't active, or no node
      *        is selected.
      *
-     * Converting to `Smooth` seeds both handles collapsed onto the
-     * node's own anchor - the same documented `PathNode` convention
-     * `PathController`'s own placement already follows for a freshly
-     * created `Smooth` node with no curve pulled out of it yet.
-     * Converting to `Corner` discards both handles.
+     * Converting to `Smooth` extends both handles a comfortable distance
+     * from the node's own anchor - not collapsed onto it the way
+     * `PathController`'s own placement seeds a freshly created `Smooth`
+     * node (see `path.h`'s own docs on that convention): a node *edited*
+     * into `Smooth` from an existing `Corner` has real neighbors already
+     * on both sides to take a direction from, so it extends its own
+     * handles along the tangent that rounds that corner symmetrically
+     * between them (perpendicular to the corner angle's own bisector -
+     * see `smoothedHandleTangent()`'s own docs in `pick_controller.cpp`),
+     * rather than leaving them invisible and unclickable exactly on top
+     * of the anchor until dragged out by trial and error. An isolated
+     * single-node path (no neighbor to take a direction from) is the one
+     * case that still collapses the handles onto the anchor, for lack of
+     * a better direction. Converting to `Corner` discards both handles.
      *
      * Applies directly to `currentPreviewPath()`, not yet committed to
      * the log - see commitPathEdit()'s own docs.

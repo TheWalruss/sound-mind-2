@@ -1,5 +1,6 @@
 #include "test_pick_controller.h"
 
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -1083,12 +1084,22 @@ void PickControllerTest::toggleSelectedPathNodeTypeConvertsCornerToSmoothAndBack
 
     controller.toggleSelectedPathNodeType();
 
+    // Node 0 has only one neighbor (node 1, at (0.4, 600.0)) - handleOut
+    // extends a third of the way toward it, handleIn the same distance
+    // the opposite way - see smoothedHandleTangent()'s own docs for why
+    // this reduces to exactly a third of the raw anchor-to-neighbor delta
+    // here (the fraction branch, not the floor, wins for this fixture's
+    // own distances).
     const auto& smoothed = controller.currentPreviewPath().nodes().front();
     QCOMPARE(smoothed.type, PathNodeType::Smooth);
     QVERIFY(smoothed.handleIn.has_value());
     QVERIFY(smoothed.handleOut.has_value());
-    QCOMPARE(smoothed.handleIn->timeSeconds, smoothed.anchor.timeSeconds);
-    QCOMPARE(smoothed.handleOut->timeSeconds, smoothed.anchor.timeSeconds);
+    const double expectedDeltaTime = (0.4 - 0.2) / 3.0;
+    const double expectedDeltaFrequency = (600.0 - 400.0) / 3.0;
+    QCOMPARE(smoothed.handleOut->timeSeconds, smoothed.anchor.timeSeconds + expectedDeltaTime);
+    QCOMPARE(smoothed.handleOut->frequencyHz, smoothed.anchor.frequencyHz + expectedDeltaFrequency);
+    QCOMPARE(smoothed.handleIn->timeSeconds, smoothed.anchor.timeSeconds - expectedDeltaTime);
+    QCOMPARE(smoothed.handleIn->frequencyHz, smoothed.anchor.frequencyHz - expectedDeltaFrequency);
 
     controller.toggleSelectedPathNodeType();
 
@@ -1096,6 +1107,112 @@ void PickControllerTest::toggleSelectedPathNodeTypeConvertsCornerToSmoothAndBack
     QCOMPARE(cornered.type, PathNodeType::Corner);
     QVERIFY(!cornered.handleIn.has_value());
     QVERIFY(!cornered.handleOut.has_value());
+}
+
+void PickControllerTest::toggleSelectedPathNodeTypeExtendsHandlesPerpendicularToTheCornersBisector() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+
+    // A symmetric right-angle corner - equal-length edges on both sides
+    // (0.2s/400Hz-equivalent each) - so smoothedHandleTangent()'s own
+    // perpendicular-to-the-bisector result is easy to check by hand: the
+    // prev edge runs due earlier in time, the next edge runs due higher
+    // in frequency, so the corner's own bisector is (-1, 1) in this
+    // normalized space, and the tangent perpendicular to it should have
+    // zero dot product against that.
+    Path path;
+    PathNode prevNode;
+    prevNode.anchor = TimeFrequencyPoint{0.3, 1000.0};
+    prevNode.type = PathNodeType::Corner;
+    path.addNode(prevNode);
+    PathNode cornerNode;
+    cornerNode.anchor = TimeFrequencyPoint{0.5, 1000.0};
+    cornerNode.type = PathNodeType::Corner;
+    path.addNode(cornerNode);
+    PathNode nextNode;
+    nextNode.anchor = TimeFrequencyPoint{0.5, 1400.0};
+    nextNode.type = PathNodeType::Corner;
+    path.addNode(nextNode);
+
+    auto& log = project.operationLog();
+    const OperationId id = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(id, layerId, std::move(path), makeOpaqueTool(0.02)));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.4, 1200.0}));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.5, 1000.0}));  // selects the corner node.
+    QCOMPARE(*controller.selectedPathNodeIndex(), std::size_t{1});
+
+    controller.toggleSelectedPathNodeType();
+
+    const auto& smoothed = controller.currentPreviewPath().nodes()[1];
+    QCOMPARE(smoothed.type, PathNodeType::Smooth);
+    QVERIFY(smoothed.handleIn.has_value());
+    QVERIFY(smoothed.handleOut.has_value());
+
+    const double scale = sound_mind::core::frequencyToTimeScaleFor(project.settings());
+
+    // The anchor is the exact midpoint between its own two handles.
+    QCOMPARE(smoothed.handleOut->timeSeconds + smoothed.handleIn->timeSeconds, 2.0 * smoothed.anchor.timeSeconds);
+    QCOMPARE(smoothed.handleOut->frequencyHz + smoothed.handleIn->frequencyHz, 2.0 * smoothed.anchor.frequencyHz);
+
+    // Not collapsed onto the anchor - comfortably farther than the node
+    // hit-test tolerance, so it's actually its own clickable target.
+    const double dtOut = smoothed.handleOut->timeSeconds - smoothed.anchor.timeSeconds;
+    const double dfOutNormalized = (smoothed.handleOut->frequencyHz - smoothed.anchor.frequencyHz) / scale;
+    const double handleDistance = std::sqrt(dtOut * dtOut + dfOutNormalized * dfOutNormalized);
+    QVERIFY(handleDistance > 0.03);  // kNodeHitToleranceSeconds, in pick_controller.cpp.
+
+    // Perpendicular to the corner's own bisector.
+    constexpr double bisectorDt = -1.0;
+    constexpr double bisectorDfNormalized = 1.0;
+    const double dot = dtOut * bisectorDt + dfOutNormalized * bisectorDfNormalized;
+    QVERIFY(std::abs(dot) < 1e-9);
+
+    // Oriented toward the *next* neighbor's own side (positive frequency
+    // direction here), not the previous one's.
+    QVERIFY(dfOutNormalized > 0.0);
+}
+
+void PickControllerTest::toggleSelectedPathNodeTypeCollapsesHandlesForAnIsolatedSingleNodePath() {
+    // No neighbor at all to take a direction from - smoothedHandleTangent()
+    // has nothing to extend toward, so this is the one case that still
+    // falls back to the old collapsed-on-anchor placement.
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+
+    Path path;
+    PathNode onlyNode;
+    onlyNode.anchor = TimeFrequencyPoint{0.3, 500.0};
+    onlyNode.type = PathNodeType::Corner;
+    path.addNode(onlyNode);
+
+    auto& log = project.operationLog();
+    const OperationId id = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(id, layerId, std::move(path), makeOpaqueTool(0.02)));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.toggleSelectedPathNodeType();
+
+    const auto& smoothed = controller.currentPreviewPath().nodes().front();
+    QCOMPARE(smoothed.type, PathNodeType::Smooth);
+    QVERIFY(smoothed.handleIn.has_value());
+    QVERIFY(smoothed.handleOut.has_value());
+    QCOMPARE(smoothed.handleIn->timeSeconds, smoothed.anchor.timeSeconds);
+    QCOMPARE(smoothed.handleIn->frequencyHz, smoothed.anchor.frequencyHz);
+    QCOMPARE(smoothed.handleOut->timeSeconds, smoothed.anchor.timeSeconds);
+    QCOMPARE(smoothed.handleOut->frequencyHz, smoothed.anchor.frequencyHz);
 }
 
 void PickControllerTest::commitPathEditSupersedesTheOriginalWithEditedGeometryKeepingItsGradient() {

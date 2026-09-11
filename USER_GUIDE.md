@@ -242,7 +242,12 @@ settings:
   the rest currently paint the same as Circle).
 - **Falloff** - how soft the stroke's edge is, from a hard edge (`0`) to
   fully soft (`1`).
-- **Brush Size**.
+- **Brush Size** - the tip's own radius: in seconds on the time axis, and
+  the equivalent frequency span on the frequency axis (using this
+  project's own Hz-per-second scale, so the same number always describes
+  the same *shape*, not the same pixel size, regardless of canvas
+  resolution). The panel's own default (`0.2`) is a comfortably visible
+  stroke on a typical project without covering too much of it at once.
 - **Color** - a swatch button; click it to open a color picker. This is
   how loud the stroke paints, *and* its stereo balance, at once: the
   picked color's red channel sets the left channel's loudness, green
@@ -304,7 +309,10 @@ regardless of the "Show bounding boxes" setting - ready to:
     side. The opposite handle always mirrors it, to keep the curve
     smooth through the node.
   - **Edit → Toggle Node Type** switches the selected node between a
-    smooth curve point and a sharp corner.
+    smooth curve point and a sharp corner. Converting to smooth extends
+    its own two handles out a comfortable distance, rounding out the
+    corner right away - drag either handle further from there to reshape
+    it more.
   - **Delete key** removes the selected node (refused if it's the only
     node left).
   - **Edit → Apply Path Edit** commits everything changed so far as a

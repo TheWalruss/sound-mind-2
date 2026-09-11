@@ -47,6 +47,8 @@ private slots:
     void draggingASelectedSmoothNodesHandleMirrorsTheOppositeHandle();
     void deleteSelectedPathNodeRemovesItButRefusesToEmptyThePath();
     void toggleSelectedPathNodeTypeConvertsCornerToSmoothAndBack();
+    void toggleSelectedPathNodeTypeExtendsHandlesPerpendicularToTheCornersBisector();
+    void toggleSelectedPathNodeTypeCollapsesHandlesForAnIsolatedSingleNodePath();
     void commitPathEditSupersedesTheOriginalWithEditedGeometryKeepingItsGradient();
     void cancelPathEditDiscardsChangesAndLeavesTheOriginalSelected();
     void deleteSelectionDeletesTheSelectedNodeWhileEditingInsteadOfTheWholeObject();
