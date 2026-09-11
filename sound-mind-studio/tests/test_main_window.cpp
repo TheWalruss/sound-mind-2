@@ -3055,6 +3055,48 @@ void MainWindowTest::modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionS
     QVERIFY(dynamic_cast<const FillOperation*>(active[1]) != nullptr);   // ...below the cut's own silence fill.
 }
 
+void MainWindowTest::cutRegionIsPickableAndMovable() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-cut-pickable.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+
+    // A stroke, then a Cut carved out of the middle of it - the exact
+    // reported scenario ("Cut areas are not Pickable").
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    window.setPaintModeEnabled(false);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 5));
+    QTest::mouseMove(canvas, QPoint(70, 35));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(70, 35));
+    window.cutSelection();
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});  // paint, cut-fill.
+
+    // Pick and move the (invisible, silenced) cut region itself, not the
+    // stroke underneath it.
+    window.setSelectModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(45, 20));
+    QTest::mouseMove(canvas, QPoint(80, 5));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(80, 5));
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{3});  // paint, cut-fill, moved-cut-fill.
+    const auto layerId = window.project()->layers().back().id();
+    const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{2});  // paint (untouched) + the moved cut-fill (original now superseded).
+    const bool anyFillActive =
+        std::any_of(active.begin(), active.end(), [](const auto* op) { return dynamic_cast<const FillOperation*>(op) != nullptr; });
+    QVERIFY(anyFillActive);
+}
+
 void MainWindowTest::bringPickedObjectToFrontMovesItAboveLaterStrokesOnTheSameLayer() {
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-bring-to-front.smproj";
     TestMainWindow window;

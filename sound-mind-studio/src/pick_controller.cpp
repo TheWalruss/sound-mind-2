@@ -39,6 +39,19 @@ bool containsPoint(const sound_mind::core::TimeFrequencyRect& bounds, sound_mind
 /// this same normalized space (see pick()'s own brush-size padding).
 constexpr double kNodeHitToleranceSeconds = 0.015;
 
+/// @brief The minimum click forgiveness `pick()` gives every candidate,
+/// regardless of type - in the same normalized space as
+/// `kNodeHitToleranceSeconds` above. `PaintOperation`'s own brush-size
+/// padding (see `pick()`'s own docs) is usually generous enough on its
+/// own, but a `FillOperation`/`PasteOperation`'s bounds() already exactly
+/// matches its real footprint, which used to mean *zero* padding for
+/// those - fine for a visibly-colored Fill or a visibly-different Paste,
+/// where a real mouse click naturally lands well inside the visible
+/// shape, but not for a Cut's own silence Fill: with nothing rendered to
+/// see, there's no way to click confidently away from the exact edge, and
+/// a real mouse is far less precise than an automated test's exact pixel.
+constexpr double kMinimumPickPaddingSeconds = 0.015;
+
 /// @brief Squared distance between two points in the same normalized
 /// space `kNodeHitToleranceSeconds` is measured in.
 double normalizedDistanceSquared(sound_mind::core::TimeFrequencyPoint a, sound_mind::core::TimeFrequencyPoint b,
@@ -99,12 +112,11 @@ bool PickController::pick(sound_mind::core::LayerId layer, sound_mind::core::Tim
     std::vector<const sound_mind::core::Operation*> candidates;
     for (auto it = operations.rbegin(); it != operations.rend(); ++it) {
         const sound_mind::core::Operation* operation = *it;
-        double timePadding = 0.0;
-        double frequencyPadding = 0.0;
+        double timePadding = kMinimumPickPaddingSeconds;
         if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(operation)) {
-            timePadding = paint->config().size();
-            frequencyPadding = timePadding * scale;
+            timePadding = std::max(timePadding, paint->config().size());
         }
+        const double frequencyPadding = timePadding * scale;
         if (containsPoint(operation->bounds(), point, timePadding, frequencyPadding)) {
             candidates.push_back(operation);
         }

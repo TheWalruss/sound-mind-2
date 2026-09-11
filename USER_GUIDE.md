@@ -222,8 +222,10 @@ hear it composited).
 
 Click the **Paint** toolbar button to switch the canvas into paint mode;
 click it again (or switch tools) to leave it. While it's on, dragging on
-the canvas draws a stroke - you'll see it live as a yellow outline while
-drawing, and it's applied to the spectrogram once you release the mouse.
+the canvas draws a stroke - you'll see it live as a black-outlined white
+line while drawing (visible over any painted color underneath, including
+a matching one), and it's applied to the spectrogram once you release
+the mouse.
 
 **Which layer gets painted**: whichever layer's name you last clicked in
 the Layers panel (see [Working with Layers](#working-with-layers)). If

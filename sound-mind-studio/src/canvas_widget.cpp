@@ -160,9 +160,21 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     // The live paint-stroke preview (v0.Y.24.1, Basic Painting) - see
     // setPaintPreviewPath()'s own docs. Always drawn, regardless of Show
     // path geometry's own setting - see that method's own docs for why.
+    //
+    // Drawn as a black-outlined white line, not a single fixed color - a
+    // path being painted or edited over a matching painted color (yellow
+    // over yellow, say) used to disappear entirely. No single fixed color
+    // survives an arbitrary painted background, but white-with-a-black-
+    // outline does: nothing is simultaneously black and white, so at
+    // least one of the two always contrasts, on any background color or
+    // pattern - the same "halo" technique drawPreviewPathNodes() below
+    // uses for the nodes/handles themselves.
     if (project_ != nullptr && !paintPreviewPath_.nodes().empty()) {
-        painter.setPen(QPen(Qt::yellow, 1));
-        painter.drawPath(toPainterPath(paintPreviewPath_));
+        const QPainterPath previewPath = toPainterPath(paintPreviewPath_);
+        painter.setPen(QPen(Qt::black, 3));
+        painter.drawPath(previewPath);
+        painter.setPen(QPen(Qt::white, 1));
+        painter.drawPath(previewPath);
         drawPreviewPathNodes(painter);
     }
 
@@ -214,38 +226,60 @@ void CanvasWidget::drawPreviewPathNodes(QPainter& painter) const {
     constexpr double kNodeRadius = 3.0;
     constexpr double kSelectedNodeRadius = 5.0;
     constexpr double kHandleRadius = 3.0;
+    // How much wider/larger the black halo is drawn than the colored
+    // shape it sits behind - see this method's own docs, and
+    // paintEvent()'s matching treatment of the path line itself.
+    constexpr double kHaloExtra = 1.5;
+
+    // Draws `radius`-sized dot at `point` in `color`, behind a slightly
+    // larger solid black one - so it stays visible even directly over a
+    // painted region the same color as the dot itself.
+    const auto drawHaloDot = [&painter](QPointF point, double radius, const QColor& color) {
+        painter.setPen(QPen(Qt::black, 1));
+        painter.setBrush(Qt::black);
+        painter.drawEllipse(point, radius + kHaloExtra, radius + kHaloExtra);
+        painter.setPen(QPen(color, 1));
+        painter.setBrush(color);
+        painter.drawEllipse(point, radius, radius);
+        painter.setBrush(Qt::NoBrush);
+    };
+    // Draws a line from `from` to `to` in `color`, behind a wider solid
+    // black one, for the same reason.
+    const auto drawHaloLine = [&painter](QPointF from, QPointF to, const QColor& color) {
+        painter.setPen(QPen(Qt::black, 3));
+        painter.drawLine(from, to);
+        painter.setPen(QPen(color, 1));
+        painter.drawLine(from, to);
+    };
 
     const auto& nodes = paintPreviewPath_.nodes();
     for (std::size_t i = 0; i < nodes.size(); ++i) {
         const bool selected = previewSelectedNodeIndex_.has_value() && *previewSelectedNodeIndex_ == i;
         const QPointF anchorPoint = timeFrequencyToWidgetPoint(nodes[i].anchor);
 
+        // The node's own anchor - drawn *before* its own handles below,
+        // not after: a freshly-smoothed node's handles start collapsed
+        // exactly onto its own anchor (see PathNode's own docs) and stay
+        // there until dragged out, so if the anchor drew on top it would
+        // fully hide them - the only visible sign Toggle Node Type did
+        // anything would be a Corner node's already-absent handles simply
+        // staying absent, indistinguishable from nothing having happened.
+        drawHaloDot(anchorPoint, selected ? kSelectedNodeRadius : kNodeRadius, selected ? Qt::white : Qt::yellow);
+
         // Handles - only for the selected node, and only if it's Smooth -
         // see setPreviewSelectedNodeIndex()'s own docs for why.
         if (selected && nodes[i].type == sound_mind::core::PathNodeType::Smooth) {
-            painter.setPen(QPen(Qt::cyan, 1));
-            painter.setBrush(Qt::cyan);
             if (nodes[i].handleOut.has_value()) {
                 const QPointF handlePoint = timeFrequencyToWidgetPoint(*nodes[i].handleOut);
-                painter.drawLine(anchorPoint, handlePoint);
-                painter.drawEllipse(handlePoint, kHandleRadius, kHandleRadius);
+                drawHaloLine(anchorPoint, handlePoint, Qt::cyan);
+                drawHaloDot(handlePoint, kHandleRadius, Qt::cyan);
             }
             if (nodes[i].handleIn.has_value()) {
                 const QPointF handlePoint = timeFrequencyToWidgetPoint(*nodes[i].handleIn);
-                painter.drawLine(anchorPoint, handlePoint);
-                painter.drawEllipse(handlePoint, kHandleRadius, kHandleRadius);
+                drawHaloLine(anchorPoint, handlePoint, Qt::cyan);
+                drawHaloDot(handlePoint, kHandleRadius, Qt::cyan);
             }
-            painter.setBrush(Qt::NoBrush);
         }
-
-        // The node's own anchor - drawn last, over any handle line that
-        // happens to pass close to it.
-        const QColor color = selected ? Qt::white : Qt::yellow;
-        painter.setPen(QPen(color, 1));
-        painter.setBrush(color);
-        painter.drawEllipse(anchorPoint, selected ? kSelectedNodeRadius : kNodeRadius,
-                             selected ? kSelectedNodeRadius : kNodeRadius);
-        painter.setBrush(Qt::NoBrush);
     }
 }
 

@@ -117,15 +117,19 @@ public:
      * when nothing is within tolerance - the edit session itself stays
      * active either way; only commitPathEdit()/cancelPathEdit() ends it.
      *
-     * Hit-tested against each candidate operation's own `bounds()`. A
-     * `PaintOperation` is padded by its own brush size (`ToolConfiguration
-     * ::size()`, converted via `frequencyToTimeScaleFor()`) so a single-
-     * tap stroke - whose raw Path bounds are a single, zero-area point -
-     * is still actually clickable, matching how far its stamp really
-     * painted; every other kind (`FillOperation`, `PasteOperation`) uses
-     * no padding at all, since their own `bounds()` already exactly
-     * matches their real, visible footprint (unlike a Path's deliberately
-     * coarser raw node/handle extent - see `Path::bounds()`'s own docs).
+     * Hit-tested against each candidate operation's own `bounds()`, with
+     * at least `kMinimumPickPaddingSeconds`' worth of forgiveness on every
+     * side - a real mouse click is far less precise than an automated
+     * test's exact pixel, and a `FillOperation`'s/`PasteOperation`'s own
+     * `bounds()` already exactly matches its real, visible footprint
+     * (unlike a Path's deliberately coarser raw node/handle extent - see
+     * `Path::bounds()`'s own docs), leaving no margin of its own to spare
+     * - especially a Cut's own silence Fill, which renders nothing at all
+     * to click confidently inside of. A `PaintOperation` is additionally
+     * padded by its own brush size (`ToolConfiguration::size()`, converted
+     * via `frequencyToTimeScaleFor()`) when that's larger, so a single-tap
+     * stroke - whose raw Path bounds are a single, zero-area point - is
+     * still actually clickable, matching how far its stamp really painted.
      *
      * Ordinarily selects whichever candidate is most recent (an
      * overlapping newer stroke wins over an older one underneath it) -

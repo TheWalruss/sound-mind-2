@@ -339,8 +339,11 @@ void CanvasWidgetTest::setPaintPreviewPathDrawsItOverTheCanvas() {
 
     widget.setPaintPreviewPath(path);
 
+    // White-with-a-black-outline, not a flat color - see paintEvent()'s
+    // own docs for why a preview line can't rely on any single fixed
+    // color staying visible over an arbitrary painted background.
     const QImage rendered = widget.grab().toImage();
-    QCOMPARE(rendered.pixelColor(50, 25), QColor(255, 255, 0));  // Qt::yellow.
+    QCOMPARE(rendered.pixelColor(50, 25), QColor(255, 255, 255));  // Qt::white, the line's own core.
 }
 
 void CanvasWidgetTest::setPaintPreviewPathWithNoNodesDrawsNothing() {

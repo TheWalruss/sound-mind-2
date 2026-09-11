@@ -518,6 +518,32 @@ void PickControllerTest::pickSelectsAFillOperation() {
     QVERIFY(controller.selectionBounds().has_value());
 }
 
+void PickControllerTest::pickPadsAFillOperationsHitTestingByAMinimumForgivenessMargin() {
+    // A Fill's own bounds() already exactly matches its real, visible
+    // footprint, so it used to get zero hit-test padding - fine for a
+    // visibly-colored Fill, where a real click naturally lands well
+    // inside it, but not for a Cut's own silence Fill: nothing renders
+    // there to click confidently away from the exact edge, and a real
+    // mouse is far less precise than this test's own exact coordinate.
+    // See kMinimumPickPaddingSeconds's own docs in pick_controller.cpp.
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addFillOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    // 0.01s outside the Fill's own raw [0.2, 0.4] time bounds - within
+    // the minimum forgiveness margin, but not inside the raw bounds
+    // themselves.
+    const bool picked = controller.pick(layerId, TimeFrequencyPoint{0.19, 500.0});
+
+    QVERIFY(picked);
+    QVERIFY(controller.hasSelection());
+}
+
 void PickControllerTest::pickSelectsAPasteOperation() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);

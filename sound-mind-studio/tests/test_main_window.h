@@ -181,4 +181,5 @@ private slots:
     void bringPickedObjectToFrontMovesItAboveLaterStrokesOnTheSameLayer();
     void editingAPickedStrokesPathMovesANodeAndCommitsOnApply();
     void cancelingAPickedStrokesPathEditDiscardsTheDragWithoutCommitting();
+    void cutRegionIsPickableAndMovable();
 };

@@ -21,6 +21,7 @@ private slots:
     void clearSelectionEmitsSelectionChangedOnlyWhenSomethingWasSelected();
     void setProjectClearsSelection();
     void pickSelectsAFillOperation();
+    void pickPadsAFillOperationsHitTestingByAMinimumForgivenessMargin();
     void pickSelectsAPasteOperation();
     void selectedConfigurationIsNullForAFillOrPasteSelection();
     void endMoveOnAFillOperationCommitsATranslatedSupersedingFillOperation();

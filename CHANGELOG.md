@@ -6,6 +6,38 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.5] - 2026-09-11
+
+Three follow-up fixes from testing `v0.0.26.4`'s Pick and Edit Path work.
+
+### Fixed
+
+- **A Cut region is now reliably Pickable.** It always *was* pickable at
+  the data-model level (a Cut is a `FillOperation` like any other, and
+  `v0.0.26.2` already generalized Pick to every operation kind) - but a
+  Cut's own silenced region renders nothing, so unlike a visibly-colored
+  Fill, there was no visual margin to click confidently inside its exact
+  bounds with a real (imprecise) mouse. Pick's own hit-testing now gives
+  every candidate a small minimum forgiveness margin, not just zero
+  padding for anything that isn't a brush stroke.
+- **The live path preview - a stroke in progress, a Path-tool placement,
+  or an active Edit Path session - no longer disappears against a
+  matching painted color** (yellow-on-yellow, in particular, since the
+  preview line and its nodes were themselves drawn in plain yellow). It's
+  now drawn as a black-outlined line/dot instead of one flat color:
+  nothing is simultaneously black and white, so at least one of the two
+  always contrasts, regardless of the background color or pattern
+  underneath.
+- **Edit → Toggle Node Type now visibly does something immediately**,
+  instead of only becoming visible once a newly-Smooth node's handles
+  were separately dragged out. A freshly-smoothed node's handles start
+  collapsed exactly onto its own anchor (unchanged, deliberate - see
+  `v0.0.26.4`'s own entry), but the anchor's own dot used to be drawn
+  *last*, completely covering the identically-positioned, smaller handle
+  dots underneath it; the anchor is now drawn first, so a Smooth node's
+  handles show through on top of it even before either one is dragged
+  anywhere.
+
 ## [0.0.26.4] - 2026-09-11
 
 The second installment of Phase 3's "Paths & Grids" milestone: direct
