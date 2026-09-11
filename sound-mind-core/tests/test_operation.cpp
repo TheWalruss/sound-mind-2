@@ -25,6 +25,12 @@ public:
     [[nodiscard]] TimeFrequencyRect bounds() const override {
         return TimeFrequencyRect{0.0, 1.0, 20.0, 20000.0};
     }
+
+    // Never actually exercised for real geometry - FakeOperation has none
+    // - only present to satisfy the abstract interface.
+    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double, double) const override {
+        return std::make_unique<FakeOperation>(newId, id());
+    }
 };
 
 }  // namespace

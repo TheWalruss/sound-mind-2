@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include <QObject>
@@ -14,19 +15,32 @@ namespace sound_mind::studio {
 class PaintController;
 
 /**
- * @brief Owns the currently Picked paint object and turns move/modify/
- *        delete gestures into new, non-destructive `PaintOperation`s that
+ * @brief Owns the currently Picked paint object - of *any* concrete
+ *        `Operation` subtype, not just `PaintOperation` - and turns move/
+ *        modify/delete gestures into new, non-destructive operations that
  *        supersede it - see `docs/sound-mind-design.md`'s "Pick".
  *
  * Every edit (move, a reopened Tool Configuration's own change, delete)
- * appends a brand-new `PaintOperation` pointing its own `supersedes()`
- * back at whichever operation was picked, exactly the same non-mutating
- * "editing is a logged action" model `docs/sound-mind-architecture.md`'s
- * Decisions Made already established for `OperationLog` - nothing here
- * ever mutates a past log entry in place. After a successful edit, the
- * *new* operation becomes the current selection, so further edits keep
- * chaining onto it correctly and a freshly-moved/modified object stays
- * pickable without re-clicking it.
+ * appends a brand-new operation pointing its own `supersedes()` back at
+ * whichever operation was picked, exactly the same non-mutating "editing
+ * is a logged action" model `docs/sound-mind-architecture.md`'s Decisions
+ * Made already established for `OperationLog` - nothing here ever mutates
+ * a past log entry in place. After a successful edit, the *new* operation
+ * becomes the current selection, so further edits keep chaining onto it
+ * correctly and a freshly-moved/modified object stays pickable without
+ * re-clicking it.
+ *
+ * **Any pickable operation can be selected, moved, and deleted** - a
+ * `FillOperation`/`PasteOperation` is exactly as pickable as a
+ * `PaintOperation`, via `Operation::translatedCopy()`'s shared move
+ * primitive. **Only a `PaintOperation` can be "modified" via a reopened
+ * Tool Configuration** (`applyToolConfiguration()`) - `selectedConfiguration()`
+ * returns `std::nullopt` for anything else, which the Tool Configuration
+ * Panel already treats as "nothing to load", so no separate UI branching
+ * is needed for the other kinds. A moved non-`PaintOperation`'s own live
+ * drag preview is a plain rectangular outline of its translated `bounds()`
+ * rather than a rich Path preview, for the same reason - see
+ * `currentPreviewPath()`'s own docs.
  *
  * Shares `PaintController`'s own per-layer pre-paint base cache rather
  * than keeping a second one: every commit here calls back into
@@ -70,17 +84,20 @@ public:
     void setProject(sound_mind::core::Project* project);
 
     /**
-     * @brief Attempts to select whichever active `PaintOperation`
-     *        targeting `layer` is under `point`, and arms a potential
-     *        drag from this same point (see continueMove()/endMove()'s
-     *        own docs).
+     * @brief Attempts to select whichever active operation - of any
+     *        concrete kind - targeting `layer` is under `point`, and
+     *        arms a potential drag from this same point (see
+     *        continueMove()/endMove()'s own docs).
      *
-     * Hit-tested against each candidate operation's own `bounds()`,
-     * padded by that operation's own brush size (`ToolConfiguration::
-     * size()`, converted via `frequencyToTimeScaleFor()`) so a single-tap
-     * stroke - whose raw Path bounds are a single, zero-area point - is
-     * still actually clickable, matching how far its stamp really
-     * painted.
+     * Hit-tested against each candidate operation's own `bounds()`. A
+     * `PaintOperation` is padded by its own brush size (`ToolConfiguration
+     * ::size()`, converted via `frequencyToTimeScaleFor()`) so a single-
+     * tap stroke - whose raw Path bounds are a single, zero-area point -
+     * is still actually clickable, matching how far its stamp really
+     * painted; every other kind (`FillOperation`, `PasteOperation`) uses
+     * no padding at all, since their own `bounds()` already exactly
+     * matches their real, visible footprint (unlike a Path's deliberately
+     * coarser raw node/handle extent - see `Path::bounds()`'s own docs).
      *
      * Ordinarily selects whichever candidate is most recent (an
      * overlapping newer stroke wins over an older one underneath it) -
@@ -117,7 +134,9 @@ public:
     ///        what it was painted (or last modified) with, for
     ///        pre-filling a reopened Tool Configuration Panel.
     /// @return The selected configuration, or `std::nullopt` if nothing
-    ///         is selected.
+    ///         is selected, or the selected object isn't a
+    ///         `PaintOperation` (a `FillOperation`/`PasteOperation` has
+    ///         no tool configuration of its own to reopen).
     [[nodiscard]] std::optional<sound_mind::core::ToolConfiguration> selectedConfiguration() const;
 
     /// @brief The selected object's own current bounding box, for
@@ -149,9 +168,11 @@ public:
      * plain click, not a drag), this is a no-op that leaves the
      * selection exactly as it was - no spurious zero-distance edit is
      * ever logged for a click alone. Otherwise, commits the moved object
-     * as a new `PaintOperation` (same `ToolConfiguration`, a
-     * `Path::translated()` copy of the original geometry) superseding
-     * the one picked, and makes the new operation the current selection.
+     * via its own `Operation::translatedCopy()` - whatever concrete kind
+     * it is - superseding the one picked (see `OperationLog::append()`'s
+     * own docs: this also preserves its exact position in the stack,
+     * rather than promoting it to the top), and makes the new operation
+     * the current selection.
      *
      * Emits pathChanged() (clearing the live preview), contentChanged()
      * for the affected layer, and selectionChanged() if a move was
@@ -163,7 +184,11 @@ public:
      * @brief Applies a new tool configuration to the selected object -
      *        the actual work behind reopening Tool Configuration and
      *        changing a control while something is Picked. A no-op if
-     *        nothing is selected.
+     *        nothing is selected, or the selected object isn't a
+     *        `PaintOperation` (see `selectedConfiguration()`'s own docs -
+     *        the Tool Configuration Panel never reopens for anything
+     *        else in the first place, so this case isn't expected to be
+     *        reached via normal UI interaction, only guarded defensively).
      *
      * Commits immediately (no drag/live-preview phase, unlike move): a
      * new `PaintOperation` with the selected object's own unchanged
@@ -182,22 +207,41 @@ public:
      * @brief Deletes the selected object - a no-op if nothing is
      *        selected.
      *
-     * Commits a new, empty-Path `PaintOperation` superseding the one
-     * picked - a deliberate "tombstone", not a real stroke: an empty
-     * Path samples to nothing (`applyPaintOperation()`'s own docs), so
-     * it has zero visual effect once replayed, exactly matching what
-     * "deleted" should look like within an append-only log that never
-     * actually removes an entry. Clears the selection afterward - unlike
-     * move/modify, there's nothing left to keep selected.
+     * A `PaintOperation` is superseded by a new, empty-Path one - a
+     * deliberate "tombstone", not a real stroke: an empty Path samples to
+     * nothing (`applyPaintOperation()`'s own docs), so it has zero visual
+     * effect once replayed. Any other kind (`FillOperation`,
+     * `PasteOperation`) can't reduce to a literal "zero-effect copy of
+     * itself" the same way - a `PasteOperation` in particular always
+     * overwrites outright, with no opacity to zero out - so those are
+     * instead superseded by a fresh, fully-opaque `FillOperation` at the
+     * silence floor over the same `bounds()`, the identical "clear this
+     * region" mechanism Cut's own source-clearing already uses (see
+     * `sound_mind::core::silenceGradient()`'s own docs). Either way,
+     * nothing is ever actually removed from the log - "deleted" always
+     * means "a new entry supersedes it with zero visible effect".
+     *
+     * Clears the selection afterward - unlike move/modify, there's
+     * nothing left to keep selected.
      *
      * Emits contentChanged() for the affected layer and
      * selectionChanged().
      */
     void deleteSelection();
 
-    /// @brief The in-progress move's own live preview Path.
-    /// @return The current live preview; empty (no nodes) if no move is
-    ///         in progress.
+    /**
+     * @brief The in-progress move's own live preview.
+     *
+     * A translated copy of the selected object's own Path, if it's a
+     * `PaintOperation` - the same rich, curve-accurate preview this
+     * always showed. For any other kind, a plain four-corner rectangular
+     * outline of its translated `bounds()` instead - there's no Path to
+     * preview, and a moving bounding box is still real, useful feedback
+     * for where a Fill or Paste would land.
+     *
+     * @return The current live preview; empty (no nodes) if no move is
+     *         in progress.
+     */
     [[nodiscard]] const sound_mind::core::Path& currentPreviewPath() const noexcept { return previewPath_; }
 
 signals:
@@ -217,20 +261,31 @@ signals:
     void contentChanged(sound_mind::core::LayerId layer);
 
 private:
-    /// @brief Appends `newPath`/`newConfig` as a new `PaintOperation`
-    ///        superseding the current selection, rebuilds the affected
-    ///        layer via `paintController_`, and emits contentChanged().
+    /// @brief Appends `replacement` (already constructed with its own
+    ///        `supersedes()` pointing at the current selection) to the
+    ///        log, rebuilds the affected layer via `paintController_`,
+    ///        emits contentChanged(), and updates `pickedOperationId_`/
+    ///        `pickedOperation_` to the newly-appended entry.
     /// @return The new operation's own id.
-    sound_mind::core::OperationId commitReplacement(sound_mind::core::Path newPath,
-                                                      sound_mind::core::ToolConfiguration newConfig);
+    sound_mind::core::OperationId commitReplacement(std::unique_ptr<sound_mind::core::Operation> replacement);
 
     PaintController* paintController_;
     sound_mind::core::Project* project_ = nullptr;
 
     std::optional<sound_mind::core::OperationId> pickedOperationId_;
     sound_mind::core::LayerId pickedLayer_ = 0;
-    sound_mind::core::Path pickedPath_;
-    sound_mind::core::ToolConfiguration pickedConfig_;
+
+    /// @brief The currently selected operation, or `nullptr` if nothing
+    ///        is. A raw, non-owning pointer straight into the project's
+    ///        own `OperationLog` - safe to hold across further append()
+    ///        calls, since `OperationLog` only ever grows via
+    ///        `std::vector<std::unique_ptr<Operation>>::push_back()`,
+    ///        which never moves or destroys an *already-held* Operation,
+    ///        only the vector's own unique_ptr slots (a real vector
+    ///        reallocation moves the smart pointers, not the heap objects
+    ///        they own). Never dereferenced unless `pickedOperationId_`
+    ///        also has a value.
+    const sound_mind::core::Operation* pickedOperation_ = nullptr;
 
     sound_mind::core::TimeFrequencyPoint dragAnchor_;
     bool dragMoved_ = false;

@@ -40,6 +40,30 @@ namespace sound_mind::core {
  *   operation whose `supersedes()` points at the old one, which becomes
  *   permanently inactive regardless of the undo high-water mark. It isn't
  *   how plain undo works; plain undo doesn't need a replacement.
+ *
+ * A third, independent mechanism - **stack order** - decides *rendering*
+ * order (which of two overlapping active operations on the same layer
+ * paints on top), deliberately kept separate from both of the above:
+ *
+ * - `operations_`'s own append order is a strict, append-only history
+ *   record - it exists so undo()/redo()'s high-water mark and
+ *   `supersedes()` chains stay simple and correct, and it must never be
+ *   reinterpreted as anything else.
+ * - `stackOrder_` is a separate, independently-ordered list of every
+ *   operation id ever appended, used *only* to decide the order
+ *   `activeOperationsTargeting()` returns its own (already-filtered)
+ *   results in. A fresh, non-superseding append places its own id at the
+ *   end of `stackOrder_` (newest paints on top, same as before). A
+ *   *superseding* append - Pick's own move/modify/delete - inserts its
+ *   own id immediately next to the operation it supersedes' own entry,
+ *   rather than at the end: the whole reason this exists is so editing an
+ *   object preserves its position in the stack instead of always
+ *   promoting it to the top (a real, reported bug in the very first
+ *   version of this mechanism, which just used append order for both
+ *   purposes at once - see `docs/sound-mind-architecture.md`'s Decisions
+ *   Made). Entries for ids that are no longer active (superseded, or
+ *   undone) are simply skipped when read, never pruned - undo()/redo()
+ *   needs no awareness of `stackOrder_` at all as a result.
  */
 class OperationLog {
 public:
@@ -57,6 +81,13 @@ public:
      * If undo() had moved the active high-water mark backward, this
      * discards every operation past it first - the same "a fresh edit
      * invalidates the redo tail" rule any conventional undo stack follows.
+     *
+     * Also places the new operation's own id into `stackOrder_` (see the
+     * class's own docs): at the very end if `operation->supersedes()` is
+     * `std::nullopt` (a genuinely new object, painted on top of
+     * everything else so far); immediately next to its own superseded
+     * id's entry otherwise, so editing an object never changes where it
+     * sits in the stack.
      *
      * @param operation The operation to append; must not be `nullptr`.
      */
@@ -94,18 +125,25 @@ public:
     void redo() noexcept;
 
     /**
-     * @brief The operations relevant to rebuilding one layer's cache,
-     *        in log order - the exact sequence a real replay needs to
-     *        consume.
+     * @brief The operations relevant to rebuilding one layer's cache, in
+     *        stack order (back to front) - the exact sequence a real
+     *        replay needs to consume, and the same order Pick's own
+     *        hit-testing reads (most-recent-in-the-stack-first, via
+     *        reverse iteration) to decide which overlapping object a
+     *        click actually reaches first.
      *
      * Only operations that are both currently active (not undone) *and*
      * not superseded by a later active operation are included - matching
      * "Composer Mode Fit"'s own replay rule: "Replay honours only the
-     * non-superseded operation at each point in a layer's history."
+     * non-superseded operation at each point in a layer's history." The
+     * *order* they're returned in is `stackOrder_`'s own (see the class's
+     * own docs) - deliberately not raw append order, which would put a
+     * just-edited object back at the very end (the top) regardless of
+     * where it actually sits in the stack.
      *
      * @param layer Which layer to filter to, via each operation's own
      *        Operation::targetLayer().
-     * @return Every matching operation, oldest first.
+     * @return Every matching operation, back of the stack first.
      */
     [[nodiscard]] std::vector<const Operation*> activeOperationsTargeting(LayerId layer) const;
 
@@ -116,6 +154,11 @@ private:
     std::vector<std::unique_ptr<Operation>> operations_;
     std::size_t activeCount_ = 0;
     OperationId nextId_ = 1;
+
+    /// @brief The current rendering (stack) order of every operation ever
+    ///        appended - see the class's own docs for why this is kept
+    ///        entirely separate from `operations_`'s own append order.
+    std::vector<OperationId> stackOrder_;
 };
 
 /// @brief Serializes the log to its JSON representation.

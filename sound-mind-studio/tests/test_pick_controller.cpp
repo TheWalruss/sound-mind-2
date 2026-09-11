@@ -5,24 +5,33 @@
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/gradient.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_operation.h"
+#include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/pick_controller.h"
 
+using sound_mind::core::Clip;
+using sound_mind::core::FillOperation;
+using sound_mind::core::Gradient;
+using sound_mind::core::GradientStop;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
 using sound_mind::core::OperationId;
 using sound_mind::core::PaintOperation;
+using sound_mind::core::PasteOperation;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
+using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::studio::PaintController;
 using sound_mind::studio::PickController;
@@ -94,6 +103,57 @@ OperationId addPaintOperation(Project& project, LayerId layer, double startTime,
     auto& log = project.operationLog();
     const OperationId id = log.reserveId();
     log.append(std::make_unique<PaintOperation>(id, layer, std::move(path), config));
+    return id;
+}
+
+TimeFrequencyRect makeTestBounds(double startTime, double startFrequency, double endTime, double endFrequency) {
+    TimeFrequencyRect bounds;
+    bounds.startTimeSeconds = startTime;
+    bounds.lowFrequencyHz = startFrequency;
+    bounds.endTimeSeconds = endTime;
+    bounds.highFrequencyHz = endFrequency;
+    return bounds;
+}
+
+/// @brief A uniform (same value at both stops), fully opaque gradient.
+Gradient makeOpaqueGradient(float intensity) {
+    Gradient gradient;
+    GradientStop stop;
+    stop.leftIntensity = intensity;
+    stop.rightIntensity = intensity;
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    gradient.setStopValues(0, stop);
+    gradient.setStopValues(1, stop);
+    return gradient;
+}
+
+/// @brief Appends a real FillOperation directly to `project`'s own
+/// OperationLog - the "already filled, ready to be Picked" starting state.
+OperationId addFillOperation(Project& project, LayerId layer, double startTime, double startFrequency,
+                              double endTime, double endFrequency, float intensity = -10.0f) {
+    auto& log = project.operationLog();
+    const OperationId id = log.reserveId();
+    log.append(std::make_unique<FillOperation>(
+        id, layer, makeTestBounds(startTime, startFrequency, endTime, endFrequency), makeOpaqueGradient(intensity)));
+    return id;
+}
+
+/// @brief Appends a real PasteOperation directly to `project`'s own
+/// OperationLog - the "already pasted, ready to be Picked" starting state.
+OperationId addPasteOperation(Project& project, LayerId layer, double startTime, double startFrequency,
+                               double endTime, double endFrequency) {
+    Clip clip;
+    clip.frameCount = 2;
+    clip.binCount = 2;
+    clip.leftMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.rightMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.sharedPhaseRadians = {0.0f, 0.0f, 0.0f, 0.0f};
+
+    auto& log = project.operationLog();
+    const OperationId id = log.reserveId();
+    log.append(std::make_unique<PasteOperation>(
+        id, layer, makeTestBounds(startTime, startFrequency, endTime, endFrequency), clip));
     return id;
 }
 
@@ -414,4 +474,240 @@ void PickControllerTest::setProjectClearsSelection() {
     controller.setProject(nullptr);
 
     QVERIFY(!controller.hasSelection());
+}
+
+void PickControllerTest::pickSelectsAFillOperation() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addFillOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    const bool picked = controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0});
+
+    QVERIFY(picked);
+    QVERIFY(controller.hasSelection());
+    QVERIFY(controller.selectionBounds().has_value());
+}
+
+void PickControllerTest::pickSelectsAPasteOperation() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPasteOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    const bool picked = controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0});
+
+    QVERIFY(picked);
+    QVERIFY(controller.hasSelection());
+    QVERIFY(controller.selectionBounds().has_value());
+}
+
+void PickControllerTest::selectedConfigurationIsNullForAFillOrPasteSelection() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addFillOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+    addPasteOperation(project, layerId, 1.0, 400.0, 1.2, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(!controller.selectedConfiguration().has_value());
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{1.1, 500.0}));
+    QVERIFY(!controller.selectedConfiguration().has_value());
+}
+
+void PickControllerTest::endMoveOnAFillOperationCommitsATranslatedSupersedingFillOperation() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId originalId = addFillOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});  // +0.1s, +200Hz.
+    controller.endMove();
+
+    QCOMPARE(project.operationLog().size(), std::size_t{2});
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* moved = dynamic_cast<const FillOperation*>(active.front());
+    QVERIFY(moved != nullptr);
+    QVERIFY(moved->supersedes().has_value());
+    QCOMPARE(*moved->supersedes(), originalId);
+    QCOMPARE(moved->bounds().startTimeSeconds, 0.3);
+    QCOMPARE(moved->bounds().lowFrequencyHz, 600.0);
+
+    // Still selected - now the new, moved operation.
+    QVERIFY(controller.hasSelection());
+}
+
+void PickControllerTest::endMoveOnAPasteOperationCommitsATranslatedSupersedingPasteOperation() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId originalId = addPasteOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});
+    controller.endMove();
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* moved = dynamic_cast<const PasteOperation*>(active.front());
+    QVERIFY(moved != nullptr);
+    QVERIFY(moved->supersedes().has_value());
+    QCOMPARE(*moved->supersedes(), originalId);
+    QCOMPARE(moved->clip().leftMagnitudeDb.size(), std::size_t{4});  // the clip itself carries over unchanged.
+}
+
+void PickControllerTest::continueMoveOnAFillOperationShowsARectangularOutlinePreview() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addFillOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.continueMove(TimeFrequencyPoint{0.4, 700.0});
+
+    // A closed, 5-node rectangular outline - see currentPreviewPath()'s own docs.
+    QCOMPARE(controller.currentPreviewPath().nodes().size(), std::size_t{5});
+}
+
+void PickControllerTest::applyToolConfigurationIsANoOpWhenAFillOperationIsSelected() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addFillOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.applyToolConfiguration(makeOpaqueTool(0.05));
+
+    QCOMPARE(project.operationLog().size(), std::size_t{1});  // nothing new committed.
+}
+
+void PickControllerTest::deleteSelectionOnAFillOperationCommitsASilenceFillTombstone() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId originalId = addFillOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.deleteSelection();
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* tombstone = dynamic_cast<const FillOperation*>(active.front());
+    QVERIFY(tombstone != nullptr);
+    QVERIFY(tombstone->supersedes().has_value());
+    QCOMPARE(*tombstone->supersedes(), originalId);
+    QCOMPARE(tombstone->gradient().stops().front().leftIntensity, -96.0f);
+    QCOMPARE(tombstone->gradient().stops().front().leftOpacity, 1.0f);
+    QVERIFY(!controller.hasSelection());
+}
+
+void PickControllerTest::deleteSelectionOnAPasteOperationCommitsASilenceFillTombstone() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId originalId = addPasteOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.deleteSelection();
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    // A PasteOperation can't become a literal zero-effect copy of itself
+    // (it always overwrites outright) - it's superseded by a silence Fill
+    // over the same bounds instead, the same "clear this region"
+    // mechanism Cut's own source-clearing already uses.
+    const auto* tombstone = dynamic_cast<const FillOperation*>(active.front());
+    QVERIFY(tombstone != nullptr);
+    QVERIFY(tombstone->supersedes().has_value());
+    QCOMPARE(*tombstone->supersedes(), originalId);
+}
+
+void PickControllerTest::endMovePreservesTheMovedOperationsOwnStackPosition() {
+    // The actual reported bug: paint A, then paint B on top of the same
+    // spot; moving A (reached by cycling past B) must NOT promote it
+    // above B - B must stay on top afterward.
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    const OperationId aId = addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);  // B, same footprint, painted later.
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));  // selects B (topmost).
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));  // cycles to A (occluded).
+
+    controller.continueMove(TimeFrequencyPoint{0.5, 900.0});
+    controller.endMove();
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{2});
+    // A's own move must still sit *below* B - not promoted to the top.
+    QVERIFY(active[0]->supersedes().has_value());
+    QCOMPARE(*active[0]->supersedes(), aId);
+    QVERIFY(!active[1]->supersedes().has_value());  // B, unchanged and still on top.
+}
+
+void PickControllerTest::deleteSelectionPreservesStackPositionOfOperationsAboveIt() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    const OperationId aId = addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);  // B, on top.
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));  // B.
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));  // cycles to A.
+
+    controller.deleteSelection();
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{2});
+    QVERIFY(active[0]->supersedes().has_value());
+    QCOMPARE(*active[0]->supersedes(), aId);  // A's own tombstone, still in A's old slot.
+    QVERIFY(!active[1]->supersedes().has_value());  // B, unaffected.
 }

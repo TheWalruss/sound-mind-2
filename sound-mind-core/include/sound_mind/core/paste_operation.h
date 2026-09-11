@@ -102,6 +102,14 @@ public:
     /// @return This operation's own clip.
     [[nodiscard]] const Clip& clip() const noexcept { return clip_; }
 
+    /// @copydoc Operation::translatedCopy()
+    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double deltaTimeSeconds,
+                                                              double deltaFrequencyHz) const override {
+        return std::make_unique<PasteOperation>(newId, targetLayer_,
+                                                  translated(placement_, deltaTimeSeconds, deltaFrequencyHz), clip_,
+                                                  id());
+    }
+
 private:
     LayerId targetLayer_;
     TimeFrequencyRect placement_;

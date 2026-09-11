@@ -172,6 +172,119 @@ TEST_CASE("undoing a superseding operation makes the original visible again", "[
     REQUIRE(active[0]->id() == original);
 }
 
+TEST_CASE("a superseding append preserves the superseded operation's own position in the stack, "
+          "not just its own append position",
+          "[core][operation_log]") {
+    // The actual bug this mechanism exists to fix: A, B, C painted in that
+    // order (bottom to top); superseding B (a Pick move/modify, say) used
+    // to always append the replacement at the very end of the log, which
+    // activeOperationsTargeting() then read back as "B' is now on top of
+    // C" - silently reordering the stack. B' must stay exactly where B
+    // was: between A and C.
+    OperationLog log;
+    const OperationId a = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    const OperationId b = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    const OperationId c = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(c, LayerId{1}, makeTestPath(2.0, 3.0), ToolConfiguration{}));
+
+    log.append(makePaint(log, LayerId{1}, b));  // supersedes B - "moving" it, in effect.
+
+    const auto active = log.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 3);
+    REQUIRE(active[0]->id() == a);
+    REQUIRE(active[1]->supersedes().has_value());
+    REQUIRE(*active[1]->supersedes() == b);  // B's replacement, in B's own old slot.
+    REQUIRE(active[2]->id() == c);
+}
+
+TEST_CASE("a chain of several supersedes on the same original all preserve its own stack position",
+          "[core][operation_log]") {
+    OperationLog log;
+    const OperationId a = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    const OperationId b = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    const OperationId c = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(c, LayerId{1}, makeTestPath(2.0, 3.0), ToolConfiguration{}));
+
+    log.append(makePaint(log, LayerId{1}, b));   // move B once.
+    log.append(makePaint(log, LayerId{1}, log.at(3).id()));  // move it again.
+
+    const auto active = log.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 3);
+    REQUIRE(active[0]->id() == a);
+    REQUIRE(active[1]->id() == log.at(4).id());  // the second (latest) move.
+    REQUIRE(active[2]->id() == c);
+}
+
+TEST_CASE("a fresh, non-superseding append always places the new operation on top of the stack",
+          "[core][operation_log]") {
+    OperationLog log;
+    const OperationId a = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    const OperationId b = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+
+    log.append(makePaint(log, LayerId{1}, a));  // moves A - must NOT jump above B.
+    const OperationId freshOnTop = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(freshOnTop, LayerId{1}, makeTestPath(3.0, 4.0), ToolConfiguration{}));
+
+    const auto active = log.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 3);
+    REQUIRE(active.back()->id() == freshOnTop);  // a genuinely new object always goes on top.
+}
+
+TEST_CASE("An OperationLog's stack order round-trips through JSON", "[core][operation_log]") {
+    OperationLog log;
+    const OperationId a = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    const OperationId b = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    const OperationId c = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(c, LayerId{1}, makeTestPath(2.0, 3.0), ToolConfiguration{}));
+    log.append(makePaint(log, LayerId{1}, b));
+
+    const nlohmann::json json = log;
+    const OperationLog roundTripped = json.get<OperationLog>();
+
+    const auto active = roundTripped.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 3);
+    REQUIRE(active[0]->id() == a);
+    REQUIRE(active[1]->supersedes().has_value());
+    REQUIRE(*active[1]->supersedes() == b);
+    REQUIRE(active[2]->id() == c);
+}
+
+TEST_CASE("An OperationLog's pre-stack-order JSON shape (no \"stackOrder\" field) falls back to append order",
+          "[core][operation_log]") {
+    const nlohmann::json legacy = nlohmann::json{
+        {"operations",
+         nlohmann::json::array({
+             nlohmann::json{{"kind", "paint"},
+                             {"id", 1},
+                             {"targetLayer", 1},
+                             {"path", makeTestPath(0.0, 1.0)},
+                             {"config", ToolConfiguration{}}},
+             nlohmann::json{{"kind", "paint"},
+                             {"id", 2},
+                             {"targetLayer", 1},
+                             {"path", makeTestPath(1.0, 2.0)},
+                             {"config", ToolConfiguration{}}},
+         })},
+        {"activeCount", 2},
+        {"nextId", 3},
+    };
+
+    const OperationLog log = legacy.get<OperationLog>();
+
+    const auto active = log.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 2);
+    REQUIRE(active[0]->id() == OperationId{1});
+    REQUIRE(active[1]->id() == OperationId{2});
+}
+
 TEST_CASE("An OperationLog with real PaintOperations round-trips through JSON", "[core][operation_log]") {
     OperationLog log;
     const OperationId original = log.reserveId();

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include "sound_mind/core/gradient.h"
@@ -53,6 +54,13 @@ public:
     /// @brief The color (or gradient) this fill was applied with.
     /// @return This operation's own gradient.
     [[nodiscard]] const Gradient& gradient() const noexcept { return gradient_; }
+
+    /// @copydoc Operation::translatedCopy()
+    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double deltaTimeSeconds,
+                                                              double deltaFrequencyHz) const override {
+        return std::make_unique<FillOperation>(newId, targetLayer_, translated(bounds_, deltaTimeSeconds, deltaFrequencyHz),
+                                                 gradient_, id());
+    }
 
 private:
     LayerId targetLayer_;

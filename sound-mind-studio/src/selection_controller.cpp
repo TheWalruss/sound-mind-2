@@ -24,28 +24,6 @@ sound_mind::core::TimeFrequencyRect rectFromCorners(sound_mind::core::TimeFreque
     return rect;
 }
 
-/// @brief The "silence floor" dB value used throughout the codebase for
-/// "as quiet as this representation goes" - the same constant
-/// `color_conversion.h`'s own display range and Codec's Pool file
-/// quantization already use.
-constexpr float kSilenceDb = -96.0f;
-
-/// @brief An opaque, uniform gradient at the silence floor on both
-/// channels - what cutSelection() writes over its own source region,
-/// standing in for a dedicated "delete" Operation the same way
-/// PickController's own delete reuses an empty-effect PaintOperation.
-sound_mind::core::Gradient silenceGradient() {
-    sound_mind::core::Gradient gradient;
-    sound_mind::core::GradientStop stop;
-    stop.leftIntensity = kSilenceDb;
-    stop.rightIntensity = kSilenceDb;
-    stop.leftOpacity = 1.0f;
-    stop.rightOpacity = 1.0f;
-    gradient.setStopValues(0, stop);
-    gradient.setStopValues(1, stop);
-    return gradient;
-}
-
 }  // namespace
 
 SelectionController::SelectionController(PaintController* paintController, QObject* parent)
@@ -169,7 +147,7 @@ void SelectionController::cutSelection() {
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_,
-                                                                    silenceGradient()));
+                                                                    sound_mind::core::silenceGradient()));
     paintController_->rebuildLayerContent(selectionLayer_);
     emit contentChanged(selectionLayer_);
 }

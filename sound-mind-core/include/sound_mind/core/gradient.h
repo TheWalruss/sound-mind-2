@@ -136,4 +136,22 @@ void to_json(nlohmann::json& json, const Gradient& gradient);
 /// @throws nlohmann::json::exception on malformed or missing required data.
 void from_json(const nlohmann::json& json, Gradient& gradient);
 
+/**
+ * @brief An opaque, uniform gradient at the "silence floor" (~-96dB) on
+ *        both channels - "no audible/visible content here", the same
+ *        constant `color_conversion.h`'s own display range and Codec's
+ *        Pool file quantization already use.
+ *
+ * Shared by every caller that needs to non-destructively silence a region
+ * rather than removing an operation outright: Cut's own source-region
+ * clearing, and Pick's own delete for any operation kind that can't
+ * reduce to a literal zero-effect copy of itself the way an empty-Path
+ * `PaintOperation` can (a `PasteOperation` in particular, which always
+ * overwrites outright and so has no opacity to zero out instead).
+ *
+ * @return A fresh gradient, both stops at (-96dB, opacity 1.0) on both
+ *         channels.
+ */
+[[nodiscard]] Gradient silenceGradient();
+
 }  // namespace sound_mind::core

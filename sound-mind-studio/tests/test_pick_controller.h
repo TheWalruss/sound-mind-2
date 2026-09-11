@@ -20,4 +20,15 @@ private slots:
     void deleteSelectionCommitsATombstoneAndClearsSelection();
     void clearSelectionEmitsSelectionChangedOnlyWhenSomethingWasSelected();
     void setProjectClearsSelection();
+    void pickSelectsAFillOperation();
+    void pickSelectsAPasteOperation();
+    void selectedConfigurationIsNullForAFillOrPasteSelection();
+    void endMoveOnAFillOperationCommitsATranslatedSupersedingFillOperation();
+    void endMoveOnAPasteOperationCommitsATranslatedSupersedingPasteOperation();
+    void continueMoveOnAFillOperationShowsARectangularOutlinePreview();
+    void applyToolConfigurationIsANoOpWhenAFillOperationIsSelected();
+    void deleteSelectionOnAFillOperationCommitsASilenceFillTombstone();
+    void deleteSelectionOnAPasteOperationCommitsASilenceFillTombstone();
+    void endMovePreservesTheMovedOperationsOwnStackPosition();
+    void deleteSelectionPreservesStackPositionOfOperationsAboveIt();
 };

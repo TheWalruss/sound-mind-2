@@ -23,4 +23,14 @@ void from_json(const nlohmann::json& json, TimeFrequencyRect& rect) {
     json.at("highFrequencyHz").get_to(rect.highFrequencyHz);
 }
 
+TimeFrequencyRect translated(const TimeFrequencyRect& rect, double deltaTimeSeconds,
+                              double deltaFrequencyHz) noexcept {
+    TimeFrequencyRect result = rect;
+    result.startTimeSeconds += deltaTimeSeconds;
+    result.endTimeSeconds += deltaTimeSeconds;
+    result.lowFrequencyHz += deltaFrequencyHz;
+    result.highFrequencyHz += deltaFrequencyHz;
+    return result;
+}
+
 }  // namespace sound_mind::core

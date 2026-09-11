@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include "sound_mind/core/operation.h"
@@ -54,6 +55,13 @@ public:
     /// @brief The tool configuration this stroke was painted with.
     /// @return This operation's own tool configuration.
     [[nodiscard]] const ToolConfiguration& config() const noexcept { return config_; }
+
+    /// @copydoc Operation::translatedCopy()
+    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double deltaTimeSeconds,
+                                                              double deltaFrequencyHz) const override {
+        return std::make_unique<PaintOperation>(newId, targetLayer_, path_.translated(deltaTimeSeconds, deltaFrequencyHz),
+                                                  config_, id());
+    }
 
 private:
     LayerId targetLayer_;

@@ -107,4 +107,17 @@ void from_json(const nlohmann::json& json, Gradient& gradient) {
     json.at("linkChannels").get_to(gradient.linkChannels_);
 }
 
+Gradient silenceGradient() {
+    constexpr float kSilenceDb = -96.0f;
+    Gradient gradient;
+    GradientStop stop;
+    stop.leftIntensity = kSilenceDb;
+    stop.rightIntensity = kSilenceDb;
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    gradient.setStopValues(0, stop);
+    gradient.setStopValues(1, stop);
+    return gradient;
+}
+
 }  // namespace sound_mind::core

@@ -1,6 +1,8 @@
 #include "sound_mind/core/operation_log.h"
 
+#include <algorithm>
 #include <stdexcept>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "sound_mind/core/fill_operation.h"
@@ -18,6 +20,26 @@ void OperationLog::append(std::unique_ptr<Operation> operation) {
     operations_.resize(activeCount_);
     operations_.push_back(std::move(operation));
     activeCount_ = operations_.size();
+
+    // stackOrder_ placement - see the class's own docs. Any id
+    // stackOrder_ still carries for an operation this truncation just
+    // discarded simply stops being findable in operations_ - harmless,
+    // since activeOperationsTargeting() only ever looks an id up after
+    // already confirming it's currently active.
+    const Operation& appended = *operations_.back();
+    if (const auto supersedes = appended.supersedes(); supersedes.has_value()) {
+        const auto it = std::find(stackOrder_.begin(), stackOrder_.end(), *supersedes);
+        if (it != stackOrder_.end()) {
+            stackOrder_.insert(std::next(it), appended.id());
+        } else {
+            // Defensive: no real call site constructs a supersedes()
+            // reference stackOrder_ doesn't already know about - falls
+            // back to the same "new object, goes on top" placement below.
+            stackOrder_.push_back(appended.id());
+        }
+    } else {
+        stackOrder_.push_back(appended.id());
+    }
 }
 
 void OperationLog::undo() noexcept {
@@ -40,14 +62,25 @@ std::vector<const Operation*> OperationLog::activeOperationsTargeting(LayerId la
         }
     }
 
-    std::vector<const Operation*> result;
+    // The active, non-superseded, this-layer subset - same filter as
+    // before, just no longer also deciding the result's own order (that's
+    // stackOrder_'s job below) - see this method's own docs.
+    std::unordered_map<OperationId, const Operation*> eligible;
     for (std::size_t i = 0; i < activeCount_; ++i) {
         const Operation& operation = *operations_[i];
         if (supersededIds.contains(operation.id())) {
             continue;  // a later active operation replaces this one - see this method's own docs.
         }
         if (operation.targetLayer() == layer) {
-            result.push_back(&operation);
+            eligible.emplace(operation.id(), &operation);
+        }
+    }
+
+    std::vector<const Operation*> result;
+    result.reserve(eligible.size());
+    for (const OperationId id : stackOrder_) {
+        if (const auto it = eligible.find(id); it != eligible.end()) {
+            result.push_back(it->second);
         }
     }
     return result;
@@ -107,11 +140,15 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
             operations.push_back(std::move(entry));
         }
     }
-    json = nlohmann::json{{"operations", operations}, {"activeCount", log.activeCount_}, {"nextId", log.nextId_}};
+    json = nlohmann::json{{"operations", operations},
+                          {"activeCount", log.activeCount_},
+                          {"nextId", log.nextId_},
+                          {"stackOrder", log.stackOrder_}};
 }
 
 void from_json(const nlohmann::json& json, OperationLog& log) {
     log.operations_.clear();
+    log.stackOrder_.clear();
 
     if (json.contains("operations")) {
         // Current, real shape.
@@ -153,6 +190,18 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
         }
         log.activeCount_ = json.at("activeCount").get<std::size_t>();
         log.nextId_ = json.at("nextId").get<OperationId>();
+        if (json.contains("stackOrder")) {
+            log.stackOrder_ = json.at("stackOrder").get<std::vector<OperationId>>();
+        } else {
+            // A project file saved before stackOrder_ existed (`v0.0.26.2`)
+            // - synthesize the same default it always implicitly had:
+            // append order, i.e. every operation's own id in the order it
+            // appears in "operations" above.
+            log.stackOrder_.reserve(log.operations_.size());
+            for (const auto& operation : log.operations_) {
+                log.stackOrder_.push_back(operation->id());
+            }
+        }
     } else {
         // The pre-`v0.0.24.1` empty-array shape, before any concrete
         // Operation subtype existed - an empty log either way.

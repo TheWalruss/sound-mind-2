@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 #include <nlohmann/json.hpp>
@@ -38,6 +39,20 @@ void to_json(nlohmann::json& json, const TimeFrequencyRect& rect);
 /// @brief Parses a rect from its JSON representation.
 /// @throws nlohmann::json::exception on malformed or missing required data.
 void from_json(const nlohmann::json& json, TimeFrequencyRect& rect);
+
+/**
+ * @brief A copy of `rect`, shifted by a fixed time/frequency offset - the
+ *        `TimeFrequencyRect` counterpart to `Path::translated()`, needed
+ *        so a rect-bounded `Operation` (`FillOperation`, `PasteOperation`)
+ *        can be moved the same way a `Path`-bounded one already can.
+ *
+ * @param rect The rectangle to shift.
+ * @param deltaTimeSeconds How far to shift along the timeline.
+ * @param deltaFrequencyHz How far to shift along the frequency axis.
+ * @return The shifted rectangle.
+ */
+[[nodiscard]] TimeFrequencyRect translated(const TimeFrequencyRect& rect, double deltaTimeSeconds,
+                                            double deltaFrequencyHz) noexcept;
 
 /**
  * @brief Abstract base for every entry in a Project's OperationLog.
@@ -112,6 +127,25 @@ public:
      *         operation with no single target layer.
      */
     [[nodiscard]] virtual std::optional<LayerId> targetLayer() const noexcept { return std::nullopt; }
+
+    /**
+     * @brief A copy of this operation, shifted by a fixed time/frequency
+     *        offset, with a new id and supersedes() pointing back at this
+     *        one - the shared "move" primitive Pick's own move gesture
+     *        uses, regardless of which concrete subtype is being moved
+     *        (see `docs/sound-mind-design.md`'s "Pick": "it can be...
+     *        moved... independent of" which kind of paint object it is).
+     *
+     * Every other field (gradient, tool configuration, clip pixel data)
+     * carries over unchanged - only the geometry shifts.
+     *
+     * @param newId Identity to give the translated copy.
+     * @param deltaTimeSeconds How far to shift along the timeline.
+     * @param deltaFrequencyHz How far to shift along the frequency axis.
+     * @return The translated copy, superseding this operation.
+     */
+    [[nodiscard]] virtual std::unique_ptr<Operation> translatedCopy(OperationId newId, double deltaTimeSeconds,
+                                                                     double deltaFrequencyHz) const = 0;
 
 protected:
     /**

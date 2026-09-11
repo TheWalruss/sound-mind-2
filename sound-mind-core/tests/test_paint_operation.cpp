@@ -65,3 +65,29 @@ TEST_CASE("PaintOperation carries its own tool configuration", "[core][paint_ope
     const PaintOperation op(1, LayerId{1}, makeTestPath(), config);
     REQUIRE(op.config().name() == "My Brush");
 }
+
+TEST_CASE("PaintOperation::translatedCopy() shifts the path, keeps everything else, and supersedes the original",
+          "[core][paint_operation]") {
+    ToolConfiguration config;
+    config.setName("My Brush");
+    const PaintOperation original(5, LayerId{2}, makeTestPath(), config);
+
+    const auto copy = original.translatedCopy(OperationId{9}, 0.5, 100.0);
+
+    REQUIRE(copy != nullptr);
+    REQUIRE(copy->id() == OperationId{9});
+    REQUIRE(copy->supersedes().has_value());
+    REQUIRE(*copy->supersedes() == OperationId{5});
+    REQUIRE(copy->targetLayer() == LayerId{2});
+
+    const auto* paintCopy = dynamic_cast<const PaintOperation*>(copy.get());
+    REQUIRE(paintCopy != nullptr);
+    REQUIRE(paintCopy->config().name() == "My Brush");
+    REQUIRE(paintCopy->path().nodes().at(0).anchor.timeSeconds == 0.5);
+    REQUIRE(paintCopy->path().nodes().at(0).anchor.frequencyHz == 200.0);
+    REQUIRE(paintCopy->path().nodes().at(1).anchor.timeSeconds == 1.5);
+    REQUIRE(paintCopy->path().nodes().at(1).anchor.frequencyHz == 600.0);
+
+    // The original is untouched - translatedCopy() never mutates.
+    REQUIRE(original.path().nodes().at(0).anchor.timeSeconds == 0.0);
+}

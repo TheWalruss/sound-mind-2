@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "sound_mind/core/fill_operation.h"
@@ -57,4 +58,32 @@ TEST_CASE("FillOperation carries its own gradient", "[core][fill_operation]") {
     gradient.setStopValues(0, stop);
     const FillOperation op(1, LayerId{1}, makeTestBounds(), gradient);
     REQUIRE(op.gradient().stops().front().leftIntensity == -12.0f);
+}
+
+TEST_CASE("FillOperation::translatedCopy() shifts bounds, keeps the gradient, and supersedes the original",
+          "[core][fill_operation]") {
+    Gradient gradient;
+    auto stop = gradient.stops().front();
+    stop.leftIntensity = -12.0f;
+    gradient.setStopValues(0, stop);
+    const FillOperation original(5, LayerId{2}, makeTestBounds(), gradient);
+
+    const auto copy = original.translatedCopy(OperationId{9}, 0.1, 100.0);
+
+    REQUIRE(copy != nullptr);
+    REQUIRE(copy->id() == OperationId{9});
+    REQUIRE(copy->supersedes().has_value());
+    REQUIRE(*copy->supersedes() == OperationId{5});
+    REQUIRE(copy->targetLayer() == LayerId{2});
+    REQUIRE(copy->bounds().startTimeSeconds == Catch::Approx(0.3));
+    REQUIRE(copy->bounds().endTimeSeconds == Catch::Approx(0.6));
+    REQUIRE(copy->bounds().lowFrequencyHz == Catch::Approx(400.0));
+    REQUIRE(copy->bounds().highFrequencyHz == Catch::Approx(1000.0));
+
+    const auto* fillCopy = dynamic_cast<const FillOperation*>(copy.get());
+    REQUIRE(fillCopy != nullptr);
+    REQUIRE(fillCopy->gradient().stops().front().leftIntensity == -12.0f);
+
+    // The original is untouched.
+    REQUIRE(original.bounds().startTimeSeconds == 0.2);
 }

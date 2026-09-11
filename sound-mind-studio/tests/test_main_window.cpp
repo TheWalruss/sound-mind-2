@@ -23,7 +23,9 @@
 #include <QToolBar>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/paint_operation.h"
+#include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
@@ -36,7 +38,9 @@
 #include "sound_mind/studio/record_panel.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
+using sound_mind::core::FillOperation;
 using sound_mind::core::PaintOperation;
+using sound_mind::core::PasteOperation;
 using sound_mind::core::PathNodeType;
 using sound_mind::studio::CanvasWidget;
 using sound_mind::studio::ImageScalePickerDialog;
@@ -2733,6 +2737,20 @@ bool anyLoudLeftChannelPixel(const sound_mind::codec::StreamImage& content) {
                         [](float value) { return value > -50.0f; });
 }
 
+/// @brief The left channel's own dB value at a specific widget pixel -
+/// for tests needing to check one exact spot (e.g. "is this specific
+/// region still silent"), not just "is anything loud anywhere". Assumes
+/// a 100x50 canvas shown at a 1:1 (100x50) widget size, matching every
+/// other test in this file that uses imageScalingTestProjectSettings()
+/// with canvas->setFixedSize(100, 50) - and the same Y-flip
+/// (`CanvasWidget::widgetPointToTimeFrequency()`'s own docs) a real click
+/// at this same widget position would be converted through.
+float leftDbAtWidgetPixel(const sound_mind::codec::StreamImage& content, int widgetX, int widgetY) {
+    const int frame = widgetX;
+    const int bin = 50 - widgetY;
+    return content.leftMagnitudeDb[static_cast<std::size_t>(bin) * content.frameCount + static_cast<std::size_t>(frame)];
+}
+
 }  // namespace
 
 void MainWindowTest::copyThenPasteOnTheSameLayerReproducesTheSelection() {
@@ -2935,4 +2953,104 @@ void MainWindowTest::settingANewProjectResetsPathModeToOff() {
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);
     QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
+}
+
+void MainWindowTest::pastedContentIsPickableAndMovable() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-paste-pickable.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+
+    // Paint, select it, copy, then paste - lands back at the same spot,
+    // onto the same active layer (see SelectionController::pasteInto()'s
+    // own docs) - a second, independent object on top of the paint.
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    window.setPaintModeEnabled(false);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 5));
+    QTest::mouseMove(canvas, QPoint(70, 35));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(70, 35));
+    window.copySelection();
+    window.paste();
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});  // paint, paste.
+
+    // Pick the pasted region (its own bounds are the whole selection, so
+    // this point is unambiguously inside it) and move it - this is the
+    // actual reported bug: a paste used to be entirely invisible to Pick.
+    window.setSelectModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(45, 20));
+    QTest::mouseMove(canvas, QPoint(80, 5));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(80, 5));
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{3});  // paint, paste, moved-paste.
+    const auto layerId = window.project()->layers().back().id();
+    const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{2});  // paint + the moved paste (original paste now superseded).
+    const bool anyPasteActive =
+        std::any_of(active.begin(), active.end(), [](const auto* op) { return dynamic_cast<const PasteOperation*>(op) != nullptr; });
+    QVERIFY(anyPasteActive);
+}
+
+void MainWindowTest::modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionSilenced() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-cut-then-modify.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    auto* panel = window.findChild<ToolConfigurationPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    QVERIFY(sizeSpinBox != nullptr);
+
+    // A single wide stroke spanning most of the canvas.
+    window.setPaintModeEnabled(true);
+    sizeSpinBox->setValue(5.0);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 25));
+    QTest::mouseMove(canvas, QPoint(90, 25));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(90, 25));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    QVERIFY(anyLoudLeftChannelPixel(*window.project()->layers().back().content()));
+
+    // Cut a sub-region out of the middle of the stroke.
+    window.setPaintModeEnabled(false);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+    window.cutSelection();
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
+    QVERIFY(leftDbAtWidgetPixel(*window.project()->layers().back().content(), 50, 25) < -50.0f);
+
+    // Pick the paint stroke *outside* the cut region (unambiguous - the
+    // Fill's own bounds don't extend there) and modify it via Tool
+    // Configuration - no geometry change, the exact reported scenario
+    // ("if I then move or modify the thing I cut away from").
+    window.setSelectModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(15, 25));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(15, 25));
+    sizeSpinBox->setValue(6.0);  // triggers applyToolConfiguration() on the picked stroke.
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{3});
+
+    // The cut region must still be silent - modifying the stroke it was
+    // cut from must not undo the cut.
+    QVERIFY(leftDbAtWidgetPixel(*window.project()->layers().back().content(), 50, 25) < -50.0f);
+
+    const auto layerId = window.project()->layers().back().id();
+    const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{2});
+    QVERIFY(dynamic_cast<const PaintOperation*>(active[0]) != nullptr);  // the modified stroke, still...
+    QVERIFY(dynamic_cast<const FillOperation*>(active[1]) != nullptr);   // ...below the cut's own silence fill.
 }

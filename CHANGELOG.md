@@ -6,6 +6,58 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.2] - 2026-09-11
+
+A cross-cutting bug-fix release: Pick's own move/modify/delete could
+silently corrupt a layer's stacking order, and Fill/Paste results weren't
+pickable at all. Found in manual testing across the Selection & Fill and
+Basic Painting milestones; fixed at the root rather than patched per
+symptom.
+
+### Fixed
+
+- **Any Pick edit (move, modify, delete) used to always promote the
+  edited object to the very top of its layer's stack**, since it was
+  simply appended to the end of the operation log and replay read that
+  same append order as z-order. In practice: cutting or filling a region,
+  then moving or modifying whatever was painted underneath it, silently
+  undid the cut/fill (the moved/modified paint now rendered *on top of*
+  it instead of staying where it was in the stack). `OperationLog` now
+  tracks stack order as an explicit, separate concern from its own
+  append-only history - a Pick edit now supersedes an operation *in its
+  own slot*, not at the top.
+- **`FillOperation`/`PasteOperation` results are now Pickable** - Cut/
+  Fill/Paste all produce real paint objects that can be selected, moved,
+  and deleted via Pick, exactly like a painted stroke (only "modify via
+  Tool Configuration" stays Paint-only, since a Fill/Paste has no tool
+  configuration of its own to reopen). A moved Fill/Paste shows a
+  rectangular outline as its own live drag preview, in place of a
+  painted stroke's richer Path preview.
+- **Deleting a Fill/Paste** supersedes it with a fresh, fully-opaque
+  silence `FillOperation` over the same bounds - the same "clear this
+  region" mechanism Cut's own source-clearing already used - since
+  neither can reduce to a literal zero-effect copy of itself the way an
+  empty-Path `PaintOperation` already could (a Paste in particular always
+  overwrites outright, with no opacity to zero out).
+
+### Added
+
+- **`sound_mind::core::Operation::translatedCopy()`** - a new shared
+  "move" primitive every concrete `Operation` subtype implements, so
+  Pick's own move gesture works identically regardless of which kind of
+  object is picked.
+- **`sound_mind::core::silenceGradient()`** - promoted out of
+  `SelectionController`'s own private helper (Cut already needed the
+  identical thing) into a shared Core utility, now used by both Cut and
+  Pick's own Fill/Paste delete.
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes (265/265 ctest entries), including new coverage for the exact
+reported scenarios (cutting over a stroke, then modifying it without
+moving it, still leaves the cut region silent; a pasted region is
+directly pickable and movable). Doxygen docs target rebuilds clean, 0
+warnings.
+
 ## [0.0.26.1] - 2026-09-11
 
 The first installment of Phase 3's "Paths & Grids" milestone: the Path

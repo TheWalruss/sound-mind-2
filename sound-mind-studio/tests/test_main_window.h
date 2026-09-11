@@ -176,4 +176,6 @@ private slots:
     void smoothNodesToggleAffectsSubsequentlyPlacedNodes();
     void finishPathWithNoNodesPlacedIsANoOp();
     void settingANewProjectResetsPathModeToOff();
+    void pastedContentIsPickableAndMovable();
+    void modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionSilenced();
 };

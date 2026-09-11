@@ -93,6 +93,9 @@ class FakeOperation final : public Operation {
 public:
     explicit FakeOperation(OperationId id) : Operation(id) {}
     [[nodiscard]] TimeFrequencyRect bounds() const override { return TimeFrequencyRect{}; }
+    [[nodiscard]] std::unique_ptr<Operation> translatedCopy(OperationId newId, double, double) const override {
+        return std::make_unique<FakeOperation>(newId);
+    }
 };
 
 }  // namespace

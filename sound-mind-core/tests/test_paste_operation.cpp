@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
@@ -70,6 +71,31 @@ TEST_CASE("PasteOperation carries its own clip", "[core][paste_operation]") {
     REQUIRE(op.clip().leftMagnitudeDb == clip.leftMagnitudeDb);
     REQUIRE(op.clip().rightMagnitudeDb == clip.rightMagnitudeDb);
     REQUIRE(op.clip().sharedPhaseRadians == clip.sharedPhaseRadians);
+}
+
+TEST_CASE("PasteOperation::translatedCopy() shifts the placement, keeps the clip, and supersedes the original",
+          "[core][paste_operation]") {
+    const Clip clip = makeTestClip();
+    const PasteOperation original(5, LayerId{2}, makeTestBounds(), clip);
+
+    const auto copy = original.translatedCopy(OperationId{9}, 0.1, 100.0);
+
+    REQUIRE(copy != nullptr);
+    REQUIRE(copy->id() == OperationId{9});
+    REQUIRE(copy->supersedes().has_value());
+    REQUIRE(*copy->supersedes() == OperationId{5});
+    REQUIRE(copy->targetLayer() == LayerId{2});
+    REQUIRE(copy->bounds().startTimeSeconds == Catch::Approx(0.3));
+    REQUIRE(copy->bounds().endTimeSeconds == Catch::Approx(0.6));
+    REQUIRE(copy->bounds().lowFrequencyHz == Catch::Approx(400.0));
+    REQUIRE(copy->bounds().highFrequencyHz == Catch::Approx(1000.0));
+
+    const auto* pasteCopy = dynamic_cast<const PasteOperation*>(copy.get());
+    REQUIRE(pasteCopy != nullptr);
+    REQUIRE(pasteCopy->clip().leftMagnitudeDb == clip.leftMagnitudeDb);
+
+    // The original is untouched.
+    REQUIRE(original.bounds().startTimeSeconds == 0.2);
 }
 
 TEST_CASE("A Clip round-trips through JSON", "[core][paste_operation]") {
