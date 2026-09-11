@@ -91,6 +91,11 @@ void CanvasWidget::setPaintPreviewPath(sound_mind::core::Path path) {
     update();
 }
 
+void CanvasWidget::setPreviewSelectedNodeIndex(std::optional<std::size_t> index) {
+    previewSelectedNodeIndex_ = index;
+    update();
+}
+
 void CanvasWidget::setPickSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds) {
     pickSelectionBounds_ = bounds;
     update();
@@ -158,6 +163,7 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     if (project_ != nullptr && !paintPreviewPath_.nodes().empty()) {
         painter.setPen(QPen(Qt::yellow, 1));
         painter.drawPath(toPainterPath(paintPreviewPath_));
+        drawPreviewPathNodes(painter);
     }
 
     // The Picked object's own selection highlight (Pick) - see
@@ -201,6 +207,45 @@ void CanvasWidget::drawOperationOverlays(QPainter& painter) const {
                 painter.drawPath(toPainterPath(paint->path()));
             }
         }
+    }
+}
+
+void CanvasWidget::drawPreviewPathNodes(QPainter& painter) const {
+    constexpr double kNodeRadius = 3.0;
+    constexpr double kSelectedNodeRadius = 5.0;
+    constexpr double kHandleRadius = 3.0;
+
+    const auto& nodes = paintPreviewPath_.nodes();
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
+        const bool selected = previewSelectedNodeIndex_.has_value() && *previewSelectedNodeIndex_ == i;
+        const QPointF anchorPoint = timeFrequencyToWidgetPoint(nodes[i].anchor);
+
+        // Handles - only for the selected node, and only if it's Smooth -
+        // see setPreviewSelectedNodeIndex()'s own docs for why.
+        if (selected && nodes[i].type == sound_mind::core::PathNodeType::Smooth) {
+            painter.setPen(QPen(Qt::cyan, 1));
+            painter.setBrush(Qt::cyan);
+            if (nodes[i].handleOut.has_value()) {
+                const QPointF handlePoint = timeFrequencyToWidgetPoint(*nodes[i].handleOut);
+                painter.drawLine(anchorPoint, handlePoint);
+                painter.drawEllipse(handlePoint, kHandleRadius, kHandleRadius);
+            }
+            if (nodes[i].handleIn.has_value()) {
+                const QPointF handlePoint = timeFrequencyToWidgetPoint(*nodes[i].handleIn);
+                painter.drawLine(anchorPoint, handlePoint);
+                painter.drawEllipse(handlePoint, kHandleRadius, kHandleRadius);
+            }
+            painter.setBrush(Qt::NoBrush);
+        }
+
+        // The node's own anchor - drawn last, over any handle line that
+        // happens to pass close to it.
+        const QColor color = selected ? Qt::white : Qt::yellow;
+        painter.setPen(QPen(color, 1));
+        painter.setBrush(color);
+        painter.drawEllipse(anchorPoint, selected ? kSelectedNodeRadius : kNodeRadius,
+                             selected ? kSelectedNodeRadius : kNodeRadius);
+        painter.setBrush(Qt::NoBrush);
     }
 }
 

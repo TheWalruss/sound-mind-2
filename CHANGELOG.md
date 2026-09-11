@@ -6,6 +6,51 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.4] - 2026-09-11
+
+The second installment of Phase 3's "Paths & Grids" milestone: direct
+node/handle editing of an already-painted stroke's own Path, closing the
+gap `v0.0.26.1`'s own placement-only Path tool deliberately left open.
+Informed by a dedicated review of the legacy Python Studio's own Curve
+tool workflow. Overlay Grids/Snap to Grid remain the milestone's own last
+open piece.
+
+### Added
+
+- **Edit → Edit Path**, on a Picked stroke: brings its own nodes and
+  handles back onto the canvas, editable directly - matching
+  `docs/sound-mind-design.md`'s "Placing and Editing" ("picking a paint
+  object brings its nodes and handles back onto the canvas exactly as if
+  it were still being drawn"). Click a node (or, once selected, one of
+  its own handles) to select it; drag to move it - dragging a node's own
+  anchor carries its handles along with it; dragging a `Smooth` node's
+  own handle reshapes that side of the curve, with the opposite handle
+  always mirroring through the anchor to keep the tangent smooth.
+- **Edit → Toggle Node Type**, **Apply Path Edit**, **Cancel Path Edit**
+  - converts the selected node between `Corner`/`Smooth`, commits the
+    session's own accumulated changes (superseding the original stroke,
+    same as any other Pick edit), or discards them entirely. The Delete
+    key deletes the selected *node* while editing, instead of the whole
+    object.
+- The canvas now draws a small dot at every node of whatever's being
+  previewed (a freehand stroke in progress, a Path-tool placement, or an
+  active path edit) - the selected node (while editing) larger and in a
+  distinct color, with its own handles (if `Smooth`) also shown.
+
+This installment's own scope, by deliberate choice: no double-click to
+insert/delete a node, no Alt+drag to detach a handle from its own
+mirrored pair - both real, valued parts of the legacy Curve tool's own
+workflow, tracked as open follow-ups rather than built speculatively
+alongside everything else here. See `docs/sound-mind-architecture.md`'s
+Decisions Made for the full reasoning, including why hit-testing here
+uses a fixed domain-space tolerance rather than the legacy tool's own
+screen-pixel radii (no per-view zoom exists yet for a pixel radius to be
+meaningful against).
+
+Regression: full `sound-mind-studio-tests`/`sound-mind-core-tests` suite
+passes (276/276 ctest entries). Doxygen docs target rebuilds clean, 0
+warnings.
+
 ## [0.0.26.3] - 2026-09-11
 
 Explicit stack-order controls for Pick, built directly on the

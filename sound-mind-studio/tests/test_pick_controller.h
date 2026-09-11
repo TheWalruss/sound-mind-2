@@ -37,4 +37,17 @@ private slots:
     void sendBackwardSwapsTheSelectionWithTheOneBelowIt();
     void reorderMethodsAreNoOpsWithNoSelection();
     void reorderMethodsEmitNoContentChangedWhenAlreadyAtTheRequestedEnd();
+    void beginPathEditIsANoOpWithNoSelection();
+    void beginPathEditIsANoOpForAFillSelection();
+    void beginPathEditSucceedsForAPaintSelectionAndCopiesItsPath();
+    void selectPathNodeNearSelectsTheClosestNodeWithinTolerance();
+    void selectPathNodeNearDeselectsWhenNothingIsClose();
+    void draggingASelectedNodesAnchorMovesItAndItsHandles();
+    void draggingASelectedSmoothNodesHandleMirrorsTheOppositeHandle();
+    void deleteSelectedPathNodeRemovesItButRefusesToEmptyThePath();
+    void toggleSelectedPathNodeTypeConvertsCornerToSmoothAndBack();
+    void commitPathEditSupersedesTheOriginalWithEditedGeometryKeepingItsGradient();
+    void cancelPathEditDiscardsChangesAndLeavesTheOriginalSelected();
+    void deleteSelectionDeletesTheSelectedNodeWhileEditingInsteadOfTheWholeObject();
+    void clearSelectionExitsAnActivePathEditSessionWithoutCommitting();
 };

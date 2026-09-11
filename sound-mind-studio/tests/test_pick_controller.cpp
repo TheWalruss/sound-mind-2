@@ -107,6 +107,30 @@ OperationId addPaintOperation(Project& project, LayerId layer, double startTime,
     return id;
 }
 
+/// @brief Appends a two-node PaintOperation directly to `project`'s own
+/// OperationLog, whose *first* node is Smooth with explicit, independent
+/// handles - the fixture path-editing's own handle-drag tests need.
+OperationId addSmoothPaintOperation(Project& project, LayerId layer, TimeFrequencyPoint anchor,
+                                     TimeFrequencyPoint handleIn, TimeFrequencyPoint handleOut,
+                                     TimeFrequencyPoint secondAnchor, const ToolConfiguration& config) {
+    Path path;
+    PathNode smooth;
+    smooth.anchor = anchor;
+    smooth.type = PathNodeType::Smooth;
+    smooth.handleIn = handleIn;
+    smooth.handleOut = handleOut;
+    path.addNode(smooth);
+    PathNode corner;
+    corner.anchor = secondAnchor;
+    corner.type = PathNodeType::Corner;
+    path.addNode(corner);
+
+    auto& log = project.operationLog();
+    const OperationId id = log.reserveId();
+    log.append(std::make_unique<PaintOperation>(id, layer, std::move(path), config));
+    return id;
+}
+
 TimeFrequencyRect makeTestBounds(double startTime, double startFrequency, double endTime, double endFrequency) {
     TimeFrequencyRect bounds;
     bounds.startTimeSeconds = startTime;
@@ -842,4 +866,304 @@ void PickControllerTest::reorderMethodsEmitNoContentChangedWhenAlreadyAtTheReque
     controller.bringForward();  // already topmost - no change.
 
     QCOMPARE(contentSpy.count(), 0);
+}
+
+void PickControllerTest::beginPathEditIsANoOpWithNoSelection() {
+    Project project = Project::createNew(testSettings());
+    addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    QVERIFY(!controller.beginPathEdit());
+    QVERIFY(!controller.isPathEditActive());
+}
+
+void PickControllerTest::beginPathEditIsANoOpForAFillSelection() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addFillOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    QVERIFY(!controller.beginPathEdit());
+    QVERIFY(!controller.isPathEditActive());
+}
+
+void PickControllerTest::beginPathEditSucceedsForAPaintSelectionAndCopiesItsPath() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QSignalSpy pathSpy(&controller, &PickController::pathChanged);
+
+    QVERIFY(controller.beginPathEdit());
+
+    QVERIFY(controller.isPathEditActive());
+    QCOMPARE(pathSpy.count(), 1);
+    QCOMPARE(controller.currentPreviewPath().nodes().size(), std::size_t{2});
+    QVERIFY(!controller.selectedPathNodeIndex().has_value());
+}
+
+void PickControllerTest::selectPathNodeNearSelectsTheClosestNodeWithinTolerance() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(controller.beginPathEdit());
+
+    // Well within tolerance (see pick_controller.cpp's own
+    // kNodeHitToleranceSeconds - a few hundredths of a second/Hz here).
+    const bool hit = controller.pick(layerId, TimeFrequencyPoint{0.201, 401.0});
+
+    QVERIFY(hit);
+    QVERIFY(controller.selectedPathNodeIndex().has_value());
+    QCOMPARE(*controller.selectedPathNodeIndex(), std::size_t{0});
+}
+
+void PickControllerTest::selectPathNodeNearDeselectsWhenNothingIsClose() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.2, 400.0}));  // select node 0 first.
+
+    const bool hit = controller.pick(layerId, TimeFrequencyPoint{0.9, 1900.0});  // far from every node.
+
+    QVERIFY(!hit);
+    QVERIFY(!controller.selectedPathNodeIndex().has_value());
+    QVERIFY(controller.isPathEditActive());  // the session itself stays active.
+}
+
+void PickControllerTest::draggingASelectedNodesAnchorMovesItAndItsHandles() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const TimeFrequencyPoint anchor{0.3, 500.0};
+    const TimeFrequencyPoint handleIn{0.25, 480.0};
+    const TimeFrequencyPoint handleOut{0.35, 520.0};
+    addSmoothPaintOperation(project, layerId, anchor, handleIn, handleOut, TimeFrequencyPoint{0.6, 700.0},
+                             makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, anchor));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, anchor));  // selects node 0's own anchor.
+    QCOMPARE(*controller.selectedPathNodeIndex(), std::size_t{0});
+
+    controller.continueMove(TimeFrequencyPoint{anchor.timeSeconds + 0.1, anchor.frequencyHz + 100.0});
+
+    const auto& node = controller.currentPreviewPath().nodes().front();
+    QCOMPARE(node.anchor.timeSeconds, anchor.timeSeconds + 0.1);
+    QCOMPARE(node.anchor.frequencyHz, anchor.frequencyHz + 100.0);
+    QVERIFY(node.handleIn.has_value());
+    QCOMPARE(node.handleIn->timeSeconds, handleIn.timeSeconds + 0.1);
+    QCOMPARE(node.handleIn->frequencyHz, handleIn.frequencyHz + 100.0);
+    QVERIFY(node.handleOut.has_value());
+    QCOMPARE(node.handleOut->timeSeconds, handleOut.timeSeconds + 0.1);
+    QCOMPARE(node.handleOut->frequencyHz, handleOut.frequencyHz + 100.0);
+}
+
+void PickControllerTest::draggingASelectedSmoothNodesHandleMirrorsTheOppositeHandle() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const TimeFrequencyPoint anchor{0.3, 500.0};
+    const TimeFrequencyPoint handleIn{0.25, 480.0};
+    const TimeFrequencyPoint handleOut{0.35, 520.0};
+    addSmoothPaintOperation(project, layerId, anchor, handleIn, handleOut, TimeFrequencyPoint{0.6, 700.0},
+                             makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, anchor));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, handleOut));  // selects node 0's own handleOut specifically.
+    QCOMPARE(*controller.selectedPathNodeIndex(), std::size_t{0});
+
+    // Drag handleOut straight up in frequency, well past tolerance.
+    const TimeFrequencyPoint newHandleOut{handleOut.timeSeconds, handleOut.frequencyHz + 200.0};
+    controller.continueMove(newHandleOut);
+
+    const auto& node = controller.currentPreviewPath().nodes().front();
+    QCOMPARE(node.handleOut->timeSeconds, newHandleOut.timeSeconds);
+    QCOMPARE(node.handleOut->frequencyHz, newHandleOut.frequencyHz);
+    // handleIn mirrors through the anchor: anchor - (newHandleOut - anchor).
+    QCOMPARE(node.handleIn->timeSeconds, 2.0 * anchor.timeSeconds - newHandleOut.timeSeconds);
+    QCOMPARE(node.handleIn->frequencyHz, 2.0 * anchor.frequencyHz - newHandleOut.frequencyHz);
+}
+
+void PickControllerTest::deleteSelectedPathNodeRemovesItButRefusesToEmptyThePath() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.2, 400.0}));
+
+    controller.deleteSelectedPathNode();
+    QCOMPARE(controller.currentPreviewPath().nodes().size(), std::size_t{1});
+    QVERIFY(!controller.selectedPathNodeIndex().has_value());
+
+    // Select the one remaining node and try again - refused.
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.4, 600.0}));
+    controller.deleteSelectedPathNode();
+
+    QCOMPARE(controller.currentPreviewPath().nodes().size(), std::size_t{1});
+}
+
+void PickControllerTest::toggleSelectedPathNodeTypeConvertsCornerToSmoothAndBack() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.2, 400.0}));
+    QCOMPARE(controller.currentPreviewPath().nodes().front().type, PathNodeType::Corner);
+
+    controller.toggleSelectedPathNodeType();
+
+    const auto& smoothed = controller.currentPreviewPath().nodes().front();
+    QCOMPARE(smoothed.type, PathNodeType::Smooth);
+    QVERIFY(smoothed.handleIn.has_value());
+    QVERIFY(smoothed.handleOut.has_value());
+    QCOMPARE(smoothed.handleIn->timeSeconds, smoothed.anchor.timeSeconds);
+    QCOMPARE(smoothed.handleOut->timeSeconds, smoothed.anchor.timeSeconds);
+
+    controller.toggleSelectedPathNodeType();
+
+    const auto& cornered = controller.currentPreviewPath().nodes().front();
+    QCOMPARE(cornered.type, PathNodeType::Corner);
+    QVERIFY(!cornered.handleIn.has_value());
+    QVERIFY(!cornered.handleOut.has_value());
+}
+
+void PickControllerTest::commitPathEditSupersedesTheOriginalWithEditedGeometryKeepingItsGradient() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId originalId =
+        addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02, 0.0f, -10.0f));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.2, 400.0}));
+    controller.continueMove(TimeFrequencyPoint{0.25, 450.0});
+    QSignalSpy contentSpy(&controller, &PickController::contentChanged);
+
+    controller.commitPathEdit();
+
+    QVERIFY(!controller.isPathEditActive());
+    QCOMPARE(contentSpy.count(), 1);
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* edited = dynamic_cast<const PaintOperation*>(active.front());
+    QVERIFY(edited != nullptr);
+    QVERIFY(edited->supersedes().has_value());
+    QCOMPARE(*edited->supersedes(), originalId);
+    QCOMPARE(edited->path().nodes().front().anchor.timeSeconds, 0.25);
+    // The gradient is untouched - addPaintOperation()'s own fixture path
+    // never sets one, so it's still the plain, fully-transparent default
+    // (leftIntensity 0.0f) - not re-seeded from the tool's own -10.0f
+    // default gradient the way applyToolConfiguration() would.
+    QCOMPARE(edited->path().gradient().stops().front().leftIntensity, 0.0f);
+}
+
+void PickControllerTest::cancelPathEditDiscardsChangesAndLeavesTheOriginalSelected() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId originalId = addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.2, 400.0}));
+    controller.continueMove(TimeFrequencyPoint{0.25, 450.0});
+
+    controller.cancelPathEdit();
+
+    QVERIFY(!controller.isPathEditActive());
+    QCOMPARE(project.operationLog().size(), std::size_t{1});  // nothing committed.
+    QVERIFY(controller.hasSelection());
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.front()->id(), originalId);  // the original, unedited operation.
+}
+
+void PickControllerTest::deleteSelectionDeletesTheSelectedNodeWhileEditingInsteadOfTheWholeObject() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.2, 400.0}));
+
+    controller.deleteSelection();
+
+    QCOMPARE(controller.currentPreviewPath().nodes().size(), std::size_t{1});
+    QCOMPARE(project.operationLog().size(), std::size_t{1});  // nothing committed - still just the original.
+    QVERIFY(controller.isPathEditActive());
+}
+
+void PickControllerTest::clearSelectionExitsAnActivePathEditSessionWithoutCommitting() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(controller.beginPathEdit());
+
+    controller.clearSelection();
+
+    QVERIFY(!controller.isPathEditActive());
+    QVERIFY(!controller.hasSelection());
+    QCOMPARE(project.operationLog().size(), std::size_t{1});  // nothing committed.
 }

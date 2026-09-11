@@ -179,4 +179,6 @@ private slots:
     void pastedContentIsPickableAndMovable();
     void modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionSilenced();
     void bringPickedObjectToFrontMovesItAboveLaterStrokesOnTheSameLayer();
+    void editingAPickedStrokesPathMovesANodeAndCommitsOnApply();
+    void cancelingAPickedStrokesPathEditDiscardsTheDragWithoutCommitting();
 };

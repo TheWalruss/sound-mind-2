@@ -155,6 +155,27 @@ public:
     void setPaintPreviewPath(sound_mind::core::Path path);
 
     /**
+     * @brief Sets (or clears) which node of the current live preview path
+     *        is highlighted as "selected" - during Pick's own node/handle
+     *        editing (`PickController::beginPathEdit()`), the node
+     *        `PickController::selectedPathNodeIndex()` currently reports.
+     *
+     * Every node in the current preview is always drawn as a small dot
+     * (see setPaintPreviewPath()'s own docs); the *selected* one is drawn
+     * larger and in a distinct color, and - if it's a `Smooth` node -
+     * with its own two handles (and the thin lines connecting them to
+     * the anchor) also drawn, in yet another distinct color. Handles are
+     * deliberately only ever shown for the selected node, not every node
+     * at once, to keep an in-progress edit legible rather than cluttering
+     * the whole path with every handle simultaneously.
+     *
+     * @param index The node to highlight, by its own index into the
+     *        current preview path's `nodes()`; `std::nullopt` highlights
+     *        none (still drawing every node as a plain dot).
+     */
+    void setPreviewSelectedNodeIndex(std::optional<std::size_t> index);
+
+    /**
      * @brief Sets (or clears) the Picked object's own selection highlight
      *        and repaints - a distinct-colored (white) rectangle, drawn
      *        over whatever the canvas otherwise shows.
@@ -346,6 +367,15 @@ private:
     /// @param bounds The rectangle to convert.
     [[nodiscard]] QRectF widgetRectFor(const sound_mind::core::TimeFrequencyRect& bounds) const;
 
+    /// @brief Draws a small dot at every node of `paintPreviewPath_`, and
+    ///        - for whichever one `previewSelectedNodeIndex_` names - a
+    ///        larger, distinctly-colored dot plus (for a `Smooth` node)
+    ///        its own two handles - the shared drawing behind
+    ///        setPreviewSelectedNodeIndex()'s own docs.
+    /// @param painter The painter to draw with - already set up by
+    ///        paintEvent().
+    void drawPreviewPathNodes(QPainter& painter) const;
+
     const sound_mind::core::Project* project_ = nullptr;
     std::optional<double> playheadFraction_;
     ToolMode toolMode_ = ToolMode::None;
@@ -353,6 +383,7 @@ private:
     bool pickStrokeActive_ = false;
     bool selectStrokeActive_ = false;
     sound_mind::core::Path paintPreviewPath_;
+    std::optional<std::size_t> previewSelectedNodeIndex_;
     std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;
     std::optional<sound_mind::core::TimeFrequencyRect> selectionBounds_;
     bool showBoundingBoxes_ = false;

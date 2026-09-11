@@ -291,6 +291,23 @@ regardless of the "Show bounding boxes" setting - ready to:
   (Ctrl+]), or **Send Backward** (Ctrl+[). This only changes which
   object renders on top where they overlap - it doesn't move, modify, or
   select anything else.
+- **Edit its own path** - **Edit → Edit Path** (a brush stroke only;
+  a filled selection or a pasted region has no path to edit). Brings its
+  nodes and handles back onto the canvas as small dots:
+  - **Click a node** to select it (shown larger, in white).
+  - **Drag a node** to move it - its own handles (if any) move with it.
+  - **Click, then drag, one of the selected node's own handles** (shown
+    in cyan, connected to the node by a thin line - only the *selected*
+    node's own handles are ever shown) to reshape the curve on that
+    side. The opposite handle always mirrors it, to keep the curve
+    smooth through the node.
+  - **Edit → Toggle Node Type** switches the selected node between a
+    smooth curve point and a sharp corner.
+  - **Delete key** removes the selected node (refused if it's the only
+    node left).
+  - **Edit → Apply Path Edit** commits everything changed so far as a
+    new, undoable edit to the stroke. **Edit → Cancel Path Edit**
+    discards it instead, leaving the stroke exactly as it was.
 
 Clicking empty canvas space deselects. If an object is entirely covered
 by another one on top of it, click the already-selected (covering)
@@ -298,12 +315,14 @@ object again to select the one underneath - each further click on the
 same spot cycles to the next one down, wrapping back to the topmost once
 you reach the bottom.
 
-Move/Modify/Delete are all undoable (Ctrl+Z), the same as painting a new
-stroke. Restacking currently isn't - if you bring something to front and
-change your mind, restack it back rather than pressing Ctrl+Z.
+Move/Modify/Delete/a completed path edit are all undoable (Ctrl+Z), the
+same as painting a new stroke. Restacking currently isn't - if you bring
+something to front and change your mind, restack it back rather than
+pressing Ctrl+Z.
 
-Copying a picked object, and directly reshaping a stroke's underlying
-path (drag its own nodes and handles), aren't here yet - see
+Copying a picked object isn't here yet, and path editing doesn't yet
+support inserting/deleting a node by double-clicking, or detaching a
+handle from its own mirrored pair - see
 [What's Not Here Yet](#whats-not-here-yet).
 
 ## Selection and Fill
@@ -449,10 +468,14 @@ what's designed for it:
 - No **Tool Configuration Wizard** or **Tool Preset** drop-down - the
   Panel described above is the only way to set brush parameters today,
   and there's no way yet to save/reuse/export a particular brush setup.
-- Pick can't **copy** a picked object, and can't reshape a stroke's
-  underlying path directly (dragging its own individual nodes/handles) -
-  only move, modify a stroke's own brush settings, delete it, or restack
-  it within its own layer.
+- Pick can't **copy** a picked object yet - only move, modify a stroke's
+  own brush settings, delete it, restack it within its own layer, or (for
+  a brush stroke) edit its own path.
+- Path editing (Edit → Edit Path) can move a node, drag a handle, or
+  toggle a node's type, but can't yet insert or delete a node by
+  double-clicking a segment or an existing node, or detach a handle from
+  its own mirrored pair with Alt+drag - only whole-node delete (Delete
+  key) is here today.
 - Restacking (Bring to Front/Send to Back/Bring Forward/Send Backward)
   isn't undoable (Ctrl+Z) yet - see [Pick](#pick) above.
 
@@ -469,13 +492,13 @@ but only a fraction of what's designed for it:
 - Fill only ever produces a uniform color, not a real two-color gradient
   across the selection - there's no UI yet to pick a second color.
 
-The [Path Tool](#path-tool) (see above) only places new paths today, not
-Overlay Grids or reshaping:
+The [Path Tool](#path-tool) (see above) only places new paths today; once
+a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,
+"Edit its own path") rather than the Path tool's own:
 
-- No reshaping an already-placed path - moving a node, dragging a handle
-  to pull a curve out of a smooth node, inserting or removing a node, or
-  converting a node's type after the fact. Pick's own "modify" doesn't
-  reopen node/handle editing either yet, for the same reason.
+- Inserting or removing a node from an already-placed path (other than
+  deleting the single selected node) still isn't here - see the Pick
+  section above.
 - No **Overlay Grids** (frequency or timing reference lines), pitch
   quantising, or **Snap to Grid** - a placed node lands exactly where you
   click, with nothing to snap it to a note, beat, or custom reference yet.

@@ -729,6 +729,33 @@ public slots:
     ///        nothing is selected, or it's already at the back.
     void sendPickedObjectBackward();
 
+    /// @brief Enters direct node/handle editing of the currently Picked
+    ///        stroke's own Path - the actual work behind the Edit menu's
+    ///        "Edit Path" action. Delegates to
+    ///        `PickController::beginPathEdit()`; a no-op if nothing is
+    ///        selected, or the selection isn't a stroke (a `FillOperation`/
+    ///        `PasteOperation` has no Path to edit).
+    void editPickedPath();
+
+    /// @brief Converts the currently selected node (within an active path
+    ///        edit) between `Corner` and `Smooth` - the actual work
+    ///        behind the Edit menu's "Toggle Node Type" action. Delegates
+    ///        to `PickController::toggleSelectedPathNodeType()`; a no-op
+    ///        if a path edit isn't active, or no node is selected.
+    void togglePickedPathNodeType();
+
+    /// @brief Commits the active path edit's own accumulated changes -
+    ///        the actual work behind the Edit menu's "Apply Path Edit"
+    ///        action. Delegates to `PickController::commitPathEdit()`; a
+    ///        no-op if a path edit isn't active.
+    void applyPickedPathEdit();
+
+    /// @brief Discards the active path edit's own accumulated changes -
+    ///        the actual work behind the Edit menu's "Cancel Path Edit"
+    ///        action. Delegates to `PickController::cancelPathEdit()`; a
+    ///        no-op if a path edit isn't active.
+    void cancelPickedPathEdit();
+
     /// @brief Clears the current rectangular selection - the actual work
     ///        behind the Edit menu's Deselect action. Delegates to
     ///        `SelectionController::clearSelection()`; a no-op if there

@@ -3091,3 +3091,79 @@ void MainWindowTest::bringPickedObjectToFrontMovesItAboveLaterStrokesOnTheSameLa
     QCOMPARE(active.front()->id(), window.project()->operationLog().at(1).id());  // B, now at the back.
     QCOMPARE(active.back()->id(), window.project()->operationLog().at(0).id());   // A, now on top.
 }
+
+void MainWindowTest::editingAPickedStrokesPathMovesANodeAndCommitsOnApply() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-edit-path-apply.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+
+    // A straight-line stroke simplifies to exactly two nodes, at exactly
+    // its own start/end click positions (see fitPathToPoints()'s own
+    // "simplifies a straight line down to just its two endpoints").
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 25));
+    QTest::mouseMove(canvas, QPoint(90, 25));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(90, 25));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 25));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 25));
+
+    window.editPickedPath();
+
+    // Selects and drags the node at (10, 25) up to (10, 10).
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 25));
+    QTest::mouseMove(canvas, QPoint(10, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+
+    window.applyPickedPathEdit();
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
+    const auto layerId = window.project()->layers().back().id();
+    const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* edited = dynamic_cast<const PaintOperation*>(active.front());
+    QVERIFY(edited != nullptr);
+    QVERIFY(edited->supersedes().has_value());
+    QCOMPARE(edited->path().nodes().size(), std::size_t{2});
+    // The moved node's own frequency changed - the other end didn't.
+    QVERIFY(edited->path().nodes().front().anchor.frequencyHz != edited->path().nodes().back().anchor.frequencyHz);
+}
+
+void MainWindowTest::cancelingAPickedStrokesPathEditDiscardsTheDragWithoutCommitting() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-edit-path-cancel.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 25));
+    QTest::mouseMove(canvas, QPoint(90, 25));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(90, 25));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 25));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 25));
+
+    window.editPickedPath();
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 25));
+    QTest::mouseMove(canvas, QPoint(10, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+
+    window.cancelPickedPathEdit();
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});  // nothing committed.
+}

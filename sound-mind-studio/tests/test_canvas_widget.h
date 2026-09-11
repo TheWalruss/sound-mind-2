@@ -23,6 +23,7 @@ private slots:
     void changingToolModeAwayFromPaintCancelsAnyActiveStroke();
     void setPaintPreviewPathDrawsItOverTheCanvas();
     void setPaintPreviewPathWithNoNodesDrawsNothing();
+    void setPreviewSelectedNodeIndexHighlightsThatNodeDistinctly();
     void showBoundingBoxesDrawsNothingWhenOff();
     void showBoundingBoxesDrawsAnActiveOperationsBoundingBox();
     void showPathGeometryDrawsAnActiveOperationsPath();

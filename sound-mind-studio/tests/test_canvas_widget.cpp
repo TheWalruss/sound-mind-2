@@ -356,6 +356,34 @@ void CanvasWidgetTest::setPaintPreviewPathWithNoNodesDrawsNothing() {
     QCOMPARE(rendered.pixelColor(50, 25), QColor(40, 40, 40));
 }
 
+void CanvasWidgetTest::setPreviewSelectedNodeIndexHighlightsThatNodeDistinctly() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    Path path;
+    PathNode start;
+    start.anchor = TimeFrequencyPoint{sound_mind::core::frameIndexToTime(10.0, config),
+                                       sound_mind::core::binIndexToFrequency(25.0f, config)};
+    start.type = PathNodeType::Corner;
+    path.addNode(start);
+    PathNode end;
+    end.anchor = TimeFrequencyPoint{sound_mind::core::frameIndexToTime(90.0, config), start.anchor.frequencyHz};
+    end.type = PathNodeType::Corner;
+    path.addNode(end);
+    widget.setPaintPreviewPath(path);
+
+    widget.setPreviewSelectedNodeIndex(0);
+
+    const QImage rendered = widget.grab().toImage();
+    QCOMPARE(rendered.pixelColor(10, 25), QColor(255, 255, 255));  // node 0 - selected, drawn white.
+    QCOMPARE(rendered.pixelColor(90, 25), QColor(255, 255, 0));    // node 1 - not selected, still yellow.
+}
+
 namespace {
 
 /// @brief A project (per mouseConversionTestSettings()) with one Normal

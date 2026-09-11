@@ -239,8 +239,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(canvas_, &CanvasWidget::pickStrokeContinued, this,
             [this](sound_mind::core::TimeFrequencyPoint point) { pickController_->continueMove(point); });
     connect(canvas_, &CanvasWidget::pickStrokeEnded, this, [this]() { pickController_->endMove(); });
-    connect(pickController_, &PickController::pathChanged, this,
-            [this]() { canvas_->setPaintPreviewPath(pickController_->currentPreviewPath()); });
+    connect(pickController_, &PickController::pathChanged, this, [this]() {
+        canvas_->setPaintPreviewPath(pickController_->currentPreviewPath());
+        canvas_->setPreviewSelectedNodeIndex(pickController_->selectedPathNodeIndex());
+    });
     connect(pickController_, &PickController::contentChanged, this, [this](sound_mind::core::LayerId) {
         canvas_->update();
         hasUnsavedChanges_ = true;
@@ -443,6 +445,24 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* sendBackwardAction = editMenu->addAction(tr("Send Back&ward"));
     sendBackwardAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
     connect(sendBackwardAction, &QAction::triggered, this, &MainWindow::sendPickedObjectBackward);
+
+    editMenu->addSeparator();
+
+    // Path node/handle editing (v0.0.26.4) - see PickController::
+    // beginPathEdit()'s own docs. No standard shortcuts (matching Fill
+    // Selection's own no-shortcut choice above); each is a no-op when
+    // inapplicable, the same "always present" choice deleteAction makes.
+    QAction* editPathAction = editMenu->addAction(tr("&Edit Path"));
+    connect(editPathAction, &QAction::triggered, this, &MainWindow::editPickedPath);
+
+    QAction* toggleNodeTypeAction = editMenu->addAction(tr("Toggle &Node Type"));
+    connect(toggleNodeTypeAction, &QAction::triggered, this, &MainWindow::togglePickedPathNodeType);
+
+    QAction* applyPathEditAction = editMenu->addAction(tr("&Apply Path Edit"));
+    connect(applyPathEditAction, &QAction::triggered, this, &MainWindow::applyPickedPathEdit);
+
+    QAction* cancelPathEditAction = editMenu->addAction(tr("Cancel Pat&h Edit"));
+    connect(cancelPathEditAction, &QAction::triggered, this, &MainWindow::cancelPickedPathEdit);
 
     editMenu->addSeparator();
 
@@ -1444,6 +1464,14 @@ void MainWindow::sendPickedObjectToBack() { pickController_->sendToBack(); }
 void MainWindow::bringPickedObjectForward() { pickController_->bringForward(); }
 
 void MainWindow::sendPickedObjectBackward() { pickController_->sendBackward(); }
+
+void MainWindow::editPickedPath() { pickController_->beginPathEdit(); }
+
+void MainWindow::togglePickedPathNodeType() { pickController_->toggleSelectedPathNodeType(); }
+
+void MainWindow::applyPickedPathEdit() { pickController_->commitPathEdit(); }
+
+void MainWindow::cancelPickedPathEdit() { pickController_->cancelPathEdit(); }
 
 void MainWindow::deselect() { selectionController_->clearSelection(); }
 

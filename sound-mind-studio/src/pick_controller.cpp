@@ -1,6 +1,8 @@
 #include "sound_mind/studio/pick_controller.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -24,6 +26,26 @@ bool containsPoint(const sound_mind::core::TimeFrequencyRect& bounds, sound_mind
            point.timeSeconds <= bounds.endTimeSeconds + timePadding &&
            point.frequencyHz >= bounds.lowFrequencyHz - frequencyPadding &&
            point.frequencyHz <= bounds.highFrequencyHz + frequencyPadding;
+}
+
+/// @brief How close (in `frequencyToTimeScaleFor()`'s own seconds-
+/// equivalent normalized space - see paint_application.h's own docs on
+/// why that's the shared yardstick between the two wildly different-
+/// scaled axes) a click needs to land to a node/handle to select it -
+/// see selectPathNodeNear()'s own docs. A fixed value, not converted from
+/// a screen-pixel radius the way the legacy Studio's own Curve tool did:
+/// this codebase has no per-view zoom yet for a pixel radius to be
+/// meaningful against, and every other hit-test here already works in
+/// this same normalized space (see pick()'s own brush-size padding).
+constexpr double kNodeHitToleranceSeconds = 0.015;
+
+/// @brief Squared distance between two points in the same normalized
+/// space `kNodeHitToleranceSeconds` is measured in.
+double normalizedDistanceSquared(sound_mind::core::TimeFrequencyPoint a, sound_mind::core::TimeFrequencyPoint b,
+                                  double scale) {
+    const double dt = a.timeSeconds - b.timeSeconds;
+    const double df = (a.frequencyHz - b.frequencyHz) / scale;
+    return dt * dt + df * df;
 }
 
 /// @brief A closed, four-corner rectangular outline Path tracing `rect` -
@@ -59,6 +81,9 @@ bool PickController::pick(sound_mind::core::LayerId layer, sound_mind::core::Tim
     if (project_ == nullptr) {
         clearSelection();
         return false;
+    }
+    if (pathEditActive_) {
+        return selectPathNodeNear(point);
     }
 
     const auto operations = project_->operationLog().activeOperationsTargeting(layer);
@@ -125,6 +150,10 @@ void PickController::clearSelection() {
     pickedOperation_ = nullptr;
     dragMoved_ = false;
     previewPath_ = sound_mind::core::Path{};
+    // Discards any in-progress path edit too, without committing it - a
+    // cleared selection has nothing left to be editing the Path of.
+    pathEditActive_ = false;
+    selectedNodeIndex_.reset();
     if (hadSelection) {
         emit selectionChanged();
     }
@@ -149,6 +178,10 @@ std::optional<sound_mind::core::TimeFrequencyRect> PickController::selectionBoun
 }
 
 void PickController::continueMove(sound_mind::core::TimeFrequencyPoint point) {
+    if (pathEditActive_) {
+        continuePathNodeDrag(point);
+        return;
+    }
     if (!pickedOperationId_.has_value()) {
         return;
     }
@@ -167,6 +200,12 @@ void PickController::continueMove(sound_mind::core::TimeFrequencyPoint point) {
 }
 
 void PickController::endMove() {
+    if (pathEditActive_) {
+        // continuePathNodeDrag() already applied the drag directly to
+        // previewPath_ - nothing further to do until commitPathEdit()/
+        // cancelPathEdit() - see this method's own docs.
+        return;
+    }
     if (!pickedOperationId_.has_value() || !dragMoved_) {
         dragMoved_ = false;
         if (!previewPath_.nodes().empty()) {
@@ -210,6 +249,10 @@ void PickController::applyToolConfiguration(const sound_mind::core::ToolConfigur
 }
 
 void PickController::deleteSelection() {
+    if (pathEditActive_ && selectedNodeIndex_.has_value()) {
+        deleteSelectedPathNode();
+        return;
+    }
     if (!pickedOperationId_.has_value()) {
         return;
     }
@@ -248,6 +291,201 @@ void PickController::reorderSelection(bool (sound_mind::core::OperationLog::*reo
         paintController_->rebuildLayerContent(pickedLayer_);
         emit contentChanged(pickedLayer_);
     }
+}
+
+bool PickController::beginPathEdit() {
+    if (!pickedOperationId_.has_value()) {
+        return false;
+    }
+    const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_);
+    if (paint == nullptr) {
+        return false;
+    }
+    pathEditActive_ = true;
+    previewPath_ = paint->path();
+    selectedNodeIndex_.reset();
+    emit pathChanged();
+    return true;
+}
+
+bool PickController::selectPathNodeNear(sound_mind::core::TimeFrequencyPoint point) {
+    const double scale = sound_mind::core::frequencyToTimeScaleFor(project_->settings());
+    const double toleranceSquared = kNodeHitToleranceSeconds * kNodeHitToleranceSeconds;
+
+    std::optional<std::size_t> bestIndex;
+    NodePart bestPart = NodePart::Anchor;
+    double bestDistanceSquared = std::numeric_limits<double>::max();
+
+    const auto& nodes = previewPath_.nodes();
+    // Handles first - a near-tie between a handle and some node's own
+    // anchor favors the handle, matching the design doc's own handle-
+    // first editing emphasis (see selectPathNodeNear()'s own docs).
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
+        const sound_mind::core::PathNode& node = nodes[i];
+        if (node.type != sound_mind::core::PathNodeType::Smooth) {
+            continue;
+        }
+        if (node.handleOut.has_value()) {
+            const double distanceSquared = normalizedDistanceSquared(*node.handleOut, point, scale);
+            if (distanceSquared <= toleranceSquared && distanceSquared < bestDistanceSquared) {
+                bestDistanceSquared = distanceSquared;
+                bestIndex = i;
+                bestPart = NodePart::HandleOut;
+            }
+        }
+        if (node.handleIn.has_value()) {
+            const double distanceSquared = normalizedDistanceSquared(*node.handleIn, point, scale);
+            if (distanceSquared <= toleranceSquared && distanceSquared < bestDistanceSquared) {
+                bestDistanceSquared = distanceSquared;
+                bestIndex = i;
+                bestPart = NodePart::HandleIn;
+            }
+        }
+    }
+    if (!bestIndex.has_value()) {
+        for (std::size_t i = 0; i < nodes.size(); ++i) {
+            const double distanceSquared = normalizedDistanceSquared(nodes[i].anchor, point, scale);
+            if (distanceSquared <= toleranceSquared && distanceSquared < bestDistanceSquared) {
+                bestDistanceSquared = distanceSquared;
+                bestIndex = i;
+                bestPart = NodePart::Anchor;
+            }
+        }
+    }
+
+    selectedNodeIndex_ = bestIndex;
+    if (bestIndex.has_value()) {
+        selectedNodePart_ = bestPart;
+        dragAnchor_ = point;
+        pathEditDragStart_ = previewPath_;
+    }
+    emit pathChanged();
+    return bestIndex.has_value();
+}
+
+void PickController::continuePathNodeDrag(sound_mind::core::TimeFrequencyPoint point) {
+    if (!selectedNodeIndex_.has_value()) {
+        return;
+    }
+    const double deltaTimeSeconds = point.timeSeconds - dragAnchor_.timeSeconds;
+    const double deltaFrequencyHz = point.frequencyHz - dragAnchor_.frequencyHz;
+
+    const sound_mind::core::PathNode originalNode = pathEditDragStart_.nodes().at(*selectedNodeIndex_);
+    sound_mind::core::PathNode node = originalNode;
+
+    switch (selectedNodePart_) {
+        case NodePart::Anchor:
+            // Moving the anchor carries both handles along with it, by
+            // the same delta - see continueMove()'s own docs.
+            node.anchor.timeSeconds = originalNode.anchor.timeSeconds + deltaTimeSeconds;
+            node.anchor.frequencyHz = originalNode.anchor.frequencyHz + deltaFrequencyHz;
+            if (originalNode.handleIn.has_value()) {
+                node.handleIn = sound_mind::core::TimeFrequencyPoint{
+                    originalNode.handleIn->timeSeconds + deltaTimeSeconds,
+                    originalNode.handleIn->frequencyHz + deltaFrequencyHz};
+            }
+            if (originalNode.handleOut.has_value()) {
+                node.handleOut = sound_mind::core::TimeFrequencyPoint{
+                    originalNode.handleOut->timeSeconds + deltaTimeSeconds,
+                    originalNode.handleOut->frequencyHz + deltaFrequencyHz};
+            }
+            break;
+        case NodePart::HandleOut:
+        case NodePart::HandleIn: {
+            const bool draggingOut = selectedNodePart_ == NodePart::HandleOut;
+            const sound_mind::core::TimeFrequencyPoint originalHandle =
+                draggingOut ? originalNode.handleOut.value_or(originalNode.anchor)
+                            : originalNode.handleIn.value_or(originalNode.anchor);
+            const sound_mind::core::TimeFrequencyPoint draggedHandle{originalHandle.timeSeconds + deltaTimeSeconds,
+                                                                       originalHandle.frequencyHz + deltaFrequencyHz};
+            (draggingOut ? node.handleOut : node.handleIn) = draggedHandle;
+            // The opposite handle always mirrors through the anchor, to
+            // keep the tangent smooth - no detach-to-corner gesture yet,
+            // see the class's own docs.
+            const sound_mind::core::TimeFrequencyPoint mirrored{
+                2.0 * node.anchor.timeSeconds - draggedHandle.timeSeconds,
+                2.0 * node.anchor.frequencyHz - draggedHandle.frequencyHz};
+            (draggingOut ? node.handleIn : node.handleOut) = mirrored;
+            break;
+        }
+    }
+
+    previewPath_.setNode(*selectedNodeIndex_, node);
+    emit pathChanged();
+}
+
+void PickController::deleteSelectedPathNode() {
+    if (!pathEditActive_ || !selectedNodeIndex_.has_value()) {
+        return;
+    }
+    if (previewPath_.nodes().size() <= 1) {
+        return;  // refuses to edit a path down to nothing mid-session - see this method's own docs.
+    }
+    previewPath_.removeNode(*selectedNodeIndex_);
+    selectedNodeIndex_.reset();
+    emit pathChanged();
+}
+
+void PickController::toggleSelectedPathNodeType() {
+    if (!pathEditActive_ || !selectedNodeIndex_.has_value()) {
+        return;
+    }
+    sound_mind::core::PathNode node = previewPath_.nodes().at(*selectedNodeIndex_);
+    if (node.type == sound_mind::core::PathNodeType::Corner) {
+        node.type = sound_mind::core::PathNodeType::Smooth;
+        // Collapsed onto the anchor itself, per PathNode's own documented
+        // precedent for a freshly-smoothed node with no curve pulled out
+        // of it yet - see this method's own docs.
+        node.handleIn = node.anchor;
+        node.handleOut = node.anchor;
+    } else {
+        node.type = sound_mind::core::PathNodeType::Corner;
+        node.handleIn.reset();
+        node.handleOut.reset();
+    }
+    previewPath_.setNode(*selectedNodeIndex_, node);
+    emit pathChanged();
+}
+
+void PickController::commitPathEdit() {
+    if (!pathEditActive_) {
+        return;
+    }
+    const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_);
+    if (paint == nullptr) {
+        // Defensive: beginPathEdit() only ever activates for a
+        // PaintOperation, and nothing else changes pickedOperation_
+        // while a path edit is active.
+        cancelPathEdit();
+        return;
+    }
+
+    sound_mind::core::Path editedPath = previewPath_;
+    // The original's own gradient carries over unchanged - editing
+    // geometry shouldn't silently reset color or opacity.
+    editedPath.gradient() = paint->path().gradient();
+    const sound_mind::core::ToolConfiguration config = paint->config();
+
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    const sound_mind::core::OperationId newId = log.reserveId();
+
+    pathEditActive_ = false;
+    selectedNodeIndex_.reset();
+
+    commitReplacement(std::make_unique<sound_mind::core::PaintOperation>(newId, pickedLayer_, std::move(editedPath),
+                                                                            config, pickedOperationId_));
+    previewPath_ = sound_mind::core::Path{};
+    emit pathChanged();
+}
+
+void PickController::cancelPathEdit() {
+    if (!pathEditActive_) {
+        return;
+    }
+    pathEditActive_ = false;
+    selectedNodeIndex_.reset();
+    previewPath_ = sound_mind::core::Path{};
+    emit pathChanged();
 }
 
 sound_mind::core::OperationId PickController::commitReplacement(
