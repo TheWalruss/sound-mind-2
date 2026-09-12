@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.28.6] - 2026-09-12
+
+The Studio half of the "Filter Layers" milestone's third installment (Tone Curve). **Now reachable from the app**: pick Tone Curve from the Filter Type drop-down and draw a real curve.
+
+### Added
+
+- **`ToneCurveEditor`** - a draggable, add/remove-point curve editor. Click anywhere on the plot to add a point, drag a point (including the two fixed endpoints, whose own x stays pinned) to move it, double-click an interior point to remove it. Renders a live preview of the exact curve `applyFilter()`'s own ToneCurve uses.
+- **Tone Curve** is now listed in the Filter Configuration panel's Filter Type drop-down, alongside the other five - every one of the six designed filter types is now fully usable from the app.
+
+Core regression: unchanged (this half is Studio-only). Studio regression: 343/343 ctest entries passing (12 new test cases across `ToneCurveEditorTest`/`FilterConfigurationPanelTest`). Doxygen: 0 warnings.
+
 ## [0.0.28.5] - 2026-09-12
 
 The Core half of the "Filter Layers" milestone's third installment (Tone Curve). **Core-only, not yet reachable from the app** - the Filter Configuration panel doesn't list Tone Curve yet; a real add/drag-point curve editor (confirmed with the user ahead of implementation, in place of another spin-box-only panel) is the following Studio half of this same installment.

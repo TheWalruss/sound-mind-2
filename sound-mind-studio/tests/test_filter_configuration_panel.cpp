@@ -11,10 +11,12 @@
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/filter_configuration_panel.h"
+#include "sound_mind/studio/tone_curve_editor.h"
 
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterType;
 using sound_mind::studio::FilterConfigurationPanel;
+using sound_mind::studio::ToneCurveEditor;
 
 void FilterConfigurationPanelTest::freshPanelHasAFullyTransparentDefaultConfiguration() {
     const FilterConfigurationPanel panel;
@@ -183,4 +185,56 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheTypeComboAndNew
     // Sharpen's own group is now the visible one.
     QVERIFY(panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
     QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("sharpenGroup"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::selectingToneCurveShowsItsOwnGroup() {
+    FilterConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
+    QVERIFY(combo != nullptr);
+
+    const int index = combo->findData(QVariant::fromValue(static_cast<int>(FilterType::ToneCurve)));
+    QVERIFY(index >= 0);
+    combo->setCurrentIndex(index);
+
+    QCOMPARE(panel.filterConfiguration().type(), FilterType::ToneCurve);
+    QVERIFY(panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("toneCurveGroup"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::editingTheToneCurveEditorUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    FilterConfiguration config;
+    config.setType(FilterType::ToneCurve);
+    panel.setFilterConfiguration(config);
+
+    auto* editor = panel.findChild<ToneCurveEditor*>(QStringLiteral("toneCurveEditor"));
+    QVERIFY(editor != nullptr);
+    editor->resize(240, 160);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    // Drags the first point (widget-space (8,152) for a 240x160 widget
+    // with ToneCurveEditor's own 8px plot margin) up to y=0.5.
+    QTest::mousePress(editor, Qt::LeftButton, Qt::NoModifier, QPoint(8, 152));
+    QTest::mouseMove(editor, QPoint(8, 80));
+    QTest::mouseRelease(editor, Qt::LeftButton, Qt::NoModifier, QPoint(8, 80));
+
+    QVERIFY(spy.count() >= 1);
+    const auto& points = panel.filterConfiguration().toneCurvePoints();
+    QVERIFY(qAbs(points.front()[0] - 0.0f) < 0.01);
+    QVERIFY(qAbs(points.front()[1] - 0.5f) < 0.02);
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheToneCurveEditorWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    FilterConfiguration config;
+    config.setType(FilterType::ToneCurve);
+    config.setToneCurvePoints({{0.0f, 0.0f}, {0.3f, 0.1f}, {1.0f, 1.0f}});
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    auto* editor = panel.findChild<ToneCurveEditor*>(QStringLiteral("toneCurveEditor"));
+    QVERIFY(editor != nullptr);
+    QCOMPARE(editor->points(), config.toneCurvePoints());
 }

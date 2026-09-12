@@ -276,9 +276,17 @@ group's own controls while it was hidden.
   90° along frequency).
 - **Sharpen** is Blur's own opposite, tightening detail instead of
   softening it - one **Amount** control (higher pushes further).
+- **Tone Curve** remaps loudness through a curve you draw yourself: click
+  anywhere on the curve area to add a point, drag a point to move it, and
+  double-click a point (other than the two fixed endpoints) to remove it.
+  The curve always passes exactly through every point, smoothly and
+  without overshooting past a point's own neighbors, however steep the
+  curve gets between them. A fresh Filter layer of this type starts as a
+  straight diagonal line (input equals output - no effect) until you
+  drag a point.
 
-**Tone Curve isn't implemented yet** and doesn't appear in the Filter
-Type dropdown - see [What's Not Here Yet](#whats-not-here-yet).
+Every one of the six designed filter types now has a real, working
+algorithm.
 
 A Filter layer with nothing beneath it (or with everything beneath it
 hidden) has nothing to filter, so it has no effect. Filter layers aren't
@@ -617,7 +625,9 @@ full intended scope - MindWave-driven modulation, generators, analysis
 tools, a Composer Mode track view, Sound Flower's polar view, MIDI
 import, chord/sequence generation, and a Sound Mind VST plugin, among
 others none of which exist in the Studio yet. Filter layers (see
-[Filter Layers](#filter-layers) above) have just gotten started.
+[Filter Layers](#filter-layers) above) are further along than most - all
+six designed filter types work now - but the milestone as a whole isn't
+finished (no Equalizer layer yet, in particular).
 `docs/sound-mind-roadmap.md` tracks what's actually being built next, in
 order; this guide will grow alongside it.
 
@@ -670,15 +680,14 @@ designed for it:
 - **Playback decodes the composite once, at Play** - it doesn't yet keep
   re-decoding live as you make further edits during playback.
 
-[Filter Layers](#filter-layers) (see above) have just gotten started -
-only a first sliver of what's designed for them:
+[Filter Layers](#filter-layers) (see above) have all six designed filter
+types working now, but still only a slice of what's designed for the
+milestone as a whole:
 
-- **Five of the six designed filter types work: Frequency-Axis
-  Gradient, Uniform Blur, Edge-Preserving Blur, Directional Blur, and
-  Sharpen** - only **Tone Curve** can't be selected yet, and doesn't
-  appear in the Filter Type drop-down until it does.
-- **No draggable visual gradient editor, and no interior stops** - just
-  the two endpoint stops (`t=0`, `t=1`), via plain spin boxes.
+- **No draggable visual gradient editor for Frequency-Axis Gradient, and
+  no interior stops** - just the two endpoint stops (`t=0`, `t=1`), via
+  plain spin boxes. (Tone Curve, unlike Frequency-Axis Gradient, does
+  have a real draggable point editor now.)
 - **No Equalizer layer yet** - the locked, top-of-stack Filter layer
   `docs/sound-mind-design.md` describes (Frequency-Axis Gradient with a
   specialized "Cut" editor) isn't built; any Filter layer today is a

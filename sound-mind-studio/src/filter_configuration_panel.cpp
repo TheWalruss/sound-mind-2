@@ -2,6 +2,7 @@
 
 #include <array>
 #include <utility>
+#include <vector>
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -15,6 +16,8 @@
 #include <QVariant>
 #include <QWidget>
 
+#include "sound_mind/studio/tone_curve_editor.h"
+
 namespace sound_mind::studio {
 
 namespace {
@@ -22,14 +25,16 @@ namespace {
 using sound_mind::core::FilterType;
 using sound_mind::core::GradientStop;
 
-/// @brief The `FilterType`s with a real algorithm behind them, in
-/// `docs/sound-mind-design.md`'s own family order - see this panel's own
-/// docs for why `ToneCurve` isn't listed yet.
-constexpr std::array<std::pair<FilterType, const char*>, 5> kSelectableFilterTypes{{
+/// @brief Every `FilterType`, in `docs/sound-mind-design.md`'s own
+/// family order (Blur & focus, then Tonal, then Spectral shaping) - all
+/// six now have a real algorithm behind them (`applyFilter()`'s own
+/// docs), so this panel lists all six.
+constexpr std::array<std::pair<FilterType, const char*>, 6> kSelectableFilterTypes{{
     {FilterType::UniformBlur, "Uniform Blur"},
     {FilterType::EdgePreservingBlur, "Edge-Preserving Blur"},
     {FilterType::DirectionalBlur, "Directional Blur"},
     {FilterType::Sharpen, "Sharpen"},
+    {FilterType::ToneCurve, "Tone Curve"},
     {FilterType::FrequencyAxisGradient, "Frequency-Axis Gradient"},
 }};
 
@@ -218,6 +223,23 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     sharpenForm->addRow(tr("Amount:"), sharpenAmountSpinBox_);
     root->addWidget(sharpenGroup_);
 
+    toneCurveGroup_ = new QGroupBox(tr("Tone Curve"), container);
+    toneCurveGroup_->setObjectName(QStringLiteral("toneCurveGroup"));
+    auto* toneCurveLayout = new QVBoxLayout(toneCurveGroup_);
+    auto* toneCurveHint = new QLabel(
+        tr("Click to add a point, drag to move it, double-click an interior point to remove it."), toneCurveGroup_);
+    toneCurveHint->setWordWrap(true);
+    toneCurveLayout->addWidget(toneCurveHint);
+    toneCurveEditor_ = new ToneCurveEditor(toneCurveGroup_);
+    toneCurveEditor_->setObjectName(QStringLiteral("toneCurveEditor"));
+    connect(toneCurveEditor_, &ToneCurveEditor::pointsChanged, this,
+            [this](const std::vector<std::array<float, 2>>& points) {
+                config_.setToneCurvePoints(points);
+                emitConfigChanged();
+            });
+    toneCurveLayout->addWidget(toneCurveEditor_);
+    root->addWidget(toneCurveGroup_);
+
     root->addStretch();
 
     auto* scrollArea = new QScrollArea(this);
@@ -237,6 +259,7 @@ void FilterConfigurationPanel::updateVisibleGroup() {
     edgePreservingBlurGroup_->setVisible(type == FilterType::EdgePreservingBlur);
     directionalBlurGroup_->setVisible(type == FilterType::DirectionalBlur);
     sharpenGroup_->setVisible(type == FilterType::Sharpen);
+    toneCurveGroup_->setVisible(type == FilterType::ToneCurve);
 }
 
 void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
@@ -262,10 +285,11 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     const QSignalBlocker directionalBlurAngleBlocker(directionalBlurAngleSpinBox_);
     const QSignalBlocker sharpenAmountBlocker(sharpenAmountSpinBox_);
 
-    // Falls back to index 0 for a stored type not on the list (ToneCurve -
-    // not selectable here yet, see this class's own docs) without
-    // mutating config_.type() itself, matching ToolConfigurationPanel's
-    // own fallback for an out-of-list stored value.
+    // Every FilterType is selectable now - findData() only ever falls
+    // back to index 0 here for a corrupted/out-of-range stored value
+    // (hand-edited project JSON), the same defensive fallback
+    // ToolConfigurationPanel's own combos already establish, without
+    // mutating config_.type() itself.
     const int typeIndex = filterTypeCombo_->findData(QVariant::fromValue(static_cast<int>(config_.type())));
     filterTypeCombo_->setCurrentIndex(typeIndex >= 0 ? typeIndex : 0);
 
@@ -284,6 +308,9 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     directionalBlurLengthSpinBox_->setValue(config_.directionalBlurLength());
     directionalBlurAngleSpinBox_->setValue(config_.directionalBlurAngleDegrees());
     sharpenAmountSpinBox_->setValue(config_.sharpenAmount());
+    // ToneCurveEditor::setPoints() doesn't emit pointsChanged() by its
+    // own contract, so no QSignalBlocker is needed here.
+    toneCurveEditor_->setPoints(config_.toneCurvePoints());
 
     updateVisibleGroup();
 }

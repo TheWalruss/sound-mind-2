@@ -51,6 +51,7 @@ add_library(sound-mind-studio-lib
     src/recent_projects.cpp
     src/selection_controller.cpp
     src/theme.cpp
+    src/tone_curve_editor.cpp
     src/tool_configuration_panel.cpp
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/canvas_widget.h
@@ -75,6 +76,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/recent_projects.h
     include/sound_mind/studio/selection_controller.h
     include/sound_mind/studio/theme.h
+    include/sound_mind/studio/tone_curve_editor.h
     include/sound_mind/studio/tool_configuration_panel.h
     assets/app.qrc
 )

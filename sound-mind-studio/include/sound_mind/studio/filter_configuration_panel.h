@@ -13,6 +13,8 @@ class QWidget;
 
 namespace sound_mind::studio {
 
+class ToneCurveEditor;
+
 /**
  * @brief A dockable panel for configuring the currently selected Filter
  *        layer - see `docs/sound-mind-design.md`'s "Filter Layer".
@@ -30,28 +32,31 @@ namespace sound_mind::studio {
  *
  * **A `FilterType` selector, listing only the types with a real algorithm
  * behind them** - `docs/sound-mind-roadmap.md`'s `v0.Y.28.1` (Filter
- * Layers) milestone's own multi-installment scope: `UniformBlur`,
- * `EdgePreservingBlur`, `DirectionalBlur`, `Sharpen`, and
- * `FrequencyAxisGradient` all have one now (see `sound_mind::core::
+ * Layers) milestone's own multi-installment scope: every one of the six
+ * designed filter types now has one (see `sound_mind::core::
  * applyFilter()`'s own docs), in `docs/sound-mind-design.md`'s own
- * family order (Blur & focus, then Spectral shaping). `ToneCurve` stays
- * off the list until its own algorithm lands (Installment C) - the same
- * "don't build a selector for types with nothing to select between yet"
- * precedent `ToolConfigurationPanel`'s own docs establish for `ToolType`,
- * applied per-item here rather than only before the very first real type
- * existed. Selecting a type shows only that type's own parameter group;
- * every other group stays hidden (`QWidget::setVisible(false)`), the same
- * "meaningless unless `type()` matches" contract `FilterConfiguration`'s
- * own per-field docs already state.
+ * family order (Blur & focus, then Tonal, then Spectral shaping) - so
+ * this selector now lists all six. Selecting a type shows only that
+ * type's own parameter group; every other group stays hidden
+ * (`QWidget::setVisible(false)`), the same "meaningless unless `type()`
+ * matches" contract `FilterConfiguration`'s own per-field docs already
+ * state.
  *
- * **A basic, two-endpoint-stop gradient editor, not a rich visual one** -
- * `Gradient` always has at least its two endpoint stops (`t=0`, `t=1`);
- * this panel edits exactly those two directly, via plain spin boxes (no
- * draggable visual stop editor - nothing in this codebase has built one
- * yet, for any gradient, anywhere). A richer, draggable editor - and
- * interior stops - are deferred; the Equalizer layer's own specialized
- * "Cut" editor (a later installment of this same milestone) will need
- * its own nicer widget regardless, once built.
+ * **A basic, two-endpoint-stop gradient editor for `FrequencyAxisGradient`,
+ * not a rich visual one** - `Gradient` always has at least its two
+ * endpoint stops (`t=0`, `t=1`); this panel edits exactly those two
+ * directly, via plain spin boxes (no draggable visual stop editor -
+ * nothing in this codebase has built one yet, for any gradient,
+ * anywhere). A richer, draggable editor - and interior stops - are
+ * deferred; the Equalizer layer's own specialized "Cut" editor (a later
+ * installment of this same milestone) will need its own nicer widget
+ * regardless, once built.
+ *
+ * **A real add/drag-point curve editor for `ToneCurve`**
+ * (`ToneCurveEditor`, `tone_curve_editor.h`) - confirmed with the user
+ * ahead of Installment C's own implementation, in place of another
+ * two-endpoint-spin-box panel like Frequency-Axis Gradient's own. See
+ * that class's own docs for its interaction model.
  */
 class FilterConfigurationPanel : public QDockWidget {
     Q_OBJECT
@@ -126,6 +131,9 @@ private:
 
     QGroupBox* sharpenGroup_ = nullptr;
     QDoubleSpinBox* sharpenAmountSpinBox_ = nullptr;
+
+    QGroupBox* toneCurveGroup_ = nullptr;
+    ToneCurveEditor* toneCurveEditor_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

@@ -17,4 +17,7 @@ private slots:
     void changingDirectionalBlurLengthAndAngleUpdateConfigAndEmit();
     void changingSharpenAmountUpdatesConfigAndEmits();
     void setFilterConfigurationSyncsTheTypeComboAndNewSpinBoxesWithoutEmitting();
+    void selectingToneCurveShowsItsOwnGroup();
+    void editingTheToneCurveEditorUpdatesConfigAndEmits();
+    void setFilterConfigurationSyncsTheToneCurveEditorWithoutEmitting();
 };

@@ -25,6 +25,7 @@ add_executable(sound-mind-studio-tests
     test_record_panel.cpp
     test_recent_projects.cpp
     test_theme.cpp
+    test_tone_curve_editor.cpp
     test_tool_configuration_panel.cpp
 )
 

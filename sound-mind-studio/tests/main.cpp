@@ -36,6 +36,7 @@
 #include "test_recent_projects.h"
 #include "test_selection_controller.h"
 #include "test_theme.h"
+#include "test_tone_curve_editor.h"
 #include "test_tool_configuration_panel.h"
 
 int main(int argc, char** argv) {
@@ -126,6 +127,9 @@ int main(int argc, char** argv) {
 
     FilterConfigurationPanelTest filterConfigurationPanelTest;
     status |= QTest::qExec(&filterConfigurationPanelTest, argc, argv);
+
+    ToneCurveEditorTest toneCurveEditorTest;
+    status |= QTest::qExec(&toneCurveEditorTest, argc, argv);
 
     return status;
 }
