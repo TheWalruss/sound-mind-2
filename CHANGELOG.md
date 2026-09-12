@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.28.3] - 2026-09-12
+
+The Core half of the "Filter Layers" milestone's second installment (blur family + sharpen). **Core-only, not yet reachable from the app** - the Filter Configuration panel still shows only Frequency-Axis Gradient's own controls, so this build behaves identically to `v0.0.28.2` for anyone using the Studio itself; a `FilterType` selector and this half's own parameter controls are the following Studio half of this same installment.
+
+### Added
+
+- **Real algorithms for four more `FilterType`s**, ported from the legacy Python reference implementation's own formulas: **`UniformBlur`** (a separable Gaussian blur, `blurSigma()`), **`EdgePreservingBlur`** (a median filter over a square window, `medianSize()`), **`DirectionalBlur`** (a directional line-kernel blur, `directionalBlurLength()`/`directionalBlurAngleDegrees()`), and **`Sharpen`** (an unsharp mask, `sharpenAmount()`). All four operate directly on dB values (not linear amplitude) and leave phase untouched, matching Frequency-Axis Gradient's own precedent. Only `ToneCurve` remains an unimplemented passthrough now.
+
+Core regression: 299 test cases (51,302 assertions), all passing (9 new test cases). Studio regression: 334/334 ctest entries passing (unaffected - Core-only change). Doxygen: 0 warnings.
+
 ## [0.0.28.2] - 2026-09-12
 
 The Studio half of the "Filter Layers" milestone's first installment (`v0.0.28.1` was the Core-only half). **Now reachable from the app**: add a Filter layer, configure its Frequency-Axis Gradient, hear it reshape the composite.

@@ -30,11 +30,44 @@ namespace sound_mind::core {
  *   UI simply always writing `leftIntensity`/`rightIntensity` at the
  *   silence floor and exposing only opacity, as "how much to cut").
  *   Phase is left untouched - only amplitude is affected.
- * - **Every other `FilterType`** (`UniformBlur`, `EdgePreservingBlur`,
- *   `DirectionalBlur`, `Sharpen`, `ToneCurve`) is not implemented yet -
- *   `docs/sound-mind-roadmap.md`'s own later installments of this same
- *   milestone. Returns `composite` unchanged (a harmless passthrough,
- *   not a silent wrong answer) until each lands.
+ * - **`UniformBlur`/`EdgePreservingBlur`/`DirectionalBlur`/`Sharpen`**
+ *   (`v0.Y.28.1` Installment B): each operates on `leftMagnitudeDb` and
+ *   `rightMagnitudeDb` independently, directly in dB space (not converted
+ *   to linear amplitude first - the same domain `FrequencyAxisGradient`
+ *   and the legacy Python reference implementation both already operate
+ *   in, since legacy's own normalized `[0,1]` pixel domain is just a
+ *   linear rescale of dB). Phase is left untouched, matching
+ *   `FrequencyAxisGradient`'s own precedent - legacy's optional
+ *   `apply_to_phase` toggle isn't represented here. Every one of these
+ *   four uses clamp-to-edge boundary handling (the nearest in-bounds
+ *   cell stands in for anything off the edge of the grid) - a
+ *   deliberate simplification, not a port of legacy's own
+ *   per-filter-inconsistent boundary modes (`scipy.ndimage`'s
+ *   default `reflect` for its Gaussian/median filters, an explicit
+ *   `nearest` for its convolve-based motion blur - see
+ *   `../sound-mind/packages/sound_mind_studio/src/sound_mind_studio/
+ *   filters/core.py`). Radii/sizes/lengths are all in raw bin/column
+ *   units, per `FilterConfiguration`'s own docs.
+ *   - `UniformBlur`: a separable 2D Gaussian blur (`blurSigma()`,
+ *     floored at `0.1` matching legacy), kernel truncated at 4 standard
+ *     deviations (matching `scipy.ndimage.gaussian_filter`'s own default
+ *     `truncate`).
+ *   - `EdgePreservingBlur`: a 2D median filter over a square window
+ *     (`medianSize()`, forced odd and at least `3` the same way legacy
+ *     forces it: `max(3, size | 1)`).
+ *   - `DirectionalBlur`: a line-shaped kernel stepped along
+ *     `directionalBlurAngleDegrees()` for `directionalBlurLength()`
+ *     samples each side of center, normalized to sum to 1 - ported
+ *     directly from legacy's own `motion_blur_filter` algorithm (`0`°
+ *     blurs along the time axis/columns, `90`° along the frequency
+ *     axis/bins).
+ *   - `Sharpen`: an unsharp mask - `original + sharpenAmount() *
+ *     (original - gaussianBlur(original, sigma=1.0))`, the same fixed
+ *     internal sigma legacy's own `sharpen_filter` uses.
+ * - **`ToneCurve`** is not implemented yet - `docs/sound-mind-roadmap.md`'s
+ *   own later installment of this same milestone. Returns `composite`
+ *   unchanged (a harmless passthrough, not a silent wrong answer) until
+ *   it lands.
  *
  * @param composite The running composite to filter - everything visible
  *        beneath the Filter layer this configuration belongs to, already
