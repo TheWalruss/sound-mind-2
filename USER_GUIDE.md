@@ -299,11 +299,15 @@ between it and the next Filter layer down).
 **Every project has one special Filter layer: the Equalizer**, always
 present, locked at the very top of the stack (it can't be reordered or
 deleted - see [Working with Layers](#working-with-layers) above). It
-starts with no effect (its Cut is `0` everywhere) - selecting it opens
-the same Filter Configuration panel described above, showing its own
-Frequency-Axis Gradient controls. A dedicated "Cut" editor, matching the
-Equalizer's own specialized role, isn't built yet - see
-[What's Not Here Yet](#whats-not-here-yet).
+starts with no effect (its Cut is `0` everywhere). Selecting it opens the
+Filter Configuration panel in a dedicated mode: no Filter Type
+drop-down (the Equalizer is always Frequency-Axis Gradient underneath,
+so there's nothing to switch), just a **Cut** group with the same
+**Start**/**End** stops as Frequency-Axis Gradient, but only **Left
+Cut**/**Right Cut** per stop - `0` leaves that frequency untouched, `1`
+silences it completely. Unlike the ordinary Frequency-Axis Gradient
+editor, there's no Intensity to set here - the Equalizer only ever cuts
+toward silence, never toward some other target loudness.
 
 ## Painting
 
@@ -696,16 +700,11 @@ designed for it:
 types working now, but still only a slice of what's designed for the
 milestone as a whole:
 
-- **No draggable visual gradient editor for Frequency-Axis Gradient, and
-  no interior stops** - just the two endpoint stops (`t=0`, `t=1`), via
-  plain spin boxes. (Tone Curve, unlike Frequency-Axis Gradient, does
-  have a real draggable point editor now.)
-- **The Equalizer layer's own specialized "Cut" editor isn't built yet** -
-  every new project now has a locked, top-of-stack Equalizer layer (see
-  [Working with Layers](#working-with-layers) above), but selecting it
-  shows the same generic Frequency-Axis Gradient panel any other Filter
-  layer gets (including a Filter Type drop-down that shouldn't really be
-  switchable for it) rather than its own dedicated "Cut" controls.
+- **No draggable visual gradient editor for Frequency-Axis Gradient
+  (including the Equalizer's own Cut editor), and no interior stops** -
+  just the two endpoint stops (`t=0`, `t=1`), via plain spin boxes. (Tone
+  Curve, unlike Frequency-Axis Gradient, does have a real draggable point
+  editor now.)
 - **No MindWave-bound filter parameters** - a filter's own strength
   can't yet vary spatially; MindWaves don't exist until a later
   milestone.

@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.28.8] - 2026-09-12
+
+The Studio half of the "Filter Layers" milestone's fourth and final installment (the Equalizer layer). **Now reachable from the app**: selecting the Equalizer layer shows its own specialized Cut editor. This closes out the entire "Filter Layers" milestone - every one of the six designed filter types now has both a real algorithm and a real, appropriate way to configure it.
+
+### Added
+
+- **A dedicated Cut editor for the Equalizer layer** - selecting it in the Layers panel hides the Filter Configuration panel's own Filter Type drop-down (the Equalizer is always Frequency-Axis Gradient underneath - there's nothing to switch it to) and shows a **Cut** group instead: the same Start/End stops as Frequency-Axis Gradient, but only Left Cut/Right Cut per stop (`0` = pass-through, `1` = full silence) - no Intensity field, since the Equalizer only ever cuts toward silence.
+
+Core regression: unchanged (this half is Studio-only). Studio regression: 345/345 ctest entries passing (4 new test cases in `FilterConfigurationPanelTest`, 1 new integration test in `MainWindowTest`). Doxygen: 0 warnings.
+
 ## [0.0.28.7] - 2026-09-12
 
 The Core half of the "Filter Layers" milestone's fourth and final installment (the Equalizer layer). **Every new project now has a locked Equalizer layer at the top of its stack** - its own specialized "Cut" editor is the following Studio half; until then, selecting it in the Studio shows the same generic Frequency-Axis Gradient panel any other Filter layer gets.

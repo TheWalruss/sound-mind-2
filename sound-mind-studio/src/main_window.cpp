@@ -1438,9 +1438,13 @@ void MainWindow::addFilterLayer() {
 
 void MainWindow::handleLayerSelectionChanged(std::optional<sound_mind::core::LayerId> id) {
     const sound_mind::core::Layer* layer = id.has_value() ? layerById(*id) : nullptr;
-    const bool isFilterLayer =
-        layer != nullptr &&
-        (layer->type() == sound_mind::core::LayerType::Filter || layer->type() == sound_mind::core::LayerType::Equalizer);
+    const bool isEqualizer = layer != nullptr && layer->type() == sound_mind::core::LayerType::Equalizer;
+    const bool isFilterLayer = layer != nullptr && (layer->type() == sound_mind::core::LayerType::Filter || isEqualizer);
+    // Set before setFilterConfiguration() - see FilterConfigurationPanel::
+    // setEqualizerMode()'s own docs (both are display-mode toggles, not
+    // user edits, and updateVisibleGroup() reads isEqualizerMode_ as part
+    // of loading a fresh configuration's own visible group).
+    filterConfigurationPanel_->setEqualizerMode(isEqualizer);
     if (isFilterLayer) {
         filterConfigurationPanel_->setFilterConfiguration(layer->filterConfiguration());
     }

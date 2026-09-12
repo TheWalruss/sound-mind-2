@@ -57,6 +57,18 @@ class ToneCurveEditor;
  * ahead of Installment C's own implementation, in place of another
  * two-endpoint-spin-box panel like Frequency-Axis Gradient's own. See
  * that class's own docs for its interaction model.
+ *
+ * **A specialized "Cut" editor for the Equalizer layer** - `setEqualizerMode()`
+ * (called by `MainWindow` whenever the selected layer's own `type()` is
+ * `LayerType::Equalizer`) hides the `FilterType` combo entirely (the
+ * Equalizer is always a `FrequencyAxisGradient` filter - switching it to
+ * something else doesn't make sense) and shows a dedicated Cut group
+ * instead of the generic Frequency-Axis Gradient one: the same two
+ * endpoint stops, but exposing only Left/Right **Cut** per stop (`0` =
+ * pass-through, `1` = full silence) - intensity is never shown, always
+ * written as the silence floor underneath, confirmed with the user ahead
+ * of implementation (Decision #61's own already-recorded reasoning for
+ * why this needs no new blend math, only a constrained editor).
  */
 class FilterConfigurationPanel : public QDockWidget {
     Q_OBJECT
@@ -91,6 +103,22 @@ public:
      */
     void setFilterConfiguration(const sound_mind::core::FilterConfiguration& config);
 
+    /**
+     * @brief Switches between the generic per-`FilterType` editor (the
+     *        default) and the Equalizer's own specialized "Cut" editor -
+     *        see this class's own docs.
+     *
+     * Purely a display mode - like `setFilterConfiguration()`, this
+     * doesn't emit filterConfigurationChanged(); `MainWindow` calls this
+     * whenever the selection changes, based on the newly selected
+     * layer's own `type()`, entirely separately from loading that
+     * layer's own configuration.
+     *
+     * @param isEqualizer `true` to show the Cut editor (and hide the
+     *        `FilterType` combo); `false` for the normal, generic panel.
+     */
+    void setEqualizerMode(bool isEqualizer);
+
 signals:
     /// @brief Emitted whenever any parameter control changes.
     /// @param config The panel's own new, complete configuration.
@@ -105,8 +133,10 @@ private:
     void updateVisibleGroup();
 
     sound_mind::core::FilterConfiguration config_;
+    bool isEqualizerMode_ = false;
 
     QComboBox* filterTypeCombo_ = nullptr;
+    QLabel* filterTypeLabel_ = nullptr;
 
     QWidget* frequencyAxisGradientSection_ = nullptr;
     QLabel* frequencyGradientLabel_ = nullptr;
@@ -134,6 +164,12 @@ private:
 
     QGroupBox* toneCurveGroup_ = nullptr;
     ToneCurveEditor* toneCurveEditor_ = nullptr;
+
+    QGroupBox* equalizerCutGroup_ = nullptr;
+    QDoubleSpinBox* startLeftCutSpinBox_ = nullptr;
+    QDoubleSpinBox* startRightCutSpinBox_ = nullptr;
+    QDoubleSpinBox* endLeftCutSpinBox_ = nullptr;
+    QDoubleSpinBox* endRightCutSpinBox_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

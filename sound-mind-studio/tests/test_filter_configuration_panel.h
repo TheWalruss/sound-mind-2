@@ -20,4 +20,8 @@ private slots:
     void selectingToneCurveShowsItsOwnGroup();
     void editingTheToneCurveEditorUpdatesConfigAndEmits();
     void setFilterConfigurationSyncsTheToneCurveEditorWithoutEmitting();
+    void equalizerModeHidesTheFilterTypeComboAndShowsTheCutGroup();
+    void equalizerModeOffRestoresTheNormalPerTypeGroup();
+    void editingACutSpinBoxWritesOpacityAndForcesIntensityToTheSilenceFloor();
+    void setFilterConfigurationSyncsTheCutSpinBoxesFromOpacityWithoutEmitting();
 };

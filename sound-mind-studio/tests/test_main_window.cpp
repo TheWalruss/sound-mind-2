@@ -13,6 +13,7 @@
 #include <QDoubleSpinBox>
 #include <QEvent>
 #include <QFile>
+#include <QGroupBox>
 #include <QImage>
 #include <QLabel>
 #include <QMouseEvent>
@@ -2514,6 +2515,33 @@ void MainWindowTest::selectingANormalLayerDisablesFilterConfigurationPanel() {
     layersPanel->selectLayer(window.project()->layers().front().id());  // Background - a Normal-ish, non-Filter type.
 
     QVERIFY(!filterPanel->isEnabled());
+}
+
+void MainWindowTest::selectingTheEqualizerLayerSwitchesTheFilterConfigurationPanelToCutMode() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    auto* filterPanel = window.findChild<FilterConfigurationPanel*>();
+    QVERIFY(filterPanel != nullptr);
+    // A regular Filter layer first, to confirm switching *back* out of
+    // Equalizer mode also works, not just into it.
+    window.addFilterLayer();
+    const auto ordinaryFilterId = topmostNonEqualizerLayer(*window.project()).id();
+    layersPanel->selectLayer(ordinaryFilterId);
+    QVERIFY(filterPanel->findChild<QGroupBox*>(QStringLiteral("equalizerCutGroup"))->isHidden());
+
+    const auto equalizerId = window.project()->layers().back().id();  // Always the topmost layer.
+    layersPanel->selectLayer(equalizerId);
+
+    QVERIFY(filterPanel->isEnabled());
+    QVERIFY(filterPanel->findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
+    QVERIFY(!filterPanel->findChild<QGroupBox*>(QStringLiteral("equalizerCutGroup"))->isHidden());
+
+    layersPanel->selectLayer(ordinaryFilterId);
+
+    QVERIFY(!filterPanel->findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
+    QVERIFY(filterPanel->findChild<QGroupBox*>(QStringLiteral("equalizerCutGroup"))->isHidden());
 }
 
 void MainWindowTest::editingFilterConfigurationPanelWritesBackToTheSelectedLayer() {

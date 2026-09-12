@@ -154,6 +154,7 @@ private slots:
     void addFilterLayerAddsAFilterTypeLayerAndSelectsIt();
     void selectingAFilterLayerLoadsAndEnablesFilterConfigurationPanel();
     void selectingANormalLayerDisablesFilterConfigurationPanel();
+    void selectingTheEqualizerLayerSwitchesTheFilterConfigurationPanelToCutMode();
     void editingFilterConfigurationPanelWritesBackToTheSelectedLayer();
     void movingTheMouseOverTheCanvasUpdatesTheCursorPositionLabel();
     void leavingTheCanvasClearsTheCursorPositionLabel();

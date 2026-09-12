@@ -238,3 +238,61 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheToneCurveEditor
     QVERIFY(editor != nullptr);
     QCOMPARE(editor->points(), config.toneCurvePoints());
 }
+
+void FilterConfigurationPanelTest::equalizerModeHidesTheFilterTypeComboAndShowsTheCutGroup() {
+    FilterConfigurationPanel panel;
+
+    panel.setEqualizerMode(true);
+
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("equalizerCutGroup"))->isHidden());
+    // Every per-type group stays hidden while in Equalizer mode, even
+    // though config_.type() is still FrequencyAxisGradient (the default).
+    QVERIFY(panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::equalizerModeOffRestoresTheNormalPerTypeGroup() {
+    FilterConfigurationPanel panel;
+    panel.setEqualizerMode(true);
+
+    panel.setEqualizerMode(false);
+
+    QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("equalizerCutGroup"))->isHidden());
+    QVERIFY(!panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::editingACutSpinBoxWritesOpacityAndForcesIntensityToTheSilenceFloor() {
+    FilterConfigurationPanel panel;
+    panel.setEqualizerMode(true);
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("startLeftCutSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(0.75);
+
+    QCOMPARE(spy.count(), 1);
+    const auto& stop = panel.filterConfiguration().frequencyGradient().stops().front();
+    QCOMPARE(stop.leftOpacity, 0.75f);
+    QCOMPARE(stop.leftIntensity, -96.0f);
+    // The other channel/endpoint are untouched.
+    QCOMPARE(stop.rightOpacity, 0.0f);
+    QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().leftOpacity, 0.0f);
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheCutSpinBoxesFromOpacityWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    panel.setEqualizerMode(true);
+    FilterConfiguration config;
+    config.frequencyGradient().setStopValues(0, {0.0f, -96.0f, -96.0f, 0.3f, 0.4f});
+    config.frequencyGradient().setStopValues(1, {1.0f, -96.0f, -96.0f, 0.5f, 0.6f});
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("startLeftCutSpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("startRightCutSpinBox"))->value(), 0.4);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endLeftCutSpinBox"))->value(), 0.5);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endRightCutSpinBox"))->value(), 0.6);
+}
