@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.28.5] - 2026-09-12
+
+The Core half of the "Filter Layers" milestone's third installment (Tone Curve). **Core-only, not yet reachable from the app** - the Filter Configuration panel doesn't list Tone Curve yet; a real add/drag-point curve editor (confirmed with the user ahead of implementation, in place of another spin-box-only panel) is the following Studio half of this same installment.
+
+### Added
+
+- **`sound_mind::core::monotoneCubicTangents()`/`evaluateToneCurve()`** (`tone_curve.h`/`.cpp`) - a monotone cubic Hermite spline (Fritsch-Carlson), a public Core function so the coming Studio curve editor can render an exact live preview using the same math `applyFilter()` uses, not a second implementation.
+- **A real algorithm for `FilterType::ToneCurve`** - each of a layer's own left/right dB values normalizes to `[0, 1]`, remaps through `config.toneCurvePoints()`'s own curve, and converts back. Phase is left untouched, matching every other filter this milestone has built. Every one of the six designed filter types now has a real algorithm behind it.
+
+Core regression: 308 test cases (51,939 assertions), all passing (16 new test cases). Studio regression: 343/343 ctest entries passing (unaffected - Core-only change). Doxygen: 0 warnings.
+
 ## [0.0.28.4] - 2026-09-12
 
 The Studio half of the "Filter Layers" milestone's second installment (`v0.0.28.3` was the Core-only half). **Now reachable from the app**: pick a Filter layer's own type and configure it.

@@ -64,10 +64,21 @@ namespace sound_mind::core {
  *   - `Sharpen`: an unsharp mask - `original + sharpenAmount() *
  *     (original - gaussianBlur(original, sigma=1.0))`, the same fixed
  *     internal sigma legacy's own `sharpen_filter` uses.
- * - **`ToneCurve`** is not implemented yet - `docs/sound-mind-roadmap.md`'s
- *   own later installment of this same milestone. Returns `composite`
- *   unchanged (a harmless passthrough, not a silent wrong answer) until
- *   it lands.
+ * - **`ToneCurve`** (`v0.Y.28.1` Installment C): each of `leftMagnitudeDb`/
+ *   `rightMagnitudeDb` is remapped independently, per cell - the cell's
+ *   own dB value normalizes to `[0, 1]` (the same `-96..0` display range
+ *   `color_mapping.cpp`'s own `dbToByte()`/`byteToDb()` establish,
+ *   Core's own duplicated copy - see `dbToUnit()`/`unitToDb()` in
+ *   `filter_application.cpp`), the normalized value is evaluated against
+ *   `config.toneCurvePoints()` via `evaluateToneCurve()`
+ *   (`tone_curve.h` - a monotone cubic Hermite spline; see its own docs
+ *   for why monotone, and for how it differs from legacy's own
+ *   `PchipInterpolator`-based curve), the result clamps back to
+ *   `[0, 1]`, and converts back to dB. Phase is left untouched, matching
+ *   every other filter's own precedent. The two mandatory endpoint
+ *   control points (`{0, 0}`, `{1, 1}` by default - the identity curve)
+ *   mean a fresh Filter layer of this type has no effect until a point
+ *   is moved.
  *
  * @param composite The running composite to filter - everything visible
  *        beneath the Filter layer this configuration belongs to, already

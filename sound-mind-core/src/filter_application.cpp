@@ -1,6 +1,7 @@
 #include "sound_mind/core/filter_application.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -9,6 +10,8 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+
+#include "sound_mind/core/tone_curve.h"
 
 namespace sound_mind::core {
 
@@ -239,6 +242,48 @@ StreamImage applyFrequencyAxisGradient(const StreamImage& composite, const Gradi
     return result;
 }
 
+// The same `-96..0` dB display range `color_mapping.cpp`'s own (private,
+// Codec-internal) `dbToByte()`/`byteToDb()` already establish - Core's
+// own copy, not a shared header, since Core can't depend on Codec's
+// private `src/`-only files (the same "duplicated, not shared" reasoning
+// `docs/sound-mind-architecture.md`'s Decision #59 already gives for
+// `dbToLinearAmplitude()`/`linearAmplitudeToDb()`). A plain float
+// `[0, 1]` normalization, not an 8-bit round trip - full precision, since
+// nothing here needs to display or store a byte.
+constexpr float kToneCurveMinDb = -96.0f;
+constexpr float kToneCurveMaxDb = 0.0f;
+
+float dbToUnit(float db) {
+    const float clamped = std::clamp(db, kToneCurveMinDb, kToneCurveMaxDb);
+    return (clamped - kToneCurveMinDb) / (kToneCurveMaxDb - kToneCurveMinDb);
+}
+
+float unitToDb(float unit) { return kToneCurveMinDb + unit * (kToneCurveMaxDb - kToneCurveMinDb); }
+
+/// @brief `applyFilter()`'s own `ToneCurve` implementation - see its docs
+/// for the exact remap.
+StreamImage applyToneCurve(const StreamImage& composite, const std::vector<std::array<float, 2>>& points) {
+    StreamImage result = composite;
+    if (composite.config.binCount == 0 || composite.frameCount == 0 || points.empty()) {
+        return result;
+    }
+
+    const auto tangents = monotoneCubicTangents(points);
+    const auto remap = [&points, &tangents](float db) {
+        const float curved = evaluateToneCurve(points, tangents, dbToUnit(db));
+        return unitToDb(std::clamp(curved, 0.0f, 1.0f));
+    };
+    for (float& db : result.leftMagnitudeDb) {
+        db = remap(db);
+    }
+    for (float& db : result.rightMagnitudeDb) {
+        db = remap(db);
+    }
+    // Phase is left untouched - the same amplitude-only contract every
+    // other filter this milestone has built so far already keeps.
+    return result;
+}
+
 }  // namespace
 
 StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration& config,
@@ -268,10 +313,7 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
                     return sharpen2D(grid, bins, frames, config.sharpenAmount());
                 });
         case FilterType::ToneCurve:
-            // Not implemented yet - see this function's own docs. A
-            // harmless passthrough, not a silent wrong answer, until it
-            // lands in a later installment of this same milestone.
-            return composite;
+            return applyToneCurve(composite, config.toneCurvePoints());
     }
     return composite;
 }

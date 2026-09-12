@@ -79,17 +79,52 @@ TEST_CASE("applyFilter's FrequencyAxisGradient leaves phase untouched", "[core][
     }
 }
 
-TEST_CASE("applyFilter is a harmless passthrough for a filter type not implemented yet",
+// ---------------------------------------------------------------------------
+// ToneCurve - Installment C.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("applyFilter's ToneCurve leaves dB values unchanged for the default identity curve",
           "[core][filter_application]") {
     FilterConfiguration config;
-    config.setType(FilterType::ToneCurve);  // Installment C's own scope, not yet built.
+    config.setType(FilterType::ToneCurve);  // Default toneCurvePoints(): {0,0},{1,1} - the identity curve.
 
-    const auto composite = makeComposite();
-    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
 
-    CHECK(filtered.leftMagnitudeDb == composite.leftMagnitudeDb);
-    CHECK(filtered.rightMagnitudeDb == composite.rightMagnitudeDb);
-    CHECK(filtered.sharedPhaseRadians == composite.sharedPhaseRadians);
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-20.0f));
+    CHECK(filtered.rightMagnitudeDb[0] == Catch::Approx(-10.0f));
+}
+
+TEST_CASE("applyFilter's ToneCurve remaps each channel's own dB value independently through the curve",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ToneCurve);
+    config.setToneCurvePoints({{0.0f, 0.0f}, {0.5f, 0.2f}, {1.0f, 1.0f}});
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    // Reference values from this filter's own documented remap (dB ->
+    // normalized [0,1] -> evaluateToneCurve() -> dB), computed
+    // independently ahead of this test. Left is -20 dB, right is -10 dB
+    // (makeComposite()'s own values) - each channel's own value drives
+    // its own point on the curve.
+    for (const float db : filtered.leftMagnitudeDb) {
+        CHECK(db == Catch::Approx(-34.91666667f).margin(0.001));
+    }
+    for (const float db : filtered.rightMagnitudeDb) {
+        CHECK(db == Catch::Approx(-16.98958333f).margin(0.001));
+    }
+}
+
+TEST_CASE("applyFilter's ToneCurve leaves phase untouched", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ToneCurve);
+    config.setToneCurvePoints({{0.0f, 0.0f}, {0.5f, 0.9f}, {1.0f, 1.0f}});
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    for (const float phase : filtered.sharedPhaseRadians) {
+        CHECK(phase == 0.5f);
+    }
 }
 
 // ---------------------------------------------------------------------------
