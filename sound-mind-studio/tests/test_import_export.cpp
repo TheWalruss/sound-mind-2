@@ -12,6 +12,8 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/import_export.h"
 
+using sound_mind::core::Layer;
+using sound_mind::core::LayerId;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::studio::AudioSnippetPickerDialog;
@@ -152,13 +154,16 @@ void ImportExportTest::importImageFileIntoAddsANewLayer() {
     Project project = Project::createNew(imageScalingTestProjectSettings());
     const std::size_t layerCountBefore = project.layers().size();
 
-    const bool ok =
-        sound_mind::studio::importImageFileInto(project, path, ImageScalePickerDialog::Mode::RescaleToFitProject);
+    LayerId newLayerId = 0;
+    const bool ok = sound_mind::studio::importImageFileInto(
+        project, path, ImageScalePickerDialog::Mode::RescaleToFitProject, nullptr, &newLayerId);
     std::filesystem::remove(path);
 
     QVERIFY(ok);
     QCOMPARE(project.layers().size(), layerCountBefore + 1);
-    const auto& content = *project.layers().back().content();
+    const Layer* newLayer = project.layerById(newLayerId);
+    QVERIFY(newLayer != nullptr);
+    const auto& content = *newLayer->content();
     QCOMPARE(content.frameCount, static_cast<std::uint32_t>(100));
     QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(50));
 }
@@ -190,8 +195,12 @@ void ImportExportTest::importImageFilesIntoImportsEachFileIndependentlyWhenNotSe
 
     QCOMPARE(importedCount, 2);
     QCOMPARE(project.layers().size(), layerCountBefore + 2);
+    // Indexed from layerCountBefore - 1, not layerCountBefore - every
+    // import inserts just below the Equalizer (Project::addLayer()'s own
+    // docs), so the newly imported layers start one slot earlier than
+    // the old Equalizer-less stack would have put them.
+    QCOMPARE(project.layers()[layerCountBefore - 1].translationColumns(), static_cast<std::int64_t>(0));
     QCOMPARE(project.layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(0));
-    QCOMPARE(project.layers()[layerCountBefore + 1].translationColumns(), static_cast<std::int64_t>(0));
 }
 
 void ImportExportTest::importImageFilesIntoAppliesCumulativeTranslationWhenSequential() {
@@ -210,11 +219,14 @@ void ImportExportTest::importImageFilesIntoAppliesCumulativeTranslationWhenSeque
     std::filesystem::remove(pathB);
 
     QCOMPARE(importedCount, 2);
-    // Sorted alphabetically regardless of input order - A first.
-    QCOMPARE(project.layers()[layerCountBefore].name(), pathA.filename().string());
-    QCOMPARE(project.layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(0));
-    QCOMPARE(project.layers()[layerCountBefore + 1].name(), pathB.filename().string());
-    QCOMPARE(project.layers()[layerCountBefore + 1].translationColumns(), static_cast<std::int64_t>(75));
+    // Sorted alphabetically regardless of input order - A first. Indexed
+    // from layerCountBefore - 1 - see
+    // importImageFilesIntoImportsEachFileIndependentlyWhenNotSequential()'s
+    // own comment.
+    QCOMPARE(project.layers()[layerCountBefore - 1].name(), pathA.filename().string());
+    QCOMPARE(project.layers()[layerCountBefore - 1].translationColumns(), static_cast<std::int64_t>(0));
+    QCOMPARE(project.layers()[layerCountBefore].name(), pathB.filename().string());
+    QCOMPARE(project.layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(75));
 }
 
 void ImportExportTest::importImageFilesIntoReturnsZeroWhenNothingWasImported() {
@@ -237,7 +249,10 @@ void ImportExportTest::exportLayerAudioNowWritesARealFile() {
     std::filesystem::remove(wavPath);
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-audio.flac";
-    const bool ok = sound_mind::studio::exportLayerAudioNow(project.layers().back(), exportPath);
+    // Not project.layers().back() - that's the Equalizer layer; the
+    // snippet just imported sits just below it (addLayer()'s own docs).
+    const bool ok =
+        sound_mind::studio::exportLayerAudioNow(project.layers().at(project.layers().size() - 2), exportPath);
     const bool exists = std::filesystem::exists(exportPath);
     std::filesystem::remove(exportPath);
 
@@ -253,9 +268,10 @@ void ImportExportTest::exportLayerAudioNowFailsForAnUnrecognizedExtension() {
     std::filesystem::remove(wavPath);
 
     QString errorMessage;
+    // Not project.layers().back() - see exportLayerAudioNowWritesARealFile()'s own comment.
     const bool ok = sound_mind::studio::exportLayerAudioNow(
-        project.layers().back(), std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-audio.xyz",
-        &errorMessage);
+        project.layers().at(project.layers().size() - 2),
+        std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-audio.xyz", &errorMessage);
 
     QVERIFY(!ok);
     QVERIFY(!errorMessage.isEmpty());
@@ -269,8 +285,9 @@ void ImportExportTest::exportLayerVideoNowWritesARealFile() {
     std::filesystem::remove(wavPath);
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-video.mp4";
-    const bool ok =
-        sound_mind::studio::exportLayerVideoNow(project.layers().back(), exportPath, project.settings().canvasWidth);
+    // Not project.layers().back() - see exportLayerAudioNowWritesARealFile()'s own comment.
+    const bool ok = sound_mind::studio::exportLayerVideoNow(project.layers().at(project.layers().size() - 2),
+                                                             exportPath, project.settings().canvasWidth);
     const bool exists = std::filesystem::exists(exportPath);
     std::filesystem::remove(exportPath);
 

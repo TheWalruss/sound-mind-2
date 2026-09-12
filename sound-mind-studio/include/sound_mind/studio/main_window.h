@@ -1445,12 +1445,15 @@ private:
      *
      * `layersPanel_`'s own selected row (LayersPanel::selectedLayerId()),
      * if any - the "active layer" a user has actually clicked. Falls back
-     * to the topmost layer in the stack (`project_->layers().back()`),
-     * regardless of content or type, whenever nothing is selected (a
-     * fresh project, or a selection that was cleared) - the same
-     * predictable placeholder this method always used, not
-     * `topmostLayerWithContent()` (which requires existing content and
-     * would make a fresh, still-empty new layer unpaintable).
+     * to the *bottommost* layer in the stack (`project_->layers().front()`
+     * - the Background layer, always present), regardless of content or
+     * type, whenever nothing is selected (a fresh project, or a selection
+     * that was cleared) - the same predictable placeholder this method
+     * always used, not `topmostLayerWithContent()` (which requires
+     * existing content and would make a fresh, still-empty new layer
+     * unpaintable). Not `.back()` - since the Equalizer milestone, that's
+     * always the (locked, content-less) Equalizer layer, never a sensible
+     * paint target.
      *
      * @return That layer's id, or `std::nullopt` if no project is open.
      */

@@ -6,6 +6,22 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.28.7] - 2026-09-12
+
+The Core half of the "Filter Layers" milestone's fourth and final installment (the Equalizer layer). **Every new project now has a locked Equalizer layer at the top of its stack** - its own specialized "Cut" editor is the following Studio half; until then, selecting it in the Studio shows the same generic Frequency-Axis Gradient panel any other Filter layer gets.
+
+### Added
+
+- **`Project::createNew()` now creates an Equalizer layer**, right after Background - a `FrequencyAxisGradient` filter with intensity pinned to the silence floor on both stops/channels, opacity at `0` (no cut applied yet). Existing projects don't retroactively gain one on load - only new projects, from this version forward.
+- **`Project::addLayer()` keeps the Equalizer pinned to the top of the stack** - a new layer now inserts just below an existing Equalizer rather than unconditionally at the very top, regardless of how many more layers get added afterward.
+
+### Fixed
+
+- **`MainWindow::paintTargetLayerId()`'s own "nothing selected" fallback** used to default to the topmost layer - now always the Equalizer, and never a sensible paint target. Falls back to the Background layer instead, matching what a fresh project with nothing selected has always actually meant to offer.
+- **Sequential image import placement** (`importImageFilesInto()`) used to locate "the layer just imported" as the topmost layer, silently wrong for the same reason. Fixed to track the newly added layer's own id directly.
+
+Core regression: 310 test cases (51,960 assertions), all passing. Studio regression: 345/345 ctest entries passing (extensive test-suite updates for the new layer, no new behavior beyond the two fixes above). Doxygen: 0 warnings.
+
 ## [0.0.28.6] - 2026-09-12
 
 The Studio half of the "Filter Layers" milestone's third installment (Tone Curve). **Now reachable from the app**: pick Tone Curve from the Filter Type drop-down and draw a real curve.

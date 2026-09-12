@@ -34,18 +34,26 @@ public:
     Project() = default;
 
     /**
-     * @brief Creates a new project with the given settings and a single
-     *        Background layer, per `docs/sound-mind-design.md`'s "Special
-     *        Layers".
+     * @brief Creates a new project with the given settings, a Background
+     *        layer, and an Equalizer layer, per `docs/sound-mind-design.md`'s
+     *        "Special Layers".
      *
-     * @note The Equalizer special layer isn't created yet - it needs a
-     *       working Filter mechanism, which doesn't exist until the
-     *       `Filter Layers` milestone (see `docs/sound-mind-roadmap.md`).
-     *       A non-functional stand-in would just need redesigning then.
+     * The Equalizer starts as a `FrequencyAxisGradient` filter configured
+     * for "Cut": both gradient stops' own intensity is pinned to the
+     * silence floor (`-96` dB, matching every other dB-ranged control's
+     * own established floor), opacity left at its own default `0` (no
+     * cut applied yet - the same "nothing happens by accident" default
+     * every other fresh Filter layer's own gradient already establishes).
+     *
+     * @note Only a *new* project gets one - an existing project file
+     *       saved before this milestone has no Equalizer layer at all,
+     *       and `load()` doesn't retroactively add one (confirmed with
+     *       the user: a project has whatever layers its own file says it
+     *       has, the same as any other field).
      *
      * @param settings The settings the new project should carry.
-     * @return The new project, with its Background layer and an empty
-     *         operation log.
+     * @return The new project, with its Background and Equalizer layers
+     *         and an empty operation log.
      */
     [[nodiscard]] static Project createNew(ProjectSettings settings);
 
@@ -82,7 +90,17 @@ public:
     void save(const std::filesystem::path& path) const;
 
     /**
-     * @brief Appends a new layer to the top of the layer stack.
+     * @brief Appends a new layer to the top of the layer stack - or, if
+     *        an Equalizer layer already occupies the very top, just
+     *        beneath it instead.
+     *
+     * The Equalizer stays locked at the top of the stack, per
+     * `docs/sound-mind-design.md`'s "Special Layers" - `createNew()`
+     * creates at most one, and nothing else in this codebase ever
+     * creates a second, but this check costs nothing even if that ever
+     * changes, and keeps this method correct regardless of *how* an
+     * Equalizer layer came to exist rather than relying on every caller
+     * to know not to add layers after it.
      *
      * @param layer The layer to add. Its own id is ignored - a fresh,
      *        unique id is assigned to the appended copy instead, since a

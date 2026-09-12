@@ -80,6 +80,26 @@ public:
     TestMainWindow() : MainWindow(nullptr, sound_mind::core::AudioDeviceMode::None) {}
 };
 
+/// @brief The topmost layer that isn't the Equalizer - what this whole
+/// file's own many `project()->layers().back()` call sites actually meant
+/// before every `Project::createNew()` started adding an Equalizer layer
+/// (v0.Y.28.1's own Installment D): "whichever layer a just-completed
+/// action (import, paint, pool, add) most recently touched or created",
+/// which is always the layer just below the Equalizer now, not the very
+/// last element. A small helper here rather than updating each call site
+/// to `.at(size() - 2)` individually - this doesn't assume exactly one
+/// layer beyond Background/Equalizer exists, only that the Equalizer
+/// itself (if present) is never the layer under test.
+const sound_mind::core::Layer& topmostNonEqualizerLayer(const sound_mind::core::Project& project) {
+    const auto& layers = project.layers();
+    for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
+        if (it->type() != sound_mind::core::LayerType::Equalizer) {
+            return *it;
+        }
+    }
+    return layers.back();  // Defensive only - a real project always has a Background layer at least.
+}
+
 void appendUint32(std::vector<char>& bytes, std::uint32_t value) {
     for (int i = 0; i < 4; ++i) {
         bytes.push_back(static_cast<char>((value >> (8 * i)) & 0xFF));
@@ -291,7 +311,7 @@ void MainWindowTest::landingPageRecentProjectRequestedOpensThatPath() {
     // there - via a prior successful open, not by reaching into internals.
     QVERIFY(window.openProjectAt(projectPath));
     createFreshTestProject(window);  // back to a fresh, different project.
-    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(1));
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(2));  // Background + Equalizer.
 
     auto* landing = window.findChild<LandingPage*>();
     QVERIFY(landing != nullptr);
@@ -326,7 +346,7 @@ void MainWindowTest::newProjectReplacesTheCurrentOne() {
     createFreshTestProject(window);  // replace it with another fresh one.
 
     QVERIFY(window.project() != nullptr);
-    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(1));
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(2));  // Background + Equalizer.
 }
 
 void MainWindowTest::importAudioFileAddsANewLayer() {
@@ -339,8 +359,8 @@ void MainWindowTest::importAudioFileAddsANewLayer() {
     std::filesystem::remove(path);
 
     QVERIFY(ok);
-    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(2));
-    QVERIFY(window.project()->layers().back().content().has_value());
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(3));  // Background + Equalizer + imported.
+    QVERIFY(topmostNonEqualizerLayer(*window.project()).content().has_value());
 }
 
 void MainWindowTest::importImageFileAddsANewLayer() {
@@ -357,10 +377,10 @@ void MainWindowTest::importImageFileAddsANewLayer() {
     std::filesystem::remove(path);
 
     QVERIFY(ok);
-    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(2));
-    QVERIFY(window.project()->layers().back().content().has_value());
-    QCOMPARE(window.project()->layers().back().content()->frameCount, static_cast<std::uint32_t>(4));
-    QCOMPARE(window.project()->layers().back().content()->config.binCount, static_cast<std::uint32_t>(3));
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(3));  // Background + Equalizer + imported.
+    QVERIFY(topmostNonEqualizerLayer(*window.project()).content().has_value());
+    QCOMPARE(topmostNonEqualizerLayer(*window.project()).content()->frameCount, static_cast<std::uint32_t>(4));
+    QCOMPARE(topmostNonEqualizerLayer(*window.project()).content()->config.binCount, static_cast<std::uint32_t>(3));
 }
 
 void MainWindowTest::importAudioFileFailsGracefullyForAMissingFile() {
@@ -369,11 +389,11 @@ void MainWindowTest::importAudioFileFailsGracefullyForAMissingFile() {
     const bool ok = window.importAudioFile(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.wav");
 
     QVERIFY(!ok);
-    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(1));
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(2));  // Background + Equalizer, unchanged.
 }
 
 void MainWindowTest::startPlaybackDoesNothingWithNoContent() {
-    // A fresh project's only layer (Background) has no content yet.
+    // A fresh project's Background/Equalizer layers have no content yet.
     TestMainWindow window;
     createFreshTestProject(window);
     window.startPlayback();
@@ -442,7 +462,7 @@ void MainWindowTest::stopPlaybackStopsIt() {
 }
 
 void MainWindowTest::poolTopmostLayerNowFailsGracefullyWithNoContent() {
-    // A fresh project's only layer (Background) has no content yet.
+    // A fresh project's Background/Equalizer layers have no content yet.
     TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(!window.poolTopmostLayerNow());
@@ -466,14 +486,14 @@ void MainWindowTest::poolTopmostLayerNowPoolsAnImportedLayer() {
     QVERIFY(!poolPngPath.isEmpty());
     QVERIFY(QFile::exists(streamPngPath));
     QVERIFY(QFile::exists(poolPngPath));
-    QCOMPARE(window.project()->layers().back().poolContent().has_value(), true);
+    QCOMPARE(topmostNonEqualizerLayer(*window.project()).poolContent().has_value(), true);
 
     QFile::remove(streamPngPath);
     QFile::remove(poolPngPath);
 }
 
 void MainWindowTest::exportTopmostLayerAudioNowFailsGracefullyWithNoContent() {
-    // A fresh project's only layer (Background) has no content yet.
+    // A fresh project's Background/Equalizer layers have no content yet.
     TestMainWindow window;
     createFreshTestProject(window);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export.flac";
@@ -514,7 +534,7 @@ void MainWindowTest::exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension()
 }
 
 void MainWindowTest::exportTopmostLayerVideoNowFailsGracefullyWithNoContent() {
-    // A fresh project's only layer (Background) has no content yet.
+    // A fresh project's Background/Equalizer layers have no content yet.
     TestMainWindow window;
     createFreshTestProject(window);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export.mp4";
@@ -626,7 +646,7 @@ void MainWindowTest::toggleLoopModeAddsALayerAndStartsTheEngine() {
 
     QVERIFY(window.isLoopModeRunning());
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
-    QCOMPARE(QString::fromStdString(window.project()->layers().back().name()), QStringLiteral("Loop Input"));
+    QCOMPARE(QString::fromStdString(topmostNonEqualizerLayer(*window.project()).name()), QStringLiteral("Loop Input"));
 
     window.toggleLoopMode();  // cleanup - stop before the window is destroyed.
 }
@@ -956,7 +976,7 @@ void MainWindowTest::importAudioFileUsesTheProjectsConfiguredCodecSettings() {
     std::filesystem::remove(path);
     std::filesystem::remove(projectPath);
 
-    QCOMPARE(window.project()->layers().back().content()->config.binCount, static_cast<std::uint32_t>(128));
+    QCOMPARE(topmostNonEqualizerLayer(*window.project()).content()->config.binCount, static_cast<std::uint32_t>(128));
 }
 
 void MainWindowTest::layersPanelIsHiddenUntilAProjectExists() {
@@ -990,7 +1010,7 @@ void MainWindowTest::refreshLayersPanelReflectsTheCurrentLayers() {
     // actually gone before counting below, the same as it would have been
     // by the time a real user's next interaction runs.
     QTest::qWait(0);
-    QCOMPARE(panel->findChildren<QLabel*>(QStringLiteral("nameLabel")).size(), 2);
+    QCOMPARE(panel->findChildren<QLabel*>(QStringLiteral("nameLabel")).size(), 3);  // Background + Equalizer + imported.
 }
 
 void MainWindowTest::toggleLayerVisibilityHidesALayerFromTopmostLookup() {
@@ -1001,7 +1021,7 @@ void MainWindowTest::toggleLayerVisibilityHidesALayerFromTopmostLookup() {
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
-    const auto layerId = window.project()->layers().back().id();
+    const auto layerId = topmostNonEqualizerLayer(*window.project()).id();
 
     // poolTopmostLayerNow() needs a topmost layer with content - a clean,
     // already-established way to observe topmostLayerWithContent()
@@ -1095,7 +1115,7 @@ void MainWindowTest::deleteLayerRemovesANormalLayer() {
     createFreshTestProject(window);
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
-    const auto layerId = window.project()->layers().back().id();
+    const auto layerId = topmostNonEqualizerLayer(*window.project()).id();
     const std::size_t countBefore = window.project()->layers().size();
 
     window.deleteLayer(layerId);
@@ -1124,11 +1144,16 @@ void MainWindowTest::reorderLayersAppliesAValidPermutation() {
     std::filesystem::remove(path);
     const auto backgroundId = window.project()->layers().at(0).id();
     const auto importedId = window.project()->layers().at(1).id();
+    const auto equalizerId = window.project()->layers().at(2).id();
 
-    window.reorderLayers({importedId, backgroundId});
+    // Every layer, Equalizer included, must appear exactly once -
+    // Project::reorderLayers() has no Equalizer-position enforcement of
+    // its own (that's a UI-level rule - see its own docs).
+    window.reorderLayers({importedId, backgroundId, equalizerId});
 
     QCOMPARE(window.project()->layers().at(0).id(), importedId);
     QCOMPARE(window.project()->layers().at(1).id(), backgroundId);
+    QCOMPARE(window.project()->layers().at(2).id(), equalizerId);
     QVERIFY(window.hasUnsavedChanges());
 }
 
@@ -1139,7 +1164,7 @@ void MainWindowTest::reorderLayersRejectsAnInvalidPermutation() {
 
     window.reorderLayers({backgroundId, 999999});  // not a valid permutation.
 
-    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(1));
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(2));  // Background + Equalizer, unchanged.
     QVERIFY(!window.hasUnsavedChanges());
 }
 
@@ -1159,10 +1184,9 @@ void MainWindowTest::changingARealRowsOpacitySliderDoesNotCrash() {
     // exercised here only because it needs a real QInputDialog, which
     // would block this headless test - see importAudioFile()'s docs.
     //
-    // A fresh project's only layer is its Background one, which (per
-    // Decisions Made #30) has no opacity slider at all any more - a real
-    // Normal layer, imported here, is what this test actually needs a
-    // slider from.
+    // A fresh project's Background layer (per Decisions Made #30) has no
+    // opacity slider at all any more - a real Normal layer, imported
+    // here, is what this test actually needs a slider from.
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-opacity-slider-crash.wav";
     writeTestWavFile(path);
     TestMainWindow window;
@@ -1172,15 +1196,28 @@ void MainWindowTest::changingARealRowsOpacitySliderDoesNotCrash() {
 
     auto* panel = window.findChild<LayersPanel*>();
     QVERIFY(panel != nullptr);
-    auto* slider = panel->findChild<QSlider*>(QStringLiteral("opacitySlider"));
-    QVERIFY(slider != nullptr);
+    // setLayers() deletes old rows via deleteLater() (see its own docs) -
+    // without waiting a tick, createFreshTestProject()'s own now-stale
+    // Equalizer row (with its own now-orphaned slider) would still be
+    // findable alongside the two real, current sliders (Equalizer +
+    // imported) - see refreshLayersPanelReflectsTheCurrentLayers()'s own
+    // comment for the identical timing issue.
+    QTest::qWait(0);
+    // Two sliders now, not one - the Equalizer also has an opacity
+    // slider (only Background is excluded). Rows list top-to-bottom, so
+    // index 0 is the Equalizer's own (topmost), index 1 the imported
+    // layer's.
+    const auto sliders = panel->findChildren<QSlider*>(QStringLiteral("opacitySlider"));
+    QCOMPARE(sliders.size(), 2);
+    QSlider* slider = sliders.at(1);
 
     slider->setValue(42);  // Emits valueChanged() for real, synchronously.
 
     // If this line is reached at all, the process didn't crash. The
-    // imported layer is the topmost (last) one - the Background layer
-    // beneath it has no opacity slider to have driven in the first place.
-    QCOMPARE(window.project()->layers().back().opacity(), 0.42f);
+    // topmost imported layer is the topmost non-Equalizer one - the
+    // Background layer at the very bottom has no opacity slider to have
+    // driven in the first place.
+    QCOMPARE(topmostNonEqualizerLayer(*window.project()).opacity(), 0.42f);
 }
 
 void MainWindowTest::toggleLoopModeDoesNothingWithNoProjectOpen() {
@@ -1294,7 +1331,7 @@ void MainWindowTest::toggleLoopModeGivesANewLoopInputLayerAPlaceholderContentImm
     window.toggleLoopMode();
     QVERIFY(window.isLoopModeRunning());
 
-    const sound_mind::core::Layer& loopLayer = window.project()->layers().back();
+    const sound_mind::core::Layer& loopLayer = topmostNonEqualizerLayer(*window.project());
     QCOMPARE(QString::fromStdString(loopLayer.name()), QStringLiteral("Loop Input"));
     QVERIFY(loopLayer.content().has_value());
     QVERIFY(loopLayer.content()->frameCount > 0);
@@ -1558,11 +1595,15 @@ void MainWindowTest::importAudioFileImportsEveryComputedSnippetForLongAudio() {
 
     QVERIFY(ok);
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 3);
-    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore].name()),
+    // Indexed from layerCountBefore - 1, not layerCountBefore - every
+    // import inserts just below the Equalizer (addLayer()'s own docs),
+    // so the newly imported layers start one slot earlier than the old
+    // Equalizer-less stack would have put them.
+    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore - 1].name()),
               QString::fromStdString(stem + "_0000"));
-    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore + 1].name()),
+    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore].name()),
               QString::fromStdString(stem + "_0001"));
-    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore + 2].name()),
+    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore + 1].name()),
               QString::fromStdString(stem + "_0002"));
 }
 
@@ -1585,9 +1626,10 @@ void MainWindowTest::importAudioSnippetsImportsOnlyTheRequestedSubset() {
 
     QVERIFY(ok);
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
-    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore].name()),
+    // See importAudioFileImportsEveryComputedSnippetForLongAudio()'s own comment.
+    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore - 1].name()),
               QString::fromStdString(stem + "_0000"));
-    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore + 1].name()),
+    QCOMPARE(QString::fromStdString(window.project()->layers()[layerCountBefore].name()),
               QString::fromStdString(stem + "_0002"));
 }
 
@@ -1651,7 +1693,7 @@ void MainWindowTest::importImageFileRescaleToFitProjectStretchesBothAxes() {
     std::filesystem::remove(projectPath);
 
     QVERIFY(ok);
-    const auto& content = *window.project()->layers().back().content();
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
     QCOMPARE(content.frameCount, static_cast<std::uint32_t>(100));    // project's canvasWidth.
     QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(50));  // project's binCount.
 }
@@ -1669,7 +1711,7 @@ void MainWindowTest::importImageFileScaleVerticalKeepHorizontalKeepsNativeWidth(
     std::filesystem::remove(projectPath);
 
     QVERIFY(ok);
-    const auto& content = *window.project()->layers().back().content();
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
     QCOMPARE(content.frameCount, static_cast<std::uint32_t>(30));     // the source image's own native width.
     QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(50));  // project's binCount.
 }
@@ -1687,7 +1729,7 @@ void MainWindowTest::importImageFileScaleHorizontalKeepVerticalKeepsNativeHeight
     std::filesystem::remove(projectPath);
 
     QVERIFY(ok);
-    const auto& content = *window.project()->layers().back().content();
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
     QCOMPARE(content.frameCount, static_cast<std::uint32_t>(100));    // project's canvasWidth.
     QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(20));  // the source image's own native height.
 }
@@ -1706,7 +1748,7 @@ void MainWindowTest::importImageFileScaleVerticalProportionalPreservesAspectRati
     std::filesystem::remove(projectPath);
 
     QVERIFY(ok);
-    const auto& content = *window.project()->layers().back().content();
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
     QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(50));  // project's binCount.
     QCOMPARE(content.frameCount, static_cast<std::uint32_t>(75));       // 30 * 50 / 20, preserving the 3:2 aspect ratio.
 }
@@ -1724,7 +1766,7 @@ void MainWindowTest::importImageFileKeepNativeResolutionDoesNotRescale() {
     std::filesystem::remove(projectPath);
 
     QVERIFY(ok);
-    const auto& content = *window.project()->layers().back().content();
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
     QCOMPARE(content.frameCount, static_cast<std::uint32_t>(30));     // the source image's own native width.
     QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(20));  // the source image's own native height.
 }
@@ -1860,7 +1902,7 @@ void MainWindowTest::handleDroppedFilesAppliesTheGivenImageMode() {
     std::filesystem::remove(path);
     std::filesystem::remove(projectPath);
 
-    const auto& content = *window.project()->layers().back().content();
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
     QCOMPARE(content.frameCount, static_cast<std::uint32_t>(30));      // native, not the canvas's 100.
     QCOMPARE(content.config.binCount, static_cast<std::uint32_t>(20));  // native, not the canvas's 50.
 }
@@ -1886,8 +1928,10 @@ void MainWindowTest::handleDroppedFilesSequencesDroppedImagesWhenRequested() {
     std::filesystem::remove(projectPath);
 
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
-    QCOMPARE(window.project()->layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(0));
-    QCOMPARE(window.project()->layers()[layerCountBefore + 1].translationColumns(), static_cast<std::int64_t>(75));
+    // Indexed from layerCountBefore - 1 - see
+    // importAudioFileImportsEveryComputedSnippetForLongAudio()'s own comment.
+    QCOMPARE(window.project()->layers()[layerCountBefore - 1].translationColumns(), static_cast<std::int64_t>(0));
+    QCOMPARE(window.project()->layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(75));
 }
 
 void MainWindowTest::handleDroppedFilesAppliesGivenAudioSnippetSelections() {
@@ -1950,9 +1994,11 @@ void MainWindowTest::importImageFilesImportsEachFileIndependentlyWhenNotSequenti
     QVERIFY(ok);
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
     // Neither file was translated - each imported independently, per its
-    // own explicitly-chosen mode (KeepNativeResolution here).
+    // own explicitly-chosen mode (KeepNativeResolution here). Indexed
+    // from layerCountBefore - 1 - see
+    // importAudioFileImportsEveryComputedSnippetForLongAudio()'s own comment.
+    QCOMPARE(window.project()->layers()[layerCountBefore - 1].translationColumns(), static_cast<std::int64_t>(0));
     QCOMPARE(window.project()->layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(0));
-    QCOMPARE(window.project()->layers()[layerCountBefore + 1].translationColumns(), static_cast<std::int64_t>(0));
 }
 
 void MainWindowTest::importImageFilesAppliesProportionalScalingAndCumulativeTranslationWhenSequential() {
@@ -1982,11 +2028,13 @@ void MainWindowTest::importImageFilesAppliesProportionalScalingAndCumulativeTran
     QVERIFY(ok);
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
 
-    const auto& layerA = window.project()->layers()[layerCountBefore];
+    // Indexed from layerCountBefore - 1 - see
+    // importAudioFileImportsEveryComputedSnippetForLongAudio()'s own comment.
+    const auto& layerA = window.project()->layers()[layerCountBefore - 1];
     QCOMPARE(layerA.translationColumns(), static_cast<std::int64_t>(0));
     QCOMPARE(layerA.content()->frameCount, static_cast<std::uint32_t>(75));
 
-    const auto& layerB = window.project()->layers()[layerCountBefore + 1];
+    const auto& layerB = window.project()->layers()[layerCountBefore];
     QCOMPARE(layerB.translationColumns(), static_cast<std::int64_t>(75));  // starts right after A's own width.
     QCOMPARE(layerB.content()->frameCount, static_cast<std::uint32_t>(40));
 }
@@ -2018,9 +2066,11 @@ void MainWindowTest::importImageFilesWrapsCumulativeOffsetPastCanvasWidth() {
     std::filesystem::remove(projectPath);
 
     QVERIFY(ok);
-    QCOMPARE(window.project()->layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(0));
-    QCOMPARE(window.project()->layers()[layerCountBefore + 1].translationColumns(), static_cast<std::int64_t>(75));
-    QCOMPARE(window.project()->layers()[layerCountBefore + 2].translationColumns(), static_cast<std::int64_t>(0));
+    // Indexed from layerCountBefore - 1 - see
+    // importAudioFileImportsEveryComputedSnippetForLongAudio()'s own comment.
+    QCOMPARE(window.project()->layers()[layerCountBefore - 1].translationColumns(), static_cast<std::int64_t>(0));
+    QCOMPARE(window.project()->layers()[layerCountBefore].translationColumns(), static_cast<std::int64_t>(75));
+    QCOMPARE(window.project()->layers()[layerCountBefore + 1].translationColumns(), static_cast<std::int64_t>(0));
 }
 
 void MainWindowTest::importImageFilesSortsFilesAlphabeticallyWhenSequential() {
@@ -2043,8 +2093,10 @@ void MainWindowTest::importImageFilesSortsFilesAlphabeticallyWhenSequential() {
     std::filesystem::remove(projectPath);
 
     QVERIFY(ok);
-    const auto& firstImported = window.project()->layers()[layerCountBefore];
-    const auto& secondImported = window.project()->layers()[layerCountBefore + 1];
+    // Indexed from layerCountBefore - 1 - see
+    // importAudioFileImportsEveryComputedSnippetForLongAudio()'s own comment.
+    const auto& firstImported = window.project()->layers()[layerCountBefore - 1];
+    const auto& secondImported = window.project()->layers()[layerCountBefore];
     QCOMPARE(firstImported.name(), pathA.filename().string());
     QCOMPARE(secondImported.name(), pathB.filename().string());
     QCOMPARE(firstImported.translationColumns(), static_cast<std::int64_t>(0));
@@ -2257,12 +2309,17 @@ void MainWindowTest::paintingWithTheDefaultToolConfigurationActuallyPaintsSometh
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
     std::filesystem::remove(projectPath);
 
-    // Painting targets paintTargetLayerId()'s own choice - with no row ever
-    // selected in the LayersPanel, that falls back to the topmost layer,
-    // so importing an image first gives *that* layer real content to paint
-    // onto, exactly matching canvas->resize() below.
+    // Painting targets paintTargetLayerId()'s own choice - with no row
+    // selected in the LayersPanel, that falls back to the Background
+    // layer (not the imported one - see paintTargetLayerId()'s own docs),
+    // so the imported layer is explicitly selected here to give *that*
+    // layer real content to paint onto, exactly matching canvas->resize()
+    // below.
     QVERIFY(window.importImageFile(imagePath, ImageScalePickerDialog::Mode::RescaleToFitProject));
     std::filesystem::remove(imagePath);
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    layersPanel->selectLayer(topmostNonEqualizerLayer(*window.project()).id());
 
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);
@@ -2290,7 +2347,7 @@ void MainWindowTest::paintingWithTheDefaultToolConfigurationActuallyPaintsSometh
     // the same value it started at and prove nothing either way. The
     // right channel starts near the silent floor instead, so painting it
     // to 0 dB is the one channel guaranteed to show a real numeric change.
-    const auto& content = *window.project()->layers().back().content();
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
     const bool anyPainted = std::any_of(content.rightMagnitudeDb.begin(), content.rightMagnitudeDb.end(),
                                          [](float value) { return value > -50.0f; });
     QVERIFY(anyPainted);
@@ -2327,11 +2384,11 @@ void MainWindowTest::paintingTargetsTheSelectedLayerNotNecessarilyTheTopmostOne(
     std::filesystem::remove(projectPath);
 
     QVERIFY(window.importImageFile(imagePathA, ImageScalePickerDialog::Mode::RescaleToFitProject));
-    const auto firstLayerId = window.project()->layers().back().id();
+    const auto firstLayerId = topmostNonEqualizerLayer(*window.project()).id();
     QVERIFY(window.importImageFile(imagePathB, ImageScalePickerDialog::Mode::RescaleToFitProject));
     std::filesystem::remove(imagePathA);
     std::filesystem::remove(imagePathB);
-    const auto secondLayerId = window.project()->layers().back().id();
+    const auto secondLayerId = topmostNonEqualizerLayer(*window.project()).id();
     QVERIFY(firstLayerId != secondLayerId);
 
     // The first-imported layer is no longer topmost (the second import sits
@@ -2345,8 +2402,9 @@ void MainWindowTest::paintingTargetsTheSelectedLayerNotNecessarilyTheTopmostOne(
     // why, and setLayers()'s own docs for the underlying Qt gotcha.
     QTest::qWait(0);
     const auto nameLabels = panel->findChildren<QLabel*>(QStringLiteral("nameLabel"));
-    QCOMPARE(nameLabels.size(), 3);  // Background, plus the two imported layers.
-    QTest::mouseClick(nameLabels.at(1), Qt::LeftButton);  // index 0 = topmost (second import); 1 = first import.
+    QCOMPARE(nameLabels.size(), 4);  // Equalizer, Background, plus the two imported layers.
+    // Top-to-bottom: 0 = Equalizer, 1 = second import (topmost import), 2 = first import, 3 = Background.
+    QTest::mouseClick(nameLabels.at(2), Qt::LeftButton);
     QVERIFY(panel->selectedLayerId().has_value());
     QCOMPARE(*panel->selectedLayerId(), firstLayerId);
 
@@ -2376,7 +2434,7 @@ void MainWindowTest::addEmptyLayerAddsASilentLayerAndSelectsIt() {
     addButton->click();
 
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
-    const auto& newLayer = window.project()->layers().back();
+    const auto& newLayer = topmostNonEqualizerLayer(*window.project());
     QCOMPARE(newLayer.type(), sound_mind::core::LayerType::Normal);
     QVERIFY(newLayer.content().has_value());  // a real, silent placeholder - see addEmptyLayer()'s own docs.
 
@@ -2407,7 +2465,7 @@ void MainWindowTest::addFilterLayerAddsAFilterTypeLayerAndSelectsIt() {
     addFilterButton->click();
 
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
-    const auto& newLayer = window.project()->layers().back();
+    const auto& newLayer = topmostNonEqualizerLayer(*window.project());
     QCOMPARE(newLayer.type(), sound_mind::core::LayerType::Filter);
     QVERIFY(!newLayer.content().has_value());  // never painted onto - see addFilterLayer()'s own docs.
 
@@ -2419,7 +2477,7 @@ void MainWindowTest::selectingAFilterLayerLoadsAndEnablesFilterConfigurationPane
     TestMainWindow window;
     createFreshTestProject(window);
     window.addFilterLayer();  // Selects it immediately.
-    const auto filterLayerId = window.project()->layers().back().id();
+    const auto filterLayerId = topmostNonEqualizerLayer(*window.project()).id();
 
     auto* layersPanel = window.findChild<LayersPanel*>();
     QVERIFY(layersPanel != nullptr);
@@ -2445,7 +2503,7 @@ void MainWindowTest::selectingANormalLayerDisablesFilterConfigurationPanel() {
     TestMainWindow window;
     createFreshTestProject(window);
     window.addFilterLayer();
-    const auto filterLayerId = window.project()->layers().back().id();
+    const auto filterLayerId = topmostNonEqualizerLayer(*window.project()).id();
     auto* layersPanel = window.findChild<LayersPanel*>();
     QVERIFY(layersPanel != nullptr);
     layersPanel->selectLayer(filterLayerId);
@@ -2462,7 +2520,7 @@ void MainWindowTest::editingFilterConfigurationPanelWritesBackToTheSelectedLayer
     TestMainWindow window;
     createFreshTestProject(window);
     window.addFilterLayer();
-    const auto filterLayerId = window.project()->layers().back().id();
+    const auto filterLayerId = topmostNonEqualizerLayer(*window.project()).id();
     auto* layersPanel = window.findChild<LayersPanel*>();
     QVERIFY(layersPanel != nullptr);
     layersPanel->selectLayer(filterLayerId);
@@ -2531,10 +2589,11 @@ void MainWindowTest::paintingTheBackgroundLayerActuallyPaintsSomethingVisible() 
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
     std::filesystem::remove(projectPath);
     // The Background layer - content-less by construction
-    // (Project::createNew()'s own docs) - is the project's only layer
-    // here, so it's paintTargetLayerId()'s own default with nothing ever
-    // selected.
-    QVERIFY(!window.project()->layers().back().content().has_value());
+    // (Project::createNew()'s own docs) - is the only *paintable* layer
+    // here (an Equalizer also exists now, but is never a paint target -
+    // see paintTargetLayerId()'s own docs), so it's paintTargetLayerId()'s
+    // own default with nothing ever selected.
+    QVERIFY(!topmostNonEqualizerLayer(*window.project()).content().has_value());
 
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);
@@ -2545,8 +2604,8 @@ void MainWindowTest::paintingTheBackgroundLayerActuallyPaintsSomethingVisible() 
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
 
     QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
-    QVERIFY(window.project()->layers().back().content().has_value());
-    const auto& content = *window.project()->layers().back().content();
+    QVERIFY(topmostNonEqualizerLayer(*window.project()).content().has_value());
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
     // Unlike an imported image (which can already start at the brush's
     // own target on one channel - see paintingWithTheDefaultTool
     // ConfigurationActuallyPaintsSomethingVisible()'s own comment), the
@@ -2631,7 +2690,7 @@ void MainWindowTest::movingAPickedStrokeCommitsATranslatedOperation() {
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 10));
 
     QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
-    const auto layerId = window.project()->layers().back().id();
+    const auto layerId = topmostNonEqualizerLayer(*window.project()).id();
     const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
     QCOMPARE(active.size(), std::size_t{1});  // the original is superseded, not still active alongside the move.
 }
@@ -2658,7 +2717,7 @@ void MainWindowTest::deletingAPickedStrokeLeavesAnEmptyTombstone() {
     window.deletePickedObject();
 
     QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
-    const auto layerId = window.project()->layers().back().id();
+    const auto layerId = topmostNonEqualizerLayer(*window.project()).id();
     const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
     QCOMPARE(active.size(), std::size_t{1});
     const auto* tombstone = dynamic_cast<const sound_mind::core::PaintOperation*>(active.front());
@@ -2765,7 +2824,7 @@ void MainWindowTest::drawingASelectionAndFillingItChangesTheLayersContent() {
     window.fillSelectionWith(QColor(255, 0, 0));  // pure red - loud left channel.
 
     QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
-    const auto& content = *window.project()->layers().back().content();
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
     const bool anyFilled = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
                                         [](float value) { return value > -50.0f; });
     QVERIFY(anyFilled);
@@ -2883,11 +2942,11 @@ void MainWindowTest::copyThenPasteOnTheSameLayerReproducesTheSelection() {
     window.copySelection();
     window.fillSelectionWith(QColor(0, 0, 0));  // black - silences the same region again.
 
-    QVERIFY(!anyLoudLeftChannelPixel(*window.project()->layers().back().content()));
+    QVERIFY(!anyLoudLeftChannelPixel(*topmostNonEqualizerLayer(*window.project()).content()));
 
     window.paste();
 
-    QVERIFY(anyLoudLeftChannelPixel(*window.project()->layers().back().content()));
+    QVERIFY(anyLoudLeftChannelPixel(*topmostNonEqualizerLayer(*window.project()).content()));
     QCOMPARE(window.project()->operationLog().size(), std::size_t{3});  // fill, fill, paste - copy logs nothing.
 }
 
@@ -2908,11 +2967,11 @@ void MainWindowTest::cutClearsTheSourceRegionButPasteStillReproducesIt() {
     window.fillSelectionWith(QColor(255, 0, 0));
     window.cutSelection();  // captures the loud pixels onto the clipboard, then silences them in place.
 
-    QVERIFY(!anyLoudLeftChannelPixel(*window.project()->layers().back().content()));
+    QVERIFY(!anyLoudLeftChannelPixel(*topmostNonEqualizerLayer(*window.project()).content()));
 
     window.paste();
 
-    QVERIFY(anyLoudLeftChannelPixel(*window.project()->layers().back().content()));
+    QVERIFY(anyLoudLeftChannelPixel(*topmostNonEqualizerLayer(*window.project()).content()));
 }
 
 void MainWindowTest::pasteCanTargetADifferentLayerThanItWasCopiedFrom() {
@@ -2924,7 +2983,7 @@ void MainWindowTest::pasteCanTargetADifferentLayerThanItWasCopiedFrom() {
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);
     canvas->setFixedSize(100, 50);
-    const auto sourceLayerId = window.project()->layers().back().id();  // Background, still the only layer.
+    const auto sourceLayerId = topmostNonEqualizerLayer(*window.project()).id();  // Background - nothing else added yet.
 
     window.setSelectModeEnabled(true);
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
@@ -2942,7 +3001,7 @@ void MainWindowTest::pasteCanTargetADifferentLayerThanItWasCopiedFrom() {
     auto* addButton = panel->findChild<QPushButton*>(QStringLiteral("addLayerButton"));
     QVERIFY(addButton != nullptr);
     addButton->click();
-    const auto targetLayerId = window.project()->layers().back().id();
+    const auto targetLayerId = topmostNonEqualizerLayer(*window.project()).id();
     QVERIFY(targetLayerId != sourceLayerId);
 
     window.paste();
@@ -3114,7 +3173,7 @@ void MainWindowTest::pastedContentIsPickableAndMovable() {
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(80, 5));
 
     QCOMPARE(window.project()->operationLog().size(), std::size_t{3});  // paint, paste, moved-paste.
-    const auto layerId = window.project()->layers().back().id();
+    const auto layerId = topmostNonEqualizerLayer(*window.project()).id();
     const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
     QCOMPARE(active.size(), std::size_t{2});  // paint + the moved paste (original paste now superseded).
     const bool anyPasteActive =
@@ -3165,7 +3224,7 @@ void MainWindowTest::movingAPastedRegionPreservesItsOwnVerticalShapeAndOrientati
     // from the pasted block's own top (widgetY 15), exactly tracking the
     // drag - not distorted or shifted to some other position by the
     // log-scaled frequency axis.
-    const auto& content = *window.project()->layers().back().content();
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
     QVERIFY(leftDbAtWidgetPixel(content, 45, 14) < -50.0f);  // just above the strip: still silent.
     QVERIFY(leftDbAtWidgetPixel(content, 45, 15) > -50.0f);
     QVERIFY(leftDbAtWidgetPixel(content, 45, 19) > -50.0f);
@@ -3216,7 +3275,7 @@ void MainWindowTest::modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionS
     QTest::mouseMove(canvas, QPoint(90, 25));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(90, 25));
     QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
-    QVERIFY(anyLoudLeftChannelPixel(*window.project()->layers().back().content()));
+    QVERIFY(anyLoudLeftChannelPixel(*topmostNonEqualizerLayer(*window.project()).content()));
 
     // Cut a sub-region out of the middle of the stroke.
     window.setPaintModeEnabled(false);
@@ -3226,7 +3285,7 @@ void MainWindowTest::modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionS
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
     window.cutSelection();
     QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
-    QVERIFY(leftDbAtWidgetPixel(*window.project()->layers().back().content(), 50, 25) < -50.0f);
+    QVERIFY(leftDbAtWidgetPixel(*topmostNonEqualizerLayer(*window.project()).content(), 50, 25) < -50.0f);
 
     // Pick the paint stroke *outside* the cut region (unambiguous - the
     // Fill's own bounds don't extend there) and modify it via Tool
@@ -3241,9 +3300,9 @@ void MainWindowTest::modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionS
 
     // The cut region must still be silent - modifying the stroke it was
     // cut from must not undo the cut.
-    QVERIFY(leftDbAtWidgetPixel(*window.project()->layers().back().content(), 50, 25) < -50.0f);
+    QVERIFY(leftDbAtWidgetPixel(*topmostNonEqualizerLayer(*window.project()).content(), 50, 25) < -50.0f);
 
-    const auto layerId = window.project()->layers().back().id();
+    const auto layerId = topmostNonEqualizerLayer(*window.project()).id();
     const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
     QCOMPARE(active.size(), std::size_t{2});
     QVERIFY(dynamic_cast<const PaintOperation*>(active[0]) != nullptr);  // the modified stroke, still...
@@ -3284,7 +3343,7 @@ void MainWindowTest::cutRegionIsPickableAndMovable() {
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(80, 5));
 
     QCOMPARE(window.project()->operationLog().size(), std::size_t{3});  // paint, cut-fill, moved-cut-fill.
-    const auto layerId = window.project()->layers().back().id();
+    const auto layerId = topmostNonEqualizerLayer(*window.project()).id();
     const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
     QCOMPARE(active.size(), std::size_t{2});  // paint (untouched) + the moved cut-fill (original now superseded).
     const bool anyFillActive =
@@ -3322,7 +3381,7 @@ void MainWindowTest::bringPickedObjectToFrontMovesItAboveLaterStrokesOnTheSameLa
 
     window.bringPickedObjectToFront();
 
-    const auto layerId = window.project()->layers().back().id();
+    const auto layerId = topmostNonEqualizerLayer(*window.project()).id();
     const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
     QCOMPARE(active.size(), std::size_t{2});
     QCOMPARE(active.front()->id(), window.project()->operationLog().at(1).id());  // B, now at the back.
@@ -3363,7 +3422,7 @@ void MainWindowTest::editingAPickedStrokesPathMovesANodeAndCommitsOnApply() {
     window.applyPickedPathEdit();
 
     QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
-    const auto layerId = window.project()->layers().back().id();
+    const auto layerId = topmostNonEqualizerLayer(*window.project()).id();
     const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
     QCOMPARE(active.size(), std::size_t{1});
     const auto* edited = dynamic_cast<const PaintOperation*>(active.front());

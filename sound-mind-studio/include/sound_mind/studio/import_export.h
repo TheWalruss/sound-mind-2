@@ -91,10 +91,17 @@ namespace sound_mind::studio {
  * @param mode How to resize the image before importing it.
  * @param errorMessage If non-null and this returns `false`, set to a
  *        human-readable description of what went wrong.
+ * @param outLayerId If non-null and this returns `true`, set to the
+ *        newly added layer's own id - `Project::addLayer()`'s own return
+ *        value, exposed here since the new layer's own position in the
+ *        stack isn't predictable from the outside alone (it lands just
+ *        below an Equalizer layer, if one exists - see `addLayer()`'s
+ *        own docs - so it's never simply `project.layers().back()`).
  * @return `true` on success; `false` if loading or converting it failed.
  */
 [[nodiscard]] bool importImageFileInto(sound_mind::core::Project& project, const std::filesystem::path& path,
-                                        ImageScalePickerDialog::Mode mode, QString* errorMessage = nullptr);
+                                        ImageScalePickerDialog::Mode mode, QString* errorMessage = nullptr,
+                                        sound_mind::core::LayerId* outLayerId = nullptr);
 
 /**
  * @brief Imports several image files at once into `project`.

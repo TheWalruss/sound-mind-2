@@ -173,8 +173,10 @@ Layer**, adds a Filter layer instead - see
 [Filter Layers](#filter-layers) below. Each row has:
 
 - A **drag handle** (⠿) to reorder it, or a **lock icon** (🔒) if it can't
-  be reordered or deleted - only the **Background** layer (always present,
-  bottom of the stack) is locked today.
+  be reordered or deleted - the **Background** layer (always present,
+  bottom of the stack) and the **Equalizer** layer (always present, top
+  of the stack - see [Filter Layers](#filter-layers) below) are both
+  locked.
 - A **visibility toggle** (●/○).
 - The layer's **name** - click once to select it (see [Painting](#painting)
   below - the selected layer is the one a brush stroke paints into), or
@@ -289,10 +291,19 @@ Every one of the six designed filter types now has a real, working
 algorithm.
 
 A Filter layer with nothing beneath it (or with everything beneath it
-hidden) has nothing to filter, so it has no effect. Filter layers aren't
-locked - they can be reordered or deleted like a Normal layer, and
-reordering one changes exactly what it composites (everything between
-it and the next Filter layer down).
+hidden) has nothing to filter, so it has no effect. An ordinary Filter
+layer isn't locked - it can be reordered or deleted like a Normal layer,
+and reordering one changes exactly what it composites (everything
+between it and the next Filter layer down).
+
+**Every project has one special Filter layer: the Equalizer**, always
+present, locked at the very top of the stack (it can't be reordered or
+deleted - see [Working with Layers](#working-with-layers) above). It
+starts with no effect (its Cut is `0` everywhere) - selecting it opens
+the same Filter Configuration panel described above, showing its own
+Frequency-Axis Gradient controls. A dedicated "Cut" editor, matching the
+Equalizer's own specialized role, isn't built yet - see
+[What's Not Here Yet](#whats-not-here-yet).
 
 ## Painting
 
@@ -305,9 +316,10 @@ the mouse.
 
 **Which layer gets painted**: whichever layer's name you last clicked in
 the Layers panel (see [Working with Layers](#working-with-layers)). If
-you haven't clicked one yet, painting targets the topmost layer - which,
-in a brand new project, is the **Background** layer itself: it's a real,
-paintable canvas like any other, not just a fixed floor to import onto.
+you haven't clicked one yet, painting targets the **Background** layer -
+it's a real, paintable canvas like any other, not just a fixed floor to
+import onto (never the locked Equalizer layer at the top, which has
+nothing to paint onto in the first place).
 
 The **Tool Configuration** toolbar button opens a dockable panel (off by
 default, alongside Layers/Playback/Record/Loop) with the brush's own
@@ -688,10 +700,12 @@ milestone as a whole:
   no interior stops** - just the two endpoint stops (`t=0`, `t=1`), via
   plain spin boxes. (Tone Curve, unlike Frequency-Axis Gradient, does
   have a real draggable point editor now.)
-- **No Equalizer layer yet** - the locked, top-of-stack Filter layer
-  `docs/sound-mind-design.md` describes (Frequency-Axis Gradient with a
-  specialized "Cut" editor) isn't built; any Filter layer today is a
-  plain, unlocked, reorderable one you add yourself.
+- **The Equalizer layer's own specialized "Cut" editor isn't built yet** -
+  every new project now has a locked, top-of-stack Equalizer layer (see
+  [Working with Layers](#working-with-layers) above), but selecting it
+  shows the same generic Frequency-Axis Gradient panel any other Filter
+  layer gets (including a Filter Type drop-down that shouldn't really be
+  switchable for it) rather than its own dedicated "Cut" controls.
 - **No MindWave-bound filter parameters** - a filter's own strength
   can't yet vary spatially; MindWaves don't exist until a later
   milestone.

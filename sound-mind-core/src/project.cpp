@@ -10,10 +10,13 @@
 namespace sound_mind::core {
 
 namespace {
-// The Background layer is always the first (and, for now, only) layer a
-// new project has - id allocation for more than one layer is a concern
-// for whichever milestone first adds a second layer (Import).
+// The Background layer is always the first layer a new project has.
 constexpr LayerId kBackgroundLayerId = 1;
+
+// The Equalizer layer is always the second - immediately after
+// Background, and (per addLayer()'s own docs) the last one addLayer()
+// will ever let anything else be appended above.
+constexpr LayerId kEqualizerLayerId = 2;
 
 /// @brief The directory a project's media/sources/pool/mindshots folders
 /// live under, per docs/sound-mind-architecture.md's Project File & Folder
@@ -39,6 +42,25 @@ Project Project::createNew(ProjectSettings settings) {
     Project project;
     project.settings_ = settings;
     project.layers_.emplace_back(kBackgroundLayerId, "Background", LayerType::Background);
+
+    // The Equalizer's own default "Cut" gradient: intensity pinned to
+    // the silence floor on both stops/channels - see createNew()'s own
+    // docs - opacity left at FilterConfiguration's own default (0, no
+    // cut applied yet).
+    Layer equalizer(kEqualizerLayerId, "Equalizer", LayerType::Equalizer);
+    FilterConfiguration equalizerConfig;
+    Gradient& cutGradient = equalizerConfig.frequencyGradient();
+    GradientStop startStop = cutGradient.stops().front();
+    startStop.leftIntensity = -96.0f;
+    startStop.rightIntensity = -96.0f;
+    cutGradient.setStopValues(0, startStop);
+    GradientStop endStop = cutGradient.stops().back();
+    endStop.leftIntensity = -96.0f;
+    endStop.rightIntensity = -96.0f;
+    cutGradient.setStopValues(1, endStop);
+    equalizer.setFilterConfiguration(equalizerConfig);
+    project.layers_.push_back(std::move(equalizer));
+
     return project;
 }
 
@@ -93,7 +115,13 @@ LayerId Project::addLayer(Layer layer) {
     const LayerId newId = (maxId == layers_.end() ? kBackgroundLayerId : maxId->id()) + 1;
 
     layer.setId(newId);
-    layers_.push_back(std::move(layer));
+    // See this method's own docs - inserted just below an existing
+    // Equalizer layer rather than unconditionally appended to the top.
+    if (!layers_.empty() && layers_.back().type() == LayerType::Equalizer) {
+        layers_.insert(layers_.end() - 1, std::move(layer));
+    } else {
+        layers_.push_back(std::move(layer));
+    }
     return newId;
 }
 

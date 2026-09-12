@@ -1262,14 +1262,16 @@ std::optional<sound_mind::core::LayerId> MainWindow::paintTargetLayerId() const 
     // class docs) wins whenever there is one; layersPanel_->setLayers()
     // (called from refreshLayersPanel()) already drops a selection whose
     // id no longer exists in project_, so no extra validity check is
-    // needed here. Falls back to the topmost layer, unchanged from this
-    // method's original placeholder behavior, whenever nothing is
-    // selected - e.g. a project that was just opened/created and never
-    // had a row clicked in it yet.
+    // needed here. Falls back to the bottommost layer (Background, always
+    // present) whenever nothing is selected - e.g. a project that was
+    // just opened/created and never had a row clicked in it yet. Not
+    // .back() - since the Equalizer milestone, that's always the
+    // (locked, content-less) Equalizer layer, never a sensible paint
+    // target - see this method's own docs.
     if (const auto selected = layersPanel_->selectedLayerId(); selected.has_value()) {
         return selected;
     }
-    return project_->layers().back().id();
+    return project_->layers().front().id();
 }
 
 void MainWindow::updateWindowTitle() {

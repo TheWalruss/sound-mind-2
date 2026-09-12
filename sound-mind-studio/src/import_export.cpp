@@ -131,7 +131,8 @@ int importAudioSnippetsInto(sound_mind::core::Project& project, const std::files
 }
 
 bool importImageFileInto(sound_mind::core::Project& project, const std::filesystem::path& path,
-                          ImageScalePickerDialog::Mode mode, QString* errorMessage) {
+                          ImageScalePickerDialog::Mode mode, QString* errorMessage,
+                          sound_mind::core::LayerId* outLayerId) {
     const QImage sourceImage(QString::fromStdString(path.string()));
     if (sourceImage.isNull()) {
         if (errorMessage != nullptr) {
@@ -149,7 +150,10 @@ bool importImageFileInto(sound_mind::core::Project& project, const std::filesyst
 
         sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
         layer.setContent(content);
-        project.addLayer(std::move(layer));
+        const sound_mind::core::LayerId newId = project.addLayer(std::move(layer));
+        if (outLayerId != nullptr) {
+            *outLayerId = newId;
+        }
         return true;
     } catch (const std::exception& e) {
         if (errorMessage != nullptr) {
@@ -185,7 +189,8 @@ int importImageFilesInto(sound_mind::core::Project& project, const std::vector<s
     for (const auto& path : orderedPaths) {
         const auto fileMode = importAsSequence ? ImageScalePickerDialog::Mode::ScaleVerticalProportional : mode;
         QString thisError;
-        if (!importImageFileInto(project, path, fileMode, &thisError)) {
+        sound_mind::core::LayerId newLayerId = 0;
+        if (!importImageFileInto(project, path, fileMode, &thisError, &newLayerId)) {
             if (firstError.isEmpty()) {
                 firstError = thisError;
             }
@@ -203,7 +208,13 @@ int importImageFilesInto(sound_mind::core::Project& project, const std::vector<s
             if (canvasWidth > 0 && cumulativeTranslation >= canvasWidth) {
                 cumulativeTranslation = 0;
             }
-            sound_mind::core::Layer& justImported = project.layers().back();
+            // Not project.layers().back() - that's the Equalizer layer,
+            // if one exists (see importImageFileInto()'s own docs).
+            sound_mind::core::Layer* justImportedPtr = project.layerById(newLayerId);
+            if (justImportedPtr == nullptr) {
+                continue;
+            }
+            sound_mind::core::Layer& justImported = *justImportedPtr;
             justImported.setTranslationColumns(cumulativeTranslation);
             const std::int64_t thisWidth =
                 justImported.content().has_value() ? static_cast<std::int64_t>(justImported.content()->frameCount) : 0;

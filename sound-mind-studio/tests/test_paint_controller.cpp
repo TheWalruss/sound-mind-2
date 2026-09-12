@@ -177,7 +177,7 @@ void PaintControllerTest::endStrokeActuallyChangesTheLayersStoredContent() {
     controller.beginStroke(layerId, TimeFrequencyPoint{0.3, 500.0});
     controller.endStroke();
 
-    const auto& content = *project.layers().back().content();
+    const auto& content = *project.layerById(layerId)->content();
     const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
                                          [](float value) { return value != 0.0f; });
     QVERIFY(anyPainted);
@@ -232,20 +232,20 @@ void PaintControllerTest::undoRevertsTheLayersContentAndRedoReappliesIt() {
     controller.beginStroke(layerId, TimeFrequencyPoint{0.3, 500.0});
     controller.endStroke();
 
-    const auto paintedContent = *project.layers().back().content();
+    const auto paintedContent = *project.layerById(layerId)->content();
     const bool wasPainted = std::any_of(paintedContent.leftMagnitudeDb.begin(), paintedContent.leftMagnitudeDb.end(),
                                          [](float value) { return value != 0.0f; });
     QVERIFY(wasPainted);
 
     QVERIFY(controller.canUndo());
     controller.undo();
-    const auto undoneContent = *project.layers().back().content();
+    const auto undoneContent = *project.layerById(layerId)->content();
     QVERIFY(std::all_of(undoneContent.leftMagnitudeDb.begin(), undoneContent.leftMagnitudeDb.end(),
                          [](float value) { return value == 0.0f; }));
 
     QVERIFY(controller.canRedo());
     controller.redo();
-    const auto redoneContent = *project.layers().back().content();
+    const auto redoneContent = *project.layerById(layerId)->content();
     QVERIFY(std::any_of(redoneContent.leftMagnitudeDb.begin(), redoneContent.leftMagnitudeDb.end(),
                          [](float value) { return value != 0.0f; }));
 }
