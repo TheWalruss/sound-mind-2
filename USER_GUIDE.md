@@ -168,7 +168,9 @@ a popup, so one bad file in a multi-file drop doesn't interrupt the rest.
 The **Layers** panel lists every layer, top of the stack first. A **+ Add
 Layer** button above the list adds a new, empty (silent) layer and
 selects it immediately - the only way to get a layer to paint onto from
-scratch, rather than from an import. Each row has:
+scratch, rather than from an import. A second button, **+ Add Filter
+Layer**, adds a Filter layer instead - see
+[Filter Layers](#filter-layers) below. Each row has:
 
 - A **drag handle** (⠿) to reorder it, or a **lock icon** (🔒) if it can't
   be reordered or deleted - only the **Background** layer (always present,
@@ -236,6 +238,36 @@ translation/rescale shifts where its own content lands before mixing
 into the composite, so "lining up" two layers visually is exactly what
 you'll hear lined up as well. Recording's result, Loop Mode, Pooling,
 and Export are the exception - see the note above.
+
+### Filter Layers
+
+A **Filter layer** doesn't hold its own painted content - instead, it
+composites every visible layer beneath it (down to the next Filter layer
+below it, if there is one) and reshapes the result. Click **+ Add Filter
+Layer** to add one; it's tagged **Filter** in its own row, and selecting
+it (click its name, the same as any other layer) opens the **Filter
+Configuration** panel with its own controls.
+
+**Only one filter is actually implemented so far: Frequency-Axis
+Gradient** - every new Filter layer starts as this type. Its panel shows
+two groups, **Start (t=0, lowest frequency)** and **End (t=1, highest
+frequency)**, each with **Left Intensity**/**Left Opacity**/**Right
+Intensity**/**Right Opacity** - the exact same gradient controls Path
+Gradient and Fill already use (see [Gradients](#gradients) below),
+applied across the frequency axis instead of along a path: at each
+frequency, the composite's own loudness blends toward that stop's own
+Intensity, by that stop's own Opacity (`0` leaves it untouched, `1`
+forces it all the way to Intensity). A fresh Filter layer starts fully
+transparent (both stops at `0` opacity) - it does nothing until you
+raise an Opacity. This is a basic, spin-box-only editor for now - just
+the gradient's own two endpoint stops, no draggable visual editor and no
+interior stops yet.
+
+A Filter layer with nothing beneath it (or with everything beneath it
+hidden) has nothing to filter, so it has no effect. Filter layers aren't
+locked - they can be reordered or deleted like a Normal layer, and
+reordering one changes exactly what it composites (everything between
+it and the next Filter layer down).
 
 ## Painting
 
@@ -564,10 +596,11 @@ while you have unsaved changes prompts you to save first.
 ## What's Not Here Yet
 
 The [design document](docs/sound-mind-design.md) describes the Studio's
-full intended scope - filter layers, MindWave-driven modulation,
-generators, analysis tools, a Composer Mode track view, Sound Flower's
-polar view, MIDI import, chord/sequence generation, and a Sound Mind VST
-plugin, among others none of which exist in the Studio yet.
+full intended scope - MindWave-driven modulation, generators, analysis
+tools, a Composer Mode track view, Sound Flower's polar view, MIDI
+import, chord/sequence generation, and a Sound Mind VST plugin, among
+others none of which exist in the Studio yet. Filter layers (see
+[Filter Layers](#filter-layers) above) have just gotten started.
 `docs/sound-mind-roadmap.md` tracks what's actually being built next, in
 order; this guide will grow alongside it.
 
@@ -619,6 +652,23 @@ designed for it:
   [the note above](#important-whats-actually-shown-and-played-right-now).
 - **Playback decodes the composite once, at Play** - it doesn't yet keep
   re-decoding live as you make further edits during playback.
+
+[Filter Layers](#filter-layers) (see above) have just gotten started -
+only a first sliver of what's designed for them:
+
+- **Only Frequency-Axis Gradient is a real, working filter** - the
+  other five kinds the design doc describes (Uniform/Edge-Preserving/
+  Directional Blur, Sharpen, Tone Curve) can't be selected yet; there's
+  no `FilterType` drop-down at all until a second one actually works.
+- **No draggable visual gradient editor, and no interior stops** - just
+  the two endpoint stops (`t=0`, `t=1`), via plain spin boxes.
+- **No Equalizer layer yet** - the locked, top-of-stack Filter layer
+  `docs/sound-mind-design.md` describes (Frequency-Axis Gradient with a
+  specialized "Cut" editor) isn't built; any Filter layer today is a
+  plain, unlocked, reorderable one you add yourself.
+- **No MindWave-bound filter parameters** - a filter's own strength
+  can't yet vary spatially; MindWaves don't exist until a later
+  milestone.
 
 The [Path Tool](#path-tool) (see above) only places new paths today; once
 a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,

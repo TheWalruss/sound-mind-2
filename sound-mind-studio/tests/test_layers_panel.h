@@ -25,6 +25,10 @@ private slots:
     void selectionIsDroppedWhenTheSelectedLayerIsGoneFromANewSetLayersCall();
     void clearSelectionDropsTheSelectionAndItsHighlight();
     void addLayerButtonEmitsAddLayerRequested();
+    void addFilterLayerButtonEmitsAddFilterLayerRequested();
     void selectLayerSelectsAMatchingRow();
     void selectLayerIsANoOpForAnUnknownId();
+    void selectLayerEmitsSelectionChanged();
+    void clearSelectionEmitsSelectionChangedWithNullopt();
+    void setLayersEmitsSelectionChangedWhenTheSelectedLayerIsGone();
 };

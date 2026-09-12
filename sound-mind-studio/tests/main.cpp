@@ -17,6 +17,7 @@
 #include "test_axis_labels.h"
 #include "test_canvas_widget.h"
 #include "test_create_project_wizard.h"
+#include "test_filter_configuration_panel.h"
 #include "test_grid_config.h"
 #include "test_grid_panel.h"
 #include "test_image_scale_picker_dialog.h"
@@ -122,6 +123,9 @@ int main(int argc, char** argv) {
 
     GridConfigTest gridConfigTest;
     status |= QTest::qExec(&gridConfigTest, argc, argv);
+
+    FilterConfigurationPanelTest filterConfigurationPanelTest;
+    status |= QTest::qExec(&filterConfigurationPanelTest, argc, argv);
 
     return status;
 }

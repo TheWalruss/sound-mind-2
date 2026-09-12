@@ -271,11 +271,19 @@ LayersPanel::LayersPanel(QWidget* parent) : QDockWidget(tr("Layers"), parent) {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
+    auto* addButtonRow = new QHBoxLayout();
     auto* addLayerButton = new QPushButton(tr("+ Add Layer"));
     addLayerButton->setObjectName(QStringLiteral("addLayerButton"));
     addLayerButton->setToolTip(tr("Add a new, empty layer to paint onto"));
     connect(addLayerButton, &QPushButton::clicked, this, &LayersPanel::addLayerRequested);
-    layout->addWidget(addLayerButton);
+    addButtonRow->addWidget(addLayerButton);
+
+    auto* addFilterLayerButton = new QPushButton(tr("+ Add Filter Layer"));
+    addFilterLayerButton->setObjectName(QStringLiteral("addFilterLayerButton"));
+    addFilterLayerButton->setToolTip(tr("Add a new Filter layer, configured in the Filter Configuration panel"));
+    connect(addFilterLayerButton, &QPushButton::clicked, this, &LayersPanel::addFilterLayerRequested);
+    addButtonRow->addWidget(addFilterLayerButton);
+    layout->addLayout(addButtonRow);
 
     list_ = new QListWidget();
     list_->setObjectName(QStringLiteral("layersList"));
@@ -302,6 +310,7 @@ void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
                                                [this](const RowData& row) { return row.id == *selectedLayerId_; });
         if (!stillPresent) {
             selectedLayerId_.reset();
+            emit selectionChanged(std::nullopt);
         }
     }
 
@@ -363,6 +372,7 @@ void LayersPanel::selectLayer(sound_mind::core::LayerId id) {
         if (static_cast<sound_mind::core::LayerId>(item->data(Qt::UserRole).toULongLong()) == id) {
             selectedLayerId_ = id;
             list_->setCurrentItem(item);
+            emit selectionChanged(selectedLayerId_);
             return;
         }
     }
@@ -373,6 +383,7 @@ void LayersPanel::selectLayer(sound_mind::core::LayerId id) {
 void LayersPanel::clearSelection() {
     selectedLayerId_.reset();
     list_->setCurrentItem(nullptr);
+    emit selectionChanged(std::nullopt);
 }
 
 void LayersPanel::handleRowsMoved() {

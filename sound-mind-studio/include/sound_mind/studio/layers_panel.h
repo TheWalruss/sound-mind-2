@@ -123,6 +123,19 @@ public:
     void selectLayer(sound_mind::core::LayerId id);
 
 signals:
+    /// @brief The current selection changed - a row was clicked,
+    ///        selectLayer() was called, or clearSelection() was called.
+    ///        Unlike every other signal here, this reflects purely local
+    ///        UI state with nothing in `Project`/`Layer` for it to
+    ///        mutate (see the class's own docs) - `MainWindow` uses it to
+    ///        react (loading `FilterConfigurationPanel` when the newly
+    ///        selected layer is a `Filter` type, in particular), not to
+    ///        apply anything back to the project itself.
+    /// @param id The newly selected layer's id, or `std::nullopt` if the
+    ///        selection was cleared.
+    void selectionChanged(std::optional<sound_mind::core::LayerId> id);
+
+
     /// @brief A row's visibility toggle was clicked.
     void visibilityToggled(sound_mind::core::LayerId id, bool visible);
 
@@ -148,6 +161,13 @@ signals:
     ///        `MainWindow::addEmptyLayer()`'s own docs) and selecting it
     ///        via selectLayer(), ready to paint into immediately.
     void addLayerRequested();
+
+    /// @brief The "+ Add Filter Layer" button was clicked - `MainWindow`
+    ///        responds by adding a new `Filter`-type layer (see
+    ///        `MainWindow::addFilterLayer()`'s own docs) and selecting it
+    ///        via selectLayer(), ready to configure in
+    ///        `FilterConfigurationPanel` immediately.
+    void addFilterLayerRequested();
 
     /**
      * @brief A drag-reorder finished with a valid result (a locked

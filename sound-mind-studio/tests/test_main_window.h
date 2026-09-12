@@ -151,6 +151,10 @@ private slots:
     void paintingTargetsTheSelectedLayerNotNecessarilyTheTopmostOne();
     void addEmptyLayerAddsASilentLayerAndSelectsIt();
     void addEmptyLayerIsANoOpWithNoProjectOpen();
+    void addFilterLayerAddsAFilterTypeLayerAndSelectsIt();
+    void selectingAFilterLayerLoadsAndEnablesFilterConfigurationPanel();
+    void selectingANormalLayerDisablesFilterConfigurationPanel();
+    void editingFilterConfigurationPanelWritesBackToTheSelectedLayer();
     void movingTheMouseOverTheCanvasUpdatesTheCursorPositionLabel();
     void leavingTheCanvasClearsTheCursorPositionLabel();
     void paintingTheBackgroundLayerActuallyPaintsSomethingVisible();

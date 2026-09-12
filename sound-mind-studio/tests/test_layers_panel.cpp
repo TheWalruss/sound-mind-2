@@ -294,6 +294,18 @@ void LayersPanelTest::addLayerButtonEmitsAddLayerRequested() {
     QCOMPARE(spy.count(), 1);
 }
 
+void LayersPanelTest::addFilterLayerButtonEmitsAddFilterLayerRequested() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    QSignalSpy spy(&panel, &LayersPanel::addFilterLayerRequested);
+
+    auto* button = panel.findChild<QPushButton*>(QStringLiteral("addFilterLayerButton"));
+    QVERIFY(button != nullptr);
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+}
+
 void LayersPanelTest::selectLayerSelectsAMatchingRow() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());
@@ -314,4 +326,57 @@ void LayersPanelTest::selectLayerIsANoOpForAnUnknownId() {
     panel.selectLayer(static_cast<LayerId>(999));
 
     QVERIFY(!panel.selectedLayerId().has_value());
+}
+
+void LayersPanelTest::selectLayerEmitsSelectionChanged() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    int emitCount = 0;
+    std::optional<LayerId> received;
+    connect(&panel, &LayersPanel::selectionChanged, [&](std::optional<LayerId> id) {
+        ++emitCount;
+        received = id;
+    });
+
+    panel.selectLayer(static_cast<LayerId>(1));
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(received.has_value());
+    QCOMPARE(*received, static_cast<LayerId>(1));
+}
+
+void LayersPanelTest::clearSelectionEmitsSelectionChangedWithNullopt() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));
+    int emitCount = 0;
+    std::optional<LayerId> received = static_cast<LayerId>(1);
+    connect(&panel, &LayersPanel::selectionChanged, [&](std::optional<LayerId> id) {
+        ++emitCount;
+        received = id;
+    });
+
+    panel.clearSelection();
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(!received.has_value());
+}
+
+void LayersPanelTest::setLayersEmitsSelectionChangedWhenTheSelectedLayerIsGone() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));
+    int emitCount = 0;
+    std::optional<LayerId> received = static_cast<LayerId>(1);
+    connect(&panel, &LayersPanel::selectionChanged, [&](std::optional<LayerId> id) {
+        ++emitCount;
+        received = id;
+    });
+
+    std::vector<LayersPanel::RowData> rows = twoNormalLayers();
+    rows.erase(rows.begin());  // Drops layer id 1 - the currently selected one.
+    panel.setLayers(rows);
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(!received.has_value());
 }

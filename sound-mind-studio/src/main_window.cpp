@@ -172,6 +172,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layersPanel_, &LayersPanel::deleteRequested, this, &MainWindow::deleteLayer);
     connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
     connect(layersPanel_, &LayersPanel::addLayerRequested, this, &MainWindow::addEmptyLayer);
+    connect(layersPanel_, &LayersPanel::addFilterLayerRequested, this, &MainWindow::addFilterLayer);
 
     // Playback/Record/Loop each get their own dockable panel (v0.Y.16.1) -
     // hidden until setProject(), matching layersPanel_'s own "nothing to
@@ -362,6 +363,15 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(gridPanel_, &GridPanel::snapToGridChanged, this, applyGridSnapping);
     connect(gridPanel_, &GridPanel::frequencyGridConfigChanged, this, applyGridSnapping);
     connect(gridPanel_, &GridPanel::timingGridConfigChanged, this, applyGridSnapping);
+
+    filterConfigurationPanel_ = new FilterConfigurationPanel(this);
+    filterConfigurationPanel_->hide();
+    // Nothing selected yet - see handleLayerSelectionChanged()'s own docs.
+    filterConfigurationPanel_->setEnabled(false);
+    addDockWidget(Qt::RightDockWidgetArea, filterConfigurationPanel_);
+    connect(layersPanel_, &LayersPanel::selectionChanged, this, &MainWindow::handleLayerSelectionChanged);
+    connect(filterConfigurationPanel_, &FilterConfigurationPanel::filterConfigurationChanged, this,
+            &MainWindow::applyFilterConfiguration);
 
     // A permanent (not showMessage()'s own temporary-message) label in the
     // status bar's normal (left-hand) area - see cursorPositionLabel_'s
@@ -603,6 +613,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     transportToolBar->addAction(toolConfigurationPanel_->toggleViewAction());
     // Off by default, same reasoning - see gridPanel_'s own docs.
     transportToolBar->addAction(gridPanel_->toggleViewAction());
+    // Off by default, same reasoning - see filterConfigurationPanel_'s own docs.
+    transportToolBar->addAction(filterConfigurationPanel_->toggleViewAction());
 
     // ~30fps - frequent enough for each completed loop's spectrogram
     // update to read as prompt, without repainting so often it competes
@@ -1404,6 +1416,49 @@ void MainWindow::addEmptyLayer() {
     // Selected immediately - ready to paint into without an extra click,
     // the whole point of adding it in the first place.
     layersPanel_->selectLayer(id);
+}
+
+void MainWindow::addFilterLayer() {
+    if (!project_) {
+        return;
+    }
+    sound_mind::core::Layer layer(0, tr("New Filter").toStdString(), sound_mind::core::LayerType::Filter);
+    const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
+    hasUnsavedChanges_ = true;
+    playbackController_->invalidate();
+    canvas_->update();
+    refreshLayersPanel();
+    // Selected immediately - ready to configure in FilterConfigurationPanel
+    // without an extra click, the same reasoning addEmptyLayer()'s own
+    // docs give for painting.
+    layersPanel_->selectLayer(id);
+}
+
+void MainWindow::handleLayerSelectionChanged(std::optional<sound_mind::core::LayerId> id) {
+    const sound_mind::core::Layer* layer = id.has_value() ? layerById(*id) : nullptr;
+    const bool isFilterLayer =
+        layer != nullptr &&
+        (layer->type() == sound_mind::core::LayerType::Filter || layer->type() == sound_mind::core::LayerType::Equalizer);
+    if (isFilterLayer) {
+        filterConfigurationPanel_->setFilterConfiguration(layer->filterConfiguration());
+    }
+    filterConfigurationPanel_->setEnabled(isFilterLayer);
+}
+
+void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
+    const auto id = layersPanel_->selectedLayerId();
+    if (!project_ || !id.has_value()) {
+        return;
+    }
+    sound_mind::core::Layer* layer = layerById(*id);
+    if (layer == nullptr ||
+        (layer->type() != sound_mind::core::LayerType::Filter && layer->type() != sound_mind::core::LayerType::Equalizer)) {
+        return;
+    }
+    layer->setFilterConfiguration(config);
+    hasUnsavedChanges_ = true;
+    playbackController_->invalidate();
+    canvas_->update();
 }
 
 void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {

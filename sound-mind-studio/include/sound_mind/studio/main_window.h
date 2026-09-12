@@ -15,6 +15,7 @@
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/grid_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/paint_controller.h"
@@ -593,6 +594,57 @@ public slots:
      * project is open.
      */
     void addEmptyLayer();
+
+    /**
+     * @brief Adds a new `Filter`-type layer to the current project - the
+     *        actual work behind `LayersPanel`'s "+ Add Filter Layer"
+     *        button.
+     *
+     * Unlike addEmptyLayer(), a Filter layer is never painted onto (see
+     * `sound_mind::core::Layer::filterConfiguration()`'s own docs), so no
+     * placeholder content is set - it starts with a fresh, fully
+     * transparent `FrequencyAxisGradient` configuration (see
+     * `FilterConfiguration`'s own docs: "nothing happens by accident"),
+     * added to the top of the stack and selected immediately via
+     * `LayersPanel::selectLayer()`, ready to configure in
+     * `FilterConfigurationPanel` without an extra click. A no-op if no
+     * project is open.
+     */
+    void addFilterLayer();
+
+    /**
+     * @brief Reacts to `LayersPanel`'s own selection changing - the
+     *        actual work keeping `FilterConfigurationPanel` in sync.
+     *
+     * Loads the newly selected layer's own `filterConfiguration()` into
+     * `filterConfigurationPanel_` (via `setFilterConfiguration()`, which
+     * doesn't itself emit a change - see that method's own docs) and
+     * enables the panel, if `id` refers to a `Filter`-type layer;
+     * otherwise disables the panel entirely (`QWidget::setEnabled(false)`)
+     * - editing a Filter layer's own parameters only makes sense while
+     *   one is actually selected.
+     *
+     * @param id The newly selected layer's id, or `std::nullopt` if the
+     *        selection was cleared - see `LayersPanel::selectionChanged()`'s
+     *        own docs.
+     */
+    void handleLayerSelectionChanged(std::optional<sound_mind::core::LayerId> id);
+
+    /**
+     * @brief Applies `FilterConfigurationPanel`'s own edited configuration
+     *        back onto whichever layer it's currently editing - the
+     *        actual work behind `FilterConfigurationPanel::
+     *        filterConfigurationChanged()`.
+     *
+     * A no-op if no project is open, or the panel isn't currently editing
+     * a real, still-selected `Filter`-type layer (the panel is disabled
+     * in that case anyway - see `handleLayerSelectionChanged()`'s own
+     * docs - so this shouldn't normally be reachable, only guarded
+     * defensively).
+     *
+     * @param config The panel's own new, complete configuration.
+     */
+    void applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config);
 
     /**
      * @brief Reorders the current project's layer stack - the actual work
@@ -1585,6 +1637,15 @@ private:
     /// Hidden by default, the same "off until shown" convention
     /// toolConfigurationPanel_ already follows.
     GridPanel* gridPanel_ = nullptr;
+
+    /// @brief The dockable panel exposing the currently selected Filter
+    /// layer's own parameters - see its own class docs. Hidden by
+    /// default, the same "off until shown" convention
+    /// toolConfigurationPanel_ already follows; disabled (not just
+    /// hidden) whenever `layersPanel_`'s own current selection isn't a
+    /// `Filter`-type layer at all - see `handleLayerSelectionChanged()`'s
+    /// own docs.
+    FilterConfigurationPanel* filterConfigurationPanel_ = nullptr;
 
     /// @brief `nullptr` until the first setProject() call - LoopEngine
     /// needs a real loop length (the project's own duration in samples)

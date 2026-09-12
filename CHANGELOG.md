@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.28.2] - 2026-09-12
+
+The Studio half of the "Filter Layers" milestone's first installment (`v0.0.28.1` was the Core-only half). **Now reachable from the app**: add a Filter layer, configure its Frequency-Axis Gradient, hear it reshape the composite.
+
+### Added
+
+- **"+ Add Filter Layer"**, next to "+ Add Layer" in the Layers panel - adds a new Filter-type layer (tagged **Filter** in its own row) and selects it immediately.
+- **The Filter Configuration panel** (toolbar-toggled, off by default like Tool Configuration/Grid) - shows the selected Filter layer's own controls, and disables itself whenever the current selection isn't a Filter-type layer. Only Frequency-Axis Gradient has real controls this pass: two endpoint stops (**Start**/**End**), each with Left/Right Intensity (dB) and Left/Right Opacity - the same gradient model Path Gradient and Fill already use, applied across the frequency axis. A fresh Filter layer starts fully transparent (no effect) until an Opacity is raised.
+
+### Changed
+
+- **`LayersPanel` now emits a real `selectionChanged` signal** when the row selection changes (by click, or programmatically) - previously purely local, read-on-demand state; needed so the Filter Configuration panel can react live to a new selection.
+
+Core regression: unchanged (this half is Studio-only). Studio regression: 325/325 ctest entries passing (12 new test cases across `LayersPanelTest`/`FilterConfigurationPanelTest`/`MainWindowTest`). Doxygen: 0 warnings.
+
 ## [0.0.28.1] - 2026-09-12
 
 The Core half of the new "Filter Layers" milestone's first installment (`docs/sound-mind-roadmap.md`'s `v0.Y.28.1`). **Core-only, and not yet reachable from the app** - Studio has no UI yet to create a Filter-type layer or edit its own parameters, so this build behaves identically to `v0.0.27.2` for anyone using the Studio itself; the Studio half (a Filter Configuration panel, and a way to add a Filter layer) is tracked as a separate, following piece of this same installment.

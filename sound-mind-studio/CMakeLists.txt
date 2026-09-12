@@ -31,6 +31,7 @@ add_library(sound-mind-studio-lib
     src/canvas_widget.cpp
     src/color_conversion.cpp
     src/create_project_wizard.cpp
+    src/filter_configuration_panel.cpp
     src/grid_config.cpp
     src/grid_panel.cpp
     src/image_scale_picker_dialog.cpp
@@ -55,6 +56,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/color_conversion.h
     include/sound_mind/studio/create_project_wizard.h
+    include/sound_mind/studio/filter_configuration_panel.h
     include/sound_mind/studio/grid_panel.h
     include/sound_mind/studio/image_scale_picker_dialog.h
     include/sound_mind/studio/import_export.h

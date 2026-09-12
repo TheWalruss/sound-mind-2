@@ -24,11 +24,13 @@
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
@@ -45,6 +47,7 @@ using sound_mind::core::PathNodeType;
 using sound_mind::studio::CanvasWidget;
 using sound_mind::studio::ImageScalePickerDialog;
 using sound_mind::studio::LandingPage;
+using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::LayersPanel;
 using sound_mind::studio::LoopPanel;
 using sound_mind::studio::MainWindow;
@@ -2390,6 +2393,89 @@ void MainWindowTest::addEmptyLayerIsANoOpWithNoProjectOpen() {
     // elsewhere in this file, confirms it doesn't crash.
     window.addEmptyLayer();
     QVERIFY(window.project() == nullptr);
+}
+
+void MainWindowTest::addFilterLayerAddsAFilterTypeLayerAndSelectsIt() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    const auto layerCountBefore = window.project()->layers().size();
+
+    auto* panel = window.findChild<LayersPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* addFilterButton = panel->findChild<QPushButton*>(QStringLiteral("addFilterLayerButton"));
+    QVERIFY(addFilterButton != nullptr);
+    addFilterButton->click();
+
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 1);
+    const auto& newLayer = window.project()->layers().back();
+    QCOMPARE(newLayer.type(), sound_mind::core::LayerType::Filter);
+    QVERIFY(!newLayer.content().has_value());  // never painted onto - see addFilterLayer()'s own docs.
+
+    QVERIFY(panel->selectedLayerId().has_value());
+    QCOMPARE(*panel->selectedLayerId(), newLayer.id());
+}
+
+void MainWindowTest::selectingAFilterLayerLoadsAndEnablesFilterConfigurationPanel() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    window.addFilterLayer();  // Selects it immediately.
+    const auto filterLayerId = window.project()->layers().back().id();
+
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    auto* filterPanel = window.findChild<FilterConfigurationPanel*>();
+    QVERIFY(filterPanel != nullptr);
+
+    // Set a distinctive value via the normal write path, then deselect
+    // and reselect - confirming the reload genuinely pulls from the
+    // layer's own current data, not just leftover UI state.
+    sound_mind::core::FilterConfiguration config;
+    config.frequencyGradient().setStopValues(0, {0.0f, -20.0f, -30.0f, 0.5f, 0.6f});
+    window.applyFilterConfiguration(config);
+    layersPanel->clearSelection();
+    QVERIFY(!filterPanel->isEnabled());
+
+    layersPanel->selectLayer(filterLayerId);
+
+    QVERIFY(filterPanel->isEnabled());
+    QCOMPARE(filterPanel->filterConfiguration().frequencyGradient().stops().front().leftIntensity, -20.0f);
+}
+
+void MainWindowTest::selectingANormalLayerDisablesFilterConfigurationPanel() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    window.addFilterLayer();
+    const auto filterLayerId = window.project()->layers().back().id();
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    layersPanel->selectLayer(filterLayerId);
+    auto* filterPanel = window.findChild<FilterConfigurationPanel*>();
+    QVERIFY(filterPanel != nullptr);
+    QVERIFY(filterPanel->isEnabled());
+
+    layersPanel->selectLayer(window.project()->layers().front().id());  // Background - a Normal-ish, non-Filter type.
+
+    QVERIFY(!filterPanel->isEnabled());
+}
+
+void MainWindowTest::editingFilterConfigurationPanelWritesBackToTheSelectedLayer() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    window.addFilterLayer();
+    const auto filterLayerId = window.project()->layers().back().id();
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    layersPanel->selectLayer(filterLayerId);
+    auto* filterPanel = window.findChild<FilterConfigurationPanel*>();
+    QVERIFY(filterPanel != nullptr);
+    auto* spinBox = filterPanel->findChild<QDoubleSpinBox*>(QStringLiteral("startLeftIntensitySpinBox"));
+    QVERIFY(spinBox != nullptr);
+
+    spinBox->setValue(-15.0);
+
+    const auto* layer = window.project()->layerById(filterLayerId);
+    QVERIFY(layer != nullptr);
+    QCOMPARE(layer->filterConfiguration().frequencyGradient().stops().front().leftIntensity, -15.0f);
 }
 
 void MainWindowTest::movingTheMouseOverTheCanvasUpdatesTheCursorPositionLabel() {
