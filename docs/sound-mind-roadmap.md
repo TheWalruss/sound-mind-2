@@ -370,15 +370,27 @@ The Path (Bézier) tool with node placement/editing and Path Gradient; Overlay G
 
 **Demo:** draw a precise, grid-snapped melodic line.
 
-### v0.Y.27.1 - Filter Layers
+### v0.Y.27.1 - Multi-layer Compositing
 
-The Filter layer type, a first concrete filter set (blur family, sharpen, tone curve, frequency-axis gradient), and the Equalizer special layer made functional.
+**Inserted ahead of Filter Layers, reordering this phase's remaining milestones** (confirmed with the user rather than assumed): Filter Layers' own definition - "composites the layers beneath it... applies a filter... renders the result" - requires real multi-layer compositing to exist first, and it never has. Every render path since Basic Painting (`sound_mind::core::renderLayer()`, `CanvasWidget`) has shown only "whichever layer was rendered most recently," documented explicitly as a placeholder ahead of this milestone (`docs/sound-mind-architecture.md`'s Decisions Made, `v0.0.3.1`'s Compositor entry) - building it as a rushed side effect of Filter Layers, rather than its own milestone with its own tests, was judged the wrong sequencing once the gap surfaced.
+
+A real N-layer composite loop: every visible layer's own cached content, blended top-to-bottom in stack order by its own opacity - **Normal (alpha-over) blending only**, the one mode any concrete need calls for so far. The design doc names "blend modes" throughout but never enumerates a concrete list beyond this - a fuller catalogue (Multiply, Screen, etc.) is real, undesigned scope, deferred until something actually needs one (most likely alongside MindWave-bound blending in Phase 4, per the design doc's own "Layer opacity" MindWave-binding section, which presumes a real composite loop to bind into).
+
+**Demo:** stack two painted layers at different opacities and see them actually blend together, not just the topmost one showing.
+
+### v0.Y.28.1 - Filter Layers
+
+The Filter layer type, a first concrete filter set, and the Equalizer special layer made functional - built on top of `v0.Y.27.1`'s own real compositor rather than needing to invent one itself.
+
+**Filter set for this pass** (confirmed with the user): all three of the design doc's "Blur & focus" family - uniform, edge-preserving, and directional blur - plus sharpen, a tone curve, and a frequency-axis gradient (the basis of the Equalizer layer). The design doc's other Filter Layer families (Noise & distortion, Geometric, Space) are explicitly out of scope for this pass, left for a later filter-set expansion. **CPU-only**, matching every DSP feature built so far (painting, Pool codec) - `docs/tech-stack-decisions.md` designates DirectX 12 Compute for this kind of image/graphics work, but standing that pipeline up is deferred to a dedicated performance pass once profiling shows an actual need, not built speculatively here. MindWave parameter binding (`docs/sound-mind-design.md`'s "Filter parameters") stays out of scope too, same reasoning as every other Phase 3 milestone - MindWaves don't exist until Phase 4.
+
+**The Equalizer layer is created for new projects only** - an older, already-saved project simply has none; no retroactive migration injects one on load. The two kinds of project are both left in a valid, if different, shape rather than rewriting old project files on open.
 
 **Demo:** add an EQ layer, reshape frequency balance, hear it.
 
-### v0.Y.28.1 - Refactor & Clean Up
+### v0.Y.29.1 - Refactor & Clean Up
 
-A dedicated pass over everything Phase 3 (Basic Painting, Selection & Fill, Paths & Grids, Filter Layers) added, same purpose and scope as `v0.Y.5.1`'s entry. This phase introduces the operation log's first real `Operation` subtypes and the `supersedes` mechanism's first real exercise - worth specifically checking that the paint/selection/path/filter tool implementations share what they should (common brush/stroke/selection-mask plumbing) rather than each having independently reinvented it.
+A dedicated pass over everything Phase 3 (Basic Painting, Selection & Fill, Paths & Grids, Multi-layer Compositing, Filter Layers) added, same purpose and scope as `v0.Y.5.1`'s entry. This phase introduces the operation log's first real `Operation` subtypes and the `supersedes` mechanism's first real exercise - worth specifically checking that the paint/selection/path/filter tool implementations share what they should (common brush/stroke/selection-mask plumbing) rather than each having independently reinvented it.
 
 **Demo:** the full regression suite still passes, unchanged in behavior.
 
@@ -388,55 +400,55 @@ A dedicated pass over everything Phase 3 (Basic Painting, Selection & Fill, Path
 
 ## Phase 4 - Expressive Tools
 
-### v0.Y.29.1 - MindWaves v1
+### v0.Y.30.1 - MindWaves v1
 
 The core generator types (periodic, envelope, stepped/noise, spatial, a first fractal field), superposition, and binding to layer opacity and filter parameters (the direct-vs-shape distinction).
 
 **Demo:** bind a sine MindWave to a layer's opacity; watch and hear it pulse.
 
-### v0.Y.30.1 - Sound Mind Instruments
+### v0.Y.31.1 - Sound Mind Instruments
 
 The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument model; the canvas-space vs. operation-relative MindWave binding-coordinate-frame choice, since that's specifically about how a paint operation (an instrument note, in particular) binds to a MindWave. Also: revisit Loop Mode (Phase 2.5) to add the operation-relative retrigger feel this unlocks.
 
 **Demo:** paint with an instrument voice that actually sounds like a plausible physical source; feed the same instrument through Loop Mode and hear it retrigger per note.
 
-### v0.Y.31.1 - Mind Shots & Mind Grains
+### v0.Y.32.1 - Mind Shots & Mind Grains
 
 Capture-and-stamp static samples; live-reference dynamic grains from a source layer. Also: revisit Record (Phase 2) to add capture-directly-to-a-Mind-Shot.
 
 **Demo:** capture a moment as a Mind Shot and restamp it; link a Mind Grain to a source layer and watch it change live as the source does.
 
-### v0.Y.32.1 - Composer Mode
+### v0.Y.33.1 - Composer Mode
 
 The DAW-style track view: each layer as a track, operations drawn as boxes via `Operation::bounds()`, retiming/moving an operation between layers via the `supersedes` mechanism, the three track background styles.
 
 **Demo:** arrange a multi-layer piece in the track view; move a stamped note to a different layer without repainting it.
 
-### v0.Y.33.1 - MindWaves v2
+### v0.Y.34.1 - MindWaves v2
 
 Field operators (Warp, Reduce), drawn-shape and step-grid generator types, and the continuous shape/skew/character controls.
 
 **Demo:** a MindWave built from a hand-drawn Path, reduced to a plain time-varying control signal.
 
-### v0.Y.34.1 - Chords/Arpeggiator/Sequencer
+### v0.Y.35.1 - Chords/Arpeggiator/Sequencer
 
 The Chord Generator and the generalized notation-driven sequence it's built on, targeting any paintable tip. Resolves the sequence-notation Deferred Decision (validating the ABC-notation direction, or picking an alternative).
 
 **Demo:** stamp a chord progression, then re-voice and re-time it without repainting.
 
-### v0.Y.35.1 - Loop Mode Live Preview
+### v0.Y.36.1 - Loop Mode Live Preview
 
 A live-updating preview of the *currently capturing* loop, rendered incrementally as it's captured - restoring the visual behavior the original Live Mode (`v0.0.7.1`) had before Loop Mode's fixed-length redesign (`v0.Y.14.1`) replaced it. Today, the canvas only updates once a whole loop finishes - a real, silent wait as long as the project's own duration (see `v0.Y.14.1`'s own "Fixed in manual testing" note on how confusing that first wait already reads, even with a placeholder image now covering the very first activation).
 
 **A second, parallel pipeline - not a change to what's actually played back.** LoopEngine's own whole-buffer encode/decode-per-loop design (confirmed, `v0.Y.14.1`) stays exactly as-is for the audio that's actually heard - this milestone is purely about what's *rendered on the canvas* while a loop is still being captured. A `sound_mind::codec::StreamIncrementalEncoder` instance (the same one the original Live Mode used, still present in `sound-mind-codec`, unused since the `v0.Y.14.1` rewrite) tracks just the current loop's progress, reset at every loop boundary rather than growing across a whole session - sidestepping the original Live Mode's own "cost grows with session length" limitation by construction, since a loop is always bounded.
 
-**Distinct from `v0.Y.30.1`'s own "revisit Loop Mode" note**: that one is about *audio* - a per-note, operation-relative retrigger feel, once Sound Mind Instruments exists. This one is purely visual - what the canvas shows while a loop is in progress - and doesn't depend on Instruments existing first.
+**Distinct from `v0.Y.31.1`'s own "revisit Loop Mode" note**: that one is about *audio* - a per-note, operation-relative retrigger feel, once Sound Mind Instruments exists. This one is purely visual - what the canvas shows while a loop is in progress - and doesn't depend on Instruments existing first.
 
 **Demo:** start Loop Mode and watch the spectrogram grow continuously *during* the current loop, the same way the original Live Mode used to, rather than jumping once per completed loop.
 
 **No Y bump expected** - a rendering-only addition; the project file format, and what's actually captured/played back, are unchanged.
 
-### v0.Y.36.1 - Refactor & Clean Up
+### v0.Y.37.1 - Refactor & Clean Up
 
 A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, Sound Mind Instruments, Mind Shots & Mind Grains, Composer Mode, Chords/Arpeggiator/Sequencer, Loop Mode Live Preview) added, same purpose and scope as `v0.Y.5.1`'s entry. This is the largest phase in the whole roadmap - a strong candidate for the biggest structural payoff of any of these cleanup milestones, particularly around the MindWave binding machinery (used by opacity, filter parameters, and instrument notes alike by this point) and Composer Mode's operation-to-track bookkeeping.
 
@@ -448,25 +460,25 @@ A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, So
 
 ## Phase 5 - Generative & Analytical
 
-### v0.Y.37.1 - Generators
+### v0.Y.38.1 - Generators
 
 Lattice, fractal, and streaming procedural content generators, sharing the Order/Chaos criticality axis.
 
 **Demo:** generate a fractal melodic texture as a new layer, tuned from rigid to chaotic.
 
-### v0.Y.38.1 - Analysis Tools v1
+### v0.Y.39.1 - Analysis Tools v1
 
 A first useful cross-section across all five categories (loudness/mastering, pitch/vocal, stereo/phase, spectral health, criticality/pattern) - not every meter the legacy version had, but at least one representative of each.
 
 **Demo:** check integrated loudness and stereo correlation on a real mix.
 
-### v0.Y.39.1 - Sound Flower
+### v0.Y.40.1 - Sound Flower
 
 Polar canvas view, and polar-form image import.
 
 **Demo:** toggle Sound Flower view while painting and keep working without switching tools.
 
-### v0.Y.40.1 - Refactor & Clean Up
+### v0.Y.41.1 - Refactor & Clean Up
 
 A dedicated pass over everything Phase 5 (Generators, Analysis Tools v1, Sound Flower) added, same purpose and scope as `v0.Y.5.1`'s entry.
 
@@ -478,21 +490,21 @@ A dedicated pass over everything Phase 5 (Generators, Analysis Tools v1, Sound F
 
 ## Phase 6 - Interchange & Polish
 
-### v0.Y.41.1 - Portable Resources
+### v0.Y.42.1 - Portable Resources
 
 Standalone `.smwave` and `.sminst` files; cross-project import of layers, Mind Shots, MindWaves, and Sound Mind Instruments. Resolves the Mind Grain portability Deferred Decision one way or the other.
 
 **Demo:** export an instrument from one project, import it cleanly into another.
 
-### v0.Y.42.1 - Performance Validation & Hardening
+### v0.Y.43.1 - Performance Validation & Hardening
 
 By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. Validate the ~100 ms / ~250 ms latency targets for real, on both this Arm64 machine and actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding). Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
 
 **Demo:** the full design-doc feature set, exercised together, meeting the latency targets on real desktop GPU hardware.
 
-### v0.Y.43.1 - Refactor & Clean Up
+### v0.Y.44.1 - Refactor & Clean Up
 
-A dedicated pass over everything Phase 6 (Portable Resources, Performance Validation & Hardening) added, same purpose and scope as `v0.Y.5.1`'s entry - and, by extension, the last general cleanup pass before `v1.0.0.0` itself. Real overlap with `v0.Y.42.1`'s own "full pass reconciling Doxygen output, architecture.md, and the test suite" - that milestone already covers documentation/test consistency end to end, so this one's own scope is specifically the code structure/decomposition half Sequencing principle #7 describes, not a duplicate documentation pass.
+A dedicated pass over everything Phase 6 (Portable Resources, Performance Validation & Hardening) added, same purpose and scope as `v0.Y.5.1`'s entry - and, by extension, the last general cleanup pass before `v1.0.0.0` itself. Real overlap with `v0.Y.43.1`'s own "full pass reconciling Doxygen output, architecture.md, and the test suite" - that milestone already covers documentation/test consistency end to end, so this one's own scope is specifically the code structure/decomposition half Sequencing principle #7 describes, not a duplicate documentation pass.
 
 **Demo:** the full regression suite still passes, unchanged in behavior.
 
