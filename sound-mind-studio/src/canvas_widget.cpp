@@ -10,6 +10,7 @@
 #include <QPaintEvent>
 #include <QPen>
 
+#include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
@@ -21,35 +22,27 @@ namespace sound_mind::studio {
 namespace {
 const QSize kFallbackSize(400, 300);
 
-/// @brief The last layer (top of the stack) with cached content, if any -
-/// see CanvasWidget's docs for why "last with content" stands in for a
-/// real composite for now.
-[[nodiscard]] std::optional<sound_mind::codec::RgbImage> findTopmostRender(const sound_mind::core::Project& project) {
-    const auto& layers = project.layers();
-    for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
-        // A layer hidden via the Layers Panel (v0.Y.13.1) is skipped here
-        // too, same as MainWindow::topmostLayerWithContent() - this is a
-        // second, independent "topmost layer" traversal (CanvasWidget
-        // renders directly from the Project it's given, rather than going
-        // through MainWindow), so it needs the same check applied
-        // separately rather than inheriting it for free.
-        if (!it->visible()) {
-            continue;
-        }
-        if (auto rendered = sound_mind::core::renderLayer(*it, project.settings().canvasWidth); rendered.has_value()) {
-            return rendered;
-        }
+/// @brief The project's own real multi-layer composite (see
+/// `sound_mind::core::compositeProject()`'s own docs), converted to
+/// displayable pixels - `docs/sound-mind-roadmap.md`'s `v0.Y.27.1`
+/// (Multi-layer Compositing), replacing the single-topmost-layer
+/// placeholder every render path here used before it.
+[[nodiscard]] std::optional<sound_mind::codec::RgbImage> renderComposite(const sound_mind::core::Project& project) {
+    const auto composite = sound_mind::core::compositeProject(project);
+    if (!composite.has_value()) {
+        return std::nullopt;
     }
-    return std::nullopt;
+    return sound_mind::codec::toRgbImage(*composite);
 }
 
-/// @brief The same "topmost visible layer with content" the image
-/// findTopmostRender() above returns actually came from - as the Layer
-/// itself, for drawOperationOverlays() to query its own id's operations
-/// with. A second, independent lookup (same reasoning as findTopmostRender()'s
-/// own docs) rather than having findTopmostRender() return both, to keep
-/// its own return type (just the rendered image) unchanged for every
-/// existing caller.
+/// @brief The topmost visible layer with content - unlike
+/// renderComposite() above (which now shows every visible layer's own
+/// contribution, blended together), Show bounding boxes/Show path
+/// geometry are a per-layer editing aid tied to whichever single layer
+/// they'd highlight operations on, so they deliberately keep pointing at
+/// the topmost one rather than trying to show every layer's operations
+/// overlaid at once - unrelated to (and left unchanged by)
+/// `v0.Y.27.1`'s (Multi-layer Compositing) own real composite above.
 [[nodiscard]] const sound_mind::core::Layer* findTopmostLayerWithContent(const sound_mind::core::Project& project) {
     const auto& layers = project.layers();
     for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
@@ -150,11 +143,12 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     painter.fillRect(rect(), Qt::black);
 
     if (project_ != nullptr) {
-        if (const auto rendered = findTopmostRender(*project_); rendered.has_value()) {
+        if (const auto rendered = renderComposite(*project_); rendered.has_value()) {
             painter.drawImage(rect(), toQImageView(*rendered));
         } else {
-            // No layer has any content yet - fall back to the placeholder
-            // that stood in for the whole canvas before Import existed.
+            // No layer has any content at all yet - fall back to the
+            // placeholder that stood in for the whole canvas before
+            // Import existed.
             const QRect canvasRect(0, 0, static_cast<int>(project_->settings().canvasWidth),
                                     static_cast<int>(project_->settings().canvasHeight));
             painter.fillRect(canvasRect.intersected(rect()), QColor(40, 40, 40));

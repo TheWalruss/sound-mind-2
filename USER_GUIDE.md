@@ -185,20 +185,38 @@ scratch, rather than from an import. Each row has:
   always first in time, so neither applies to it.
 - A **delete** button (×), for any layer except the locked one(s).
 
-### Important: what's actually shown right now
+### Compositing
 
-Sound Mind Studio's eventual design composites every visible layer
-together. **That compositing doesn't exist yet.** Right now, the canvas -
-and Playback, Recording's result, Loop Mode, Pooling, and video export -
-all show or use exactly one layer: the **topmost layer that's both
-visible and has content**, skipping hidden ones. This means:
+Every visible layer with content contributes to what the canvas shows
+and Playback plays - mixed together, not one covering another. Two
+layers at full opacity both come through in full, exactly like two
+instruments or voices sounding at once; a layer's own **Opacity** slider
+acts as its own volume in that mix, from silent (`0%`) to full strength
+(`100%`), rather than making it "more see-through" the way opacity works
+in an image editor. Turning a layer's opacity down never affects any
+other layer - each one mixes in independently.
 
-- The opacity slider doesn't currently have any visible effect - it's
-  there, and it's saved with the project, but nothing reads it yet.
-- Importing a new layer, or reordering one to the top, changes what's on
-  screen and what plays - even without touching visibility.
-- To compare two layers, toggle one's visibility off and the other's on,
-  rather than expecting to see both at once.
+### Important: what's actually shown and played right now
+
+The canvas and Playback now show/play a real composite of every visible
+layer, mixed together (see [Compositing](#compositing) above) - opacity
+included, so two overlapping layers genuinely blend rather than one
+hiding the other. **A few other operations still work on a single
+layer, not the composite**: **Recording's result, Loop Mode, Pooling,
+and Audio/Video Export** all still use the **topmost layer that's both
+visible and has content**, skipping hidden ones - each of these is
+about capturing, processing, or exporting one specific layer's own data,
+not "everything currently audible," so extending them to the composite
+is separate, still-open work. This means:
+
+- The canvas and Playback reflect every visible layer's own opacity;
+  Recording/Loop Mode/Pooling/Export don't read it yet for the single
+  layer they act on.
+- To compare two layers on the canvas, toggle visibility - both stay
+  visible together if you leave them both on, now genuinely blended, not
+  one replacing the other.
+- For Pooling/Export specifically, importing a new layer or reordering
+  one to the top still changes which single layer gets acted on.
 
 ### Layer Timing
 
@@ -213,12 +231,11 @@ up in time:
   timeline, for matching the pacing of two clips that don't quite line
   up.
 
-Both are visual/timing adjustments to the spectrogram only - they don't
-currently affect a layer's own audio when it's the one being played,
-recorded from, or exported (see the note above: only one layer is ever
-actually played at a time today, so "lining up" two layers is something
-you'll be able to see, by toggling visibility, before you'll be able to
-hear it composited).
+Both affect Playback too, not just what the canvas shows - a layer's
+translation/rescale shifts where its own content lands before mixing
+into the composite, so "lining up" two layers visually is exactly what
+you'll hear lined up as well. Recording's result, Loop Mode, Pooling,
+and Export are the exception - see the note above.
 
 ## Painting
 
@@ -481,10 +498,12 @@ all off, that axis simply isn't snapped (nothing to snap to).
 
 The **Playback** panel has **Play**, **Pause**, and **Stop**, a draggable
 position bar with an elapsed/total time label, an output device picker,
-and a volume slider. It plays the topmost visible layer with content -
-see [the note above](#important-whats-actually-shown-right-now). Playback
-reflects the project as it currently stands; there's no separate "render"
-step.
+and a volume slider. It plays the project's own real composite - every
+visible layer mixed together (see [Compositing](#compositing) above),
+spanning the project's own full canvas-width duration, silence included
+past wherever real content ends. Pressing Play decodes that composite
+once; it doesn't yet keep re-decoding live as you make further edits
+during playback.
 
 While playing, a white line sweeps across the canvas in real time,
 tracking the current position - the same playhead line a video export
@@ -584,6 +603,22 @@ but only a fraction of what's designed for it:
   see [Selection and Fill](#selection-and-fill) above).
 - Fill only ever produces a uniform color, not a real two-color gradient
   across the selection - there's no UI yet to pick a second color.
+
+[Compositing](#compositing) (see above) mixes every visible layer
+together on the canvas and in Playback, but only a fraction of what's
+designed for it:
+
+- **Normal (mixing) is the only blend mode** - a fuller catalogue
+  (Multiply, Screen, and the rest of the usual image-editor set) isn't
+  designed or built yet.
+- **No MindWave-bound blending** - a layer's own contribution can't yet
+  vary spatially (louder in some regions, quieter in others); MindWaves
+  don't exist until a later milestone.
+- **Recording's result, Loop Mode, Pooling, and Audio/Video Export**
+  still act on a single (topmost) layer, not the composite - see
+  [the note above](#important-whats-actually-shown-and-played-right-now).
+- **Playback decodes the composite once, at Play** - it doesn't yet keep
+  re-decoding live as you make further edits during playback.
 
 The [Path Tool](#path-tool) (see above) only places new paths today; once
 a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,

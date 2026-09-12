@@ -6,6 +6,22 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.27.2] - 2026-09-12
+
+The second and final installment of the "Multi-layer Compositing" milestone - `compositeProject()` (added in `v0.0.27.1`, Core-only) is now wired into the app: the canvas display and Playback both show/play the project's own real composite, mixing every visible layer together instead of only the single topmost one. This is the milestone's own demo: stack two painted layers at different opacities and see (and now hear) them actually blend together.
+
+### Changed
+
+- **The canvas display and Playback now use `compositeProject()`** in place of the single-topmost-layer placeholder every render/decode path here used since Basic Painting. `CanvasWidget` composites on every repaint; `MainWindow::startPlayback()` decodes the composite once when Play is pressed (still one-shot, not continuously live during playback - see `docs/sound-mind-roadmap.md`'s own confirmed scope). Recording's result, Loop Mode, Pooling, and Audio/Video Export are unaffected - all four still act on the single topmost visible layer with content, a deliberately separate, still-open piece of work (see `USER_GUIDE.md`'s own "What's Not Here Yet").
+
+### Fixed
+
+- **Two real bugs in `compositeProject()` itself, found while verifying this installment against the existing test suite** (both predate any app-level wiring, but had no way to surface until something actually called the function on real, varied fixtures):
+  - A layer whose own cached content declares a different `binCount` than the project's current settings (a routine, valid situation for a hand-built test fixture, and possible in principle for a real project reconfigured since a layer was last encoded) used to be read out of bounds. Fixed by deriving the composite's own `binCount` from the tallest contributing layer's own content, and treating any layer's own bins beyond its own range as silent rather than indexing past its arrays.
+  - `compositeProject()`'s own general (2+ layer) summation path is meaningfully more expensive per cell than the single-layer render it replaces (real complex-number math vs. a direct color-mapping lookup) - fine for genuinely multi-layer projects, but this function runs on every canvas repaint, and the overwhelmingly common case (one contributing layer) was paying that cost for no reason. Added a dedicated fast path for exactly one contributing layer - mathematically identical (summing one term is the identity), but skips every transcendental call in favor of one gain shift plus a placement copy.
+
+Core regression: 268 test cases (51,181 assertions), all passing. Studio regression: 303/303 ctest entries passing. Doxygen: 0 warnings.
+
 ## [0.0.27.1] - 2026-09-12
 
 The first installment of the new "Multi-layer Compositing" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.27.1`, inserted ahead of Filter Layers - see that document for why). **Core-only, and not yet reachable from the app** - nothing in Studio calls the new function yet, so this build behaves identically to `v0.0.26.11`; the milestone's own demo (stack two layers, hear them mixed) lands with the next installment, which wires this into the canvas display, Playback, Loop Mode, and Record.

@@ -140,14 +140,36 @@ std::optional<sound_mind::codec::RgbImage> renderLayer(const Layer& layer, std::
 
 std::optional<StreamImage> compositeProject(const Project& project) {
     const auto& layers = project.layers();
-    const bool anyContent = std::any_of(
-        layers.begin(), layers.end(), [](const Layer& layer) { return layer.visible() && layer.content().has_value(); });
-    if (!anyContent) {
+    std::vector<const Layer*> contributingLayers;
+    for (const Layer& layer : layers) {
+        if (layer.visible() && layer.content().has_value()) {
+            contributingLayers.push_back(&layer);
+        }
+    }
+    if (contributingLayers.empty()) {
         return std::nullopt;
     }
 
     const auto& settings = project.settings();
-    const auto config = streamCodecConfigFor(settings);
+    auto config = streamCodecConfigFor(settings);
+    // The project's own settings.binCount is authoritative for a project
+    // whose layers were actually encoded from it (the normal case - every
+    // real layer's own content already comes from streamCodecConfigFor()
+    // against these same settings, so the two numbers are identical in
+    // practice). But nothing enforces that in general, and it's routine
+    // for a hand-built StreamImage (an in-memory test fixture, in
+    // particular) to declare its own, different binCount - using every
+    // contributing layer's own tallest bin range instead keeps the
+    // composite matching whatever its own real content actually is,
+    // rather than silently padding it to (or truncating it against) a
+    // project-level number nothing here actually guarantees matches.
+    std::uint32_t binCount = 0;
+    for (const Layer* layer : contributingLayers) {
+        binCount = std::max(binCount, layer->content()->config.binCount);
+    }
+    if (binCount > 0) {
+        config.binCount = binCount;
+    }
     const std::uint32_t canvasWidth = settings.canvasWidth;
 
     StreamImage result;
@@ -158,26 +180,82 @@ std::optional<StreamImage> compositeProject(const Project& project) {
     result.leftMagnitudeDb.resize(cellCount);
     result.rightMagnitudeDb.resize(cellCount);
     result.sharedPhaseRadians.resize(cellCount);
+    const float silenceFloorDb = linearAmplitudeToDb(0.0f);
+
+    if (contributingLayers.size() == 1) {
+        // Fast path: summing a single term is the identity, so this
+        // produces exactly the same result the general path below would
+        // - but skips every transcendental call (sin/cos/abs/log10) it
+        // needs to actually sum *multiple* complex values, replacing
+        // them with one gain shift (computed once, not per cell) plus a
+        // placement copy. Worth a dedicated path specifically because
+        // it's the overwhelmingly common case (most projects, and most
+        // moments even within a genuinely multi-layer one, have exactly
+        // one contributing layer at any given cell) and this function
+        // runs on every canvas repaint - see its own docs.
+        const Layer& layer = *contributingLayers.front();
+        const StreamImage& content = *layer.content();
+        const float gainDb = 20.0f * std::log10(std::max(layer.opacity(), kMinLinearAmplitude));
+        for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+            for (std::uint32_t x = 0; x < canvasWidth; ++x) {
+                const std::size_t outputCell = std::size_t{bin} * canvasWidth + x;
+                // A layer's own content may have fewer bins than the
+                // project's own binCount (e.g. a project reconfigured
+                // since this layer was last encoded) - out-of-range bins
+                // contribute nothing, the same as a column outside the
+                // layer's own placed range does, rather than indexing
+                // past that layer's own arrays.
+                if (bin >= content.config.binCount) {
+                    result.leftMagnitudeDb[outputCell] = silenceFloorDb;
+                    result.rightMagnitudeDb[outputCell] = silenceFloorDb;
+                    result.sharedPhaseRadians[outputCell] = 0.0f;
+                    continue;
+                }
+                const auto sourceColumn =
+                    sourceColumnFor(x, content.frameCount, layer.rescaleFactor(), layer.translationColumns());
+                if (!sourceColumn.has_value()) {
+                    result.leftMagnitudeDb[outputCell] = silenceFloorDb;
+                    result.rightMagnitudeDb[outputCell] = silenceFloorDb;
+                    result.sharedPhaseRadians[outputCell] = 0.0f;
+                    continue;
+                }
+                const std::size_t sourceCell = std::size_t{bin} * content.frameCount + *sourceColumn;
+                // dB(linear * gain) == dB(linear) + dB(gain) - the same
+                // identity dbToLinearAmplitude()/linearAmplitudeToDb()
+                // round-trip exactly for any value clear of the silence
+                // floor, letting opacity apply as a plain addition
+                // instead of a full linear round-trip.
+                result.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell] + gainDb;
+                result.rightMagnitudeDb[outputCell] = content.rightMagnitudeDb[sourceCell] + gainDb;
+                result.sharedPhaseRadians[outputCell] = content.sharedPhaseRadians[sourceCell];
+            }
+        }
+        return result;
+    }
 
     for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
         for (std::uint32_t x = 0; x < canvasWidth; ++x) {
             std::complex<float> leftSum(0.0f, 0.0f);
             std::complex<float> rightSum(0.0f, 0.0f);
 
-            for (const Layer& layer : layers) {
-                if (!layer.visible() || !layer.content().has_value()) {
+            for (const Layer* layer : contributingLayers) {
+                const StreamImage& content = *layer->content();
+                // See the fast path's own comment above on why a
+                // layer's own content may have fewer bins than the
+                // project's own binCount.
+                if (bin >= content.config.binCount) {
                     continue;
                 }
-                const StreamImage& content = *layer.content();
                 const auto sourceColumn =
-                    sourceColumnFor(x, content.frameCount, layer.rescaleFactor(), layer.translationColumns());
+                    sourceColumnFor(x, content.frameCount, layer->rescaleFactor(), layer->translationColumns());
                 if (!sourceColumn.has_value()) {
                     continue;
                 }
 
                 const std::size_t sourceCell = std::size_t{bin} * content.frameCount + *sourceColumn;
-                const float leftLinear = dbToLinearAmplitude(content.leftMagnitudeDb[sourceCell]) * layer.opacity();
-                const float rightLinear = dbToLinearAmplitude(content.rightMagnitudeDb[sourceCell]) * layer.opacity();
+                const float leftLinear = dbToLinearAmplitude(content.leftMagnitudeDb[sourceCell]) * layer->opacity();
+                const float rightLinear =
+                    dbToLinearAmplitude(content.rightMagnitudeDb[sourceCell]) * layer->opacity();
                 const float phase = content.sharedPhaseRadians[sourceCell];
                 const std::complex<float> direction(std::cos(phase), std::sin(phase));
 

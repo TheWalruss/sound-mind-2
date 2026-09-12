@@ -381,8 +381,15 @@ void MainWindowTest::startPlaybackPlaysAnImportedLayer() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback.wav";
     writeTestWavFile(path);
 
+    // A small canvasWidth, not createFreshTestProject()'s default 1024 - as
+    // of v0.Y.27.1 (Multi-layer Compositing), startPlayback() decodes the
+    // project's own real composite, which always spans exactly
+    // canvasWidth's own duration - a default-sized project would decode
+    // several seconds of mostly silence for writeTestWavFile()'s own
+    // 4-sample clip, for no reason this test actually needs.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-playback.smproj";
     TestMainWindow window;
-    createFreshTestProject(window);
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -394,8 +401,11 @@ void MainWindowTest::pauseAndResumePlayback() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-pause.wav";
     writeTestWavFile(path);
 
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why a
+    // small canvasWidth, not createFreshTestProject()'s default.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-playback-pause.smproj";
     TestMainWindow window;
-    createFreshTestProject(window);
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -413,8 +423,11 @@ void MainWindowTest::stopPlaybackStopsIt() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-stop.wav";
     writeTestWavFile(path);
 
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why a
+    // small canvasWidth, not createFreshTestProject()'s default.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-playback-stop.smproj";
     TestMainWindow window;
-    createFreshTestProject(window);
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -1457,8 +1470,11 @@ void MainWindowTest::playbackPanelButtonsDriveRealPlayback() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-panel-buttons.wav";
     writeTestWavFile(path);
 
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why a
+    // small canvasWidth, not createFreshTestProject()'s default.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-playback-panel-buttons.smproj";
     TestMainWindow window;
-    createFreshTestProject(window);
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
@@ -2085,8 +2101,18 @@ void MainWindowTest::startPlaybackSetsThePlaybackPanelDuration() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-duration.wav";
     writeTestWavFileWithFrameCount(path, 44100, 44100);  // exactly 1 second.
 
+    // As of v0.Y.27.1 (Multi-layer Compositing): Playback decodes the
+    // project's own real composite, which always spans exactly
+    // canvasWidth's own duration (padded with silence past whatever real
+    // content exists) - not just whichever single layer used to be
+    // "topmost". A default-sized (canvasWidth = 1024) project would make
+    // this assert against ~10.24s of mostly silence instead of the
+    // imported clip's own 1 second, so this test needs its own project
+    // sized to actually match - imageScalingTestProjectSettings()'s own
+    // canvasWidth (100) times the default 10ms timestep is exactly 1s.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-playback-duration.smproj";
     TestMainWindow window;
-    createFreshTestProject(window);
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 

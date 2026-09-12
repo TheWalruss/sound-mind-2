@@ -181,7 +181,15 @@ void CanvasWidgetTest::reflectsALayersTranslationColumns() {
 
     const QImage rendered = widget.grab().toImage();
 
-    QCOMPARE(rendered.pixelColor(0, 0), QColor(0, 0, 0));
+    // As of v0.Y.27.1 (Multi-layer Compositing): an untranslated,
+    // nothing-placed-here cell is genuine silence (red/green both 0),
+    // but - unlike the old per-layer render's own raw-black padding -
+    // now goes through the same toRgbImage() color mapping as real
+    // content, which always colors phase into blue (0 radians, silence's
+    // own default, maps to a mid-value, not 0) - so red/green, not exact
+    // black, is what "nothing here" actually means now.
+    QCOMPARE(rendered.pixelColor(0, 0).red(), 0);
+    QCOMPARE(rendered.pixelColor(0, 0).green(), 0);
     QCOMPARE(rendered.pixelColor(3, 0).red(), 255);
 }
 

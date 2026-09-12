@@ -39,6 +39,7 @@
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/compositor.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/layer_export.h"
@@ -1563,15 +1564,19 @@ void MainWindow::startPlayback() {
     }
 
     if (!playbackController_->isLoaded()) {
-        const sound_mind::core::Layer* layer = topmostLayerWithContent();
-        if (layer == nullptr) {
+        // As of v0.Y.27.1 (Multi-layer Compositing): the project's own real
+        // composite (every visible layer mixed together), not just
+        // whichever layer happens to be on top - see
+        // sound_mind::core::compositeProject()'s own docs.
+        const auto composite = sound_mind::core::compositeProject(*project_);
+        if (!composite.has_value()) {
             return;
         }
         // load() itself emits durationChanged() (connected in the
         // constructor to playbackPanel_->setDuration()) - only needs
         // doing once per load, not on every resume, which load() already
         // guarantees since this whole branch is skipped once isLoaded().
-        playbackController_->load(sound_mind::codec::decode(*layer->content()));
+        playbackController_->load(sound_mind::codec::decode(*composite));
     }
 
     playbackController_->play();

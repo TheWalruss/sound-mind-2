@@ -20,14 +20,15 @@ namespace sound_mind::studio {
 /**
  * @brief Renders the active project's canvas.
  *
- * Shows the topmost layer with cached content (see
- * `sound_mind::core::renderLayer()`), scaled to fill the widget - real
- * multi-layer compositing (blend modes, opacity, MindWave-bound
- * parameters) doesn't exist yet, so "the composite" is, for now, just
- * whichever layer was rendered most recently. Falls back to a placeholder
- * rectangle, sized to the project's configured canvas dimensions, when no
- * layer has any content yet (e.g. a fresh project with only its empty
- * Background layer).
+ * **As of `v0.Y.27.1` (Multi-layer Compositing):** shows the project's own
+ * real multi-layer composite (see `sound_mind::core::compositeProject()`),
+ * scaled to fill the widget - every visible layer's own content mixed
+ * together, not just whichever layer happens to be on top. Falls back to
+ * a placeholder rectangle, sized to the project's configured canvas
+ * dimensions, when no layer has any content yet (e.g. a fresh project
+ * with only its empty Background layer). MindWave-bound parameters still
+ * don't exist yet (Phase 4) - once they do, they'll bind into this same
+ * composite rather than needing a new render path.
  *
  * **As of `v0.0.21.1` (Playback position bar):** also draws a moving
  * playhead line during Playback - see setPlayheadFraction()'s own docs.

@@ -341,3 +341,41 @@ TEST_CASE("compositeProject's own sampleCount is canvasWidth frames' worth of sa
     const auto config = streamCodecConfigFor(testSettings());
     CHECK(composite->sampleCount == static_cast<std::uint64_t>(testSettings().canvasWidth) * config.hopLength);
 }
+
+TEST_CASE("compositeProject's own binCount is the tallest among the contributing layers' own content",
+          "[core][compositor]") {
+    // Reproduces a real bug found in v0.Y.27.1's own Installment B: a
+    // layer's cached content can have a different binCount than the
+    // project's own current settings declare (settings.binCount defaults
+    // to 512, but a hand-built test fixture - or a project reconfigured
+    // since a layer was last encoded - can easily leave a layer with far
+    // fewer) - compositeProject() used to index every layer's own arrays
+    // using the *project's* bin count unconditionally, reading past a
+    // narrower layer's own end. Also confirms a shorter layer's own bins
+    // beyond its own range contribute nothing (silently, not a crash) to
+    // a bin only a *taller* layer actually reaches.
+    Project project = Project::createNew(testSettings());  // canvasWidth = 3.
+    project.layers()[0].setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));  // 1 bin.
+
+    StreamImage tallerContent;
+    tallerContent.config.binCount = 3;
+    tallerContent.frameCount = 3;
+    tallerContent.leftMagnitudeDb.assign(9, -50.0f);
+    tallerContent.rightMagnitudeDb.assign(9, -50.0f);
+    tallerContent.sharedPhaseRadians.assign(9, 0.0f);
+    Layer taller(0, "Taller", LayerType::Normal);
+    taller.setContent(tallerContent);
+    project.addLayer(std::move(taller));
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->config.binCount == 3);  // The taller layer's own binCount, not settings.binCount (512).
+    // Bin 0: both layers contribute - the -50 dB layer barely moves the
+    // Background layer's own 0 dB.
+    CHECK(composite->leftMagnitudeDb[0] > -1.0f);
+    // Bin 1 (output cell 1*3 = 3): only the taller layer reaches here -
+    // the shorter layer's own (nonexistent) bin 1 contributes nothing,
+    // read without crashing.
+    CHECK(composite->leftMagnitudeDb[3] == Catch::Approx(-50.0f).margin(0.5f));
+}

@@ -74,12 +74,29 @@ namespace sound_mind::core {
  *
  * The returned image's own `config` comes from
  * `streamCodecConfigFor(project.settings())` (so every layer's amplitude
- * lines up bin-for-bin against a shared frequency range), `frameCount`
- * is `project.settings().canvasWidth`, and `sampleCount` is
- * `frameCount * config.hopLength` - the exact sample count
- * `sound_mind::codec::decode()` should reconstruct for the project's own
- * full canvas-width duration.
+ * lines up bin-for-bin against a shared frequency range) - **except its
+ * own `binCount`**, which instead is the tallest `binCount` among the
+ * contributing layers' own cached content. The two numbers are identical
+ * for any layer actually encoded from these same settings (the normal
+ * case), but nothing enforces that in general, so this keeps the
+ * composite matching what its own real content actually is rather than
+ * padding or truncating against a project-level number that isn't
+ * guaranteed to match it. `frameCount` is `project.settings().canvasWidth`,
+ * and `sampleCount` is `frameCount * config.hopLength` - the exact
+ * sample count `sound_mind::codec::decode()` should reconstruct for the
+ * project's own full canvas-width duration. A layer whose own cached
+ * content has fewer bins than the composite's own (tallest-among-layers)
+ * `binCount` simply contributes nothing past its own bin range, rather
+ * than being read out of bounds.
  *
+ * @note **Fast path for the overwhelmingly common case of exactly one
+ *       contributing layer**: summing a single term is the identity, so
+ *       when only one layer is visible and has content, this skips the
+ *       complex-domain math entirely (no `sin`/`cos`/`abs`/`log10` per
+ *       cell) in favor of one gain shift plus a placement copy - this
+ *       function runs on every canvas repaint, and most projects (and
+ *       most moments even within a genuinely multi-layer one) have
+ *       exactly one contributing layer at any given cell.
  * @note CPU-only, and not real-time-safe as written (allocates
  *       throughout) - the same characterization `sound_mind::codec::
  *       encode()`/`decode()` already carry, and consistent with
