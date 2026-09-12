@@ -2,13 +2,18 @@
 
 #include <optional>
 
+#include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QGroupBox>
 #include <QSignalSpy>
+#include <QSpinBox>
+#include <QVariant>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/filter_configuration_panel.h"
 
 using sound_mind::core::FilterConfiguration;
+using sound_mind::core::FilterType;
 using sound_mind::studio::FilterConfigurationPanel;
 
 void FilterConfigurationPanelTest::freshPanelHasAFullyTransparentDefaultConfiguration() {
@@ -69,4 +74,113 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsAllEightSpinBoxesW
     QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endRightIntensitySpinBox"))->value(), -40.0);
     QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endLeftOpacitySpinBox"))->value(), 0.5);
     QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endRightOpacitySpinBox"))->value(), 0.6);
+}
+
+void FilterConfigurationPanelTest::freshPanelShowsOnlyTheFrequencyAxisGradientGroup() {
+    const FilterConfigurationPanel panel;
+
+    QVERIFY(!panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("uniformBlurGroup"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("edgePreservingBlurGroup"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("directionalBlurGroup"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("sharpenGroup"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::selectingAFilterTypeShowsOnlyThatTypesOwnGroupAndEmitsTheNewType() {
+    FilterConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
+    QVERIFY(combo != nullptr);
+    std::optional<FilterConfiguration> received;
+    connect(&panel, &FilterConfigurationPanel::filterConfigurationChanged,
+            [&](const FilterConfiguration& config) { received = config; });
+
+    const int index = combo->findData(QVariant::fromValue(static_cast<int>(FilterType::DirectionalBlur)));
+    QVERIFY(index >= 0);
+    combo->setCurrentIndex(index);
+
+    QVERIFY(received.has_value());
+    QCOMPARE(received->type(), FilterType::DirectionalBlur);
+    QCOMPARE(panel.filterConfiguration().type(), FilterType::DirectionalBlur);
+    QVERIFY(panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("uniformBlurGroup"))->isHidden());
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("directionalBlurGroup"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("sharpenGroup"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::changingBlurSigmaUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("blurSigmaSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(5.5);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().blurSigma(), 5.5f);
+}
+
+void FilterConfigurationPanelTest::changingMedianSizeUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QSpinBox*>(QStringLiteral("medianSizeSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(9);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().medianSize(), 9);
+}
+
+void FilterConfigurationPanelTest::changingDirectionalBlurLengthAndAngleUpdateConfigAndEmit() {
+    FilterConfigurationPanel panel;
+    auto* lengthSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("directionalBlurLengthSpinBox"));
+    auto* angleSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("directionalBlurAngleSpinBox"));
+    QVERIFY(lengthSpinBox != nullptr);
+    QVERIFY(angleSpinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    lengthSpinBox->setValue(42);
+    angleSpinBox->setValue(135.0);
+
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(panel.filterConfiguration().directionalBlurLength(), 42);
+    QCOMPARE(panel.filterConfiguration().directionalBlurAngleDegrees(), 135.0f);
+}
+
+void FilterConfigurationPanelTest::changingSharpenAmountUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("sharpenAmountSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(2.5);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().sharpenAmount(), 2.5f);
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheTypeComboAndNewSpinBoxesWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    FilterConfiguration config;
+    config.setType(FilterType::Sharpen);
+    config.setBlurSigma(3.3f);
+    config.setMedianSize(7);
+    config.setDirectionalBlurLength(20);
+    config.setDirectionalBlurAngleDegrees(45.0f);
+    config.setSharpenAmount(1.8f);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
+    QCOMPARE(combo->currentData().toInt(), static_cast<int>(FilterType::Sharpen));
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("blurSigmaSpinBox"))->value(), 3.3);
+    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("medianSizeSpinBox"))->value(), 7);
+    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("directionalBlurLengthSpinBox"))->value(), 20);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("directionalBlurAngleSpinBox"))->value(), 45.0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("sharpenAmountSpinBox"))->value(), 1.8);
+    // Sharpen's own group is now the visible one.
+    QVERIFY(panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("sharpenGroup"))->isHidden());
 }

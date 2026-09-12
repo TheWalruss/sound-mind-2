@@ -10,4 +10,11 @@ private slots:
     void changingAStartSpinBoxUpdatesStop0AndEmitsFilterConfigurationChanged();
     void changingAnEndSpinBoxUpdatesStop1AndEmitsFilterConfigurationChanged();
     void setFilterConfigurationSyncsAllEightSpinBoxesWithoutEmitting();
+    void freshPanelShowsOnlyTheFrequencyAxisGradientGroup();
+    void selectingAFilterTypeShowsOnlyThatTypesOwnGroupAndEmitsTheNewType();
+    void changingBlurSigmaUpdatesConfigAndEmits();
+    void changingMedianSizeUpdatesConfigAndEmits();
+    void changingDirectionalBlurLengthAndAngleUpdateConfigAndEmit();
+    void changingSharpenAmountUpdatesConfigAndEmits();
+    void setFilterConfigurationSyncsTheTypeComboAndNewSpinBoxesWithoutEmitting();
 };

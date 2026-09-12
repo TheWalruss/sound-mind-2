@@ -248,20 +248,37 @@ Layer** to add one; it's tagged **Filter** in its own row, and selecting
 it (click its name, the same as any other layer) opens the **Filter
 Configuration** panel with its own controls.
 
-**Only one filter is actually implemented so far: Frequency-Axis
-Gradient** - every new Filter layer starts as this type. Its panel shows
-two groups, **Start (t=0, lowest frequency)** and **End (t=1, highest
-frequency)**, each with **Left Intensity**/**Left Opacity**/**Right
-Intensity**/**Right Opacity** - the exact same gradient controls Path
-Gradient and Fill already use (see [Gradients](#gradients) below),
-applied across the frequency axis instead of along a path: at each
-frequency, the composite's own loudness blends toward that stop's own
-Intensity, by that stop's own Opacity (`0` leaves it untouched, `1`
-forces it all the way to Intensity). A fresh Filter layer starts fully
-transparent (both stops at `0` opacity) - it does nothing until you
-raise an Opacity. This is a basic, spin-box-only editor for now - just
-the gradient's own two endpoint stops, no draggable visual editor and no
-interior stops yet.
+The Filter Configuration panel starts with a **Filter Type** dropdown -
+every new Filter layer starts as **Frequency-Axis Gradient**. Choosing a
+different type shows only that type's own controls below the dropdown;
+switching back and forth doesn't lose whatever you entered into a
+group's own controls while it was hidden.
+
+- **Frequency-Axis Gradient** shows two groups, **Start (t=0, lowest
+  frequency)** and **End (t=1, highest frequency)**, each with **Left
+  Intensity**/**Left Opacity**/**Right Intensity**/**Right Opacity** -
+  the exact same gradient controls Path Gradient and Fill already use
+  (see [Gradients](#gradients) below), applied across the frequency axis
+  instead of along a path: at each frequency, the composite's own
+  loudness blends toward that stop's own Intensity, by that stop's own
+  Opacity (`0` leaves it untouched, `1` forces it all the way to
+  Intensity). A fresh Filter layer starts fully transparent (both stops
+  at `0` opacity) - it does nothing until you raise an Opacity. This is
+  a basic, spin-box-only editor for now - just the gradient's own two
+  endpoint stops, no draggable visual editor and no interior stops yet.
+- **Uniform Blur** softens evenly in every direction - one **Sigma**
+  control (the blur's own strength, in bins/columns).
+- **Edge-Preserving Blur** softens without smearing across a sharp
+  boundary the way Uniform Blur would - one **Size** control (the
+  window's own size, in bins/columns).
+- **Directional Blur** softens along one direction only - **Length**
+  (how far the smear reaches) and **Angle** (0° smears along time,
+  90° along frequency).
+- **Sharpen** is Blur's own opposite, tightening detail instead of
+  softening it - one **Amount** control (higher pushes further).
+
+**Tone Curve isn't implemented yet** and doesn't appear in the Filter
+Type dropdown - see [What's Not Here Yet](#whats-not-here-yet).
 
 A Filter layer with nothing beneath it (or with everything beneath it
 hidden) has nothing to filter, so it has no effect. Filter layers aren't
@@ -656,10 +673,10 @@ designed for it:
 [Filter Layers](#filter-layers) (see above) have just gotten started -
 only a first sliver of what's designed for them:
 
-- **Only Frequency-Axis Gradient is a real, working filter** - the
-  other five kinds the design doc describes (Uniform/Edge-Preserving/
-  Directional Blur, Sharpen, Tone Curve) can't be selected yet; there's
-  no `FilterType` drop-down at all until a second one actually works.
+- **Five of the six designed filter types work: Frequency-Axis
+  Gradient, Uniform Blur, Edge-Preserving Blur, Directional Blur, and
+  Sharpen** - only **Tone Curve** can't be selected yet, and doesn't
+  appear in the Filter Type drop-down until it does.
 - **No draggable visual gradient editor, and no interior stops** - just
   the two endpoint stops (`t=0`, `t=1`), via plain spin boxes.
 - **No Equalizer layer yet** - the locked, top-of-stack Filter layer

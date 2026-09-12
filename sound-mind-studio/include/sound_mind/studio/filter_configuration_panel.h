@@ -4,8 +4,12 @@
 
 #include "sound_mind/core/filter_configuration.h"
 
+class QComboBox;
 class QDoubleSpinBox;
+class QGroupBox;
 class QLabel;
+class QSpinBox;
+class QWidget;
 
 namespace sound_mind::studio {
 
@@ -24,16 +28,21 @@ namespace sound_mind::studio {
  * presentational" boundary `ToolConfigurationPanel` already draws around
  * `PaintOperation`/Pick.
  *
- * **`FrequencyAxisGradient`-only controls, for now** - `docs/sound-mind-
- * roadmap.md`'s `v0.Y.28.1` (Filter Layers) milestone's own confirmed
- * scope: only this one filter type has a real algorithm behind it yet
- * (see `sound_mind::core::applyFilter()`'s own docs), so this installment's
- * own panel shows only its controls directly - no `FilterType` selector,
- * the same "don't build a selector for types with nothing to select
- * between yet" precedent `ToolConfigurationPanel`'s own docs establish
- * for `ToolType`. A `FilterType` combo (and each other filter's own
- * parameter controls) arrives alongside its own algorithm, in a later
- * installment.
+ * **A `FilterType` selector, listing only the types with a real algorithm
+ * behind them** - `docs/sound-mind-roadmap.md`'s `v0.Y.28.1` (Filter
+ * Layers) milestone's own multi-installment scope: `UniformBlur`,
+ * `EdgePreservingBlur`, `DirectionalBlur`, `Sharpen`, and
+ * `FrequencyAxisGradient` all have one now (see `sound_mind::core::
+ * applyFilter()`'s own docs), in `docs/sound-mind-design.md`'s own
+ * family order (Blur & focus, then Spectral shaping). `ToneCurve` stays
+ * off the list until its own algorithm lands (Installment C) - the same
+ * "don't build a selector for types with nothing to select between yet"
+ * precedent `ToolConfigurationPanel`'s own docs establish for `ToolType`,
+ * applied per-item here rather than only before the very first real type
+ * existed. Selecting a type shows only that type's own parameter group;
+ * every other group stays hidden (`QWidget::setVisible(false)`), the same
+ * "meaningless unless `type()` matches" contract `FilterConfiguration`'s
+ * own per-field docs already state.
  *
  * **A basic, two-endpoint-stop gradient editor, not a rich visual one** -
  * `Gradient` always has at least its two endpoint stops (`t=0`, `t=1`);
@@ -86,8 +95,15 @@ private:
     /// @brief Emits filterConfigurationChanged() with the current config_.
     void emitConfigChanged();
 
+    /// @brief Shows the one parameter group matching `config_.type()` and
+    ///        hides every other one - see this class's own docs.
+    void updateVisibleGroup();
+
     sound_mind::core::FilterConfiguration config_;
 
+    QComboBox* filterTypeCombo_ = nullptr;
+
+    QWidget* frequencyAxisGradientSection_ = nullptr;
     QLabel* frequencyGradientLabel_ = nullptr;
     QDoubleSpinBox* startLeftIntensitySpinBox_ = nullptr;
     QDoubleSpinBox* startLeftOpacitySpinBox_ = nullptr;
@@ -97,6 +113,19 @@ private:
     QDoubleSpinBox* endLeftOpacitySpinBox_ = nullptr;
     QDoubleSpinBox* endRightIntensitySpinBox_ = nullptr;
     QDoubleSpinBox* endRightOpacitySpinBox_ = nullptr;
+
+    QGroupBox* uniformBlurGroup_ = nullptr;
+    QDoubleSpinBox* blurSigmaSpinBox_ = nullptr;
+
+    QGroupBox* edgePreservingBlurGroup_ = nullptr;
+    QSpinBox* medianSizeSpinBox_ = nullptr;
+
+    QGroupBox* directionalBlurGroup_ = nullptr;
+    QSpinBox* directionalBlurLengthSpinBox_ = nullptr;
+    QDoubleSpinBox* directionalBlurAngleSpinBox_ = nullptr;
+
+    QGroupBox* sharpenGroup_ = nullptr;
+    QDoubleSpinBox* sharpenAmountSpinBox_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

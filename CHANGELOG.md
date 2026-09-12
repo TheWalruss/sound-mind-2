@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.28.4] - 2026-09-12
+
+The Studio half of the "Filter Layers" milestone's second installment (`v0.0.28.3` was the Core-only half). **Now reachable from the app**: pick a Filter layer's own type and configure it.
+
+### Added
+
+- **A "Filter Type" drop-down** in the Filter Configuration panel, listing every filter type with a real algorithm behind it: Uniform Blur, Edge-Preserving Blur, Directional Blur, Sharpen, and Frequency-Axis Gradient (Tone Curve stays off the list until it has one too). Selecting a type shows only that type's own parameter group; switching back and forth doesn't lose values entered into a currently-hidden group.
+- **Parameter controls for the four new filter types**: Uniform Blur's **Sigma**, Edge-Preserving Blur's **Size**, Directional Blur's **Length**/**Angle**, and Sharpen's **Amount**.
+
+Core regression: unchanged (this half is Studio-only). Studio regression: 334/334 ctest entries passing (7 new test cases in `FilterConfigurationPanelTest`). Doxygen: 0 warnings.
+
 ## [0.0.28.3] - 2026-09-12
 
 The Core half of the "Filter Layers" milestone's second installment (blur family + sharpen). **Core-only, not yet reachable from the app** - the Filter Configuration panel still shows only Frequency-Axis Gradient's own controls, so this build behaves identically to `v0.0.28.2` for anyone using the Studio itself; a `FilterType` selector and this half's own parameter controls are the following Studio half of this same installment.
