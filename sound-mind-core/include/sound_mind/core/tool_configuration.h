@@ -83,6 +83,44 @@ NLOHMANN_JSON_SERIALIZE_ENUM(BrushTipShape, {
 // clang-format on
 
 /**
+ * @brief How a stroke's own brush stamps are spaced along its Path - see
+ *        `docs/sound-mind-design.md`'s "Stamp Intervals".
+ *
+ * Independent of *how* the Path itself was built (freehand capture or
+ * the Path tool's own deliberate node placement - see `path.h`'s own
+ * docs on why both end up the same underlying representation): this is
+ * a property of the brush stamping *along* that Path, the same as tip
+ * shape or size, not of how the geometry was drawn.
+ */
+enum class StampMode {
+    /// @brief Densely overlapping stamps, blending into one continuous
+    ///        stroke - the only mode that existed before Stamp Intervals,
+    ///        and still the default.
+    Continuous,
+    /// @brief Evenly spaced stamps measured along the Path's own arc
+    ///        length, in the same seconds-equivalent normalized space
+    ///        `ToolConfiguration::size()` already uses - a "dotted brush"
+    ///        effect, spacing following the curve however it bends.
+    AlongCurve,
+    /// @brief One stamp everywhere the Path crosses a time-axis line
+    ///        `stampInterval()` seconds apart - a rhythmic, grid-like
+    ///        placement independent of the Path's own actual shape.
+    TimeAxis,
+    /// @brief One stamp everywhere the Path crosses a frequency-axis
+    ///        line `stampInterval()` Hz apart.
+    FrequencyAxis,
+};
+
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(StampMode, {
+    {StampMode::Continuous, "continuous"},
+    {StampMode::AlongCurve, "alongCurve"},
+    {StampMode::TimeAxis, "timeAxis"},
+    {StampMode::FrequencyAxis, "frequencyAxis"},
+})
+// clang-format on
+
+/**
  * @brief A named, savable/shareable painting-tool setup - see
  *        `docs/sound-mind-design.md`'s "Tool Configuration".
  *
@@ -160,6 +198,38 @@ public:
     ///        validated here.
     void setSize(double size) noexcept { size_ = size; }
 
+    /// @brief How this tool's own stamps are spaced along whatever Path
+    ///        they're applied to.
+    /// @return The currently configured stamp mode; `Continuous` by
+    ///         default (the only mode that existed before Stamp
+    ///         Intervals).
+    [[nodiscard]] StampMode stampMode() const noexcept { return stampMode_; }
+
+    /// @brief Sets how this tool's own stamps are spaced along a Path.
+    /// @param mode The new stamp mode.
+    void setStampMode(StampMode mode) noexcept { stampMode_ = mode; }
+
+    /**
+     * @brief The spacing `stampMode()` places stamps at - meaningless
+     *        while `stampMode()` is `Continuous` (which always uses its
+     *        own fixed, dense spacing instead).
+     *
+     * The unit depends on `stampMode()`: seconds-equivalent arc length
+     * for `AlongCurve` (the same normalized space `size()` uses), plain
+     * seconds for `TimeAxis`, Hz for `FrequencyAxis`.
+     *
+     * @return The current interval; not clamped or validated here, but
+     *         a non-positive value stamps nothing (see
+     *         `sampleStroke()`'s own docs in `paint_application.cpp`).
+     */
+    [[nodiscard]] double stampInterval() const noexcept { return stampInterval_; }
+
+    /// @brief Sets `stampMode()`'s own spacing.
+    /// @param interval The new interval, in whatever unit stampInterval()'s
+    ///        own docs specify for the current stampMode(); intended to be
+    ///        positive.
+    void setStampInterval(double interval) noexcept { stampInterval_ = interval; }
+
     /// @brief This tool's own default gradient - seeds a new Path's own
     ///        gradient (see `path.h`) whenever painting starts with this
     ///        configuration; the artist can then further customize that
@@ -181,6 +251,8 @@ private:
     BrushTipShape tipShape_ = BrushTipShape::Circle;
     float falloff_ = 0.5f;
     double size_ = 0.2;
+    StampMode stampMode_ = StampMode::Continuous;
+    double stampInterval_ = 0.1;
     Gradient defaultGradient_;
 };
 

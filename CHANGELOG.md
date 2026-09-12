@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.10] - 2026-09-11
+
+The second installment of Phase 3's "Paths & Grids" milestone's second half - Stamp Intervals, modeled on the legacy Python Studio's own "Curve" tool (Overlay Grids/Snap to Grid remain open for the milestone's third and final installment).
+
+### Added
+
+- **A new "Stamp Mode" control on `ToolConfiguration`, with a matching combo box and interval spin box in the Tool Configuration panel** (right below Brush Size): `Continuous` (the default, unchanged dense stamping), `Along Curve` (evenly spaced along the path's own drawn length, in seconds), `Time Axis` (stamped at every evenly-spaced moment in time the path crosses, in seconds), and `Frequency Axis` (the same idea rotated onto frequency, in Hz). The interval spin box is disabled under `Continuous`, where an interval is meaningless, and its suffix/tooltip adapt to whichever mode is selected. Persisted in project JSON, backward-compatible with older saved projects (missing keys default to `Continuous`/`0.1`).
+
+### Fixed
+
+- **`Along Curve` stamping now interpolates between dense sample points instead of snapping to the nearest preceding one** - found while implementing, before it ever shipped: snapping produced duplicate stamps at the same position whenever the requested interval was finer than one dense-tessellation hop's own length (a real risk, since the dense tessellation's step size is tuned for a brush's own smooth blended footprint, not for arc-length precision).
+
+Core regression: 256 test cases (51,145 assertions), all passing. Studio regression: 291/291 ctest entries passing. Doxygen: 0 warnings.
+
 ## [0.0.26.9] - 2026-09-11
 
 The first installment of Phase 3's "Paths & Grids" milestone's second half - Axis Labels, a genuinely new addition beyond the milestone's own original roadmap sketch (Overlay Grids/Snap to Grid/pitch quantising, and configurable stamp intervals along a Path, remain open for later installments of the same milestone).

@@ -17,4 +17,8 @@ private slots:
     void setColorSetsBothGradientStopsIntensityAndEmitsChange();
     void colorRoundTripsThroughSetColor();
     void colorButtonExistsForOpeningTheRealDialog();
+    void freshPanelHasStampModeContinuousAndTheIntervalSpinBoxDisabled();
+    void changingTheStampModeEmitsToolConfigurationChangedAndEnablesTheIntervalSpinBox();
+    void changingTheStampIntervalEmitsToolConfigurationChanged();
+    void loadingAConfigurationSyncsTheStampModeAndIntervalControls();
 };

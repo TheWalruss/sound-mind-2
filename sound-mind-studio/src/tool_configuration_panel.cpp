@@ -23,6 +23,16 @@ namespace sound_mind::studio {
 namespace {
 
 using sound_mind::core::BrushTipShape;
+using sound_mind::core::StampMode;
+
+/// @brief Every `StampMode` paired with its display name, in the same
+/// order `docs/sound-mind-design.md`'s "Stamp Intervals" lists them.
+constexpr std::array<std::pair<StampMode, const char*>, 4> kStampModes{{
+    {StampMode::Continuous, "Continuous"},
+    {StampMode::AlongCurve, "Along Curve"},
+    {StampMode::TimeAxis, "Time Axis"},
+    {StampMode::FrequencyAxis, "Frequency Axis"},
+}};
 
 /// @brief Every `BrushTipShape` paired with its display name, in the same
 /// order `docs/sound-mind-design.md`'s "Procedural Brushes" lists them -
@@ -106,6 +116,31 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent) : QDockWidget(tr
     });
     form->addRow(tr("Brush Size:"), sizeSpinBox_);
 
+    stampModeCombo_ = new QComboBox(container);
+    stampModeCombo_->setObjectName(QStringLiteral("stampModeCombo"));
+    for (const auto& [mode, name] : kStampModes) {
+        stampModeCombo_->addItem(tr(name), QVariant::fromValue(static_cast<int>(mode)));
+    }
+    connect(stampModeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        config_.setStampMode(static_cast<StampMode>(stampModeCombo_->itemData(index).toInt()));
+        updateStampIntervalAppearance();
+        emitConfigChanged();
+    });
+    form->addRow(tr("Stamp Mode:"), stampModeCombo_);
+
+    stampIntervalSpinBox_ = new QDoubleSpinBox(container);
+    stampIntervalSpinBox_->setObjectName(QStringLiteral("stampIntervalSpinBox"));
+    stampIntervalSpinBox_->setRange(0.001, 20000.0);
+    stampIntervalSpinBox_->setSingleStep(0.01);
+    stampIntervalSpinBox_->setDecimals(3);
+    stampIntervalSpinBox_->setValue(config_.stampInterval());
+    connect(stampIntervalSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setStampInterval(value);
+        emitConfigChanged();
+    });
+    form->addRow(tr("Stamp Interval:"), stampIntervalSpinBox_);
+    updateStampIntervalAppearance();
+
     // Color/opacity directly below set *both* gradient stops uniformly -
     // the design doc's own "Uniform color" example (see
     // sound-mind-design.md's Gradients) - a real, full multi-stop
@@ -187,6 +222,16 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
         sizeSpinBox_->setValue(config_.size());
     }
     {
+        const QSignalBlocker blocker(stampModeCombo_);
+        const int index = stampModeCombo_->findData(QVariant::fromValue(static_cast<int>(config_.stampMode())));
+        stampModeCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    }
+    {
+        const QSignalBlocker blocker(stampIntervalSpinBox_);
+        stampIntervalSpinBox_->setValue(config_.stampInterval());
+    }
+    updateStampIntervalAppearance();
+    {
         const QSignalBlocker blocker(opacitySpinBox_);
         opacitySpinBox_->setValue(static_cast<double>(config_.defaultGradient().stops().front().leftOpacity) * 100.0);
     }
@@ -216,6 +261,38 @@ void ToolConfigurationPanel::openColorDialog() {
     const QColor picked = QColorDialog::getColor(color(), this, tr("Choose Brush Color"));
     if (picked.isValid()) {
         setColor(picked);
+    }
+}
+
+void ToolConfigurationPanel::updateStampIntervalAppearance() {
+    const bool active = config_.stampMode() != StampMode::Continuous;
+    stampIntervalSpinBox_->setEnabled(active);
+
+    switch (config_.stampMode()) {
+        case StampMode::Continuous:
+            stampIntervalSpinBox_->setSuffix(QString());
+            stampIntervalSpinBox_->setToolTip(
+                tr("Meaningless for Continuous - stamps are already spaced densely enough to overlap into one "
+                   "solid stroke."));
+            break;
+        case StampMode::AlongCurve:
+            stampIntervalSpinBox_->setSuffix(QStringLiteral(" s (along curve)"));
+            stampIntervalSpinBox_->setToolTip(
+                tr("Spacing between stamps, measured along the path's own arc length - in the same seconds-"
+                   "equivalent units as Brush Size (see its own tooltip)."));
+            break;
+        case StampMode::TimeAxis:
+            stampIntervalSpinBox_->setSuffix(QStringLiteral(" s"));
+            stampIntervalSpinBox_->setToolTip(
+                tr("Stamps everywhere the path crosses a time-axis line this many seconds apart, regardless of "
+                   "the path's own shape."));
+            break;
+        case StampMode::FrequencyAxis:
+            stampIntervalSpinBox_->setSuffix(QStringLiteral(" Hz"));
+            stampIntervalSpinBox_->setToolTip(
+                tr("Stamps everywhere the path crosses a frequency-axis line this many Hz apart, regardless of "
+                   "the path's own shape."));
+            break;
     }
 }
 

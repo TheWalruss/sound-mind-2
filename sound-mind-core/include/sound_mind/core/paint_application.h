@@ -99,9 +99,15 @@ namespace sound_mind::core {
  *        Brushes" and "What Editing Does": painting amplitude pixels
  *        brighter/darker changes that frequency's loudness at that time).
  *
- * Stamps the brush tip repeatedly along `operation.path()`, densely enough
- * that consecutive stamps overlap into a continuous stroke rather than a
- * series of dots. At each stamp, every pixel within the tip's own radius
+ * Stamps the brush tip repeatedly along `operation.path()`, spaced per
+ * `operation.config().stampMode()` (see `docs/sound-mind-design.md`'s
+ * "Stamp Intervals"): `Continuous` (the default) stamps densely enough
+ * that consecutive stamps overlap into one continuous stroke rather than
+ * a series of dots; `AlongCurve`/`TimeAxis`/`FrequencyAxis` instead space
+ * stamps `stampInterval()` apart - by arc length, or wherever the path
+ * crosses a time/frequency grid line, respectively - producing visibly
+ * separate stamps rather than a solid stroke. At each stamp, every pixel
+ * within the tip's own radius
  * blends toward `operation.path().gradient()`'s target intensity (written
  * directly as the new dB value - a `GradientStop`'s `leftIntensity`/
  * `rightIntensity` *are* target `leftMagnitudeDb`/`rightMagnitudeDb`

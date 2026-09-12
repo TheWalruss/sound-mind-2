@@ -137,10 +137,20 @@ private:
     ///        shows a stale swatch.
     void updateColorButtonAppearance();
 
+    /// @brief Syncs stampIntervalSpinBox_'s own suffix/tooltip to
+    ///        config_'s current `stampMode()`, and disables it entirely
+    ///        while that mode is `Continuous` (where an interval is
+    ///        meaningless - see `ToolConfiguration::stampInterval()`'s
+    ///        own docs) - called after any change to config_'s stamp
+    ///        mode, so the spin box never shows a stale/wrong unit.
+    void updateStampIntervalAppearance();
+
     sound_mind::core::ToolConfiguration config_;
     QComboBox* tipShapeCombo_ = nullptr;
     QDoubleSpinBox* falloffSpinBox_ = nullptr;
     QDoubleSpinBox* sizeSpinBox_ = nullptr;
+    QComboBox* stampModeCombo_ = nullptr;
+    QDoubleSpinBox* stampIntervalSpinBox_ = nullptr;
     QPushButton* colorButton_ = nullptr;
     QDoubleSpinBox* opacitySpinBox_ = nullptr;
     QCheckBox* showBoundingBoxesCheckBox_ = nullptr;

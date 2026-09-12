@@ -298,6 +298,16 @@ Both stay off by default so ordinary use shows only the rendered result, unclutt
 
 A brush's **tip** defines the geometric footprint stamped at each paint event — a shape from a shared library spanning basic fills (circle, square, diamond, triangle), lines and line compounds (single strokes, crosses, star patterns), corners and arcs, and procedurally scattered textures (dot spatter and dapple patterns), all sharing a common falloff (edge softness) control. Tip shape is independent of tone: it governs *where* a stamp lands, not *what it sounds like*.
 
+### Stamp Intervals
+
+By default, a stroke's own stamps are packed densely enough to overlap into one continuous line — but any brush can instead be set to space its stamps out, along its own [Path](#paths), by a chosen interval:
+
+- **Along curve** — evenly spaced by the Path's own arc length, following every bend exactly as drawn.
+- **Time axis** — one stamp everywhere the Path crosses an evenly-spaced line of the [Timing Grid](#overlay-grids), regardless of the Path's own shape.
+- **Frequency axis** — one stamp everywhere the Path crosses an evenly-spaced line of the [Frequency Grid](#overlay-grids).
+
+The result is a visibly separate run of individual stamps rather than a solid stroke — a "dotted brush" for Along curve, or a rhythmic/pitched sequence for Time axis/Frequency axis, independent of *how* the underlying Path itself was built (freehand capture or the Path tool's own deliberate placement — see [Placing and Editing](#placing-and-editing)): stamp spacing is a property of the brush, the same as tip shape or size, not of how the geometry was drawn.
+
 ### Sound Mind Instruments
 
 A **Sound Mind Instrument** is a small parametric sound model that can be painted with directly, saved, named, and shared between projects — the same way a Mind Shot is, but generative rather than sampled. Where a brush stroke implies a pitch (from where it lands on the frequency axis), a Sound Mind Instrument synthesizes a stamp around that pitch from:

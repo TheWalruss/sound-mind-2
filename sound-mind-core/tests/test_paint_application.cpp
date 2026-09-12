@@ -21,6 +21,7 @@ using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
 using sound_mind::core::rebuildPaintedContent;
+using sound_mind::core::StampMode;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ToolConfiguration;
@@ -63,6 +64,31 @@ Path makeUniformHorizontalPath(double startTime, double endTime, double frequenc
     end.anchor = TimeFrequencyPoint{endTime, frequencyHz};
     end.type = PathNodeType::Corner;
     path.addNode(end);
+
+    auto stop = path.gradient().stops().front();
+    stop.leftIntensity = intensity;
+    stop.rightIntensity = intensity;
+    stop.leftOpacity = opacity;
+    stop.rightOpacity = opacity;
+    path.gradient().setStopValues(0, stop);
+    path.gradient().setStopValues(1, stop);
+    return path;
+}
+
+/// @brief A straight-line Path between two arbitrary (time, frequency)
+/// points, with a uniform gradient of the given intensity/opacity - the
+/// diagonal counterpart to makeUniformHorizontalPath(), for stamp-mode
+/// tests that need frequency to vary along the path too.
+Path makeUniformDiagonalPath(TimeFrequencyPoint start, TimeFrequencyPoint end, float intensity, float opacity) {
+    Path path;
+    PathNode startNode;
+    startNode.anchor = start;
+    startNode.type = PathNodeType::Corner;
+    path.addNode(startNode);
+    PathNode endNode;
+    endNode.anchor = end;
+    endNode.type = PathNodeType::Corner;
+    path.addNode(endNode);
 
     auto stop = path.gradient().stops().front();
     stop.leftIntensity = intensity;
@@ -222,6 +248,99 @@ TEST_CASE("applyPaintOperation blends partially when opacity is between 0 and 1"
 
     // Starting from 0 dB, blending 50% toward -10 dB lands at -5 dB.
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] == -5.0f);
+}
+
+TEST_CASE("applyPaintOperation with AlongCurve stamp mode leaves gaps between stamps", "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);  // 0.4s span, constant frequency.
+
+    ToolConfiguration tool = makeCircleTool(0.02, 0.0f);
+    tool.setStampMode(StampMode::AlongCurve);
+    // Seconds-equivalent arc length == plain seconds here, since this
+    // path has zero frequency variation to contribute any normalized-
+    // frequency distance.
+    tool.setStampInterval(0.1);
+
+    const PaintOperation op(1, LayerId{1}, path, tool);
+    applyPaintOperation(op, 2000.0, content);
+
+    const int bin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    for (const double t : {0.1, 0.2, 0.3, 0.4, 0.5}) {
+        const int frame = static_cast<int>(std::lround(timeToFrameIndex(t, config)));
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, frame, bin)] == -10.0f);
+    }
+    // Halfway between two stamps, well outside the 0.02s brush radius.
+    const int midFrame = static_cast<int>(std::lround(timeToFrameIndex(0.15, config)));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, midFrame, bin)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation with TimeAxis stamp mode stamps at each time-grid crossing",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path =
+        makeUniformDiagonalPath(TimeFrequencyPoint{0.1, 400.0}, TimeFrequencyPoint{0.9, 1200.0}, -10.0f, 1.0f);
+
+    // Small enough that gaps are clearly untouched, but not *so* small
+    // that its own bin-radius (log-scaled - see frequencyToBinIndex()'s
+    // own docs, and applyPaintOperation()'s "Local bin-radius" comment)
+    // shrinks below reaching even the nearest integer bin at this path's
+    // own highest frequency (1200 Hz) - which 0.01 alone did.
+    ToolConfiguration tool = makeCircleTool(0.03, 0.0f);
+    tool.setStampMode(StampMode::TimeAxis);
+    tool.setStampInterval(0.3);
+
+    const PaintOperation op(1, LayerId{1}, path, tool);
+    applyPaintOperation(op, 2000.0, content);
+
+    // The path's own start (t=0.1, always stamped), plus every 0.3s
+    // crossing after it (t=0.4, t=0.7) - each at the frequency the
+    // straight path itself passes through at that time.
+    for (const auto& [t, frequencyHz] : {std::pair{0.1, 400.0}, std::pair{0.4, 700.0}, std::pair{0.7, 1000.0}}) {
+        const int frame = static_cast<int>(std::lround(timeToFrameIndex(t, config)));
+        const int bin =
+            static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(static_cast<float>(frequencyHz), config))));
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, frame, bin)] == -10.0f);
+    }
+    // Halfway between the first two stamps (t=0.25s) - the path's own
+    // frequency there (550 Hz) stays untouched.
+    const int midFrame = static_cast<int>(std::lround(timeToFrameIndex(0.25, config)));
+    const int midBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(550.0f, config))));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, midFrame, midBin)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation with FrequencyAxis stamp mode stamps at each frequency-grid crossing",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path =
+        makeUniformDiagonalPath(TimeFrequencyPoint{0.1, 400.0}, TimeFrequencyPoint{0.9, 1200.0}, -10.0f, 1.0f);
+
+    // See the TimeAxis test above for why this can't be too small.
+    ToolConfiguration tool = makeCircleTool(0.03, 0.0f);
+    tool.setStampMode(StampMode::FrequencyAxis);
+    tool.setStampInterval(200.0);
+
+    const PaintOperation op(1, LayerId{1}, path, tool);
+    applyPaintOperation(op, 2000.0, content);
+
+    // The path's own start (freq 400 Hz, always stamped), plus every
+    // 200 Hz crossing after it (600, 800, 1000, 1200), each at the time
+    // the straight path itself passes through that frequency.
+    for (const auto& [frequencyHz, t] :
+         {std::pair{400.0, 0.1}, std::pair{600.0, 0.3}, std::pair{800.0, 0.5}, std::pair{1000.0, 0.7},
+          std::pair{1200.0, 0.9}}) {
+        const int frame = static_cast<int>(std::lround(timeToFrameIndex(t, config)));
+        const int bin =
+            static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(static_cast<float>(frequencyHz), config))));
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, frame, bin)] == -10.0f);
+    }
+    // Halfway between the first two stamps (500 Hz) - the path's own
+    // time there (0.2s) stays untouched.
+    const int midFrame = static_cast<int>(std::lround(timeToFrameIndex(0.2, config)));
+    const int midBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(500.0f, config))));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, midFrame, midBin)] == 0.0f);
 }
 
 TEST_CASE("applyPaintOperation does nothing for a non-positive frequencyToTimeScale", "[core][paint_application]") {

@@ -64,7 +64,16 @@ struct StrokeSample {
     float pathT = 0.0f;
 };
 
-std::vector<StrokeSample> sampleStroke(const Path& path, double frequencyToTimeScale) {
+/// @brief The dense, evenly-parametrized (in each segment's own `t`, not
+/// arc length) sample list every `StampMode` starts from - `Continuous`
+/// mode's own final result, and the raw material `sampleStrokeAlongCurve()`/
+/// `sampleStrokeAxisCrossings()` below walk/interpolate the real stamp
+/// positions from. Dense enough (`kStepsPerRadius`) for `Continuous`
+/// mode's own consecutive stamps to overlap into a solid stroke, which
+/// - since a stamp mode's own interval is essentially always coarser
+/// than that - is more than enough resolution for the other modes to
+/// interpolate against too.
+std::vector<StrokeSample> sampleStrokeDense(const Path& path, double frequencyToTimeScale) {
     std::vector<StrokeSample> samples;
     const auto& nodes = path.nodes();
     if (nodes.size() < 2) {
@@ -103,6 +112,125 @@ std::vector<StrokeSample> sampleStroke(const Path& path, double frequencyToTimeS
         }
     }
     return samples;
+}
+
+/// @brief Linear interpolation between two samples - exact (not merely
+/// approximate) whenever `a`/`b` sit on a single straight segment, which
+/// is exactly the case sampleStrokeAxisCrossings() below ever calls this
+/// for (interpolating *between* two already-dense points, never across a
+/// real curve's own bend).
+StrokeSample lerpSample(const StrokeSample& a, const StrokeSample& b, double t) {
+    return StrokeSample{TimeFrequencyPoint{a.point.timeSeconds + (b.point.timeSeconds - a.point.timeSeconds) * t,
+                                             a.point.frequencyHz + (b.point.frequencyHz - a.point.frequencyHz) * t},
+                          static_cast<float>(a.pathT + (b.pathT - a.pathT) * t)};
+}
+
+/// @brief `dense`, re-sampled at fixed steps of `interval` along its own
+/// arc length (in the same normalized space `size()` uses) -
+/// `StampMode::AlongCurve`'s own placement. Linearly interpolates the
+/// exact point at each target arc length, between whichever dense-to-
+/// dense hop it falls in (the same technique `sampleStrokeAxisCrossings()`
+/// below uses along a straight hop) - snapping to the *nearest* already-
+/// dense sample instead would only be exact by coincidence, since `dense`
+/// itself is tuned to be fine enough for a stamp's own blended footprint
+/// (see its own docs), not for arc length specifically - a requested
+/// `interval` finer than one dense hop's own length would otherwise
+/// repeat the same nearest vertex for every target that falls within it.
+std::vector<StrokeSample> sampleStrokeAlongCurve(const std::vector<StrokeSample>& dense, double frequencyToTimeScale,
+                                                   double interval) {
+    std::vector<StrokeSample> result;
+    if (dense.empty() || interval <= 0.0) {
+        return result;
+    }
+    if (dense.size() == 1) {
+        result.push_back(dense.front());
+        return result;
+    }
+
+    std::vector<double> cumulativeLength(dense.size(), 0.0);
+    for (std::size_t i = 1; i < dense.size(); ++i) {
+        cumulativeLength[i] = cumulativeLength[i - 1] +
+                               distance(normalize(dense[i - 1].point, frequencyToTimeScale),
+                                        normalize(dense[i].point, frequencyToTimeScale));
+    }
+    const double total = cumulativeLength.back();
+
+    std::size_t segment = 0;
+    for (double target = 0.0; target <= total + 1e-9; target += interval) {
+        while (segment + 2 < dense.size() && cumulativeLength[segment + 1] < target) {
+            ++segment;
+        }
+        const double segmentStart = cumulativeLength[segment];
+        const double segmentEnd = cumulativeLength[segment + 1];
+        const double t = segmentEnd > segmentStart ? (target - segmentStart) / (segmentEnd - segmentStart) : 0.0;
+        result.push_back(lerpSample(dense[segment], dense[segment + 1], std::clamp(t, 0.0, 1.0)));
+    }
+    return result;
+}
+
+/// @brief Which coordinate of a `TimeFrequencyPoint` `StampMode::TimeAxis`/
+/// `FrequencyAxis` measure crossings along.
+enum class StampAxis { Time, Frequency };
+
+double stampAxisCoordinate(const TimeFrequencyPoint& point, StampAxis axis) {
+    return axis == StampAxis::Time ? point.timeSeconds : point.frequencyHz;
+}
+
+/// @brief `dense`, re-sampled at every point it crosses `axis`'s own
+/// coordinate `start + k * interval` (for every integer `k`, in either
+/// direction of travel - a hop can cross more than one such line, and a
+/// path that reverses direction can cross the same one more than once,
+/// each its own stamp) - `StampMode::TimeAxis`/`FrequencyAxis`'s own
+/// placement, `start` being `dense`'s own first point. Always includes
+/// `dense`'s own first point itself (`k = 0`), the one crossing no
+/// dense-to-dense hop could ever produce on its own.
+std::vector<StrokeSample> sampleStrokeAxisCrossings(const std::vector<StrokeSample>& dense, double interval,
+                                                      StampAxis axis) {
+    std::vector<StrokeSample> result;
+    if (dense.empty() || interval <= 0.0) {
+        return result;
+    }
+    result.push_back(dense.front());
+
+    const double start = stampAxisCoordinate(dense.front().point, axis);
+    for (std::size_t i = 0; i + 1 < dense.size(); ++i) {
+        const double c0 = stampAxisCoordinate(dense[i].point, axis);
+        const double c1 = stampAxisCoordinate(dense[i + 1].point, axis);
+        if (c0 == c1) {
+            continue;  // No crossing possible along a hop parallel to this axis's own gridlines.
+        }
+        const double lo = std::min(c0, c1);
+        const double hi = std::max(c0, c1);
+        const int kFirst = static_cast<int>(std::ceil((lo - start) / interval));
+        const int kLast = static_cast<int>(std::floor((hi - start) / interval));
+        for (int k = kFirst; k <= kLast; ++k) {
+            const double target = start + static_cast<double>(k) * interval;
+            // Half-open (lo, hi] so a target landing exactly on a shared
+            // dense point between two consecutive hops is only ever
+            // stamped once - by whichever hop it's the *high* end of.
+            if (target <= lo || target > hi) {
+                continue;
+            }
+            result.push_back(lerpSample(dense[i], dense[i + 1], (target - c0) / (c1 - c0)));
+        }
+    }
+    return result;
+}
+
+std::vector<StrokeSample> sampleStroke(const Path& path, double frequencyToTimeScale,
+                                        const ToolConfiguration& toolConfig) {
+    const std::vector<StrokeSample> dense = sampleStrokeDense(path, frequencyToTimeScale);
+    switch (toolConfig.stampMode()) {
+        case StampMode::AlongCurve:
+            return sampleStrokeAlongCurve(dense, frequencyToTimeScale, toolConfig.stampInterval());
+        case StampMode::TimeAxis:
+            return sampleStrokeAxisCrossings(dense, toolConfig.stampInterval(), StampAxis::Time);
+        case StampMode::FrequencyAxis:
+            return sampleStrokeAxisCrossings(dense, toolConfig.stampInterval(), StampAxis::Frequency);
+        case StampMode::Continuous:
+        default:
+            return dense;
+    }
 }
 
 /// @brief The tip footprint's own normalized distance metric - `<= 1.0`
@@ -191,7 +319,7 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
     }
 
     const ToolConfiguration& toolConfig = operation.config();
-    const std::vector<StrokeSample> samples = sampleStroke(operation.path(), frequencyToTimeScale);
+    const std::vector<StrokeSample> samples = sampleStroke(operation.path(), frequencyToTimeScale, toolConfig);
     if (samples.empty()) {
         return;
     }

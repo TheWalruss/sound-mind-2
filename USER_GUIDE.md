@@ -249,6 +249,25 @@ settings:
   the same *shape*, not the same pixel size, regardless of canvas
   resolution). The panel's own default (`0.2`) is a comfortably visible
   stroke on a typical project without covering too much of it at once.
+- **Stamp Mode** - how densely the brush's tip is stamped along a stroke's
+  path, from a drop-down:
+  - **Continuous** (the default) - stamped as densely as the path itself
+    is drawn, with no gaps; unchanged from how painting has always worked.
+  - **Along Curve** - stamped at even intervals measured along the path's
+    own length, so a longer stroke gets proportionally more stamps.
+  - **Time Axis** - stamped every time the path crosses an evenly-spaced
+    moment in time (see [Axis Labels](#axis-labels); "Interval" below is
+    in seconds).
+  - **Frequency Axis** - stamped every time the path crosses an
+    evenly-spaced frequency, the same idea rotated onto the other axis
+    ("Interval" is in Hz).
+
+  Choosing any mode but Continuous enables the **Interval** spin box next
+  to it, which sets the spacing (seconds for Along Curve/Time Axis, Hz for
+  Frequency Axis) - it's disabled and ignored under Continuous, where an
+  interval wouldn't mean anything. This is the same idea as the legacy
+  Studio's "Curve" tool, minus its pixel-based unit (this build has no
+  canvas zoom yet, so seconds/Hz are the only units that make sense).
 - **Color** - a swatch button; click it to open a color picker. This is
   how loud the stroke paints, *and* its stereo balance, at once: the
   picked color's red channel sets the left channel's loudness, green
@@ -289,10 +308,10 @@ regardless of the "Show bounding boxes" setting - ready to:
   after you move or modify it.
 - **Modify** it - open **Tool Configuration** (if it isn't already);
   it's pre-filled with exactly the settings the stroke was painted with.
-  Change anything (tip shape, falloff, size, color, opacity) and the
-  selected stroke updates to match. Only a brush stroke has settings to
-  reopen this way - a filled selection or a pasted region can still be
-  moved and deleted, just not "modified" through this panel.
+  Change anything (tip shape, falloff, size, stamp mode/interval, color,
+  opacity) and the selected stroke updates to match. Only a brush stroke
+  has settings to reopen this way - a filled selection or a pasted region
+  can still be moved and deleted, just not "modified" through this panel.
 - **Delete** it - **Edit → Delete** (or the Delete key).
 - **Restack** it within its own layer - **Edit → Bring to Front**
   (Ctrl+Shift+]), **Send to Back** (Ctrl+Shift+[), **Bring Forward**

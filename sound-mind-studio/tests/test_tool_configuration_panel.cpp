@@ -11,6 +11,7 @@
 #include "sound_mind/studio/tool_configuration_panel.h"
 
 using sound_mind::core::BrushTipShape;
+using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::studio::ToolConfigurationPanel;
 
@@ -148,4 +149,56 @@ void ToolConfigurationPanelTest::colorButtonExistsForOpeningTheRealDialog() {
     // updateColorButtonAppearance()'s own docs - checked via the hex text
     // it sets alongside the background fill, not by parsing a stylesheet.
     QCOMPARE(button->text(), panel.color().name());
+}
+
+void ToolConfigurationPanelTest::freshPanelHasStampModeContinuousAndTheIntervalSpinBoxDisabled() {
+    const ToolConfigurationPanel panel;
+    QCOMPARE(panel.toolConfiguration().stampMode(), StampMode::Continuous);
+    auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"));
+    QVERIFY(intervalSpinBox != nullptr);
+    // Meaningless while Continuous - see ToolConfiguration::stampInterval()'s
+    // own docs - so disabled rather than editable-but-ignored.
+    QVERIFY(!intervalSpinBox->isEnabled());
+}
+
+void ToolConfigurationPanelTest::changingTheStampModeEmitsToolConfigurationChangedAndEnablesTheIntervalSpinBox() {
+    ToolConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
+    QVERIFY(combo != nullptr);
+    auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"));
+    QVERIFY(intervalSpinBox != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Along Curve")));
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.toolConfiguration().stampMode(), StampMode::AlongCurve);
+    QVERIFY(intervalSpinBox->isEnabled());
+}
+
+void ToolConfigurationPanelTest::changingTheStampIntervalEmitsToolConfigurationChanged() {
+    ToolConfigurationPanel panel;
+    auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"));
+    QVERIFY(intervalSpinBox != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    intervalSpinBox->setValue(0.25);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.toolConfiguration().stampInterval(), 0.25);
+}
+
+void ToolConfigurationPanelTest::loadingAConfigurationSyncsTheStampModeAndIntervalControls() {
+    ToolConfigurationPanel panel;
+    ToolConfiguration config;
+    config.setStampMode(StampMode::FrequencyAxis);
+    config.setStampInterval(150.0);
+
+    panel.setToolConfiguration(config);
+
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
+    auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"));
+    QCOMPARE(combo->currentText(), QStringLiteral("Frequency Axis"));
+    QCOMPARE(intervalSpinBox->value(), 150.0);
+    QVERIFY(intervalSpinBox->isEnabled());
 }

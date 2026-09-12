@@ -4,6 +4,7 @@
 #include "sound_mind/core/tool_configuration.h"
 
 using sound_mind::core::BrushTipShape;
+using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::core::ToolType;
 
@@ -54,12 +55,31 @@ TEST_CASE("A ToolConfiguration's default gradient can be mutated in place", "[co
     REQUIRE(config.defaultGradient().linkChannels());
 }
 
+TEST_CASE("A fresh ToolConfiguration's stamp mode is Continuous", "[core][tool_configuration]") {
+    const ToolConfiguration config;
+    REQUIRE(config.stampMode() == StampMode::Continuous);
+}
+
+TEST_CASE("A ToolConfiguration's stamp mode can be changed", "[core][tool_configuration]") {
+    ToolConfiguration config;
+    config.setStampMode(StampMode::AlongCurve);
+    REQUIRE(config.stampMode() == StampMode::AlongCurve);
+}
+
+TEST_CASE("A ToolConfiguration's stamp interval can be changed", "[core][tool_configuration]") {
+    ToolConfiguration config;
+    config.setStampInterval(0.5);
+    REQUIRE(config.stampInterval() == 0.5);
+}
+
 TEST_CASE("A ToolConfiguration round-trips through JSON", "[core][tool_configuration]") {
     ToolConfiguration config;
     config.setName("My Brush");
     config.setTipShape(BrushTipShape::Diamond);
     config.setFalloff(0.25f);
     config.setSize(3.0);
+    config.setStampMode(StampMode::FrequencyAxis);
+    config.setStampInterval(150.0);
     config.defaultGradient().setLinkChannels(true);
 
     const nlohmann::json json = config;
@@ -70,5 +90,23 @@ TEST_CASE("A ToolConfiguration round-trips through JSON", "[core][tool_configura
     REQUIRE(roundTripped.tipShape() == BrushTipShape::Diamond);
     REQUIRE(roundTripped.falloff() == 0.25f);
     REQUIRE(roundTripped.size() == 3.0);
+    REQUIRE(roundTripped.stampMode() == StampMode::FrequencyAxis);
+    REQUIRE(roundTripped.stampInterval() == 150.0);
     REQUIRE(roundTripped.defaultGradient().linkChannels());
+}
+
+TEST_CASE("A ToolConfiguration loaded from JSON with no stampMode/stampInterval keys falls back to Continuous",
+          "[core][tool_configuration]") {
+    // A project saved before Stamp Intervals existed - its own strokes
+    // must render identically after loading, not silently gain a new
+    // (and, for their own already-committed geometry, meaningless)
+    // stamp spacing.
+    nlohmann::json json = ToolConfiguration{};
+    json.erase("stampMode");
+    json.erase("stampInterval");
+
+    const ToolConfiguration loaded = json.get<ToolConfiguration>();
+
+    REQUIRE(loaded.stampMode() == StampMode::Continuous);
+    REQUIRE(loaded.stampInterval() == 0.1);
 }
