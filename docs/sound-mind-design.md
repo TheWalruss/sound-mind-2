@@ -119,6 +119,12 @@ When performing a Pool export, all the operations are applied to the Pool-format
 
 Sound Mind Projects are composed of multiple layers, which are composited to a visual whole before decoding to sound. Each layer contains metadata describing the operations applied to it, as well as the latest rendered result.
 
+### Compositing
+
+Every visible layer with rendered content contributes to the project's one combined result, top-to-bottom in stack order. **Normal compositing — the default, and so far the only blend mode any concrete need has called for — is audio-style mixing, not image-style alpha-over**: a layer's amplitude converts from its stored dB scale to linear, is scaled by that layer's own opacity acting as a linear gain, and sums with every other visible layer's own contribution at the same time-frequency bin, using the shared phase each layer's own amplitude is paired with. The combined linear amplitude converts back to dB for the result. A fully-opaque layer never mutes what's beneath it the way an opaque top layer would under image alpha-over — multiple layers of sound are meant to be heard together, the same way multiple simultaneous instruments or voices combine in the real world, not the way a photo editor's opaque top layer covers what's under it.
+
+Other blend modes (Multiply, Screen, and the rest of the usual image-editor catalogue) are conceivable future additions — a MindWave-bound blend mode, in particular, is a natural way to make where and how layers mix spatially selective — but none is designed yet; Normal mixing is the only concrete blend mode this document currently specifies.
+
 ### Special Layers
 
 Locked at the bottom is the Background Layer. It cannot be made transparent, nor can it be hidden, removed, or re-ordered. It can be painted on like any other layer.
