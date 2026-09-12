@@ -364,13 +364,13 @@ Rectangle, Lasso, and Wand selection with boolean combination; cut/copy/paste; t
 
 **Implemented as** two separately-tested installments (`v0.0.25.1`-`v0.0.25.2`, see `CHANGELOG.md`/`docs/sound-mind-architecture.md`'s Decisions #46-47), per explicit user-confirmed scope at the milestone's outset: Rectangle selection, Fill (color/gradient, confined exactly to the selection), and Cut/Copy/Paste (independently tracking a selection's source layer, what Cut clears, and Paste's destination layer as three potentially-different layers). The demo above is fully reachable with this scope. Still open, and explicitly out of this milestone's own confirmed scope: Lasso, Wand, and boolean combination between selections (`FillOperation`'s own `bounds()` stays a plain `TimeFrequencyRect` until one of these needs a real mask/region representation), and Rectangle's own rotate handle.
 
-### v0.Y.26.1 - Paths & Grids
+### v0.Y.26.1 - Paths & Grids ✅
 
 The Path (Bézier) tool with node placement/editing and Path Gradient; Overlay Grids (frequency and timing) and Snap to Grid, including pitch quantising.
 
 **Demo:** draw a precise, grid-snapped melodic line.
 
-### v0.Y.27.1 - Multi-layer Compositing
+### v0.Y.27.1 - Multi-layer Compositing ✅
 
 **Inserted ahead of Filter Layers, reordering this phase's remaining milestones** (confirmed with the user rather than assumed): Filter Layers' own definition - "composites the layers beneath it... applies a filter... renders the result" - requires real multi-layer compositing to exist first, and it never has. This is also the same long-deferred gap Live Mode (`v0.Y.8.1`), Loop Mode (`v0.Y.14.1`), and Layers Panel (`v0.Y.15.1`) each explicitly postponed in turn ("real multi-layer audio mixing doesn't exist anywhere in the codebase yet - not even Playback does it") - every one of those milestones' own notes point here.
 
@@ -380,7 +380,7 @@ The Path (Bézier) tool with node placement/editing and Path Gradient; Overlay G
 
 **Demo:** stack two painted layers at different opacities and hear them actually mixed together on playback, not just the topmost one sounding.
 
-### v0.Y.28.1 - Filter Layers
+### v0.Y.28.1 - Filter Layers ✅
 
 The Filter layer type, a first concrete filter set, and the Equalizer special layer made functional - built on top of `v0.Y.27.1`'s own real compositor rather than needing to invent one itself.
 
@@ -390,7 +390,7 @@ The Filter layer type, a first concrete filter set, and the Equalizer special la
 
 **Demo:** add an EQ layer, reshape frequency balance, hear it.
 
-### v0.Y.29.1 - Refactor & Clean Up
+### v0.Y.29.1 - Refactor & Clean Up 🔜
 
 A dedicated pass over everything Phase 3 (Basic Painting, Selection & Fill, Paths & Grids, Multi-layer Compositing, Filter Layers) added, same purpose and scope as `v0.Y.5.1`'s entry. This phase introduces the operation log's first real `Operation` subtypes and the `supersedes` mechanism's first real exercise - worth specifically checking that the paint/selection/path/filter tool implementations share what they should (common brush/stroke/selection-mask plumbing) rather than each having independently reinvented it.
 
