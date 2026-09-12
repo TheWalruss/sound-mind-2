@@ -5,6 +5,7 @@
 
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/core/compositor.h"
+#include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
@@ -12,6 +13,8 @@
 using sound_mind::codec::StreamImage;
 using sound_mind::codec::toRgbImage;
 using sound_mind::core::compositeProject;
+using sound_mind::core::FilterConfiguration;
+using sound_mind::core::FilterType;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
 using sound_mind::core::Project;
@@ -378,4 +381,87 @@ TEST_CASE("compositeProject's own binCount is the tallest among the contributing
     // the shorter layer's own (nonexistent) bin 1 contributes nothing,
     // read without crashing.
     CHECK(composite->leftMagnitudeDb[3] == Catch::Approx(-50.0f).margin(0.5f));
+}
+
+TEST_CASE("compositeProject applies a Filter layer's own filter to everything beneath it",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());  // canvasWidth = 3, binCount = 1.
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    FilterConfiguration filterConfig;
+    filterConfig.setType(FilterType::FrequencyAxisGradient);
+    filterConfig.frequencyGradient().setStopValues(0, {0.0f, 0.0f, 0.0f, 1.0f, 1.0f});  // Force both to 0 dB.
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(filterConfig);
+    project.addLayer(std::move(filterLayer));
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject returns nullopt when a Filter layer has nothing beneath it",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());  // Background has no content.
+    FilterConfiguration filterConfig;
+    filterConfig.setType(FilterType::FrequencyAxisGradient);
+    filterConfig.frequencyGradient().setStopValues(0, {0.0f, 0.0f, 0.0f, 1.0f, 1.0f});
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(filterConfig);
+    project.addLayer(std::move(filterLayer));
+
+    CHECK_FALSE(compositeProject(project).has_value());
+}
+
+TEST_CASE("compositeProject skips a hidden Filter layer's own filter", "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    FilterConfiguration filterConfig;
+    filterConfig.setType(FilterType::FrequencyAxisGradient);
+    filterConfig.frequencyGradient().setStopValues(0, {0.0f, 0.0f, 0.0f, 1.0f, 1.0f});  // Would force 0 dB if applied.
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(filterConfig);
+    filterLayer.setVisible(false);
+    project.addLayer(std::move(filterLayer));
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-20.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject segments the stack by Filter layers - a Normal layer above one sees "
+          "the filtered result, and a filter never reaches back below an earlier one",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());  // canvasWidth = 3.
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    // A Filter layer that always forces its own input to exactly 0 dB.
+    FilterConfiguration forceZeroDb;
+    forceZeroDb.setType(FilterType::FrequencyAxisGradient);
+    forceZeroDb.frequencyGradient().setStopValues(0, {0.0f, 0.0f, 0.0f, 1.0f, 1.0f});
+    forceZeroDb.frequencyGradient().setStopValues(1, {1.0f, 0.0f, 0.0f, 1.0f, 1.0f});
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(forceZeroDb);
+    project.addLayer(std::move(filterLayer));
+
+    // A Normal layer above the filter, contributing its own -10 dB.
+    Layer above(0, "Above", LayerType::Normal);
+    above.setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
+    project.addLayer(std::move(above));
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    // If the filter's own 0 dB result correctly propagated upward before
+    // "Above" mixed in, the result is mix(0 dB, -10 dB) ~= +2.4 dB -
+    // louder than either input alone. If the filter were instead skipped
+    // entirely (a flat sum of Background's raw -20 dB and Above's -10 dB
+    // ignoring the filter), the result would be ~= -7.6 dB instead - the
+    // two are clearly distinguishable.
+    CHECK(composite->leftMagnitudeDb[0] > -1.0f);
+    CHECK(composite->leftMagnitudeDb[0] < 5.0f);
 }

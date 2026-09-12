@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.28.1] - 2026-09-12
+
+The Core half of the new "Filter Layers" milestone's first installment (`docs/sound-mind-roadmap.md`'s `v0.Y.28.1`). **Core-only, and not yet reachable from the app** - Studio has no UI yet to create a Filter-type layer or edit its own parameters, so this build behaves identically to `v0.0.27.2` for anyone using the Studio itself; the Studio half (a Filter Configuration panel, and a way to add a Filter layer) is tracked as a separate, following piece of this same installment.
+
+### Added
+
+- **`sound_mind::core::FilterConfiguration`** - a Filter layer's own filter type and parameters: all three "Blur & focus" variants (Uniform/Edge-Preserving/Directional), Sharpen, a Tone Curve, and a Frequency-Axis Gradient (the Equalizer layer's own future basis) - `docs/sound-mind-roadmap.md`'s own confirmed scope for this milestone. `Layer` gains a `filterConfiguration()` of its own, unconditionally present (meaningless unless the layer's own type is Filter or Equalizer).
+- **`sound_mind::core::applyFilter()`** - applies a Filter layer's own configured filter to a running composite. Only **Frequency-Axis Gradient** is a real, working algorithm this pass (reusing the exact same `Gradient` blend Fill/Paint already use, evaluated once per frequency bin) - the other five filter types are real, selectable, parameter-bearing, but return their own input unchanged for now, a deliberate placeholder rather than a silent wrong answer, until each lands in a later installment.
+- **`compositeProject()` now actually applies Filter layers**, not just Normal ones - a Filter layer composites and transforms everything beneath it (down to the next-lower Filter layer, if any), and whatever's stacked above it mixes with that *filtered* result, matching `docs/sound-mind-design.md`'s own "Filter Layer" description.
+
+Core regression: 290 test cases (51,241 assertions), all passing. Studio regression: 325/325 ctest entries passing (unaffected - `compositeProject()`'s own new signature/behavior is exercised only by Core's own tests so far). Doxygen: 0 warnings.
+
 ## [0.0.27.2] - 2026-09-12
 
 The second and final installment of the "Multi-layer Compositing" milestone - `compositeProject()` (added in `v0.0.27.1`, Core-only) is now wired into the app: the canvas display and Playback both show/play the project's own real composite, mixing every visible layer together instead of only the single topmost one. This is the milestone's own demo: stack two painted layers at different opacities and see (and now hear) them actually blend together.

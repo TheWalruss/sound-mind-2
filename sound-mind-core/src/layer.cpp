@@ -11,6 +11,7 @@ void to_json(nlohmann::json& json, const Layer& layer) {
         {"visible", layer.visible_},
         {"translationColumns", layer.translationColumns_},
         {"rescaleFactor", layer.rescaleFactor_},
+        {"filterConfiguration", layer.filterConfiguration_},
     };
 }
 
@@ -31,6 +32,13 @@ void from_json(const nlohmann::json& json, Layer& layer) {
     // untranslated and unrescaled anyway.
     layer.translationColumns_ = json.value("translationColumns", std::int64_t{0});
     layer.rescaleFactor_ = json.value("rescaleFactor", 1.0);
+    // Lenient (defaults to a fresh FilterConfiguration if absent), same
+    // reasoning as visible_/translationColumns_/rescaleFactor_ above -
+    // didn't exist before v0.Y.28.1 (Filter Layers); a layer saved before
+    // this milestone was never a Filter-type layer anyway, so its own
+    // (meaningless, for that layer) default filter configuration is a
+    // harmless fallback.
+    layer.filterConfiguration_ = json.value("filterConfiguration", FilterConfiguration{});
 }
 
 }  // namespace sound_mind::core

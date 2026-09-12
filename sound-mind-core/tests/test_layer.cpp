@@ -3,10 +3,13 @@
 
 #include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/layer.h"
 
 using sound_mind::codec::PoolImage;
 using sound_mind::codec::StreamImage;
+using sound_mind::core::FilterConfiguration;
+using sound_mind::core::FilterType;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
 
@@ -73,6 +76,8 @@ TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     original.setVisible(false);
     original.setTranslationColumns(120);
     original.setRescaleFactor(1.5);
+    original.filterConfiguration().setType(FilterType::Sharpen);
+    original.filterConfiguration().setSharpenAmount(2.0f);
 
     const nlohmann::json json = original;
     const Layer restored = json.get<Layer>();
@@ -84,6 +89,8 @@ TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     REQUIRE(restored.visible() == original.visible());
     REQUIRE(restored.translationColumns() == original.translationColumns());
     REQUIRE(restored.rescaleFactor() == original.rescaleFactor());
+    REQUIRE(restored.filterConfiguration().type() == FilterType::Sharpen);
+    REQUIRE(restored.filterConfiguration().sharpenAmount() == 2.0f);
 }
 
 TEST_CASE("A Layer loads from JSON missing visible (a layer saved before v0.Y.13.1) as visible",
@@ -108,6 +115,29 @@ TEST_CASE("A Layer loads from JSON missing translationColumns/rescaleFactor "
 
     REQUIRE(restored.translationColumns() == 0);
     REQUIRE(restored.rescaleFactor() == 1.0);
+}
+
+TEST_CASE("A Layer defaults to a fresh FilterConfiguration", "[core][layer]") {
+    const Layer layer(1, "Untitled", LayerType::Normal);
+    REQUIRE(layer.filterConfiguration().type() == FilterType::FrequencyAxisGradient);
+}
+
+TEST_CASE("A Layer's filter configuration can be mutated in place", "[core][layer]") {
+    Layer layer(1, "Untitled", LayerType::Filter);
+    layer.filterConfiguration().setType(FilterType::UniformBlur);
+    REQUIRE(layer.filterConfiguration().type() == FilterType::UniformBlur);
+}
+
+TEST_CASE("A Layer loads from JSON missing filterConfiguration (a layer saved before v0.Y.28.1) "
+          "with a fresh default one",
+          "[core][layer]") {
+    const nlohmann::json json{
+        {"id", 1}, {"name", "Untitled"}, {"type", "normal"}, {"opacity", 1.0f}, {"visible", true},
+    };
+
+    const Layer restored = json.get<Layer>();
+
+    REQUIRE(restored.filterConfiguration().type() == FilterType::FrequencyAxisGradient);
 }
 
 TEST_CASE("A Layer has no content by default", "[core][layer]") {

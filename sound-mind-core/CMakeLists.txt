@@ -21,6 +21,8 @@ add_library(sound-mind-core
     src/gradient.cpp
     src/path.cpp
     src/tool_configuration.cpp
+    src/filter_configuration.cpp
+    src/filter_application.cpp
     src/paint_application.cpp
     src/fill_application.cpp
     src/paste_operation.cpp

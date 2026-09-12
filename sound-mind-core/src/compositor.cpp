@@ -6,6 +6,7 @@
 #include <cstddef>
 
 #include "sound_mind/codec/color_mapping.h"
+#include "sound_mind/core/filter_application.h"
 #include "sound_mind/core/project_settings.h"
 
 namespace sound_mind::core {
@@ -120,6 +121,61 @@ constexpr float kMinLinearAmplitude = 1e-7f;
         sourceWidth - 1, (static_cast<std::uint64_t>(rescaledIndex) * sourceWidth) / rescaledWidth));
 }
 
+/// @brief Whether `type` is one of the two Filter layer kinds - see
+/// `docs/sound-mind-design.md`'s "Special Layers" (the Equalizer is "a
+/// Filter layer of Equalizer type", not a separate concept).
+[[nodiscard]] bool isFilterLayerType(LayerType type) noexcept {
+    return type == LayerType::Filter || type == LayerType::Equalizer;
+}
+
+/// @brief Mixes `layer`'s own placed content into `running`, in place -
+/// compositeProject()'s own general-path building block, called once per
+/// Normal/Background contributor. Reads `running`'s own current dB/phase
+/// back into a complex value, sums `layer`'s own (placed, opacity-scaled)
+/// contribution into it, and writes the result back - see
+/// compositeProject()'s own docs for why this per-layer incremental
+/// approach (rather than one N-way sum) is what lets a Filter layer
+/// transform an in-progress composite mid-stack.
+void mixLayerInto(StreamImage& running, const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
+                    std::uint32_t canvasWidth) {
+    const StreamImage& content = *layer.content();
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        if (bin >= content.config.binCount) {
+            continue;  // Nothing to add at this bin - see compositeProject()'s own docs.
+        }
+        for (std::uint32_t x = 0; x < canvasWidth; ++x) {
+            const auto sourceColumn =
+                sourceColumnFor(x, content.frameCount, layer.rescaleFactor(), layer.translationColumns());
+            if (!sourceColumn.has_value()) {
+                continue;
+            }
+
+            const std::size_t sourceCell = std::size_t{bin} * content.frameCount + *sourceColumn;
+            const std::size_t outputCell = std::size_t{bin} * canvasWidth + x;
+
+            const float layerLeftLinear = dbToLinearAmplitude(content.leftMagnitudeDb[sourceCell]) * layer.opacity();
+            const float layerRightLinear =
+                dbToLinearAmplitude(content.rightMagnitudeDb[sourceCell]) * layer.opacity();
+            const float layerPhase = content.sharedPhaseRadians[sourceCell];
+            const std::complex<float> layerDirection(std::cos(layerPhase), std::sin(layerPhase));
+
+            const float runningLeftLinear = dbToLinearAmplitude(running.leftMagnitudeDb[outputCell]);
+            const float runningRightLinear = dbToLinearAmplitude(running.rightMagnitudeDb[outputCell]);
+            const float runningPhase = running.sharedPhaseRadians[outputCell];
+            const std::complex<float> runningDirection(std::cos(runningPhase), std::sin(runningPhase));
+
+            const std::complex<float> newLeft = runningLeftLinear * runningDirection + layerLeftLinear * layerDirection;
+            const std::complex<float> newRight =
+                runningRightLinear * runningDirection + layerRightLinear * layerDirection;
+
+            running.leftMagnitudeDb[outputCell] = linearAmplitudeToDb(std::abs(newLeft));
+            running.rightMagnitudeDb[outputCell] = linearAmplitudeToDb(std::abs(newRight));
+            const std::complex<float> mid = (newLeft + newRight) / 2.0f;
+            running.sharedPhaseRadians[outputCell] = (std::abs(mid) > 0.0f) ? std::arg(mid) : 0.0f;
+        }
+    }
+}
+
 }  // namespace
 
 std::optional<sound_mind::codec::RgbImage> renderLayer(const Layer& layer, std::uint32_t canvasWidth) {
@@ -140,33 +196,53 @@ std::optional<sound_mind::codec::RgbImage> renderLayer(const Layer& layer, std::
 
 std::optional<StreamImage> compositeProject(const Project& project) {
     const auto& layers = project.layers();
-    std::vector<const Layer*> contributingLayers;
+
+    // Pre-pass: which Normal/Background layers actually contribute their
+    // own content, the composite's own output binCount (the tallest among
+    // them - see the loop below for why), and whether any Filter-type
+    // layer exists at all (Filter/Equalizer layers never have their own
+    // content() - see Layer's own docs - so they never appear in
+    // normalContributors, but their mere presence forces the general path
+    // below instead of the single-layer fast path).
+    std::uint32_t binCount = 0;
+    std::vector<const Layer*> normalContributors;
+    bool anyFilterLayer = false;
     for (const Layer& layer : layers) {
-        if (layer.visible() && layer.content().has_value()) {
-            contributingLayers.push_back(&layer);
+        if (!layer.visible()) {
+            continue;
+        }
+        if (isFilterLayerType(layer.type())) {
+            anyFilterLayer = true;
+            continue;
+        }
+        if (layer.content().has_value()) {
+            normalContributors.push_back(&layer);
+            // The project's own settings.binCount is authoritative for a
+            // project whose layers were actually encoded from it (the
+            // normal case - every real layer's own content already comes
+            // from streamCodecConfigFor() against these same settings, so
+            // the two numbers are identical in practice). But nothing
+            // enforces that in general, and it's routine for a hand-built
+            // StreamImage (an in-memory test fixture, in particular) to
+            // declare its own, different binCount - using every
+            // contributing layer's own tallest bin range instead keeps
+            // the composite matching whatever its own real content
+            // actually is, rather than silently padding it to (or
+            // truncating it against) a project-level number nothing here
+            // actually guarantees matches.
+            binCount = std::max(binCount, layer.content()->config.binCount);
         }
     }
-    if (contributingLayers.empty()) {
+    if (normalContributors.empty()) {
+        // Nothing to composite at all - a Filter layer with nothing
+        // beneath it (or beneath everything hidden/contentless) has
+        // nothing to filter either, per docs/sound-mind-design.md's
+        // "Filter Layer" ("composits the layers beneath it").
         return std::nullopt;
     }
 
     const auto& settings = project.settings();
     auto config = streamCodecConfigFor(settings);
-    // The project's own settings.binCount is authoritative for a project
-    // whose layers were actually encoded from it (the normal case - every
-    // real layer's own content already comes from streamCodecConfigFor()
-    // against these same settings, so the two numbers are identical in
-    // practice). But nothing enforces that in general, and it's routine
-    // for a hand-built StreamImage (an in-memory test fixture, in
-    // particular) to declare its own, different binCount - using every
-    // contributing layer's own tallest bin range instead keeps the
-    // composite matching whatever its own real content actually is,
-    // rather than silently padding it to (or truncating it against) a
-    // project-level number nothing here actually guarantees matches.
-    std::uint32_t binCount = 0;
-    for (const Layer* layer : contributingLayers) {
-        binCount = std::max(binCount, layer->content()->config.binCount);
-    }
     if (binCount > 0) {
         config.binCount = binCount;
     }
@@ -182,7 +258,7 @@ std::optional<StreamImage> compositeProject(const Project& project) {
     result.sharedPhaseRadians.resize(cellCount);
     const float silenceFloorDb = linearAmplitudeToDb(0.0f);
 
-    if (contributingLayers.size() == 1) {
+    if (!anyFilterLayer && normalContributors.size() == 1) {
         // Fast path: summing a single term is the identity, so this
         // produces exactly the same result the general path below would
         // - but skips every transcendental call (sin/cos/abs/log10) it
@@ -192,8 +268,11 @@ std::optional<StreamImage> compositeProject(const Project& project) {
         // it's the overwhelmingly common case (most projects, and most
         // moments even within a genuinely multi-layer one, have exactly
         // one contributing layer at any given cell) and this function
-        // runs on every canvas repaint - see its own docs.
-        const Layer& layer = *contributingLayers.front();
+        // runs on every canvas repaint - see its own docs. Only reachable
+        // with zero Filter layers in the project at all - even a single
+        // Filter layer above this one contributor still needs the
+        // general (sequential-fold) path below, to actually apply it.
+        const Layer& layer = *normalContributors.front();
         const StreamImage& content = *layer.content();
         const float gainDb = 20.0f * std::log10(std::max(layer.opacity(), kMinLinearAmplitude));
         for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
@@ -233,42 +312,38 @@ std::optional<StreamImage> compositeProject(const Project& project) {
         return result;
     }
 
-    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
-        for (std::uint32_t x = 0; x < canvasWidth; ++x) {
-            std::complex<float> leftSum(0.0f, 0.0f);
-            std::complex<float> rightSum(0.0f, 0.0f);
-
-            for (const Layer* layer : contributingLayers) {
-                const StreamImage& content = *layer->content();
-                // See the fast path's own comment above on why a
-                // layer's own content may have fewer bins than the
-                // project's own binCount.
-                if (bin >= content.config.binCount) {
-                    continue;
-                }
-                const auto sourceColumn =
-                    sourceColumnFor(x, content.frameCount, layer->rescaleFactor(), layer->translationColumns());
-                if (!sourceColumn.has_value()) {
-                    continue;
-                }
-
-                const std::size_t sourceCell = std::size_t{bin} * content.frameCount + *sourceColumn;
-                const float leftLinear = dbToLinearAmplitude(content.leftMagnitudeDb[sourceCell]) * layer->opacity();
-                const float rightLinear =
-                    dbToLinearAmplitude(content.rightMagnitudeDb[sourceCell]) * layer->opacity();
-                const float phase = content.sharedPhaseRadians[sourceCell];
-                const std::complex<float> direction(std::cos(phase), std::sin(phase));
-
-                leftSum += leftLinear * direction;
-                rightSum += rightLinear * direction;
-            }
-
-            const std::size_t outputCell = std::size_t{bin} * canvasWidth + x;
-            result.leftMagnitudeDb[outputCell] = linearAmplitudeToDb(std::abs(leftSum));
-            result.rightMagnitudeDb[outputCell] = linearAmplitudeToDb(std::abs(rightSum));
-            const std::complex<float> mid = (leftSum + rightSum) / 2.0f;
-            result.sharedPhaseRadians[outputCell] = (std::abs(mid) > 0.0f) ? std::arg(mid) : 0.0f;
+    // General path: a sequential fold over the whole stack, bottom to
+    // top - see docs/sound-mind-design.md's "Filter Layer" ("composits
+    // the layers beneath it... applies a filter... and renders the
+    // result"). Normal/Background layers mix into the running composite
+    // (result), initialized to silence; a Filter-type layer transforms
+    // the running composite in place instead. This alone implements "each
+    // Filter layer only composites down to the next-lower Filter layer"
+    // (docs/sound-mind-architecture.md's own Decision recording why no
+    // separate segment bookkeeping is needed): by the time a Filter layer
+    // is reached, `result` already *is* exactly "everything beneath it
+    // since the last Filter layer" - an earlier (lower) Filter layer
+    // already collapsed whatever was below *it* into one transformed
+    // contribution, so this one only ever sees what came after that.
+    result.leftMagnitudeDb.assign(cellCount, silenceFloorDb);
+    result.rightMagnitudeDb.assign(cellCount, silenceFloorDb);
+    result.sharedPhaseRadians.assign(cellCount, 0.0f);
+    bool anyMixedIn = false;
+    for (const Layer& layer : layers) {
+        if (!layer.visible()) {
+            continue;
         }
+        if (isFilterLayerType(layer.type())) {
+            if (anyMixedIn) {
+                result = applyFilter(result, layer.filterConfiguration(), settings);
+            }
+            continue;
+        }
+        if (!layer.content().has_value()) {
+            continue;
+        }
+        mixLayerInto(result, layer, config, canvasWidth);
+        anyMixedIn = true;
     }
 
     return result;

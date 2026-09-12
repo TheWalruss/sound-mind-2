@@ -9,6 +9,7 @@
 
 #include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/filter_configuration.h"
 
 namespace sound_mind::core {
 
@@ -221,6 +222,31 @@ public:
     /// @param content The new content, replacing anything previously cached.
     void setPoolContent(sound_mind::codec::PoolImage content) { poolContent_ = std::move(content); }
 
+    /**
+     * @brief This layer's own filter type and parameters - see
+     *        `docs/sound-mind-design.md`'s "Filter Layer" and
+     *        `FilterConfiguration`'s own docs.
+     *
+     * Unconditionally present on every layer, the same as opacity()/
+     * translationColumns() - meaningless unless type() is `Filter` or
+     * `Equalizer` (a Normal/Background layer is never filtered), the same
+     * "always there, sometimes not applicable" shape those two already
+     * establish rather than wrapping this one field alone in
+     * `std::optional`.
+     *
+     * @return The current filter configuration.
+     */
+    [[nodiscard]] const FilterConfiguration& filterConfiguration() const noexcept { return filterConfiguration_; }
+
+    /// @brief Mutable access to this layer's own filter configuration,
+    ///        for in-place edits.
+    /// @return The current filter configuration.
+    [[nodiscard]] FilterConfiguration& filterConfiguration() noexcept { return filterConfiguration_; }
+
+    /// @brief Sets this layer's own filter configuration wholesale.
+    /// @param config The new configuration - see filterConfiguration()'s own docs.
+    void setFilterConfiguration(FilterConfiguration config) { filterConfiguration_ = std::move(config); }
+
     friend void to_json(nlohmann::json& json, const Layer& layer);
     friend void from_json(const nlohmann::json& json, Layer& layer);
 
@@ -234,6 +260,7 @@ private:
     double rescaleFactor_ = 1.0;
     std::optional<sound_mind::codec::StreamImage> content_;
     std::optional<sound_mind::codec::PoolImage> poolContent_;
+    FilterConfiguration filterConfiguration_;
 };
 
 /// @brief Serializes a Layer to its JSON representation.
