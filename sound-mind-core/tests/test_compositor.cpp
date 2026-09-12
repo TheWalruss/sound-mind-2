@@ -1,14 +1,23 @@
+#include <cmath>
+
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/project.h"
+#include "sound_mind/core/project_settings.h"
 
 using sound_mind::codec::StreamImage;
 using sound_mind::codec::toRgbImage;
+using sound_mind::core::compositeProject;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
+using sound_mind::core::Project;
+using sound_mind::core::ProjectSettings;
 using sound_mind::core::renderLayer;
+using sound_mind::core::streamCodecConfigFor;
 
 TEST_CASE("renderLayer returns nullopt for a layer with no content", "[core][compositor]") {
     const Layer layer(1, "Untitled", LayerType::Normal);
@@ -67,6 +76,33 @@ bool isBlackColumn(const sound_mind::codec::RgbImage& image, std::uint32_t x) {
         }
     }
     return true;
+}
+
+/// @brief A small, single-bin project - matching this file's own
+/// single-bin StreamImage fixtures above, so compositeProject()'s own
+/// output binCount/frameCount are trivial to index into.
+ProjectSettings testSettings() {
+    ProjectSettings settings;
+    settings.canvasWidth = 3;
+    settings.binCount = 1;
+    settings.minFrequencyHz = 20.0f;
+    settings.maxFrequencyHz = 2000.0f;
+    return settings;
+}
+
+/// @brief A single-bin, `frameCount`-wide StreamImage with the given
+/// per-column left/right dB amplitude and (shared) phase - a more
+/// direct fixture builder than makeGradientContent() above for
+/// compositeProject()'s own tests, which need to control amplitude/phase
+/// precisely rather than just needing per-column-distinctive content.
+StreamImage makeContent(std::vector<float> leftDb, std::vector<float> rightDb, std::vector<float> phase) {
+    StreamImage content;
+    content.config.binCount = 1;
+    content.frameCount = static_cast<std::uint32_t>(leftDb.size());
+    content.leftMagnitudeDb = std::move(leftDb);
+    content.rightMagnitudeDb = std::move(rightDb);
+    content.sharedPhaseRadians = std::move(phase);
+    return content;
 }
 
 }  // namespace
@@ -164,4 +200,144 @@ TEST_CASE("renderLayer's rescaleFactor compresses the layer's own timeline befor
     CHECK(rendered->width == 4);
     CHECK(isBlackColumn(*rendered, 2));  // only 2 real columns now - the rest is padding.
     CHECK(isBlackColumn(*rendered, 3));
+}
+
+TEST_CASE("compositeProject returns nullopt when no layer has any content", "[core][compositor]") {
+    const Project project = Project::createNew(testSettings());  // Background only, no content set.
+    CHECK_FALSE(compositeProject(project).has_value());
+}
+
+TEST_CASE("compositeProject returns nullopt when the only layer with content is hidden", "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    project.layers()[0].setVisible(false);
+
+    CHECK_FALSE(compositeProject(project).has_value());
+}
+
+TEST_CASE("compositeProject reproduces a single full-opacity layer's own content exactly",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-6.0f, -20.0f, -96.0f}, {-3.0f, -40.0f, -96.0f}, {0.5f, -1.0f, 0.0f}));
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-6.0f).margin(0.01));
+    CHECK(composite->leftMagnitudeDb[1] == Catch::Approx(-20.0f).margin(0.01));
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(-3.0f).margin(0.01));
+    CHECK(composite->rightMagnitudeDb[1] == Catch::Approx(-40.0f).margin(0.01));
+    CHECK(composite->sharedPhaseRadians[0] == Catch::Approx(0.5f).margin(0.001));
+    CHECK(composite->sharedPhaseRadians[1] == Catch::Approx(-1.0f).margin(0.001));
+}
+
+TEST_CASE("compositeProject scales a layer's amplitude by its own opacity, as a linear gain",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    project.layers()[0].setOpacity(0.5f);
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    const float halfGainDb = 20.0f * std::log10(0.5f);  // ~ -6.02 dB - half the linear amplitude.
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(halfGainDb).margin(0.01));
+}
+
+TEST_CASE("compositeProject sums two full-opacity overlapping layers, mixing rather than muting",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    const float halfDb = 20.0f * std::log10(0.5f);  // ~ -6.02 dB - half the linear amplitude.
+    project.layers()[0].setContent(makeContent({halfDb, halfDb, halfDb}, {halfDb, halfDb, halfDb}, {0.0f, 0.0f, 0.0f}));
+    Layer second(0, "Second", LayerType::Normal);
+    second.setContent(makeContent({halfDb, halfDb, halfDb}, {halfDb, halfDb, halfDb}, {0.0f, 0.0f, 0.0f}));
+    project.addLayer(std::move(second));
+
+    const auto composite = compositeProject(project);
+
+    // Two layers each at half linear amplitude (same phase) sum to full
+    // linear amplitude (0 dB) - image alpha-over would instead leave the
+    // top layer's own -6 dB unchanged, since both are equally "opaque".
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject skips a hidden layer's own contribution", "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
+    Layer loud(0, "Loud", LayerType::Normal);
+    loud.setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    loud.setVisible(false);
+    project.addLayer(std::move(loud));
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-10.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject skips a layer with no content, without crashing", "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
+    project.addLayer(Layer(0, "Empty", LayerType::Normal));  // No content set at all.
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-10.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject respects a layer's own translationColumns when placing it",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());  // canvasWidth = 3.
+    project.layers()[0].setContent(makeContent({0.0f, -20.0f}, {0.0f, -20.0f}, {0.0f, 0.0f}));
+    project.layers()[0].setTranslationColumns(1);
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    // Source column 0 (0 dB) now sits at output column 1; output column 0
+    // has nothing placed there - pure silence (the floor dB value).
+    CHECK(composite->leftMagnitudeDb[1] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(composite->leftMagnitudeDb[2] == Catch::Approx(-20.0f).margin(0.01));
+    CHECK(composite->leftMagnitudeDb[0] < -100.0f);  // silence floor, not 0 dB.
+}
+
+TEST_CASE("compositeProject respects a layer's own rescaleFactor when placing it", "[core][compositor]") {
+    Project project = Project::createNew(testSettings());  // canvasWidth = 3.
+    project.layers()[0].setContent(makeContent({0.0f}, {0.0f}, {0.0f}));
+    project.layers()[0].setRescaleFactor(3.0);  // 1 column -> 3, stretched to fill the whole canvas.
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(composite->leftMagnitudeDb[1] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(composite->leftMagnitudeDb[2] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject always produces exactly canvasWidth columns, regardless of layer width",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());  // canvasWidth = 3.
+    project.layers()[0].setContent(makeContent({0.0f}, {0.0f}, {0.0f}));  // Only 1 column of real content.
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->frameCount == 3);
+    CHECK(composite->leftMagnitudeDb.size() == std::size_t{3});
+    CHECK(composite->leftMagnitudeDb[1] < -100.0f);  // padding, not the source column's own 0 dB.
+}
+
+TEST_CASE("compositeProject's own sampleCount is canvasWidth frames' worth of samples",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    const auto config = streamCodecConfigFor(testSettings());
+    CHECK(composite->sampleCount == static_cast<std::uint64_t>(testSettings().canvasWidth) * config.hopLength);
 }

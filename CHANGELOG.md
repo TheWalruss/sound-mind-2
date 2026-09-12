@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.27.1] - 2026-09-12
+
+The first installment of the new "Multi-layer Compositing" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.27.1`, inserted ahead of Filter Layers - see that document for why). **Core-only, and not yet reachable from the app** - nothing in Studio calls the new function yet, so this build behaves identically to `v0.0.26.11`; the milestone's own demo (stack two layers, hear them mixed) lands with the next installment, which wires this into the canvas display, Playback, Loop Mode, and Record.
+
+### Added
+
+- **`sound_mind::core::compositeProject()`** - combines every visible, contentful layer in a project into one `StreamImage`, mixing (not covering) each layer's own amplitude in complex (amplitude/phase) space, scaled by that layer's own opacity as a linear gain - audio-style mixing, not image-style alpha-over (a fully-opaque layer never mutes what's beneath it). Placement (rescale/translate) uses the same geometry `renderLayer()` already established for a single layer, so a project with only one layer composites to numerically the same result `renderLayer()` already produced for it.
+
+Core regression: 267 test cases (51,177 assertions), all passing. Studio regression: 302/302 ctest entries passing. Doxygen: 0 warnings.
+
 ## [0.0.26.11] - 2026-09-12
 
 The third and final installment of Phase 3's "Paths & Grids" milestone's second half - the Overlay Grid panel and Snap to Grid, completing the milestone (Chord Overlay remains explicitly deferred - see `docs/sound-mind-architecture.md`'s Decisions Made).
