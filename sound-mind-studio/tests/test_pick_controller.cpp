@@ -15,6 +15,7 @@
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/grid_config.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/pick_controller.h"
 
@@ -36,8 +37,10 @@ using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ToolConfiguration;
+using sound_mind::studio::FrequencyGridConfig;
 using sound_mind::studio::PaintController;
 using sound_mind::studio::PickController;
+using sound_mind::studio::TimingGridConfig;
 
 namespace {
 
@@ -1407,4 +1410,86 @@ void PickControllerTest::clearSelectionExitsAnActivePathEditSessionWithoutCommit
     QVERIFY(!controller.isPathEditActive());
     QVERIFY(!controller.hasSelection());
     QCOMPARE(project.operationLog().size(), std::size_t{1});  // nothing committed.
+}
+
+void PickControllerTest::continueMoveSnapsToTheNearestGridLineWhenSnapToGridIsEnabled() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    FrequencyGridConfig frequencyGridConfig;
+    frequencyGridConfig.harmonicSeriesEnabled = true;
+    frequencyGridConfig.harmonicFundamentalHz = 100.0;
+    controller.setGridSnapping(true, frequencyGridConfig, TimingGridConfig{});
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    // 340 Hz's own nearest harmonic (fundamental 100 Hz) is 300 Hz - the
+    // drag should behave exactly as if the cursor had landed there, not
+    // at the raw 340 Hz it was actually reported at.
+    controller.continueMove(TimeFrequencyPoint{0.4, 340.0});
+
+    const auto& node = controller.currentPreviewPath().nodes().front();
+    QCOMPARE(node.anchor.timeSeconds, 0.3);  // 0.2 + 0.1 delta - time isn't snapped (Timing Grid off).
+    QCOMPARE(node.anchor.frequencyHz, expectedTranslatedFrequency(400.0, 500.0, 300.0));
+}
+
+void PickControllerTest::continueMoveIgnoresGridConfigurationWhenSnapToGridIsDisabled() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto config = makeOpaqueTool(0.02);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, config);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    // A real, active Frequency Grid configuration - but Snap to Grid
+    // itself is off (setGridSnapping()'s own `enabled` left at its
+    // default `false`), so it must have no effect at all.
+    FrequencyGridConfig frequencyGridConfig;
+    frequencyGridConfig.harmonicSeriesEnabled = true;
+    frequencyGridConfig.harmonicFundamentalHz = 100.0;
+    controller.setGridSnapping(false, frequencyGridConfig, TimingGridConfig{});
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    controller.continueMove(TimeFrequencyPoint{0.4, 340.0});
+
+    const auto& node = controller.currentPreviewPath().nodes().front();
+    QCOMPARE(node.anchor.timeSeconds, 0.3);
+    QCOMPARE(node.anchor.frequencyHz, expectedTranslatedFrequency(400.0, 500.0, 340.0));  // Raw, unsnapped delta.
+}
+
+void PickControllerTest::continuePathNodeDragSnapsToTheNearestGridLineWhenSnapToGridIsEnabled() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    FrequencyGridConfig frequencyGridConfig;
+    frequencyGridConfig.harmonicSeriesEnabled = true;
+    frequencyGridConfig.harmonicFundamentalHz = 100.0;
+    controller.setGridSnapping(true, frequencyGridConfig, TimingGridConfig{});
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.2, 400.0}));  // Selects node 0's own anchor.
+
+    // 340 Hz's own nearest harmonic (fundamental 100 Hz) is 300 Hz.
+    controller.continueMove(TimeFrequencyPoint{0.3, 340.0});
+
+    const auto& node = controller.currentPreviewPath().nodes().front();
+    QCOMPARE(node.anchor.timeSeconds, 0.3);  // 0.2 + 0.1 delta.
+    QCOMPARE(node.anchor.frequencyHz, expectedTranslatedFrequency(400.0, 400.0, 300.0));
 }

@@ -9,6 +9,7 @@
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/studio/axis_labels.h"
+#include "sound_mind/studio/grid_config.h"
 
 class QEvent;
 class QMouseEvent;
@@ -243,6 +244,35 @@ public:
      */
     void setHorizontalAxisLabelMode(HorizontalAxisLabelMode mode);
 
+    /**
+     * @brief Sets the Frequency Grid's own current configuration, and
+     *        repaints - see `docs/sound-mind-design.md`'s "Overlay
+     *        Grids" > "Frequency Grid".
+     *
+     * Drawn as horizontal reference lines (this canvas's own time-
+     * horizontal/frequency-vertical convention - see
+     * `docs/sound-mind-architecture.md`'s Decision #56), independent of
+     * every other overlay this widget draws - a pure display aid, never
+     * affecting encoding, decoding, or any stored pixel data.
+     *
+     * @param config The configuration to draw; a default-constructed one
+     *        (no source enabled) draws nothing.
+     */
+    void setFrequencyGridConfig(const FrequencyGridConfig& config);
+
+    /**
+     * @brief Sets the Timing Grid's own current configuration, and
+     *        repaints - see `docs/sound-mind-design.md`'s "Overlay
+     *        Grids" > "Timing Grid".
+     *
+     * Drawn as vertical reference lines - see setFrequencyGridConfig()'s
+     * own docs for the rest.
+     *
+     * @param config The configuration to draw; `TimingGridMode::Off`
+     *        (the default) draws nothing.
+     */
+    void setTimingGridConfig(const TimingGridConfig& config);
+
     /// @brief The widget's preferred size.
     /// @return The current project's configured canvas dimensions, or a
     ///         fallback size if no project is set.
@@ -422,6 +452,18 @@ private:
     ///        paintEvent().
     void drawAxisLabels(QPainter& painter) const;
 
+    /// @brief Draws the Frequency/Timing Grid's own active lines (see
+    ///        setFrequencyGridConfig()'s/setTimingGridConfig()'s own
+    ///        docs) - a horizontal line per `frequencyGridLinesHz()`
+    ///        entry, spanning the full canvas width, and a vertical line
+    ///        per `timingGridLinesSeconds()` entry, spanning the full
+    ///        canvas height, each drawn with its own config's line
+    ///        color/width/style. A no-op for whichever grid isn't
+    ///        currently active, or if no project is set.
+    /// @param painter The painter to draw with - already set up by
+    ///        paintEvent().
+    void drawGrid(QPainter& painter) const;
+
     const sound_mind::core::Project* project_ = nullptr;
     std::optional<double> playheadFraction_;
     ToolMode toolMode_ = ToolMode::None;
@@ -436,6 +478,8 @@ private:
     bool showPathGeometry_ = false;
     VerticalAxisLabelMode verticalAxisLabelMode_ = VerticalAxisLabelMode::Off;
     HorizontalAxisLabelMode horizontalAxisLabelMode_ = HorizontalAxisLabelMode::Off;
+    FrequencyGridConfig frequencyGridConfig_;
+    TimingGridConfig timingGridConfig_;
 };
 
 }  // namespace sound_mind::studio

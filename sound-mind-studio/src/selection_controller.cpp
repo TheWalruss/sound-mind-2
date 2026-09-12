@@ -29,6 +29,13 @@ sound_mind::core::TimeFrequencyRect rectFromCorners(sound_mind::core::TimeFreque
 SelectionController::SelectionController(PaintController* paintController, QObject* parent)
     : QObject(parent), paintController_(paintController) {}
 
+void SelectionController::setGridSnapping(bool enabled, const FrequencyGridConfig& frequencyGridConfig,
+                                             const TimingGridConfig& timingGridConfig) {
+    gridSnappingEnabled_ = enabled;
+    frequencyGridConfig_ = frequencyGridConfig;
+    timingGridConfig_ = timingGridConfig;
+}
+
 void SelectionController::setProject(sound_mind::core::Project* project) {
     project_ = project;
     dragActive_ = false;
@@ -55,6 +62,9 @@ void SelectionController::beginSelectionDrag(sound_mind::core::LayerId layer, so
 void SelectionController::continueSelectionDrag(sound_mind::core::TimeFrequencyPoint point) {
     if (!dragActive_) {
         return;
+    }
+    if (gridSnappingEnabled_ && project_ != nullptr) {
+        point = snapToGrid(point, frequencyGridConfig_, timingGridConfig_, project_->settings());
     }
     dragMoved_ = true;
     dragPreviewBounds_ = rectFromCorners(dragAnchor_, point);

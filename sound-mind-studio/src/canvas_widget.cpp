@@ -117,6 +117,16 @@ void CanvasWidget::setHorizontalAxisLabelMode(HorizontalAxisLabelMode mode) {
     update();
 }
 
+void CanvasWidget::setFrequencyGridConfig(const FrequencyGridConfig& config) {
+    frequencyGridConfig_ = config;
+    update();
+}
+
+void CanvasWidget::setTimingGridConfig(const TimingGridConfig& config) {
+    timingGridConfig_ = config;
+    update();
+}
+
 void CanvasWidget::setShowBoundingBoxes(bool shown) {
     showBoundingBoxes_ = shown;
     update();
@@ -155,6 +165,15 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         if (showBoundingBoxes_ || showPathGeometry_) {
             drawOperationOverlays(painter);
         }
+
+        // Overlay Grids (see setFrequencyGridConfig()'s/
+        // setTimingGridConfig()'s own docs) - drawn over the rendered
+        // content but under every interactive overlay below (the live
+        // paint preview, Pick/Selection highlights), the same "a
+        // reference aid the artist paints against, not a foreground
+        // element" ordering the design doc's own "purely a display aid"
+        // framing implies.
+        drawGrid(painter);
     }
 
     // The playhead (v0.0.21.1, Playback position bar) is drawn last, over
@@ -277,6 +296,32 @@ void CanvasWidget::drawAxisLabels(QPainter& painter) const {
             painter.setPen(Qt::lightGray);
             painter.drawText(QPointF(backing.left() + kTextPadding, backing.bottom() - kTextPadding - metrics.descent()),
                               tick.label);
+        }
+    }
+}
+
+void CanvasWidget::drawGrid(QPainter& painter) const {
+    if (project_ == nullptr) {
+        return;
+    }
+    const auto& settings = project_->settings();
+
+    if (frequencyGridConfig_.isActive()) {
+        painter.setPen(QPen(frequencyGridConfig_.lineColor, frequencyGridConfig_.lineWidthPixels,
+                              frequencyGridConfig_.lineStyle));
+        for (const double frequencyHz : frequencyGridLinesHz(frequencyGridConfig_, settings)) {
+            const double y = timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint{0.0, frequencyHz}).y();
+            painter.drawLine(QPointF(0.0, y), QPointF(rect().width(), y));
+        }
+    }
+
+    if (timingGridConfig_.isActive()) {
+        const double durationSeconds = static_cast<double>(settings.canvasWidth) * settings.timestepMs / 1000.0;
+        painter.setPen(
+            QPen(timingGridConfig_.lineColor, timingGridConfig_.lineWidthPixels, timingGridConfig_.lineStyle));
+        for (const double seconds : timingGridLinesSeconds(timingGridConfig_, settings, durationSeconds)) {
+            const double x = timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint{seconds, 0.0}).x();
+            painter.drawLine(QPointF(x, 0.0), QPointF(x, rect().height()));
         }
     }
 }

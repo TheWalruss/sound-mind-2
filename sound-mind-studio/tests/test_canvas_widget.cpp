@@ -30,7 +30,10 @@ using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::studio::CanvasWidget;
+using sound_mind::studio::FrequencyGridConfig;
 using sound_mind::studio::HorizontalAxisLabelMode;
+using sound_mind::studio::TimingGridConfig;
+using sound_mind::studio::TimingGridMode;
 using sound_mind::studio::VerticalAxisLabelMode;
 
 namespace {
@@ -881,6 +884,56 @@ void CanvasWidgetTest::setHorizontalAxisLabelModeChangesWhatsDrawnNearTheBottomE
     bool foundDifference = false;
     for (int x = 0; x < 100 && !foundDifference; ++x) {
         for (int y = 30; y < 50; ++y) {
+            if (before.pixelColor(x, y) != after.pixelColor(x, y)) {
+                foundDifference = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundDifference);
+}
+
+void CanvasWidgetTest::setFrequencyGridConfigDrawsHorizontalLines() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    const QImage before = widget.grab().toImage();
+
+    FrequencyGridConfig config;
+    config.harmonicSeriesEnabled = true;
+    config.harmonicFundamentalHz = 500.0;  // Lines at 500/1000/1500/2000 Hz - all within [20, 2020] Hz.
+    widget.setFrequencyGridConfig(config);
+    const QImage after = widget.grab().toImage();
+
+    bool foundDifference = false;
+    for (int y = 0; y < 50 && !foundDifference; ++y) {
+        for (int x = 0; x < 100; ++x) {
+            if (before.pixelColor(x, y) != after.pixelColor(x, y)) {
+                foundDifference = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundDifference);
+}
+
+void CanvasWidgetTest::setTimingGridConfigDrawsVerticalLines() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    const QImage before = widget.grab().toImage();
+
+    TimingGridConfig config;
+    config.mode = TimingGridMode::Interval;
+    config.intervalSeconds = 0.1;  // 11 lines across the project's own 1-second duration.
+    widget.setTimingGridConfig(config);
+    const QImage after = widget.grab().toImage();
+
+    bool foundDifference = false;
+    for (int x = 0; x < 100 && !foundDifference; ++x) {
+        for (int y = 0; y < 50; ++y) {
             if (before.pixelColor(x, y) != after.pixelColor(x, y)) {
                 foundDifference = true;
                 break;

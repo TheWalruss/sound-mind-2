@@ -56,4 +56,8 @@ private slots:
     void cancelPathEditDiscardsChangesAndLeavesTheOriginalSelected();
     void deleteSelectionDeletesTheSelectedNodeWhileEditingInsteadOfTheWholeObject();
     void clearSelectionExitsAnActivePathEditSessionWithoutCommitting();
+
+    void continueMoveSnapsToTheNearestGridLineWhenSnapToGridIsEnabled();
+    void continueMoveIgnoresGridConfigurationWhenSnapToGridIsDisabled();
+    void continuePathNodeDragSnapsToTheNearestGridLineWhenSnapToGridIsEnabled();
 };

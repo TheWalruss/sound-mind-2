@@ -191,6 +191,13 @@ sound_mind::core::Path outlinePathFor(const sound_mind::core::TimeFrequencyRect&
 PickController::PickController(PaintController* paintController, QObject* parent)
     : QObject(parent), paintController_(paintController) {}
 
+void PickController::setGridSnapping(bool enabled, const FrequencyGridConfig& frequencyGridConfig,
+                                       const TimingGridConfig& timingGridConfig) {
+    gridSnappingEnabled_ = enabled;
+    frequencyGridConfig_ = frequencyGridConfig;
+    timingGridConfig_ = timingGridConfig;
+}
+
 void PickController::setProject(sound_mind::core::Project* project) {
     project_ = project;
     clearSelection();
@@ -331,6 +338,9 @@ void PickController::continueMove(sound_mind::core::TimeFrequencyPoint point) {
     }
     if (!pickedOperationId_.has_value()) {
         return;
+    }
+    if (gridSnappingEnabled_) {
+        point = snapToGrid(point, frequencyGridConfig_, timingGridConfig_, project_->settings());
     }
     dragMoved_ = true;
     dragCurrent_ = point;
@@ -515,6 +525,9 @@ bool PickController::selectPathNodeNear(sound_mind::core::TimeFrequencyPoint poi
 void PickController::continuePathNodeDrag(sound_mind::core::TimeFrequencyPoint point) {
     if (!selectedNodeIndex_.has_value()) {
         return;
+    }
+    if (gridSnappingEnabled_) {
+        point = snapToGrid(point, frequencyGridConfig_, timingGridConfig_, project_->settings());
     }
     const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
     const double deltaTimeSeconds = point.timeSeconds - dragAnchor_.timeSeconds;

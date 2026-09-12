@@ -20,13 +20,14 @@ in-app behavior is correct and this guide is due an update.
 9. [Selection and Fill](#selection-and-fill)
 10. [Path Tool](#path-tool)
 11. [Axis Labels](#axis-labels)
-12. [Playback](#playback)
-13. [Recording](#recording)
-14. [Loop Mode](#loop-mode)
-15. [Pooling a Layer](#pooling-a-layer)
-16. [Exporting](#exporting)
-17. [Saving and Project Files](#saving-and-project-files)
-18. [What's Not Here Yet](#whats-not-here-yet)
+12. [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid)
+13. [Playback](#playback)
+14. [Recording](#recording)
+15. [Loop Mode](#loop-mode)
+16. [Pooling a Layer](#pooling-a-layer)
+17. [Exporting](#exporting)
+18. [Saving and Project Files](#saving-and-project-files)
+19. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -436,6 +437,46 @@ regardless of a project's own duration or frequency range. Purely a
 display aid, like everything else in this panel eventually will be: axis
 labels never affect encoding, decoding, or any stored pixel data.
 
+## Overlay Grids and Snap to Grid
+
+The same **Grid** panel (see [Axis Labels](#axis-labels) above) also has a
+**Frequency Grid** section, a **Timing Grid** section, and a **Snap to
+Grid** checkbox at the bottom.
+
+**Frequency Grid** draws horizontal reference lines across the canvas -
+any combination of these can be on at once:
+
+- **Note grid** - one line per semitone (12-TET), against the project's
+  own tuning reference.
+- **Harmonic series** - one line per integer multiple of a **Fundamental**
+  you set (in Hz).
+- **Custom frequencies** - a **Frequencies (Hz)** field you type your own
+  list into (comma- or space-separated, e.g. `220, 440, 880`); anything
+  that isn't a valid positive number is ignored rather than blocking the
+  rest of the list.
+
+**Timing Grid** draws vertical reference lines, from one **Mode**
+drop-down (only one at a time, unlike Frequency Grid's combinable
+sources):
+
+- **Off** (the default) - no lines.
+- **Fixed Interval** - one line every **Interval** (seconds).
+- **Tempo** - one line per **Subdivision** (Whole/Half/Quarter/Eighth/
+  Sixteenth/Thirty-second note) at the project's own default tempo.
+
+Each of Frequency Grid and Timing Grid has its own **Line color** swatch,
+**Line width** (pixels), and **Line style** (Solid/Dash/Dot) - set them
+independently so the two grids stay visually distinct when both are on
+at once. Purely a display aid, like Axis Labels: neither grid affects
+encoding, decoding, or any stored pixel data.
+
+**Snap to Grid**, once checked, makes a Path node drag, a whole-object
+Pick move, or a Selection drag land on the nearest active grid line
+instead of exactly where you release the mouse - frequency snaps to the
+nearest active Frequency Grid line, and time snaps to the nearest active
+Timing Grid line, independently of each other. With a grid's own sources
+all off, that axis simply isn't snapped (nothing to snap to).
+
 ## Playback
 
 The **Playback** panel has **Play**, **Pause**, and **Stop**, a draggable
@@ -551,16 +592,18 @@ a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,
 - Inserting or removing a node from an already-placed path (other than
   deleting the single selected node) still isn't here - see the Pick
   section above.
-- No **Overlay Grids** (frequency or timing reference lines) or pitch
-  quantising yet - [Axis Labels](#axis-labels) (see above) is a separate,
-  simpler feature (labeling the canvas's own two axes) that shipped
-  first; the Grid panel it lives in will grow real grid lines in a later
-  update.
-- No **Snap to Grid** - a placed node lands exactly where you click, with
-  nothing to snap it to a note, beat, or custom reference yet (Overlay
-  Grids' own dependency, per above).
-- No way yet to stamp a brush at set intervals along a path, rather than
-  painting it as one continuous stroke.
+- No **Chord Overlay** - a selected chord/arpeggio in a (not-yet-built)
+  Chord Generator drawn live on the frequency axis, independent of the
+  general Frequency Grid.
+- No pitch quantising while painting - Snap to Grid (see
+  [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid) above)
+  snaps a *placed* node/move/selection to the nearest grid line, but a
+  freehand stroke's own pitch doesn't yet snap to the active Frequency
+  Grid while it's being painted.
+- No curated preset sets for Custom Frequencies, and no way yet to
+  retune the note grid's own tuning reference (fixed at 440 Hz/A4) or
+  change the project's own default tempo (fixed at 120 BPM) - Custom
+  Frequencies is free-entry only for now (type your own Hz values).
 - No dedicated Path Gradient UI - a finished path uses the current
   Painting brush's own Color/Opacity settings (the same uniform-color
   shortcut Fill Selection's own picker uses), not a real multi-stop

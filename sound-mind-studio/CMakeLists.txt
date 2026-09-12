@@ -31,6 +31,7 @@ add_library(sound-mind-studio-lib
     src/canvas_widget.cpp
     src/color_conversion.cpp
     src/create_project_wizard.cpp
+    src/grid_config.cpp
     src/grid_panel.cpp
     src/image_scale_picker_dialog.cpp
     src/import_export.cpp

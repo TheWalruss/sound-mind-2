@@ -6,6 +6,23 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.26.11] - 2026-09-12
+
+The third and final installment of Phase 3's "Paths & Grids" milestone's second half - the Overlay Grid panel and Snap to Grid, completing the milestone (Chord Overlay remains explicitly deferred - see `docs/sound-mind-architecture.md`'s Decisions Made).
+
+### Added
+
+- **Frequency Grid and Timing Grid, in the same Grid panel Axis Labels already lives in.** Frequency Grid draws horizontal reference lines from any combination of a **Note grid** (every semitone, against the project's own tuning reference), a **Harmonic series** (integer multiples of a **Fundamental** you set), and **Custom frequencies** (a free-typed Hz list). Timing Grid draws vertical reference lines from one of **Off** (the default), **Fixed Interval** (seconds), or **Tempo** (a note-value subdivision at the project's own default tempo). Each grid has its own **Line color**/**Line width**/**Line style** (Solid/Dash/Dot), so the two stay visually distinct when both are on. Purely a display aid, like Axis Labels - neither affects encoding, decoding, or any stored pixel data, and neither persists in the project file (every grid starts off again on reopening a project, the same as Axis Labels already do).
+- **Snap to Grid**, a checkbox in the same panel: once on, a Path node drag, a whole-object Pick move, or a Selection drag lands on the nearest active grid line instead of exactly where the mouse is released - frequency snaps to the nearest active Frequency Grid line, time to the nearest active Timing Grid line, independently of each other, and only for whichever axis actually has an active grid.
+
+### Notes on scope
+
+- **Custom Frequencies and the note grid's own tuning reference are free-entry only** - the design doc mentions curated preset sets for both, but names no specific values for either; per explicit user choice, this installment ships manual entry only, deferring a preset picker.
+- **Pitch quantising while painting is still not here** - Snap to Grid applies to placement (a node/move/selection landing somewhere), not to a freehand stroke's own pitch as it's drawn.
+- **No UI yet to retune the note grid's own reference (fixed at 440 Hz/A4) or change the project's own default tempo (fixed at 120 BPM)** - both fields already existed on `ProjectSettings`, pre-seeded for exactly this, but nothing in Studio exposes them for editing yet.
+
+Core regression: unchanged (256 test cases, 51,145 assertions - this installment is Studio-only). Studio regression: 291/291 ctest entries passing (47 new QTest cases across `GridConfigTest`/`GridPanelTest`/`PickControllerTest`/`SelectionControllerTest`/`CanvasWidgetTest`). Doxygen: 0 warnings.
+
 ## [0.0.26.10] - 2026-09-11
 
 The second installment of Phase 3's "Paths & Grids" milestone's second half - Stamp Intervals, modeled on the legacy Python Studio's own "Curve" tool (Overlay Grids/Snap to Grid remain open for the milestone's third and final installment).

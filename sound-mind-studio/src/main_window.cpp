@@ -343,6 +343,24 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(gridPanel_, &GridPanel::verticalAxisLabelModeChanged, canvas_, &CanvasWidget::setVerticalAxisLabelMode);
     connect(gridPanel_, &GridPanel::horizontalAxisLabelModeChanged, canvas_,
             &CanvasWidget::setHorizontalAxisLabelMode);
+    connect(gridPanel_, &GridPanel::frequencyGridConfigChanged, canvas_, &CanvasWidget::setFrequencyGridConfig);
+    connect(gridPanel_, &GridPanel::timingGridConfigChanged, canvas_, &CanvasWidget::setTimingGridConfig);
+    // Snap to Grid (see PickController::setGridSnapping()'s/
+    // SelectionController::setGridSnapping()'s own docs) needs the
+    // panel's own current enabled flag *and* both grid configurations
+    // together, regardless of which one just changed - a single shared
+    // slot re-reads all three off gridPanel_ itself and re-applies them
+    // to both controllers, rather than three separate slots each only
+    // updating one piece of state the other two calls already hold.
+    const auto applyGridSnapping = [this]() {
+        pickController_->setGridSnapping(gridPanel_->snapToGridEnabled(), gridPanel_->frequencyGridConfig(),
+                                          gridPanel_->timingGridConfig());
+        selectionController_->setGridSnapping(gridPanel_->snapToGridEnabled(), gridPanel_->frequencyGridConfig(),
+                                               gridPanel_->timingGridConfig());
+    };
+    connect(gridPanel_, &GridPanel::snapToGridChanged, this, applyGridSnapping);
+    connect(gridPanel_, &GridPanel::frequencyGridConfigChanged, this, applyGridSnapping);
+    connect(gridPanel_, &GridPanel::timingGridConfigChanged, this, applyGridSnapping);
 
     // A permanent (not showMessage()'s own temporary-message) label in the
     // status bar's normal (left-hand) area - see cursorPositionLabel_'s

@@ -10,6 +10,7 @@
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/tool_configuration.h"
+#include "sound_mind/studio/grid_config.h"
 
 namespace sound_mind::studio {
 
@@ -89,6 +90,29 @@ public:
      *        convention; may be `nullptr`.
      */
     explicit PickController(PaintController* paintController, QObject* parent = nullptr);
+
+    /**
+     * @brief Sets whether Snap to Grid is currently on, and the
+     *        Frequency/Timing Grid configurations to snap against while
+     *        it is - see `docs/sound-mind-design.md`'s "Snap to Grid".
+     *
+     * Applies to every subsequent continueMove()/continuePathNodeDrag()
+     * call: a whole-object move's own cursor position, or a dragged
+     * Path node's own anchor/handle, snaps to the nearest active grid
+     * line on each axis independently (see `sound_mind::studio::
+     * snapToGrid()`'s own docs) before anything else about the drag is
+     * computed - a pasted region and a layer transform handle are the
+     * design doc's other two listed snap targets, neither of which this
+     * codebase has a concept of yet, so neither is wired here.
+     *
+     * @param enabled Whether Snap to Grid is on.
+     * @param frequencyGridConfig Which Frequency Grid source(s) are
+     *        active, to snap the frequency axis against.
+     * @param timingGridConfig The Timing Grid's own current mode, to
+     *        snap the time axis against.
+     */
+    void setGridSnapping(bool enabled, const FrequencyGridConfig& frequencyGridConfig,
+                          const TimingGridConfig& timingGridConfig);
 
     /**
      * @brief Sets which project Pick targets.
@@ -565,6 +589,12 @@ private:
     ///        whole-object drag already follows via `pickedOperation_`
     ///        staying untouched until the drag actually ends).
     sound_mind::core::Path pathEditDragStart_;
+
+    /// @brief Snap to Grid's own current state - see setGridSnapping()'s
+    /// own docs.
+    bool gridSnappingEnabled_ = false;
+    FrequencyGridConfig frequencyGridConfig_;
+    TimingGridConfig timingGridConfig_;
 };
 
 }  // namespace sound_mind::studio

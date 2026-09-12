@@ -7,6 +7,7 @@
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/grid_config.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/selection_controller.h"
 
@@ -22,8 +23,10 @@ using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::timeToFrameIndex;
 using sound_mind::core::TimeFrequencyPoint;
+using sound_mind::studio::FrequencyGridConfig;
 using sound_mind::studio::PaintController;
 using sound_mind::studio::SelectionController;
+using sound_mind::studio::TimingGridConfig;
 
 namespace {
 
@@ -465,4 +468,49 @@ void SelectionControllerTest::setProjectClearsTheClipboardToo() {
     controller.setProject(nullptr);
 
     QVERIFY(!controller.hasClipboard());
+}
+
+void SelectionControllerTest::continueSelectionDragSnapsToTheNearestGridLineWhenSnapToGridIsEnabled() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+
+    FrequencyGridConfig frequencyGridConfig;
+    frequencyGridConfig.harmonicSeriesEnabled = true;
+    frequencyGridConfig.harmonicFundamentalHz = 100.0;
+    controller.setGridSnapping(true, frequencyGridConfig, TimingGridConfig{});
+
+    controller.beginSelectionDrag(layerId, TimeFrequencyPoint{0.2, 700.0});
+    // 340 Hz's own nearest harmonic (fundamental 100 Hz) is 300 Hz.
+    controller.continueSelectionDrag(TimeFrequencyPoint{0.5, 340.0});
+
+    const auto bounds = *controller.displayBounds();
+    QCOMPARE(bounds.startTimeSeconds, 0.2);
+    QCOMPARE(bounds.endTimeSeconds, 0.5);
+    QCOMPARE(bounds.lowFrequencyHz, 300.0);
+    QCOMPARE(bounds.highFrequencyHz, 700.0);
+}
+
+void SelectionControllerTest::continueSelectionDragIgnoresGridConfigurationWhenSnapToGridIsDisabled() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+
+    FrequencyGridConfig frequencyGridConfig;
+    frequencyGridConfig.harmonicSeriesEnabled = true;
+    frequencyGridConfig.harmonicFundamentalHz = 100.0;
+    controller.setGridSnapping(false, frequencyGridConfig, TimingGridConfig{});
+
+    controller.beginSelectionDrag(layerId, TimeFrequencyPoint{0.2, 700.0});
+    controller.continueSelectionDrag(TimeFrequencyPoint{0.5, 340.0});
+
+    const auto bounds = *controller.displayBounds();
+    QCOMPARE(bounds.lowFrequencyHz, 340.0);  // Raw, unsnapped value.
+    QCOMPARE(bounds.highFrequencyHz, 700.0);
 }

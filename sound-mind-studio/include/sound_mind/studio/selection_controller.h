@@ -9,6 +9,7 @@
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
+#include "sound_mind/studio/grid_config.h"
 
 namespace sound_mind::studio {
 
@@ -70,6 +71,22 @@ public:
      *        convention; may be `nullptr`.
      */
     explicit SelectionController(PaintController* paintController, QObject* parent = nullptr);
+
+    /**
+     * @brief Sets whether Snap to Grid is currently on, and the
+     *        Frequency/Timing Grid configurations to snap against while
+     *        it is - see `PickController::setGridSnapping()`'s own docs
+     *        (this is the same idea, applied to continueSelectionDrag()'s
+     *        own dragged corner instead of a Pick move/Path node).
+     *
+     * @param enabled Whether Snap to Grid is on.
+     * @param frequencyGridConfig Which Frequency Grid source(s) are
+     *        active, to snap the frequency axis against.
+     * @param timingGridConfig The Timing Grid's own current mode, to
+     *        snap the time axis against.
+     */
+    void setGridSnapping(bool enabled, const FrequencyGridConfig& frequencyGridConfig,
+                          const TimingGridConfig& timingGridConfig);
 
     /**
      * @brief Sets which project selection/fill targets.
@@ -255,6 +272,12 @@ private:
     bool dragMoved_ = false;
     sound_mind::core::TimeFrequencyPoint dragAnchor_;
     sound_mind::core::TimeFrequencyRect dragPreviewBounds_;
+
+    /// @brief Snap to Grid's own current state - see setGridSnapping()'s
+    /// own docs.
+    bool gridSnappingEnabled_ = false;
+    FrequencyGridConfig frequencyGridConfig_;
+    TimingGridConfig timingGridConfig_;
 };
 
 }  // namespace sound_mind::studio

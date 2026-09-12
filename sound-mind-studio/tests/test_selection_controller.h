@@ -26,4 +26,7 @@ private slots:
     void pasteIntoIsANoOpWithNoClipboard();
     void pasteIntoUpdatesTheCommittedSelectionToThePastedRegion();
     void setProjectClearsTheClipboardToo();
+
+    void continueSelectionDragSnapsToTheNearestGridLineWhenSnapToGridIsEnabled();
+    void continueSelectionDragIgnoresGridConfigurationWhenSnapToGridIsDisabled();
 };

@@ -47,4 +47,6 @@ private slots:
     void mouseReleaseInPathModeDoesNotEmitPathNodePlacedAgain();
     void setVerticalAxisLabelModeChangesWhatsDrawnNearTheLeftEdge();
     void setHorizontalAxisLabelModeChangesWhatsDrawnNearTheBottomEdge();
+    void setFrequencyGridConfigDrawsHorizontalLines();
+    void setTimingGridConfigDrawsVerticalLines();
 };
