@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.1] - 2026-09-13
+
+The first installment of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`, Phase 4's opening feature). **Core-only, not reachable from the app yet** - no UI, no `Project` storage, no binding to a layer's opacity or a filter's parameters. Proves the `MindWave` resource and its own field-evaluation pipeline with a single generator (a sine) before the rest of the v1 catalogue.
+
+### Added
+
+- **`sound_mind::core::MindWave`** - a parametric waveform producing a per-cell scalar field in `[0, 1]`, per `docs/sound-mind-design.md`'s "Low Frequency Oscillations (MindWaves)". `evaluate(TimeFrequencyPoint, StreamCodecConfig)` matches `Gradient::evaluate()`'s own shape. Only `GeneratorType::Periodic`/`PeriodicWaveform::Sine` exist so far - more generator types arrive in the next installment. The frequency axis's own `period()` is in bins, not Hz (the frequency axis is log-scaled - a raw-Hz period would look inconsistent across the range).
+- JSON round-trip (`to_json`/`from_json`).
+
+Core regression: 324/324 test cases (up from 315), full regression 378/378 passing. Doxygen: 0 warnings. No USER_GUIDE.md change - nothing user-visible yet.
+
 ## [0.0.30.6] - 2026-09-13
 
 Installment E of the "Refactor & Clean Up" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.29.1`) - the last two findings from the original Phase 3 audit, landed together: the `compositor.cpp` placement-loop dedup and the `PickController` path-edit split. `v0.Y.29.1` is now fully worked through. Purely internal code quality work, no user-visible behavior change.

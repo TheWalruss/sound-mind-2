@@ -23,6 +23,7 @@ add_library(sound-mind-core
     src/tool_configuration.cpp
     src/filter_configuration.cpp
     src/tone_curve.cpp
+    src/mind_wave.cpp
     src/filter_application.cpp
     src/paint_application.cpp
     src/fill_application.cpp
