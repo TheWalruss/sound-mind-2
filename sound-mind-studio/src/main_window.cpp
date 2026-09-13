@@ -1320,6 +1320,7 @@ void MainWindow::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
     }
     layer->setOpacity(opacity);
     hasUnsavedChanges_ = true;
+    canvas_->update();
     refreshLayersPanel();
 }
 

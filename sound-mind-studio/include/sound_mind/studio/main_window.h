@@ -550,11 +550,10 @@ public slots:
      *        milestone (`v0.Y.21.1`).
      *
      * Marks hasUnsavedChanges() and refreshes both the canvas and the
-     * Layers Panel - unlike setLayerOpacity(), this one's canvas refresh is
-     * not a no-op: translation directly changes renderLayer()'s pixel
-     * output (see its own docs), where opacity currently has no visible
-     * effect at all (real multi-layer blending doesn't exist yet). Does
-     * nothing if no layer with this id exists.
+     * Layers Panel, the same as setLayerOpacity() - translation directly
+     * changes both renderLayer()'s pixel output (see its own docs) and
+     * compositeProject()'s own placement of this layer. Does nothing if no
+     * layer with this id exists.
      *
      * @param id The layer to change.
      * @param translationColumns The new shift, in spectrogram columns - see
@@ -566,7 +565,8 @@ public slots:
      * @brief Sets the horizontal rescale of the layer with the given id -
      *        the actual work behind `LayersPanel`'s rescale spin box. See
      *        setLayerTranslation()'s docs for the milestone this belongs to
-     *        and why this refreshes the canvas, unlike setLayerOpacity().
+     *        and for why this refreshes the canvas, the same as
+     *        setLayerOpacity().
      *
      * @param id The layer to change.
      * @param rescaleFactor The new ratio - see

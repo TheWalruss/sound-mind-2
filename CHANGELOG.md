@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.30.3] - 2026-09-13
+
+Bug fix, surfaced by the Refactor & Clean Up audit but landed as its own labeled commit (confirmed with the user) since it's a genuine, user-visible behavior change, not the "unchanged in behavior" refactor work around it.
+
+### Fixed
+
+- **`MainWindow::setLayerOpacity()` now actually refreshes the canvas.** Dragging a layer's opacity slider in the Layers Panel previously updated the model (and was reflected next time anything else repainted the canvas) but never triggered a repaint itself - stale since before multi-layer compositing existed (opacity used to have no visible effect at all). Matches the exact pattern `setLayerTranslation()`/`setLayerRescale()` already use; their own docs, which had explicitly pointed at this now-closed gap as a deliberate distinction, are corrected too.
+
+Full regression: 369/369 passing (unchanged - this is a real behavior fix, not covered by a new automated assertion; see `docs/sound-mind-architecture.md` Decision #74 for why). No USER_GUIDE.md change (the opacity slider's own documented behavior doesn't change, it's now just correctly wired to match it).
+
 ## [0.0.30.2] - 2026-09-13
 
 Installment B of the "Refactor & Clean Up" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.29.1`) - the Operation/JSON dedup findings from the same Phase 3 audit, plus six documented-behavior-vs-code reconciliations. Purely internal/documentation work; one new test added (a previously-undocumented, untested behavior now documented and covered).
