@@ -13,6 +13,7 @@ add_executable(sound-mind-studio-tests
     test_import_export.cpp
     test_import_helpers.cpp
     test_landing_page.cpp
+    test_layer_controller.cpp
     test_layers_panel.cpp
     test_loop_panel.cpp
     test_main_window.cpp

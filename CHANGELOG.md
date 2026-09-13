@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.30.5] - 2026-09-13
+
+Installment D of the "Refactor & Clean Up" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.29.1`) - extracts layer-stack lookup/mutation and Layers/Filter Configuration Panel refresh out of `MainWindow` into a new `LayerController`, the same treatment `PlaybackController`/`ToolPaletteController` already received. Purely internal code quality work, no user-visible behavior change.
+
+### Changed
+
+- **New `sound_mind::studio::LayerController`** owns `layerById()`/`topmostLayerWithContent()`/`paintTargetLayerId()`, every layer mutation (`toggleLayerVisibility()` through `reorderLayers()`), and `LayersPanel`/`FilterConfigurationPanel` refresh. Scope grew past the original "layer mutation slots" framing once it became clear those lookup methods are also used by Loop Mode, Recording, import, export, and pooling - all of those call sites now go through `layerController_` too, rather than duplicating the lookup logic a second time.
+- Every `MainWindow` public method touching layers keeps its exact pre-extraction signature, now a thin forwarding body. `test_main_window.cpp` needed zero changes.
+- New `test_layer_controller.cpp` - covers real mutation effects (not just "doesn't crash"), the locked-layer delete refusal, and the new `layersChanged()` signal.
+
+Full regression: 369/369 passing (unchanged count). Doxygen: 0 warnings. No USER_GUIDE.md change.
+
 ## [0.0.30.4] - 2026-09-13
 
 Installment C of the "Refactor & Clean Up" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.29.1`) - extracts the Paint/Pick/Select/Path tool cluster out of `MainWindow` (1959/1677 lines - by far the largest files in the project) into a new `ToolPaletteController`, the same "own presentation" treatment `PlaybackController` (`v0.Y.23.1`) already received. Purely internal code quality work, no user-visible behavior change.

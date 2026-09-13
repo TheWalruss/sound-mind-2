@@ -38,6 +38,7 @@ add_library(sound-mind-studio-lib
     src/import_export.cpp
     src/import_helpers.cpp
     src/landing_page.cpp
+    src/layer_controller.cpp
     src/layers_panel.cpp
     src/loop_panel.cpp
     src/main_window.cpp
@@ -64,6 +65,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/import_export.h
     include/sound_mind/studio/import_helpers.h
     include/sound_mind/studio/landing_page.h
+    include/sound_mind/studio/layer_controller.h
     include/sound_mind/studio/layers_panel.h
     include/sound_mind/studio/loop_panel.h
     include/sound_mind/studio/main_window.h

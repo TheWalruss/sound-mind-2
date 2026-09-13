@@ -18,6 +18,7 @@
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/grid_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
+#include "sound_mind/studio/layer_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/recent_projects.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
@@ -160,14 +161,24 @@ class RecordPanel;
  * looks from the sheer number of still-present delegating methods
  * (`undo()`, `deletePickedObject()`, `fillSelectionWith()`, `paste()`,
  * ...): resolving "which layer" a freehand gesture starting right now
- * targets (`paintTargetLayerId()`, a `LayersPanel`-selection concept
- * `toolPaletteController_` has no reason to know about) and managing the
- * four toolbar `QAction`s' own mutual exclusivity
- * (`setExclusiveToolMode()`) - a toolbar/menu concern, not a tool-palette
- * one. Every one of those delegating methods kept its exact pre-
- * extraction signature, now a thin forwarding body - matching the same
- * "unchanged public surface" precedent `v0.Y.23.1`'s own
+ * targets and managing the four toolbar `QAction`s' own mutual
+ * exclusivity (`setExclusiveToolMode()`) - a toolbar/menu concern, not a
+ * tool-palette one. Every one of those delegating methods kept its exact
+ * pre-extraction signature, now a thin forwarding body - matching the
+ * same "unchanged public surface" precedent `v0.Y.23.1`'s own
  * `PlaybackController`/import_export extractions already set.
+ *
+ * **As of `v0.Y.29.1` (Refactor & Clean Up, Installment D):**
+ * `layerController_` now owns layer-stack lookup (`layerById()`,
+ * `topmostLayerWithContent()`, `paintTargetLayerId()`), mutation
+ * (`toggleLayerVisibility()`, `setLayerOpacity()`, ... `reorderLayers()`),
+ * and Layers Panel/Filter Configuration Panel refresh - see its own class
+ * docs. `paintTargetLayerId()` - the "which layer" resolution the
+ * previous paragraph names - now lives there too, called via
+ * `layerController_->paintTargetLayerId()` at each of the same call
+ * sites; `MainWindow` itself no longer implements it. Every public
+ * method delegating to it kept its exact signature, the same "unchanged
+ * public surface" precedent as Installment C.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -1468,53 +1479,12 @@ private:
      */
     [[nodiscard]] bool confirmDiscardUnsavedChanges();
 
-    /// @brief The topmost *visible* layer with content, if any - the same
-    /// notion of "the composite" startPlayback(), CanvasWidget, and
-    /// poolTopmostLayer() all share for now (see their docs). As of the
-    /// Layers Panel milestone (`v0.Y.13.1`), a layer hidden via
-    /// toggleLayerVisibility() is skipped here, same as one with no
-    /// content at all.
-    /// @return A mutable pointer to that layer, or `nullptr` if none
-    ///         qualifies, or no project is open.
-    [[nodiscard]] sound_mind::core::Layer* topmostLayerWithContent();
-
-    /// @brief The layer with the given id, if the current project has one.
-    /// @return A mutable pointer to that layer, or `nullptr` if no project
-    ///         is open or no layer in it has this id.
-    [[nodiscard]] sound_mind::core::Layer* layerById(sound_mind::core::LayerId id);
-
-    /**
-     * @brief Which layer a freehand stroke started right now would paint
-     *        into.
-     *
-     * `layersPanel_`'s own selected row (LayersPanel::selectedLayerId()),
-     * if any - the "active layer" a user has actually clicked. Falls back
-     * to the *bottommost* layer in the stack (`project_->layers().front()`
-     * - the Background layer, always present), regardless of content or
-     * type, whenever nothing is selected (a fresh project, or a selection
-     * that was cleared) - the same predictable placeholder this method
-     * always used, not `topmostLayerWithContent()` (which requires
-     * existing content and would make a fresh, still-empty new layer
-     * unpaintable). Not `.back()` - since the Equalizer milestone, that's
-     * always the (locked, content-less) Equalizer layer, never a sensible
-     * paint target.
-     *
-     * @return That layer's id, or `std::nullopt` if no project is open.
-     */
-    [[nodiscard]] std::optional<sound_mind::core::LayerId> paintTargetLayerId() const;
-
     /// @brief Sets the window title to "Sound Mind Studio v<version>",
     /// plus " - <project name>" (currentPath_'s own file stem) once a
     /// project has been saved/opened at a real path - called after every
     /// currentPath_ assignment (createProjectAt()/openProjectAt()/
     /// saveProjectAs()).
     void updateWindowTitle();
-
-    /// @brief Pushes the current project's layer stack into layersPanel_ -
-    /// called after setProject() and after any action that adds, removes,
-    /// reorders, renames, or changes a layer's visibility/opacity. An
-    /// empty list (not a no-op) when no project is open.
-    void refreshLayersPanel();
 
     /// @brief loopUpdateTimer_'s slot: refreshes the Loop layer's content
     /// from loopEngine_->currentImage() and repaints the canvas, and shows
@@ -1593,8 +1563,9 @@ private:
 
     /// @brief Owns the PlaybackEngine and its position-polling timer -
     /// extracted from a plain member + free-standing timer/flag as part of
-    /// the Phase 2.5 Refactor & Clean Up milestone (`v0.Y.23.1`). "Which
-    /// layer to play" (topmostLayerWithContent()) and wiring its signals to
+    /// the Phase 2.5 Refactor & Clean Up milestone (`v0.Y.23.1`). Loading
+    /// the project's own real composite (as of `v0.Y.27.1` - see
+    /// startPlayback()'s own docs) and wiring its signals to
     /// playbackPanel_/canvas_ both stay MainWindow's own job - see
     /// PlaybackController's own docs for why it doesn't know about either.
     PlaybackController* playbackController_ = nullptr;
@@ -1667,6 +1638,12 @@ private:
     /// `Filter`-type layer at all - see `handleLayerSelectionChanged()`'s
     /// own docs.
     FilterConfigurationPanel* filterConfigurationPanel_ = nullptr;
+
+    /// @brief Owns layer-stack lookup/mutation and Layers Panel/Filter
+    /// Configuration Panel refresh - see its own class docs. Extracted out
+    /// of this class as part of the Refactor & Clean Up milestone
+    /// (`v0.Y.29.1`, Installment D).
+    LayerController* layerController_ = nullptr;
 
     /// @brief `nullptr` until the first setProject() call - LoopEngine
     /// needs a real loop length (the project's own duration in samples)

@@ -213,27 +213,30 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // controllers and all of their wiring to canvas_/
     // toolConfigurationPanel_ internally. This class's own remaining job:
     // resolving "which layer" a freehand gesture targets
-    // (paintTargetLayerId()) and forwarding it to whichever begin*() call
-    // applies - a LayersPanel-selection concept toolPaletteController_ has
-    // no reason to know about.
+    // (layerController_->paintTargetLayerId() - Installment D) and
+    // forwarding it to whichever begin*() call applies - a
+    // LayersPanel-selection concept toolPaletteController_ has no reason
+    // to know about. layerController_ itself isn't constructed until
+    // later in this same constructor, but these lambdas only run later
+    // still, on a real gesture - safe by the time any of them fire.
     toolPaletteController_ = new ToolPaletteController(canvas_, toolConfigurationPanel_, this);
     connect(canvas_, &CanvasWidget::paintStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
-        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+        if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->beginPaintStroke(*layerId, point);
         }
     });
     connect(canvas_, &CanvasWidget::pickStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
-        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+        if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->beginPick(*layerId, point);
         }
     });
     connect(canvas_, &CanvasWidget::selectStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
-        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+        if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->beginSelectionDrag(*layerId, point);
         }
     });
     connect(canvas_, &CanvasWidget::pathNodePlaced, this, [this](sound_mind::core::TimeFrequencyPoint point) {
-        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+        if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->placePathNode(*layerId, point);
         }
     });
@@ -243,7 +246,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(toolPaletteController_, &ToolPaletteController::contentChanged, this,
             [this](sound_mind::core::LayerId) {
                 hasUnsavedChanges_ = true;
-                refreshLayersPanel();
+                layerController_->refreshLayersPanel();
             });
 
     gridPanel_ = new GridPanel(this);
@@ -277,6 +280,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layersPanel_, &LayersPanel::selectionChanged, this, &MainWindow::handleLayerSelectionChanged);
     connect(filterConfigurationPanel_, &FilterConfigurationPanel::filterConfigurationChanged, this,
             &MainWindow::applyFilterConfiguration);
+
+    // Layer-stack lookup/mutation and Layers/Filter Configuration Panel
+    // refresh - extracted as its own class (Refactor & Clean Up,
+    // v0.Y.29.1, Installment D); see its own docs.
+    layerController_ = new LayerController(canvas_, playbackController_, layersPanel_, filterConfigurationPanel_, this);
+    connect(layerController_, &LayerController::layersChanged, this, [this]() { hasUnsavedChanges_ = true; });
 
     // A permanent (not showMessage()'s own temporary-message) label in the
     // status bar's normal (left-hand) area - see cursorPositionLabel_'s
@@ -762,6 +771,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
 
     canvas_->setProject(&*project_);
     toolPaletteController_->setProject(&*project_);
+    layerController_->setProject(&*project_);
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
     // Layers is shown automatically the *first* time any project exists in
@@ -786,7 +796,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
         layersPanel_->toggleViewAction()->setChecked(true);
         layersPanelShownOnce_ = true;
     }
-    refreshLayersPanel();
+    layerController_->refreshLayersPanel();
 }
 
 void MainWindow::newProject() {
@@ -1021,7 +1031,7 @@ bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const st
     // before, rather than silently keep playing stale content.
     playbackController_->invalidate();
     hasUnsavedChanges_ = true;
-    refreshLayersPanel();
+    layerController_->refreshLayersPanel();
     statusBar()->showMessage(
         tr("Imported %1 layer(s) from \"%2\".").arg(importedCount).arg(QString::fromStdString(path.filename().string())),
         5000);
@@ -1046,7 +1056,7 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePi
     canvas_->update();
     playbackController_->invalidate();
     hasUnsavedChanges_ = true;
-    refreshLayersPanel();
+    layerController_->refreshLayersPanel();
     statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
     return true;
 }
@@ -1071,7 +1081,7 @@ bool MainWindow::importImageFiles(const std::vector<std::filesystem::path>& path
     canvas_->update();
     playbackController_->invalidate();
     hasUnsavedChanges_ = true;
-    refreshLayersPanel();
+    layerController_->refreshLayersPanel();
     statusBar()->showMessage(tr("Imported %1 file(s).").arg(importedCount), 5000);
     return true;
 }
@@ -1101,7 +1111,7 @@ void MainWindow::exportVideo() {
 }
 
 bool MainWindow::exportTopmostLayerAudioNow(const std::filesystem::path& path, QString* errorMessage) {
-    sound_mind::core::Layer* layer = topmostLayerWithContent();
+    sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
     if (layer == nullptr) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No layer with content to export.");
@@ -1119,7 +1129,7 @@ bool MainWindow::exportTopmostLayerAudioNow(const std::filesystem::path& path, Q
 }
 
 bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, QString* errorMessage) {
-    sound_mind::core::Layer* layer = topmostLayerWithContent();
+    sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
     if (layer == nullptr) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No layer with content to export.");
@@ -1136,46 +1146,6 @@ bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, Q
     return true;
 }
 
-sound_mind::core::Layer* MainWindow::topmostLayerWithContent() {
-    if (!project_) {
-        return nullptr;
-    }
-    auto& layers = project_->layers();
-    for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
-        if (it->content().has_value() && it->visible()) {
-            return &*it;
-        }
-    }
-    return nullptr;
-}
-
-sound_mind::core::Layer* MainWindow::layerById(sound_mind::core::LayerId id) {
-    if (!project_) {
-        return nullptr;
-    }
-    return project_->layerById(id);
-}
-
-std::optional<sound_mind::core::LayerId> MainWindow::paintTargetLayerId() const {
-    if (!project_ || project_->layers().empty()) {
-        return std::nullopt;
-    }
-    // A real row selection (LayersPanel's own "active layer" - see its
-    // class docs) wins whenever there is one; layersPanel_->setLayers()
-    // (called from refreshLayersPanel()) already drops a selection whose
-    // id no longer exists in project_, so no extra validity check is
-    // needed here. Falls back to the bottommost layer (Background, always
-    // present) whenever nothing is selected - e.g. a project that was
-    // just opened/created and never had a row clicked in it yet. Not
-    // .back() - since the Equalizer milestone, that's always the
-    // (locked, content-less) Equalizer layer, never a sensible paint
-    // target - see this method's own docs.
-    if (const auto selected = layersPanel_->selectedLayerId(); selected.has_value()) {
-        return selected;
-    }
-    return project_->layers().front().id();
-}
-
 void MainWindow::updateWindowTitle() {
     QString title = QStringLiteral("Sound Mind Studio v" SOUND_MIND_VERSION);
     if (currentPath_) {
@@ -1184,72 +1154,24 @@ void MainWindow::updateWindowTitle() {
     setWindowTitle(title);
 }
 
-void MainWindow::refreshLayersPanel() {
-    std::vector<LayersPanel::RowData> rows;
-    if (project_) {
-        rows.reserve(project_->layers().size());
-        for (const auto& layer : project_->layers()) {
-            LayersPanel::RowData row;
-            row.id = layer.id();
-            row.name = QString::fromStdString(layer.name());
-            row.type = layer.type();
-            row.opacity = layer.opacity();
-            row.visible = layer.visible();
-            row.translationColumns = layer.translationColumns();
-            row.rescaleFactor = layer.rescaleFactor();
-            rows.push_back(row);
-        }
-    }
-    layersPanel_->setLayers(rows);
-}
-
 void MainWindow::toggleLayerVisibility(sound_mind::core::LayerId id, bool visible) {
-    sound_mind::core::Layer* layer = layerById(id);
-    if (layer == nullptr) {
-        return;
-    }
-    layer->setVisible(visible);
-    hasUnsavedChanges_ = true;
-    playbackController_->invalidate();  // "topmost layer with content" may have changed.
-    canvas_->update();
-    refreshLayersPanel();
+    layerController_->toggleLayerVisibility(id, visible);
 }
 
 void MainWindow::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
-    sound_mind::core::Layer* layer = layerById(id);
-    if (layer == nullptr) {
-        return;
-    }
-    layer->setOpacity(opacity);
-    hasUnsavedChanges_ = true;
-    canvas_->update();
-    refreshLayersPanel();
+    layerController_->setLayerOpacity(id, opacity);
 }
 
 void MainWindow::setLayerTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns) {
-    sound_mind::core::Layer* layer = layerById(id);
-    if (layer == nullptr) {
-        return;
-    }
-    layer->setTranslationColumns(translationColumns);
-    hasUnsavedChanges_ = true;
-    canvas_->update();
-    refreshLayersPanel();
+    layerController_->setLayerTranslation(id, translationColumns);
 }
 
 void MainWindow::setLayerRescale(sound_mind::core::LayerId id, double rescaleFactor) {
-    sound_mind::core::Layer* layer = layerById(id);
-    if (layer == nullptr) {
-        return;
-    }
-    layer->setRescaleFactor(rescaleFactor);
-    hasUnsavedChanges_ = true;
-    canvas_->update();
-    refreshLayersPanel();
+    layerController_->setLayerRescale(id, rescaleFactor);
 }
 
 void MainWindow::renameLayer(sound_mind::core::LayerId id) {
-    sound_mind::core::Layer* layer = layerById(id);
+    sound_mind::core::Layer* layer = layerController_->layerById(id);
     if (layer == nullptr) {
         return;
     }
@@ -1263,123 +1185,35 @@ void MainWindow::renameLayer(sound_mind::core::LayerId id) {
 }
 
 bool MainWindow::renameLayerTo(sound_mind::core::LayerId id, const QString& newName) {
-    if (newName.isEmpty()) {
-        return false;
-    }
-    sound_mind::core::Layer* layer = layerById(id);
-    if (layer == nullptr) {
-        return false;
-    }
-    layer->setName(newName.toStdString());
-    hasUnsavedChanges_ = true;
-    refreshLayersPanel();
-    return true;
+    return layerController_->renameLayerTo(id, newName);
 }
 
-void MainWindow::deleteLayer(sound_mind::core::LayerId id) {
-    if (!project_) {
-        return;
-    }
-    const sound_mind::core::Layer* layer = layerById(id);
-    if (layer == nullptr) {
-        return;
-    }
-    if (sound_mind::core::isLockedLayerType(layer->type())) {
-        // Defense in depth - LayersPanel doesn't even show a delete
-        // button for these, but refuse here too regardless of caller.
-        return;
-    }
-
-    if (project_->removeLayer(id)) {
-        hasUnsavedChanges_ = true;
-        playbackController_->invalidate();
-        canvas_->update();
-        refreshLayersPanel();
-    }
-}
+void MainWindow::deleteLayer(sound_mind::core::LayerId id) { layerController_->deleteLayer(id); }
 
 void MainWindow::addEmptyLayer() {
     if (!project_) {
         return;
     }
-    sound_mind::core::Layer layer(0, tr("New Layer").toStdString(), sound_mind::core::LayerType::Normal);
-    // A silent, correctly-dimensioned placeholder - the same one a fresh
-    // Loop Input layer gets (startLoopMode()'s own comment) - so there's
-    // real content to paint onto (and to render/play, like any other
-    // layer) immediately, rather than nothing at all until the first
-    // stroke. loopEngine_ is already guaranteed to exist for any open
-    // project (constructed fresh in setProject()), and its emptyImage()
-    // already knows this project's real dimensions/config, so there's no
-    // reason to duplicate that math here.
-    layer.setContent(loopEngine_->emptyImage());
-    const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
-    hasUnsavedChanges_ = true;
-    playbackController_->invalidate();
-    canvas_->update();
-    refreshLayersPanel();
-    // Selected immediately - ready to paint into without an extra click,
-    // the whole point of adding it in the first place.
-    layersPanel_->selectLayer(id);
+    // loopEngine_ is already guaranteed to exist for any open project
+    // (constructed fresh in setProject()), and its emptyImage() already
+    // knows this project's real dimensions/config - LayerController
+    // itself knows nothing about LoopEngine (see its own docs), so this
+    // is resolved here and passed in.
+    layerController_->addEmptyLayer(loopEngine_->emptyImage());
 }
 
-void MainWindow::addFilterLayer() {
-    if (!project_) {
-        return;
-    }
-    sound_mind::core::Layer layer(0, tr("New Filter").toStdString(), sound_mind::core::LayerType::Filter);
-    const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
-    hasUnsavedChanges_ = true;
-    playbackController_->invalidate();
-    canvas_->update();
-    refreshLayersPanel();
-    // Selected immediately - ready to configure in FilterConfigurationPanel
-    // without an extra click, the same reasoning addEmptyLayer()'s own
-    // docs give for painting.
-    layersPanel_->selectLayer(id);
-}
+void MainWindow::addFilterLayer() { layerController_->addFilterLayer(); }
 
 void MainWindow::handleLayerSelectionChanged(std::optional<sound_mind::core::LayerId> id) {
-    const sound_mind::core::Layer* layer = id.has_value() ? layerById(*id) : nullptr;
-    const bool isEqualizer = layer != nullptr && layer->type() == sound_mind::core::LayerType::Equalizer;
-    const bool isFilterLayer = layer != nullptr && sound_mind::core::isFilterLayerType(layer->type());
-    // Set before setFilterConfiguration() - see FilterConfigurationPanel::
-    // setEqualizerMode()'s own docs (both are display-mode toggles, not
-    // user edits, and updateVisibleGroup() reads isEqualizerMode_ as part
-    // of loading a fresh configuration's own visible group).
-    filterConfigurationPanel_->setEqualizerMode(isEqualizer);
-    if (isFilterLayer) {
-        filterConfigurationPanel_->setFilterConfiguration(layer->filterConfiguration());
-    }
-    filterConfigurationPanel_->setEnabled(isFilterLayer);
+    layerController_->handleLayerSelectionChanged(id);
 }
 
 void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
-    const auto id = layersPanel_->selectedLayerId();
-    if (!project_ || !id.has_value()) {
-        return;
-    }
-    sound_mind::core::Layer* layer = layerById(*id);
-    if (layer == nullptr || !sound_mind::core::isFilterLayerType(layer->type())) {
-        return;
-    }
-    layer->setFilterConfiguration(config);
-    hasUnsavedChanges_ = true;
-    playbackController_->invalidate();
-    canvas_->update();
+    layerController_->applyFilterConfiguration(config);
 }
 
 void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {
-    if (!project_) {
-        return;
-    }
-    if (project_->reorderLayers(newOrderBottomToTop)) {
-        hasUnsavedChanges_ = true;
-        canvas_->update();
-    }
-    // Refreshed either way - even a rejected reorder needs the panel
-    // snapped back to the authoritative order (see LayersPanel::
-    // reorderRequested()'s docs).
-    refreshLayersPanel();
+    layerController_->reorderLayers(newOrderBottomToTop);
 }
 
 void MainWindow::setPaintModeEnabled(bool enabled) {
@@ -1501,7 +1335,7 @@ void MainWindow::paste() {
     // The paste target is resolved fresh, right now - independent of
     // whichever layer the clipboard was originally copied from - per
     // SelectionController::pasteInto()'s own docs.
-    if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+    if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
         if (const auto pastedId = toolPaletteController_->pasteInto(*layerId); pastedId.has_value()) {
             // Immediately Pickable - move/modify/delete/restack all work
             // right away, with no separate switch-to-Pick-and-click-it
@@ -1629,7 +1463,7 @@ void MainWindow::toggleLoopMode() {
         loopLayerId_ = project_->addLayer(std::move(layer));
     }
     hasUnsavedChanges_ = true;
-    refreshLayersPanel();
+    layerController_->refreshLayersPanel();
     canvas_->update();
 
     loopEngine_->start();
@@ -1669,7 +1503,7 @@ void MainWindow::updateLoopLayer() {
     if (!loopLayerId_ || !loopEngine_) {
         return;
     }
-    sound_mind::core::Layer* layer = layerById(*loopLayerId_);
+    sound_mind::core::Layer* layer = layerController_->layerById(*loopLayerId_);
     if (layer == nullptr) {
         return;
     }
@@ -1748,7 +1582,7 @@ void MainWindow::toggleRecording() {
             canvas_->update();
             playbackController_->invalidate();
             hasUnsavedChanges_ = true;
-            refreshLayersPanel();
+            layerController_->refreshLayersPanel();
             statusBar()->showMessage(tr("Recording added as a new layer."), 5000);
         } catch (const std::exception& e) {
             QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));
@@ -1799,7 +1633,7 @@ void MainWindow::poolTopmostLayer() {
 }
 
 bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPath, QString* poolPngPath) {
-    sound_mind::core::Layer* layer = topmostLayerWithContent();
+    sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
     if (layer == nullptr) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No layer with content to pool.");

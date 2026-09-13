@@ -24,6 +24,7 @@
 #include "test_import_export.h"
 #include "test_import_helpers.h"
 #include "test_landing_page.h"
+#include "test_layer_controller.h"
 #include "test_layers_panel.h"
 #include "test_loop_panel.h"
 #include "test_main_window.h"
@@ -62,6 +63,9 @@ int main(int argc, char** argv) {
 
     LandingPageTest landingPageTest;
     status |= QTest::qExec(&landingPageTest, argc, argv);
+
+    LayerControllerTest layerControllerTest;
+    status |= QTest::qExec(&layerControllerTest, argc, argv);
 
     MainWindowTest mainWindowTest;
     status |= QTest::qExec(&mainWindowTest, argc, argv);
