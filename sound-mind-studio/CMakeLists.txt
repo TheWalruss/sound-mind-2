@@ -44,6 +44,7 @@ add_library(sound-mind-studio-lib
     src/main_window.cpp
     src/paint_controller.cpp
     src/path_controller.cpp
+    src/path_edit_session.cpp
     src/pick_controller.cpp
     src/playback_controller.cpp
     src/playback_panel.cpp
@@ -71,6 +72,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/main_window.h
     include/sound_mind/studio/paint_controller.h
     include/sound_mind/studio/path_controller.h
+    include/sound_mind/studio/path_edit_session.h
     include/sound_mind/studio/pick_controller.h
     include/sound_mind/studio/playback_controller.h
     include/sound_mind/studio/playback_panel.h

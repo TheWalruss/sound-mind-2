@@ -11,6 +11,7 @@
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/grid_config.h"
+#include "sound_mind/studio/path_edit_session.h"
 
 namespace sound_mind::studio {
 
@@ -60,6 +61,16 @@ class PaintController;
  * and toggle its type. Inserting a node by clicking a segment, and
  * deleting one by double-clicking it, are deferred - see
  * `docs/sound-mind-architecture.md`'s Decisions Made.
+ *
+ * **As of `v0.Y.29.1` (Refactor & Clean Up, Installment E):** the node/
+ * handle editing session's own state and geometry (the preview Path being
+ * edited, which node/handle is selected, the in-progress drag) moved into
+ * its own `PathEditSession` member (`pathEditSession_`) - see its own
+ * class docs. This class still owns every *decision* about when a path
+ * edit applies (the same `if (isPathEditActive()) { delegate; return; }`
+ * repurposing `pick()`/`continueMove()`/`endMove()`/`deleteSelection()`
+ * always had) and every public method above keeps its exact pre-
+ * extraction signature; only the node-level implementation moved.
  *
  * Shares `PaintController`'s own per-layer pre-paint base cache rather
  * than keeping a second one: every commit here calls back into
@@ -389,7 +400,7 @@ public:
     /// @brief Whether a path edit session is currently active.
     /// @return `true` between a successful beginPathEdit() and its own
     ///         commitPathEdit()/cancelPathEdit().
-    [[nodiscard]] bool isPathEditActive() const noexcept { return pathEditActive_; }
+    [[nodiscard]] bool isPathEditActive() const noexcept { return pathEditSession_.isActive(); }
 
     /// @brief Which node of `currentPreviewPath()` is currently selected,
     ///        while a path edit is active - for the caller to highlight
@@ -398,7 +409,9 @@ public:
     /// @return The selected node's own index, or `std::nullopt` if a path
     ///         edit isn't active, or nothing is currently selected within
     ///         it.
-    [[nodiscard]] std::optional<std::size_t> selectedPathNodeIndex() const noexcept { return selectedNodeIndex_; }
+    [[nodiscard]] std::optional<std::size_t> selectedPathNodeIndex() const noexcept {
+        return pathEditSession_.selectedNodeIndex();
+    }
 
     /**
      * @brief Deletes the currently selected node from the path being
@@ -428,7 +441,7 @@ public:
      * on both sides to take a direction from, so it extends its own
      * handles along the tangent that rounds that corner symmetrically
      * between them (perpendicular to the corner angle's own bisector -
-     * see `smoothedHandleTangent()`'s own docs in `pick_controller.cpp`),
+     * see `smoothedHandleTangent()`'s own docs in `path_edit_session.cpp`),
      * rather than leaving them invisible and unclickable exactly on top
      * of the anchor until dragged out by trial and error. An isolated
      * single-node path (no neighbor to take a direction from) is the one
@@ -484,7 +497,9 @@ public:
      * @return The current live preview; empty (no nodes) if neither a
      *         move nor a path edit is in progress.
      */
-    [[nodiscard]] const sound_mind::core::Path& currentPreviewPath() const noexcept { return previewPath_; }
+    [[nodiscard]] const sound_mind::core::Path& currentPreviewPath() const noexcept {
+        return pathEditSession_.isActive() ? pathEditSession_.previewPath() : previewPath_;
+    }
 
 signals:
     /// @brief Emitted whenever the current selection changes - a new
@@ -521,30 +536,6 @@ private:
     ///        call.
     void reorderSelection(bool (sound_mind::core::OperationLog::*reorder)(sound_mind::core::OperationId));
 
-    /// @brief Which part of a `PathNode` a node/handle hit-test or drag
-    ///        refers to - see selectPathNodeNear()'s own docs.
-    enum class NodePart { Anchor, HandleIn, HandleOut };
-
-    /// @brief pick()'s own node-editing repurposing while a path edit is
-    ///        active - see pick()'s own docs. Hit-tests every node's
-    ///        anchor and (for a `Smooth` node) both handles in
-    ///        `previewPath_` against `point`, selecting whichever is
-    ///        closest within a small, fixed tolerance (handles win a
-    ///        near-tie over anchors), and arms a potential drag from
-    ///        `point` if something was hit.
-    /// @param point The click position, in time/frequency space.
-    /// @return `true` if a node/handle was selected; `false` (clearing
-    ///         the current node selection) otherwise.
-    bool selectPathNodeNear(sound_mind::core::TimeFrequencyPoint point);
-
-    /// @brief continueMove()'s own node-editing repurposing while a path
-    ///        edit is active - see continueMove()'s own docs. A no-op if
-    ///        nothing is currently selected (selectPathNodeNear() never
-    ///        hit anything).
-    /// @param point The cursor's current position, in time/frequency
-    ///        space.
-    void continuePathNodeDrag(sound_mind::core::TimeFrequencyPoint point);
-
     PaintController* paintController_;
     sound_mind::core::Project* project_ = nullptr;
 
@@ -568,27 +559,11 @@ private:
     sound_mind::core::TimeFrequencyPoint dragCurrent_;
     sound_mind::core::Path previewPath_;
 
-    /// @brief Whether a path edit session (beginPathEdit()) is currently
-    ///        active - see the class's own docs.
-    bool pathEditActive_ = false;
-
-    /// @brief Which node of `previewPath_` is currently selected, while
-    ///        a path edit is active - `std::nullopt` if none is.
-    std::optional<std::size_t> selectedNodeIndex_;
-
-    /// @brief Which part of `selectedNodeIndex_`'s own node
-    ///        selectPathNodeNear() most recently armed for dragging.
-    NodePart selectedNodePart_ = NodePart::Anchor;
-
-    /// @brief A snapshot of `previewPath_` taken at the start of the
-    ///        current node/handle drag, so continuePathNodeDrag() always
-    ///        applies the *total* delta from `dragAnchor_` to the
-    ///        original position, rather than compounding small per-call
-    ///        deltas (the same "always derive from the drag's own start,
-    ///        never from the last frame" precedent endMove()'s own
-    ///        whole-object drag already follows via `pickedOperation_`
-    ///        staying untouched until the drag actually ends).
-    sound_mind::core::Path pathEditDragStart_;
+    /// @brief Owns direct node/handle editing of the selected
+    ///        `PaintOperation`'s own Path - see beginPathEdit()'s own
+    ///        docs, and `PathEditSession`'s own class docs (Refactor &
+    ///        Clean Up, `v0.Y.29.1`, Installment E).
+    PathEditSession pathEditSession_;
 
     /// @brief Snap to Grid's own current state - see setGridSnapping()'s
     /// own docs.

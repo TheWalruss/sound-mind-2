@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.30.6] - 2026-09-13
+
+Installment E of the "Refactor & Clean Up" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.29.1`) - the last two findings from the original Phase 3 audit, landed together: the `compositor.cpp` placement-loop dedup and the `PickController` path-edit split. `v0.Y.29.1` is now fully worked through. Purely internal code quality work, no user-visible behavior change.
+
+### Changed
+
+- **`compositor.cpp`**: new shared `rescaledWidthFor()` and `forEachPlacedCell()` helpers replace three independently-implemented copies of the same placement geometry (`mixLayerInto()`, `placeLayerForGpuMix()`, and `compositeProject()`'s own single-layer fast path) and a duplicated rescaled-width computation (`sourceColumnFor()`/`renderLayer()`). The fast path is now its own named `compositeSingleLayer()`.
+- **New `sound_mind::studio::PathEditSession`** extracts `PickController`'s own node/handle path-editing session (previously ~230 lines interleaved with whole-object picking) into its own plain value class. `PickController` keeps every decision about when a path edit applies and all of its own signal emissions; two subtle behavior-preservation issues (a no-op-means-no-signal case, and a guard ordering that avoids a null-dereference risk) were caught and fixed during the extraction rather than after.
+- New `test_path_edit_session.cpp` tests the extracted session directly. `test_pick_controller.cpp` and `test_main_window.cpp` both needed zero changes.
+
+Full regression: 369/369 passing (unchanged count - new test cases run within the existing `sound-mind-core-tests`/`sound-mind-studio-tests` ctest entries). Doxygen: 0 warnings. No USER_GUIDE.md change.
+
 ## [0.0.30.5] - 2026-09-13
 
 Installment D of the "Refactor & Clean Up" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.29.1`) - extracts layer-stack lookup/mutation and Layers/Filter Configuration Panel refresh out of `MainWindow` into a new `LayerController`, the same treatment `PlaybackController`/`ToolPaletteController` already received. Purely internal code quality work, no user-visible behavior change.

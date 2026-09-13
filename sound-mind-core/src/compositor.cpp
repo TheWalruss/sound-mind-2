@@ -91,6 +91,19 @@ constexpr float kMinLinearAmplitude = 1e-7f;
     return 20.0f * std::log10(std::max(amplitude, kMinLinearAmplitude));
 }
 
+/// @brief The width a `sourceWidth`-wide sequence rescales to under
+/// `rescaleFactor` - shared by `sourceColumnFor()` (bin-space placement,
+/// below) and `renderLayer()` (RGB-pixel-space `resampleHorizontally()`'s
+/// own target width), so the two stay in exact agreement for the same
+/// layer (Refactor & Clean Up, `v0.Y.29.1`).
+[[nodiscard]] std::uint32_t rescaledWidthFor(std::uint32_t sourceWidth, double rescaleFactor) noexcept {
+    if (rescaleFactor == 1.0) {
+        return sourceWidth;
+    }
+    const double scaled = static_cast<double>(sourceWidth) * rescaleFactor;
+    return static_cast<std::uint32_t>(std::max(1.0, std::round(scaled)));
+}
+
 /// @brief The column of a `sourceWidth`-wide layer that `outputColumn`
 /// (on the project's own `canvasWidth`-wide timeline) maps to, after
 /// applying `rescaleFactor` (stretches/compresses the layer's own
@@ -111,17 +124,75 @@ constexpr float kMinLinearAmplitude = 1e-7f;
     if (sourceWidth == 0) {
         return std::nullopt;
     }
-    std::uint32_t rescaledWidth = sourceWidth;
-    if (rescaleFactor != 1.0) {
-        const double scaled = static_cast<double>(sourceWidth) * rescaleFactor;
-        rescaledWidth = static_cast<std::uint32_t>(std::max(1.0, std::round(scaled)));
-    }
+    const std::uint32_t rescaledWidth = rescaledWidthFor(sourceWidth, rescaleFactor);
     const std::int64_t rescaledIndex = static_cast<std::int64_t>(outputColumn) - translationColumns;
     if (rescaledIndex < 0 || rescaledIndex >= static_cast<std::int64_t>(rescaledWidth)) {
         return std::nullopt;
     }
     return static_cast<std::uint32_t>(std::min<std::uint64_t>(
         sourceWidth - 1, (static_cast<std::uint64_t>(rescaledIndex) * sourceWidth) / rescaledWidth));
+}
+
+/// @brief Calls `onPlaced(bin, outputColumn, sourceCell, outputCell)` for
+/// every `(bin, outputColumn)` cell in `[0, config.binCount) x
+/// [0, canvasWidth)` where `layer`'s own (rescaled, translated) content
+/// actually has something to place there (`bin` within the layer's own
+/// `content()->config.binCount`, and `sourceColumnFor()` finds a source
+/// column), and `onUnplaced(bin, outputColumn, outputCell)` for every
+/// other cell in that same range.
+///
+/// The shared placement-geometry loop behind `mixLayerInto()`,
+/// `placeLayerForGpuMix()`, and `compositeSingleLayer()` below - all
+/// three independently implemented this exact nested loop/branch
+/// structure before being consolidated here (Refactor & Clean Up,
+/// `v0.Y.29.1`), risking the three copies silently drifting apart from
+/// each other.
+///
+/// @param layer The layer being placed - must have content (`layer.content()`
+///        must have a value); every caller here already guarantees this.
+/// @param config Supplies `binCount`, the output row count to iterate.
+/// @param canvasWidth The output column count to iterate.
+/// @param onPlaced Called for each cell with real source data - see above.
+/// @param onUnplaced Called for each cell with no real source data - see
+///        above.
+template <typename OnPlaced, typename OnUnplaced>
+void forEachPlacedCell(const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
+                       std::uint32_t canvasWidth, OnPlaced onPlaced, OnUnplaced onUnplaced) {
+    const StreamImage& content = *layer.content();
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        if (bin >= content.config.binCount) {
+            // Nothing to add at this bin - see compositeProject()'s own
+            // docs - for every column.
+            for (std::uint32_t x = 0; x < canvasWidth; ++x) {
+                onUnplaced(bin, x, cellIndex(bin, x, canvasWidth));
+            }
+            continue;
+        }
+        for (std::uint32_t x = 0; x < canvasWidth; ++x) {
+            const std::size_t outputCell = cellIndex(bin, x, canvasWidth);
+            const auto sourceColumn =
+                sourceColumnFor(x, content.frameCount, layer.rescaleFactor(), layer.translationColumns());
+            if (!sourceColumn.has_value()) {
+                onUnplaced(bin, x, outputCell);
+                continue;
+            }
+            onPlaced(bin, x, cellIndex(bin, *sourceColumn, content.frameCount), outputCell);
+        }
+    }
+}
+
+/// @brief `forEachPlacedCell()` above, for a caller with nothing to do on
+/// an unplaced cell (leaving it untouched, e.g. `mixLayerInto()`'s own
+/// "nothing to add here" semantics).
+/// @param layer See the five-argument overload's own docs.
+/// @param config See the five-argument overload's own docs.
+/// @param canvasWidth See the five-argument overload's own docs.
+/// @param onPlaced See the five-argument overload's own docs.
+template <typename OnPlaced>
+void forEachPlacedCell(const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
+                       std::uint32_t canvasWidth, OnPlaced onPlaced) {
+    forEachPlacedCell(layer, config, canvasWidth, onPlaced,
+                       [](std::uint32_t /*bin*/, std::uint32_t /*outputColumn*/, std::size_t /*outputCell*/) {});
 }
 
 /// @brief Mixes `layer`'s own placed content into `running`, in place -
@@ -135,20 +206,9 @@ constexpr float kMinLinearAmplitude = 1e-7f;
 void mixLayerInto(StreamImage& running, const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
                     std::uint32_t canvasWidth) {
     const StreamImage& content = *layer.content();
-    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
-        if (bin >= content.config.binCount) {
-            continue;  // Nothing to add at this bin - see compositeProject()'s own docs.
-        }
-        for (std::uint32_t x = 0; x < canvasWidth; ++x) {
-            const auto sourceColumn =
-                sourceColumnFor(x, content.frameCount, layer.rescaleFactor(), layer.translationColumns());
-            if (!sourceColumn.has_value()) {
-                continue;
-            }
-
-            const std::size_t sourceCell = cellIndex(bin, *sourceColumn, content.frameCount);
-            const std::size_t outputCell = cellIndex(bin, x, canvasWidth);
-
+    forEachPlacedCell(
+        layer, config, canvasWidth,
+        [&](std::uint32_t /*bin*/, std::uint32_t /*outputColumn*/, std::size_t sourceCell, std::size_t outputCell) {
             const float layerLeftLinear = dbToLinearAmplitude(content.leftMagnitudeDb[sourceCell]) * layer.opacity();
             const float layerRightLinear =
                 dbToLinearAmplitude(content.rightMagnitudeDb[sourceCell]) * layer.opacity();
@@ -168,8 +228,7 @@ void mixLayerInto(StreamImage& running, const Layer& layer, const sound_mind::co
             running.rightMagnitudeDb[outputCell] = linearAmplitudeToDb(std::abs(newRight));
             const std::complex<float> mid = (newLeft + newRight) / 2.0f;
             running.sharedPhaseRadians[outputCell] = (std::abs(mid) > 0.0f) ? std::arg(mid) : 0.0f;
-        }
-    }
+        });
 }
 
 /// @brief Builds a `sound_mind::gpu::AmplitudePhaseSignal` sized/aligned
@@ -196,23 +255,13 @@ sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
     placed.leftMagnitudeDb.assign(cellCount, silenceFloorDb);
     placed.rightMagnitudeDb.assign(cellCount, silenceFloorDb);
     placed.phaseRadians.assign(cellCount, 0.0f);
-    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
-        if (bin >= content.config.binCount) {
-            continue;
-        }
-        for (std::uint32_t x = 0; x < canvasWidth; ++x) {
-            const auto sourceColumn =
-                sourceColumnFor(x, content.frameCount, layer.rescaleFactor(), layer.translationColumns());
-            if (!sourceColumn.has_value()) {
-                continue;
-            }
-            const std::size_t sourceCell = cellIndex(bin, *sourceColumn, content.frameCount);
-            const std::size_t outputCell = cellIndex(bin, x, canvasWidth);
-            placed.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell];
-            placed.rightMagnitudeDb[outputCell] = content.rightMagnitudeDb[sourceCell];
-            placed.phaseRadians[outputCell] = content.sharedPhaseRadians[sourceCell];
-        }
-    }
+    forEachPlacedCell(layer, config, canvasWidth,
+                       [&](std::uint32_t /*bin*/, std::uint32_t /*outputColumn*/, std::size_t sourceCell,
+                           std::size_t outputCell) {
+                           placed.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell];
+                           placed.rightMagnitudeDb[outputCell] = content.rightMagnitudeDb[sourceCell];
+                           placed.phaseRadians[outputCell] = content.sharedPhaseRadians[sourceCell];
+                       });
     return placed;
 }
 
@@ -246,6 +295,56 @@ void mixLayerIntoGpuOrCpu(StreamImage& running, const Layer& layer, const sound_
     mixLayerInto(running, layer, config, canvasWidth);
 }
 
+/// @brief `compositeProject()`'s own single-layer fast path: summing a
+/// single term is the identity, so this produces exactly the same result
+/// the general (`mixLayerIntoGpuOrCpu()`-based) path would - but skips
+/// every transcendental call (sin/cos/abs/log10) it needs to actually sum
+/// *multiple* complex values, replacing them with one gain shift
+/// (computed once, not per cell) plus a placement copy. Worth its own
+/// dedicated path specifically because it's the overwhelmingly common
+/// case (most projects, and most moments even within a genuinely multi-
+/// layer one, have exactly one contributing layer at any given cell) and
+/// `compositeProject()` runs on every canvas repaint. Only called when
+/// there's exactly one contributing layer and zero Filter layers in the
+/// project at all - see `compositeProject()`'s own call site; even a
+/// single Filter layer above this one contributor still needs the
+/// general (sequential-fold) path, to actually apply it.
+StreamImage compositeSingleLayer(const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
+                                  std::uint32_t canvasWidth, float silenceFloorDb) {
+    StreamImage result;
+    result.config = config;
+    result.frameCount = canvasWidth;
+    result.sampleCount = static_cast<std::uint64_t>(canvasWidth) * config.hopLength;
+    const std::size_t cellCount = std::size_t{config.binCount} * canvasWidth;
+    result.leftMagnitudeDb.resize(cellCount);
+    result.rightMagnitudeDb.resize(cellCount);
+    result.sharedPhaseRadians.resize(cellCount);
+
+    const StreamImage& content = *layer.content();
+    const float gainDb = 20.0f * std::log10(std::max(layer.opacity(), kMinLinearAmplitude));
+    forEachPlacedCell(
+        layer, config, canvasWidth,
+        [&](std::uint32_t /*bin*/, std::uint32_t /*outputColumn*/, std::size_t sourceCell, std::size_t outputCell) {
+            // dB(linear * gain) == dB(linear) + dB(gain) - the same
+            // identity dbToLinearAmplitude()/linearAmplitudeToDb() round-
+            // trips exactly for any value clear of the silence floor,
+            // letting opacity apply as a plain addition instead of a
+            // full linear round-trip.
+            result.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell] + gainDb;
+            result.rightMagnitudeDb[outputCell] = content.rightMagnitudeDb[sourceCell] + gainDb;
+            result.sharedPhaseRadians[outputCell] = content.sharedPhaseRadians[sourceCell];
+        },
+        [&](std::uint32_t /*bin*/, std::uint32_t /*outputColumn*/, std::size_t outputCell) {
+            // Out of the layer's own bin range, or outside its own placed
+            // column range - nothing to place there, same as a column
+            // outside the layer's own placed range.
+            result.leftMagnitudeDb[outputCell] = silenceFloorDb;
+            result.rightMagnitudeDb[outputCell] = silenceFloorDb;
+            result.sharedPhaseRadians[outputCell] = 0.0f;
+        });
+    return result;
+}
+
 }  // namespace
 
 std::optional<sound_mind::codec::RgbImage> renderLayer(const Layer& layer, std::uint32_t canvasWidth) {
@@ -254,11 +353,7 @@ std::optional<sound_mind::codec::RgbImage> renderLayer(const Layer& layer, std::
     }
     const RgbImage base = sound_mind::codec::toRgbImage(*layer.content());
 
-    std::uint32_t rescaledWidth = base.width;
-    if (layer.rescaleFactor() != 1.0) {
-        const double scaled = static_cast<double>(base.width) * layer.rescaleFactor();
-        rescaledWidth = static_cast<std::uint32_t>(std::max(1.0, std::round(scaled)));
-    }
+    const std::uint32_t rescaledWidth = rescaledWidthFor(base.width, layer.rescaleFactor());
     const RgbImage rescaled = resampleHorizontally(base, rescaledWidth);
 
     return placeOnCanvas(rescaled, layer.translationColumns(), canvasWidth);
@@ -317,69 +412,13 @@ std::optional<StreamImage> compositeProject(const Project& project) {
         config.binCount = binCount;
     }
     const std::uint32_t canvasWidth = settings.canvasWidth;
-
-    StreamImage result;
-    result.config = config;
-    result.frameCount = canvasWidth;
-    result.sampleCount = static_cast<std::uint64_t>(canvasWidth) * config.hopLength;
-    const std::size_t cellCount = std::size_t{config.binCount} * canvasWidth;
-    result.leftMagnitudeDb.resize(cellCount);
-    result.rightMagnitudeDb.resize(cellCount);
-    result.sharedPhaseRadians.resize(cellCount);
     const float silenceFloorDb = linearAmplitudeToDb(0.0f);
 
     if (!anyFilterLayer && normalContributors.size() == 1) {
-        // Fast path: summing a single term is the identity, so this
-        // produces exactly the same result the general path below would
-        // - but skips every transcendental call (sin/cos/abs/log10) it
-        // needs to actually sum *multiple* complex values, replacing
-        // them with one gain shift (computed once, not per cell) plus a
-        // placement copy. Worth a dedicated path specifically because
-        // it's the overwhelmingly common case (most projects, and most
-        // moments even within a genuinely multi-layer one, have exactly
-        // one contributing layer at any given cell) and this function
-        // runs on every canvas repaint - see its own docs. Only reachable
-        // with zero Filter layers in the project at all - even a single
-        // Filter layer above this one contributor still needs the
-        // general (sequential-fold) path below, to actually apply it.
-        const Layer& layer = *normalContributors.front();
-        const StreamImage& content = *layer.content();
-        const float gainDb = 20.0f * std::log10(std::max(layer.opacity(), kMinLinearAmplitude));
-        for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
-            for (std::uint32_t x = 0; x < canvasWidth; ++x) {
-                const std::size_t outputCell = cellIndex(bin, x, canvasWidth);
-                // A layer's own content may have fewer bins than the
-                // project's own binCount (e.g. a project reconfigured
-                // since this layer was last encoded) - out-of-range bins
-                // contribute nothing, the same as a column outside the
-                // layer's own placed range does, rather than indexing
-                // past that layer's own arrays.
-                if (bin >= content.config.binCount) {
-                    result.leftMagnitudeDb[outputCell] = silenceFloorDb;
-                    result.rightMagnitudeDb[outputCell] = silenceFloorDb;
-                    result.sharedPhaseRadians[outputCell] = 0.0f;
-                    continue;
-                }
-                const auto sourceColumn =
-                    sourceColumnFor(x, content.frameCount, layer.rescaleFactor(), layer.translationColumns());
-                if (!sourceColumn.has_value()) {
-                    result.leftMagnitudeDb[outputCell] = silenceFloorDb;
-                    result.rightMagnitudeDb[outputCell] = silenceFloorDb;
-                    result.sharedPhaseRadians[outputCell] = 0.0f;
-                    continue;
-                }
-                const std::size_t sourceCell = cellIndex(bin, *sourceColumn, content.frameCount);
-                // dB(linear * gain) == dB(linear) + dB(gain) - the same
-                // identity dbToLinearAmplitude()/linearAmplitudeToDb()
-                // round-trip exactly for any value clear of the silence
-                // floor, letting opacity apply as a plain addition
-                // instead of a full linear round-trip.
-                result.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell] + gainDb;
-                result.rightMagnitudeDb[outputCell] = content.rightMagnitudeDb[sourceCell] + gainDb;
-                result.sharedPhaseRadians[outputCell] = content.sharedPhaseRadians[sourceCell];
-            }
-        }
-        return result;
+        // Fast path - see compositeSingleLayer()'s own docs for why this
+        // is worth a dedicated path, and what it's specifically reachable
+        // for.
+        return compositeSingleLayer(*normalContributors.front(), config, canvasWidth, silenceFloorDb);
     }
 
     // General path: a sequential fold over the whole stack, bottom to
@@ -395,6 +434,11 @@ std::optional<StreamImage> compositeProject(const Project& project) {
     // since the last Filter layer" - an earlier (lower) Filter layer
     // already collapsed whatever was below *it* into one transformed
     // contribution, so this one only ever sees what came after that.
+    StreamImage result;
+    result.config = config;
+    result.frameCount = canvasWidth;
+    result.sampleCount = static_cast<std::uint64_t>(canvasWidth) * config.hopLength;
+    const std::size_t cellCount = std::size_t{config.binCount} * canvasWidth;
     result.leftMagnitudeDb.assign(cellCount, silenceFloorDb);
     result.rightMagnitudeDb.assign(cellCount, silenceFloorDb);
     result.sharedPhaseRadians.assign(cellCount, 0.0f);

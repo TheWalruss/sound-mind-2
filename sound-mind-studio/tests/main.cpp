@@ -30,6 +30,7 @@
 #include "test_main_window.h"
 #include "test_paint_controller.h"
 #include "test_path_controller.h"
+#include "test_path_edit_session.h"
 #include "test_pick_controller.h"
 #include "test_playback_controller.h"
 #include "test_playback_panel.h"
@@ -102,6 +103,9 @@ int main(int argc, char** argv) {
 
     PathControllerTest pathControllerTest;
     status |= QTest::qExec(&pathControllerTest, argc, argv);
+
+    PathEditSessionTest pathEditSessionTest;
+    status |= QTest::qExec(&pathEditSessionTest, argc, argv);
 
     SelectionControllerTest selectionControllerTest;
     status |= QTest::qExec(&selectionControllerTest, argc, argv);
