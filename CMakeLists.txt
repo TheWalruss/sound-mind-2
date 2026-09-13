@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(SoundMind
-    VERSION 0.0.28.8
+    VERSION 0.0.29.1
     DESCRIPTION "Sound Mind Studio: a spectrogram-as-image DAW and graphics studio"
     LANGUAGES CXX C
 )
@@ -30,10 +30,11 @@ find_package(JUCE CONFIG REQUIRED)
 
 add_subdirectory(sound-mind-codec)
 add_subdirectory(sound-mind-core)
+add_subdirectory(sound-mind-gpu)
 add_subdirectory(sound-mind-studio)
 
-# Not yet scaffolded: sound-mind-gpu, sound-mind-vst (deferred). Added once
-# each has real content, per sound-mind-architecture.md's Build & Module Layout.
+# Not yet scaffolded: sound-mind-vst (deferred until the standalone Studio
+# is fully operational, per sound-mind-design.md's own resolved decision).
 
 # --- Code documentation (Doxygen) --------------------------------------
 # See CLAUDE.md's "Code Documentation (Doxygen)" section: this is the

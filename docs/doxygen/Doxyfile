@@ -1037,6 +1037,8 @@ INPUT                  = sound-mind-codec/include \
                          sound-mind-codec/src \
                          sound-mind-core/include \
                          sound-mind-core/src \
+                         sound-mind-gpu/include \
+                         sound-mind-gpu/src \
                          sound-mind-studio/include \
                          sound-mind-studio/src
 

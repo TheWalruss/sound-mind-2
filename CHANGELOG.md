@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.29.1] - 2026-09-13
+
+The first installment of the new "GPU Compute Enablement" milestone (`docs/sound-mind-roadmap.md`'s new Phase 3.5, moved forward from its original spot right before `v1.0.0.0` - confirmed with the user). **Pure plumbing, not a real DSP operation yet** - nothing else in the app depends on this yet, and no user-visible or audible change exists in this build.
+
+### Added
+
+- **`sound-mind-gpu`** - a new module, DirectX 12's first real code in this project (the module itself has been named in `docs/sound-mind-architecture.md` since the very first architecture draft, with nothing behind it until now). `sound_mind::gpu::ComputeDevice::create()` creates a device from a real hardware adapter, falling back to Microsoft's WARP software adapter before giving up entirely (never throws - returns `std::nullopt` on total failure, for callers to fall back to the existing CPU path). `ComputeDevice::multiplyByTwo()` is the one operation this installment builds: a trivial, DSP-meaningless compute shader that proves the whole device/pipeline/dispatch/readback round trip works end to end, compiled offline via `dxc` at build time.
+- No new third-party dependency - `d3d12.lib`/`dxgi.lib`/`dxguid.lib` and `dxc.exe` are all Windows SDK components already available via this project's existing MSVC toolchain requirement.
+
+Core regression: unchanged. Studio regression: unchanged. New `sound-mind-gpu` test suite: 7 test cases (284 assertions), all passing - and confirmed running against a real hardware adapter (this laptop's own Adreno GPU), not just WARP. Doxygen: 0 warnings.
+
 ## [0.0.28.8] - 2026-09-12
 
 The Studio half of the "Filter Layers" milestone's fourth and final installment (the Equalizer layer). **Now reachable from the app**: selecting the Equalizer layer shows its own specialized Cut editor. This closes out the entire "Filter Layers" milestone - every one of the six designed filter types now has both a real algorithm and a real, appropriate way to configure it.
