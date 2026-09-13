@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <map>
 #include <numbers>
@@ -11,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "gpu_compute_access.h"
 #include "sound_mind/core/tone_curve.h"
 
 namespace sound_mind::core {
@@ -91,6 +93,40 @@ std::vector<float> gaussianBlur2D(const std::vector<float>& grid, std::uint32_t 
         }
     }
     return result;
+}
+
+/// @brief `gaussianBlur2D()` above, preferring the GPU when available -
+/// `UniformBlur`'s own dispatch point, confirmed with the user ahead of
+/// implementation (`v0.Y.30.1`'s roadmap entry names Uniform Blur as "the
+/// cleanest textbook GPU fit"). Falls back to the CPU implementation
+/// above whenever `sound_mind::core::detail::gpuComputeDeviceOrNull()`
+/// returns `nullptr` (no device at all, or
+/// `setGpuComputeForcedOffForTesting(true)` is in effect), or if the GPU
+/// call itself throws - a device lost mid-session (driver reset/removal)
+/// is treated as a transient failure to degrade past, not a fatal error,
+/// also confirmed with the user.
+///
+/// Deliberately not used by `sharpen2D()`'s own internal blur call below:
+/// that one always runs at a small, fixed `sigma` (1.0, kernel radius 4),
+/// a much smaller workload than this GPU kernel has ever been measured
+/// against (`sound-mind-gpu`'s own tests use a 512x512 grid at `sigma`
+/// 8.0) - routing it through the GPU risked a real regression from fixed
+/// per-call dispatch overhead outweighing such a small kernel's own CPU
+/// cost, unmeasured, so left CPU-only rather than assumed faster.
+std::vector<float> gaussianBlur2DGpuOrCpu(const std::vector<float>& grid, std::uint32_t binCount,
+                                           std::uint32_t frameCount, float sigma) {
+    if (auto* device = detail::gpuComputeDeviceOrNull()) {
+        try {
+            // gaussianBlur2D()'s own grid is binCount (rows) x frameCount
+            // (columns); ComputeDevice::gaussianBlur2D() names the same
+            // shape width (columns) x height (rows) - frameCount is the
+            // width, binCount the height.
+            return device->gaussianBlur2D(grid, frameCount, binCount, sigma);
+        } catch (const std::exception&) {
+            // Fall through to the CPU path below.
+        }
+    }
+    return gaussianBlur2D(grid, binCount, frameCount, sigma);
 }
 
 /// @brief A 2D median filter over a square, clamp-to-edge window (matching
@@ -294,7 +330,7 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
         case FilterType::UniformBlur:
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
-                    return gaussianBlur2D(grid, bins, frames, config.blurSigma());
+                    return gaussianBlur2DGpuOrCpu(grid, bins, frames, config.blurSigma());
                 });
         case FilterType::EdgePreservingBlur:
             return applyPerChannelGridFilter(

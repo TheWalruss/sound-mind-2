@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(SoundMind
-    VERSION 0.0.29.2
+    VERSION 0.0.29.3
     DESCRIPTION "Sound Mind Studio: a spectrogram-as-image DAW and graphics studio"
     LANGUAGES CXX C
 )
@@ -29,8 +29,12 @@ include(CTest)
 find_package(JUCE CONFIG REQUIRED)
 
 add_subdirectory(sound-mind-codec)
-add_subdirectory(sound-mind-core)
+# sound-mind-gpu before sound-mind-core: as of v0.0.29.3, sound-mind-core
+# links against it (filter_application.cpp/compositor.cpp's own GPU-or-CPU
+# dispatch points - see sound-mind-core/src/gpu_compute_access.h), so its
+# target needs to exist first.
 add_subdirectory(sound-mind-gpu)
+add_subdirectory(sound-mind-core)
 add_subdirectory(sound-mind-studio)
 
 # Not yet scaffolded: sound-mind-vst (deferred until the standalone Studio

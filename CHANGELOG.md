@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.29.3] - 2026-09-13
+
+The third installment of "GPU Compute Enablement" (`docs/sound-mind-roadmap.md`'s Phase 3.5): wires the two kernels `v0.0.29.2` proved into `sound-mind-core`'s own real pipeline. **This fulfills `v0.Y.30.1`'s own roadmap "Demo"**: the same operation, same visible/audible result, measurably faster on this laptop's own GPU than the CPU path it replaced - and still correct, falling back cleanly, when the GPU is unavailable.
+
+### Added
+
+- **`applyFilter()`'s `UniformBlur` case and `compositeProject()`'s per-layer mixing now dispatch to `sound-mind-gpu` when a device is available**, falling back to their existing CPU implementations otherwise (no GPU at all, or a live GPU-call failure mid-session, which is caught and degraded rather than propagated). A single `ComputeDevice` is created lazily on first use and reused for the process's lifetime, not rebuilt per call.
+- **`sound_mind::core::setGpuComputeForcedOffForTesting(bool)`** - a small, public, test-only override forcing the CPU fallback path deterministically, so it can be exercised and verified even on a machine where GPU (or WARP) succeeds.
+
+### Unchanged by design
+
+- `compositeProject()`'s single-layer fast path (never needed the general mixing math to begin with) and the Sharpen filter's own internal blur (a much smaller workload than this GPU kernel has been measured against) both stay CPU-only - confirmed scope.
+
+Core regression: 314/314 passing (4 new test cases). Full project regression: 368/368 passing. No user-visible or audible change - the app produces the same output either way, just faster when a GPU is available. Doxygen: 0 warnings.
+
 ## [0.0.29.2] - 2026-09-13
 
 The second installment of "GPU Compute Enablement" (`docs/sound-mind-roadmap.md`'s Phase 3.5): `sound-mind-gpu`'s first two real DSP kernels. Given a choice of moving either the compositor's per-cell mixing or the Gaussian/Uniform Blur filter to GPU first, both were built - one proves an everyday hot path gets faster, the other proves the GPU DSP pattern on a real 2D, multi-pass workload. **Still not wired into `sound-mind-core`** - `applyFilter()`/`compositeProject()` are unchanged, and no user-visible or audible change exists in this build; wiring is deferred to a later installment.

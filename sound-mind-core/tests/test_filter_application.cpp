@@ -1,4 +1,6 @@
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 #include <vector>
 
@@ -7,6 +9,7 @@
 
 #include "sound_mind/core/filter_application.h"
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/gpu_compute_availability.h"
 #include "sound_mind/core/project_settings.h"
 
 using sound_mind::codec::StreamImage;
@@ -14,8 +17,18 @@ using sound_mind::core::applyFilter;
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterType;
 using sound_mind::core::ProjectSettings;
+using sound_mind::core::setGpuComputeForcedOffForTesting;
 
 namespace {
+
+/// @brief Forces the CPU fallback path (`setGpuComputeForcedOffForTesting(true)`)
+/// for its own scope, restoring normal GPU-when-available behavior when it
+/// goes out of scope - even if the test fails partway through, so this
+/// override never leaks into whichever test Catch2 runs next.
+struct GpuComputeForcedOffGuard {
+    GpuComputeForcedOffGuard() { setGpuComputeForcedOffForTesting(true); }
+    ~GpuComputeForcedOffGuard() { setGpuComputeForcedOffForTesting(false); }
+};
 
 /// @brief A 3-bin, 2-column StreamImage with uniform left/right dB and a
 /// distinctive, easy-to-check phase - small enough to hand-verify every
@@ -189,6 +202,80 @@ TEST_CASE("applyFilter's UniformBlur leaves phase untouched", "[core][filter_app
 
     for (const float phase : filtered.sharedPhaseRadians) {
         CHECK(phase == 0.75f);
+    }
+}
+
+TEST_CASE("applyFilter's UniformBlur produces the same result via its CPU fallback as via the GPU "
+          "(GPU wiring - Installment C)",
+          "[core][filter_application][gpu]") {
+    GpuComputeForcedOffGuard forceCpu;
+
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(1.0f);
+
+    // Same impulse and same expected values as the GPU-preferred test
+    // above - this is the same math, run through the CPU fallback branch
+    // instead, confirmed identical (see docs/sound-mind-architecture.md's
+    // Decision #4 testing strategy: the GPU path and the CPU fallback
+    // must produce equivalent results).
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto filtered = applyFilter(makeSingleRowComposite(impulse), config, ProjectSettings{});
+
+    const std::vector<float> expected = {-95.987152f, -95.574541f, -90.816852f, -72.770741f,
+                                          -57.701427f, -72.770741f, -90.816852f, -95.574541f, -95.987152f};
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        CHECK(filtered.leftMagnitudeDb[i] == Catch::Approx(expected[i]).margin(0.001));
+        CHECK(filtered.rightMagnitudeDb[i] == Catch::Approx(expected[i]).margin(0.001));
+    }
+}
+
+TEST_CASE("applyFilter's UniformBlur agrees with itself whether or not the GPU is available "
+          "(GPU wiring - Installment C)",
+          "[core][filter_application][gpu]") {
+    // A bigger, more varied grid than the hand-derived single-row cases
+    // above - not checked against an independently-computed expected
+    // value (sound-mind-gpu's own tests already do that, against a
+    // from-scratch CPU reference), but cross-checked against *this*
+    // production CPU implementation, GPU-preferred vs. forced-off,
+    // confirming the wiring itself (not just the math in isolation)
+    // agrees with its own fallback.
+    constexpr std::uint32_t binCount = 6;
+    constexpr std::uint32_t frameCount = 10;
+    StreamImage composite;
+    composite.config.binCount = binCount;
+    composite.frameCount = frameCount;
+    composite.leftMagnitudeDb.resize(std::size_t{binCount} * frameCount);
+    composite.rightMagnitudeDb.resize(std::size_t{binCount} * frameCount);
+    for (std::size_t i = 0; i < composite.leftMagnitudeDb.size(); ++i) {
+        // A deterministic, non-uniform pattern (not literally random, so
+        // the test stays reproducible) - varied enough to exercise every
+        // part of the separable kernel, not just a flat or single-impulse
+        // input.
+        composite.leftMagnitudeDb[i] = -50.0f + 40.0f * std::sin(static_cast<float>(i) * 0.7f);
+        composite.rightMagnitudeDb[i] = -30.0f + 20.0f * std::cos(static_cast<float>(i) * 1.3f);
+    }
+    composite.sharedPhaseRadians.assign(composite.leftMagnitudeDb.size(), 0.0f);
+
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(2.5f);
+
+    const auto gpuFiltered = applyFilter(composite, config, ProjectSettings{});
+    std::vector<float> cpuLeft;
+    std::vector<float> cpuRight;
+    {
+        GpuComputeForcedOffGuard forceCpu;
+        const auto cpuFiltered = applyFilter(composite, config, ProjectSettings{});
+        cpuLeft = cpuFiltered.leftMagnitudeDb;
+        cpuRight = cpuFiltered.rightMagnitudeDb;
+    }
+
+    REQUIRE(gpuFiltered.leftMagnitudeDb.size() == cpuLeft.size());
+    for (std::size_t i = 0; i < cpuLeft.size(); ++i) {
+        CHECK(gpuFiltered.leftMagnitudeDb[i] == Catch::Approx(cpuLeft[i]).margin(0.01));
+        CHECK(gpuFiltered.rightMagnitudeDb[i] == Catch::Approx(cpuRight[i]).margin(0.01));
     }
 }
 

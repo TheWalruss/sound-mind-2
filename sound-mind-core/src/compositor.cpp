@@ -4,7 +4,9 @@
 #include <cmath>
 #include <complex>
 #include <cstddef>
+#include <exception>
 
+#include "gpu_compute_access.h"
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/core/filter_application.h"
 #include "sound_mind/core/project_settings.h"
@@ -176,6 +178,80 @@ void mixLayerInto(StreamImage& running, const Layer& layer, const sound_mind::co
     }
 }
 
+/// @brief Builds a `sound_mind::gpu::AmplitudePhaseSignal` sized/aligned
+/// exactly like `running` (`config.binCount` x `canvasWidth`) from
+/// `layer`'s own content, applying the same placement geometry
+/// `mixLayerInto()`'s own CPU loop uses (`sourceColumnFor()`) - satisfies
+/// `ComputeDevice::mixAmplitudePhaseSignal()`'s own precondition that its
+/// `layer` argument already be placed onto `running`'s own shape. Cells
+/// outside the layer's own placed range, or beyond its own bin range, are
+/// filled with `silenceFloorDb` (rather than left untouched, the way the
+/// CPU loop's own `continue` does) - the closest equivalent this whole-
+/// array GPU kernel has to "nothing to add here", since (unlike the CPU
+/// loop) it has no way to skip a cell individually.
+///
+/// Opacity is deliberately *not* baked in here - `mixLayerIntoGpuOrCpu()`
+/// passes it separately as `mixAmplitudePhaseSignal()`'s own `layerGain`,
+/// matching the CPU path's own separation of placement from gain.
+sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
+                                                           const sound_mind::codec::StreamCodecConfig& config,
+                                                           std::uint32_t canvasWidth, float silenceFloorDb) {
+    const StreamImage& content = *layer.content();
+    sound_mind::gpu::AmplitudePhaseSignal placed;
+    const std::size_t cellCount = std::size_t{config.binCount} * canvasWidth;
+    placed.leftMagnitudeDb.assign(cellCount, silenceFloorDb);
+    placed.rightMagnitudeDb.assign(cellCount, silenceFloorDb);
+    placed.phaseRadians.assign(cellCount, 0.0f);
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        if (bin >= content.config.binCount) {
+            continue;
+        }
+        for (std::uint32_t x = 0; x < canvasWidth; ++x) {
+            const auto sourceColumn =
+                sourceColumnFor(x, content.frameCount, layer.rescaleFactor(), layer.translationColumns());
+            if (!sourceColumn.has_value()) {
+                continue;
+            }
+            const std::size_t sourceCell = std::size_t{bin} * content.frameCount + *sourceColumn;
+            const std::size_t outputCell = std::size_t{bin} * canvasWidth + x;
+            placed.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell];
+            placed.rightMagnitudeDb[outputCell] = content.rightMagnitudeDb[sourceCell];
+            placed.phaseRadians[outputCell] = content.sharedPhaseRadians[sourceCell];
+        }
+    }
+    return placed;
+}
+
+/// @brief `mixLayerInto()` above, preferring the GPU when available -
+/// `compositeProject()`'s own general-path dispatch point, confirmed with
+/// the user ahead of implementation. Falls back to the CPU
+/// implementation above whenever `sound_mind::core::detail::
+/// gpuComputeDeviceOrNull()` returns `nullptr` (no device at all, or
+/// `setGpuComputeForcedOffForTesting(true)` is in effect), or if the GPU
+/// call itself throws - a device lost mid-session (driver reset/removal)
+/// is treated as a transient failure to degrade past, not a fatal error,
+/// also confirmed with the user.
+void mixLayerIntoGpuOrCpu(StreamImage& running, const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
+                           std::uint32_t canvasWidth, float silenceFloorDb) {
+    if (auto* device = detail::gpuComputeDeviceOrNull()) {
+        try {
+            sound_mind::gpu::AmplitudePhaseSignal runningSignal;
+            runningSignal.leftMagnitudeDb = running.leftMagnitudeDb;
+            runningSignal.rightMagnitudeDb = running.rightMagnitudeDb;
+            runningSignal.phaseRadians = running.sharedPhaseRadians;
+            const auto layerSignal = placeLayerForGpuMix(layer, config, canvasWidth, silenceFloorDb);
+            const auto mixed = device->mixAmplitudePhaseSignal(runningSignal, layerSignal, layer.opacity());
+            running.leftMagnitudeDb = mixed.leftMagnitudeDb;
+            running.rightMagnitudeDb = mixed.rightMagnitudeDb;
+            running.sharedPhaseRadians = mixed.phaseRadians;
+            return;
+        } catch (const std::exception&) {
+            // Fall through to the CPU path below.
+        }
+    }
+    mixLayerInto(running, layer, config, canvasWidth);
+}
+
 }  // namespace
 
 std::optional<sound_mind::codec::RgbImage> renderLayer(const Layer& layer, std::uint32_t canvasWidth) {
@@ -342,7 +418,7 @@ std::optional<StreamImage> compositeProject(const Project& project) {
         if (!layer.content().has_value()) {
             continue;
         }
-        mixLayerInto(result, layer, config, canvasWidth);
+        mixLayerIntoGpuOrCpu(result, layer, config, canvasWidth, silenceFloorDb);
         anyMixedIn = true;
     }
 

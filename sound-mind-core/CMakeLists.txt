@@ -40,6 +40,7 @@ add_library(sound-mind-core
     src/record_engine.cpp
     src/pooling.cpp
     src/layer_export.cpp
+    src/gpu_compute_access.cpp
 )
 
 target_include_directories(sound-mind-core
@@ -58,6 +59,14 @@ target_link_libraries(sound-mind-core
     PRIVATE
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags
+        # sound-mind-gpu, PRIVATE: filter_application.cpp's UniformBlur
+        # case and compositor.cpp's layer mixing dispatch to it internally
+        # (via src/gpu_compute_access.h - see its own docs), but no public
+        # sound-mind-core header exposes any sound_mind::gpu type, so
+        # nothing downstream (sound-mind-studio) needs to know or link
+        # against it - matches sound-mind-gpu's own stated goal of
+        # isolating the DirectX 12 specifics from everything above it.
+        sound-mind-gpu
 )
 
 target_compile_features(sound-mind-core PUBLIC cxx_std_23)

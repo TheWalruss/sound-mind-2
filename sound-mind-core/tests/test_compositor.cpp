@@ -1,4 +1,5 @@
 #include <cmath>
+#include <optional>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -6,6 +7,7 @@
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/gpu_compute_availability.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
@@ -20,6 +22,7 @@ using sound_mind::core::LayerType;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::renderLayer;
+using sound_mind::core::setGpuComputeForcedOffForTesting;
 using sound_mind::core::streamCodecConfigFor;
 
 TEST_CASE("renderLayer returns nullopt for a layer with no content", "[core][compositor]") {
@@ -107,6 +110,15 @@ StreamImage makeContent(std::vector<float> leftDb, std::vector<float> rightDb, s
     content.sharedPhaseRadians = std::move(phase);
     return content;
 }
+
+/// @brief Forces the CPU fallback path (`setGpuComputeForcedOffForTesting(true)`)
+/// for its own scope, restoring normal GPU-when-available behavior when it
+/// goes out of scope - even if the test fails partway through, so this
+/// override never leaks into whichever test Catch2 runs next.
+struct GpuComputeForcedOffGuard {
+    GpuComputeForcedOffGuard() { setGpuComputeForcedOffForTesting(true); }
+    ~GpuComputeForcedOffGuard() { setGpuComputeForcedOffForTesting(false); }
+};
 
 }  // namespace
 
@@ -264,6 +276,72 @@ TEST_CASE("compositeProject sums two full-opacity overlapping layers, mixing rat
     REQUIRE(composite.has_value());
     CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
     CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject sums two full-opacity overlapping layers the same way via its CPU "
+          "fallback as via the GPU (GPU wiring - Installment C)",
+          "[core][compositor][gpu]") {
+    GpuComputeForcedOffGuard forceCpu;
+
+    Project project = Project::createNew(testSettings());
+    const float halfDb = 20.0f * std::log10(0.5f);
+    project.layers()[0].setContent(makeContent({halfDb, halfDb, halfDb}, {halfDb, halfDb, halfDb}, {0.0f, 0.0f, 0.0f}));
+    Layer second(0, "Second", LayerType::Normal);
+    second.setContent(makeContent({halfDb, halfDb, halfDb}, {halfDb, halfDb, halfDb}, {0.0f, 0.0f, 0.0f}));
+    project.addLayer(std::move(second));
+
+    // Same scenario, same expected result, as the GPU-preferred test
+    // above - run through the CPU fallback branch instead (see
+    // docs/sound-mind-architecture.md's Decision #4 testing strategy: the
+    // GPU path and the CPU fallback must produce equivalent results).
+    // This project already carries an Equalizer layer (Project::createNew()'s
+    // own default), which alone is enough to force compositeProject()'s
+    // general (mixLayerInto-based) path rather than the single-layer fast
+    // path - the same path every other test in this file already exercises.
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject agrees with itself whether or not the GPU is available "
+          "(GPU wiring - Installment C)",
+          "[core][compositor][gpu]") {
+    // A three-layer, varied-content scenario (not checked against an
+    // independently-computed expected value - sound-mind-gpu's own tests
+    // already do that, against a from-scratch CPU reference), but
+    // cross-checked against *this* production CPU implementation,
+    // GPU-preferred vs. forced-off, confirming the wiring itself agrees
+    // with its own fallback, including placement (translationColumns) and
+    // multiple overlapping contributors.
+    auto buildProject = []() {
+        Project project = Project::createNew(testSettings());
+        project.layers()[0].setContent(
+            makeContent({-6.0f, -14.0f, -30.0f}, {-9.0f, -18.0f, -40.0f}, {0.3f, -0.6f, 1.1f}));
+        project.layers()[0].setOpacity(0.8f);
+        Layer second(0, "Second", LayerType::Normal);
+        second.setContent(makeContent({-3.0f, -50.0f}, {-5.0f, -60.0f}, {-1.2f, 0.9f}));
+        second.setOpacity(0.5f);
+        second.setTranslationColumns(1);
+        project.addLayer(std::move(second));
+        return project;
+    };
+
+    const auto gpuComposite = compositeProject(buildProject());
+    std::optional<StreamImage> cpuComposite;
+    {
+        GpuComputeForcedOffGuard forceCpu;
+        cpuComposite = compositeProject(buildProject());
+    }
+
+    REQUIRE(gpuComposite.has_value());
+    REQUIRE(cpuComposite.has_value());
+    REQUIRE(gpuComposite->leftMagnitudeDb.size() == cpuComposite->leftMagnitudeDb.size());
+    for (std::size_t i = 0; i < cpuComposite->leftMagnitudeDb.size(); ++i) {
+        CHECK(gpuComposite->leftMagnitudeDb[i] == Catch::Approx(cpuComposite->leftMagnitudeDb[i]).margin(0.01));
+        CHECK(gpuComposite->rightMagnitudeDb[i] == Catch::Approx(cpuComposite->rightMagnitudeDb[i]).margin(0.01));
+    }
 }
 
 TEST_CASE("compositeProject skips a hidden layer's own contribution", "[core][compositor]") {
