@@ -1,12 +1,106 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/gradient.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/paint_operation.h"
 
 namespace sound_mind::core {
+
+/**
+ * @brief The flat index into a `StreamImage`'s own row-major
+ *        `leftMagnitudeDb`/`rightMagnitudeDb`/`sharedPhaseRadians` arrays
+ *        for a given `(bin, frame)` cell.
+ *
+ * Every content-editing `Operation`'s own apply function
+ * (`applyPaintOperation()`, `applyFillOperation()`, `applyPasteOperation()`,
+ * and `filter_application.cpp`'s own `applyFrequencyAxisGradient()`) needs
+ * this same `bin * frameCount + frame` arithmetic - shared here as one
+ * spelling rather than four near-identical ones (Refactor & Clean Up,
+ * `v0.Y.29.1`).
+ *
+ * @param bin The row index.
+ * @param frame The column index.
+ * @param frameCount The row length (`StreamImage::frameCount`).
+ * @return `bin * frameCount + frame`, as a `std::size_t`.
+ */
+template <typename BinIndex, typename FrameIndex>
+[[nodiscard]] constexpr std::size_t cellIndex(BinIndex bin, FrameIndex frame, std::uint32_t frameCount) noexcept {
+    return static_cast<std::size_t>(bin) * static_cast<std::size_t>(frameCount) + static_cast<std::size_t>(frame);
+}
+
+/**
+ * @brief Blends `left`/`right` toward `stop`'s own target intensities, in
+ *        place: `newValue = oldValue + (targetValue - oldValue) *
+ *        (opacity * weight)`.
+ *
+ * Every `Gradient`-driven amplitude edit in this codebase shares this
+ * exact formula - `applyPaintOperation()`'s own per-pixel falloff-weighted
+ * blend, `applyFillOperation()`'s uniform blend, and
+ * `filter_application.cpp`'s `FrequencyAxisGradient`/Equalizer blend -
+ * shared here as one spelling rather than three near-identical ones
+ * (Refactor & Clean Up, `v0.Y.29.1`).
+ *
+ * @param left The left-channel dB value to blend toward
+ *        `stop.leftIntensity`, in place.
+ * @param right The right-channel dB value to blend toward
+ *        `stop.rightIntensity`, in place.
+ * @param stop Supplies both channels' own target intensity and opacity.
+ * @param weight An additional multiplier on both channels' own opacity -
+ *        `1.0` (the default) for callers with no extra per-pixel weight
+ *        of their own (Fill, FrequencyAxisGradient); `applyPaintOperation()`
+ *        passes its own `[0, 1]` per-pixel falloff weight here instead.
+ */
+constexpr void blendTowardStop(float& left, float& right, const GradientStop& stop, float weight = 1.0f) noexcept {
+    left += (stop.leftIntensity - left) * (stop.leftOpacity * weight);
+    right += (stop.rightIntensity - right) * (stop.rightOpacity * weight);
+}
+
+/**
+ * @brief One rectangle's own clamped frame/bin range within a
+ *        `StreamImage` of the given `frameCount`/`binCount` - see
+ *        `rangeFor()`'s own docs. A range with `frameHigh < frameLow` (or
+ *        `binHigh < binLow`) means `bounds` fell entirely outside the
+ *        image (nothing to do), the same "empty" convention `Clip`'s own
+ *        default-constructed state already uses.
+ */
+struct FrameBinRange {
+    int frameLow = 0;    ///< The lowest (inclusive) frame/column index.
+    int frameHigh = -1;  ///< The highest (inclusive) frame/column index.
+    int binLow = 0;      ///< The lowest (inclusive) bin/row index.
+    int binHigh = -1;    ///< The highest (inclusive) bin/row index.
+};
+
+/**
+ * @brief `bounds`'s own time/frequency extent, converted to a clamped
+ *        frame/bin range within a `frameCount`-wide, `config.binCount`-tall
+ *        `StreamImage`.
+ *
+ * `applyFillOperation()` and `sound_mind::core::captureClip()`/
+ * `applyPasteOperation()` (see `fill_application.h`/`paste_application.h`)
+ * each need to turn a `TimeFrequencyRect` into concrete array indices the
+ * same way - shared here (Refactor & Clean Up, `v0.Y.29.1`) so a fill's
+ * own bounds and a paste's own clip-capture/placement origin always agree
+ * on exactly the same corner for the same `bounds`, rather than risking
+ * two independently-maintained copies of this rounding/clamping drifting
+ * apart.
+ *
+ * @param bounds The rectangle to convert - `startTimeSeconds`/
+ *        `endTimeSeconds` and `lowFrequencyHz`/`highFrequencyHz` need not
+ *        already be in low-to-high order.
+ * @param config The project's own Stream codec configuration.
+ * @param frameCount The row length to clamp against (a `StreamImage`'s own
+ *        `frameCount` - not always `config`'s own, since a layer's content
+ *        can have fewer/more frames than the project's current settings).
+ * @return The clamped `[frameLow, frameHigh] x [binLow, binHigh]` range -
+ *         see `FrameBinRange`'s own docs for what an empty result means.
+ */
+[[nodiscard]] FrameBinRange rangeFor(const TimeFrequencyRect& bounds, const sound_mind::codec::StreamCodecConfig& config,
+                                       std::uint32_t frameCount) noexcept;
 
 /**
  * @brief The fractional log-scale bin (row) index `frequencyHz` maps to in

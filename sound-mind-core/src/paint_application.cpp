@@ -312,6 +312,29 @@ double frameIndexToTime(double frameIndex, const sound_mind::codec::StreamCodecC
     return frameIndex * static_cast<double>(config.hopLength) / static_cast<double>(config.sampleRateHz);
 }
 
+FrameBinRange rangeFor(const TimeFrequencyRect& bounds, const sound_mind::codec::StreamCodecConfig& config,
+                        std::uint32_t frameCount) noexcept {
+    const double frameLowD = timeToFrameIndex(bounds.startTimeSeconds, config);
+    const double frameHighD = timeToFrameIndex(bounds.endTimeSeconds, config);
+    // The frequency axis is log-scaled (see frequencyToBinIndex()'s own
+    // docs), but its own direction still agrees with Hz - lowFrequencyHz
+    // always maps to the smaller bin index - so no separate min/max
+    // ordering is needed here beyond what std::minmax already gives.
+    const float binAtLow = frequencyToBinIndex(static_cast<float>(bounds.lowFrequencyHz), config);
+    const float binAtHigh = frequencyToBinIndex(static_cast<float>(bounds.highFrequencyHz), config);
+
+    FrameBinRange range;
+    range.frameLow = std::clamp(static_cast<int>(std::round(std::min(frameLowD, frameHighD))), 0,
+                                 static_cast<int>(frameCount) - 1);
+    range.frameHigh = std::clamp(static_cast<int>(std::round(std::max(frameLowD, frameHighD))), 0,
+                                  static_cast<int>(frameCount) - 1);
+    range.binLow = std::clamp(static_cast<int>(std::round(std::min(binAtLow, binAtHigh))), 0,
+                               static_cast<int>(config.binCount) - 1);
+    range.binHigh = std::clamp(static_cast<int>(std::round(std::max(binAtLow, binAtHigh))), 0,
+                                static_cast<int>(config.binCount) - 1);
+    return range;
+}
+
 void applyPaintOperation(const PaintOperation& operation, double frequencyToTimeScale,
                           sound_mind::codec::StreamImage& content) {
     if (frequencyToTimeScale <= 0.0 || content.frameCount == 0 || content.config.binCount == 0) {
@@ -371,11 +394,8 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
                     continue;
                 }
 
-                const std::size_t index = static_cast<std::size_t>(bin) * content.frameCount + static_cast<std::size_t>(frame);
-                float& left = content.leftMagnitudeDb[index];
-                float& right = content.rightMagnitudeDb[index];
-                left += (target.leftIntensity - left) * (target.leftOpacity * weight);
-                right += (target.rightIntensity - right) * (target.rightOpacity * weight);
+                const std::size_t index = cellIndex(bin, frame, content.frameCount);
+                blendTowardStop(content.leftMagnitudeDb[index], content.rightMagnitudeDb[index], target, weight);
             }
         }
     }

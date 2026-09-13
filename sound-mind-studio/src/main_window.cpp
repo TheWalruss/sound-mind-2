@@ -1381,8 +1381,7 @@ void MainWindow::deleteLayer(sound_mind::core::LayerId id) {
     if (layer == nullptr) {
         return;
     }
-    if (layer->type() == sound_mind::core::LayerType::Background ||
-        layer->type() == sound_mind::core::LayerType::Equalizer) {
+    if (sound_mind::core::isLockedLayerType(layer->type())) {
         // Defense in depth - LayersPanel doesn't even show a delete
         // button for these, but refuse here too regardless of caller.
         return;
@@ -1439,7 +1438,7 @@ void MainWindow::addFilterLayer() {
 void MainWindow::handleLayerSelectionChanged(std::optional<sound_mind::core::LayerId> id) {
     const sound_mind::core::Layer* layer = id.has_value() ? layerById(*id) : nullptr;
     const bool isEqualizer = layer != nullptr && layer->type() == sound_mind::core::LayerType::Equalizer;
-    const bool isFilterLayer = layer != nullptr && (layer->type() == sound_mind::core::LayerType::Filter || isEqualizer);
+    const bool isFilterLayer = layer != nullptr && sound_mind::core::isFilterLayerType(layer->type());
     // Set before setFilterConfiguration() - see FilterConfigurationPanel::
     // setEqualizerMode()'s own docs (both are display-mode toggles, not
     // user edits, and updateVisibleGroup() reads isEqualizerMode_ as part
@@ -1457,8 +1456,7 @@ void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfigur
         return;
     }
     sound_mind::core::Layer* layer = layerById(*id);
-    if (layer == nullptr ||
-        (layer->type() != sound_mind::core::LayerType::Filter && layer->type() != sound_mind::core::LayerType::Equalizer)) {
+    if (layer == nullptr || !sound_mind::core::isFilterLayerType(layer->type())) {
         return;
     }
     layer->setFilterConfiguration(config);

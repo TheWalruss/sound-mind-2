@@ -22,8 +22,11 @@ using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
 
 /// @brief Whether `type` is one of the fixed-position layer types - no
-/// drag handle, no delete button (see the class docs).
-bool isLocked(LayerType type) { return type == LayerType::Background || type == LayerType::Equalizer; }
+/// drag handle, no delete button (see the class docs). A thin alias for
+/// `sound_mind::core::isLockedLayerType()` - kept as its own name here
+/// since every call site in this file already reads naturally as
+/// "isLocked", not "isLockedLayerType".
+bool isLocked(LayerType type) { return sound_mind::core::isLockedLayerType(type); }
 
 QString typeTagText(LayerType type) {
     switch (type) {

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "gpu_compute_access.h"
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/tone_curve.h"
 
 namespace sound_mind::core {
@@ -267,10 +268,8 @@ StreamImage applyFrequencyAxisGradient(const StreamImage& composite, const Gradi
         const GradientStop stop = gradient.evaluate(t);
 
         for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
-            const std::size_t cell = std::size_t{bin} * frameCount + frame;
-            result.leftMagnitudeDb[cell] += (stop.leftIntensity - result.leftMagnitudeDb[cell]) * stop.leftOpacity;
-            result.rightMagnitudeDb[cell] +=
-                (stop.rightIntensity - result.rightMagnitudeDb[cell]) * stop.rightOpacity;
+            const std::size_t cell = cellIndex(bin, frame, frameCount);
+            blendTowardStop(result.leftMagnitudeDb[cell], result.rightMagnitudeDb[cell], stop);
             // Phase is left untouched - the gradient only ever targets
             // amplitude, the same as Fill/Paint's own use of a Gradient.
         }

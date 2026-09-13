@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.30.1] - 2026-09-13
+
+Installment A of the "Refactor & Clean Up" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.29.1`) - a dedicated pass over everything Phase 3 added (Basic Painting, Selection & Fill, Paths & Grids, Multi-layer Compositing, Filter Layers). Purely internal code quality work, no user-visible behavior change. A dedicated audit turned up ~20 findings across five tiers of risk/effort; this installment lands the three lowest-risk, purely-mechanical ones, confirmed with the user to proceed installment-by-installment rather than as one combined pass.
+
+### Changed
+
+- **New shared `sound_mind::core::cellIndex()`/`blendTowardStop()`** (`paint_application.h`) replace near-identical flat-array-index and Gradient-blend arithmetic previously spelled out separately in `paint_application.cpp`, `fill_application.cpp`, `paste_application.cpp`, `filter_application.cpp`, and `compositor.cpp`.
+- **New shared `sound_mind::core::FrameBinRange`/`rangeFor()`** (`paint_application.h`) replace `applyFillOperation()`'s own round-then-clamp block and `paste_application.cpp`'s own private, near-identical copy of the same logic.
+- **New shared `sound_mind::core::isFilterLayerType()`/`isLockedLayerType()`** (`layer.h`) replace the same two `LayerType` predicates reimplemented inline at three `MainWindow` call sites and `compositor.cpp`'s own private copy; `LayersPanel`'s own `isLocked()` now delegates to the shared function instead of duplicating its body.
+
+No new tests were needed for this installment: every one of the five extracted helpers is pure, previously-inline arithmetic already exercised end-to-end by the existing regression suite. Full regression: 368/368 passing (unchanged from `v0.0.29.3` - zero new/removed test cases). Doxygen: 0 warnings.
+
+Three related findings from the same audit (a redundant duplicate `contentChanged` signal emission, consolidating duplicated grid-snapping state, and factoring a repeated "append operation + rebuild" sequence) turned out to touch each controller's own public Qt signal contract rather than being pure substitution, and are deliberately left for a later installment.
+
 ## [0.0.29.3] - 2026-09-13
 
 The third installment of "GPU Compute Enablement" (`docs/sound-mind-roadmap.md`'s Phase 3.5): wires the two kernels `v0.0.29.2` proved into `sound-mind-core`'s own real pipeline. **This fulfills `v0.Y.30.1`'s own roadmap "Demo"**: the same operation, same visible/audible result, measurably faster on this laptop's own GPU than the CPU path it replaced - and still correct, falling back cleanly, when the GPU is unavailable.

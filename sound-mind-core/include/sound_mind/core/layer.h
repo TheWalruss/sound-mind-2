@@ -35,6 +35,24 @@ NLOHMANN_JSON_SERIALIZE_ENUM(LayerType, {
 })
 // clang-format on
 
+/// @brief Whether `type` is one of the two Filter layer kinds - see
+/// `docs/sound-mind-design.md`'s "Special Layers" (the Equalizer is "a
+/// Filter layer of Equalizer type", not a separate concept). Shared here
+/// rather than reimplemented at each of its own call sites
+/// (`compositor.cpp`, `sound-mind-studio`'s `MainWindow`) - Refactor &
+/// Clean Up, `v0.Y.29.1`.
+[[nodiscard]] constexpr bool isFilterLayerType(LayerType type) noexcept {
+    return type == LayerType::Filter || type == LayerType::Equalizer;
+}
+
+/// @brief Whether `type` is one of the fixed-position layer types - no
+/// drag handle, no delete button, no rename (see `LayersPanel`'s own
+/// docs). Shared here rather than reimplemented at each of its own call
+/// sites (`LayersPanel`, `MainWindow`) - Refactor & Clean Up, `v0.Y.29.1`.
+[[nodiscard]] constexpr bool isLockedLayerType(LayerType type) noexcept {
+    return type == LayerType::Background || type == LayerType::Equalizer;
+}
+
 /**
  * @brief One entry in a Project's layer stack.
  *

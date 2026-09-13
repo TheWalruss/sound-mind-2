@@ -8,44 +8,6 @@
 
 namespace sound_mind::core {
 
-namespace {
-
-/// @brief One rectangle's own clamped frame/bin range within a
-/// `StreamImage` of the given `frameCount`/`binCount` - the same
-/// round-then-clamp `applyFillOperation()` already uses, shared here so
-/// captureClip()'s own origin and applyPasteOperation()'s own destination
-/// origin agree on exactly the same corner for the same `bounds`.
-struct FrameBinRange {
-    int frameLow = 0;
-    int frameHigh = -1;
-    int binLow = 0;
-    int binHigh = -1;
-};
-
-FrameBinRange rangeFor(const TimeFrequencyRect& bounds, const sound_mind::codec::StreamCodecConfig& config,
-                        std::uint32_t frameCount) {
-    const double frameLowD = timeToFrameIndex(bounds.startTimeSeconds, config);
-    const double frameHighD = timeToFrameIndex(bounds.endTimeSeconds, config);
-    // The frequency axis is log-scaled, but its own direction still agrees
-    // with Hz - lowFrequencyHz always maps to the smaller bin index - see
-    // applyFillOperation()'s own docs for the same reasoning.
-    const float binAtLow = frequencyToBinIndex(static_cast<float>(bounds.lowFrequencyHz), config);
-    const float binAtHigh = frequencyToBinIndex(static_cast<float>(bounds.highFrequencyHz), config);
-
-    FrameBinRange range;
-    range.frameLow = std::clamp(static_cast<int>(std::round(std::min(frameLowD, frameHighD))), 0,
-                                 static_cast<int>(frameCount) - 1);
-    range.frameHigh = std::clamp(static_cast<int>(std::round(std::max(frameLowD, frameHighD))), 0,
-                                  static_cast<int>(frameCount) - 1);
-    range.binLow = std::clamp(static_cast<int>(std::round(std::min(binAtLow, binAtHigh))), 0,
-                               static_cast<int>(config.binCount) - 1);
-    range.binHigh = std::clamp(static_cast<int>(std::round(std::max(binAtLow, binAtHigh))), 0,
-                                static_cast<int>(config.binCount) - 1);
-    return range;
-}
-
-}  // namespace
-
 Clip captureClip(const sound_mind::codec::StreamImage& source, const TimeFrequencyRect& bounds) {
     Clip clip;
     if (source.frameCount == 0 || source.config.binCount == 0) {
@@ -66,8 +28,7 @@ Clip captureClip(const sound_mind::codec::StreamImage& source, const TimeFrequen
 
     for (int bin = range.binLow; bin <= range.binHigh; ++bin) {
         for (int frame = range.frameLow; frame <= range.frameHigh; ++frame) {
-            const std::size_t index =
-                static_cast<std::size_t>(bin) * source.frameCount + static_cast<std::size_t>(frame);
+            const std::size_t index = cellIndex(bin, frame, source.frameCount);
             clip.leftMagnitudeDb.push_back(source.leftMagnitudeDb[index]);
             clip.rightMagnitudeDb.push_back(source.rightMagnitudeDb[index]);
             clip.sharedPhaseRadians.push_back(source.sharedPhaseRadians[index]);
@@ -102,9 +63,8 @@ void applyPasteOperation(const PasteOperation& operation, sound_mind::codec::Str
                 continue;  // Falls outside the destination's own frame range - silently clipped.
             }
 
-            const std::size_t clipIndex = static_cast<std::size_t>(clipBin) * clip.frameCount + clipFrame;
-            const std::size_t destIndex =
-                static_cast<std::size_t>(destBin) * content.frameCount + static_cast<std::size_t>(destFrame);
+            const std::size_t clipIndex = cellIndex(clipBin, clipFrame, clip.frameCount);
+            const std::size_t destIndex = cellIndex(destBin, destFrame, content.frameCount);
             content.leftMagnitudeDb[destIndex] = clip.leftMagnitudeDb[clipIndex];
             content.rightMagnitudeDb[destIndex] = clip.rightMagnitudeDb[clipIndex];
             content.sharedPhaseRadians[destIndex] = clip.sharedPhaseRadians[clipIndex];

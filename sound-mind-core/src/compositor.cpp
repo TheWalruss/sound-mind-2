@@ -9,6 +9,7 @@
 #include "gpu_compute_access.h"
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/core/filter_application.h"
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/project_settings.h"
 
 namespace sound_mind::core {
@@ -123,13 +124,6 @@ constexpr float kMinLinearAmplitude = 1e-7f;
         sourceWidth - 1, (static_cast<std::uint64_t>(rescaledIndex) * sourceWidth) / rescaledWidth));
 }
 
-/// @brief Whether `type` is one of the two Filter layer kinds - see
-/// `docs/sound-mind-design.md`'s "Special Layers" (the Equalizer is "a
-/// Filter layer of Equalizer type", not a separate concept).
-[[nodiscard]] bool isFilterLayerType(LayerType type) noexcept {
-    return type == LayerType::Filter || type == LayerType::Equalizer;
-}
-
 /// @brief Mixes `layer`'s own placed content into `running`, in place -
 /// compositeProject()'s own general-path building block, called once per
 /// Normal/Background contributor. Reads `running`'s own current dB/phase
@@ -152,8 +146,8 @@ void mixLayerInto(StreamImage& running, const Layer& layer, const sound_mind::co
                 continue;
             }
 
-            const std::size_t sourceCell = std::size_t{bin} * content.frameCount + *sourceColumn;
-            const std::size_t outputCell = std::size_t{bin} * canvasWidth + x;
+            const std::size_t sourceCell = cellIndex(bin, *sourceColumn, content.frameCount);
+            const std::size_t outputCell = cellIndex(bin, x, canvasWidth);
 
             const float layerLeftLinear = dbToLinearAmplitude(content.leftMagnitudeDb[sourceCell]) * layer.opacity();
             const float layerRightLinear =
@@ -212,8 +206,8 @@ sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
             if (!sourceColumn.has_value()) {
                 continue;
             }
-            const std::size_t sourceCell = std::size_t{bin} * content.frameCount + *sourceColumn;
-            const std::size_t outputCell = std::size_t{bin} * canvasWidth + x;
+            const std::size_t sourceCell = cellIndex(bin, *sourceColumn, content.frameCount);
+            const std::size_t outputCell = cellIndex(bin, x, canvasWidth);
             placed.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell];
             placed.rightMagnitudeDb[outputCell] = content.rightMagnitudeDb[sourceCell];
             placed.phaseRadians[outputCell] = content.sharedPhaseRadians[sourceCell];
@@ -353,7 +347,7 @@ std::optional<StreamImage> compositeProject(const Project& project) {
         const float gainDb = 20.0f * std::log10(std::max(layer.opacity(), kMinLinearAmplitude));
         for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
             for (std::uint32_t x = 0; x < canvasWidth; ++x) {
-                const std::size_t outputCell = std::size_t{bin} * canvasWidth + x;
+                const std::size_t outputCell = cellIndex(bin, x, canvasWidth);
                 // A layer's own content may have fewer bins than the
                 // project's own binCount (e.g. a project reconfigured
                 // since this layer was last encoded) - out-of-range bins
@@ -374,7 +368,7 @@ std::optional<StreamImage> compositeProject(const Project& project) {
                     result.sharedPhaseRadians[outputCell] = 0.0f;
                     continue;
                 }
-                const std::size_t sourceCell = std::size_t{bin} * content.frameCount + *sourceColumn;
+                const std::size_t sourceCell = cellIndex(bin, *sourceColumn, content.frameCount);
                 // dB(linear * gain) == dB(linear) + dB(gain) - the same
                 // identity dbToLinearAmplitude()/linearAmplitudeToDb()
                 // round-trip exactly for any value clear of the silence
