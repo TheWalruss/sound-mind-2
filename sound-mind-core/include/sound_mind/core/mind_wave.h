@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <vector>
+
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/path.h"
 
@@ -11,19 +14,26 @@ namespace sound_mind::core {
  * @brief Which family of waveform a `MindWave` generates - see `docs/
  *        sound-mind-design.md`'s "MindWave Functions".
  *
- * Only `Periodic` exists so far (`v0.Y.31.1`, Installment A) - `Envelope`,
- * `SteppedNoise`, `Spatial`, and `Fractal` are added incrementally as each
- * is actually implemented, the same one-value-per-installment shape
- * `FilterType` was built up in during Filter Layers, rather than declared
- * upfront with unimplemented branches.
+ * `v0.Y.31.1` Installment B fills out the full v1 catalogue named there:
+ * periodic, envelope, stepped/noise, spatial, and a first fractal field.
+ * `Spatial` deliberately ignores `MindWaveAxis` (see that enum's own docs) -
+ * it varies across both canvas axes at once.
  */
 enum class GeneratorType {
     Periodic,
+    Envelope,
+    SteppedNoise,
+    Spatial,
+    Fractal,
 };
 
 // clang-format off
 NLOHMANN_JSON_SERIALIZE_ENUM(GeneratorType, {
     {GeneratorType::Periodic, "periodic"},
+    {GeneratorType::Envelope, "envelope"},
+    {GeneratorType::SteppedNoise, "steppedNoise"},
+    {GeneratorType::Spatial, "spatial"},
+    {GeneratorType::Fractal, "fractal"},
 })
 // clang-format on
 
@@ -33,17 +43,25 @@ NLOHMANN_JSON_SERIALIZE_ENUM(GeneratorType, {
  *        "MindWave Functions": "sine, triangle, square, sawtooth, and
  *        pulse".
  *
- * Only `Sine` exists so far (`v0.Y.31.1`, Installment A) - the other four
- * are added once actually implemented, same reasoning as `GeneratorType`'s
- * own docs.
+ * `Square` is exactly `Pulse` at a fixed 50% `dutyCycle()` - kept as its
+ * own named value because the design doc names it separately, even though
+ * `Pulse` alone could express it.
  */
 enum class PeriodicWaveform {
     Sine,
+    Triangle,
+    Square,
+    Sawtooth,
+    Pulse,
 };
 
 // clang-format off
 NLOHMANN_JSON_SERIALIZE_ENUM(PeriodicWaveform, {
     {PeriodicWaveform::Sine, "sine"},
+    {PeriodicWaveform::Triangle, "triangle"},
+    {PeriodicWaveform::Square, "square"},
+    {PeriodicWaveform::Sawtooth, "sawtooth"},
+    {PeriodicWaveform::Pulse, "pulse"},
 })
 // clang-format on
 
@@ -52,9 +70,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(PeriodicWaveform, {
  *        sound-mind-design.md`'s "a spatial 'LFO' that varies over time
  *        (horizontal axis), frequency (vertical axis), or both".
  *
- * Only the two single-axis cases exist so far; a generator type that
- * varies across both axes at once (`GeneratorType::Spatial`, once it
- * exists) won't use this enum at all - it has no single axis to name.
+ * Meaningless for `GeneratorType::Spatial`, which varies across both axes
+ * at once and has no single axis to name.
  */
 enum class MindWaveAxis {
     Time,
@@ -69,6 +86,102 @@ NLOHMANN_JSON_SERIALIZE_ENUM(MindWaveAxis, {
 // clang-format on
 
 /**
+ * @brief Which one-shot shape a `GeneratorType::Envelope` `MindWave`
+ *        follows - see `docs/sound-mind-design.md`'s "Envelope shapes":
+ *        "exponential decay, a decaying oscillation, and an S-curve
+ *        transition, for one-shot fades and thresholds rather than
+ *        repeating cycles."
+ */
+enum class EnvelopeShape {
+    ExponentialDecay,
+    DecayingOscillation,
+    SCurve,
+};
+
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(EnvelopeShape, {
+    {EnvelopeShape::ExponentialDecay, "exponentialDecay"},
+    {EnvelopeShape::DecayingOscillation, "decayingOscillation"},
+    {EnvelopeShape::SCurve, "sCurve"},
+})
+// clang-format on
+
+/**
+ * @brief Which shape a `GeneratorType::SteppedNoise` `MindWave` produces -
+ *        see `docs/sound-mind-design.md`'s "Stepped and noise fields": "a
+ *        quantised staircase, and smooth (Gaussian-filtered) or fractal
+ *        noise."
+ */
+enum class SteppedNoiseShape {
+    Stepped,
+    GaussianNoise,
+    FractalNoise,
+};
+
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(SteppedNoiseShape, {
+    {SteppedNoiseShape::Stepped, "stepped"},
+    {SteppedNoiseShape::GaussianNoise, "gaussianNoise"},
+    {SteppedNoiseShape::FractalNoise, "fractalNoise"},
+})
+// clang-format on
+
+/**
+ * @brief Which two-axis pattern a `GeneratorType::Spatial` `MindWave`
+ *        produces - see `docs/sound-mind-design.md`'s "Spatial patterns":
+ *        "ripples, checkerboards, cellular (Voronoi-like) blobs, and
+ *        domain-warped noise, evaluated across both axes at once."
+ */
+enum class SpatialPattern {
+    Ripples,
+    Checkerboard,
+    Cellular,
+    DomainWarpedNoise,
+};
+
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(SpatialPattern, {
+    {SpatialPattern::Ripples, "ripples"},
+    {SpatialPattern::Checkerboard, "checkerboard"},
+    {SpatialPattern::Cellular, "cellular"},
+    {SpatialPattern::DomainWarpedNoise, "domainWarpedNoise"},
+})
+// clang-format on
+
+/**
+ * @brief How a superposed `MindWave` folds into the running result - see
+ *        `docs/sound-mind-design.md`'s "Field Operators": "Superposition
+ *        ... layering them together the same way layers themselves
+ *        composite, with a chosen blend (multiply, add, min, max, average)
+ *        determining how each one folds into the running result."
+ *
+ * @note `Average` folds pairwise, in stack order (`running = (running +
+ *       member) / 2`, one member at a time) - the same "folds into the
+ *       running result" mechanism the other four modes use, not a single
+ *       statistical mean across every member at once. With more than one
+ *       stack member, later members therefore weigh more heavily than
+ *       earlier ones; documented here as a known v1 simplification rather
+ *       than a claimed true average.
+ */
+enum class SuperpositionBlendMode {
+    Multiply,
+    Add,
+    Min,
+    Max,
+    Average,
+};
+
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(SuperpositionBlendMode, {
+    {SuperpositionBlendMode::Multiply, "multiply"},
+    {SuperpositionBlendMode::Add, "add"},
+    {SuperpositionBlendMode::Min, "min"},
+    {SuperpositionBlendMode::Max, "max"},
+    {SuperpositionBlendMode::Average, "average"},
+})
+// clang-format on
+
+/**
  * @brief A parametric waveform producing a per-cell scalar field in
  *        `[0, 1]` across the canvas - see `docs/sound-mind-design.md`'s
  *        "Low Frequency Oscillations (MindWaves)".
@@ -77,18 +190,33 @@ NLOHMANN_JSON_SERIALIZE_ENUM(MindWaveAxis, {
  * a named, `Project`-scoped, independently-referenceable resource the way
  * the design doc's own "MindWave" ultimately is - the same "not built
  * until a real consumer needs it" gap `ToolConfiguration` currently has
- * too (embedded directly wherever it's used, no id/name/`Project` storage
- * of its own yet). Identity/storage arrives once something actually binds
- * to a `MindWave` by reference (the layer-opacity-binding installment).
- * Likewise, no superposition-stack field yet - added once superposition
- * itself is implemented, not speculatively ahead of that.
+ * too. Identity/storage arrives once something actually binds to a
+ * `MindWave` by reference (the layer-opacity-binding installment).
  *
- * Only one generator family (`GeneratorType::Periodic`) and one waveform
- * within it (`PeriodicWaveform::Sine`) exist yet - proving the field-
- * evaluation pipeline end to end with a single, hand-verifiable shape
- * before building out the rest of `v0.Y.31.1`'s own named catalogue
- * (`docs/sound-mind-roadmap.md`'s "narrow proof first" installment plan,
- * confirmed with the user).
+ * **`v0.Y.31.1`, Installment B**: fills out the rest of the v1 generator
+ * catalogue (`Envelope`, `SteppedNoise`, `Spatial`, `Fractal`, and
+ * `Periodic`'s remaining four waveforms) plus superposition
+ * (`superpositionStack()`/`superpositionBlendMode()`). Deliberately flat
+ * fields for every generator type, not a tagged union/`std::variant` - the
+ * same reasoning `FilterConfiguration`'s own docs (and `docs/sound-mind-
+ * architecture.md`'s Decision #34) already give: plain typed fields stay
+ * simpler and safer than an opaque bag or a discriminated union while the
+ * per-type field count stays small, even with five real generator types
+ * now coexisting.
+ *
+ * A hand-rolled, seeded value-noise primitive (not a third-party library -
+ * confirmed with the user) backs `GaussianNoise`/`FractalNoise`/`Cellular`/
+ * `DomainWarpedNoise`, satisfying `docs/sound-mind-architecture.md`'s own
+ * "anything seeded must replay bit-for-bit on the same Studio version and
+ * architecture" rule - see `mind_wave.cpp`'s anonymous namespace.
+ *
+ * `GeneratorType::Fractal` is built from recursive midpoint displacement
+ * (confirmed with the user) rather than the branching amplitude/phase
+ * grammar `docs/sound-mind-design.md` cross-references from `v0.Y.39.1`
+ * (Generators, Phase 5, which comes *after* this milestone) - a simpler,
+ * self-contained 1D-field primitive suited to this narrower need, per
+ * `docs/sound-mind-roadmap.md`'s own note on why this milestone can't lean
+ * on that later one.
  */
 class MindWave {
 public:
@@ -117,7 +245,8 @@ public:
     /// @param waveform The new periodic waveform.
     void setPeriodicWaveform(PeriodicWaveform waveform) noexcept { periodicWaveform_ = waveform; }
 
-    /// @brief Which canvas axis this MindWave cycles along.
+    /// @brief Which canvas axis this MindWave cycles along - meaningless
+    ///        for `GeneratorType::Spatial` (see `MindWaveAxis`'s own docs).
     /// @return The current axis.
     [[nodiscard]] MindWaveAxis axis() const noexcept { return axis_; }
 
@@ -129,7 +258,12 @@ public:
      * @brief How long one full cycle takes, in the current axis's own
      *        natural unit: seconds for `MindWaveAxis::Time`, bins (not
      *        Hz) for `MindWaveAxis::Frequency` - see `evaluate()`'s own
-     *        docs for why bins, not Hz.
+     *        docs for why bins, not Hz. Also used as `Envelope`'s own
+     *        oscillation period (`DecayingOscillation`), `SteppedNoise`'s
+     *        own cycle length (`Stepped`), `Spatial`'s own ring spacing
+     *        (`Ripples`) or cell size (`Checkerboard`, in both axes' own
+     *        mixed units - a deliberate v1 simplification), and
+     *        `Fractal`'s own tile length.
      * @return The current period.
      */
     [[nodiscard]] double period() const noexcept { return period_; }
@@ -142,10 +276,9 @@ public:
     void setPeriod(double period) noexcept { period_ = period; }
 
     /// @brief The cycle's own phase offset, in radians - `0` starts the
-    ///        cycle at its own defined origin; matches `sharedPhaseRadians`'s
-    ///        own unit convention elsewhere in this codebase, even though
-    ///        it's a different concept (a generator parameter, not a
-    ///        signal's own phase).
+    ///        cycle at its own defined origin. Also used as `Envelope`'s
+    ///        own `DecayingOscillation` phase and `Spatial`'s own
+    ///        `Ripples` phase.
     /// @return The current phase offset, in radians.
     [[nodiscard]] double phaseRadians() const noexcept { return phaseRadians_; }
 
@@ -155,7 +288,255 @@ public:
     void setPhaseRadians(double phaseRadians) noexcept { phaseRadians_ = phaseRadians; }
 
     /**
-     * @brief This MindWave's own field value at `point`.
+     * @brief `PeriodicWaveform::Pulse`'s own fraction of each cycle spent
+     *        at `1.0` before dropping to `0.0`, in `[0, 1]` - `0.5`
+     *        (the default) makes `Pulse` identical to `Square`.
+     * @return The current duty cycle; meaningless unless `periodicWaveform()`
+     *         is `Pulse`. Not clamped or validated here.
+     */
+    [[nodiscard]] double dutyCycle() const noexcept { return dutyCycle_; }
+
+    /// @brief Sets `Pulse`'s own duty cycle.
+    /// @param dutyCycle The new duty cycle, intended to be within `[0, 1]`.
+    void setDutyCycle(double dutyCycle) noexcept { dutyCycle_ = dutyCycle; }
+
+    /// @brief Which one-shot shape this MindWave follows - only
+    ///        meaningful while `type()` is `GeneratorType::Envelope`.
+    /// @return The current envelope shape.
+    [[nodiscard]] EnvelopeShape envelopeShape() const noexcept { return envelopeShape_; }
+
+    /// @brief Sets which one-shot shape this MindWave follows.
+    /// @param shape The new envelope shape.
+    void setEnvelopeShape(EnvelopeShape shape) noexcept { envelopeShape_ = shape; }
+
+    /**
+     * @brief The position (in the current axis's own unit - see
+     *        `period()`'s own docs) where `ExponentialDecay` begins
+     *        decaying, or where `SCurve` sits at exactly `0.5`. Before this
+     *        position, `ExponentialDecay` plateaus at `1.0`.
+     * @return The current center; meaningless unless `type()` is
+     *         `GeneratorType::Envelope`.
+     */
+    [[nodiscard]] double envelopeCenter() const noexcept { return envelopeCenter_; }
+
+    /// @brief Sets the envelope's own center - see `envelopeCenter()`'s
+    ///        own docs.
+    /// @param center The new center.
+    void setEnvelopeCenter(double center) noexcept { envelopeCenter_ = center; }
+
+    /**
+     * @brief `SCurve`'s own transition steepness - higher values produce a
+     *        sharper threshold, lower values a gentler ramp.
+     * @return The current steepness; meaningless unless `envelopeShape()`
+     *         is `SCurve`. Not clamped or validated here.
+     */
+    [[nodiscard]] double envelopeSteepness() const noexcept { return envelopeSteepness_; }
+
+    /// @brief Sets `SCurve`'s own transition steepness.
+    /// @param steepness The new steepness.
+    void setEnvelopeSteepness(double steepness) noexcept { envelopeSteepness_ = steepness; }
+
+    /**
+     * @brief How quickly `ExponentialDecay`/`DecayingOscillation` decay
+     *        past `envelopeCenter()` - higher values decay faster.
+     * @return The current decay rate; meaningless unless `envelopeShape()`
+     *         is `ExponentialDecay` or `DecayingOscillation`. Not clamped
+     *         or validated here.
+     */
+    [[nodiscard]] double decayRate() const noexcept { return decayRate_; }
+
+    /// @brief Sets the envelope's own decay rate.
+    /// @param decayRate The new decay rate.
+    void setDecayRate(double decayRate) noexcept { decayRate_ = decayRate; }
+
+    /// @brief Which shape this MindWave produces - only meaningful while
+    ///        `type()` is `GeneratorType::SteppedNoise`.
+    /// @return The current stepped/noise shape.
+    [[nodiscard]] SteppedNoiseShape steppedNoiseShape() const noexcept { return steppedNoiseShape_; }
+
+    /// @brief Sets which shape this MindWave produces.
+    /// @param shape The new stepped/noise shape.
+    void setSteppedNoiseShape(SteppedNoiseShape shape) noexcept { steppedNoiseShape_ = shape; }
+
+    /**
+     * @brief `Stepped`'s own number of discrete levels per cycle.
+     * @return The current step count; meaningless unless
+     *         `steppedNoiseShape()` is `Stepped`. Not clamped or validated
+     *         here (a non-positive value is defensively floored at `1` by
+     *         `evaluate()`, not rejected here).
+     */
+    [[nodiscard]] int stepCount() const noexcept { return stepCount_; }
+
+    /// @brief Sets `Stepped`'s own number of discrete levels.
+    /// @param stepCount The new step count; intended to be a positive integer.
+    void setStepCount(int stepCount) noexcept { stepCount_ = stepCount; }
+
+    /**
+     * @brief The seed driving every noise-based generator
+     *        (`GaussianNoise`, `FractalNoise`, `Cellular`,
+     *        `DomainWarpedNoise`) - the same seed always reproduces the
+     *        same field, per `docs/sound-mind-architecture.md`'s own
+     *        seeded-reproducibility rule.
+     * @return The current seed; meaningless for every non-noise-based
+     *         generator shape.
+     */
+    [[nodiscard]] std::uint32_t seed() const noexcept { return seed_; }
+
+    /// @brief Sets the noise seed - see `seed()`'s own docs.
+    /// @param seed The new seed.
+    void setSeed(std::uint32_t seed) noexcept { seed_ = seed; }
+
+    /**
+     * @brief The lattice/cell size noise-based generators sample at, in
+     *        the current axis's own unit (or the same mixed unit
+     *        `period()` uses for `Spatial`) - smaller values produce
+     *        finer, more rapidly-varying noise.
+     * @return The current noise scale; meaningless for every non-noise-
+     *         based generator shape. Not clamped or validated here.
+     */
+    [[nodiscard]] double noiseScale() const noexcept { return noiseScale_; }
+
+    /// @brief Sets the noise lattice/cell size.
+    /// @param scale The new scale; intended to be positive.
+    void setNoiseScale(double scale) noexcept { noiseScale_ = scale; }
+
+    /**
+     * @brief How many octaves `FractalNoise`/`DomainWarpedNoise` sum
+     *        (fractal Brownian motion) - more octaves add finer detail.
+     * @return The current octave count; meaningless unless
+     *         `steppedNoiseShape()` is `FractalNoise` or `spatialPattern()`
+     *         is `DomainWarpedNoise`. Not clamped or validated here (a
+     *         non-positive value is defensively floored at `1` by
+     *         `evaluate()`, not rejected here).
+     */
+    [[nodiscard]] int noiseOctaves() const noexcept { return noiseOctaves_; }
+
+    /// @brief Sets the fractal-noise octave count.
+    /// @param octaves The new octave count; intended to be a positive integer.
+    void setNoiseOctaves(int octaves) noexcept { noiseOctaves_ = octaves; }
+
+    /**
+     * @brief How much each successive fractal-noise octave's amplitude
+     *        shrinks by, in `(0, 1)` - lower values weight coarse detail
+     *        more heavily, higher values weight fine detail more heavily.
+     * @return The current persistence; meaningless unless
+     *         `steppedNoiseShape()` is `FractalNoise` or `spatialPattern()`
+     *         is `DomainWarpedNoise`. Not clamped or validated here.
+     */
+    [[nodiscard]] double noisePersistence() const noexcept { return noisePersistence_; }
+
+    /// @brief Sets the fractal-noise persistence.
+    /// @param persistence The new persistence.
+    void setNoisePersistence(double persistence) noexcept { noisePersistence_ = persistence; }
+
+    /// @brief Which two-axis pattern this MindWave produces - only
+    ///        meaningful while `type()` is `GeneratorType::Spatial`.
+    /// @return The current spatial pattern.
+    [[nodiscard]] SpatialPattern spatialPattern() const noexcept { return spatialPattern_; }
+
+    /// @brief Sets which two-axis pattern this MindWave produces.
+    /// @param pattern The new spatial pattern.
+    void setSpatialPattern(SpatialPattern pattern) noexcept { spatialPattern_ = pattern; }
+
+    /**
+     * @brief `Ripples`'s own ring center, along the time axis (seconds).
+     * @return The current center X; meaningless unless `spatialPattern()`
+     *         is `Ripples`.
+     */
+    [[nodiscard]] double spatialCenterX() const noexcept { return spatialCenterX_; }
+
+    /// @brief Sets `Ripples`'s own ring center's time-axis component.
+    /// @param centerX The new center X, in seconds.
+    void setSpatialCenterX(double centerX) noexcept { spatialCenterX_ = centerX; }
+
+    /**
+     * @brief `Ripples`'s own ring center, along the frequency axis (bins,
+     *        not Hz - see `evaluate()`'s own docs).
+     * @return The current center Y; meaningless unless `spatialPattern()`
+     *         is `Ripples`.
+     */
+    [[nodiscard]] double spatialCenterY() const noexcept { return spatialCenterY_; }
+
+    /// @brief Sets `Ripples`'s own ring center's frequency-axis component.
+    /// @param centerY The new center Y, in bins.
+    void setSpatialCenterY(double centerY) noexcept { spatialCenterY_ = centerY; }
+
+    /**
+     * @brief `DomainWarpedNoise`'s own warp magnitude - how far the
+     *        sampled coordinates are displaced before the underlying
+     *        fractal-noise field is sampled.
+     * @return The current warp strength; meaningless unless
+     *         `spatialPattern()` is `DomainWarpedNoise`. Not clamped or
+     *         validated here.
+     */
+    [[nodiscard]] double domainWarpStrength() const noexcept { return domainWarpStrength_; }
+
+    /// @brief Sets `DomainWarpedNoise`'s own warp magnitude.
+    /// @param strength The new warp strength.
+    void setDomainWarpStrength(double strength) noexcept { domainWarpStrength_ = strength; }
+
+    /**
+     * @brief How much `Fractal`'s own recursive midpoint displacement
+     *        shrinks at each successive subdivision level, in `(0, 1)` -
+     *        lower values produce a smoother curve, higher values a more
+     *        jagged one.
+     * @return The current roughness; meaningless unless `type()` is
+     *         `GeneratorType::Fractal`. Not clamped or validated here.
+     */
+    [[nodiscard]] double fractalRoughness() const noexcept { return fractalRoughness_; }
+
+    /// @brief Sets `Fractal`'s own roughness.
+    /// @param roughness The new roughness.
+    void setFractalRoughness(double roughness) noexcept { fractalRoughness_ = roughness; }
+
+    /**
+     * @brief How many recursive midpoint-displacement subdivision levels
+     *        `Fractal` computes - more levels add finer detail.
+     * @return The current iteration count; meaningless unless `type()` is
+     *         `GeneratorType::Fractal`. Not clamped or validated here (a
+     *         negative value is defensively floored at `0` by
+     *         `evaluate()`, not rejected here).
+     */
+    [[nodiscard]] int fractalIterations() const noexcept { return fractalIterations_; }
+
+    /// @brief Sets `Fractal`'s own iteration count.
+    /// @param iterations The new iteration count; intended to be a
+    ///        non-negative integer.
+    void setFractalIterations(int iterations) noexcept { fractalIterations_ = iterations; }
+
+    /**
+     * @brief The other MindWaves this one's own field is combined with,
+     *        via `superpositionBlendMode()`, after this MindWave's own
+     *        generator is evaluated - see `docs/sound-mind-design.md`'s
+     *        "Field Operators" ("Superposition"). Empty by default - a
+     *        fresh MindWave superposes nothing, matching this class's own
+     *        "nothing happens by accident beyond the base generator"
+     *        default philosophy.
+     * @return The current superposition stack, in fold order.
+     */
+    [[nodiscard]] const std::vector<MindWave>& superpositionStack() const noexcept { return superpositionStack_; }
+
+    /// @brief Mutable access to the superposition stack, for in-place edits.
+    /// @return The current superposition stack.
+    [[nodiscard]] std::vector<MindWave>& superpositionStack() noexcept { return superpositionStack_; }
+
+    /// @brief Sets the superposition stack wholesale.
+    /// @param stack The new stack, in fold order.
+    void setSuperpositionStack(std::vector<MindWave> stack) { superpositionStack_ = std::move(stack); }
+
+    /// @brief How each `superpositionStack()` member folds into the
+    ///        running result - see `SuperpositionBlendMode`'s own docs.
+    ///        Meaningless while `superpositionStack()` is empty.
+    /// @return The current blend mode.
+    [[nodiscard]] SuperpositionBlendMode superpositionBlendMode() const noexcept { return superpositionBlendMode_; }
+
+    /// @brief Sets how each superposed MindWave folds into the running result.
+    /// @param mode The new blend mode.
+    void setSuperpositionBlendMode(SuperpositionBlendMode mode) noexcept { superpositionBlendMode_ = mode; }
+
+    /**
+     * @brief This MindWave's own field value at `point`, after superposing
+     *        `superpositionStack()` (if any) on top of its own generator.
      *
      * The frequency axis is log-scaled (see `frequencyToBinIndex()`'s own
      * docs), so a `period()` expressed in raw Hz would pack a different
@@ -165,13 +546,19 @@ public:
      * drag math already established for why bins, not Hz, are this axis's
      * own natural, evenly-spaced unit. `period()` on `MindWaveAxis::Frequency`
      * is therefore in bins, converted from `point`'s own Hz via
-     * `frequencyToBinIndex()` before dividing by it.
+     * `frequencyToBinIndex()` before dividing by it. `GeneratorType::Spatial`
+     * uses both of `point`'s own components directly (time seconds and
+     * frequency bins) regardless of `axis()`.
      *
-     * @param point The canvas position to evaluate - only the component
-     *        matching `axis()` is actually used.
+     * The result is always clamped to `[0, 1]` before returning, regardless
+     * of which generator shape or superposition blend produced it -
+     * defensive only, since e.g. `SuperpositionBlendMode::Add` can
+     * otherwise exceed `1.0`.
+     *
+     * @param point The canvas position to evaluate.
      * @param config Interprets `point`'s own Hz against `config`'s own
-     *        frequency range/bin count, needed only when `axis()` is
-     *        `MindWaveAxis::Frequency`.
+     *        frequency range/bin count, needed whenever a bin index is
+     *        computed (`MindWaveAxis::Frequency`, or any `Spatial` pattern).
      * @return This MindWave's own field value at `point`, in `[0, 1]`.
      */
     [[nodiscard]] float evaluate(TimeFrequencyPoint point, const sound_mind::codec::StreamCodecConfig& config) const;
@@ -182,6 +569,25 @@ private:
     MindWaveAxis axis_ = MindWaveAxis::Time;
     double period_ = 1.0;
     double phaseRadians_ = 0.0;
+    double dutyCycle_ = 0.5;
+    EnvelopeShape envelopeShape_ = EnvelopeShape::ExponentialDecay;
+    double envelopeCenter_ = 0.0;
+    double envelopeSteepness_ = 1.0;
+    double decayRate_ = 1.0;
+    SteppedNoiseShape steppedNoiseShape_ = SteppedNoiseShape::Stepped;
+    int stepCount_ = 4;
+    std::uint32_t seed_ = 1;
+    double noiseScale_ = 1.0;
+    int noiseOctaves_ = 4;
+    double noisePersistence_ = 0.5;
+    SpatialPattern spatialPattern_ = SpatialPattern::Ripples;
+    double spatialCenterX_ = 0.0;
+    double spatialCenterY_ = 0.0;
+    double domainWarpStrength_ = 1.0;
+    double fractalRoughness_ = 0.5;
+    int fractalIterations_ = 8;
+    std::vector<MindWave> superpositionStack_;
+    SuperpositionBlendMode superpositionBlendMode_ = SuperpositionBlendMode::Multiply;
 };
 
 /// @brief Serializes a MindWave to its JSON representation.

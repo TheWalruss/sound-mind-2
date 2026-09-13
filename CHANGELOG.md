@@ -6,6 +6,22 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.2] - 2026-09-13
+
+Installment B of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - fills out the rest of the v1 generator catalogue plus superposition. **Still Core-only, not reachable from the app yet** - no UI, no `Project` storage, no binding.
+
+### Added
+
+- **`Periodic`'s remaining four waveforms**: `Triangle`, `Square`, `Sawtooth`, `Pulse` (`dutyCycle()` controls `Pulse`'s own on-fraction; the default `0.5` makes it identical to `Square`).
+- **`GeneratorType::Envelope`**: `ExponentialDecay`, `DecayingOscillation`, `SCurve` - one-shot fades and thresholds rather than repeating cycles, per `envelopeCenter()`/`envelopeSteepness()`/`decayRate()`.
+- **`GeneratorType::SteppedNoise`**: a quantised `Stepped` staircase, plus `GaussianNoise`/`FractalNoise` built on a new hand-rolled, seeded value-noise primitive (not a third-party dependency).
+- **`GeneratorType::Spatial`**: `Ripples`, `Checkerboard`, `Cellular` (Worley/Voronoi), and `DomainWarpedNoise` - varies across both canvas axes at once, ignoring `axis()`.
+- **`GeneratorType::Fractal`**: a first fractal field, built from recursive midpoint displacement (deterministic, seeded, tiles seamlessly at `period()` boundaries).
+- **Superposition**: `superpositionStack()`/`superpositionBlendMode()` combine any number of MindWaves (multiply/add/min/max/average, folded pairwise in stack order); nesting works with no special-case code.
+- JSON round-trip extended to every new field, including a nested superposition stack.
+
+Core regression: 339/339 test cases (up from 324), 52271 assertions. Full regression (core + studio) passing. Doxygen: 0 warnings. No USER_GUIDE.md change - nothing user-visible yet.
+
 ## [0.0.31.1] - 2026-09-13
 
 The first installment of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`, Phase 4's opening feature). **Core-only, not reachable from the app yet** - no UI, no `Project` storage, no binding to a layer's opacity or a filter's parameters. Proves the `MindWave` resource and its own field-evaluation pipeline with a single generator (a sine) before the rest of the v1 catalogue.
