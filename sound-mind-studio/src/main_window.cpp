@@ -203,141 +203,48 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     });
     playbackPanel_->setOutputDevices(toQStringList(playbackController_->availableOutputDeviceNames()));
 
-    // Basic Painting (v0.Y.24.1) - the same "purely presentational, every
-    // user action is a signal the owner connects to" shape
-    // playbackController_ already established. canvas_ only ever emits
-    // already-converted TimeFrequencyPoints; paintController_ never
-    // reaches into canvas_ directly, only back through pathChanged()/
-    // contentChanged() below.
-    paintController_ = new PaintController(this);
-    connect(canvas_, &CanvasWidget::paintStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
-        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
-            paintController_->beginStroke(*layerId, point);
-        }
-    });
-    connect(canvas_, &CanvasWidget::paintStrokeContinued, this,
-            [this](sound_mind::core::TimeFrequencyPoint point) { paintController_->continueStroke(point); });
-    connect(canvas_, &CanvasWidget::paintStrokeEnded, this, [this]() { paintController_->endStroke(); });
-    connect(paintController_, &PaintController::pathChanged, this,
-            [this]() { canvas_->setPaintPreviewPath(paintController_->currentPreviewPath()); });
-    connect(paintController_, &PaintController::contentChanged, this, [this](sound_mind::core::LayerId) {
-        canvas_->update();
-        hasUnsavedChanges_ = true;
-        refreshLayersPanel();
-    });
-
-    // Pick (v0.Y.24.1) - shares paintController_'s own pre-paint base
-    // cache (see PickController's own docs), so it's constructed after
-    // paintController_ and holds a pointer to it. The same "canvas only
-    // ever emits already-converted points, this controller never reaches
-    // into canvas_ directly" shape paintController_'s own wiring above
-    // already established.
-    pickController_ = new PickController(paintController_, this);
-    connect(canvas_, &CanvasWidget::pickStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
-        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
-            pickController_->pick(*layerId, point);
-        }
-    });
-    connect(canvas_, &CanvasWidget::pickStrokeContinued, this,
-            [this](sound_mind::core::TimeFrequencyPoint point) { pickController_->continueMove(point); });
-    connect(canvas_, &CanvasWidget::pickStrokeEnded, this, [this]() { pickController_->endMove(); });
-    connect(pickController_, &PickController::pathChanged, this, [this]() {
-        canvas_->setPaintPreviewPath(pickController_->currentPreviewPath());
-        canvas_->setPreviewSelectedNodeIndex(pickController_->selectedPathNodeIndex());
-    });
-    connect(pickController_, &PickController::contentChanged, this, [this](sound_mind::core::LayerId) {
-        canvas_->update();
-        hasUnsavedChanges_ = true;
-        refreshLayersPanel();
-    });
-    connect(pickController_, &PickController::selectionChanged, this, [this]() {
-        canvas_->setPickSelectionBounds(pickController_->selectionBounds());
-        // Pre-fills the panel with the newly-picked object's own
-        // settings, ready to reopen and adjust - see docs/sound-mind-
-        // design.md's "Pick". Left showing whatever it last displayed on
-        // a deselect (clicking empty space, deleting the selection) -
-        // reverting to some prior "default" isn't attempted; the panel's
-        // job is "the current brush settings", picked or not.
-        if (const auto config = pickController_->selectedConfiguration(); config.has_value()) {
-            toolConfigurationPanel_->setToolConfiguration(*config);
-        }
-    });
-
-    // Selection & Fill (v0.Y.25.1) - shares paintController_'s own
-    // pre-paint base cache (see SelectionController's own docs), so it's
-    // constructed after paintController_ and holds a pointer to it. The
-    // same "canvas only ever emits already-converted points" shape
-    // paintController_/pickController_'s own wiring above already
-    // established.
-    selectionController_ = new SelectionController(paintController_, this);
-    connect(canvas_, &CanvasWidget::selectStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
-        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
-            selectionController_->beginSelectionDrag(*layerId, point);
-        }
-    });
-    connect(canvas_, &CanvasWidget::selectStrokeContinued, this,
-            [this](sound_mind::core::TimeFrequencyPoint point) { selectionController_->continueSelectionDrag(point); });
-    connect(canvas_, &CanvasWidget::selectStrokeEnded, this, [this]() { selectionController_->endSelectionDrag(); });
-    connect(selectionController_, &SelectionController::boundsChanged, this,
-            [this]() { canvas_->setSelectionBounds(selectionController_->displayBounds()); });
-    connect(selectionController_, &SelectionController::contentChanged, this, [this](sound_mind::core::LayerId) {
-        canvas_->update();
-        hasUnsavedChanges_ = true;
-        refreshLayersPanel();
-    });
-
-    // Paths & Grids (v0.Y.26.1), Path tool placement - shares
-    // paintController_'s own pre-paint base cache (see PathController's
-    // own docs), so it's constructed after paintController_ and holds a
-    // pointer to it. Reuses canvas_'s own existing live-preview overlay
-    // (setPaintPreviewPath()) rather than a second one - Paint/Pick/Path
-    // are mutually exclusive tool modes, so only one of them ever has a
-    // real preview to show at once.
-    pathController_ = new PathController(paintController_, this);
-    connect(canvas_, &CanvasWidget::pathNodePlaced, this, [this](sound_mind::core::TimeFrequencyPoint point) {
-        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
-            pathController_->placeNode(*layerId, point);
-        }
-    });
-    connect(canvas_, &CanvasWidget::cursorMoved, this,
-            [this](QPointF, std::optional<sound_mind::core::TimeFrequencyPoint> domainPoint) {
-                if (domainPoint.has_value()) {
-                    pathController_->updateCursor(*domainPoint);
-                }
-            });
-    connect(pathController_, &PathController::pathChanged, this,
-            [this]() { canvas_->setPaintPreviewPath(pathController_->currentPreviewPath()); });
-    connect(pathController_, &PathController::contentChanged, this, [this](sound_mind::core::LayerId) {
-        canvas_->update();
-        hasUnsavedChanges_ = true;
-        refreshLayersPanel();
-    });
-
     toolConfigurationPanel_ = new ToolConfigurationPanel(this);
     toolConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, toolConfigurationPanel_);
-    // The panel's own constructed-with defaults are already a real,
-    // opaque brush (not ToolConfiguration's own transparent default - see
-    // the panel's own docs) - applied here so a stroke painted before
-    // ever opening the panel still paints something visible.
-    paintController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration());
-    pathController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration());
-    connect(toolConfigurationPanel_, &ToolConfigurationPanel::toolConfigurationChanged, this,
-            [this](const sound_mind::core::ToolConfiguration& config) {
-                paintController_->setToolConfiguration(config);
-                pathController_->setToolConfiguration(config);
-                // Also applies to whatever's currently Picked, if
-                // anything - see PickController::applyToolConfiguration()'s
-                // own docs on why this is safe to do unconditionally
-                // alongside updating the pending default above.
-                if (pickController_->hasSelection()) {
-                    pickController_->applyToolConfiguration(config);
-                }
+
+    // Basic Painting/Pick/Selection & Fill/Paths & Grids (Phase 3,
+    // v0.Y.24.1-v0.Y.26.1) - extracted as its own class (Refactor & Clean
+    // Up, v0.Y.29.1, Installment C); see its own docs. Owns the four tool
+    // controllers and all of their wiring to canvas_/
+    // toolConfigurationPanel_ internally. This class's own remaining job:
+    // resolving "which layer" a freehand gesture targets
+    // (paintTargetLayerId()) and forwarding it to whichever begin*() call
+    // applies - a LayersPanel-selection concept toolPaletteController_ has
+    // no reason to know about.
+    toolPaletteController_ = new ToolPaletteController(canvas_, toolConfigurationPanel_, this);
+    connect(canvas_, &CanvasWidget::paintStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+            toolPaletteController_->beginPaintStroke(*layerId, point);
+        }
+    });
+    connect(canvas_, &CanvasWidget::pickStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+            toolPaletteController_->beginPick(*layerId, point);
+        }
+    });
+    connect(canvas_, &CanvasWidget::selectStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+            toolPaletteController_->beginSelectionDrag(*layerId, point);
+        }
+    });
+    connect(canvas_, &CanvasWidget::pathNodePlaced, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
+            toolPaletteController_->placePathNode(*layerId, point);
+        }
+    });
+    // Merges all four tool controllers' own contentChanged() into one
+    // connection - see ToolPaletteController::contentChanged()'s own
+    // docs; it has already called canvas_->update() itself by this point.
+    connect(toolPaletteController_, &ToolPaletteController::contentChanged, this,
+            [this](sound_mind::core::LayerId) {
+                hasUnsavedChanges_ = true;
+                refreshLayersPanel();
             });
-    connect(toolConfigurationPanel_, &ToolConfigurationPanel::showBoundingBoxesChanged, canvas_,
-            &CanvasWidget::setShowBoundingBoxes);
-    connect(toolConfigurationPanel_, &ToolConfigurationPanel::showPathGeometryChanged, canvas_,
-            &CanvasWidget::setShowPathGeometry);
 
     gridPanel_ = new GridPanel(this);
     gridPanel_->hide();
@@ -355,10 +262,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // to both controllers, rather than three separate slots each only
     // updating one piece of state the other two calls already hold.
     const auto applyGridSnapping = [this]() {
-        pickController_->setGridSnapping(gridPanel_->snapToGridEnabled(), gridPanel_->frequencyGridConfig(),
-                                          gridPanel_->timingGridConfig());
-        selectionController_->setGridSnapping(gridPanel_->snapToGridEnabled(), gridPanel_->frequencyGridConfig(),
-                                               gridPanel_->timingGridConfig());
+        toolPaletteController_->setGridSnapping(gridPanel_->snapToGridEnabled(), gridPanel_->frequencyGridConfig(),
+                                                 gridPanel_->timingGridConfig());
     };
     connect(gridPanel_, &GridPanel::snapToGridChanged, this, applyGridSnapping);
     connect(gridPanel_, &GridPanel::frequencyGridConfigChanged, this, applyGridSnapping);
@@ -856,10 +761,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     loopPanel_->setOutputDevices(toQStringList(loopEngine_->availableOutputDeviceNames()));
 
     canvas_->setProject(&*project_);
-    paintController_->setProject(&*project_);
-    pickController_->setProject(&*project_);
-    selectionController_->setProject(&*project_);
-    pathController_->setProject(&*project_);
+    toolPaletteController_->setProject(&*project_);
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
     // Layers is shown automatically the *first* time any project exists in
@@ -1482,7 +1384,7 @@ void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& new
 
 void MainWindow::setPaintModeEnabled(bool enabled) {
     if (!enabled) {
-        paintController_->cancelStroke();
+        toolPaletteController_->cancelPaintStroke();
         canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     }
     setExclusiveToolMode(paintAction_, enabled, CanvasWidget::ToolMode::Paint);
@@ -1490,7 +1392,7 @@ void MainWindow::setPaintModeEnabled(bool enabled) {
 
 void MainWindow::setPickModeEnabled(bool enabled) {
     if (!enabled) {
-        pickController_->clearSelection();
+        toolPaletteController_->clearPickSelection();
         canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     }
     setExclusiveToolMode(pickAction_, enabled, CanvasWidget::ToolMode::Pick);
@@ -1498,14 +1400,14 @@ void MainWindow::setPickModeEnabled(bool enabled) {
 
 void MainWindow::setSelectModeEnabled(bool enabled) {
     if (!enabled) {
-        selectionController_->cancelSelectionDrag();
+        toolPaletteController_->cancelSelectionDrag();
     }
     setExclusiveToolMode(selectAction_, enabled, CanvasWidget::ToolMode::Select);
 }
 
 void MainWindow::setPathModeEnabled(bool enabled) {
     if (!enabled) {
-        pathController_->cancelPath();
+        toolPaletteController_->cancelPathPlacement();
         canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     }
     setExclusiveToolMode(pathAction_, enabled, CanvasWidget::ToolMode::Path);
@@ -1539,38 +1441,35 @@ void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWi
     }
 }
 
-void MainWindow::undo() { paintController_->undo(); }
+void MainWindow::undo() { toolPaletteController_->undo(); }
 
-void MainWindow::redo() { paintController_->redo(); }
+void MainWindow::redo() { toolPaletteController_->redo(); }
 
-void MainWindow::deletePickedObject() { pickController_->deleteSelection(); }
+void MainWindow::deletePickedObject() { toolPaletteController_->deleteSelection(); }
 
-void MainWindow::bringPickedObjectToFront() { pickController_->bringToFront(); }
+void MainWindow::bringPickedObjectToFront() { toolPaletteController_->bringToFront(); }
 
-void MainWindow::sendPickedObjectToBack() { pickController_->sendToBack(); }
+void MainWindow::sendPickedObjectToBack() { toolPaletteController_->sendToBack(); }
 
-void MainWindow::bringPickedObjectForward() { pickController_->bringForward(); }
+void MainWindow::bringPickedObjectForward() { toolPaletteController_->bringForward(); }
 
-void MainWindow::sendPickedObjectBackward() { pickController_->sendBackward(); }
+void MainWindow::sendPickedObjectBackward() { toolPaletteController_->sendBackward(); }
 
-void MainWindow::editPickedPath() { pickController_->beginPathEdit(); }
+void MainWindow::editPickedPath() { toolPaletteController_->beginPathEdit(); }
 
-void MainWindow::togglePickedPathNodeType() { pickController_->toggleSelectedPathNodeType(); }
+void MainWindow::togglePickedPathNodeType() { toolPaletteController_->toggleSelectedPathNodeType(); }
 
-void MainWindow::applyPickedPathEdit() { pickController_->commitPathEdit(); }
+void MainWindow::applyPickedPathEdit() { toolPaletteController_->commitPathEdit(); }
 
-void MainWindow::cancelPickedPathEdit() { pickController_->cancelPathEdit(); }
+void MainWindow::cancelPickedPathEdit() { toolPaletteController_->cancelPathEdit(); }
 
-void MainWindow::deselect() { selectionController_->clearSelection(); }
+void MainWindow::deselect() { toolPaletteController_->clearSelection(); }
 
-void MainWindow::finishPath() { pathController_->finishPath(); }
+void MainWindow::finishPath() { toolPaletteController_->finishPath(); }
 
-void MainWindow::cancelPath() { pathController_->cancelPath(); }
+void MainWindow::cancelPath() { toolPaletteController_->cancelPath(); }
 
-void MainWindow::setPathPlacesSmoothNodes(bool smooth) {
-    pathController_->setDefaultNodeType(smooth ? sound_mind::core::PathNodeType::Smooth
-                                                : sound_mind::core::PathNodeType::Corner);
-}
+void MainWindow::setPathPlacesSmoothNodes(bool smooth) { toolPaletteController_->setPathPlacesSmoothNodes(smooth); }
 
 void MainWindow::fillSelectionWith(QColor color) {
     sound_mind::core::Gradient gradient;
@@ -1581,11 +1480,11 @@ void MainWindow::fillSelectionWith(QColor color) {
     stop.rightOpacity = 1.0f;
     gradient.setStopValues(0, stop);
     gradient.setStopValues(1, stop);
-    selectionController_->fill(gradient);
+    toolPaletteController_->fill(gradient);
 }
 
 void MainWindow::fillSelection() {
-    if (!selectionController_->hasSelection()) {
+    if (!toolPaletteController_->hasSelection()) {
         return;
     }
     const QColor picked = QColorDialog::getColor(QColor(255, 255, 0), this, tr("Fill Selection"));
@@ -1594,21 +1493,21 @@ void MainWindow::fillSelection() {
     }
 }
 
-void MainWindow::copySelection() { selectionController_->copySelection(); }
+void MainWindow::copySelection() { toolPaletteController_->copySelection(); }
 
-void MainWindow::cutSelection() { selectionController_->cutSelection(); }
+void MainWindow::cutSelection() { toolPaletteController_->cutSelection(); }
 
 void MainWindow::paste() {
     // The paste target is resolved fresh, right now - independent of
     // whichever layer the clipboard was originally copied from - per
     // SelectionController::pasteInto()'s own docs.
     if (const auto layerId = paintTargetLayerId(); layerId.has_value()) {
-        if (const auto pastedId = selectionController_->pasteInto(*layerId); pastedId.has_value()) {
+        if (const auto pastedId = toolPaletteController_->pasteInto(*layerId); pastedId.has_value()) {
             // Immediately Pickable - move/modify/delete/restack all work
             // right away, with no separate switch-to-Pick-and-click-it
             // step needed to find it again.
             setPickModeEnabled(true);
-            pickController_->selectOperation(*layerId, *pastedId);
+            toolPaletteController_->selectOperation(*layerId, *pastedId);
         }
     }
 }

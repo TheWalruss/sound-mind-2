@@ -38,6 +38,7 @@
 #include "test_theme.h"
 #include "test_tone_curve_editor.h"
 #include "test_tool_configuration_panel.h"
+#include "test_tool_palette_controller.h"
 
 int main(int argc, char** argv) {
     // Redirects ini-format QSettings storage (MainWindow's recentProjects_,
@@ -103,6 +104,9 @@ int main(int argc, char** argv) {
 
     ToolConfigurationPanelTest toolConfigurationPanelTest;
     status |= QTest::qExec(&toolConfigurationPanelTest, argc, argv);
+
+    ToolPaletteControllerTest toolPaletteControllerTest;
+    status |= QTest::qExec(&toolPaletteControllerTest, argc, argv);
 
     AudioSnippetPickerDialogTest audioSnippetPickerDialogTest;
     status |= QTest::qExec(&audioSnippetPickerDialogTest, argc, argv);

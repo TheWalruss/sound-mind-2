@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.30.4] - 2026-09-13
+
+Installment C of the "Refactor & Clean Up" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.29.1`) - extracts the Paint/Pick/Select/Path tool cluster out of `MainWindow` (1959/1677 lines - by far the largest files in the project) into a new `ToolPaletteController`, the same "own presentation" treatment `PlaybackController` (`v0.Y.23.1`) already received. Purely internal code quality work, no user-visible behavior change.
+
+### Changed
+
+- **New `sound_mind::studio::ToolPaletteController`** owns the four tool controllers (`PaintController`/`PickController`/`SelectionController`/`PathController`) and all of their wiring to `CanvasWidget`/`ToolConfigurationPanel`. Does *not* own the toolbar's four `QAction`s (stays a toolbar/menu concern) or resolve which layer a gesture targets (stays `MainWindow`'s own job, since it depends on the Layers Panel's current selection).
+- Every `MainWindow` public method touching these tools (`undo()`, `deletePickedObject()`, `fillSelectionWith()`, `paste()`, and every other Edit-menu/toolbar slot) keeps its exact pre-extraction signature, now a thin forwarding body - matching the `v0.Y.23.1` precedent exactly. `test_main_window.cpp` needed zero changes.
+- New `test_tool_palette_controller.cpp` - a lighter-weight smoke suite (construction, forwarding, one real end-to-end `contentChanged` check) rather than a re-test of the Paint/Pick/Select/Path behavioral matrix, which already has comprehensive coverage in each sub-controller's own test file.
+
+Full regression: 369/369 passing (unchanged count - `test_main_window.cpp` untouched; the new controller-level tests are additional QTest functions within the same `sound-mind-studio-tests` ctest entry). Doxygen: 0 warnings. No USER_GUIDE.md change.
+
 ## [0.0.30.3] - 2026-09-13
 
 Bug fix, surfaced by the Refactor & Clean Up audit but landed as its own labeled commit (confirmed with the user) since it's a genuine, user-visible behavior change, not the "unchanged in behavior" refactor work around it.

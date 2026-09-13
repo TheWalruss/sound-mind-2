@@ -27,6 +27,7 @@ add_executable(sound-mind-studio-tests
     test_theme.cpp
     test_tone_curve_editor.cpp
     test_tool_configuration_panel.cpp
+    test_tool_palette_controller.cpp
 )
 
 target_link_libraries(sound-mind-studio-tests

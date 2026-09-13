@@ -18,13 +18,10 @@
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/grid_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
-#include "sound_mind/studio/paint_controller.h"
-#include "sound_mind/studio/path_controller.h"
-#include "sound_mind/studio/pick_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/recent_projects.h"
-#include "sound_mind/studio/selection_controller.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
+#include "sound_mind/studio/tool_palette_controller.h"
 
 class QAction;
 class QCloseEvent;
@@ -141,23 +138,36 @@ class RecordPanel;
  * status bar rather than a blocking dialog.
  *
  * **Phase 3 (Basic Painting through Filter Layers, `v0.Y.24.1`-`v0.Y.28.1`):**
- * the largest single expansion of this class's own responsibility so
- * far - four new controllers (`paintController_`/`pickController_`/
- * `selectionController_`/`pathController_`) each wired the same way
- * (canvas signal -> controller call; controller's own `pathChanged()`/
- * `contentChanged()` -> canvas repaint/Layers Panel refresh - see the
- * constructor), a `toolConfigurationPanel_`/`gridPanel_` pair configuring
- * whichever tool is active, and `filterConfigurationPanel_` (paired with
+ * the largest single expansion of this class's own responsibility so far -
+ * a `toolConfigurationPanel_`/`gridPanel_` pair configuring whichever tool
+ * is active, and `filterConfigurationPanel_` (paired with
  * `handleLayerSelectionChanged()`/`applyFilterConfiguration()`) for the
  * Filter/Equalizer layer types multi-layer compositing and Filter Layers
  * introduced. Per-milestone paragraphs weren't added here for each of
  * these individually (unlike every phase above) - `docs/sound-mind-
- * roadmap.md`'s own `v0.Y.29.1` (Refactor & Clean Up) identifies most of
- * this cluster as a `ToolPaletteController`/`LayerController` extraction
- * candidate, the same "own presentation" treatment `LayersPanel`/
- * `LoopPanel`/`RecordPanel`/`PlaybackPanel` already received - this
- * docblock is expected to shrink accordingly once that lands, rather
- * than being backfilled in detail now only to be deleted again.
+ * roadmap.md`'s own `v0.Y.29.1` (Refactor & Clean Up) instead identified
+ * most of this cluster (the Paint/Pick/Select/Path tool controllers
+ * themselves) as an extraction candidate, the same "own presentation"
+ * treatment `LayersPanel`/`LoopPanel`/`RecordPanel`/`PlaybackPanel`
+ * already received.
+ *
+ * **As of `v0.Y.29.1` (Refactor & Clean Up, Installment C):** that
+ * extraction landed - `toolPaletteController_` now owns all four tool
+ * controllers (`PaintController`/`PickController`/`SelectionController`/
+ * `PathController`) and every signal wiring between them and
+ * `canvas_`/`toolConfigurationPanel_` - see its own class docs. This
+ * class's own remaining job for the tool palette is narrower than it
+ * looks from the sheer number of still-present delegating methods
+ * (`undo()`, `deletePickedObject()`, `fillSelectionWith()`, `paste()`,
+ * ...): resolving "which layer" a freehand gesture starting right now
+ * targets (`paintTargetLayerId()`, a `LayersPanel`-selection concept
+ * `toolPaletteController_` has no reason to know about) and managing the
+ * four toolbar `QAction`s' own mutual exclusivity
+ * (`setExclusiveToolMode()`) - a toolbar/menu concern, not a tool-palette
+ * one. Every one of those delegating methods kept its exact pre-
+ * extraction signature, now a thin forwarding body - matching the same
+ * "unchanged public surface" precedent `v0.Y.23.1`'s own
+ * `PlaybackController`/import_export extractions already set.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -1589,16 +1599,15 @@ private:
     /// PlaybackController's own docs for why it doesn't know about either.
     PlaybackController* playbackController_ = nullptr;
 
-    /// @brief Owns an in-progress freehand stroke and turns it into a
-    /// real, undoable `PaintOperation` - see the Phase 3 "Basic Painting"
-    /// milestone (`v0.Y.24.1`). "Which layer to paint into" is
-    /// MainWindow's own decision (the topmost layer in the stack, for
-    /// now - see `paintTargetLayer()`'s own docs for why); wiring
-    /// `canvas_`'s mouse-derived signals to this, and this controller's
-    /// own `pathChanged()`/`contentChanged()` back to `canvas_`, is
-    /// MainWindow's own job too, the same shape `playbackController_`
-    /// already established.
-    PaintController* paintController_ = nullptr;
+    /// @brief Owns the four Paint/Pick/Select/Path tool controllers and
+    /// all of their wiring to `canvas_`/`toolConfigurationPanel_` - see its
+    /// own class docs. Extracted out of this class as part of the
+    /// Refactor & Clean Up milestone (`v0.Y.29.1`, Installment C); "which
+    /// layer" a freehand gesture targets (`paintTargetLayerId()`) and the
+    /// four toolbar `QAction`s' own mutual exclusivity
+    /// (`setExclusiveToolMode()`) both stay this class's own job - see the
+    /// class docs' own `v0.Y.29.1` note.
+    ToolPaletteController* toolPaletteController_ = nullptr;
 
     /// @brief The toolbar's Paint tool toggle - checked while the canvas
     /// accepts freehand paint input (`CanvasWidget::ToolMode::Paint`).
@@ -1608,15 +1617,6 @@ private:
     /// state.
     QAction* paintAction_ = nullptr;
 
-    /// @brief Owns the currently Picked paint object and turns move/
-    /// modify/delete gestures into new operations superseding it - see
-    /// the Phase 3 "Basic Painting" milestone's Pick installment
-    /// (`v0.Y.24.1`). Shares `paintController_`'s own per-layer pre-paint
-    /// base cache (see `PickController`'s own docs) rather than keeping a
-    /// second one, so it's constructed after `paintController_` and holds
-    /// a pointer to it.
-    PickController* pickController_ = nullptr;
-
     /// @brief The toolbar's Pick tool toggle - checked while the canvas
     /// accepts Pick input (`CanvasWidget::ToolMode::Pick`). Kept mutually
     /// exclusive with paintAction_/selectAction_/pathAction_ by
@@ -1625,28 +1625,12 @@ private:
     /// paintAction_.
     QAction* pickAction_ = nullptr;
 
-    /// @brief Owns the current rectangular selection and turns Fill into
-    /// a new operation - see the Phase 3 "Selection & Fill" milestone's
-    /// first installment (`v0.Y.25.1`). Shares `paintController_`'s own
-    /// per-layer pre-paint base cache (see `SelectionController`'s own
-    /// docs), so it's constructed after `paintController_` and holds a
-    /// pointer to it.
-    SelectionController* selectionController_ = nullptr;
-
     /// @brief The toolbar's Select tool toggle - checked while the canvas
     /// accepts Select input (`CanvasWidget::ToolMode::Select`). Kept
     /// mutually exclusive with paintAction_/pickAction_/pathAction_ by
     /// setExclusiveToolMode(); kept as a member for the same
     /// setProject()-resets-it reason as paintAction_.
     QAction* selectAction_ = nullptr;
-
-    /// @brief Owns an in-progress, deliberately node-by-node-placed Path
-    /// and turns it into a new paint object - see the Phase 3 "Paths &
-    /// Grids" milestone's first installment (`v0.Y.26.1`). Shares
-    /// `paintController_`'s own per-layer pre-paint base cache (see
-    /// `PathController`'s own docs), so it's constructed after
-    /// `paintController_` and holds a pointer to it.
-    PathController* pathController_ = nullptr;
 
     /// @brief The toolbar's Path tool toggle - checked while the canvas
     /// accepts Path input (`CanvasWidget::ToolMode::Path`). Kept mutually
