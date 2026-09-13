@@ -22,7 +22,7 @@ namespace sound_mind::core {
  * within `bounds()`, confined exactly to the selection - "a solid fill",
  * not "a very fat brush".
  */
-class FillOperation : public Operation {
+class FillOperation : public LayerContentOperation {
 public:
     /**
      * @param id Identity to give this operation within its OperationLog.
@@ -39,17 +39,13 @@ public:
      */
     FillOperation(OperationId id, LayerId targetLayer, TimeFrequencyRect bounds, Gradient gradient,
                   std::optional<OperationId> supersedes = std::nullopt) noexcept
-        : Operation(id, supersedes), targetLayer_(targetLayer), bounds_(bounds), gradient_(std::move(gradient)) {}
+        : LayerContentOperation(id, targetLayer, supersedes), bounds_(bounds), gradient_(std::move(gradient)) {}
 
     /// @brief This operation's own time/frequency footprint - exactly the
     ///        selection it was filled through, since a fill never affects
     ///        anything outside it.
     /// @return This operation's own bounds.
     [[nodiscard]] TimeFrequencyRect bounds() const override { return bounds_; }
-
-    /// @brief Which layer this fill wrote into.
-    /// @return This operation's own target layer id.
-    [[nodiscard]] std::optional<LayerId> targetLayer() const noexcept override { return targetLayer_; }
 
     /// @brief The color (or gradient) this fill was applied with.
     /// @return This operation's own gradient.
@@ -64,7 +60,6 @@ public:
     }
 
 private:
-    LayerId targetLayer_;
     TimeFrequencyRect bounds_;
     Gradient gradient_;
 };

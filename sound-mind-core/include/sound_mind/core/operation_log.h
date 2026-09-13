@@ -222,9 +222,15 @@ private:
 /// @brief Serializes the log to its JSON representation.
 void to_json(nlohmann::json& json, const OperationLog& log);
 
-/// @brief Parses the log from its JSON representation.
-/// @throws nlohmann::json::exception if the JSON value isn't an array, or
-///         an entry's own "kind" isn't a recognized Operation subtype.
+/// @brief Parses the log from its JSON representation - either the
+///        current shape (an object with an `"operations"` array plus
+///        `"activeCount"`/`"nextId"`/an optional `"stackOrder"`) or the
+///        pre-`v0.0.24.1` shape (no `"operations"` key at all, before any
+///        concrete Operation subtype existed - always an empty log).
+/// @throws std::invalid_argument if an entry's own `"kind"` isn't a
+///         recognized Operation subtype.
+/// @throws nlohmann::json::exception if a required field is missing or
+///         the wrong type (e.g. an entry with no `"id"`).
 void from_json(const nlohmann::json& json, OperationLog& log);
 
 }  // namespace sound_mind::core

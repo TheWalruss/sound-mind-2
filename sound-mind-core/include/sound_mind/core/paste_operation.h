@@ -68,7 +68,7 @@ void from_json(const nlohmann::json& json, Clip& clip);
  * of `bounds()`'s own cells from the clip's own pixel grid, not a gradient-
  * blended edit - see `applyPasteOperation()`'s own docs.
  */
-class PasteOperation : public Operation {
+class PasteOperation : public LayerContentOperation {
 public:
     /**
      * @param id Identity to give this operation within its OperationLog.
@@ -84,19 +84,12 @@ public:
      */
     PasteOperation(OperationId id, LayerId targetLayer, TimeFrequencyRect placement, Clip clip,
                     std::optional<OperationId> supersedes = std::nullopt) noexcept
-        : Operation(id, supersedes),
-          targetLayer_(targetLayer),
-          placement_(placement),
-          clip_(std::move(clip)) {}
+        : LayerContentOperation(id, targetLayer, supersedes), placement_(placement), clip_(std::move(clip)) {}
 
     /// @brief This operation's own time/frequency footprint - exactly
     ///        where the clip was placed.
     /// @return This operation's own bounds.
     [[nodiscard]] TimeFrequencyRect bounds() const override { return placement_; }
-
-    /// @brief Which layer this paste wrote into.
-    /// @return This operation's own target layer id.
-    [[nodiscard]] std::optional<LayerId> targetLayer() const noexcept override { return targetLayer_; }
 
     /// @brief The captured pixel data this operation pastes.
     /// @return This operation's own clip.
@@ -111,7 +104,6 @@ public:
     }
 
 private:
-    LayerId targetLayer_;
     TimeFrequencyRect placement_;
     Clip clip_;
 };

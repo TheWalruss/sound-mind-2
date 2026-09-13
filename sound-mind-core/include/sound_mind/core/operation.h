@@ -191,4 +191,43 @@ private:
     std::optional<OperationId> supersedes_;
 };
 
+/**
+ * @brief Intermediate base for every `Operation` subtype that affects one
+ *        layer's own raster content - `PaintOperation`, `FillOperation`,
+ *        and `PasteOperation` so far - as opposed to a structural subtype
+ *        targeting the project's layer list itself (see
+ *        `Operation::targetLayer()`'s own docs for that distinction).
+ *
+ * Each of those three subtypes originally declared its own `targetLayer_`
+ * member and its own identical one-line `targetLayer()` override
+ * independently; this base carries both once instead (Refactor & Clean
+ * Up, `v0.Y.29.1`) - not a behavior change (`targetLayer()` still returns
+ * the same value for every existing instance), and a future fourth
+ * layer-content subtype gets both for free rather than needing to
+ * reimplement them again.
+ */
+class LayerContentOperation : public Operation {
+public:
+    /// @brief Which layer this operation's content edit targets.
+    /// @return This operation's own target layer id.
+    [[nodiscard]] std::optional<LayerId> targetLayer() const noexcept override { return targetLayer_; }
+
+protected:
+    /**
+     * @param id Identity to give this operation within its OperationLog.
+     * @param targetLayer Which layer's content this operation affects.
+     * @param supersedes The prior operation this one replaces, if any.
+     */
+    explicit LayerContentOperation(OperationId id, LayerId targetLayer,
+                                    std::optional<OperationId> supersedes = std::nullopt) noexcept
+        : Operation(id, supersedes), targetLayer_(targetLayer) {}
+
+    /// @brief Which layer this operation's content edit targets, as a
+    ///        plain (non-`optional`) value - for a concrete subtype's own
+    ///        `translatedCopy()` to pass straight through to its own
+    ///        constructor, without needing to dereference `targetLayer()`'s
+    ///        own `std::optional` return each time.
+    LayerId targetLayer_;
+};
+
 }  // namespace sound_mind::core

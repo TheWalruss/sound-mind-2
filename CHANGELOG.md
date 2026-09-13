@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.30.2] - 2026-09-13
+
+Installment B of the "Refactor & Clean Up" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.29.1`) - the Operation/JSON dedup findings from the same Phase 3 audit, plus six documented-behavior-vs-code reconciliations. Purely internal/documentation work; one new test added (a previously-undocumented, untested behavior now documented and covered).
+
+### Changed
+
+- **New intermediate `sound_mind::core::LayerContentOperation` base class** (`operation.h`) replaces the identical `targetLayer_` member and `targetLayer()` override `PaintOperation`, `FillOperation`, and `PasteOperation` each declared independently.
+- **New shared JSON helpers** (`operation_log.cpp`) replace the `id`/`supersedes`/`targetLayer` boilerplate repeated across `to_json()`'s and `from_json()`'s three per-subtype branches.
+- **Doc-vs-code reconciliation** (code behavior unchanged in every case - only stale/incorrect documentation fixed): `OperationLog::from_json()`'s `@throws` doc, `applyPasteOperation()`'s false claim of out-of-range-handling parity with `applyFillOperation()` (they differ: paste drops overhanging cells, fill clamps to the edge), `MainWindow::startPlayback()`'s pre-multi-layer-compositing description, `handleLayerSelectionChanged()`/`applyFilterConfiguration()`'s missing mention of the Equalizer layer path, `hasUnsavedChanges()`'s stale "revisit once Operation subtypes exist" note, and `MainWindow`'s own class docblock (no per-milestone paragraph existed for any of Phase 3).
+- **New test**: `applyFillOperation()`'s own edge-clamping behavior (bounds extending past content's own frame/bin range still paint the boundary row/column) - previously true but undocumented and untested; now both.
+
+Full regression: 369/369 passing (368 unchanged + 1 new). Doxygen: 0 warnings. No USER_GUIDE.md change.
+
 ## [0.0.30.1] - 2026-09-13
 
 Installment A of the "Refactor & Clean Up" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.29.1`) - a dedicated pass over everything Phase 3 added (Basic Painting, Selection & Fill, Paths & Grids, Multi-layer Compositing, Filter Layers). Purely internal code quality work, no user-visible behavior change. A dedicated audit turned up ~20 findings across five tiers of risk/effort; this installment lands the three lowest-risk, purely-mechanical ones, confirmed with the user to proceed installment-by-installment rather than as one combined pass.

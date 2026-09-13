@@ -139,6 +139,25 @@ class RecordPanel;
  * the window imports/opens them via handleDroppedFiles() - see its own
  * docs for the per-extension routing and why failures report through the
  * status bar rather than a blocking dialog.
+ *
+ * **Phase 3 (Basic Painting through Filter Layers, `v0.Y.24.1`-`v0.Y.28.1`):**
+ * the largest single expansion of this class's own responsibility so
+ * far - four new controllers (`paintController_`/`pickController_`/
+ * `selectionController_`/`pathController_`) each wired the same way
+ * (canvas signal -> controller call; controller's own `pathChanged()`/
+ * `contentChanged()` -> canvas repaint/Layers Panel refresh - see the
+ * constructor), a `toolConfigurationPanel_`/`gridPanel_` pair configuring
+ * whichever tool is active, and `filterConfigurationPanel_` (paired with
+ * `handleLayerSelectionChanged()`/`applyFilterConfiguration()`) for the
+ * Filter/Equalizer layer types multi-layer compositing and Filter Layers
+ * introduced. Per-milestone paragraphs weren't added here for each of
+ * these individually (unlike every phase above) - `docs/sound-mind-
+ * roadmap.md`'s own `v0.Y.29.1` (Refactor & Clean Up) identifies most of
+ * this cluster as a `ToolPaletteController`/`LayerController` extraction
+ * candidate, the same "own presentation" treatment `LayersPanel`/
+ * `LoopPanel`/`RecordPanel`/`PlaybackPanel` already received - this
+ * docblock is expected to shrink accordingly once that lands, rather
+ * than being backfilled in detail now only to be deleted again.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -260,18 +279,18 @@ public slots:
     void importImage();
 
     /**
-     * @brief Starts (or resumes) playback of the topmost layer with
-     *        content.
+     * @brief Starts (or resumes) playback of the project's own real
+     *        composite.
      *
-     * Per the confirmed scope for this milestone: "the composite" is, for
-     * now, just whichever layer CanvasWidget would also show (see
-     * `sound_mind::core::renderLayer()`'s docs) - real multi-layer mixing
-     * doesn't exist yet. Decodes and loads that layer's audio once (not on
-     * every call - resuming after pausePlayback() continues from the same
-     * position); does nothing if no layer has content, or none is open, or
-     * Loop Mode or Recording is currently running (see toggleLoopMode()'s/
-     * toggleRecording()'s docs for why all three are mutually exclusive in
-     * this first pass).
+     * As of `v0.Y.27.1` (Multi-layer Compositing): every visible layer
+     * mixed together via `sound_mind::core::compositeProject()`, not just
+     * whichever layer happens to be topmost - see that function's own
+     * docs. Decodes and loads the composite's audio once (not on every
+     * call - resuming after pausePlayback() continues from the same
+     * position); does nothing if the composite is empty (no visible layer
+     * has content), or no project is open, or Loop Mode or Recording is
+     * currently running (see toggleLoopMode()'s/toggleRecording()'s docs
+     * for why all three are mutually exclusive).
      */
     void startPlayback();
 
@@ -619,10 +638,17 @@ public slots:
      * Loads the newly selected layer's own `filterConfiguration()` into
      * `filterConfigurationPanel_` (via `setFilterConfiguration()`, which
      * doesn't itself emit a change - see that method's own docs) and
-     * enables the panel, if `id` refers to a `Filter`-type layer;
-     * otherwise disables the panel entirely (`QWidget::setEnabled(false)`)
-     * - editing a Filter layer's own parameters only makes sense while
-     *   one is actually selected.
+     * enables the panel, if `id` refers to either Filter layer kind (a
+     * plain `Filter`-type layer, or the special `Equalizer` layer - see
+     * `sound_mind::core::isFilterLayerType()`'s own docs); otherwise
+     * disables the panel entirely (`QWidget::setEnabled(false)`) - editing
+     * a Filter layer's own parameters only makes sense while one is
+     * actually selected. Also calls `FilterConfigurationPanel::
+     * setEqualizerMode()` (before `setFilterConfiguration()` - see that
+     * method's own docs for why the order matters) so the panel shows its
+     * specialized Cut editor for the Equalizer specifically, rather than
+     * the general Frequency-Axis Gradient editor every plain `Filter`
+     * layer of that type gets.
      *
      * @param id The newly selected layer's id, or `std::nullopt` if the
      *        selection was cleared - see `LayersPanel::selectionChanged()`'s
@@ -637,10 +663,11 @@ public slots:
      *        filterConfigurationChanged()`.
      *
      * A no-op if no project is open, or the panel isn't currently editing
-     * a real, still-selected `Filter`-type layer (the panel is disabled
-     * in that case anyway - see `handleLayerSelectionChanged()`'s own
-     * docs - so this shouldn't normally be reachable, only guarded
-     * defensively).
+     * a real, still-selected layer of either Filter layer kind (plain
+     * `Filter` or `Equalizer` - see `sound_mind::core::isFilterLayerType()`'s
+     * own docs; the panel is disabled in that case anyway - see
+     * `handleLayerSelectionChanged()`'s own docs - so this shouldn't
+     * normally be reachable, only guarded defensively).
      *
      * @param config The panel's own new, complete configuration.
      */
@@ -993,14 +1020,21 @@ public:
      *        beyond its just-created state).
      *
      * Tracked as a plain flag, set whenever content actually changes
-     * (import, Pool, a Loop/Recording capture adding or updating a layer)
-     * and cleared by a successful save or by setProject() (a fresh/loaded
-     * project matches what's on disk, or - for `newProject()` - has
-     * nothing on disk to differ from yet). Deliberately simpler than
-     * diffing against the operation log's replay: no operation type logs
-     * these particular mutations yet (that starts with real `Operation`
-     * subtypes in Phase 3's Basic Painting milestone) - revisit once it
-     * does, rather than building a fuller mechanism speculatively now.
+     * (import, Pool, a Loop/Recording capture adding or updating a layer,
+     * or any real `Operation` appended to the project's `OperationLog` -
+     * paint, fill, paste, pick, and their own undo()/redo() - since
+     * Phase 3's own milestones) and cleared by a successful save or by
+     * setProject() (a fresh/loaded project matches what's on disk, or -
+     * for `newProject()` - has nothing on disk to differ from yet).
+     * Deliberately still simpler than diffing against the operation log's
+     * own replay, even though real `Operation` subtypes now exist to diff
+     * against: this flag only needs to answer "has anything changed since
+     * the last save", not "exactly what changed" - a plain flag answers
+     * that with no false negatives (every mutating call site sets it) as
+     * cheaply as a boolean write, where a replay-diff would need to
+     * actually re-render and compare content. Revisit only if a real need
+     * for the finer-grained answer (e.g. a per-layer "modified" indicator)
+     * emerges.
      *
      * @return `true` if closing or switching away from the current
      *         project right now would lose something.

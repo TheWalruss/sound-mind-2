@@ -23,7 +23,7 @@ namespace sound_mind::core {
  * shared, mutable list, so re-editing this operation later can't be
  * affected by unrelated later changes to a saved preset of the same name.
  */
-class PaintOperation : public Operation {
+class PaintOperation : public LayerContentOperation {
 public:
     /**
      * @param id Identity to give this operation within its OperationLog.
@@ -36,17 +36,13 @@ public:
      */
     PaintOperation(OperationId id, LayerId targetLayer, Path path, ToolConfiguration config,
                    std::optional<OperationId> supersedes = std::nullopt) noexcept
-        : Operation(id, supersedes), targetLayer_(targetLayer), path_(std::move(path)), config_(std::move(config)) {}
+        : LayerContentOperation(id, targetLayer, supersedes), path_(std::move(path)), config_(std::move(config)) {}
 
     /// @brief This operation's own time/frequency footprint - directly
     ///        this path's own bounds(), since a paint stroke never
     ///        affects anything outside the Path it was painted along.
     /// @return This operation's Path's own bounding rectangle.
     [[nodiscard]] TimeFrequencyRect bounds() const override { return path_.bounds(); }
-
-    /// @brief Which layer this stroke painted into.
-    /// @return This operation's own target layer id.
-    [[nodiscard]] std::optional<LayerId> targetLayer() const noexcept override { return targetLayer_; }
 
     /// @brief The Path this stroke was painted along.
     /// @return This operation's own Path.
@@ -65,7 +61,6 @@ public:
     }
 
 private:
-    LayerId targetLayer_;
     Path path_;
     ToolConfiguration config_;
 };

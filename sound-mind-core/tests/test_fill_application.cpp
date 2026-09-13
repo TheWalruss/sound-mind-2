@@ -125,6 +125,31 @@ TEST_CASE("applyFillOperation with zero opacity leaves content unchanged", "[cor
     REQUIRE(content.rightMagnitudeDb[insideIndex] == 0.0f);
 }
 
+TEST_CASE("applyFillOperation clamps bounds extending past content's own edges, rather than dropping the "
+          "overhanging part",
+          "[core][fill_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+
+    TimeFrequencyRect bounds;
+    // endTimeSeconds maps to frame 150 - well past this content's own 100
+    // frames - and highFrequencyHz similarly maps past its own 100 bins.
+    bounds.startTimeSeconds = frameIndexToTime(90.0, config);
+    bounds.endTimeSeconds = frameIndexToTime(150.0, config);
+    bounds.lowFrequencyHz = binIndexToFrequency(90.0f, config);
+    bounds.highFrequencyHz = binIndexToFrequency(150.0f, config);
+    const FillOperation op(1, LayerId{1}, bounds, makeUniformGradient(-10.0f, 1.0f));
+
+    applyFillOperation(op, content);
+
+    // The clamped-to-edge cell (last valid frame, last valid bin) is
+    // still painted - fill_application.h's own docs on why this differs
+    // from applyPasteOperation()'s own out-of-range handling.
+    const std::size_t edgeIndex = std::size_t{99} * content.frameCount + 99;
+    REQUIRE(content.leftMagnitudeDb[edgeIndex] == Catch::Approx(-10.0f));
+    REQUIRE(content.rightMagnitudeDb[edgeIndex] == Catch::Approx(-10.0f));
+}
+
 TEST_CASE("applyFillOperation does nothing for a degenerate (zero-sized) content buffer", "[core][fill_application]") {
     StreamImage content;
     content.config = makeTestConfig();

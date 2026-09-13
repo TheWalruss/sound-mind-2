@@ -177,6 +177,38 @@ constexpr const char* kPaintOperationKind = "paint";
 constexpr const char* kFillOperationKind = "fill";
 constexpr const char* kPasteOperationKind = "paste";
 
+/// @brief Writes `operation`'s own `id`/`supersedes`/`targetLayer` fields
+/// into `entry` - the three keys every concrete `LayerContentOperation`
+/// subtype's own `to_json()` branch needs, identically. Shared here
+/// rather than repeated per branch (Refactor & Clean Up, `v0.Y.29.1`).
+void writeCommonOperationFields(nlohmann::json& entry, const LayerContentOperation& operation) {
+    entry["id"] = operation.id();
+    if (const auto supersedes = operation.supersedes(); supersedes.has_value()) {
+        entry["supersedes"] = *supersedes;
+    }
+    entry["targetLayer"] = *operation.targetLayer();
+}
+
+/// @brief The three fields writeCommonOperationFields() writes, read back.
+struct CommonOperationFields {
+    OperationId id;
+    std::optional<OperationId> supersedes;
+    LayerId targetLayer;
+};
+
+/// @brief The inverse of writeCommonOperationFields() - reads `entry`'s
+/// own `id`/`supersedes`/`targetLayer` fields back out. Shared here
+/// rather than repeated per `from_json()` branch (Refactor & Clean Up,
+/// `v0.Y.29.1`).
+CommonOperationFields readCommonOperationFields(const nlohmann::json& entry) {
+    CommonOperationFields fields;
+    fields.id = entry.at("id").get<OperationId>();
+    fields.supersedes = entry.contains("supersedes") ? std::optional(entry.at("supersedes").get<OperationId>())
+                                                       : std::nullopt;
+    fields.targetLayer = entry.at("targetLayer").get<LayerId>();
+    return fields;
+}
+
 }  // namespace
 
 void to_json(nlohmann::json& json, const OperationLog& log) {
@@ -190,33 +222,21 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation.get())) {
             nlohmann::json entry;
             entry["kind"] = kPaintOperationKind;
-            entry["id"] = paint->id();
-            if (const auto supersedes = paint->supersedes(); supersedes.has_value()) {
-                entry["supersedes"] = *supersedes;
-            }
-            entry["targetLayer"] = *paint->targetLayer();
+            writeCommonOperationFields(entry, *paint);
             entry["path"] = paint->path();
             entry["config"] = paint->config();
             operations.push_back(std::move(entry));
         } else if (const auto* fill = dynamic_cast<const FillOperation*>(operation.get())) {
             nlohmann::json entry;
             entry["kind"] = kFillOperationKind;
-            entry["id"] = fill->id();
-            if (const auto supersedes = fill->supersedes(); supersedes.has_value()) {
-                entry["supersedes"] = *supersedes;
-            }
-            entry["targetLayer"] = *fill->targetLayer();
+            writeCommonOperationFields(entry, *fill);
             entry["bounds"] = fill->bounds();
             entry["gradient"] = fill->gradient();
             operations.push_back(std::move(entry));
         } else if (const auto* paste = dynamic_cast<const PasteOperation*>(operation.get())) {
             nlohmann::json entry;
             entry["kind"] = kPasteOperationKind;
-            entry["id"] = paste->id();
-            if (const auto supersedes = paste->supersedes(); supersedes.has_value()) {
-                entry["supersedes"] = *supersedes;
-            }
-            entry["targetLayer"] = *paste->targetLayer();
+            writeCommonOperationFields(entry, *paste);
             entry["placement"] = paste->bounds();
             entry["clip"] = paste->clip();
             operations.push_back(std::move(entry));
@@ -237,35 +257,23 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
         for (const auto& entry : json.at("operations")) {
             const std::string kind = entry.at("kind").get<std::string>();
             if (kind == kPaintOperationKind) {
-                const OperationId id = entry.at("id").get<OperationId>();
-                const std::optional<OperationId> supersedes =
-                    entry.contains("supersedes") ? std::optional(entry.at("supersedes").get<OperationId>())
-                                                  : std::nullopt;
-                const LayerId targetLayer = entry.at("targetLayer").get<LayerId>();
+                const CommonOperationFields fields = readCommonOperationFields(entry);
                 Path path = entry.at("path").get<Path>();
                 ToolConfiguration config = entry.at("config").get<ToolConfiguration>();
-                log.operations_.push_back(std::make_unique<PaintOperation>(id, targetLayer, std::move(path),
-                                                                            std::move(config), supersedes));
+                log.operations_.push_back(std::make_unique<PaintOperation>(
+                    fields.id, fields.targetLayer, std::move(path), std::move(config), fields.supersedes));
             } else if (kind == kFillOperationKind) {
-                const OperationId id = entry.at("id").get<OperationId>();
-                const std::optional<OperationId> supersedes =
-                    entry.contains("supersedes") ? std::optional(entry.at("supersedes").get<OperationId>())
-                                                  : std::nullopt;
-                const LayerId targetLayer = entry.at("targetLayer").get<LayerId>();
+                const CommonOperationFields fields = readCommonOperationFields(entry);
                 TimeFrequencyRect bounds = entry.at("bounds").get<TimeFrequencyRect>();
                 Gradient gradient = entry.at("gradient").get<Gradient>();
-                log.operations_.push_back(std::make_unique<FillOperation>(id, targetLayer, bounds,
-                                                                            std::move(gradient), supersedes));
+                log.operations_.push_back(std::make_unique<FillOperation>(fields.id, fields.targetLayer, bounds,
+                                                                           std::move(gradient), fields.supersedes));
             } else if (kind == kPasteOperationKind) {
-                const OperationId id = entry.at("id").get<OperationId>();
-                const std::optional<OperationId> supersedes =
-                    entry.contains("supersedes") ? std::optional(entry.at("supersedes").get<OperationId>())
-                                                  : std::nullopt;
-                const LayerId targetLayer = entry.at("targetLayer").get<LayerId>();
+                const CommonOperationFields fields = readCommonOperationFields(entry);
                 TimeFrequencyRect placement = entry.at("placement").get<TimeFrequencyRect>();
                 Clip clip = entry.at("clip").get<Clip>();
-                log.operations_.push_back(std::make_unique<PasteOperation>(id, targetLayer, placement,
-                                                                             std::move(clip), supersedes));
+                log.operations_.push_back(std::make_unique<PasteOperation>(
+                    fields.id, fields.targetLayer, placement, std::move(clip), fields.supersedes));
             } else {
                 throw std::invalid_argument("OperationLog: unrecognized operation kind \"" + kind + "\"");
             }

@@ -24,6 +24,14 @@ namespace sound_mind::core {
  * visually intuitive default (see `docs/sound-mind-architecture.md`'s
  * Decisions Made for the full rationale).
  *
+ * `operation.bounds()` extending past `content`'s own frame/bin range is
+ * *clamped*, not dropped: the fill's own footprint stops at the nearest
+ * valid edge and still paints that edge row/column, rather than skipping
+ * the overhanging portion entirely - a real, if narrower, contribution
+ * along the boundary. `applyPasteOperation()`'s own out-of-range handling
+ * is genuinely different (drops the overhanging cells outright) - see its
+ * own docs for why the two operations differ here.
+ *
  * @param operation The fill to apply - its own `bounds()`/`gradient()`
  *        fully describe it.
  * @param content The `StreamImage` to fill into, mutated in place - its

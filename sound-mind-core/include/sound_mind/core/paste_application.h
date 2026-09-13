@@ -32,10 +32,17 @@ namespace sound_mind::core {
  * `operation.bounds()` is replaced outright by the clip's own corresponding
  * source cell - a paste reproduces exactly what was copied, not a color
  * mixed toward it. The clip is positioned so its own top-left (lowest time,
- * lowest frequency bin) lands at `operation.bounds()`'s own low corner;
- * any part of the clip that would fall outside `content`'s own frame/bin
- * range is silently clipped, the same as `applyFillOperation()`'s own
- * out-of-range handling.
+ * lowest frequency bin) lands at `operation.bounds()`'s own low corner; any
+ * part of the clip that would fall outside `content`'s own frame/bin range
+ * is skipped entirely, leaving whatever was already there untouched - a
+ * genuinely different out-of-range handling than `applyFillOperation()`'s
+ * own, which instead *clamps* its edit to the nearest valid frame/bin
+ * (extending the fill to the edge, not dropping the overhanging part).
+ * Each is the natural behavior for what it's doing: a fill has no source
+ * pixels to lose by clamping its own footprint, while a paste's own clip
+ * has real, specific pixel data per cell that clamping would have to
+ * invent or drop anyway - dropping the whole overhanging cell is the more
+ * honest choice.
  *
  * @param operation The paste to apply - its own `bounds()`/`clip()` fully
  *        describe it.
