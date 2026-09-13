@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.29.2] - 2026-09-13
+
+The second installment of "GPU Compute Enablement" (`docs/sound-mind-roadmap.md`'s Phase 3.5): `sound-mind-gpu`'s first two real DSP kernels. Given a choice of moving either the compositor's per-cell mixing or the Gaussian/Uniform Blur filter to GPU first, both were built - one proves an everyday hot path gets faster, the other proves the GPU DSP pattern on a real 2D, multi-pass workload. **Still not wired into `sound-mind-core`** - `applyFilter()`/`compositeProject()` are unchanged, and no user-visible or audible change exists in this build; wiring is deferred to a later installment.
+
+### Added
+
+- **`ComputeDevice::gaussianBlur2D(data, width, height, sigma)`** - a separable two-pass (horizontal, then vertical) GPU port of `sound_mind::core`'s own CPU Gaussian blur, identical sigma floor/kernel radius/normalization/clamp-to-edge behavior.
+- **`ComputeDevice::mixAmplitudePhaseSignal(running, layer, layerGain)`** and the new **`AmplitudePhaseSignal`** struct - a GPU port of the compositor's own per-cell complex-phasor mixing math (`mixLayerInto()`'s per-cell arithmetic only; placement/rescale stays a `sound-mind-core`-side concern, deliberately excluded here).
+
+### Fixed
+
+- A real (if latent) D3D12 resource-state bug found via manual code review: the blur's ping-pong buffer was copied into without first transitioning it into `COPY_DEST`, undefined per the D3D12 spec even though it hadn't visibly misbehaved on this hardware/driver.
+
+Core regression: unchanged. Studio regression: unchanged. Full suite: 364/364 passing. `sound-mind-gpu` test suite: 19 test cases (3,499 assertions), including behavioral tests against independent CPU reference implementations and dedicated performance tests. Real measured performance on this laptop's own Adreno hardware: a 512x512 Gaussian blur (sigma 8.0) ran ~55x faster on GPU (~14.6 ms) than the CPU reference (~806 ms); mixing 500,000 cells ran ~5.9x faster on GPU (~32 ms) than the CPU reference (~190 ms). Doxygen: 0 warnings.
+
 ## [0.0.29.1] - 2026-09-13
 
 The first installment of the new "GPU Compute Enablement" milestone (`docs/sound-mind-roadmap.md`'s new Phase 3.5, moved forward from its original spot right before `v1.0.0.0` - confirmed with the user). **Pure plumbing, not a real DSP operation yet** - nothing else in the app depends on this yet, and no user-visible or audible change exists in this build.

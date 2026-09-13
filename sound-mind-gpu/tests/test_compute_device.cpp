@@ -1,21 +1,36 @@
+// Defined before any other include (even Catch2's own, which can pull in
+// <Windows.h> transitively on this platform) - without it, Windows.h's
+// own max/min macros shadow std::max/std::min wherever it happens to get
+// included from, producing a confusing "illegal token on right side of
+// ::" MSVC parse error at every std::max/std::min call below.
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <complex>
 #include <cstddef>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "sound_mind/gpu/compute_device.h"
 
 using sound_mind::gpu::AdapterKind;
+using sound_mind::gpu::AmplitudePhaseSignal;
 using sound_mind::gpu::ComputeDevice;
 
 namespace {
 
 /// @brief A device shared across this file's own test cases - real
 /// device creation (even against WARP) is comparatively expensive, and
-/// every test here only ever reads from it (`multiplyByTwo()` creates
-/// and tears down its own resources per call - see its own docs), so
-/// sharing one is safe and keeps this suite fast.
+/// every test here only ever reads from it (each `ComputeDevice` method
+/// creates and tears down its own resources per call - see its own
+/// docs), so sharing one is safe and keeps this suite fast.
 ComputeDevice& sharedDevice() {
     static ComputeDevice device = [] {
         auto created = ComputeDevice::create();
@@ -25,14 +40,101 @@ ComputeDevice& sharedDevice() {
     return device;
 }
 
+// ---------------------------------------------------------------------------
+// Independent CPU reference implementations - sound-mind-gpu doesn't (and
+// per docs/sound-mind-architecture.md's own Build & Module Layout,
+// shouldn't) depend on sound-mind-core, so this file can't call the real
+// sound_mind::core::gaussianBlur2D()/mixLayerInto() directly. These are
+// deliberately independent re-implementations of the exact same
+// documented algorithms, for behavioral comparison only - see
+// docs/sound-mind-architecture.md's own Decision #4 testing strategy
+// (behavioral tests confirming the GPU path matches a CPU reference).
+// ---------------------------------------------------------------------------
+
+std::vector<float> referenceGaussianKernel1D(float sigma) {
+    const float s = std::max(0.1f, sigma);
+    const int radius = std::max(1, static_cast<int>(std::ceil(4.0f * s)));
+    std::vector<float> kernel(static_cast<std::size_t>(radius) * 2 + 1);
+    float sum = 0.0f;
+    for (int i = -radius; i <= radius; ++i) {
+        const float weight = std::exp(-(static_cast<float>(i) * static_cast<float>(i)) / (2.0f * s * s));
+        kernel[static_cast<std::size_t>(i + radius)] = weight;
+        sum += weight;
+    }
+    for (float& weight : kernel) {
+        weight /= sum;
+    }
+    return kernel;
+}
+
+int clampIndex(int index, int size) { return std::max(0, std::min(size - 1, index)); }
+
+std::vector<float> referenceGaussianBlur2D(const std::vector<float>& data, int width, int height, float sigma) {
+    const auto kernel = referenceGaussianKernel1D(sigma);
+    const int radius = static_cast<int>(kernel.size() / 2);
+
+    std::vector<float> horizontal(data.size());
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            float sum = 0.0f;
+            for (int k = -radius; k <= radius; ++k) {
+                const int sampleX = clampIndex(x + k, width);
+                sum += data[static_cast<std::size_t>(y) * width + sampleX] * kernel[static_cast<std::size_t>(k + radius)];
+            }
+            horizontal[static_cast<std::size_t>(y) * width + x] = sum;
+        }
+    }
+
+    std::vector<float> result(data.size());
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            float sum = 0.0f;
+            for (int k = -radius; k <= radius; ++k) {
+                const int sampleY = clampIndex(y + k, height);
+                sum += horizontal[static_cast<std::size_t>(sampleY) * width + x] * kernel[static_cast<std::size_t>(k + radius)];
+            }
+            result[static_cast<std::size_t>(y) * width + x] = sum;
+        }
+    }
+    return result;
+}
+
+constexpr float kMinLinearAmplitude = 1e-7f;
+
+float referenceDbToLinear(float db) { return std::pow(10.0f, db / 20.0f); }
+
+float referenceLinearToDb(float amplitude) { return 20.0f * std::log10(std::max(amplitude, kMinLinearAmplitude)); }
+
+AmplitudePhaseSignal referenceMix(const AmplitudePhaseSignal& running, const AmplitudePhaseSignal& layer, float gain) {
+    AmplitudePhaseSignal result;
+    const std::size_t count = running.leftMagnitudeDb.size();
+    result.leftMagnitudeDb.resize(count);
+    result.rightMagnitudeDb.resize(count);
+    result.phaseRadians.resize(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        const float layerLeftLinear = referenceDbToLinear(layer.leftMagnitudeDb[i]) * gain;
+        const float layerRightLinear = referenceDbToLinear(layer.rightMagnitudeDb[i]) * gain;
+        const std::complex<float> layerDirection(std::cos(layer.phaseRadians[i]), std::sin(layer.phaseRadians[i]));
+
+        const float runningLeftLinear = referenceDbToLinear(running.leftMagnitudeDb[i]);
+        const float runningRightLinear = referenceDbToLinear(running.rightMagnitudeDb[i]);
+        const std::complex<float> runningDirection(std::cos(running.phaseRadians[i]), std::sin(running.phaseRadians[i]));
+
+        const std::complex<float> newLeft = runningLeftLinear * runningDirection + layerLeftLinear * layerDirection;
+        const std::complex<float> newRight = runningRightLinear * runningDirection + layerRightLinear * layerDirection;
+
+        result.leftMagnitudeDb[i] = referenceLinearToDb(std::abs(newLeft));
+        result.rightMagnitudeDb[i] = referenceLinearToDb(std::abs(newRight));
+        const std::complex<float> mid = (newLeft + newRight) / 2.0f;
+        result.phaseRadians[i] = (std::abs(mid) > 0.0f) ? std::arg(mid) : 0.0f;
+    }
+    return result;
+}
+
 }  // namespace
 
 TEST_CASE("create() succeeds, on a hardware adapter or WARP", "[gpu][compute_device]") {
     const auto& device = sharedDevice();
-    // Not asserting which one specifically - that depends on this
-    // machine - only that it's a valid, real outcome either way. Logged
-    // (not asserted) since it's genuinely useful, machine-specific
-    // information: which fallback tier a real run actually landed on.
     switch (device.adapterKind()) {
         case AdapterKind::Hardware:
             WARN("Adapter kind: Hardware");
@@ -84,10 +186,6 @@ TEST_CASE("multiplyByTwo is correct exactly at a thread-group boundary (64 eleme
 
 TEST_CASE("multiplyByTwo is correct across multiple thread groups, including a partial last one",
           "[gpu][compute_device]") {
-    // 200 elements over [numthreads(64,1,1)] dispatches 4 groups (256
-    // threads total) - the last group's own final 56 threads must not
-    // read/write past either buffer's own end (the shader's own bounds
-    // check - see multiply_by_two.hlsl).
     std::vector<float> input(200);
     for (std::size_t i = 0; i < input.size(); ++i) {
         input[i] = static_cast<float>(i) * 0.5f;
@@ -99,8 +197,6 @@ TEST_CASE("multiplyByTwo is correct across multiple thread groups, including a p
     for (std::size_t i = 0; i < result.size(); ++i) {
         CHECK(result[i] == static_cast<float>(i));
     }
-    // The boundary cells specifically - the ones most likely to be wrong
-    // if the dispatch/bounds-check math were off by one.
     CHECK(result[63] == 63.0f);
     CHECK(result[64] == 64.0f);
     CHECK(result[199] == 199.0f);
@@ -117,7 +213,235 @@ TEST_CASE("a moved-to ComputeDevice remains usable, and the moved-from one destr
     REQUIRE(result.size() == 2);
     CHECK(result[0] == 20.0f);
     CHECK(result[1] == 40.0f);
-    // *created (moved-from) goes out of scope right after this test,
-    // alongside `moved` - both destructing without a double-close on the
-    // shared fence event is the actual thing under test here.
+}
+
+// ---------------------------------------------------------------------------
+// gaussianBlur2D
+// ---------------------------------------------------------------------------
+
+TEST_CASE("gaussianBlur2D returns an empty vector for empty input", "[gpu][compute_device][gaussian_blur]") {
+    const auto result = sharedDevice().gaussianBlur2D({}, 0, 0, 2.0f);
+    CHECK(result.empty());
+}
+
+TEST_CASE("gaussianBlur2D throws if width * height doesn't match data.size()",
+          "[gpu][compute_device][gaussian_blur]") {
+    CHECK_THROWS_AS(sharedDevice().gaussianBlur2D({1.0f, 2.0f, 3.0f}, 2, 2, 1.0f), std::runtime_error);
+}
+
+TEST_CASE("gaussianBlur2D leaves a uniform grid unchanged", "[gpu][compute_device][gaussian_blur]") {
+    const std::vector<float> data(16 * 16, -40.0f);
+
+    const auto result = sharedDevice().gaussianBlur2D(data, 16, 16, 3.0f);
+
+    REQUIRE(result.size() == data.size());
+    for (const float value : result) {
+        CHECK(value == Catch::Approx(-40.0f).margin(0.01));
+    }
+}
+
+TEST_CASE("gaussianBlur2D matches an independent CPU reference implementation, on a real 2D impulse",
+          "[gpu][compute_device][gaussian_blur]") {
+    constexpr int width = 32;
+    constexpr int height = 24;
+    std::vector<float> data(static_cast<std::size_t>(width) * height, -96.0f);
+    data[static_cast<std::size_t>(height / 2) * width + width / 2] = 0.0f;  // A single loud impulse in the middle.
+
+    const auto expected = referenceGaussianBlur2D(data, width, height, 2.5f);
+    const auto actual = sharedDevice().gaussianBlur2D(data, width, height, 2.5f);
+
+    REQUIRE(actual.size() == expected.size());
+    for (std::size_t i = 0; i < actual.size(); ++i) {
+        CHECK(actual[i] == Catch::Approx(expected[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("gaussianBlur2D matches an independent CPU reference implementation, on random-ish data",
+          "[gpu][compute_device][gaussian_blur]") {
+    constexpr int width = 40;
+    constexpr int height = 30;
+    std::vector<float> data(static_cast<std::size_t>(width) * height);
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        // Deterministic, not actually random - a repeatable pseudo-noise
+        // pattern is all this needs, spanning most of the -96..0 dB range.
+        data[i] = -96.0f + 96.0f * static_cast<float>((i * 37 + 11) % 101) / 100.0f;
+    }
+
+    const auto expected = referenceGaussianBlur2D(data, width, height, 4.0f);
+    const auto actual = sharedDevice().gaussianBlur2D(data, width, height, 4.0f);
+
+    REQUIRE(actual.size() == expected.size());
+    for (std::size_t i = 0; i < actual.size(); ++i) {
+        CHECK(actual[i] == Catch::Approx(expected[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("gaussianBlur2D is measurably faster than the CPU reference on a large grid",
+          "[gpu][compute_device][gaussian_blur][performance]") {
+    constexpr int width = 512;
+    constexpr int height = 512;
+    std::vector<float> data(static_cast<std::size_t>(width) * height);
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        data[i] = -96.0f + 96.0f * static_cast<float>(i % 97) / 96.0f;
+    }
+    constexpr float sigma = 8.0f;  // A real kernel radius (32), not a trivial one.
+
+    const auto cpuStart = std::chrono::steady_clock::now();
+    const auto cpuResult = referenceGaussianBlur2D(data, width, height, sigma);
+    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
+
+    const auto gpuStart = std::chrono::steady_clock::now();
+    const auto gpuResult = sharedDevice().gaussianBlur2D(data, width, height, sigma);
+    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
+
+    REQUIRE(gpuResult.size() == cpuResult.size());
+    for (std::size_t i = 0; i < gpuResult.size(); i += 997) {  // Spot-check - correctness is this file's own other tests' job.
+        CHECK(gpuResult[i] == Catch::Approx(cpuResult[i]).margin(0.01));
+    }
+
+    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
+    CHECK(gpuDuration < cpuDuration);
+}
+
+// ---------------------------------------------------------------------------
+// mixAmplitudePhaseSignal
+// ---------------------------------------------------------------------------
+
+TEST_CASE("mixAmplitudePhaseSignal returns an empty signal for empty input",
+          "[gpu][compute_device][mix_amplitude_phase_signal]") {
+    const AmplitudePhaseSignal empty;
+    const auto result = sharedDevice().mixAmplitudePhaseSignal(empty, empty, 1.0f);
+    CHECK(result.leftMagnitudeDb.empty());
+    CHECK(result.rightMagnitudeDb.empty());
+    CHECK(result.phaseRadians.empty());
+}
+
+TEST_CASE("mixAmplitudePhaseSignal throws if running's and layer's own arrays aren't all the same size",
+          "[gpu][compute_device][mix_amplitude_phase_signal]") {
+    AmplitudePhaseSignal running;
+    running.leftMagnitudeDb = {-10.0f, -20.0f};
+    running.rightMagnitudeDb = {-10.0f, -20.0f};
+    running.phaseRadians = {0.0f, 0.0f};
+    AmplitudePhaseSignal layer;
+    layer.leftMagnitudeDb = {-30.0f};  // Wrong size.
+    layer.rightMagnitudeDb = {-30.0f};
+    layer.phaseRadians = {0.0f};
+
+    CHECK_THROWS_AS(sharedDevice().mixAmplitudePhaseSignal(running, layer, 1.0f), std::runtime_error);
+}
+
+TEST_CASE("mixAmplitudePhaseSignal reproduces a single full-opacity, silent-running layer's own content exactly",
+          "[gpu][compute_device][mix_amplitude_phase_signal]") {
+    // Summing one real term against pure silence is the identity - the
+    // same property docs/sound-mind-architecture.md's own Decision #59
+    // establishes for compositeProject() as a whole.
+    AmplitudePhaseSignal silentRunning;
+    silentRunning.leftMagnitudeDb = {-96.0f, -96.0f, -96.0f};
+    silentRunning.rightMagnitudeDb = {-96.0f, -96.0f, -96.0f};
+    silentRunning.phaseRadians = {0.0f, 0.0f, 0.0f};
+
+    AmplitudePhaseSignal layer;
+    layer.leftMagnitudeDb = {-10.0f, -20.0f, -5.0f};
+    layer.rightMagnitudeDb = {-15.0f, -25.0f, -8.0f};
+    layer.phaseRadians = {0.5f, -1.2f, 2.0f};
+
+    const auto result = sharedDevice().mixAmplitudePhaseSignal(silentRunning, layer, 1.0f);
+
+    REQUIRE(result.leftMagnitudeDb.size() == 3);
+    for (std::size_t i = 0; i < 3; ++i) {
+        CHECK(result.leftMagnitudeDb[i] == Catch::Approx(layer.leftMagnitudeDb[i]).margin(0.01));
+        CHECK(result.rightMagnitudeDb[i] == Catch::Approx(layer.rightMagnitudeDb[i]).margin(0.01));
+        CHECK(result.phaseRadians[i] == Catch::Approx(layer.phaseRadians[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("mixAmplitudePhaseSignal scales the layer's own contribution by its own gain",
+          "[gpu][compute_device][mix_amplitude_phase_signal]") {
+    AmplitudePhaseSignal silentRunning;
+    silentRunning.leftMagnitudeDb = {-96.0f};
+    silentRunning.rightMagnitudeDb = {-96.0f};
+    silentRunning.phaseRadians = {0.0f};
+
+    AmplitudePhaseSignal layer;
+    layer.leftMagnitudeDb = {0.0f};  // Full-scale (linear amplitude 1.0).
+    layer.rightMagnitudeDb = {0.0f};
+    layer.phaseRadians = {0.0f};
+
+    // Half amplitude (linear gain 0.5) is -6.02 dB.
+    const auto result = sharedDevice().mixAmplitudePhaseSignal(silentRunning, layer, 0.5f);
+
+    REQUIRE(result.leftMagnitudeDb.size() == 1);
+    CHECK(result.leftMagnitudeDb[0] == Catch::Approx(-6.0206f).margin(0.02));
+    CHECK(result.rightMagnitudeDb[0] == Catch::Approx(-6.0206f).margin(0.02));
+}
+
+TEST_CASE("mixAmplitudePhaseSignal matches an independent CPU reference implementation, on real-shaped data",
+          "[gpu][compute_device][mix_amplitude_phase_signal]") {
+    constexpr std::size_t count = 200;
+    AmplitudePhaseSignal running;
+    AmplitudePhaseSignal layer;
+    running.leftMagnitudeDb.resize(count);
+    running.rightMagnitudeDb.resize(count);
+    running.phaseRadians.resize(count);
+    layer.leftMagnitudeDb.resize(count);
+    layer.rightMagnitudeDb.resize(count);
+    layer.phaseRadians.resize(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        running.leftMagnitudeDb[i] = -96.0f + 80.0f * static_cast<float>((i * 13 + 3) % 97) / 96.0f;
+        running.rightMagnitudeDb[i] = -96.0f + 80.0f * static_cast<float>((i * 19 + 7) % 89) / 88.0f;
+        running.phaseRadians[i] = -3.0f + 6.0f * static_cast<float>((i * 5 + 1) % 61) / 60.0f;
+        layer.leftMagnitudeDb[i] = -96.0f + 96.0f * static_cast<float>((i * 29 + 2) % 83) / 82.0f;
+        layer.rightMagnitudeDb[i] = -96.0f + 96.0f * static_cast<float>((i * 31 + 4) % 79) / 78.0f;
+        layer.phaseRadians[i] = -3.0f + 6.0f * static_cast<float>((i * 7 + 9) % 53) / 52.0f;
+    }
+    constexpr float gain = 0.75f;
+
+    const auto expected = referenceMix(running, layer, gain);
+    const auto actual = sharedDevice().mixAmplitudePhaseSignal(running, layer, gain);
+
+    REQUIRE(actual.leftMagnitudeDb.size() == expected.leftMagnitudeDb.size());
+    for (std::size_t i = 0; i < count; ++i) {
+        CHECK(actual.leftMagnitudeDb[i] == Catch::Approx(expected.leftMagnitudeDb[i]).margin(0.02));
+        CHECK(actual.rightMagnitudeDb[i] == Catch::Approx(expected.rightMagnitudeDb[i]).margin(0.02));
+        CHECK(actual.phaseRadians[i] == Catch::Approx(expected.phaseRadians[i]).margin(0.02));
+    }
+}
+
+TEST_CASE("mixAmplitudePhaseSignal is measurably faster than the CPU reference on a large signal",
+          "[gpu][compute_device][mix_amplitude_phase_signal][performance]") {
+    constexpr std::size_t count = 500000;
+    AmplitudePhaseSignal running;
+    AmplitudePhaseSignal layer;
+    running.leftMagnitudeDb.resize(count);
+    running.rightMagnitudeDb.resize(count);
+    running.phaseRadians.resize(count);
+    layer.leftMagnitudeDb.resize(count);
+    layer.rightMagnitudeDb.resize(count);
+    layer.phaseRadians.resize(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        running.leftMagnitudeDb[i] = -96.0f + 80.0f * static_cast<float>(i % 97) / 96.0f;
+        running.rightMagnitudeDb[i] = -96.0f + 80.0f * static_cast<float>(i % 89) / 88.0f;
+        running.phaseRadians[i] = -3.0f + 6.0f * static_cast<float>(i % 61) / 60.0f;
+        layer.leftMagnitudeDb[i] = -96.0f + 96.0f * static_cast<float>(i % 83) / 82.0f;
+        layer.rightMagnitudeDb[i] = -96.0f + 96.0f * static_cast<float>(i % 79) / 78.0f;
+        layer.phaseRadians[i] = -3.0f + 6.0f * static_cast<float>(i % 53) / 52.0f;
+    }
+
+    const auto cpuStart = std::chrono::steady_clock::now();
+    const auto cpuResult = referenceMix(running, layer, 0.8f);
+    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
+
+    const auto gpuStart = std::chrono::steady_clock::now();
+    const auto gpuResult = sharedDevice().mixAmplitudePhaseSignal(running, layer, 0.8f);
+    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
+
+    REQUIRE(gpuResult.leftMagnitudeDb.size() == cpuResult.leftMagnitudeDb.size());
+    for (std::size_t i = 0; i < count; i += 4999) {  // Spot-check - correctness is this file's own other tests' job.
+        CHECK(gpuResult.leftMagnitudeDb[i] == Catch::Approx(cpuResult.leftMagnitudeDb[i]).margin(0.02));
+    }
+
+    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
+    CHECK(gpuDuration < cpuDuration);
 }

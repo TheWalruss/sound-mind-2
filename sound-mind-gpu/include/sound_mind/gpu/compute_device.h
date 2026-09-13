@@ -9,6 +9,7 @@
 struct ID3D12CommandQueue;
 struct ID3D12Device;
 struct ID3D12Fence;
+struct ID3D12GraphicsCommandList;
 
 namespace sound_mind::gpu {
 
@@ -31,30 +32,63 @@ enum class AdapterKind {
 };
 
 /**
+ * @brief A dB-magnitude/shared-phase signal - the same three-array shape
+ *        `sound_mind::codec::StreamImage` stores its own amplitude/phase
+ *        data in, without depending on Codec directly (`sound-mind-gpu`
+ *        stays below/independent of both Codec and Core - see
+ *        `docs/sound-mind-architecture.md`'s Build & Module Layout).
+ *
+ * @see ComputeDevice::mixAmplitudePhaseSignal()'s own docs.
+ */
+struct AmplitudePhaseSignal {
+    /// @brief The left channel's amplitude, in dB, one entry per cell.
+    std::vector<float> leftMagnitudeDb;
+    /// @brief The right channel's amplitude, in dB, one entry per cell -
+    ///        same size as `leftMagnitudeDb`.
+    std::vector<float> rightMagnitudeDb;
+    /// @brief The shared left/right phase, in radians, one entry per
+    ///        cell - same size as `leftMagnitudeDb`.
+    std::vector<float> phaseRadians;
+};
+
+/**
  * @brief A live DirectX 12 compute device - `sound-mind-gpu`'s own first
  *        real code (`docs/sound-mind-architecture.md`'s Build & Module
  *        Layout has named this module since the very first architecture
- *        draft, with nothing behind it until now).
+ *        draft, with nothing behind it until Installment A).
  *
- * **Deliberately pure plumbing for this installment** (`v0.Y.30.1`'s own
- * "GPU Compute Enablement", confirmed with the user ahead of
- * implementation): proves the whole device -> dispatch -> readback round
- * trip works end to end, via one trivial, DSP-meaningless operation
- * (multiplyByTwo()) - not yet a real DSP kernel. A real Filter Layer
- * operation or the compositor's own per-cell mixing, actually moved to
- * the GPU, is later, separate scope, built on top of this once it exists
- * - see this method's own docs for why proving the plumbing came first.
+ * **Installment A** (`v0.0.29.1`) was deliberately pure plumbing - one
+ * trivial, DSP-meaningless operation (multiplyByTwo()) proving the whole
+ * device -> dispatch -> readback round trip works end to end before
+ * risking a real kernel on unproven pipeline code. **Installment B**
+ * (`v0.0.29.2`) adds the first two real DSP kernels - gaussianBlur2D()
+ * (a real Filter Layer operation, `sound_mind::core::applyFilter()`'s own
+ * `UniformBlur` case) and mixAmplitudePhaseSignal() (the compositor's own
+ * per-cell layer-mixing math, `sound_mind::core::compositeProject()`'s
+ * own `mixLayerInto()`) - each proven both *correct* (matching its own
+ * CPU reference within float tolerance) and *faster* than that CPU
+ * reference, per `docs/sound-mind-architecture.md`'s own Decision #4
+ * testing strategy for real-time/GPU code.
+ *
+ * **Neither new kernel is wired into `sound-mind-core` yet** - confirmed
+ * with the user ahead of implementation (the recommended option): this
+ * installment proves each kernel correct and fast in isolation; actually
+ * having `applyFilter()`/`compositeProject()` call into `sound-mind-gpu`
+ * (with a CPU fallback when no device is available) is separate, later
+ * scope, matching the "Core primitive first, wire it into the real
+ * consumer after" pattern this whole project has used for every other
+ * multi-step feature.
  *
  * Every D3D12 resource this class touches is rebuilt fresh per call
  * (root signature, PSO, buffers) rather than cached/reused across calls -
  * correct but not remotely efficient, an explicit, documented
- * simplification appropriate for "does the pipeline work at all," not a
- * pattern a real, repeatedly-dispatched DSP kernel should copy - see
- * multiplyByTwo()'s own docs.
+ * simplification appropriate for "does the pipeline work, and is it
+ * faster" - not a pattern a real, repeatedly-dispatched, wired-in kernel
+ * should copy.
  *
  * @note Not thread-safe, and not real-time-safe: every operation
- *       allocates, and multiplyByTwo() blocks its own calling thread on
- *       a GPU fence. Matches every other DSP path in this codebase before
+ *       allocates, and every method blocks its own calling thread on a
+ *       GPU fence. Matches every other DSP path in this codebase before
  *       its own real-time-safe pass (`compositeProject()`,
  *       `sound_mind::codec::encode()`/`decode()`) - this is Core/Codec-
  *       adjacent worker-thread-shaped code, never meant to run on the
@@ -118,8 +152,8 @@ public:
     [[nodiscard]] AdapterKind adapterKind() const noexcept { return adapterKind_; }
 
     /**
-     * @brief Doubles every element of `input`, entirely on the GPU - the
-     *        one proof-of-pipeline operation this installment builds.
+     * @brief Doubles every element of `input`, entirely on the GPU -
+     *        Installment A's own proof-of-pipeline operation.
      *
      * Deliberately DSP-meaningless (see this class's own docs on why): a
      * trivial, hand-verifiable operation isolates whether the D3D12
@@ -128,11 +162,6 @@ public:
      * `input.size()`, the fence wait, the readback copy) is correct,
      * without also needing to get a real DSP kernel's own math right at
      * the same time.
-     *
-     * Every GPU resource (root signature, PSO, the three buffers) is
-     * created fresh on every call and torn down at the end of it - see
-     * this class's own docs on why that's an accepted, temporary cost
-     * here.
      *
      * @param input The values to double. An empty vector is a valid,
      *        immediate no-op (no GPU dispatch happens at all).
@@ -145,6 +174,78 @@ public:
      */
     [[nodiscard]] std::vector<float> multiplyByTwo(const std::vector<float>& input) const;
 
+    /**
+     * @brief A separable 2D Gaussian blur over `data` (`width` x `height`,
+     *        row-major), entirely on the GPU - the same algorithm
+     *        `sound_mind::core`'s own (CPU) `gaussianBlur2D()` (in
+     *        `filter_application.cpp`) implements for `FilterType::
+     *        UniformBlur`: `sigma` floored at `0.1`, kernel truncated at 4
+     *        standard deviations, clamp-to-edge boundary handling on both
+     *        passes.
+     *
+     * Two dispatches (horizontal then vertical), ping-ponging between two
+     * GPU buffers, matching the CPU version's own separable-pass shape -
+     * a real, representative GPU DSP pattern (as opposed to a single
+     * O(radius^2)-per-pixel 2D convolution, which would also be correct
+     * but wouldn't reflect how a real, efficient GPU blur is actually
+     * written).
+     *
+     * @param data The `width * height` values to blur, row-major (row =
+     *        `y`, column = `x`) - `data[y * width + x]`.
+     * @param width The row length. `width * height` must equal
+     *        `data.size()`.
+     * @param height The number of rows.
+     * @param sigma The Gaussian kernel's own standard deviation, in
+     *        cells - see `sound_mind::core::FilterConfiguration::
+     *        blurSigma()`'s own docs for the same unit convention.
+     * @return The blurred result, same size/shape as `data`.
+     * @throws std::runtime_error if `width * height != data.size()`, or
+     *         if any D3D12 call fails.
+     */
+    [[nodiscard]] std::vector<float> gaussianBlur2D(const std::vector<float>& data, std::uint32_t width,
+                                                     std::uint32_t height, float sigma) const;
+
+    /**
+     * @brief Mixes one layer's own (already-placed) contribution into a
+     *        running composite, entirely on the GPU - the same per-cell
+     *        math `sound_mind::core`'s own (CPU) `mixLayerInto()` (in
+     *        `compositor.cpp`) implements: each channel's own dB value
+     *        converts to linear, `layer`'s own converted amplitude scales
+     *        by `layerGain` (a layer's own `opacity()`, as a linear
+     *        gain), each channel becomes a complex value using its own
+     *        signal's shared phase, `running`'s own and `layer`'s own
+     *        complex values sum, and the result converts back to
+     *        dB/phase (phase as the angle of the summed *mid* signal,
+     *        `(left + right) / 2`).
+     *
+     * **Deliberately excludes `mixLayerInto()`'s own placement/rescale
+     *        step** (`sourceColumnFor()`'s own timeline-remapping math) -
+     *        `layer` here must already be sized/aligned identically to
+     *        `running` (the caller's own responsibility, matching
+     *        `mixLayerInto()`'s own precondition once a layer's content
+     *        has been placed onto the canvas). Scoped this way
+     *        deliberately: this installment proves the per-cell complex-
+     *        mixing math on the GPU, which is the actual DSP content of
+     *        `mixLayerInto()` - the placement geometry is a separate
+     *        concern, left for whichever later installment actually
+     *        wires this into `compositeProject()`.
+     *
+     * @param running The current composite. All three of its own arrays
+     *        must be the same size.
+     * @param layer The one layer's own contribution to mix in - all
+     *        three of its own arrays must be the same size as `running`'s
+     *        own.
+     * @param layerGain `layer`'s own opacity, as a linear gain (matching
+     *        `mixLayerInto()`'s own `layer.opacity()` usage) - not
+     *        clamped or validated here.
+     * @return The updated composite, same shape as `running`.
+     * @throws std::runtime_error if `running`'s and `layer`'s own arrays
+     *         aren't all the same size, or if any D3D12 call fails.
+     */
+    [[nodiscard]] AmplitudePhaseSignal mixAmplitudePhaseSignal(const AmplitudePhaseSignal& running,
+                                                                const AmplitudePhaseSignal& layer,
+                                                                float layerGain) const;
+
 private:
     /// @brief Wraps an already-successfully-created device/queue/fence
     ///        triple - `create()`'s own private constructor; use
@@ -153,16 +254,24 @@ private:
                             Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue,
                             Microsoft::WRL::ComPtr<ID3D12Fence> fence);
 
+    /// @brief Closes, executes, and blocks the calling thread until
+    ///        `commandList` has actually finished running on the GPU -
+    ///        the shared tail end of every method in this class that
+    ///        records and submits its own commands.
+    /// @param commandList The command list to close and execute -
+    ///        already fully recorded.
+    void executeAndWait(ID3D12GraphicsCommandList* commandList) const;
+
     AdapterKind adapterKind_;
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> commandQueue_;
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
-    // Bumped once per multiplyByTwo() call (a fresh fence-value handoff
+    // Bumped once per executeAndWait() call (a fresh fence-value handoff
     // each time, since every call rebuilds its own command list rather
     // than reusing one - see this class's own docs) - mutable since
-    // multiplyByTwo() is logically const (it doesn't change which device/
-    // adapter this object represents) but still needs to advance this
-    // internal counter.
+    // every public method here is logically const (none change which
+    // device/adapter this object represents) but still needs to advance
+    // this internal counter.
     mutable std::uint64_t nextFenceValue_ = 1;
     void* fenceEvent_ = nullptr;  // HANDLE, kept void* to avoid <Windows.h> in this public header.
 };

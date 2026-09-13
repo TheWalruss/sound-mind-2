@@ -1,9 +1,12 @@
 # sound-mind-gpu: the DirectX 12 compute wrapper (see
 # sound-mind-architecture.md's Build & Module Layout - named there since
-# the very first architecture draft, with no content until now). No
-# dependency on sound-mind-codec/core/studio, and (for this first
-# installment) nothing depends on it either - see ComputeDevice's own
-# docs for why this pass is pure plumbing, not a real DSP operation yet.
+# the very first architecture draft, with no content until Installment A).
+# No dependency on sound-mind-codec/core/studio, and (as of Installment B)
+# nothing depends on it either yet - see ComputeDevice's own docs: its two
+# real DSP kernels (gaussianBlur2D()/mixAmplitudePhaseSignal()) are proven
+# correct and fast here, but not yet wired into sound-mind-core's own
+# applyFilter()/compositeProject() (confirmed with the user - separate,
+# later scope).
 #
 # d3d12.lib/dxgi.lib/dxguid.lib are Windows SDK components, not a vcpkg
 # package - always available with the MSVC toolchain this project already
@@ -16,18 +19,32 @@ find_program(DXC_EXECUTABLE NAMES dxc REQUIRED
 )
 
 set(SOUND_MIND_GPU_SHADER_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
-set(SOUND_MIND_GPU_COMPILED_SHADER ${SOUND_MIND_GPU_SHADER_DIR}/multiply_by_two.cso)
 
-add_custom_command(
-    OUTPUT ${SOUND_MIND_GPU_COMPILED_SHADER}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${SOUND_MIND_GPU_SHADER_DIR}
-    COMMAND ${DXC_EXECUTABLE} -T cs_6_0 -E CSMain -Fo ${SOUND_MIND_GPU_COMPILED_SHADER}
-            ${CMAKE_CURRENT_SOURCE_DIR}/shaders/multiply_by_two.hlsl
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/shaders/multiply_by_two.hlsl
-    COMMENT "Compiling multiply_by_two.hlsl (dxc, offline)"
-    VERBATIM
-)
-add_custom_target(sound-mind-gpu-shaders DEPENDS ${SOUND_MIND_GPU_COMPILED_SHADER})
+# Compiles shaders/<name>.hlsl to ${SOUND_MIND_GPU_SHADER_DIR}/<name>.cso
+# via dxc, and appends that .cso path to SOUND_MIND_GPU_COMPILED_SHADERS
+# (in the parent scope) - one add_custom_command() per shader, shared by
+# every .hlsl file this module has, rather than repeating this block per
+# shader.
+set(SOUND_MIND_GPU_COMPILED_SHADERS "")
+function(sound_mind_gpu_compile_shader name)
+    set(source ${CMAKE_CURRENT_SOURCE_DIR}/shaders/${name}.hlsl)
+    set(output ${SOUND_MIND_GPU_SHADER_DIR}/${name}.cso)
+    add_custom_command(
+        OUTPUT ${output}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${SOUND_MIND_GPU_SHADER_DIR}
+        COMMAND ${DXC_EXECUTABLE} -T cs_6_0 -E CSMain -Fo ${output} ${source}
+        DEPENDS ${source}
+        COMMENT "Compiling ${name}.hlsl (dxc, offline)"
+        VERBATIM
+    )
+    set(SOUND_MIND_GPU_COMPILED_SHADERS ${SOUND_MIND_GPU_COMPILED_SHADERS} ${output} PARENT_SCOPE)
+endfunction()
+
+sound_mind_gpu_compile_shader(multiply_by_two)
+sound_mind_gpu_compile_shader(gaussian_blur)
+sound_mind_gpu_compile_shader(mix_amplitude_phase_signal)
+
+add_custom_target(sound-mind-gpu-shaders DEPENDS ${SOUND_MIND_GPU_COMPILED_SHADERS})
 
 add_library(sound-mind-gpu
     src/compute_device.cpp
