@@ -12,6 +12,8 @@
 
 namespace sound_mind::studio {
 
+class UndoStack;
+
 /**
  * @brief Owns an in-progress freehand stroke and turns it into a real,
  *        undoable `PaintOperation` - see `docs/sound-mind-design.md`'s
@@ -35,9 +37,19 @@ class PaintController : public QObject {
 public:
     /// @brief Constructs a controller with no project set and no stroke
     ///        in progress.
+    /// @param undoStack Non-owning; notifyOperationCommitted() pushes onto
+    ///        it - see that method's own docs. Nullable, unlike most other
+    ///        controllers' own required collaborators: every test in
+    ///        `test_paint_controller.cpp` constructs a `PaintController`
+    ///        with none of its own collaborators at all, and content-
+    ///        operation undo/redo (this class's own undo()/redo(), driving
+    ///        `sound_mind::core::OperationLog` directly) already works
+    ///        correctly with no `UndoStack` present - only the *unified*
+    ///        Edit > Undo/Redo menu needs one wired in. Must outlive this
+    ///        controller if given.
     /// @param parent The owning object, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
-    explicit PaintController(QObject* parent = nullptr);
+    explicit PaintController(UndoStack* undoStack = nullptr, QObject* parent = nullptr);
 
     /**
      * @brief Sets which project painting targets.
@@ -175,6 +187,33 @@ public:
      */
     void rebuildLayerContent(sound_mind::core::LayerId layer);
 
+    /**
+     * @brief Records a just-appended content operation on the shared
+     *        `UndoStack` (if one was given at construction), so `MainWindow`'s
+     *        unified Edit > Undo/Redo also covers it - a no-op otherwise.
+     *
+     * The pushed `UndoCommand`'s own undo()/redo() callbacks simply call
+     * back into this same controller's own undo()/redo(), which already
+     * correctly drive `sound_mind::core::OperationLog`'s high-water mark
+     * (that mark is shared project-wide, so this stays correct regardless
+     * of which controller actually appended the entry).
+     *
+     * Public since Undo/Redo Everywhere (see `docs/sound-mind-architecture.md`):
+     * `endStroke()` calls this after its own append; `PathController::
+     * finishPath()`, `PickController::commitReplacement()`, and
+     * `SelectionController::fill()`/`cutSelection()`/`pasteInto()` each
+     * call it too, right after their own respective `OperationLog::append()`
+     * call - the same "calls back into this same controller, through the
+     * shared pre-paint base cache" precedent `rebuildLayerContent()`'s own
+     * docs already establish for those classes.
+     *
+     * Deliberately **not** called from within undo()/redo() themselves
+     * (which also call rebuildLayerContent()) - only a *fresh* append
+     * should ever record a new command; replaying an already-recorded one
+     * must not record it again.
+     */
+    void notifyOperationCommitted();
+
 signals:
     /// @brief Emitted whenever the in-progress stroke's own live preview
     ///        Path changes (continueStroke()), and once more when it's
@@ -187,6 +226,7 @@ signals:
     void contentChanged(sound_mind::core::LayerId layer);
 
 private:
+    UndoStack* undoStack_;
     sound_mind::core::Project* project_ = nullptr;
     sound_mind::core::ToolConfiguration toolConfig_;
 

@@ -18,6 +18,7 @@ class PathController;
 class PickController;
 class SelectionController;
 class ToolConfigurationPanel;
+class UndoStack;
 
 /**
  * @brief Owns the Paint/Pick/Select/Path tool controllers, and all of
@@ -62,11 +63,14 @@ public:
      *        changed tool configuration and receives Pick's own "load the
      *        picked object's settings" update. Must outlive this
      *        controller.
+     * @param undoStack Non-owning; passed straight through to the internally-
+     *        constructed `PaintController` (see its own docs on why this is
+     *        nullable). Must outlive this controller if given.
      * @param parent The owning object, per Qt's normal parent-ownership
      *        convention; may be `nullptr`.
      */
     ToolPaletteController(CanvasWidget* canvas, ToolConfigurationPanel* toolConfigurationPanel,
-                           QObject* parent = nullptr);
+                           UndoStack* undoStack = nullptr, QObject* parent = nullptr);
 
     /**
      * @brief Sets which project every one of the four tool controllers

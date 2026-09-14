@@ -126,6 +126,7 @@ void SelectionController::fill(const sound_mind::core::Gradient& gradient) {
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_, gradient));
+    paintController_->notifyOperationCommitted();
     paintController_->rebuildLayerContent(selectionLayer_);
     emit contentChanged(selectionLayer_);
 }
@@ -158,6 +159,7 @@ void SelectionController::cutSelection() {
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_,
                                                                     sound_mind::core::silenceGradient()));
+    paintController_->notifyOperationCommitted();
     paintController_->rebuildLayerContent(selectionLayer_);
     emit contentChanged(selectionLayer_);
 }
@@ -173,6 +175,7 @@ std::optional<sound_mind::core::OperationId> SelectionController::pasteInto(soun
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(std::make_unique<sound_mind::core::PasteOperation>(id, targetLayer, *clipboardBounds_, *clipboard_));
+    paintController_->notifyOperationCommitted();
     paintController_->rebuildLayerContent(targetLayer);
     emit contentChanged(targetLayer);
 

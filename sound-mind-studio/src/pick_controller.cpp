@@ -427,6 +427,7 @@ sound_mind::core::OperationId PickController::commitReplacement(
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId newId = replacement->id();
     log.append(std::move(replacement));
+    paintController_->notifyOperationCommitted();
 
     // The just-appended entry is always the log's own new last element -
     // re-resolved from there rather than kept from the moved-from local,

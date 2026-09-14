@@ -10,8 +10,15 @@ private slots:
     void setProjectMakesLookupsWork();
     void toggleLayerVisibilityChangesVisibilityAndEmitsLayersChanged();
     void setLayerOpacityChangesOpacity();
+    void setLayerOpacityMindWaveChangesBindingAndTheRowDataReflectsIt();
     void setLayerTranslationChangesTranslation();
     void setLayerRescaleChangesRescale();
+    void toggleLayerVisibilityIsUndoableAndRedoable();
+    void setLayerOpacityIsUndoableAndRedoable();
+    void setLayerOpacityMindWaveIsUndoableAndRedoable();
+    void setLayerTranslationIsUndoableAndRedoable();
+    void setLayerRescaleIsUndoableAndRedoable();
+    void settingTheSameValueAgainDoesNotPushAnUndoEntry();
     void renameLayerToRenamesAndRejectsEmptyName();
     void deleteLayerRemovesALayerButRefusesALockedOne();
     void addEmptyLayerAddsAndSelectsANormalLayer();

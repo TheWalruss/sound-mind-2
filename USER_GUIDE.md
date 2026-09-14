@@ -423,8 +423,12 @@ Two checkboxes at the top of the panel, both off by default:
   path. A stroke actively being drawn is always traced, regardless of
   this checkbox.
 
-**Undo** (Ctrl+Z) and **Redo** (Ctrl+Y), in the new **Edit** menu, apply
-to paint strokes.
+**Undo** (Ctrl+Z) and **Redo** (Ctrl+Y), in the **Edit** menu, apply to
+paint strokes and to a layer's own opacity, opacity-MindWave binding,
+visibility, translation, and rescale (see
+[Working with Layers](#working-with-layers)) - both kinds share the same
+single history, undoing/redoing whichever one actually happened most
+recently, in either order.
 
 Only the **Procedural** brush exists today - see
 [What's Not Here Yet](#whats-not-here-yet) for the rest of what's

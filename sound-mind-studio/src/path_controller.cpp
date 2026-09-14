@@ -71,6 +71,7 @@ void PathController::finishPath() {
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(
         std::make_unique<sound_mind::core::PaintOperation>(id, targetLayer_, std::move(finalPath), toolConfig_));
+    paintController_->notifyOperationCommitted();
 
     const sound_mind::core::LayerId paintedLayer = targetLayer_;
     path_ = sound_mind::core::Path{};

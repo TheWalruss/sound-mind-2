@@ -145,6 +145,7 @@ private slots:
     void setPaintModeEnabledTogglesTheCanvasToolMode();
     void paintingOnTheCanvasAppendsAPaintOperationToTheProjectsLog();
     void undoAndRedoDelegateToThePaintController();
+    void undoInterleavesPaintStrokesAndLayerPropertyChangesInChronologicalOrder();
     void settingANewProjectResetsPaintModeToOff();
     void paintingWithTheDefaultToolConfigurationActuallyPaintsSomethingVisible();
     void toggleToolConfigurationPanelShowsAndHidesIt();

@@ -18,6 +18,7 @@ class CanvasWidget;
 class FilterConfigurationPanel;
 class LayersPanel;
 class PlaybackController;
+class UndoStack;
 
 /**
  * @brief Owns layer-stack lookup, mutation, and `LayersPanel`/
@@ -44,6 +45,16 @@ class PlaybackController;
  * content as a parameter rather than deriving it itself, since only
  * `MainWindow` holds the current project's `LoopEngine` (and only it needs
  * to, for Loop Mode's own reasons).
+ *
+ * **Five property setters are undoable** - `toggleLayerVisibility()`,
+ * `setLayerOpacity()`, `setLayerOpacityMindWave()`, `setLayerTranslation()`,
+ * `setLayerRescale()` each push a matching `UndoCommand` onto the shared
+ * `UndoStack` after applying the change, so `MainWindow`'s Edit > Undo/Redo
+ * covers them - see `UndoStack`'s own class docs for why this is a
+ * separate mechanism from `sound_mind::core::OperationLog`. The other
+ * mutations here (rename, delete, add, reorder, `FilterConfiguration`
+ * edits) are **not** undoable yet - a deliberately narrower scope than
+ * "every layer mutation," confirmed with the user alongside this fix.
  */
 class LayerController : public QObject {
     Q_OBJECT
@@ -61,11 +72,15 @@ public:
      * @param filterConfigurationPanel Non-owning; kept in sync with
      *        whichever Filter/Equalizer layer is currently selected. Must
      *        outlive this controller.
+     * @param undoStack Non-owning; every undoable property setter (see
+     *        the class's own docs) pushes onto it. Must outlive this
+     *        controller.
      * @param parent The owning object, per Qt's normal parent-ownership
      *        convention; may be `nullptr`.
      */
     LayerController(CanvasWidget* canvas, PlaybackController* playbackController, LayersPanel* layersPanel,
-                     FilterConfigurationPanel* filterConfigurationPanel, QObject* parent = nullptr);
+                     FilterConfigurationPanel* filterConfigurationPanel, UndoStack* undoStack,
+                     QObject* parent = nullptr);
 
     /// @brief Sets which project this controller looks up/mutates layers
     ///        in. Does *not* itself refresh the Layers Panel - `MainWindow`'s
@@ -117,14 +132,17 @@ public:
     ///        project. Repaints the canvas and invalidates cached
     ///        playback audio ("topmost layer with content" may have
     ///        changed), then refreshes the Layers Panel. Does nothing if
-    ///        no layer with this id exists.
+    ///        no layer with this id exists. **Undoable** - a no-op call
+    ///        (the same visibility it already had) still applies but
+    ///        pushes no undo entry (see the class's own docs).
     /// @param id The layer to change.
     /// @param visible The new visibility.
     void toggleLayerVisibility(sound_mind::core::LayerId id, bool visible);
 
     /// @brief Sets the opacity of the layer with the given id. Repaints
     ///        the canvas, then refreshes the Layers Panel. Does nothing if
-    ///        no layer with this id exists.
+    ///        no layer with this id exists. **Undoable** - see
+    ///        toggleLayerVisibility()'s own docs on no-op calls.
     /// @param id The layer to change.
     /// @param opacity The new opacity, intended to be in `[0, 1]`.
     void setLayerOpacity(sound_mind::core::LayerId id, float opacity);
@@ -134,7 +152,8 @@ public:
     ///        opacityMindWave()`'s own docs. Repaints the canvas (the
     ///        binding changes what the composite actually looks like),
     ///        then refreshes the Layers Panel. Does nothing if no layer
-    ///        with this id exists.
+    ///        with this id exists. **Undoable** - see
+    ///        toggleLayerVisibility()'s own docs on no-op calls.
     /// @param id The layer to change.
     /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
     void setLayerOpacityMindWave(sound_mind::core::LayerId id,
@@ -142,14 +161,16 @@ public:
 
     /// @brief Sets the horizontal translation of the layer with the given
     ///        id. Repaints the canvas, then refreshes the Layers Panel.
-    ///        Does nothing if no layer with this id exists.
+    ///        Does nothing if no layer with this id exists. **Undoable** -
+    ///        see toggleLayerVisibility()'s own docs on no-op calls.
     /// @param id The layer to change.
     /// @param translationColumns The new shift, in spectrogram columns.
     void setLayerTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns);
 
     /// @brief Sets the horizontal rescale of the layer with the given id.
     ///        Repaints the canvas, then refreshes the Layers Panel. Does
-    ///        nothing if no layer with this id exists.
+    ///        nothing if no layer with this id exists. **Undoable** - see
+    ///        toggleLayerVisibility()'s own docs on no-op calls.
     /// @param id The layer to change.
     /// @param rescaleFactor The new ratio.
     void setLayerRescale(sound_mind::core::LayerId id, double rescaleFactor);
@@ -218,10 +239,37 @@ signals:
     void layersChanged();
 
 private:
+    /// @brief The actual visibility mutation + side effects, shared by
+    ///        toggleLayerVisibility() and its own pushed UndoCommand's
+    ///        undo()/redo() callbacks - see the class's own docs.
+    void applyVisibility(sound_mind::core::LayerId id, bool visible);
+
+    /// @brief The actual opacity mutation + side effects, shared by
+    ///        setLayerOpacity() and its own pushed UndoCommand's
+    ///        undo()/redo() callbacks - see the class's own docs.
+    void applyOpacity(sound_mind::core::LayerId id, float opacity);
+
+    /// @brief The actual opacity-MindWave-binding mutation + side effects,
+    ///        shared by setLayerOpacityMindWave() and its own pushed
+    ///        UndoCommand's undo()/redo() callbacks - see the class's own
+    ///        docs.
+    void applyOpacityMindWave(sound_mind::core::LayerId id, std::optional<sound_mind::core::MindWaveId> mindWaveId);
+
+    /// @brief The actual translation mutation + side effects, shared by
+    ///        setLayerTranslation() and its own pushed UndoCommand's
+    ///        undo()/redo() callbacks - see the class's own docs.
+    void applyTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns);
+
+    /// @brief The actual rescale mutation + side effects, shared by
+    ///        setLayerRescale() and its own pushed UndoCommand's
+    ///        undo()/redo() callbacks - see the class's own docs.
+    void applyRescale(sound_mind::core::LayerId id, double rescaleFactor);
+
     CanvasWidget* canvas_;
     PlaybackController* playbackController_;
     LayersPanel* layersPanel_;
     FilterConfigurationPanel* filterConfigurationPanel_;
+    UndoStack* undoStack_;
     sound_mind::core::Project* project_ = nullptr;
 };
 

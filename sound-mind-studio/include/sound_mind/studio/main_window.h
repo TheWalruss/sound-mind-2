@@ -24,6 +24,7 @@
 #include "sound_mind/studio/recent_projects.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 #include "sound_mind/studio/tool_palette_controller.h"
+#include "sound_mind/studio/undo_stack.h"
 
 class QAction;
 class QCloseEvent;
@@ -839,20 +840,23 @@ public slots:
     void setPathModeEnabled(bool enabled);
 
     /**
-     * @brief Undoes the most recent paint stroke, if any - the actual
+     * @brief Undoes the most recent undoable edit, if any - the actual
      *        work behind the Edit menu's Undo action.
      *
-     * Delegates to `PaintController::undo()`; a no-op if nothing is
-     * undoable (no project open, or nothing painted yet since the
-     * project's own paint history - session-only, see
-     * `PaintController`'s own docs - began).
+     * Delegates to `undoStack_` (a `sound_mind::studio::UndoStack`),
+     * covering both content operations (paint strokes, Pick's move/
+     * modify/delete, Fill, Paste) and layer property changes (opacity,
+     * opacityMindWave binding, visibility, translation, rescale - see
+     * `LayerController`'s own docs), in whatever order they actually
+     * happened - a no-op if nothing is undoable (no project open, or
+     * nothing undoable yet since the project's own history - session-
+     * only, see `UndoStack`'s own docs - began).
      */
     void undo();
 
-    /// @brief Redoes the most recently undone paint stroke, if any - the
-    ///        actual work behind the Edit menu's Redo action. Delegates
-    ///        to `PaintController::redo()`; a no-op if nothing is
-    ///        redoable.
+    /// @brief Redoes the most recently undone edit, if any - the actual
+    ///        work behind the Edit menu's Redo action. Delegates to
+    ///        `undoStack_`; a no-op if nothing is redoable.
     void redo();
 
     /// @brief Deletes the currently Picked paint object, if any - the
@@ -1628,6 +1632,16 @@ private:
     /// playbackPanel_/canvas_ both stay MainWindow's own job - see
     /// PlaybackController's own docs for why it doesn't know about either.
     PlaybackController* playbackController_ = nullptr;
+
+    /// @brief The single, unified undo/redo history behind the Edit menu's
+    ///        Undo/Redo actions - see its own class docs. Owned by value
+    ///        (not `new`'d like the controllers below) since nothing else
+    ///        needs to own it and it has no Qt parent-ownership of its
+    ///        own to participate in; `toolPaletteController_`/
+    ///        `layerController_` each get a non-owning pointer to it at
+    ///        construction. `clear()`ed in setProject() - see that
+    ///        method's own body.
+    UndoStack undoStack_;
 
     /// @brief Owns the four Paint/Pick/Select/Path tool controllers and
     /// all of their wiring to `canvas_`/`toolConfigurationPanel_` - see its

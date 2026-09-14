@@ -1,5 +1,6 @@
 #include "test_layer_controller.h"
 
+#include <QComboBox>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
@@ -13,10 +14,12 @@
 #include "sound_mind/studio/layer_controller.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/playback_controller.h"
+#include "sound_mind/studio/undo_stack.h"
 
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
+using sound_mind::core::MindWaveId;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::studio::CanvasWidget;
@@ -24,6 +27,8 @@ using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::LayerController;
 using sound_mind::studio::LayersPanel;
 using sound_mind::studio::PlaybackController;
+using sound_mind::studio::UndoStack;
+using sound_mind::studio::UndoStack;
 
 namespace {
 
@@ -45,7 +50,8 @@ struct Fixture {
     PlaybackController playbackController{nullptr, sound_mind::core::AudioDeviceMode::None};
     LayersPanel layersPanel;
     FilterConfigurationPanel filterConfigurationPanel;
-    LayerController controller{&canvas, &playbackController, &layersPanel, &filterConfigurationPanel};
+    UndoStack undoStack;
+    LayerController controller{&canvas, &playbackController, &layersPanel, &filterConfigurationPanel, &undoStack};
 };
 
 }  // namespace
@@ -91,6 +97,41 @@ void LayerControllerTest::setLayerOpacityChangesOpacity() {
     QCOMPARE(project.layers().front().opacity(), 0.5f);
 }
 
+void LayerControllerTest::setLayerOpacityMindWaveChangesBindingAndTheRowDataReflectsIt() {
+    // Regression test for a real bug: refreshLayersPanel() built each
+    // row's RowData without ever setting opacityMindWaveId, so a bound
+    // MindWave took effect on the canvas but the Layers Panel's own combo
+    // reset to "None" on every refresh - which fires after every single
+    // mutation, including the bind itself.
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    // Not the Background layer - it has no opacity/MindWave combo at all
+    // (see LayersPanelTest::backgroundLayerHasNoOpacityOrTransformControls).
+    // Project::createNew() also always carries an Equalizer layer (kept
+    // last via addLayer()'s own docs) - it *does* get a combo too (only
+    // Background is excluded), so this project ends up with two: the
+    // Equalizer's own (untouched, still "None") and this new layer's own.
+    const LayerId layerId = project.addLayer(Layer{});
+    fixture.layersPanel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+
+    fixture.controller.setLayerOpacityMindWave(layerId, MindWaveId{5});
+    // setLayerOpacityMindWave() -> refreshLayersPanel() -> setLayers()
+    // rebuilds row widgets and schedules the *previous* pass's own combo
+    // for deleteLater() - see test_mind_wave_controller.cpp's own
+    // identical precedent for why qWait(0) is needed before inspecting it.
+    QTest::qWait(0);
+
+    QCOMPARE(project.layerById(layerId)->opacityMindWave(), std::optional<MindWaveId>(MindWaveId{5}));
+    // Rows display top-of-stack first: Equalizer (untouched), then this
+    // new layer, then Background (no combo at all) - see rebuildRows()'s
+    // own reverse-iteration docs.
+    const auto combos = fixture.layersPanel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
+    QCOMPARE(combos.size(), 2);
+    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("None"));  // Equalizer - untouched.
+    QCOMPARE(combos.at(1)->currentText(), QStringLiteral("Slow Pulse"));  // This test's own layer.
+}
+
 void LayerControllerTest::setLayerTranslationChangesTranslation() {
     Fixture fixture;
     Project project = Project::createNew(testSettings());
@@ -111,6 +152,113 @@ void LayerControllerTest::setLayerRescaleChangesRescale() {
     fixture.controller.setLayerRescale(backgroundId, 2.0);
 
     QCOMPARE(project.layers().front().rescaleFactor(), 2.0);
+}
+
+void LayerControllerTest::toggleLayerVisibilityIsUndoableAndRedoable() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    fixture.controller.setProject(&project);
+    QVERIFY(project.layers().front().visible());  // The default, undone-to value.
+
+    fixture.controller.toggleLayerVisibility(backgroundId, false);
+    QVERIFY(!project.layers().front().visible());
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QVERIFY(project.layers().front().visible());
+    QVERIFY(fixture.undoStack.canRedo());
+
+    fixture.undoStack.redo();
+    QVERIFY(!project.layers().front().visible());
+}
+
+void LayerControllerTest::setLayerOpacityIsUndoableAndRedoable() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    fixture.controller.setProject(&project);
+    const float oldOpacity = project.layers().front().opacity();
+
+    fixture.controller.setLayerOpacity(backgroundId, 0.5f);
+    QCOMPARE(project.layers().front().opacity(), 0.5f);
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QCOMPARE(project.layers().front().opacity(), oldOpacity);
+
+    fixture.undoStack.redo();
+    QCOMPARE(project.layers().front().opacity(), 0.5f);
+}
+
+void LayerControllerTest::setLayerOpacityMindWaveIsUndoableAndRedoable() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    fixture.controller.setProject(&project);
+    QVERIFY(!project.layers().front().opacityMindWave().has_value());
+
+    fixture.controller.setLayerOpacityMindWave(backgroundId, MindWaveId{5});
+    QCOMPARE(project.layers().front().opacityMindWave(), std::optional<MindWaveId>(MindWaveId{5}));
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QVERIFY(!project.layers().front().opacityMindWave().has_value());
+
+    fixture.undoStack.redo();
+    QCOMPARE(project.layers().front().opacityMindWave(), std::optional<MindWaveId>(MindWaveId{5}));
+}
+
+void LayerControllerTest::setLayerTranslationIsUndoableAndRedoable() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    fixture.controller.setProject(&project);
+    const std::int64_t oldTranslation = project.layers().front().translationColumns();
+
+    fixture.controller.setLayerTranslation(backgroundId, 7);
+    QCOMPARE(project.layers().front().translationColumns(), static_cast<std::int64_t>(7));
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QCOMPARE(project.layers().front().translationColumns(), oldTranslation);
+
+    fixture.undoStack.redo();
+    QCOMPARE(project.layers().front().translationColumns(), static_cast<std::int64_t>(7));
+}
+
+void LayerControllerTest::setLayerRescaleIsUndoableAndRedoable() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    fixture.controller.setProject(&project);
+    const double oldRescale = project.layers().front().rescaleFactor();
+
+    fixture.controller.setLayerRescale(backgroundId, 2.0);
+    QCOMPARE(project.layers().front().rescaleFactor(), 2.0);
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QCOMPARE(project.layers().front().rescaleFactor(), oldRescale);
+
+    fixture.undoStack.redo();
+    QCOMPARE(project.layers().front().rescaleFactor(), 2.0);
+}
+
+void LayerControllerTest::settingTheSameValueAgainDoesNotPushAnUndoEntry() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    fixture.controller.setProject(&project);
+    const float currentOpacity = project.layers().front().opacity();
+
+    fixture.controller.setLayerOpacity(backgroundId, currentOpacity);
+
+    // The value still applies (no behavior change there), but a no-op
+    // change shouldn't clutter the undo history with an entry that would
+    // do nothing.
+    QCOMPARE(project.layers().front().opacity(), currentOpacity);
+    QVERIFY(!fixture.undoStack.canUndo());
 }
 
 void LayerControllerTest::renameLayerToRenamesAndRejectsEmptyName() {

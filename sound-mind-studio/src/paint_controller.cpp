@@ -7,10 +7,11 @@
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/undo_stack.h"
 
 namespace sound_mind::studio {
 
-PaintController::PaintController(QObject* parent) : QObject(parent) {}
+PaintController::PaintController(UndoStack* undoStack, QObject* parent) : QObject(parent), undoStack_(undoStack) {}
 
 void PaintController::setProject(sound_mind::core::Project* project) {
     project_ = project;
@@ -80,6 +81,7 @@ void PaintController::endStroke() {
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(std::make_unique<sound_mind::core::PaintOperation>(id, strokeTargetLayer_, std::move(finalPath),
                                                                     toolConfig_));
+    notifyOperationCommitted();
 
     const sound_mind::core::LayerId paintedLayer = strokeTargetLayer_;
     strokePoints_.clear();
@@ -121,6 +123,13 @@ void PaintController::redo() {
     for (const auto& [layerId, base] : baseContent_) {
         rebuildLayerContent(layerId);
     }
+}
+
+void PaintController::notifyOperationCommitted() {
+    if (undoStack_ == nullptr) {
+        return;
+    }
+    undoStack_->push({/*undo=*/[this]() { undo(); }, /*redo=*/[this]() { redo(); }});
 }
 
 void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {

@@ -235,7 +235,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // to know about. layerController_ itself isn't constructed until
     // later in this same constructor, but these lambdas only run later
     // still, on a real gesture - safe by the time any of them fire.
-    toolPaletteController_ = new ToolPaletteController(canvas_, toolConfigurationPanel_, this);
+    toolPaletteController_ = new ToolPaletteController(canvas_, toolConfigurationPanel_, &undoStack_, this);
     connect(canvas_, &CanvasWidget::paintStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
         if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->beginPaintStroke(*layerId, point);
@@ -300,7 +300,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // Layer-stack lookup/mutation and Layers/Filter Configuration Panel
     // refresh - extracted as its own class (Refactor & Clean Up,
     // v0.Y.29.1, Installment D); see its own docs.
-    layerController_ = new LayerController(canvas_, playbackController_, layersPanel_, filterConfigurationPanel_, this);
+    layerController_ =
+        new LayerController(canvas_, playbackController_, layersPanel_, filterConfigurationPanel_, &undoStack_, this);
     connect(layerController_, &LayerController::layersChanged, this, [this]() { hasUnsavedChanges_ = true; });
 
     // The MindWave library itself - add/remove/rename/edit - and keeping
@@ -778,6 +779,11 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // real risk, not a theoretical one - see LayersPanel::clearSelection()'s
     // own docs.
     layersPanel_->clearSelection();
+    // A previous project's own undo/redo history is meaningless once it's
+    // gone - its LayerIds/OperationIds could coincidentally collide with
+    // the new project's own, the same risk layersPanel_->clearSelection()
+    // just guarded against above.
+    undoStack_.clear();
 
     project_ = std::move(project);
 
@@ -1331,9 +1337,9 @@ void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWi
     }
 }
 
-void MainWindow::undo() { toolPaletteController_->undo(); }
+void MainWindow::undo() { undoStack_.undo(); }
 
-void MainWindow::redo() { toolPaletteController_->redo(); }
+void MainWindow::redo() { undoStack_.redo(); }
 
 void MainWindow::deletePickedObject() { toolPaletteController_->deleteSelection(); }
 

@@ -5,17 +5,19 @@
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/playback_controller.h"
+#include "sound_mind/studio/undo_stack.h"
 
 namespace sound_mind::studio {
 
 LayerController::LayerController(CanvasWidget* canvas, PlaybackController* playbackController,
                                   LayersPanel* layersPanel, FilterConfigurationPanel* filterConfigurationPanel,
-                                  QObject* parent)
+                                  UndoStack* undoStack, QObject* parent)
     : QObject(parent),
       canvas_(canvas),
       playbackController_(playbackController),
       layersPanel_(layersPanel),
-      filterConfigurationPanel_(filterConfigurationPanel) {}
+      filterConfigurationPanel_(filterConfigurationPanel),
+      undoStack_(undoStack) {}
 
 void LayerController::setProject(sound_mind::core::Project* project) { project_ = project; }
 
@@ -72,13 +74,21 @@ void LayerController::refreshLayersPanel() {
             row.visible = layer.visible();
             row.translationColumns = layer.translationColumns();
             row.rescaleFactor = layer.rescaleFactor();
+            // Bug fix: this was previously left at RowData's own default
+            // (std::nullopt) regardless of the layer's real binding, so a
+            // MindWave selected in the opacity-bind combo took effect on
+            // the canvas (setLayerOpacityMindWave() below did apply it)
+            // but the combo itself reset to "None" on the very next
+            // refresh - every mutation refreshes the panel, so this fired
+            // immediately after every single bind/unbind.
+            row.opacityMindWaveId = layer.opacityMindWave();
             rows.push_back(row);
         }
     }
     layersPanel_->setLayers(rows);
 }
 
-void LayerController::toggleLayerVisibility(sound_mind::core::LayerId id, bool visible) {
+void LayerController::applyVisibility(sound_mind::core::LayerId id, bool visible) {
     sound_mind::core::Layer* layer = layerById(id);
     if (layer == nullptr) {
         return;
@@ -90,12 +100,50 @@ void LayerController::toggleLayerVisibility(sound_mind::core::LayerId id, bool v
     refreshLayersPanel();
 }
 
-void LayerController::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
+void LayerController::toggleLayerVisibility(sound_mind::core::LayerId id, bool visible) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    const bool oldVisible = layer->visible();
+    applyVisibility(id, visible);
+    if (oldVisible != visible) {
+        undoStack_->push({/*undo=*/[this, id, oldVisible]() { applyVisibility(id, oldVisible); },
+                           /*redo=*/[this, id, visible]() { applyVisibility(id, visible); }});
+    }
+}
+
+void LayerController::applyOpacity(sound_mind::core::LayerId id, float opacity) {
     sound_mind::core::Layer* layer = layerById(id);
     if (layer == nullptr) {
         return;
     }
     layer->setOpacity(opacity);
+    emit layersChanged();
+    canvas_->update();
+    refreshLayersPanel();
+}
+
+void LayerController::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    const float oldOpacity = layer->opacity();
+    applyOpacity(id, opacity);
+    if (oldOpacity != opacity) {
+        undoStack_->push({/*undo=*/[this, id, oldOpacity]() { applyOpacity(id, oldOpacity); },
+                           /*redo=*/[this, id, opacity]() { applyOpacity(id, opacity); }});
+    }
+}
+
+void LayerController::applyOpacityMindWave(sound_mind::core::LayerId id,
+                                             std::optional<sound_mind::core::MindWaveId> mindWaveId) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    layer->setOpacityMindWave(mindWaveId);
     emit layersChanged();
     canvas_->update();
     refreshLayersPanel();
@@ -107,13 +155,16 @@ void LayerController::setLayerOpacityMindWave(sound_mind::core::LayerId id,
     if (layer == nullptr) {
         return;
     }
-    layer->setOpacityMindWave(mindWaveId);
-    emit layersChanged();
-    canvas_->update();
-    refreshLayersPanel();
+    const std::optional<sound_mind::core::MindWaveId> oldMindWaveId = layer->opacityMindWave();
+    applyOpacityMindWave(id, mindWaveId);
+    if (oldMindWaveId != mindWaveId) {
+        undoStack_->push(
+            {/*undo=*/[this, id, oldMindWaveId]() { applyOpacityMindWave(id, oldMindWaveId); },
+             /*redo=*/[this, id, mindWaveId]() { applyOpacityMindWave(id, mindWaveId); }});
+    }
 }
 
-void LayerController::setLayerTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns) {
+void LayerController::applyTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns) {
     sound_mind::core::Layer* layer = layerById(id);
     if (layer == nullptr) {
         return;
@@ -124,7 +175,21 @@ void LayerController::setLayerTranslation(sound_mind::core::LayerId id, std::int
     refreshLayersPanel();
 }
 
-void LayerController::setLayerRescale(sound_mind::core::LayerId id, double rescaleFactor) {
+void LayerController::setLayerTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    const std::int64_t oldTranslationColumns = layer->translationColumns();
+    applyTranslation(id, translationColumns);
+    if (oldTranslationColumns != translationColumns) {
+        undoStack_->push(
+            {/*undo=*/[this, id, oldTranslationColumns]() { applyTranslation(id, oldTranslationColumns); },
+             /*redo=*/[this, id, translationColumns]() { applyTranslation(id, translationColumns); }});
+    }
+}
+
+void LayerController::applyRescale(sound_mind::core::LayerId id, double rescaleFactor) {
     sound_mind::core::Layer* layer = layerById(id);
     if (layer == nullptr) {
         return;
@@ -133,6 +198,19 @@ void LayerController::setLayerRescale(sound_mind::core::LayerId id, double resca
     emit layersChanged();
     canvas_->update();
     refreshLayersPanel();
+}
+
+void LayerController::setLayerRescale(sound_mind::core::LayerId id, double rescaleFactor) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    const double oldRescaleFactor = layer->rescaleFactor();
+    applyRescale(id, rescaleFactor);
+    if (oldRescaleFactor != rescaleFactor) {
+        undoStack_->push({/*undo=*/[this, id, oldRescaleFactor]() { applyRescale(id, oldRescaleFactor); },
+                           /*redo=*/[this, id, rescaleFactor]() { applyRescale(id, rescaleFactor); }});
+    }
 }
 
 bool LayerController::renameLayerTo(sound_mind::core::LayerId id, const QString& newName) {

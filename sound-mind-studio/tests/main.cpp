@@ -44,6 +44,7 @@
 #include "test_tone_curve_editor.h"
 #include "test_tool_configuration_panel.h"
 #include "test_tool_palette_controller.h"
+#include "test_undo_stack.h"
 
 int main(int argc, char** argv) {
     // Redirects ini-format QSettings storage (MainWindow's recentProjects_,
@@ -154,6 +155,9 @@ int main(int argc, char** argv) {
 
     MindWaveControllerTest mindWaveControllerTest;
     status |= QTest::qExec(&mindWaveControllerTest, argc, argv);
+
+    UndoStackTest undoStackTest;
+    status |= QTest::qExec(&undoStackTest, argc, argv);
 
     return status;
 }

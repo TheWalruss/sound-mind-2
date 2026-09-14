@@ -13,7 +13,7 @@
 namespace sound_mind::studio {
 
 ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigurationPanel* toolConfigurationPanel,
-                                              QObject* parent)
+                                              UndoStack* undoStack, QObject* parent)
     : QObject(parent), canvas_(canvas), toolConfigurationPanel_(toolConfigurationPanel) {
     // Basic Painting (v0.Y.24.1) - canvas_ only ever emits already-converted
     // TimeFrequencyPoints; paintController_ never reaches into canvas_
@@ -21,7 +21,7 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
     // paintStrokeStarted isn't wired here - it needs a resolved target
     // layer, which is beginPaintStroke()'s own caller's job (see this
     // class's own docs).
-    paintController_ = new PaintController(this);
+    paintController_ = new PaintController(undoStack, this);
     connect(canvas_, &CanvasWidget::paintStrokeContinued, this,
             [this](sound_mind::core::TimeFrequencyPoint point) { paintController_->continueStroke(point); });
     connect(canvas_, &CanvasWidget::paintStrokeEnded, this, [this]() { paintController_->endStroke(); });

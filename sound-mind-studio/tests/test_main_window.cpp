@@ -2286,6 +2286,52 @@ void MainWindowTest::undoAndRedoDelegateToThePaintController() {
     QVERIFY(!window.project()->operationLog().canRedo());
 }
 
+void MainWindowTest::undoInterleavesPaintStrokesAndLayerPropertyChangesInChronologicalOrder() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-mixed-undo-redo.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->resize(100, 50);
+    window.setPaintModeEnabled(true);
+
+    const sound_mind::core::LayerId backgroundId = window.project()->layers().front().id();
+    const float originalOpacity = window.project()->layers().front().opacity();
+
+    // 1. Paint a stroke (a content operation, undone via OperationLog).
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+
+    // 2. Change the background layer's own opacity (a property change,
+    // undone via UndoStack directly) - strictly *after* the stroke above.
+    window.setLayerOpacity(backgroundId, 0.25f);
+    QCOMPARE(window.project()->layers().front().opacity(), 0.25f);
+
+    // Undo must reverse the *opacity change* first - it happened more
+    // recently than the paint stroke, regardless of which of the two
+    // independent mechanisms (OperationLog vs UndoStack) actually
+    // recorded it.
+    window.undo();
+    QCOMPARE(window.project()->layers().front().opacity(), originalOpacity);
+    QVERIFY(window.project()->operationLog().canUndo());  // The stroke itself is still active.
+
+    // A second undo now reverses the stroke.
+    window.undo();
+    QVERIFY(!window.project()->operationLog().canUndo());
+
+    // Redo must restore both, in the same original order: stroke first,
+    // then opacity.
+    window.redo();
+    QVERIFY(window.project()->operationLog().canUndo());
+    QCOMPARE(window.project()->layers().front().opacity(), originalOpacity);
+
+    window.redo();
+    QCOMPARE(window.project()->layers().front().opacity(), 0.25f);
+}
+
 void MainWindowTest::settingANewProjectResetsPaintModeToOff() {
     const auto firstPath = std::filesystem::temp_directory_path() / "sound-mind-test-paint-reset-1.smproj";
     TestMainWindow window;

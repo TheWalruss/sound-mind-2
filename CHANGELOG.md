@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.9] - 2026-09-14
+
+Two bugs fixed, one of them by adding a genuinely new mechanism: layer property changes (opacity, opacity-MindWave binding, visibility, translation, rescale) are now undoable/redoable, unified with paint-stroke undo behind a single Edit > Undo/Redo.
+
+### Fixed
+
+- **Selecting a MindWave for a layer's opacity took effect on the canvas but the Layers Panel's own combo reset to "None" on the very next refresh** - `LayerController::refreshLayersPanel()` built each row's `RowData` without ever reading `Layer::opacityMindWave()` back into it, so every refresh (which fires after every mutation, including the bind itself) silently reverted the combo's own displayed selection. Fixed by populating `RowData::opacityMindWaveId` from the layer.
+- **Layer property changes (opacity, opacity-MindWave binding, visibility, translation, rescale) were not undoable at all** - `Edit > Undo/Redo` only ever covered paint strokes (and Pick/Fill/Paste, which share the same `OperationLog`). A layer property mutation applied directly with no history recorded.
+
+### Added
+
+- **A new `UndoStack` (Studio-side, deliberately independent from `sound_mind::core::OperationLog`)** unifies both kinds of edit behind one linear history - `LayerController`'s five property setters each push an undo/redo pair directly; `PaintController`, `PathController`, `PickController`, and `SelectionController` each mirror their own already-existing `OperationLog` commits onto it too (via `PaintController::notifyOperationCommitted()`), so a paint stroke and a property change interleave correctly in whatever order they actually happened. `OperationLog` itself is untouched - a layer property was deliberately kept out of it, since `OperationLog::activeOperationsTargeting()` treats every `Operation` targeting a layer as pickable canvas content, which a property mutation must never become.
+
+Full regression: sound-mind-studio all 29 QTest classes (a new `UndoStackTest`, 11 cases; `LayerControllerTest` gained 8 cases; `MainWindowTest` gained 1 interleaving case) passing; sound-mind-core 378/378 and sound-mind-gpu 33/33 unchanged (no Core/GPU code touched). Doxygen: 0 warnings.
+
 ## [0.0.31.8] - 2026-09-14
 
 Every dock panel can now be resized freely, with a scrollbar picking up whatever content doesn't fit - fixes the MindWaves panel being too tall to fit (or shrink) in a typical layout.

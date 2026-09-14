@@ -59,6 +59,7 @@ add_library(sound-mind-studio-lib
     src/tone_curve_editor.cpp
     src/tool_configuration_panel.cpp
     src/tool_palette_controller.cpp
+    src/undo_stack.cpp
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/color_conversion.h
@@ -90,6 +91,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/tone_curve_editor.h
     include/sound_mind/studio/tool_configuration_panel.h
     include/sound_mind/studio/tool_palette_controller.h
+    include/sound_mind/studio/undo_stack.h
     assets/app.qrc
 )
 
