@@ -383,6 +383,29 @@ Warp a selection along a Path curve, in time or frequency.
 
 Fills the selected region with a color or gradient (see [Gradients](#gradients)), confined exactly to the selection's boundary.
 
+## Canvas Navigation
+
+### Keyboard Modifiers
+
+Three modifier keys carry one consistent meaning across every canvas operation that could otherwise affect both axes at once — a mouse drag that moves or resizes something (a Pick selection, a rectangular Selection's own resize handles, a Layer's translation/rescale), and [Zoom](#zoom) below:
+
+- **Alt** relates to the **frequency axis** (vertical) — holding it restricts the operation to frequency alone, leaving time untouched.
+- **Shift** relates to the **time axis** (horizontal) — holding it restricts the operation to time alone, leaving frequency untouched.
+- **Ctrl** is for **proportional control** — holding it keeps both axes locked to the same ratio (moving, resizing, or zooming as one) rather than letting them vary independently.
+
+### Zoom
+
+Zoom changes how large the canvas appears on screen — a pure display setting, the same non-destructive spirit as [Overlay Grids](#overlay-grids), with no effect on encoding, decoding, or any stored pixel data. Zooming in past what fits the visible area makes the canvas scrollable, the same as any paint program.
+
+Zoom follows the [Keyboard Modifiers](#keyboard-modifiers) mnemonic above:
+
+- **Zoom In**/**Zoom Out** — `]`/`[` — proportional by default: time and frequency scale together, keeping the canvas's own visual proportions unchanged.
+- **Alt+`]`**/**Alt+`[`** — zoom the **frequency axis only** (time-invariant).
+- **Shift+`]`**/**Shift+`[`** — zoom the **time axis only** (frequency-invariant).
+- **Ctrl+`]`**/**Ctrl+`[`** — proportional, at a coarser step than the plain default. (Plain `]`/`[` is already proportional, so Ctrl's usual meaning would be redundant here — this is the one place the mnemonic bends, toward a bigger step instead of restating "proportional.")
+- **Fit to Window** and **Actual Size** (100% — one screen pixel per encoded pixel) jump directly to a specific zoom level, alongside the incremental controls above.
+- The mouse wheel, held over the canvas, zooms the same way under the same modifiers; an unmodified wheel scrolls the canvas instead, once it's larger than the visible area.
+
 ## Overlay Grids
 
 Overlay grids are visual reference lines drawn on the canvas — they never affect encoding, decoding, or any stored pixel data. They exist purely to make time and frequency legible while painting.
