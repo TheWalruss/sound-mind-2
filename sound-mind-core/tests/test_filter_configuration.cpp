@@ -5,6 +5,7 @@
 
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterType;
+using sound_mind::core::MindWaveId;
 
 TEST_CASE("A fresh FilterConfiguration is FrequencyAxisGradient", "[core][filter_configuration]") {
     const FilterConfiguration config;
@@ -98,4 +99,74 @@ TEST_CASE("A FilterConfiguration round-trips through JSON", "[core][filter_confi
     REQUIRE(roundTripped.toneCurvePoints().size() == 3);
     REQUIRE(roundTripped.toneCurvePoints()[1] == std::array<float, 2>{0.5f, 0.9f});
     REQUIRE(roundTripped.frequencyGradient().linkChannels());
+}
+
+// --- v0.Y.31.1 Installment D: filter-parameter MindWave bindings -----
+
+TEST_CASE("A fresh FilterConfiguration's five bindable parameters are all unbound", "[core][filter_configuration]") {
+    const FilterConfiguration config;
+    REQUIRE_FALSE(config.blurSigmaMindWave().has_value());
+    REQUIRE_FALSE(config.medianSizeMindWave().has_value());
+    REQUIRE_FALSE(config.directionalBlurLengthMindWave().has_value());
+    REQUIRE_FALSE(config.directionalBlurAngleMindWave().has_value());
+    REQUIRE_FALSE(config.sharpenAmountMindWave().has_value());
+}
+
+TEST_CASE("Each of a FilterConfiguration's five parameters can be bound to (and unbound from) a MindWave",
+          "[core][filter_configuration]") {
+    FilterConfiguration config;
+
+    config.setBlurSigmaMindWave(MindWaveId{1});
+    config.setMedianSizeMindWave(MindWaveId{2});
+    config.setDirectionalBlurLengthMindWave(MindWaveId{3});
+    config.setDirectionalBlurAngleMindWave(MindWaveId{4});
+    config.setSharpenAmountMindWave(MindWaveId{5});
+
+    REQUIRE(config.blurSigmaMindWave() == MindWaveId{1});
+    REQUIRE(config.medianSizeMindWave() == MindWaveId{2});
+    REQUIRE(config.directionalBlurLengthMindWave() == MindWaveId{3});
+    REQUIRE(config.directionalBlurAngleMindWave() == MindWaveId{4});
+    REQUIRE(config.sharpenAmountMindWave() == MindWaveId{5});
+
+    config.setBlurSigmaMindWave(std::nullopt);
+    REQUIRE_FALSE(config.blurSigmaMindWave().has_value());
+}
+
+TEST_CASE("A FilterConfiguration's five parameter bindings round-trip through JSON", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setBlurSigmaMindWave(MindWaveId{1});
+    config.setMedianSizeMindWave(MindWaveId{2});
+    config.setDirectionalBlurLengthMindWave(MindWaveId{3});
+    config.setDirectionalBlurAngleMindWave(MindWaveId{4});
+    config.setSharpenAmountMindWave(MindWaveId{5});
+
+    const nlohmann::json json = config;
+    const FilterConfiguration roundTripped = json.get<FilterConfiguration>();
+
+    REQUIRE(roundTripped.blurSigmaMindWave() == MindWaveId{1});
+    REQUIRE(roundTripped.medianSizeMindWave() == MindWaveId{2});
+    REQUIRE(roundTripped.directionalBlurLengthMindWave() == MindWaveId{3});
+    REQUIRE(roundTripped.directionalBlurAngleMindWave() == MindWaveId{4});
+    REQUIRE(roundTripped.sharpenAmountMindWave() == MindWaveId{5});
+}
+
+TEST_CASE("A FilterConfiguration loads from JSON missing the five MindWave binding keys "
+          "(a configuration saved before v0.Y.31.1 Installment D) as fully unbound",
+          "[core][filter_configuration]") {
+    const nlohmann::json json{{"type", "uniformBlur"},
+                               {"blurSigma", 2.0f},
+                               {"medianSize", 3},
+                               {"directionalBlurLength", 10},
+                               {"directionalBlurAngleDegrees", 0.0f},
+                               {"sharpenAmount", 1.0f},
+                               {"toneCurvePoints", std::vector<std::array<float, 2>>{{0.0f, 0.0f}, {1.0f, 1.0f}}},
+                               {"frequencyGradient", FilterConfiguration{}.frequencyGradient()}};
+
+    const FilterConfiguration restored = json.get<FilterConfiguration>();
+
+    REQUIRE_FALSE(restored.blurSigmaMindWave().has_value());
+    REQUIRE_FALSE(restored.medianSizeMindWave().has_value());
+    REQUIRE_FALSE(restored.directionalBlurLengthMindWave().has_value());
+    REQUIRE_FALSE(restored.directionalBlurAngleMindWave().has_value());
+    REQUIRE_FALSE(restored.sharpenAmountMindWave().has_value());
 }

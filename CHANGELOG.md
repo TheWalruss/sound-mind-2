@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.5] - 2026-09-14
+
+Installment D1 of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - real per-cell filter-parameter binding, Core-only (no GPU kernel yet - D2; no Studio UI yet - D3). **`docs/sound-mind-design.md`'s own "Filter parameters" section was corrected as part of this installment** - its previous description (run the filter once, blend filtered/unfiltered per cell) was functionally redundant with layer-opacity binding and has been replaced with genuine per-cell parameter variation, per the user's own explicit correction.
+
+### Added
+
+- **Five new bindable parameters on `FilterConfiguration`**: `blurSigma`, `medianSize`, `directionalBlurLength`, `directionalBlurAngleDegrees`, `sharpenAmount` - each gets an optional MindWave binding (`*MindWave()`/`set*MindWave()`). `ToneCurve`'s control points and `FrequencyAxisGradient`'s stops aren't single numbers, so neither gets one.
+- **`applyFilter()` genuinely varies a bound parameter per cell** - at every canvas position, the parameter's own MindWave is evaluated and the filter's own algorithm runs with that cell's own independently-computed value (`sharpenAmount` varies for free; `blurSigma`/`medianSize`/`directionalBlurLength`/`directionalBlurAngleDegrees` each need a genuine new per-cell kernel evaluation - no longer expressible as the existing separable/fixed-kernel algorithms once bound). The unbound path is completely unaffected, GPU dispatch included.
+
+Core regression: 375/375 test cases (up from 356). Full regression (core + gpu + studio) passing. Doxygen: 0 warnings. No USER_GUIDE.md change - no UI yet.
+
 ## [0.0.31.4] - 2026-09-14
 
 Installment C2 of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - the Studio UI half of layer opacity binding, on top of Installment C1's now-proven Core+GPU layer. **This is the first user-visible MindWaves feature** - see `USER_GUIDE.md`'s new "MindWaves" section.

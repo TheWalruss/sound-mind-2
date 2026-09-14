@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <numbers>
 #include <utility>
 #include <vector>
 
@@ -10,12 +11,16 @@
 #include "sound_mind/core/filter_application.h"
 #include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/gpu_compute_availability.h"
+#include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/project_settings.h"
 
 using sound_mind::codec::StreamImage;
 using sound_mind::core::applyFilter;
 using sound_mind::core::FilterConfiguration;
+using sound_mind::core::FilterParameterMindWaves;
 using sound_mind::core::FilterType;
+using sound_mind::core::MindWave;
+using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::setGpuComputeForcedOffForTesting;
 
@@ -155,6 +160,39 @@ StreamImage makeSingleRowComposite(std::vector<float> leftDb) {
     composite.leftMagnitudeDb = std::move(leftDb);
     composite.sharedPhaseRadians.assign(composite.frameCount, 0.75f);
     return composite;
+}
+
+// --- v0.Y.31.1 Installment D: filter-parameter MindWave bindings ------
+//
+// A Time-axis Square wave (see MindWaveTest's own precedent in
+// test_mind_wave.cpp) with a huge period stays in its own "high" half
+// (field 1.0) for any t this file's own small composites ever reach - the
+// ceiling value everywhere. Shifting phase by pi starts it in the "low"
+// half instead (field 0.0) - the baseline everywhere. A period of exactly
+// two columns' own time (10 ms apart, per makeSingleRowComposite()'s own
+// default StreamCodecConfig - sampleRateHz=44100, hopLength=441)
+// alternates high/low every column, for a genuine per-cell-varying check.
+
+MindWave alwaysCeilingWave() {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Square);
+    wave.setPeriod(1'000'000.0);
+    return wave;
+}
+
+MindWave alwaysBaselineWave() {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Square);
+    wave.setPeriod(1'000'000.0);
+    wave.setPhaseRadians(std::numbers::pi_v<double>);
+    return wave;
+}
+
+MindWave alternatingColumnsWave() {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Square);
+    wave.setPeriod(0.02);  // Two columns' own time, at the default 10 ms/column.
+    return wave;
 }
 
 TEST_CASE("applyFilter's UniformBlur leaves a uniform composite unchanged", "[core][filter_application]") {
@@ -397,4 +435,264 @@ TEST_CASE("applyFilter's Sharpen exaggerates an impulse against its own (fixed-s
     for (std::size_t i = 0; i < expected.size(); ++i) {
         CHECK(filtered.leftMagnitudeDb[i] == Catch::Approx(expected[i]).margin(0.001));
     }
+}
+
+TEST_CASE("applyFilter's UniformBlur, bound to a MindWave always at ceiling, matches the fixed sigma result",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(1.0f);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.blurSigma = &ceilingWave});
+
+    for (std::size_t i = 0; i < unbound.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(unbound.leftMagnitudeDb[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's UniformBlur, bound to a MindWave always at baseline, leaves the composite unchanged",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(3.0f);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.blurSigma = &baselineWave});
+
+    for (std::size_t i = 0; i < impulse.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(impulse[i]).margin(0.001));
+    }
+}
+
+TEST_CASE("applyFilter's UniformBlur, bound to an alternating MindWave, varies genuinely per column",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(2.0f);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto wave = alternatingColumnsWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.blurSigma = &wave});
+    const auto fullyBlurred = applyFilter(composite, config, ProjectSettings{});
+
+    // Column 4 (the impulse's own column, high field - see
+    // alternatingColumnsWave()'s own docs) should read close to the fully-
+    // blurred result; column 5 (odd, low field) should stay close to the
+    // untouched impulse floor - the two must differ from each other.
+    CHECK(bound.leftMagnitudeDb[4] == Catch::Approx(fullyBlurred.leftMagnitudeDb[4]).margin(0.5));
+    CHECK(bound.leftMagnitudeDb[5] == Catch::Approx(impulse[5]).margin(0.5));
+    CHECK(bound.leftMagnitudeDb[4] != Catch::Approx(bound.leftMagnitudeDb[5]));
+}
+
+TEST_CASE("applyFilter's UniformBlur, bound to a MindWave, leaves phase untouched",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(2.0f);
+    const auto composite = makeSingleRowComposite({-10.0f, -20.0f, -30.0f, -40.0f});
+
+    const auto wave = alternatingColumnsWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.blurSigma = &wave});
+
+    for (const float phase : bound.sharedPhaseRadians) {
+        CHECK(phase == 0.75f);
+    }
+}
+
+TEST_CASE("applyFilter's EdgePreservingBlur, bound to a MindWave always at ceiling, matches the fixed size result",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::EdgePreservingBlur);
+    config.setMedianSize(5);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.medianSize = &ceilingWave});
+
+    for (std::size_t i = 0; i < unbound.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(unbound.leftMagnitudeDb[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's EdgePreservingBlur, bound to a MindWave always at baseline, leaves the composite unchanged",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::EdgePreservingBlur);
+    config.setMedianSize(5);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.medianSize = &baselineWave});
+
+    for (std::size_t i = 0; i < impulse.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(impulse[i]).margin(0.001));
+    }
+}
+
+TEST_CASE("applyFilter's EdgePreservingBlur, bound to an alternating MindWave, varies genuinely per column",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::EdgePreservingBlur);
+    config.setMedianSize(5);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto wave = alternatingColumnsWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.medianSize = &wave});
+
+    // Column 4 (high field) gets a real median window and removes the lone
+    // impulse; column 5 (low field, baseline) stays exactly as it was.
+    CHECK(bound.leftMagnitudeDb[4] == Catch::Approx(-96.0f).margin(0.001));
+    CHECK(bound.leftMagnitudeDb[5] == Catch::Approx(impulse[5]).margin(0.001));
+}
+
+TEST_CASE("applyFilter's DirectionalBlur, bound to a MindWave always at ceiling, matches the fixed length result",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::DirectionalBlur);
+    config.setDirectionalBlurLength(3);
+    config.setDirectionalBlurAngleDegrees(0.0f);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.directionalBlurLength = &ceilingWave});
+
+    for (std::size_t i = 0; i < unbound.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(unbound.leftMagnitudeDb[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's DirectionalBlur, bound to a MindWave always at baseline, leaves the composite unchanged",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::DirectionalBlur);
+    config.setDirectionalBlurLength(5);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.directionalBlurLength = &baselineWave});
+
+    for (std::size_t i = 0; i < impulse.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(impulse[i]).margin(0.001));
+    }
+}
+
+TEST_CASE("applyFilter's DirectionalBlur, bound to an alternating MindWave, varies genuinely per column",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::DirectionalBlur);
+    config.setDirectionalBlurLength(3);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;  // Column 4 is even - alternatingColumnsWave()'s own high field.
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto wave = alternatingColumnsWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.directionalBlurLength = &wave});
+
+    // Each output cell's own kernel length comes from *that* cell's own
+    // field value, not its neighbors' - column 4's own high field blurs
+    // its own output (pulling in the surrounding floor); columns 3/5's own
+    // low field means their own output is untouched, regardless of the
+    // impulse sitting right next to them.
+    CHECK(bound.leftMagnitudeDb[4] != Catch::Approx(impulse[4]));
+    CHECK(bound.leftMagnitudeDb[3] == Catch::Approx(impulse[3]).margin(0.001));
+    CHECK(bound.leftMagnitudeDb[5] == Catch::Approx(impulse[5]).margin(0.001));
+}
+
+TEST_CASE("applyFilter's DirectionalBlur binds length and angle independently",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::DirectionalBlur);
+    config.setDirectionalBlurLength(3);
+    config.setDirectionalBlurAngleDegrees(90.0f);  // Along the frequency axis - irrelevant on a single-row composite.
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    // Length bound (varies), angle left fixed at its own configured 90 -
+    // a single-row composite has no frequency-axis neighbors, so a 90-
+    // degree blur is a no-op regardless of length.
+    const auto lengthWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.directionalBlurLength = &lengthWave});
+
+    for (std::size_t i = 0; i < impulse.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(impulse[i]).margin(0.001));
+    }
+}
+
+TEST_CASE("applyFilter's Sharpen, bound to a MindWave always at ceiling, matches the fixed amount result",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Sharpen);
+    config.setSharpenAmount(1.0f);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.sharpenAmount = &ceilingWave});
+
+    for (std::size_t i = 0; i < unbound.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(unbound.leftMagnitudeDb[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's Sharpen, bound to a MindWave always at baseline, leaves the composite unchanged",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Sharpen);
+    config.setSharpenAmount(2.0f);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.sharpenAmount = &baselineWave});
+
+    for (std::size_t i = 0; i < impulse.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(impulse[i]).margin(0.001));
+    }
+}
+
+TEST_CASE("applyFilter's Sharpen, bound to an alternating MindWave, varies genuinely per column",
+          "[core][filter_application][mind_wave]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Sharpen);
+    config.setSharpenAmount(1.0f);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto wave = alternatingColumnsWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.sharpenAmount = &wave});
+    const auto fullySharpened = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(bound.leftMagnitudeDb[4] == Catch::Approx(fullySharpened.leftMagnitudeDb[4]).margin(0.001));
+    CHECK(bound.leftMagnitudeDb[5] == Catch::Approx(impulse[5]).margin(0.001));
 }

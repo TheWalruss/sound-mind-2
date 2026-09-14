@@ -2,9 +2,37 @@
 
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/project_settings.h"
 
 namespace sound_mind::core {
+
+/**
+ * @brief Every one of `FilterConfiguration`'s five bindable parameters'
+ *        own resolved MindWave, if bound - `applyFilter()`'s own per-cell
+ *        parameter-binding entry point (`v0.Y.31.1` Installment D).
+ *
+ * Deliberately plain pointers, not `FilterConfiguration`'s own
+ * `std::optional<MindWaveId>` fields directly - resolving a `MindWaveId`
+ * against a `Project`'s own library is `compositeProject()`'s own job
+ * (mirroring `resolveOpacityMindWave()`'s exact precedent from Installment
+ * C1), the same "applyFilter() knows nothing about Project/NamedMindWave"
+ * boundary `FilterConfiguration` itself already keeps. All five default to
+ * `nullptr` (no binding at all - every parameter behaves exactly as it did
+ * before this installment).
+ */
+struct FilterParameterMindWaves {
+    /// @brief Resolved `FilterConfiguration::blurSigmaMindWave()`.
+    const MindWave* blurSigma = nullptr;
+    /// @brief Resolved `FilterConfiguration::medianSizeMindWave()`.
+    const MindWave* medianSize = nullptr;
+    /// @brief Resolved `FilterConfiguration::directionalBlurLengthMindWave()`.
+    const MindWave* directionalBlurLength = nullptr;
+    /// @brief Resolved `FilterConfiguration::directionalBlurAngleMindWave()`.
+    const MindWave* directionalBlurAngle = nullptr;
+    /// @brief Resolved `FilterConfiguration::sharpenAmountMindWave()`.
+    const MindWave* sharpenAmount = nullptr;
+};
 
 /**
  * @brief Applies a Filter layer's own filter to `composite` - the actual
@@ -80,6 +108,25 @@ namespace sound_mind::core {
  *   mean a fresh Filter layer of this type has no effect until a point
  *   is moved.
  *
+ * As of `v0.Y.31.1` (MindWaves v1) Installment D, any of the four
+ * kernel-shape parameters (`blurSigma`/`medianSize`/
+ * `directionalBlurLength`/`directionalBlurAngleDegrees`) named in
+ * `mindWaves` is evaluated fresh at *every cell*, genuinely varying that
+ * cell's own kernel - see `docs/sound-mind-design.md`'s "Filter
+ * parameters" for why this is exact per-cell computation, not a blend of
+ * two whole-image results. This is real additional work per bound
+ * parameter (no longer separable/fixed-shape - each cell effectively gets
+ * its own independently-sized kernel), unlike `sharpenAmount`, which
+ * varies for free (it only scales an already-fixed difference term - see
+ * `sharpen2D()`'s own docs). A bound parameter's own configured scalar
+ * value (`blurSigma()` etc.) becomes the *ceiling* it reaches where the
+ * MindWave is brightest, falling toward that parameter's own "no effect"
+ * baseline (`0` for `blurSigma`/`directionalBlurLength`/`sharpenAmount`,
+ * `1` for `medianSize`, `0`° for `directionalBlurAngleDegrees` - the last
+ * has no true "no effect" angle, so `0`° is a natural default rather than
+ * a claimed no-op) where it's dark. `ToneCurve`/`FrequencyAxisGradient`
+ * have no bindable parameter at all - neither has a single number to bind.
+ *
  * @param composite The running composite to filter - everything visible
  *        beneath the Filter layer this configuration belongs to, already
  *        composited (see `compositeProject()`'s own docs).
@@ -87,11 +134,16 @@ namespace sound_mind::core {
  * @param settings The project settings `streamCodecConfigFor()` needs,
  *        for any filter whose own algorithm depends on the project's
  *        encoded frequency range/bin count.
+ * @param mindWaves Each bindable parameter's own resolved MindWave, if
+ *        any - see `FilterParameterMindWaves`'s own docs. Defaults to
+ *        every parameter unbound, matching this function's own pre-
+ *        Installment-D behavior exactly.
  * @return The filtered result, the same shape (`config`/`frameCount`) as
  *         `composite`.
  */
 [[nodiscard]] sound_mind::codec::StreamImage applyFilter(const sound_mind::codec::StreamImage& composite,
                                                              const FilterConfiguration& config,
-                                                             const ProjectSettings& settings);
+                                                             const ProjectSettings& settings,
+                                                             const FilterParameterMindWaves& mindWaves = {});
 
 }  // namespace sound_mind::core

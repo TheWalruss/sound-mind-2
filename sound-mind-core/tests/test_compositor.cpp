@@ -591,6 +591,34 @@ TEST_CASE("compositeProject applies a Filter layer's own filter to everything be
     CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
 }
 
+TEST_CASE("compositeProject applies a Filter layer's own MindWave-bound parameter per cell",
+          "[core][compositor][mind_wave]") {
+    Project project = Project::createNew(testSettings());  // canvasWidth = 3, binCount = 1.
+    // A real dB step (not uniform) so Sharpen's own difference term is
+    // nonzero - a uniform composite would sharpen to itself regardless of
+    // amount, telling this test nothing.
+    project.layers()[0].setContent(makeContent({-40.0f, -10.0f, -40.0f}, {-40.0f, -10.0f, -40.0f}, {0.0f, 0.0f, 0.0f}));
+
+    FilterConfiguration filterConfig;
+    filterConfig.setType(FilterType::Sharpen);
+    filterConfig.setSharpenAmount(2.0f);
+    const auto config = streamCodecConfigFor(project.settings());
+    const MindWaveId id = project.addMindWave("Test", threeColumnSquareWave(config));
+    filterConfig.setSharpenAmountMindWave(id);
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(filterConfig);
+    project.addLayer(std::move(filterLayer));
+
+    const auto composite = compositeProject(project);
+    REQUIRE(composite.has_value());
+
+    // Columns 0/2 are threeColumnSquareWave()'s own "high" columns (full
+    // sharpenAmount ceiling); column 1 is its own "low" column (baseline
+    // 0 - identity, unaffected by sharpening at all).
+    CHECK(composite->leftMagnitudeDb[0] != Catch::Approx(-40.0f));
+    CHECK(composite->leftMagnitudeDb[1] == Catch::Approx(-10.0f).margin(0.01));
+}
+
 TEST_CASE("compositeProject returns nullopt when a Filter layer has nothing beneath it",
           "[core][compositor]") {
     Project project = Project::createNew(testSettings());  // Background has no content.

@@ -107,6 +107,33 @@ constexpr float kMinLinearAmplitude = 1e-7f;
     return named ? &named->wave : nullptr;
 }
 
+/// @brief `mindWaveId`, resolved against `project`'s own library - the
+/// single-id building block `resolveFilterParameterMindWaves()` below
+/// calls once per bindable parameter. Same graceful-dangling-id contract
+/// as `resolveOpacityMindWave()`.
+[[nodiscard]] const MindWave* resolveMindWaveId(std::optional<MindWaveId> mindWaveId, const Project& project) noexcept {
+    if (!mindWaveId.has_value()) {
+        return nullptr;
+    }
+    const NamedMindWave* named = project.mindWaveById(*mindWaveId);
+    return named ? &named->wave : nullptr;
+}
+
+/// @brief `config`'s own five bindable filter parameters, each resolved
+/// against `project`'s own library - `v0.Y.31.1` Installment D's own
+/// filter-parameter-binding entry point, the `FilterConfiguration`-level
+/// counterpart to `resolveOpacityMindWave()`.
+[[nodiscard]] FilterParameterMindWaves resolveFilterParameterMindWaves(const FilterConfiguration& config,
+                                                                        const Project& project) noexcept {
+    return FilterParameterMindWaves{
+        resolveMindWaveId(config.blurSigmaMindWave(), project),
+        resolveMindWaveId(config.medianSizeMindWave(), project),
+        resolveMindWaveId(config.directionalBlurLengthMindWave(), project),
+        resolveMindWaveId(config.directionalBlurAngleMindWave(), project),
+        resolveMindWaveId(config.sharpenAmountMindWave(), project),
+    };
+}
+
 /// @brief The per-cell opacity multiplier `opacityMindWave` (if any)
 /// contributes at `(bin, outputColumn)` - canvas-space, per `docs/
 /// sound-mind-roadmap.md`'s own confirmed `v0.Y.31.1` scope ("every
@@ -531,7 +558,8 @@ std::optional<StreamImage> compositeProject(const Project& project) {
         }
         if (isFilterLayerType(layer.type())) {
             if (anyMixedIn) {
-                result = applyFilter(result, layer.filterConfiguration(), settings);
+                result = applyFilter(result, layer.filterConfiguration(), settings,
+                                      resolveFilterParameterMindWaves(layer.filterConfiguration(), project));
             }
             continue;
         }

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
+#include <optional>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -8,6 +10,16 @@
 #include "sound_mind/core/gradient.h"
 
 namespace sound_mind::core {
+
+/// @brief Opaque identifier for a `NamedMindWave` within a Project - a
+/// deliberate, exact duplicate of `mind_wave.h`'s own `MindWaveId` alias
+/// (matching `docs/sound-mind-architecture.md`'s own Decision #59
+/// "duplicated, not shared" precedent, and `layer.h`'s own identical
+/// duplication for the same reason - Decision #80): including
+/// `mind_wave.h` here would cycle back through `path.h` -> `operation.h`
+/// -> `layer.h` -> this header. A type alias can be redeclared identically
+/// in multiple headers with no ODR concern.
+using MindWaveId = std::uint64_t;
 
 /**
  * @brief Which filter algorithm a `FilterConfiguration` configures - see
@@ -67,6 +79,15 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
  *       against), but each contributes only one or two scalar fields (or
  *       one `Gradient`), so a flat struct - only some of it meaningful
  *       depending on `type()` - stays simpler than the alternative.
+ *
+ * As of `v0.Y.31.1` (MindWaves v1) Installment D, each of the five
+ * single-scalar parameters (`blurSigma`, `medianSize`,
+ * `directionalBlurLength`, `directionalBlurAngleDegrees`,
+ * `sharpenAmount`) can additionally bind to a MindWave - see each one's
+ * own `*MindWave()` accessor and `docs/sound-mind-design.md`'s "Filter
+ * parameters". `toneCurvePoints`/`frequencyGradient` have no such binding:
+ * neither is a single number, so there's nothing for a MindWave's own
+ * `[0, 1]` output to become the *value* of.
  */
 class FilterConfiguration {
 public:
@@ -104,6 +125,23 @@ public:
     void setBlurSigma(float sigma) noexcept { blurSigma_ = sigma; }
 
     /**
+     * @brief The MindWave (if any) `blurSigma()` is bound to - see
+     *        `docs/sound-mind-design.md`'s "Filter parameters": a bound
+     *        kernel-shape parameter genuinely varies per cell, evaluated
+     *        at that cell's own canvas position, with `blurSigma()` as
+     *        the ceiling it reaches where the wave is brightest (falling
+     *        toward `0` - no blur - where it's dark), not a blend of two
+     *        whole-image results.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `blurSigma()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> blurSigmaMindWave() const noexcept { return blurSigmaMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `blurSigma()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setBlurSigmaMindWave(std::optional<MindWaveId> mindWaveId) noexcept { blurSigmaMindWave_ = mindWaveId; }
+
+    /**
      * @brief `EdgePreservingBlur`'s own median-filter window size, in
      *        bins/columns.
      * @return The current size; meaningless unless `type()` is
@@ -119,6 +157,20 @@ public:
     void setMedianSize(int size) noexcept { medianSize_ = size; }
 
     /**
+     * @brief The MindWave (if any) `medianSize()` is bound to - see
+     *        `blurSigmaMindWave()`'s own docs for the general mechanism.
+     *        Falls toward `1` (a single-cell window - identity, no
+     *        filtering at all) where the wave is dark.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `medianSize()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> medianSizeMindWave() const noexcept { return medianSizeMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `medianSize()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setMedianSizeMindWave(std::optional<MindWaveId> mindWaveId) noexcept { medianSizeMindWave_ = mindWaveId; }
+
+    /**
      * @brief `DirectionalBlur`'s own kernel length, in bins/columns.
      * @return The current length; meaningless unless `type()` is
      *         `DirectionalBlur`. Not clamped or validated here.
@@ -128,6 +180,24 @@ public:
     /// @brief Sets `DirectionalBlur`'s own kernel length.
     /// @param length The new length, in bins/columns; intended to be positive.
     void setDirectionalBlurLength(int length) noexcept { directionalBlurLength_ = length; }
+
+    /**
+     * @brief The MindWave (if any) `directionalBlurLength()` is bound to -
+     *        see `blurSigmaMindWave()`'s own docs for the general
+     *        mechanism. Falls toward `0` (no blur - identity) where the
+     *        wave is dark.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `directionalBlurLength()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> directionalBlurLengthMindWave() const noexcept {
+        return directionalBlurLengthMindWave_;
+    }
+
+    /// @brief Sets (or clears) which MindWave `directionalBlurLength()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setDirectionalBlurLengthMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        directionalBlurLengthMindWave_ = mindWaveId;
+    }
 
     /**
      * @brief `DirectionalBlur`'s own direction, in degrees - `0`° blurs
@@ -144,6 +214,27 @@ public:
     void setDirectionalBlurAngleDegrees(float degrees) noexcept { directionalBlurAngleDegrees_ = degrees; }
 
     /**
+     * @brief The MindWave (if any) `directionalBlurAngleDegrees()` is
+     *        bound to - see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Unlike the other four bindable
+     *        parameters, an angle has no "no effect" value to fall toward
+     *        (every angle blurs *some* direction) - it falls toward `0`
+     *        degrees where the wave is dark, a natural default rather
+     *        than a claimed no-op.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `directionalBlurAngleDegrees()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> directionalBlurAngleMindWave() const noexcept {
+        return directionalBlurAngleMindWave_;
+    }
+
+    /// @brief Sets (or clears) which MindWave `directionalBlurAngleDegrees()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setDirectionalBlurAngleMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        directionalBlurAngleMindWave_ = mindWaveId;
+    }
+
+    /**
      * @brief `Sharpen`'s own strength - an unsharp-mask amount, where
      *        `1.0` is a typical/moderate sharpen and higher values push
      *        further.
@@ -155,6 +246,25 @@ public:
     /// @brief Sets `Sharpen`'s own strength.
     /// @param amount The new amount; intended to be positive.
     void setSharpenAmount(float amount) noexcept { sharpenAmount_ = amount; }
+
+    /**
+     * @brief The MindWave (if any) `sharpenAmount()` is bound to - see
+     *        `blurSigmaMindWave()`'s own docs for the general mechanism.
+     *        Falls toward `0` (no sharpening - identity) where the wave
+     *        is dark. Unlike the other four bindable parameters, this one
+     *        varies per cell for free: `sharpenAmount()` only scales an
+     *        already-fixed difference term (see `applyFilter()`'s own
+     *        docs), so binding it needs no new per-cell kernel work.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `sharpenAmount()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> sharpenAmountMindWave() const noexcept { return sharpenAmountMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `sharpenAmount()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setSharpenAmountMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        sharpenAmountMindWave_ = mindWaveId;
+    }
 
     /**
      * @brief `ToneCurve`'s own control points, each `{input, output}` in
@@ -203,10 +313,15 @@ public:
 private:
     FilterType type_ = FilterType::FrequencyAxisGradient;
     float blurSigma_ = 2.0f;
+    std::optional<MindWaveId> blurSigmaMindWave_;
     int medianSize_ = 3;
+    std::optional<MindWaveId> medianSizeMindWave_;
     int directionalBlurLength_ = 10;
+    std::optional<MindWaveId> directionalBlurLengthMindWave_;
     float directionalBlurAngleDegrees_ = 0.0f;
+    std::optional<MindWaveId> directionalBlurAngleMindWave_;
     float sharpenAmount_ = 1.0f;
+    std::optional<MindWaveId> sharpenAmountMindWave_;
     std::vector<std::array<float, 2>> toneCurvePoints_{{0.0f, 0.0f}, {1.0f, 1.0f}};
     Gradient frequencyGradient_;
 };
