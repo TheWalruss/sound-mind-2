@@ -101,6 +101,18 @@ void LayerController::setLayerOpacity(sound_mind::core::LayerId id, float opacit
     refreshLayersPanel();
 }
 
+void LayerController::setLayerOpacityMindWave(sound_mind::core::LayerId id,
+                                                std::optional<sound_mind::core::MindWaveId> mindWaveId) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    layer->setOpacityMindWave(mindWaveId);
+    emit layersChanged();
+    canvas_->update();
+    refreshLayersPanel();
+}
+
 void LayerController::setLayerTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns) {
     sound_mind::core::Layer* layer = layerById(id);
     if (layer == nullptr) {

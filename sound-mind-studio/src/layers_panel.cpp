@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include <QApplication>
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -20,6 +21,7 @@ namespace {
 
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
+using sound_mind::core::MindWaveId;
 
 /// @brief Whether `type` is one of the fixed-position layer types - no
 /// drag handle, no delete button (see the class docs). A thin alias for
@@ -122,7 +124,8 @@ class LayerRowWidget : public QWidget {
     Q_OBJECT
 
 public:
-    LayerRowWidget(const LayersPanel::RowData& data, QListWidget* list, QWidget* parent = nullptr)
+    LayerRowWidget(const LayersPanel::RowData& data, QListWidget* list,
+                   const std::vector<std::pair<MindWaveId, QString>>& availableMindWaves, QWidget* parent = nullptr)
         : QWidget(parent), id_(data.id) {
         auto* layout = new QHBoxLayout(this);
         layout->setContentsMargins(2, 1, 2, 1);
@@ -195,6 +198,33 @@ public:
                     [this](int value) { emit opacityChanged(id_, static_cast<float>(value) / 100.0f); });
             layout->addWidget(opacitySlider);
 
+            // MindWave opacity binding (v0.Y.31.1 Installment C2) - "None"
+            // (a plain scalar opacity, the default) always first, then
+            // every library entry MindWaveController currently knows
+            // about. See docs/sound-mind-design.md's "Layer opacity" -
+            // this multiplies opacitySlider's own value per cell, it
+            // doesn't replace it, so both controls stay meaningful and
+            // enabled together.
+            auto* mindWaveCombo = new QComboBox();
+            mindWaveCombo->setObjectName(QStringLiteral("opacityMindWaveCombo"));
+            mindWaveCombo->setFixedWidth(90);
+            mindWaveCombo->setToolTip(tr("Bind this layer's opacity to a MindWave"));
+            mindWaveCombo->addItem(tr("None"), QVariant::fromValue(qulonglong{0}));
+            int selectedIndex = 0;
+            for (const auto& [mindWaveId, name] : availableMindWaves) {
+                mindWaveCombo->addItem(name, QVariant::fromValue(static_cast<qulonglong>(mindWaveId)));
+                if (data.opacityMindWaveId.has_value() && *data.opacityMindWaveId == mindWaveId) {
+                    selectedIndex = mindWaveCombo->count() - 1;
+                }
+            }
+            mindWaveCombo->setCurrentIndex(selectedIndex);
+            connect(mindWaveCombo, &QComboBox::currentIndexChanged, this, [this, mindWaveCombo](int index) {
+                const auto rawId = mindWaveCombo->itemData(index).toULongLong();
+                emit opacityMindWaveChanged(
+                    id_, rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+            });
+            layout->addWidget(mindWaveCombo);
+
             // Time Alignment (v0.Y.21.1): two per-layer horizontal transform
             // controls - see sound_mind::core::Layer::translationColumns()/
             // rescaleFactor()'s own docs for what each does. QSpinBox's range is
@@ -245,6 +275,7 @@ signals:
     void opacityChanged(sound_mind::core::LayerId id, float opacity);
     void translationChanged(sound_mind::core::LayerId id, std::int64_t translationColumns);
     void rescaleChanged(sound_mind::core::LayerId id, double rescaleFactor);
+    void opacityMindWaveChanged(sound_mind::core::LayerId id, std::optional<MindWaveId> mindWaveId);
     void renameRequested(sound_mind::core::LayerId id);
     void deleteRequested(sound_mind::core::LayerId id);
     void selected(sound_mind::core::LayerId id);
@@ -317,14 +348,23 @@ void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
         }
     }
 
+    rebuildRows();
+}
+
+void LayersPanel::setAvailableMindWaves(const std::vector<std::pair<MindWaveId, QString>>& mindWaves) {
+    availableMindWaves_ = mindWaves;
+    rebuildRows();
+}
+
+void LayersPanel::rebuildRows() {
     // QListWidget::clear() deletes the QListWidgetItems but *not* the
     // LayerRowWidgets set via setItemWidget() on them (a real, easy-to-miss
     // Qt gotcha - an item widget is reparented to the viewport internally,
-    // separately from the item itself) - without this, every setLayers()
+    // separately from the item itself) - without this, every rebuildRows()
     // call after the first would leak the previous rows' widgets, which
     // would then keep showing up alongside the new ones.
     //
-    // deleteLater(), not delete: setLayers() is commonly called *from*
+    // deleteLater(), not delete: rebuildRows() is commonly called *from*
     // one of these very rows' own signal handlers (MainWindow's
     // renameLayerTo()/setLayerOpacity()/etc. all call it via
     // refreshLayersPanel(), reached via that row's own emitted signal) -
@@ -342,7 +382,7 @@ void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
         }
     }
     list_->clear();
-    for (auto it = layersBottomToTop.rbegin(); it != layersBottomToTop.rend(); ++it) {
+    for (auto it = currentRows_.rbegin(); it != currentRows_.rend(); ++it) {
         auto* item = new QListWidgetItem();
         item->setData(Qt::UserRole, QVariant::fromValue(static_cast<qulonglong>(it->id)));
         item->setSizeHint(QSize(0, 32));
@@ -350,13 +390,14 @@ void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {
             item->setFlags(item->flags() & ~Qt::ItemIsDragEnabled);
         }
         list_->addItem(item);
-        list_->setItemWidget(item, new LayerRowWidget(*it, list_));
+        list_->setItemWidget(item, new LayerRowWidget(*it, list_, availableMindWaves_));
 
         auto* row = qobject_cast<LayerRowWidget*>(list_->itemWidget(item));
         connect(row, &LayerRowWidget::visibilityToggled, this, &LayersPanel::visibilityToggled);
         connect(row, &LayerRowWidget::opacityChanged, this, &LayersPanel::opacityChanged);
         connect(row, &LayerRowWidget::translationChanged, this, &LayersPanel::translationChanged);
         connect(row, &LayerRowWidget::rescaleChanged, this, &LayersPanel::rescaleChanged);
+        connect(row, &LayerRowWidget::opacityMindWaveChanged, this, &LayersPanel::opacityMindWaveChanged);
         connect(row, &LayerRowWidget::renameRequested, this, &LayersPanel::renameRequested);
         connect(row, &LayerRowWidget::deleteRequested, this, &LayersPanel::deleteRequested);
         connect(row, &LayerRowWidget::selected, this, &LayersPanel::selectLayer);

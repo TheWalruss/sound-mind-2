@@ -2,12 +2,14 @@
 
 #include <cstdint>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <QDockWidget>
 #include <QString>
 
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_wave.h"
 
 class QListWidget;
 
@@ -24,11 +26,13 @@ namespace sound_mind::studio {
  * to give a new layer content; see `MainWindow::addEmptyLayer()`'s own
  * docs), scoped down to
  * what `sound_mind::core::Layer` actually supports today: no blend-mode
- * combo, no MindWave-link combo, and no settings/gear button - none of
- * those concepts exist in the engine yet. As of `v0.Y.21.1` (Layer Time
- * Alignment), two transform controls *do* exist - translation and
- * rescale, both horizontal-axis-only (see `sound_mind::core::Layer`'s own
- * docs for the narrower-than-legacy scope).
+ * combo, and no settings/gear button - neither concept exists in the
+ * engine yet. As of `v0.Y.21.1` (Layer Time Alignment), two transform
+ * controls *do* exist - translation and rescale, both horizontal-axis-only
+ * (see `sound_mind::core::Layer`'s own docs for the narrower-than-legacy
+ * scope). As of `v0.Y.31.1` (MindWaves v1) Installment C2, a MindWave-link
+ * combo *does* exist too, next to each row's own opacity slider - see
+ * setAvailableMindWaves()'s own docs.
  *
  * Purely presentational, the same division of responsibility as
  * `LandingPage`: every row action is a signal `MainWindow` connects to
@@ -91,6 +95,9 @@ public:
 
         /// @brief Mirrors `sound_mind::core::Layer::rescaleFactor()`.
         double rescaleFactor = 1.0;
+
+        /// @brief Mirrors `sound_mind::core::Layer::opacityMindWave()`.
+        std::optional<sound_mind::core::MindWaveId> opacityMindWaveId;
     };
 
     /// @brief Builds the panel with an initially-empty layer list.
@@ -122,6 +129,25 @@ public:
     /// @param id The layer to select.
     void selectLayer(sound_mind::core::LayerId id);
 
+    /**
+     * @brief Sets which MindWaves each row's own opacity-binding combo can
+     *        offer - `MindWaveController`'s own answer to keeping this
+     *        panel in sync with the project's current MindWave library
+     *        (`docs/sound-mind-roadmap.md`'s own "bind" affordance,
+     *        `v0.Y.31.1` Installment C2).
+     *
+     * Immediately rebuilds every row's own combo (not deferred to the next
+     * setLayers() call) - a MindWave renamed in `MindWavesPanel` should be
+     * reflected here right away, without needing an unrelated layer
+     * mutation to trigger a refresh first.
+     *
+     * @param mindWaves Every current library entry's own id/name, in
+     *        whatever order they should appear in each row's combo (after
+     *        a leading "None" entry, always first).
+     */
+    void setAvailableMindWaves(
+        const std::vector<std::pair<sound_mind::core::MindWaveId, QString>>& mindWaves);
+
 signals:
     /// @brief The current selection changed - a row was clicked,
     ///        selectLayer() was called, or clearSelection() was called.
@@ -149,6 +175,13 @@ signals:
     /// @brief A row's rescale spin box changed - see
     /// `sound_mind::core::Layer::rescaleFactor()`'s docs.
     void rescaleChanged(sound_mind::core::LayerId id, double rescaleFactor);
+
+    /// @brief A row's opacity-MindWave combo changed - see
+    /// `sound_mind::core::Layer::opacityMindWave()`'s own docs.
+    /// @param id The layer that changed.
+    /// @param mindWaveId The newly selected MindWave, or `std::nullopt`
+    ///        for "None" (a plain scalar opacity again).
+    void opacityMindWaveChanged(sound_mind::core::LayerId id, std::optional<sound_mind::core::MindWaveId> mindWaveId);
 
     /// @brief A row's name was double-clicked.
     void renameRequested(sound_mind::core::LayerId id);
@@ -190,6 +223,12 @@ private slots:
     void handleRowsMoved();
 
 private:
+    /// @brief Rebuilds every row widget from `currentRows_`/
+    ///        `availableMindWaves_` - the shared body setLayers() and
+    ///        setAvailableMindWaves() both need, since either one changing
+    ///        means every row's own combo/display needs to reflect it.
+    void rebuildRows();
+
     QListWidget* list_ = nullptr;
 
     /// @brief The rows as of the last setLayers() call, bottom-to-top -
@@ -198,6 +237,9 @@ private:
     /// visual order (the QListWidgetItems themselves carry the id via
     /// Qt::UserRole, but not the type - see handleRowsMoved()'s impl).
     std::vector<RowData> currentRows_;
+
+    /// @brief See setAvailableMindWaves()'s own docs.
+    std::vector<std::pair<sound_mind::core::MindWaveId, QString>> availableMindWaves_;
 
     /// @brief See selectedLayerId()'s own docs.
     std::optional<sound_mind::core::LayerId> selectedLayerId_;

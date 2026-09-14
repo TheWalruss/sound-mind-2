@@ -31,4 +31,9 @@ private slots:
     void selectLayerEmitsSelectionChanged();
     void clearSelectionEmitsSelectionChangedWithNullopt();
     void setLayersEmitsSelectionChangedWhenTheSelectedLayerIsGone();
+    void freshRowsOfferOnlyNoneUntilSetAvailableMindWavesIsCalled();
+    void setAvailableMindWavesPopulatesEveryRowsComboImmediately();
+    void aRowsComboPreselectsItsOwnCurrentBinding();
+    void changingARowsMindWaveComboEmitsOpacityMindWaveChanged();
+    void selectingNoneEmitsOpacityMindWaveChangedWithNullopt();
 };

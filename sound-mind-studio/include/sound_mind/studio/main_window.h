@@ -19,6 +19,7 @@
 #include "sound_mind/studio/grid_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/layer_controller.h"
+#include "sound_mind/studio/mind_wave_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/recent_projects.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
@@ -39,6 +40,7 @@ class CreateProjectWizard;
 class LandingPage;
 class LayersPanel;
 class LoopPanel;
+class MindWavesPanel;
 class PlaybackPanel;
 class RecordPanel;
 
@@ -565,6 +567,21 @@ public slots:
     void setLayerOpacity(sound_mind::core::LayerId id, float opacity);
 
     /**
+     * @brief Sets (or clears) which MindWave the layer with the given id's
+     *        own opacity is bound to - the actual work behind
+     *        `LayersPanel`'s per-row opacity-MindWave combo
+     *        (`v0.Y.31.1` Installment C2).
+     *
+     * Marks hasUnsavedChanges() and refreshes both the canvas and the
+     * Layers Panel, the same as setLayerOpacity() - delegates entirely to
+     * `LayerController::setLayerOpacityMindWave()`.
+     *
+     * @param id The layer to change.
+     * @param mindWaveId The new binding, or `std::nullopt` to unbind.
+     */
+    void setLayerOpacityMindWave(sound_mind::core::LayerId id, std::optional<sound_mind::core::MindWaveId> mindWaveId);
+
+    /**
      * @brief Sets the horizontal translation of the layer with the given
      *        id - the actual work behind `LayersPanel`'s translation spin
      *        box. See `docs/sound-mind-roadmap.md`'s Layer Time Alignment
@@ -709,6 +726,48 @@ public slots:
      *        each, in the desired new bottom-to-top order.
      */
     void reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop);
+
+    /**
+     * @brief Adds a new, default MindWave to the current project - the
+     *        actual work behind `MindWavesPanel`'s "+ Add MindWave"
+     *        button (`v0.Y.31.1` Installment C2). Delegates entirely to
+     *        `MindWaveController::addMindWave()`; marks
+     *        hasUnsavedChanges() on success.
+     */
+    void addMindWave();
+
+    /**
+     * @brief Removes the MindWave with the given id from the current
+     *        project - the actual work behind `MindWavesPanel`'s delete
+     *        button. Delegates entirely to
+     *        `MindWaveController::removeMindWave()`; marks
+     *        hasUnsavedChanges() on success. Does **not** clear any
+     *        layer's own reference to it - see `sound_mind::core::
+     *        Project::removeMindWave()`'s own docs.
+     * @param id The MindWave to remove.
+     */
+    void removeMindWave(sound_mind::core::MindWaveId id);
+
+    /**
+     * @brief Prompts for a new name and applies it - the actual work
+     *        behind `MindWavesPanel`'s double-click-to-rename, the same
+     *        interactive-slot-plus-non-prompting-core split
+     *        `renameLayer()`/`MindWaveController::renameMindWaveTo()`
+     *        already establish for layers.
+     * @param id The MindWave to rename.
+     */
+    void renameMindWave(sound_mind::core::MindWaveId id);
+
+    /**
+     * @brief Applies `MindWavesPanel`'s own edited MindWave back onto the
+     *        library entry it belongs to - the actual work behind
+     *        `MindWavesPanel::mindWaveChanged()`. Delegates entirely to
+     *        `MindWaveController::updateMindWave()`; marks
+     *        hasUnsavedChanges() on success.
+     * @param id The entry that changed.
+     * @param wave Its own new, complete MindWave.
+     */
+    void updateMindWave(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave);
 
     /**
      * @brief Turns the canvas's Paint tool on or off - the actual work
@@ -1644,6 +1703,17 @@ private:
     /// of this class as part of the Refactor & Clean Up milestone
     /// (`v0.Y.29.1`, Installment D).
     LayerController* layerController_ = nullptr;
+
+    /// @brief The dockable panel managing the current project's MindWave
+    /// library - see its own class docs (`v0.Y.31.1` Installment C2).
+    /// Hidden by default, the same "off until shown" convention
+    /// filterConfigurationPanel_ already follows.
+    MindWavesPanel* mindWavesPanel_ = nullptr;
+
+    /// @brief Owns MindWave-library add/remove/rename/edit and
+    /// MindWavesPanel/LayersPanel refresh - see its own class docs
+    /// (`v0.Y.31.1` Installment C2).
+    MindWaveController* mindWaveController_ = nullptr;
 
     /// @brief `nullptr` until the first setProject() call - LoopEngine
     /// needs a real loop length (the project's own duration in samples)

@@ -55,6 +55,7 @@
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/loop_panel.h"
+#include "sound_mind/studio/mind_waves_panel.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/qt_image_conversion.h"
@@ -168,11 +169,26 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layersPanel_, &LayersPanel::opacityChanged, this, &MainWindow::setLayerOpacity);
     connect(layersPanel_, &LayersPanel::translationChanged, this, &MainWindow::setLayerTranslation);
     connect(layersPanel_, &LayersPanel::rescaleChanged, this, &MainWindow::setLayerRescale);
+    connect(layersPanel_, &LayersPanel::opacityMindWaveChanged, this, &MainWindow::setLayerOpacityMindWave);
     connect(layersPanel_, &LayersPanel::renameRequested, this, &MainWindow::renameLayer);
     connect(layersPanel_, &LayersPanel::deleteRequested, this, &MainWindow::deleteLayer);
     connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
     connect(layersPanel_, &LayersPanel::addLayerRequested, this, &MainWindow::addEmptyLayer);
     connect(layersPanel_, &LayersPanel::addFilterLayerRequested, this, &MainWindow::addFilterLayer);
+
+    // The MindWave library management panel (v0.Y.31.1 Installment C2) -
+    // hidden by default, the same "off until shown" convention
+    // filterConfigurationPanel_ already follows (unlike layersPanel_'s own
+    // special "shown automatically once" treatment - a MindWave library
+    // is a much rarer, opt-in thing to touch than the layer stack every
+    // project has from the start).
+    mindWavesPanel_ = new MindWavesPanel(this);
+    mindWavesPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, mindWavesPanel_);
+    connect(mindWavesPanel_, &MindWavesPanel::addRequested, this, &MainWindow::addMindWave);
+    connect(mindWavesPanel_, &MindWavesPanel::deleteRequested, this, &MainWindow::removeMindWave);
+    connect(mindWavesPanel_, &MindWavesPanel::renameRequested, this, &MainWindow::renameMindWave);
+    connect(mindWavesPanel_, &MindWavesPanel::mindWaveChanged, this, &MainWindow::updateMindWave);
 
     // Playback/Record/Loop each get their own dockable panel (v0.Y.16.1) -
     // hidden until setProject(), matching layersPanel_'s own "nothing to
@@ -286,6 +302,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // v0.Y.29.1, Installment D); see its own docs.
     layerController_ = new LayerController(canvas_, playbackController_, layersPanel_, filterConfigurationPanel_, this);
     connect(layerController_, &LayerController::layersChanged, this, [this]() { hasUnsavedChanges_ = true; });
+
+    // The MindWave library itself - add/remove/rename/edit - and keeping
+    // mindWavesPanel_/layersPanel_'s own opacity-binding combo in sync
+    // with it (v0.Y.31.1 Installment C2); see its own class docs.
+    mindWaveController_ = new MindWaveController(mindWavesPanel_, layersPanel_, this);
+    connect(mindWaveController_, &MindWaveController::mindWavesChanged, this, [this]() { hasUnsavedChanges_ = true; });
 
     // A permanent (not showMessage()'s own temporary-message) label in the
     // status bar's normal (left-hand) area - see cursorPositionLabel_'s
@@ -529,6 +551,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     transportToolBar->addAction(gridPanel_->toggleViewAction());
     // Off by default, same reasoning - see filterConfigurationPanel_'s own docs.
     transportToolBar->addAction(filterConfigurationPanel_->toggleViewAction());
+    // Off by default, same reasoning - see mindWavesPanel_'s own docs.
+    transportToolBar->addAction(mindWavesPanel_->toggleViewAction());
 
     // ~30fps - frequent enough for each completed loop's spectrogram
     // update to read as prompt, without repainting so often it competes
@@ -772,6 +796,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     canvas_->setProject(&*project_);
     toolPaletteController_->setProject(&*project_);
     layerController_->setProject(&*project_);
+    mindWaveController_->setProject(&*project_);
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvas_);
     // Layers is shown automatically the *first* time any project exists in
@@ -797,6 +822,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
         layersPanelShownOnce_ = true;
     }
     layerController_->refreshLayersPanel();
+    mindWaveController_->refreshMindWavesPanel();
 }
 
 void MainWindow::newProject() {
@@ -1162,6 +1188,11 @@ void MainWindow::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
     layerController_->setLayerOpacity(id, opacity);
 }
 
+void MainWindow::setLayerOpacityMindWave(sound_mind::core::LayerId id,
+                                           std::optional<sound_mind::core::MindWaveId> mindWaveId) {
+    layerController_->setLayerOpacityMindWave(id, mindWaveId);
+}
+
 void MainWindow::setLayerTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns) {
     layerController_->setLayerTranslation(id, translationColumns);
 }
@@ -1214,6 +1245,31 @@ void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfigur
 
 void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {
     layerController_->reorderLayers(newOrderBottomToTop);
+}
+
+void MainWindow::addMindWave() { mindWaveController_->addMindWave(); }
+
+void MainWindow::removeMindWave(sound_mind::core::MindWaveId id) { mindWaveController_->removeMindWave(id); }
+
+void MainWindow::renameMindWave(sound_mind::core::MindWaveId id) {
+    if (!project_.has_value()) {
+        return;
+    }
+    const sound_mind::core::NamedMindWave* entry = project_->mindWaveById(id);
+    if (entry == nullptr) {
+        return;
+    }
+    bool ok = false;
+    const QString newName = QInputDialog::getText(this, tr("Rename MindWave"), tr("Name:"), QLineEdit::Normal,
+                                                    QString::fromStdString(entry->name), &ok);
+    if (!ok) {
+        return;
+    }
+    mindWaveController_->renameMindWaveTo(id, newName);
+}
+
+void MainWindow::updateMindWave(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave) {
+    mindWaveController_->updateMindWave(id, wave);
 }
 
 void MainWindow::setPaintModeEnabled(bool enabled) {

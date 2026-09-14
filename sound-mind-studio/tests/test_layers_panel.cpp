@@ -1,5 +1,6 @@
 #include "test_layers_panel.h"
 
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QLabel>
 #include <QListWidget>
@@ -13,6 +14,7 @@
 
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
+using sound_mind::core::MindWaveId;
 using sound_mind::studio::LayersPanel;
 
 namespace {
@@ -379,4 +381,98 @@ void LayersPanelTest::setLayersEmitsSelectionChangedWhenTheSelectedLayerIsGone()
 
     QCOMPARE(emitCount, 1);
     QVERIFY(!received.has_value());
+}
+
+void LayersPanelTest::freshRowsOfferOnlyNoneUntilSetAvailableMindWavesIsCalled() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+
+    const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
+    QCOMPARE(combos.size(), 2);
+    for (auto* combo : combos) {
+        QCOMPARE(combo->count(), 1);
+        QCOMPARE(combo->currentText(), QStringLiteral("None"));
+    }
+}
+
+void LayersPanelTest::setAvailableMindWavesPopulatesEveryRowsComboImmediately() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+
+    // Called with no further setLayers() in between - see
+    // setAvailableMindWaves()'s own docs on rebuilding rows immediately,
+    // not waiting for the next unrelated layer refresh.
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")},
+                                  {MindWaveId{6}, QStringLiteral("Fast Pulse")}});
+    // rebuildRows()'s own row widgets are only scheduled via deleteLater()
+    // (see rebuildRows()'s own docs) - the setLayers() call above and this
+    // setAvailableMindWaves() call each rebuild the row widgets, leaving
+    // the first pass's own combo still alive (pending deletion) unless the
+    // event loop gets a chance to actually run it - QTest::qWait(0) does
+    // that, matching this file's own established precedent elsewhere (see
+    // setLayersReplacesThePreviousRows()).
+    QTest::qWait(0);
+
+    const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
+    QCOMPARE(combos.size(), 2);
+    for (auto* combo : combos) {
+        QCOMPARE(combo->count(), 3);  // None + two MindWaves.
+        QCOMPARE(combo->itemText(1), QStringLiteral("Slow Pulse"));
+        QCOMPARE(combo->itemText(2), QStringLiteral("Fast Pulse"));
+    }
+}
+
+void LayersPanelTest::aRowsComboPreselectsItsOwnCurrentBinding() {
+    LayersPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    auto rows = twoNormalLayers();
+    rows[1].opacityMindWaveId = MindWaveId{5};  // "Top" (id 2).
+    panel.setLayers(rows);
+
+    const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
+    QCOMPARE(combos.size(), 2);
+    // "Top" is displayed first (index 0) - see setLayersCreatesOneRowPerLayerTopFirst.
+    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("Slow Pulse"));
+    QCOMPARE(combos.at(1)->currentText(), QStringLiteral("None"));
+}
+
+void LayersPanelTest::changingARowsMindWaveComboEmitsOpacityMindWaveChanged() {
+    LayersPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    panel.setLayers(twoNormalLayers());
+    int emitCount = 0;
+    std::optional<LayerId> receivedId;
+    std::optional<MindWaveId> receivedMindWaveId;
+    connect(&panel, &LayersPanel::opacityMindWaveChanged, [&](LayerId id, std::optional<MindWaveId> mindWaveId) {
+        ++emitCount;
+        receivedId = id;
+        receivedMindWaveId = mindWaveId;
+    });
+
+    const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
+    combos.at(0)->setCurrentIndex(1);  // "Slow Pulse" - "Top" (id 2).
+
+    QCOMPARE(emitCount, 1);
+    QCOMPARE(receivedId, std::optional<LayerId>(static_cast<LayerId>(2)));
+    QCOMPARE(receivedMindWaveId, std::optional<MindWaveId>(MindWaveId{5}));
+}
+
+void LayersPanelTest::selectingNoneEmitsOpacityMindWaveChangedWithNullopt() {
+    LayersPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    auto rows = twoNormalLayers();
+    rows[1].opacityMindWaveId = MindWaveId{5};  // "Top" (id 2), already bound.
+    panel.setLayers(rows);
+    int emitCount = 0;
+    std::optional<MindWaveId> receivedMindWaveId = MindWaveId{5};
+    connect(&panel, &LayersPanel::opacityMindWaveChanged, [&](LayerId, std::optional<MindWaveId> mindWaveId) {
+        ++emitCount;
+        receivedMindWaveId = mindWaveId;
+    });
+
+    const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
+    combos.at(0)->setCurrentIndex(0);  // "None".
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(!receivedMindWaveId.has_value());
 }

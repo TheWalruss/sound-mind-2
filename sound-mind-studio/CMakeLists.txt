@@ -42,6 +42,9 @@ add_library(sound-mind-studio-lib
     src/layers_panel.cpp
     src/loop_panel.cpp
     src/main_window.cpp
+    src/mind_wave_controller.cpp
+    src/mind_wave_editor.cpp
+    src/mind_waves_panel.cpp
     src/paint_controller.cpp
     src/path_controller.cpp
     src/path_edit_session.cpp
@@ -70,6 +73,9 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/layers_panel.h
     include/sound_mind/studio/loop_panel.h
     include/sound_mind/studio/main_window.h
+    include/sound_mind/studio/mind_wave_controller.h
+    include/sound_mind/studio/mind_wave_editor.h
+    include/sound_mind/studio/mind_waves_panel.h
     include/sound_mind/studio/paint_controller.h
     include/sound_mind/studio/path_controller.h
     include/sound_mind/studio/path_edit_session.h

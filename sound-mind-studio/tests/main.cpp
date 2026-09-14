@@ -28,6 +28,9 @@
 #include "test_layers_panel.h"
 #include "test_loop_panel.h"
 #include "test_main_window.h"
+#include "test_mind_wave_controller.h"
+#include "test_mind_wave_editor.h"
+#include "test_mind_waves_panel.h"
 #include "test_paint_controller.h"
 #include "test_path_controller.h"
 #include "test_path_edit_session.h"
@@ -142,6 +145,15 @@ int main(int argc, char** argv) {
 
     ToneCurveEditorTest toneCurveEditorTest;
     status |= QTest::qExec(&toneCurveEditorTest, argc, argv);
+
+    MindWaveEditorTest mindWaveEditorTest;
+    status |= QTest::qExec(&mindWaveEditorTest, argc, argv);
+
+    MindWavesPanelTest mindWavesPanelTest;
+    status |= QTest::qExec(&mindWavesPanelTest, argc, argv);
+
+    MindWaveControllerTest mindWaveControllerTest;
+    status |= QTest::qExec(&mindWaveControllerTest, argc, argv);
 
     return status;
 }

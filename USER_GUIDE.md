@@ -183,10 +183,11 @@ Layer**, adds a Filter layer instead - see
   double-click to rename it.
 - A **type tag**, for any layer type other than the ordinary kind you get
   from importing.
-- An **opacity slider**, and **translation**/**rescale** spin boxes (see
-  [Layer Timing](#layer-timing) below) - except on the **Background**
-  layer's row, which has none of these: it's always fully opaque and
-  always first in time, so neither applies to it.
+- An **opacity slider**, an **opacity-MindWave combo** (see
+  [MindWaves](#mindwaves) below), and **translation**/**rescale** spin
+  boxes (see [Layer Timing](#layer-timing) below) - except on the
+  **Background** layer's row, which has none of these: it's always fully
+  opaque and always first in time, so none of them apply to it.
 - A **delete** button (×), for any layer except the locked one(s).
 
 ### Compositing
@@ -240,6 +241,33 @@ translation/rescale shifts where its own content lands before mixing
 into the composite, so "lining up" two layers visually is exactly what
 you'll hear lined up as well. Recording's result, Loop Mode, Pooling,
 and Export are the exception - see the note above.
+
+### MindWaves
+
+The **MindWaves** panel (toggle it from the toolbar) manages a small
+library of reusable waveforms - each one a shape that varies across the
+canvas (over time, over frequency, or both) rather than a single fixed
+number. Right now, the only thing a MindWave can do is bind to a
+**layer's own opacity**: instead of a flat volume, the layer fades in and
+out following the MindWave's own shape as it plays.
+
+- **+ Add MindWave** creates a new one with a sensible default (a plain,
+  audible sine wave) and selects it. Double-click a MindWave's name to
+  rename it; the **×** button deletes it.
+- Selecting a MindWave shows its own editor: a **Generator Type** (Periodic,
+  Envelope, Stepped/Noise, Spatial, or Fractal) and that type's own plain
+  numeric parameters - a period, a phase, a seed, and so on. This is a
+  bare-bones, functional editor, not a polished one yet - there are no
+  dials or drawing tools here, just fields to type numbers into.
+- **Superposition** lets one MindWave combine several others together
+  (multiply, add, min, max, or average) - the **+ Add Member**/**- Remove
+  Member** buttons and the small list beside them manage that MindWave's
+  own combined members, each editable the same way as a top-level one.
+- Back in the **Layers** panel, each row's opacity-MindWave combo lets you
+  bind that layer's opacity to any MindWave in the library, or set it back
+  to **None** for a plain, fixed opacity. A binding multiplies the layer's
+  own opacity slider by the MindWave's own shape at every point - it
+  doesn't replace the slider, so both still matter together.
 
 ### Filter Layers
 
@@ -637,10 +665,13 @@ while you have unsaved changes prompts you to save first.
 ## What's Not Here Yet
 
 The [design document](docs/sound-mind-design.md) describes the Studio's
-full intended scope - MindWave-driven modulation, generators, analysis
-tools, a Composer Mode track view, Sound Flower's polar view, MIDI
-import, chord/sequence generation, and a Sound Mind VST plugin, among
-others none of which exist in the Studio yet. Filter layers (see
+full intended scope - generators, analysis tools, a Composer Mode track
+view, Sound Flower's polar view, MIDI import, chord/sequence generation,
+and a Sound Mind VST plugin, among others none of which exist in the
+Studio yet. MindWave-driven modulation (see [MindWaves](#mindwaves)
+above) has made a real start - layer opacity binding works - but it's
+far from its own full scope either; see the note further down. Filter
+layers (see
 [Filter Layers](#filter-layers) above) are further along than most - all
 six designed filter types work now - but the milestone as a whole isn't
 finished (no Equalizer layer yet, in particular).
@@ -687,9 +718,9 @@ designed for it:
 - **Normal (mixing) is the only blend mode** - a fuller catalogue
   (Multiply, Screen, and the rest of the usual image-editor set) isn't
   designed or built yet.
-- **No MindWave-bound blending** - a layer's own contribution can't yet
-  vary spatially (louder in some regions, quieter in others); MindWaves
-  don't exist until a later milestone.
+- **MindWave-bound opacity exists now** (see [MindWaves](#mindwaves)
+  above), but nothing else does yet - blend mode itself still can't vary
+  spatially, only opacity.
 - **Recording's result, Loop Mode, Pooling, and Audio/Video Export**
   still act on a single (topmost) layer, not the composite - see
   [the note above](#important-whats-actually-shown-and-played-right-now).
@@ -705,9 +736,27 @@ milestone as a whole:
   just the two endpoint stops (`t=0`, `t=1`), via plain spin boxes. (Tone
   Curve, unlike Frequency-Axis Gradient, does have a real draggable point
   editor now.)
-- **No MindWave-bound filter parameters** - a filter's own strength
-  can't yet vary spatially; MindWaves don't exist until a later
-  milestone.
+- **No MindWave-bound filter parameters yet** - a filter's own strength
+  can't yet vary spatially; MindWaves (see [MindWaves](#mindwaves) above)
+  can only bind to a layer's opacity so far, not a filter's own
+  parameters.
+
+[MindWaves](#mindwaves) (see above) exist now, but only a narrow slice of
+what's designed for them:
+
+- Only **layer opacity** can bind to a MindWave - filter parameters and
+  brush parameters can't yet (see the two bullets above).
+- **No canvas-space vs. operation-relative choice** - every binding today
+  is implicitly canvas-space (the field is a fixed mask laid over the
+  whole piece); the "retriggers fresh per note" alternative doesn't exist
+  until Sound Mind Instruments do.
+- **No Field Operators** - Warp (one field distorting where another
+  samples from) and Reduce (collapsing a field to a plain control signal)
+  aren't built. Superposition (combining several MindWaves together) is
+  the one field operator that does exist.
+- **No drawn-shape or step-grid generator types**, and no Continuous
+  Controls interface - the MindWaves panel's own editor is plain numeric
+  fields only, per generator type.
 
 The [Path Tool](#path-tool) (see above) only places new paths today; once
 a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,

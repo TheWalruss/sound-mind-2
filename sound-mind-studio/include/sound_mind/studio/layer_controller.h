@@ -129,6 +129,17 @@ public:
     /// @param opacity The new opacity, intended to be in `[0, 1]`.
     void setLayerOpacity(sound_mind::core::LayerId id, float opacity);
 
+    /// @brief Sets (or clears) which MindWave the layer with the given id's
+    ///        own opacity is bound to - see `sound_mind::core::Layer::
+    ///        opacityMindWave()`'s own docs. Repaints the canvas (the
+    ///        binding changes what the composite actually looks like),
+    ///        then refreshes the Layers Panel. Does nothing if no layer
+    ///        with this id exists.
+    /// @param id The layer to change.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setLayerOpacityMindWave(sound_mind::core::LayerId id,
+                                  std::optional<sound_mind::core::MindWaveId> mindWaveId);
+
     /// @brief Sets the horizontal translation of the layer with the given
     ///        id. Repaints the canvas, then refreshes the Layers Panel.
     ///        Does nothing if no layer with this id exists.

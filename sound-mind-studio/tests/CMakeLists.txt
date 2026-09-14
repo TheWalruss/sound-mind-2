@@ -17,6 +17,9 @@ add_executable(sound-mind-studio-tests
     test_layers_panel.cpp
     test_loop_panel.cpp
     test_main_window.cpp
+    test_mind_wave_controller.cpp
+    test_mind_wave_editor.cpp
+    test_mind_waves_panel.cpp
     test_paint_controller.cpp
     test_path_controller.cpp
     test_path_edit_session.cpp

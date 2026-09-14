@@ -1,0 +1,247 @@
+#include "test_mind_waves_panel.h"
+
+#include <optional>
+
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QLabel>
+#include <QListWidget>
+#include <QPushButton>
+#include <QSignalSpy>
+#include <QSpinBox>
+#include <QtTest/QtTest>
+
+#include "sound_mind/studio/mind_wave_editor.h"
+#include "sound_mind/studio/mind_waves_panel.h"
+
+using sound_mind::core::MindWave;
+using sound_mind::core::MindWaveId;
+using sound_mind::core::SuperpositionBlendMode;
+using sound_mind::studio::MindWaveEditor;
+using sound_mind::studio::MindWavesPanel;
+
+namespace {
+
+std::vector<MindWavesPanel::RowData> twoRows() {
+    MindWavesPanel::RowData first;
+    first.id = 1;
+    first.name = QStringLiteral("First");
+    MindWavesPanel::RowData second;
+    second.id = 2;
+    second.name = QStringLiteral("Second");
+    return {first, second};
+}
+
+}  // namespace
+
+void MindWavesPanelTest::freshPanelHasNoRowsAndNoSelection() {
+    const MindWavesPanel panel;
+    QVERIFY(!panel.selectedMindWaveId().has_value());
+    QCOMPARE(panel.findChild<QListWidget*>(QStringLiteral("mindWavesList"))->count(), 0);
+    QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"))->isEnabled());
+}
+
+void MindWavesPanelTest::setMindWavesPopulatesTheListAndClickingARowSelectsIt() {
+    MindWavesPanel panel;
+    QSignalSpy spy(&panel, &MindWavesPanel::selectionChanged);
+
+    panel.setMindWaves(twoRows());
+    QCOMPARE(panel.findChild<QListWidget*>(QStringLiteral("mindWavesList"))->count(), 2);
+
+    const auto nameLabels = panel.findChildren<QLabel*>(QStringLiteral("nameLabel"));
+    QCOMPARE(nameLabels.size(), 2);
+    QTest::mouseClick(nameLabels.at(0), Qt::LeftButton);
+
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(panel.selectedMindWaveId().has_value());
+    QCOMPARE(*panel.selectedMindWaveId(), MindWaveId{1});
+    QVERIFY(panel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"))->isEnabled());
+}
+
+void MindWavesPanelTest::addButtonEmitsAddRequested() {
+    MindWavesPanel panel;
+    QSignalSpy spy(&panel, &MindWavesPanel::addRequested);
+
+    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMindWaveButton")), Qt::LeftButton);
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void MindWavesPanelTest::deletingARowEmitsDeleteRequestedWithItsId() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    QSignalSpy spy(&panel, &MindWavesPanel::deleteRequested);
+
+    const auto buttons = panel.findChildren<QPushButton*>(QStringLiteral("deleteButton"));
+    QCOMPARE(buttons.size(), 2);
+    QTest::mouseClick(buttons.at(1), Qt::LeftButton);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<MindWaveId>(), MindWaveId{2});
+}
+
+void MindWavesPanelTest::renamingARowEmitsRenameRequestedWithItsId() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    QSignalSpy spy(&panel, &MindWavesPanel::renameRequested);
+
+    const auto nameLabels = panel.findChildren<QLabel*>(QStringLiteral("nameLabel"));
+    QTest::mouseDClick(nameLabels.at(0), Qt::LeftButton);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<MindWaveId>(), MindWaveId{1});
+}
+
+void MindWavesPanelTest::editingTheTopEditorEmitsMindWaveChangedWithTheSelectedId() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(2);
+    // A lambda capture, not QSignalSpy::value<T>() - MindWave isn't a
+    // registered Qt meta type, matching FilterConfigurationPanelTest's own
+    // established idiom for capturing a custom Core type off a signal.
+    int emitCount = 0;
+    std::optional<MindWaveId> receivedId;
+    std::optional<MindWave> receivedWave;
+    connect(&panel, &MindWavesPanel::mindWaveChanged, [&](MindWaveId id, const MindWave& wave) {
+        ++emitCount;
+        receivedId = id;
+        receivedWave = wave;
+    });
+
+    panel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"))
+        ->findChild<QDoubleSpinBox*>(QStringLiteral("periodSpinBox"))
+        ->setValue(4.0);
+
+    QCOMPARE(emitCount, 1);
+    QCOMPARE(receivedId, std::optional<MindWaveId>(2));
+    QVERIFY(receivedWave.has_value());
+    QCOMPARE(receivedWave->period(), 4.0);
+}
+
+void MindWavesPanelTest::addingAStackMemberGrowsTheStackAndEmits() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    int emitCount = 0;
+    std::optional<MindWave> receivedWave;
+    connect(&panel, &MindWavesPanel::mindWaveChanged,
+            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
+
+    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")), Qt::LeftButton);
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(receivedWave.has_value());
+    QCOMPARE(receivedWave->superpositionStack().size(), std::size_t{1});
+    QCOMPARE(panel.findChild<QListWidget*>(QStringLiteral("stackList"))->count(), 1);
+}
+
+void MindWavesPanelTest::removingASelectedStackMemberShrinksTheStackAndEmits() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")), Qt::LeftButton);
+    auto* stackList = panel.findChild<QListWidget*>(QStringLiteral("stackList"));
+    stackList->setCurrentRow(0);
+    int emitCount = 0;
+    std::optional<MindWave> receivedWave;
+    connect(&panel, &MindWavesPanel::mindWaveChanged,
+            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
+
+    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton")), Qt::LeftButton);
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(receivedWave.has_value());
+    QCOMPARE(receivedWave->superpositionStack().size(), std::size_t{0});
+    QCOMPARE(stackList->count(), 0);
+}
+
+void MindWavesPanelTest::editingASelectedStackMemberUpdatesThatIndexAndEmits() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")), Qt::LeftButton);
+    panel.findChild<QListWidget*>(QStringLiteral("stackList"))->setCurrentRow(0);
+    int emitCount = 0;
+    std::optional<MindWave> receivedWave;
+    connect(&panel, &MindWavesPanel::mindWaveChanged,
+            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
+
+    panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))
+        ->findChild<QDoubleSpinBox*>(QStringLiteral("periodSpinBox"))
+        ->setValue(9.0);
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(receivedWave.has_value());
+    const auto stack = receivedWave->superpositionStack();
+    QCOMPARE(stack.size(), std::size_t{1});
+    QCOMPARE(stack.front().period(), 9.0);
+}
+
+void MindWavesPanelTest::changingBlendModeEmits() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    int emitCount = 0;
+    std::optional<MindWave> receivedWave;
+    connect(&panel, &MindWavesPanel::mindWaveChanged,
+            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
+
+    auto* blendCombo = panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"));
+    blendCombo->setCurrentIndex(blendCombo->findData(QVariant::fromValue(static_cast<int>(SuperpositionBlendMode::Add))));
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(receivedWave.has_value());
+    QCOMPARE(receivedWave->superpositionBlendMode(), SuperpositionBlendMode::Add);
+}
+
+void MindWavesPanelTest::selectMindWaveSelectsAnExistingRowAndNoOpsForUnknownId() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+
+    panel.selectMindWave(2);
+    QCOMPARE(panel.selectedMindWaveId(), std::optional<MindWaveId>(2));
+
+    panel.selectMindWave(999);
+    // No matching row - selection unchanged, per selectMindWave()'s own docs.
+    QCOMPARE(panel.selectedMindWaveId(), std::optional<MindWaveId>(2));
+}
+
+void MindWavesPanelTest::setMindWavesPreservesSelectionAndRedisplaysFromTheNewData() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+
+    auto rows = twoRows();
+    rows[0].wave.setPeriod(7.0);
+    panel.setMindWaves(rows);
+
+    QCOMPARE(panel.selectedMindWaveId(), std::optional<MindWaveId>(1));
+    QCOMPARE(panel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"))->mindWave().period(), 7.0);
+}
+
+void MindWavesPanelTest::setMindWavesDropsSelectionWhenTheIdIsGone() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    QSignalSpy spy(&panel, &MindWavesPanel::selectionChanged);
+
+    panel.setMindWaves({twoRows()[1]});  // id 1 no longer present.
+
+    QVERIFY(!panel.selectedMindWaveId().has_value());
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"))->isEnabled());
+}
+
+void MindWavesPanelTest::clearSelectionDisablesBothEditorsAndEmits() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    QSignalSpy spy(&panel, &MindWavesPanel::selectionChanged);
+
+    panel.clearSelection();
+
+    QVERIFY(!panel.selectedMindWaveId().has_value());
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"))->isEnabled());
+    QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))->isEnabled());
+}

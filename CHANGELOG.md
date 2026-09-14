@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.4] - 2026-09-14
+
+Installment C2 of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - the Studio UI half of layer opacity binding, on top of Installment C1's now-proven Core+GPU layer. **This is the first user-visible MindWaves feature** - see `USER_GUIDE.md`'s new "MindWaves" section.
+
+### Added
+
+- **A new dockable MindWaves panel** managing the current project's MindWave library: add/rename/delete, a generator-type dropdown and plain numeric parameter fields per type (Periodic/Envelope/Stepped-Noise/Spatial/Fractal), and a minimal superposition editor (add/remove members, a blend-mode dropdown, and a second nested editor for whichever member is selected - one level deep, matching this installment's own confirmed "bare-bones" scope).
+- **`sound_mind::studio::MindWaveEditor`** - a reusable plain-widget editor for a single MindWave's own generator/parameters, mirroring `FilterConfigurationPanel`'s own "one group box per type" pattern. Used twice inside the MindWaves panel (top-level entry, selected stack member).
+- **`sound_mind::studio::MindWaveController`** - owns MindWave-library add/remove/rename/edit and keeps the MindWaves panel and the Layers panel's own opacity-binding combo in sync with it, the same "own presentation" treatment `LayerController` already received.
+- **A "bind" combo on each Layers Panel row**, next to the opacity slider - "None" or any MindWave in the library. Delegates to a new `LayerController::setLayerOpacityMindWave()`.
+
+Full regression: sound-mind-studio all 28 QTest classes passing (3 new: `MindWaveEditorTest`, `MindWavesPanelTest`, `MindWaveControllerTest`, plus 5 new cases in `LayersPanelTest`); sound-mind-core 356/356 and sound-mind-gpu 21/21 unchanged (no Core/GPU code touched this installment). Doxygen: 0 warnings.
+
 ## [0.0.31.3] - 2026-09-14
 
 Installment C1 of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - a layer's opacity can now bind to a MindWave, evaluated per cell during compositing, GPU-aware from the start per the user's own explicit override of this project's usual "CPU-first" pattern. **Still no UI** - `Layer::setOpacityMindWave()`/`Project::addMindWave()` are the only way to create a binding right now; the bare-bones management panel and Layers Panel "bind" affordance are Installment C2.
