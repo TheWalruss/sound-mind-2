@@ -8,6 +8,7 @@
 #include <QListWidget>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSplitter>
 #include <QVBoxLayout>
@@ -240,11 +241,20 @@ MindWavesPanel::MindWavesPanel(QWidget* parent) : QDockWidget(tr("MindWaves"), p
         emit selectionChanged(selected.id);
     });
 
-    auto* scrollContainer = new QWidget();
-    auto* scrollLayout = new QVBoxLayout(scrollContainer);
-    scrollLayout->setContentsMargins(0, 0, 0, 0);
-    scrollLayout->addWidget(container);
-    setWidget(scrollContainer);
+    // A real QScrollArea, not just a plain wrapper widget - matching the
+    // established convention every other multi-field dock panel already
+    // uses (FilterConfigurationPanel, ToolConfigurationPanel, GridPanel,
+    // PlaybackPanel, RecordPanel, LoopPanel). Without it, `container`'s own
+    // QVBoxLayout forces this dock's minimum height up to fit everything
+    // at once - two uncapped MindWaveEditors plus the library list plus
+    // the superposition controls - which is genuinely too tall to fit a
+    // typical dock area and, critically, can't be shrunk below that either.
+    // `setWidgetResizable(true)` lets the dock resize freely regardless of
+    // that content height, with a scrollbar picking up whatever doesn't fit.
+    auto* scrollArea = new QScrollArea(this);
+    scrollArea->setWidget(container);
+    scrollArea->setWidgetResizable(true);
+    setWidget(scrollArea);
 }
 
 void MindWavesPanel::loadStackState(const MindWave& wave) {

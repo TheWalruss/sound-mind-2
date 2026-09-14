@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.8] - 2026-09-14
+
+Every dock panel can now be resized freely, with a scrollbar picking up whatever content doesn't fit - fixes the MindWaves panel being too tall to fit (or shrink) in a typical layout.
+
+### Fixed
+
+- **`MindWavesPanel` and `LayersPanel` now wrap their content in a real, resizable `QScrollArea`**, matching the convention `FilterConfigurationPanel`/`ToolConfigurationPanel`/`GridPanel`/`PlaybackPanel`/`RecordPanel`/`LoopPanel` already used. `MindWavesPanel` previously wrapped its content in a plain `QWidget` that looked like a scroll container but wasn't one - its two `MindWaveEditor` instances plus the library list and superposition controls forced the whole dock's minimum height up to fit everything at once, with no way to shrink it back down. `LayersPanel` gets the same treatment for consistency, even though its own layer list already scrolled internally.
+
+Full regression: sound-mind-studio all 28 QTest classes passing (2 new cases, one per panel, confirming both are wrapped in a resizable scroll area and that `MindWavesPanel`'s own reported minimum height stays small regardless of its real content); sound-mind-core 378/378 and sound-mind-gpu 33/33 unchanged (no Core/GPU code touched). Doxygen: 0 warnings.
+
 ## [0.0.31.7] - 2026-09-14
 
 Installment D3 of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - the Studio UI half of filter-parameter binding, completing Installment D (D1 Core, D2 GPU, D3 this). Mechanically follows Installment C2's own `LayersPanel` bind-combo precedent.

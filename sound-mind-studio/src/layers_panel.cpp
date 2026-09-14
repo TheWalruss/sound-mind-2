@@ -10,6 +10,7 @@
 #include <QListWidget>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSlider>
 #include <QSpinBox>
 #include <QVBoxLayout>
@@ -329,7 +330,18 @@ LayersPanel::LayersPanel(QWidget* parent) : QDockWidget(tr("Layers"), parent) {
     connect(list_->model(), &QAbstractItemModel::rowsMoved, this, &LayersPanel::handleRowsMoved);
     layout->addWidget(list_, 1);
 
-    setWidget(container);
+    // Wrapped in a real QScrollArea, matching every other multi-field dock
+    // panel's own established convention (FilterConfigurationPanel,
+    // ToolConfigurationPanel, GridPanel, PlaybackPanel, RecordPanel,
+    // LoopPanel) - `list_`'s own internal scrollbar already handles
+    // overflow of individual rows, but this still lets the dock itself be
+    // resized down freely rather than relying on `list_`'s own
+    // minimumSizeHint() to stay small forever as this panel's own content
+    // grows in a future change.
+    auto* scrollArea = new QScrollArea(this);
+    scrollArea->setWidget(container);
+    scrollArea->setWidgetResizable(true);
+    setWidget(scrollArea);
 }
 
 void LayersPanel::setLayers(const std::vector<RowData>& layersBottomToTop) {

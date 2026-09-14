@@ -112,7 +112,11 @@ Once a project is open, the title bar shows the project's name next to
   it when one is shown.
 
 Every dock panel can be dragged to a different edge of the window, or
-floated, like any Qt dock widget.
+floated, like any Qt dock widget. Every panel can also be resized - drag
+the edge between two stacked panels (or between a panel and the canvas)
+to make one taller/shorter or wider/narrower; if a panel's own content no
+longer fits at the size you've given it, a scrollbar appears inside it
+rather than the panel refusing to shrink.
 
 ## Importing Media
 

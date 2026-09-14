@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QtTest/QtTest>
@@ -244,4 +245,28 @@ void MindWavesPanelTest::clearSelectionDisablesBothEditorsAndEmits() {
     QCOMPARE(spy.count(), 1);
     QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"))->isEnabled());
     QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))->isEnabled());
+}
+
+void MindWavesPanelTest::contentIsInAResizableScrollAreaSoThePanelCanShrinkBelowItsFullHeight() {
+    MindWavesPanel panel;
+
+    auto* scrollArea = qobject_cast<QScrollArea*>(panel.widget());
+    QVERIFY(scrollArea != nullptr);
+    QVERIFY(scrollArea->widgetResizable());
+
+    // Select a MindWave so the top MindWaveEditor is actually populated
+    // and enabled - this is the "MindWave editor is too tall" case being
+    // guarded against: stacked below the (height-capped) library list,
+    // an uncapped MindWaveEditor plus the superposition controls plus a
+    // second uncapped MindWaveEditor comfortably exceed a typical dock's
+    // available height once laid out in full. The panel's own
+    // minimumSizeHint() must stay small regardless of that real content
+    // height - proving the QScrollArea, not the panel's own top-level
+    // layout, is what actually absorbs it, so the dock itself can still
+    // be resized down (and a scrollbar appears for the rest) instead of
+    // the panel being forced to grow to fit everything at once.
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+
+    QVERIFY(panel.minimumSizeHint().height() < 250);
 }

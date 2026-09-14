@@ -36,4 +36,5 @@ private slots:
     void aRowsComboPreselectsItsOwnCurrentBinding();
     void changingARowsMindWaveComboEmitsOpacityMindWaveChanged();
     void selectingNoneEmitsOpacityMindWaveChangedWithNullopt();
+    void contentIsInAResizableScrollAreaSoThePanelCanShrinkBelowItsFullHeight();
 };

@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSignalSpy>
 #include <QSlider>
 #include <QSpinBox>
@@ -475,4 +476,18 @@ void LayersPanelTest::selectingNoneEmitsOpacityMindWaveChangedWithNullopt() {
 
     QCOMPARE(emitCount, 1);
     QVERIFY(!receivedMindWaveId.has_value());
+}
+
+void LayersPanelTest::contentIsInAResizableScrollAreaSoThePanelCanShrinkBelowItsFullHeight() {
+    LayersPanel panel;
+
+    // Matches every other dock panel's own established convention (see
+    // e.g. FilterConfigurationPanel/ToolConfigurationPanel) - `widget()`
+    // is a `QScrollArea` wrapping the panel's real content, not the
+    // content widget directly, so the dock can be resized freely and a
+    // scrollbar appears for whatever doesn't fit instead of the panel's
+    // own layout forcing a tall minimum size.
+    auto* scrollArea = qobject_cast<QScrollArea*>(panel.widget());
+    QVERIFY(scrollArea != nullptr);
+    QVERIFY(scrollArea->widgetResizable());
 }

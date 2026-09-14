@@ -20,4 +20,5 @@ private slots:
     void setMindWavesPreservesSelectionAndRedisplaysFromTheNewData();
     void setMindWavesDropsSelectionWhenTheIdIsGone();
     void clearSelectionDisablesBothEditorsAndEmits();
+    void contentIsInAResizableScrollAreaSoThePanelCanShrinkBelowItsFullHeight();
 };
