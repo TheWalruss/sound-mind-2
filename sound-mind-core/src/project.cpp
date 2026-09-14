@@ -143,6 +143,42 @@ Layer* Project::layerById(LayerId id) noexcept {
     return nullptr;
 }
 
+MindWaveId Project::addMindWave(std::string name, MindWave wave) {
+    const auto maxId = std::max_element(mindWaves_.begin(), mindWaves_.end(),
+                                          [](const NamedMindWave& a, const NamedMindWave& b) { return a.id < b.id; });
+    const MindWaveId newId = (maxId == mindWaves_.end() ? MindWaveId{0} : maxId->id) + 1;
+    mindWaves_.push_back(NamedMindWave{newId, std::move(name), std::move(wave)});
+    return newId;
+}
+
+bool Project::removeMindWave(MindWaveId id) {
+    const auto it =
+        std::find_if(mindWaves_.begin(), mindWaves_.end(), [id](const NamedMindWave& named) { return named.id == id; });
+    if (it == mindWaves_.end()) {
+        return false;
+    }
+    mindWaves_.erase(it);
+    return true;
+}
+
+const NamedMindWave* Project::mindWaveById(MindWaveId id) const noexcept {
+    for (const NamedMindWave& named : mindWaves_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
+NamedMindWave* Project::mindWaveById(MindWaveId id) noexcept {
+    for (NamedMindWave& named : mindWaves_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
 bool Project::removeLayer(LayerId id) {
     const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const Layer& layer) { return layer.id() == id; });
     if (it == layers_.end()) {
@@ -186,6 +222,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"settings", project.settings_},
         {"layers", project.layers_},
         {"operationLog", project.operationLog_},
+        {"mindWaves", project.mindWaves_},
     };
 }
 
@@ -196,6 +233,16 @@ void from_json(const nlohmann::json& json, Project& project) {
     project.layers_.clear();
     for (const auto& layerJson : json.at("layers")) {
         project.layers_.push_back(layerJson.get<Layer>());
+    }
+
+    // Lenient (defaults to empty if absent) - didn't exist before
+    // v0.Y.31.1 Installment C1; a project saved before it had no
+    // MindWaves to lose.
+    project.mindWaves_.clear();
+    if (json.contains("mindWaves")) {
+        for (const auto& namedJson : json.at("mindWaves")) {
+            project.mindWaves_.push_back(namedJson.get<NamedMindWave>());
+        }
     }
 }
 

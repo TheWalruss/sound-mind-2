@@ -16,6 +16,17 @@ namespace sound_mind::core {
 /// @brief Opaque identifier for a Layer within a Project.
 using LayerId = std::uint64_t;
 
+/// @brief Opaque identifier for a `NamedMindWave` within a Project - a
+/// deliberate, exact duplicate of `mind_wave.h`'s own `MindWaveId` alias
+/// (matching `docs/sound-mind-architecture.md`'s own Decision #59
+/// "duplicated, not shared" precedent for something this small), not a
+/// `#include "sound_mind/core/mind_wave.h"` here - that header includes
+/// `path.h`, which includes `operation.h`, which includes *this* header,
+/// so including it here would be a real cycle. A type alias (unlike a
+/// class) can be redeclared identically in multiple headers with no ODR
+/// concern, since it never needs its own definition to be complete.
+using MindWaveId = std::uint64_t;
+
 /**
  * @brief What a Layer is for, per `docs/sound-mind-design.md`'s "Layer Types".
  */
@@ -59,16 +70,19 @@ NLOHMANN_JSON_SERIALIZE_ENUM(LayerType, {
  * See `docs/sound-mind-design.md`'s "Layers" and
  * `docs/sound-mind-architecture.md`'s Core Data Model.
  *
- * @note Deliberately minimal for now: blend mode, MindWave linkage, and
- *       the cached raster result are not yet represented here - each
- *       depends on a type (`BlendMode`, `MindWave`, `RasterCache`) that
- *       hasn't been designed in code yet. Adding placeholder members for
- *       them now would just mean redesigning this class again as soon as
- *       those types exist. As of `v0.Y.21.1` (Layer Time Alignment), a
- *       narrow slice of "transform" *is* represented - translationColumns()
- *       and rescaleFactor(), the horizontal-axis-only subset described
- *       there - not the legacy Studio's full affine transform (no
- *       vertical translation, scale, or rotation).
+ * @note Deliberately minimal for now: blend mode and the cached raster
+ *       result are not yet represented here - each depends on a type
+ *       (`BlendMode`, `RasterCache`) that hasn't been designed in code yet.
+ *       Adding placeholder members for them now would just mean
+ *       redesigning this class again as soon as those types exist. As of
+ *       `v0.Y.21.1` (Layer Time Alignment), a narrow slice of "transform"
+ *       *is* represented - translationColumns() and rescaleFactor(), the
+ *       horizontal-axis-only subset described there - not the legacy
+ *       Studio's full affine transform (no vertical translation, scale, or
+ *       rotation). As of `v0.Y.31.1` Installment C1, MindWave linkage
+ *       *is* also represented - opacityMindWave(), a `std::optional
+ *       <MindWaveId>` naming an entry in the owning `Project`'s own
+ *       `mindWaves()` library, not an embedded `MindWave` value.
  */
 class Layer {
 public:
@@ -114,6 +128,25 @@ public:
      * @return A value in [0, 1]; not clamped or validated here.
      */
     [[nodiscard]] float opacity() const noexcept { return opacity_; }
+
+    /**
+     * @brief The MindWave (if any) this layer's own opacity is bound to -
+     *        see `docs/sound-mind-design.md`'s "Layer opacity": "Linking a
+     *        MindWave to a layer multiplies the layer's effective opacity
+     *        by that field at every pixel during compositing."
+     *
+     * A reference (an id into the owning `Project`'s own `mindWaves()`
+     * library), not an embedded `MindWave` value - confirmed with the
+     * user, matching `docs/sound-mind-architecture.md`'s own `MindWaveRef`
+     * sketch. An id that no longer resolves (its `NamedMindWave` was
+     * removed from the project) is treated the same as `std::nullopt`
+     * wherever this is resolved (`sound_mind::core::compositeProject()`,
+     * in particular) - not a dangling-reference error.
+     *
+     * @return The bound MindWave's id, or `std::nullopt` if this layer's
+     *         opacity is a plain scalar (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> opacityMindWave() const noexcept { return opacityMindWave_; }
 
     /**
      * @brief Whether this layer currently contributes to the project at
@@ -182,6 +215,15 @@ public:
      * @param opacity Intended to be in [0, 1]; not clamped or validated here.
      */
     void setOpacity(float opacity) noexcept { opacity_ = opacity; }
+
+    /**
+     * @brief Sets (or clears) which MindWave this layer's opacity is bound to.
+     * @param mindWaveId The new binding, or `std::nullopt` to unbind (a
+     *        plain scalar `opacity()` again). Not validated against the
+     *        owning `Project`'s own library here - see `opacityMindWave()`'s
+     *        own docs on a non-resolving id being harmless.
+     */
+    void setOpacityMindWave(std::optional<MindWaveId> mindWaveId) noexcept { opacityMindWave_ = mindWaveId; }
 
     /**
      * @brief Sets whether this layer currently contributes to the project.
@@ -273,6 +315,7 @@ private:
     std::string name_;
     LayerType type_ = LayerType::Normal;
     float opacity_ = 1.0f;
+    std::optional<MindWaveId> opacityMindWave_;
     bool visible_ = true;
     std::int64_t translationColumns_ = 0;
     double rescaleFactor_ = 1.0;

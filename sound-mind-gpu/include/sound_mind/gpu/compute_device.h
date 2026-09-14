@@ -238,13 +238,25 @@ public:
      * @param layerGain `layer`'s own opacity, as a linear gain (matching
      *        `mixLayerInto()`'s own `layer.opacity()` usage) - not
      *        clamped or validated here.
+     * @param mindWaveField A per-cell multiplier applied alongside
+     *        `layerGain` (`sound_mind::core::Layer::opacityMindWave()`'s
+     *        own per-cell field, evaluated by the caller - `sound-mind-gpu`
+     *        has no dependency on `sound-mind-core`/`MindWave` itself, so
+     *        this arrives as a plain array), same size as `running`'s/
+     *        `layer`'s own arrays. Confirmed with the user (`v0.Y.31.1`
+     *        Installment C1) as an additional per-cell buffer alongside
+     *        the existing scalar `layerGain`, not a replacement for it - a
+     *        caller with no MindWave binding passes an all-`1.0` array
+     *        (no effect), matching `layerGain`'s own "not clamped or
+     *        validated" scalar contract extended to a per-cell one.
      * @return The updated composite, same shape as `running`.
-     * @throws std::runtime_error if `running`'s and `layer`'s own arrays
-     *         aren't all the same size, or if any D3D12 call fails.
+     * @throws std::runtime_error if `running`'s, `layer`'s, and
+     *         `mindWaveField`'s own arrays aren't all the same size, or if
+     *         any D3D12 call fails.
      */
     [[nodiscard]] AmplitudePhaseSignal mixAmplitudePhaseSignal(const AmplitudePhaseSignal& running,
-                                                                const AmplitudePhaseSignal& layer,
-                                                                float layerGain) const;
+                                                                const AmplitudePhaseSignal& layer, float layerGain,
+                                                                const std::vector<float>& mindWaveField) const;
 
 private:
     /// @brief Wraps an already-successfully-created device/queue/fence

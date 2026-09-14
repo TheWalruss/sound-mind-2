@@ -48,7 +48,11 @@ namespace sound_mind::core {
  * **Normal compositing is audio-style mixing, not image-style
  * alpha-over**: each layer's own stored amplitude (dB) converts to
  * linear, is scaled by that layer's own `opacity()` acting as a linear
- * gain, and sums with every other visible layer's own contribution at
+ * gain - further scaled, per cell, by that layer's own bound `MindWave`
+ * (`Layer::opacityMindWave()`), if any, evaluated at that cell's own
+ * canvas position (`v0.Y.31.1` Installment C1; see `Layer::
+ * opacityMindWave()`'s own docs) - and sums with every other visible
+ * layer's own contribution at
  * the same output bin/column - as a complex value, using each layer's
  * own `sharedPhaseRadians` to give its (per-channel) linear amplitude a
  * direction before summing. The summed left/right complex values'

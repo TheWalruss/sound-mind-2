@@ -9,6 +9,8 @@
 #include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/gpu_compute_availability.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_wave.h"
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 
@@ -17,8 +19,12 @@ using sound_mind::codec::toRgbImage;
 using sound_mind::core::compositeProject;
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterType;
+using sound_mind::core::frameIndexToTime;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
+using sound_mind::core::MindWave;
+using sound_mind::core::MindWaveId;
+using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::renderLayer;
@@ -257,6 +263,111 @@ TEST_CASE("compositeProject scales a layer's amplitude by its own opacity, as a 
     REQUIRE(composite.has_value());
     const float halfGainDb = 20.0f * std::log10(0.5f);  // ~ -6.02 dB - half the linear amplitude.
     CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(halfGainDb).margin(0.01));
+}
+
+// --- v0.Y.31.1 Installment C1: layer opacity bound to a MindWave -----
+
+namespace {
+
+/// @brief A `MindWave` (Time-axis Square, per `PeriodicWaveform::Square`'s
+/// own docs) whose period is set so it's high (gain 1.0) for output
+/// column 0, low (gain 0.0) for column 1, and high again for column 2 -
+/// derived from `frameIndexToTime()` itself (the same conversion
+/// `compositeProject()`'s own per-cell evaluation uses), so this doesn't
+/// depend on guessing `testSettings()`'s own sample rate/hop length.
+MindWave threeColumnSquareWave(const sound_mind::codec::StreamCodecConfig& config) {
+    const double columnDuration = frameIndexToTime(1, config) - frameIndexToTime(0, config);
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Square);
+    wave.setPeriod(columnDuration * 2.0);
+    return wave;
+}
+
+}  // namespace
+
+TEST_CASE("compositeProject applies a layer's own bound MindWave as a per-cell opacity multiplier",
+          "[core][compositor][mind_wave]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    const auto config = streamCodecConfigFor(project.settings());
+    const MindWaveId id = project.addMindWave("Test", threeColumnSquareWave(config));
+    project.layers()[0].setOpacityMindWave(id);
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    // Column 0/2: full gain (unchanged, 0 dB). Column 1: zero gain (back
+    // at the silence floor) - see threeColumnSquareWave()'s own docs.
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.02));
+    CHECK(composite->leftMagnitudeDb[1] < -90.0f);
+    CHECK(composite->leftMagnitudeDb[2] == Catch::Approx(0.0f).margin(0.02));
+}
+
+TEST_CASE("compositeProject's MindWave-bound opacity agrees with itself via the CPU fallback as via "
+          "the GPU",
+          "[core][compositor][mind_wave][gpu]") {
+    GpuComputeForcedOffGuard forceCpu;
+
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    const auto config = streamCodecConfigFor(project.settings());
+    const MindWaveId id = project.addMindWave("Test", threeColumnSquareWave(config));
+    project.layers()[0].setOpacityMindWave(id);
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.02));
+    CHECK(composite->leftMagnitudeDb[1] < -90.0f);
+    CHECK(composite->leftMagnitudeDb[2] == Catch::Approx(0.0f).margin(0.02));
+}
+
+TEST_CASE("compositeProject treats a dangling opacityMindWave id (removed from the project) as unbound",
+          "[core][compositor][mind_wave]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    const auto config = streamCodecConfigFor(project.settings());
+    const MindWaveId id = project.addMindWave("Test", threeColumnSquareWave(config));
+    project.layers()[0].setOpacityMindWave(id);
+    project.removeMindWave(id);
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    // No crash, and every column reads as if never bound (full gain).
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(composite->leftMagnitudeDb[1] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(composite->leftMagnitudeDb[2] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject's single-layer fast path is bypassed when the sole contributor's "
+          "opacity is MindWave-bound",
+          "[core][compositor][mind_wave]") {
+    Project project = Project::createNew(testSettings());
+    // Remove the default Equalizer so this project has exactly one
+    // contributing layer and no Filter layer at all - the only way to
+    // actually reach compositeSingleLayer() (every other test in this
+    // file goes through the general path, forced by the default
+    // Equalizer's own presence - see the CPU-fallback test above's own
+    // comment on this).
+    const auto equalizerId = project.layers().back().id();
+    REQUIRE(project.removeLayer(equalizerId));
+    project.layers()[0].setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+
+    const auto config = streamCodecConfigFor(project.settings());
+    const MindWaveId id = project.addMindWave("Test", threeColumnSquareWave(config));
+    project.layers()[0].setOpacityMindWave(id);
+
+    const auto composite = compositeProject(project);
+
+    // If the fast path had been taken anyway, every column would read the
+    // same flat gain (0 dB, opacity 1.0) - a per-cell difference here
+    // proves the general path (and therefore the real MindWave
+    // evaluation) ran instead.
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.02));
+    CHECK(composite->leftMagnitudeDb[1] < -90.0f);
+    CHECK(composite->leftMagnitudeDb[2] == Catch::Approx(0.0f).margin(0.02));
 }
 
 TEST_CASE("compositeProject sums two full-opacity overlapping layers, mixing rather than muting",

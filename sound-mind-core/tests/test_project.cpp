@@ -7,6 +7,7 @@
 #include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/project.h"
 
 using sound_mind::codec::PoolImage;
@@ -15,6 +16,8 @@ using sound_mind::core::FilterType;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
+using sound_mind::core::MindWave;
+using sound_mind::core::MindWaveId;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 
@@ -175,6 +178,100 @@ TEST_CASE("removeLayer returns false and changes nothing for an unknown id", "[c
 
     REQUIRE_FALSE(removed);
     REQUIRE(project.layers().size() == 2);
+}
+
+TEST_CASE("A new Project has no MindWaves", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.mindWaves().empty());
+}
+
+TEST_CASE("addMindWave appends a named MindWave with a fresh, unique id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+
+    const MindWaveId firstId = project.addMindWave("Slow Pulse", MindWave{});
+    const MindWaveId secondId = project.addMindWave("Fast Pulse", MindWave{});
+
+    REQUIRE(firstId != secondId);
+    REQUIRE(project.mindWaves().size() == 2);
+    REQUIRE(project.mindWaves()[0].id == firstId);
+    REQUIRE(project.mindWaves()[0].name == "Slow Pulse");
+    REQUIRE(project.mindWaves()[1].id == secondId);
+    REQUIRE(project.mindWaves()[1].name == "Fast Pulse");
+}
+
+TEST_CASE("mindWaveById finds the entry with a matching id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const MindWaveId id = project.addMindWave("Slow Pulse", MindWave{});
+
+    const auto* found = project.mindWaveById(id);
+
+    REQUIRE(found != nullptr);
+    REQUIRE(found->name == "Slow Pulse");
+}
+
+TEST_CASE("mindWaveById returns nullptr for an unknown id", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.mindWaveById(MindWaveId{999}) == nullptr);
+}
+
+TEST_CASE("mindWaveById's mutable overload allows in-place edits", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const MindWaveId id = project.addMindWave("Slow Pulse", MindWave{});
+
+    auto* found = project.mindWaveById(id);
+    REQUIRE(found != nullptr);
+    found->name = "Renamed";
+    found->wave.setPeriod(5.0);
+
+    REQUIRE(project.mindWaveById(id)->name == "Renamed");
+    REQUIRE(project.mindWaveById(id)->wave.period() == 5.0);
+}
+
+TEST_CASE("removeMindWave removes the entry with the given id and returns true", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const MindWaveId id = project.addMindWave("Slow Pulse", MindWave{});
+
+    const bool removed = project.removeMindWave(id);
+
+    REQUIRE(removed);
+    REQUIRE(project.mindWaves().empty());
+}
+
+TEST_CASE("removeMindWave returns false and changes nothing for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindWave("Slow Pulse", MindWave{});
+
+    const bool removed = project.removeMindWave(MindWaveId{999999});
+
+    REQUIRE_FALSE(removed);
+    REQUIRE(project.mindWaves().size() == 1);
+}
+
+TEST_CASE("A Project's MindWave library round-trips through JSON", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    MindWave wave;
+    wave.setPeriod(2.5);
+    const MindWaveId id = original.addMindWave("Slow Pulse", wave);
+
+    const nlohmann::json json = original;
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.mindWaves().size() == 1);
+    REQUIRE(restored.mindWaves()[0].id == id);
+    REQUIRE(restored.mindWaves()[0].name == "Slow Pulse");
+    REQUIRE(restored.mindWaves()[0].wave.period() == 2.5);
+}
+
+TEST_CASE("A Project loads from JSON missing mindWaves (a project saved before v0.Y.31.1 "
+          "Installment C1) with an empty library",
+          "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    nlohmann::json json = original;
+    json.erase("mindWaves");
+
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.mindWaves().empty());
 }
 
 TEST_CASE("reorderLayers applies a valid permutation of the current layer ids", "[core][project]") {

@@ -405,4 +405,14 @@ void from_json(const nlohmann::json& json, MindWave& mindWave) {
     mindWave.setSuperpositionBlendMode(json.at("superpositionBlendMode").get<SuperpositionBlendMode>());
 }
 
+void to_json(nlohmann::json& json, const NamedMindWave& namedMindWave) {
+    json = nlohmann::json{{"id", namedMindWave.id}, {"name", namedMindWave.name}, {"wave", namedMindWave.wave}};
+}
+
+void from_json(const nlohmann::json& json, NamedMindWave& namedMindWave) {
+    json.at("id").get_to(namedMindWave.id);
+    json.at("name").get_to(namedMindWave.name);
+    json.at("wave").get_to(namedMindWave.wave);
+}
+
 }  // namespace sound_mind::core

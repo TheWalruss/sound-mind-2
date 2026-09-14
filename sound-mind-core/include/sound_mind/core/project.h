@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/project_settings.h"
 
@@ -16,11 +17,13 @@ namespace sound_mind::core {
  *        operation log, per `docs/sound-mind-architecture.md`'s Core Data
  *        Model and "Project File & Folder".
  *
- * @note Deliberately minimal for now: resource libraries (MindWaves, Sound
- *       Mind Instruments, Mind Shots, Mind Grains) and sequences aren't
+ * @note Deliberately minimal for now: most resource libraries (Sound Mind
+ *       Instruments, Mind Shots, Mind Grains) and sequences aren't
  *       represented yet, since none of those features exist. Their absence
  *       from a saved file is meant to be forward-compatible - added as
  *       fields once each feature lands, not designed in speculatively now.
+ *       `MindWaves` are the first exception (`v0.Y.31.1` Installment C1) -
+ *       see `mindWaves()`'s own docs.
  */
 class Project {
 public:
@@ -186,6 +189,70 @@ public:
     /// @return The operation log this project currently holds.
     [[nodiscard]] OperationLog& operationLog() noexcept { return operationLog_; }
 
+    /**
+     * @brief This project's MindWave library - `v0.Y.31.1` Installment
+     *        C1's own answer to "identity/storage arrives once something
+     *        actually binds to a MindWave by reference" (a `Layer` binding
+     *        its own opacity to one, via `Layer::opacityMindWave()`, is
+     *        that first real binder). The same "peer resource library"
+     *        shape `docs/sound-mind-architecture.md`'s own Core Data Model
+     *        sketch already gives `SoundMindInstrument`/`ToolConfiguration`,
+     *        landed here first since this is the first of those with a
+     *        real consumer.
+     * @return This project's current MindWave library.
+     */
+    [[nodiscard]] const std::vector<NamedMindWave>& mindWaves() const noexcept { return mindWaves_; }
+
+    /// @brief This project's MindWave library - mutable access, for
+    ///        in-place edits (renaming, tuning a wave's own parameters)
+    ///        that don't change the library's own membership (addMindWave()
+    ///        is still how a new entry gets appended).
+    /// @return This project's current MindWave library.
+    [[nodiscard]] std::vector<NamedMindWave>& mindWaves() noexcept { return mindWaves_; }
+
+    /**
+     * @brief Adds a new, named MindWave to this project's library.
+     * @param name Display name - see `NamedMindWave::name`'s own docs on
+     *        uniqueness being this project's own responsibility, not
+     *        enforced here.
+     * @param wave The MindWave itself.
+     * @return The id assigned to the new entry - see `addLayer()`'s own
+     *         docs for the identical "fresh, project-unique id" pattern.
+     */
+    MindWaveId addMindWave(std::string name, MindWave wave);
+
+    /**
+     * @brief Removes the MindWave with the given id, if one exists.
+     *
+     * Does **not** clear any `Layer::opacityMindWave()` (or, later, any
+     * other binding) that still references this id - a dangling reference
+     * is treated the same as "never bound" wherever a MindWave is resolved
+     * by id (see `docs/sound-mind-architecture.md`'s own Decision on this),
+     * not cascaded into a project-wide cleanup pass here.
+     *
+     * @param id The MindWave to remove.
+     * @return `true` if a MindWave with this id was found and removed;
+     *         `false` (no change) if none was.
+     */
+    bool removeMindWave(MindWaveId id);
+
+    /**
+     * @brief Finds the MindWave library entry with the given id, if one
+     *        exists - the same "small, project-level lookup" `layerById()`
+     *        already provides for layers.
+     * @param id The entry to find.
+     * @return A pointer to that entry, or `nullptr` if no MindWave with
+     *         this id exists in this project's library.
+     */
+    [[nodiscard]] const NamedMindWave* mindWaveById(MindWaveId id) const noexcept;
+
+    /// @brief Mutable overload of mindWaveById() - for in-place edits
+    ///        (renaming, tuning a wave's own parameters).
+    /// @param id The entry to find.
+    /// @return A mutable pointer to that entry, or `nullptr` if no
+    ///         MindWave with this id exists in this project's library.
+    [[nodiscard]] NamedMindWave* mindWaveById(MindWaveId id) noexcept;
+
     friend void to_json(nlohmann::json& json, const Project& project);
     friend void from_json(const nlohmann::json& json, Project& project);
 
@@ -193,6 +260,7 @@ private:
     ProjectSettings settings_;
     std::vector<Layer> layers_;
     OperationLog operationLog_;
+    std::vector<NamedMindWave> mindWaves_;
 };
 
 /// @brief Serializes a Project to its JSON representation.

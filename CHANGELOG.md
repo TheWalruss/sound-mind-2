@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.3] - 2026-09-14
+
+Installment C1 of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - a layer's opacity can now bind to a MindWave, evaluated per cell during compositing, GPU-aware from the start per the user's own explicit override of this project's usual "CPU-first" pattern. **Still no UI** - `Layer::setOpacityMindWave()`/`Project::addMindWave()` are the only way to create a binding right now; the bare-bones management panel and Layers Panel "bind" affordance are Installment C2.
+
+### Added
+
+- **`sound_mind::core::NamedMindWave`/`MindWaveId`** - the first time a MindWave gets real, `Project`-scoped identity (a separate wrapper, confirmed with the user - `MindWave` itself stays exactly the bare value type it's always been, still correct for a superposition-stack member). `Project::addMindWave()`/`removeMindWave()`/`mindWaveById()`/`mindWaves()` manage a project's own MindWave library, the same "peer resource" shape `docs/sound-mind-architecture.md`'s own Core Data Model sketch already gives `SoundMindInstrument`/`ToolConfiguration`.
+- **`Layer::opacityMindWave()`/`setOpacityMindWave()`** - an optional `MindWaveId` naming which MindWave (if any) multiplies this layer's own opacity per cell during compositing, per `docs/sound-mind-design.md`'s "Layer opacity". A dangling id (its MindWave was removed) is treated as unbound, not an error.
+- **`compositeProject()`** now evaluates a bound layer's own MindWave at each cell's own canvas position (time seconds, frequency bins) and multiplies it into that cell's own opacity gain, on both the CPU path and the GPU path. The single-layer fast path is bypassed for a MindWave-bound sole contributor, since its whole premise (one scalar gain, computed once) no longer holds.
+- **`sound_mind::gpu::ComputeDevice::mixAmplitudePhaseSignal()`** gains a new per-cell `mindWaveField` parameter (confirmed with the user: an additional buffer alongside the existing scalar `layerGain`, not a replacement) - the per-cell evaluation this milestone specifically justified pulling GPU Compute Enablement forward in the roadmap for.
+
+Core regression: 356/356 test cases (up from 352). GPU regression: 21/21 test cases (up from 19), including a real per-cell-field kernel test and a wrong-size-throws test, run on real Adreno hardware. Full regression (core + gpu + studio) passing. Doxygen: 0 warnings. No USER_GUIDE.md change - no UI yet.
+
 ## [0.0.31.2] - 2026-09-13
 
 Installment B of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - fills out the rest of the v1 generator catalogue plus superposition. **Still Core-only, not reachable from the app yet** - no UI, no `Project` storage, no binding.

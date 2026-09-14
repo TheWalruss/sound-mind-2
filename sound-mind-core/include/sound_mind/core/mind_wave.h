@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "sound_mind/codec/stream_codec.h"
@@ -9,6 +10,10 @@
 #include <nlohmann/json.hpp>
 
 namespace sound_mind::core {
+
+/// @brief Opaque identifier for a `NamedMindWave` within a Project - see
+/// `LayerId`'s own docs for the same pattern applied to `Layer`.
+using MindWaveId = std::uint64_t;
 
 /**
  * @brief Which family of waveform a `MindWave` generates - see `docs/
@@ -596,5 +601,45 @@ void to_json(nlohmann::json& json, const MindWave& mindWave);
 /// @brief Parses a MindWave from its JSON representation.
 /// @throws nlohmann::json::exception on malformed or missing required data.
 void from_json(const nlohmann::json& json, MindWave& mindWave);
+
+/**
+ * @brief A `MindWave` given real, `Project`-scoped identity - `v0.Y.31.1`
+ *        Installment C1's own answer to "identity/storage arrives once
+ *        something actually binds to a MindWave by reference" (Installment
+ *        A's own docs) - confirmed with the user as a separate wrapper
+ *        rather than adding id/name fields to `MindWave` itself.
+ *
+ * `MindWave` itself stays exactly the bare value type it's always been -
+ * still the right shape for a `superpositionStack()` member, which never
+ * needs (and should never carry) its own identity. Only a MindWave actually
+ * registered in a `Project`'s own `Project::mindWaves()` collection - the
+ * kind something else can bind to by id - gets one of these.
+ *
+ * Deliberately a plain public-field struct, not a class with getters/
+ * setters, matching `TimeFrequencyPoint`'s/`FrameBinRange`'s own precedent
+ * for a small data holder with no invariants to protect (unlike `Layer`,
+ * whose id is fixed after construction - a `NamedMindWave`'s `id` and
+ * `name` are both freely reassignable, matching `Project::addMindWave()`'s
+ * own "caller-visible mutable fields" needs for the bare-bones management
+ * panel a later installment adds).
+ */
+struct NamedMindWave {
+    /// @brief This entry's identity within its Project - assigned by
+    ///        `Project::addMindWave()`, not meant to be picked by hand.
+    MindWaveId id = 0;
+    /// @brief Display name. `Project` is responsible for keeping names
+    ///        unique within itself, the same division `Layer::name()`'s
+    ///        own docs already draw for layer names.
+    std::string name;
+    /// @brief The actual generator/parameters this entry names.
+    MindWave wave;
+};
+
+/// @brief Serializes a NamedMindWave to its JSON representation.
+void to_json(nlohmann::json& json, const NamedMindWave& namedMindWave);
+
+/// @brief Parses a NamedMindWave from its JSON representation.
+/// @throws nlohmann::json::exception on malformed or missing required data.
+void from_json(const nlohmann::json& json, NamedMindWave& namedMindWave);
 
 }  // namespace sound_mind::core

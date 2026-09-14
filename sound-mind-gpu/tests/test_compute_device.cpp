@@ -105,15 +105,24 @@ float referenceDbToLinear(float db) { return std::pow(10.0f, db / 20.0f); }
 
 float referenceLinearToDb(float amplitude) { return 20.0f * std::log10(std::max(amplitude, kMinLinearAmplitude)); }
 
-AmplitudePhaseSignal referenceMix(const AmplitudePhaseSignal& running, const AmplitudePhaseSignal& layer, float gain) {
+/// @brief Uniform (all-1.0) field of `count` entries - the "no MindWave
+/// binding" convenience every existing call site here uses, so the
+/// pre-Installment-C1 behavior these tests already assert stays provably
+/// unchanged now that mixAmplitudePhaseSignal() always takes a per-cell
+/// field alongside the scalar gain.
+std::vector<float> uniformField(std::size_t count) { return std::vector<float>(count, 1.0f); }
+
+AmplitudePhaseSignal referenceMix(const AmplitudePhaseSignal& running, const AmplitudePhaseSignal& layer, float gain,
+                                    const std::vector<float>& mindWaveField) {
     AmplitudePhaseSignal result;
     const std::size_t count = running.leftMagnitudeDb.size();
     result.leftMagnitudeDb.resize(count);
     result.rightMagnitudeDb.resize(count);
     result.phaseRadians.resize(count);
     for (std::size_t i = 0; i < count; ++i) {
-        const float layerLeftLinear = referenceDbToLinear(layer.leftMagnitudeDb[i]) * gain;
-        const float layerRightLinear = referenceDbToLinear(layer.rightMagnitudeDb[i]) * gain;
+        const float cellGain = gain * mindWaveField[i];
+        const float layerLeftLinear = referenceDbToLinear(layer.leftMagnitudeDb[i]) * cellGain;
+        const float layerRightLinear = referenceDbToLinear(layer.rightMagnitudeDb[i]) * cellGain;
         const std::complex<float> layerDirection(std::cos(layer.phaseRadians[i]), std::sin(layer.phaseRadians[i]));
 
         const float runningLeftLinear = referenceDbToLinear(running.leftMagnitudeDb[i]);
@@ -311,7 +320,7 @@ TEST_CASE("gaussianBlur2D is measurably faster than the CPU reference on a large
 TEST_CASE("mixAmplitudePhaseSignal returns an empty signal for empty input",
           "[gpu][compute_device][mix_amplitude_phase_signal]") {
     const AmplitudePhaseSignal empty;
-    const auto result = sharedDevice().mixAmplitudePhaseSignal(empty, empty, 1.0f);
+    const auto result = sharedDevice().mixAmplitudePhaseSignal(empty, empty, 1.0f, {});
     CHECK(result.leftMagnitudeDb.empty());
     CHECK(result.rightMagnitudeDb.empty());
     CHECK(result.phaseRadians.empty());
@@ -328,7 +337,22 @@ TEST_CASE("mixAmplitudePhaseSignal throws if running's and layer's own arrays ar
     layer.rightMagnitudeDb = {-30.0f};
     layer.phaseRadians = {0.0f};
 
-    CHECK_THROWS_AS(sharedDevice().mixAmplitudePhaseSignal(running, layer, 1.0f), std::runtime_error);
+    CHECK_THROWS_AS(sharedDevice().mixAmplitudePhaseSignal(running, layer, 1.0f, uniformField(1)), std::runtime_error);
+}
+
+TEST_CASE("mixAmplitudePhaseSignal throws if mindWaveField isn't the same size as running/layer",
+          "[gpu][compute_device][mix_amplitude_phase_signal]") {
+    AmplitudePhaseSignal running;
+    running.leftMagnitudeDb = {-10.0f, -20.0f};
+    running.rightMagnitudeDb = {-10.0f, -20.0f};
+    running.phaseRadians = {0.0f, 0.0f};
+    AmplitudePhaseSignal layer;
+    layer.leftMagnitudeDb = {-30.0f, -30.0f};
+    layer.rightMagnitudeDb = {-30.0f, -30.0f};
+    layer.phaseRadians = {0.0f, 0.0f};
+
+    CHECK_THROWS_AS(sharedDevice().mixAmplitudePhaseSignal(running, layer, 1.0f, uniformField(1)),
+                    std::runtime_error);
 }
 
 TEST_CASE("mixAmplitudePhaseSignal reproduces a single full-opacity, silent-running layer's own content exactly",
@@ -346,7 +370,7 @@ TEST_CASE("mixAmplitudePhaseSignal reproduces a single full-opacity, silent-runn
     layer.rightMagnitudeDb = {-15.0f, -25.0f, -8.0f};
     layer.phaseRadians = {0.5f, -1.2f, 2.0f};
 
-    const auto result = sharedDevice().mixAmplitudePhaseSignal(silentRunning, layer, 1.0f);
+    const auto result = sharedDevice().mixAmplitudePhaseSignal(silentRunning, layer, 1.0f, uniformField(3));
 
     REQUIRE(result.leftMagnitudeDb.size() == 3);
     for (std::size_t i = 0; i < 3; ++i) {
@@ -369,11 +393,36 @@ TEST_CASE("mixAmplitudePhaseSignal scales the layer's own contribution by its ow
     layer.phaseRadians = {0.0f};
 
     // Half amplitude (linear gain 0.5) is -6.02 dB.
-    const auto result = sharedDevice().mixAmplitudePhaseSignal(silentRunning, layer, 0.5f);
+    const auto result = sharedDevice().mixAmplitudePhaseSignal(silentRunning, layer, 0.5f, uniformField(1));
 
     REQUIRE(result.leftMagnitudeDb.size() == 1);
     CHECK(result.leftMagnitudeDb[0] == Catch::Approx(-6.0206f).margin(0.02));
     CHECK(result.rightMagnitudeDb[0] == Catch::Approx(-6.0206f).margin(0.02));
+}
+
+TEST_CASE("mixAmplitudePhaseSignal scales the layer's own contribution by a per-cell MindWave field",
+          "[gpu][compute_device][mix_amplitude_phase_signal]") {
+    // Same full-scale layer at three cells, full opacity (gain 1.0), but a
+    // MindWave field of {1.0, 0.5, 0.0} (v0.Y.31.1 Installment C1) - full,
+    // half, and no contribution respectively, alongside (not replacing)
+    // the scalar opacity gain.
+    AmplitudePhaseSignal silentRunning;
+    silentRunning.leftMagnitudeDb = {-96.0f, -96.0f, -96.0f};
+    silentRunning.rightMagnitudeDb = {-96.0f, -96.0f, -96.0f};
+    silentRunning.phaseRadians = {0.0f, 0.0f, 0.0f};
+
+    AmplitudePhaseSignal layer;
+    layer.leftMagnitudeDb = {0.0f, 0.0f, 0.0f};  // Full-scale (linear amplitude 1.0).
+    layer.rightMagnitudeDb = {0.0f, 0.0f, 0.0f};
+    layer.phaseRadians = {0.0f, 0.0f, 0.0f};
+
+    const std::vector<float> field = {1.0f, 0.5f, 0.0f};
+    const auto result = sharedDevice().mixAmplitudePhaseSignal(silentRunning, layer, 1.0f, field);
+
+    REQUIRE(result.leftMagnitudeDb.size() == 3);
+    CHECK(result.leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.02));       // Full contribution: 0 dB.
+    CHECK(result.leftMagnitudeDb[1] == Catch::Approx(-6.0206f).margin(0.02));   // Half: -6.02 dB.
+    CHECK(result.leftMagnitudeDb[2] < -90.0f);                                  // None: back at the silence floor.
 }
 
 TEST_CASE("mixAmplitudePhaseSignal matches an independent CPU reference implementation, on real-shaped data",
@@ -396,9 +445,16 @@ TEST_CASE("mixAmplitudePhaseSignal matches an independent CPU reference implemen
         layer.phaseRadians[i] = -3.0f + 6.0f * static_cast<float>((i * 7 + 9) % 53) / 52.0f;
     }
     constexpr float gain = 0.75f;
+    // A non-uniform field too, not just uniformField() - exercises the
+    // per-cell multiply itself against the same independent CPU reference,
+    // not only the "no binding" case the other tests above already cover.
+    std::vector<float> field(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        field[i] = static_cast<float>((i * 11 + 3) % 100) / 99.0f;
+    }
 
-    const auto expected = referenceMix(running, layer, gain);
-    const auto actual = sharedDevice().mixAmplitudePhaseSignal(running, layer, gain);
+    const auto expected = referenceMix(running, layer, gain, field);
+    const auto actual = sharedDevice().mixAmplitudePhaseSignal(running, layer, gain, field);
 
     REQUIRE(actual.leftMagnitudeDb.size() == expected.leftMagnitudeDb.size());
     for (std::size_t i = 0; i < count; ++i) {
@@ -428,12 +484,14 @@ TEST_CASE("mixAmplitudePhaseSignal is measurably faster than the CPU reference o
         layer.phaseRadians[i] = -3.0f + 6.0f * static_cast<float>(i % 53) / 52.0f;
     }
 
+    const std::vector<float> field = uniformField(count);
+
     const auto cpuStart = std::chrono::steady_clock::now();
-    const auto cpuResult = referenceMix(running, layer, 0.8f);
+    const auto cpuResult = referenceMix(running, layer, 0.8f, field);
     const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
 
     const auto gpuStart = std::chrono::steady_clock::now();
-    const auto gpuResult = sharedDevice().mixAmplitudePhaseSignal(running, layer, 0.8f);
+    const auto gpuResult = sharedDevice().mixAmplitudePhaseSignal(running, layer, 0.8f, field);
     const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
 
     REQUIRE(gpuResult.leftMagnitudeDb.size() == cpuResult.leftMagnitudeDb.size());

@@ -473,3 +473,21 @@ TEST_CASE("A MindWave with every new generator field and a superposition stack r
     REQUIRE(restored.superpositionStack()[0].fractalRoughness() == Catch::Approx(0.4));
     REQUIRE(restored.superpositionStack()[0].fractalIterations() == 5);
 }
+
+// --- Installment C1: NamedMindWave -----------------------------------
+
+TEST_CASE("A NamedMindWave round-trips through JSON unchanged", "[core][mind_wave]") {
+    sound_mind::core::NamedMindWave original;
+    original.id = 42;
+    original.name = "Slow Pulse";
+    original.wave.setPeriod(3.0);
+    original.wave.setPeriodicWaveform(PeriodicWaveform::Triangle);
+
+    const nlohmann::json json = original;
+    const auto restored = json.get<sound_mind::core::NamedMindWave>();
+
+    REQUIRE(restored.id == original.id);
+    REQUIRE(restored.name == original.name);
+    REQUIRE(restored.wave.period() == original.wave.period());
+    REQUIRE(restored.wave.periodicWaveform() == original.wave.periodicWaveform());
+}

@@ -13,6 +13,11 @@ void to_json(nlohmann::json& json, const Layer& layer) {
         {"rescaleFactor", layer.rescaleFactor_},
         {"filterConfiguration", layer.filterConfiguration_},
     };
+    // Same "only write if present" convention path.cpp's own
+    // handleIn/handleOut already establish for an std::optional field.
+    if (layer.opacityMindWave_.has_value()) {
+        json["opacityMindWaveId"] = *layer.opacityMindWave_;
+    }
 }
 
 void from_json(const nlohmann::json& json, Layer& layer) {
@@ -39,6 +44,12 @@ void from_json(const nlohmann::json& json, Layer& layer) {
     // (meaningless, for that layer) default filter configuration is a
     // harmless fallback.
     layer.filterConfiguration_ = json.value("filterConfiguration", FilterConfiguration{});
+    // Lenient (defaults to unbound if absent), same reasoning as the
+    // fields above - didn't exist before v0.Y.31.1 Installment C1; a
+    // layer saved before this milestone was never MindWave-bound anyway.
+    layer.opacityMindWave_ = json.contains("opacityMindWaveId")
+                                  ? std::optional(json.at("opacityMindWaveId").get<MindWaveId>())
+                                  : std::nullopt;
 }
 
 }  // namespace sound_mind::core

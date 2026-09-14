@@ -5,14 +5,18 @@
 // shader). The same per-cell math sound_mind::core's own (CPU)
 // mixLayerInto() (compositor.cpp) implements: each channel's own dB
 // value converts to linear, layer's own converted amplitude scales by
-// Gain, each channel becomes a complex value (as a float2: x=real,
-// y=imaginary) using its own signal's shared phase, the two complex
-// values sum, and the result converts back to dB/phase - phase as the
-// angle of the summed *mid* signal, (left + right) / 2.
+// Gain and MindWaveField[cell] (v0.Y.31.1 Installment C1 - a per-cell
+// multiplier alongside the scalar Gain, all-1.0 when the layer's own
+// opacity isn't MindWave-bound), each channel becomes a complex value
+// (as a float2: x=real, y=imaginary) using its own signal's shared
+// phase, the two complex values sum, and the result converts back to
+// dB/phase - phase as the angle of the summed *mid* signal,
+// (left + right) / 2.
 #define ComputeRootSignature \
     "RootConstants(num32BitConstants=2, b0), " \
     "SRV(t0), SRV(t1), SRV(t2), " \
     "SRV(t3), SRV(t4), SRV(t5), " \
+    "SRV(t6), " \
     "UAV(u0), UAV(u1), UAV(u2)"
 
 cbuffer Constants : register(b0) {
@@ -26,6 +30,7 @@ StructuredBuffer<float> RunningPhase : register(t2);
 StructuredBuffer<float> LayerLeftDb : register(t3);
 StructuredBuffer<float> LayerRightDb : register(t4);
 StructuredBuffer<float> LayerPhase : register(t5);
+StructuredBuffer<float> MindWaveField : register(t6);  // per-cell gain multiplier - see above.
 RWStructuredBuffer<float> OutLeftDb : register(u0);
 RWStructuredBuffer<float> OutRightDb : register(u1);
 RWStructuredBuffer<float> OutPhase : register(u2);
@@ -51,8 +56,9 @@ void CSMain(uint3 id : SV_DispatchThreadID) {
     }
     uint cell = id.x;
 
-    float layerLeftLinear = dbToLinear(LayerLeftDb[cell]) * Gain;
-    float layerRightLinear = dbToLinear(LayerRightDb[cell]) * Gain;
+    float cellGain = Gain * MindWaveField[cell];
+    float layerLeftLinear = dbToLinear(LayerLeftDb[cell]) * cellGain;
+    float layerRightLinear = dbToLinear(LayerRightDb[cell]) * cellGain;
     float layerPhaseValue = LayerPhase[cell];
     float2 layerDirection = float2(cos(layerPhaseValue), sin(layerPhaseValue));
 

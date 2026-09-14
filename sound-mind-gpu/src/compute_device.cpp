@@ -491,15 +491,16 @@ std::vector<float> ComputeDevice::gaussianBlur2D(const std::vector<float>& data,
 }
 
 AmplitudePhaseSignal ComputeDevice::mixAmplitudePhaseSignal(const AmplitudePhaseSignal& running,
-                                                             const AmplitudePhaseSignal& layer,
-                                                             float layerGain) const {
+                                                             const AmplitudePhaseSignal& layer, float layerGain,
+                                                             const std::vector<float>& mindWaveField) const {
     const std::size_t cellCount = running.leftMagnitudeDb.size();
     const bool sameShape = running.rightMagnitudeDb.size() == cellCount && running.phaseRadians.size() == cellCount &&
                             layer.leftMagnitudeDb.size() == cellCount && layer.rightMagnitudeDb.size() == cellCount &&
-                            layer.phaseRadians.size() == cellCount;
+                            layer.phaseRadians.size() == cellCount && mindWaveField.size() == cellCount;
     if (!sameShape) {
         throw std::runtime_error(
-            "sound_mind::gpu: mixAmplitudePhaseSignal() - running's and layer's own arrays must all be the same size");
+            "sound_mind::gpu: mixAmplitudePhaseSignal() - running's, layer's, and mindWaveField's own arrays must "
+            "all be the same size");
     }
     if (cellCount == 0) {
         return {};
@@ -519,6 +520,8 @@ AmplitudePhaseSignal ComputeDevice::mixAmplitudePhaseSignal(const AmplitudePhase
     const ComPtr<ID3D12Resource> layerRight =
         createUploadBuffer(device_.Get(), layer.rightMagnitudeDb.data(), bufferSize);
     const ComPtr<ID3D12Resource> layerPhase = createUploadBuffer(device_.Get(), layer.phaseRadians.data(), bufferSize);
+    const ComPtr<ID3D12Resource> mindWaveFieldBuffer =
+        createUploadBuffer(device_.Get(), mindWaveField.data(), bufferSize);
 
     const ComPtr<ID3D12Resource> outLeft = createUavBuffer(device_.Get(), bufferSize);
     const ComPtr<ID3D12Resource> outRight = createUavBuffer(device_.Get(), bufferSize);
@@ -531,8 +534,9 @@ AmplitudePhaseSignal ComputeDevice::mixAmplitudePhaseSignal(const AmplitudePhase
     // Root parameter indices match mix_amplitude_phase_signal.hlsl's own
     // root signature string order: 0 = constants (b0: cell count, gain),
     // 1-3 = running's own left/right/phase SRVs (t0-t2), 4-6 = layer's
-    // own left/right/phase SRVs (t3-t5), 7-9 = the three output UAVs
-    // (u0-u2).
+    // own left/right/phase SRVs (t3-t5), 7 = the MindWaveField SRV (t6 -
+    // v0.Y.31.1 Installment C1, a per-cell gain multiplier alongside the
+    // scalar gain above), 8-10 = the three output UAVs (u0-u2).
     recorder.list->SetComputeRootSignature(pipeline.rootSignature.Get());
     struct Constants {
         UINT cellCount;
@@ -545,9 +549,10 @@ AmplitudePhaseSignal ComputeDevice::mixAmplitudePhaseSignal(const AmplitudePhase
     recorder.list->SetComputeRootShaderResourceView(4, layerLeft->GetGPUVirtualAddress());
     recorder.list->SetComputeRootShaderResourceView(5, layerRight->GetGPUVirtualAddress());
     recorder.list->SetComputeRootShaderResourceView(6, layerPhase->GetGPUVirtualAddress());
-    recorder.list->SetComputeRootUnorderedAccessView(7, outLeft->GetGPUVirtualAddress());
-    recorder.list->SetComputeRootUnorderedAccessView(8, outRight->GetGPUVirtualAddress());
-    recorder.list->SetComputeRootUnorderedAccessView(9, outPhase->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootShaderResourceView(7, mindWaveFieldBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootUnorderedAccessView(8, outLeft->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootUnorderedAccessView(9, outRight->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootUnorderedAccessView(10, outPhase->GetGPUVirtualAddress());
 
     const UINT threadGroupCount = (static_cast<UINT>(cellCount) + 63) / 64;
     recorder.list->Dispatch(threadGroupCount, 1, 1);

@@ -9,6 +9,7 @@
 #include "gpu_compute_access.h"
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/core/filter_application.h"
+#include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/project_settings.h"
 
@@ -89,6 +90,64 @@ constexpr float kMinLinearAmplitude = 1e-7f;
 /// @brief The inverse of dbToLinearAmplitude() - see its own docs.
 [[nodiscard]] float linearAmplitudeToDb(float amplitude) noexcept {
     return 20.0f * std::log10(std::max(amplitude, kMinLinearAmplitude));
+}
+
+/// @brief `layer`'s own bound opacity MindWave, resolved against
+/// `project`'s own library - `v0.Y.31.1` Installment C1's own opacity-
+/// binding entry point. A `layer.opacityMindWave()` id that no longer
+/// resolves (its `NamedMindWave` was removed from the project) returns
+/// `nullptr`, the same as no binding at all - see `Layer::opacityMindWave()`'s
+/// own docs on why this is graceful, not an error.
+[[nodiscard]] const MindWave* resolveOpacityMindWave(const Layer& layer, const Project& project) noexcept {
+    const auto& id = layer.opacityMindWave();
+    if (!id.has_value()) {
+        return nullptr;
+    }
+    const NamedMindWave* named = project.mindWaveById(*id);
+    return named ? &named->wave : nullptr;
+}
+
+/// @brief The per-cell opacity multiplier `opacityMindWave` (if any)
+/// contributes at `(bin, outputColumn)` - canvas-space, per `docs/
+/// sound-mind-roadmap.md`'s own confirmed `v0.Y.31.1` scope ("every
+/// binding this milestone builds is implicitly canvas-space"). This
+/// depends only on the *output* cell's own canvas position, not on
+/// `layer`'s own placement/rescale - a MindWave-bound layer's field moves
+/// with the canvas, not with the layer's own content.
+/// @return `1.0` (no effect) when `opacityMindWave` is `nullptr`.
+[[nodiscard]] float mindWaveGainAt(const MindWave* opacityMindWave, std::uint32_t bin, std::uint32_t outputColumn,
+                                    const sound_mind::codec::StreamCodecConfig& config) {
+    if (!opacityMindWave) {
+        return 1.0f;
+    }
+    const TimeFrequencyPoint point{frameIndexToTime(outputColumn, config),
+                                    binIndexToFrequency(static_cast<float>(bin), config)};
+    return opacityMindWave->evaluate(point, config);
+}
+
+/// @brief Builds a full `canvasWidth x config.binCount` array of
+/// `mindWaveGainAt()`'s own per-cell value, matching `AmplitudePhaseSignal`'s
+/// own flat row-major layout - `mixLayerIntoGpuOrCpu()`'s own GPU path
+/// needs a real array (the whole point of `ComputeDevice::
+/// mixAmplitudePhaseSignal()`'s own new per-cell field buffer), unlike the
+/// CPU path, which can call `mindWaveGainAt()` inline per cell with no
+/// array at all. Returns all-`1.0` (no effect), without evaluating
+/// anything, when `opacityMindWave` is `nullptr` - the common, unbound
+/// case skips every `MindWave::evaluate()` call entirely.
+[[nodiscard]] std::vector<float> buildMindWaveField(const MindWave* opacityMindWave,
+                                                     const sound_mind::codec::StreamCodecConfig& config,
+                                                     std::uint32_t canvasWidth) {
+    const std::size_t cellCount = std::size_t{config.binCount} * canvasWidth;
+    if (!opacityMindWave) {
+        return std::vector<float>(cellCount, 1.0f);
+    }
+    std::vector<float> field(cellCount);
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        for (std::uint32_t x = 0; x < canvasWidth; ++x) {
+            field[cellIndex(bin, x, canvasWidth)] = mindWaveGainAt(opacityMindWave, bin, x, config);
+        }
+    }
+    return field;
 }
 
 /// @brief The width a `sourceWidth`-wide sequence rescales to under
@@ -203,15 +262,21 @@ void forEachPlacedCell(const Layer& layer, const sound_mind::codec::StreamCodecC
 /// compositeProject()'s own docs for why this per-layer incremental
 /// approach (rather than one N-way sum) is what lets a Filter layer
 /// transform an in-progress composite mid-stack.
+///
+/// @param opacityMindWave `layer`'s own bound opacity MindWave (already
+///        resolved against the project - see `resolveOpacityMindWave()`),
+///        or `nullptr` if unbound - evaluated inline per cell via
+///        `mindWaveGainAt()` and multiplied alongside `layer.opacity()`,
+///        `v0.Y.31.1` Installment C1's own opacity-binding entry point.
 void mixLayerInto(StreamImage& running, const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
-                    std::uint32_t canvasWidth) {
+                    std::uint32_t canvasWidth, const MindWave* opacityMindWave) {
     const StreamImage& content = *layer.content();
     forEachPlacedCell(
         layer, config, canvasWidth,
-        [&](std::uint32_t /*bin*/, std::uint32_t /*outputColumn*/, std::size_t sourceCell, std::size_t outputCell) {
-            const float layerLeftLinear = dbToLinearAmplitude(content.leftMagnitudeDb[sourceCell]) * layer.opacity();
-            const float layerRightLinear =
-                dbToLinearAmplitude(content.rightMagnitudeDb[sourceCell]) * layer.opacity();
+        [&](std::uint32_t bin, std::uint32_t outputColumn, std::size_t sourceCell, std::size_t outputCell) {
+            const float gain = layer.opacity() * mindWaveGainAt(opacityMindWave, bin, outputColumn, config);
+            const float layerLeftLinear = dbToLinearAmplitude(content.leftMagnitudeDb[sourceCell]) * gain;
+            const float layerRightLinear = dbToLinearAmplitude(content.rightMagnitudeDb[sourceCell]) * gain;
             const float layerPhase = content.sharedPhaseRadians[sourceCell];
             const std::complex<float> layerDirection(std::cos(layerPhase), std::sin(layerPhase));
 
@@ -274,8 +339,18 @@ sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
 /// call itself throws - a device lost mid-session (driver reset/removal)
 /// is treated as a transient failure to degrade past, not a fatal error,
 /// also confirmed with the user.
+///
+/// @param opacityMindWave `layer`'s own bound opacity MindWave, or
+///        `nullptr` if unbound - forwarded to `mixLayerInto()`'s own
+///        per-cell evaluation on the CPU path, or built into a full
+///        `buildMindWaveField()` array for `ComputeDevice::
+///        mixAmplitudePhaseSignal()`'s own new per-cell field parameter on
+///        the GPU path (confirmed with the user: a new field buffer
+///        alongside the existing scalar gain, not a replacement for it -
+///        `v0.Y.31.1` Installment C1's own answer to designing this
+///        evaluation GPU-aware from the start).
 void mixLayerIntoGpuOrCpu(StreamImage& running, const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
-                           std::uint32_t canvasWidth, float silenceFloorDb) {
+                           std::uint32_t canvasWidth, float silenceFloorDb, const MindWave* opacityMindWave) {
     if (auto* device = detail::gpuComputeDeviceOrNull()) {
         try {
             sound_mind::gpu::AmplitudePhaseSignal runningSignal;
@@ -283,7 +358,9 @@ void mixLayerIntoGpuOrCpu(StreamImage& running, const Layer& layer, const sound_
             runningSignal.rightMagnitudeDb = running.rightMagnitudeDb;
             runningSignal.phaseRadians = running.sharedPhaseRadians;
             const auto layerSignal = placeLayerForGpuMix(layer, config, canvasWidth, silenceFloorDb);
-            const auto mixed = device->mixAmplitudePhaseSignal(runningSignal, layerSignal, layer.opacity());
+            const auto mindWaveField = buildMindWaveField(opacityMindWave, config, canvasWidth);
+            const auto mixed =
+                device->mixAmplitudePhaseSignal(runningSignal, layerSignal, layer.opacity(), mindWaveField);
             running.leftMagnitudeDb = mixed.leftMagnitudeDb;
             running.rightMagnitudeDb = mixed.rightMagnitudeDb;
             running.sharedPhaseRadians = mixed.phaseRadians;
@@ -292,7 +369,7 @@ void mixLayerIntoGpuOrCpu(StreamImage& running, const Layer& layer, const sound_
             // Fall through to the CPU path below.
         }
     }
-    mixLayerInto(running, layer, config, canvasWidth);
+    mixLayerInto(running, layer, config, canvasWidth, opacityMindWave);
 }
 
 /// @brief `compositeProject()`'s own single-layer fast path: summing a
@@ -414,10 +491,15 @@ std::optional<StreamImage> compositeProject(const Project& project) {
     const std::uint32_t canvasWidth = settings.canvasWidth;
     const float silenceFloorDb = linearAmplitudeToDb(0.0f);
 
-    if (!anyFilterLayer && normalContributors.size() == 1) {
+    if (!anyFilterLayer && normalContributors.size() == 1 &&
+        !resolveOpacityMindWave(*normalContributors.front(), project)) {
         // Fast path - see compositeSingleLayer()'s own docs for why this
         // is worth a dedicated path, and what it's specifically reachable
-        // for.
+        // for. Excluded once the sole contributor's own opacity is
+        // MindWave-bound (`v0.Y.31.1` Installment C1) - the fast path's
+        // whole premise is a single *scalar* gain shift, computed once,
+        // not per cell; a bound layer needs the general path's own
+        // per-cell evaluation instead.
         return compositeSingleLayer(*normalContributors.front(), config, canvasWidth, silenceFloorDb);
     }
 
@@ -456,7 +538,8 @@ std::optional<StreamImage> compositeProject(const Project& project) {
         if (!layer.content().has_value()) {
             continue;
         }
-        mixLayerIntoGpuOrCpu(result, layer, config, canvasWidth, silenceFloorDb);
+        mixLayerIntoGpuOrCpu(result, layer, config, canvasWidth, silenceFloorDb,
+                             resolveOpacityMindWave(layer, project));
         anyMixedIn = true;
     }
 
