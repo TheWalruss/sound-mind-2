@@ -314,6 +314,332 @@ TEST_CASE("gaussianBlur2D is measurably faster than the CPU reference on a large
 }
 
 // ---------------------------------------------------------------------------
+// Independent CPU reference implementations for the three v0.Y.31.1
+// Installment D2 "varying" kernels - each cell's own parameter comes from
+// its own entry in a per-cell array, matching sound_mind::core's own
+// (CPU) gaussianBlur2DVarying()/medianBlur2DVarying()/
+// directionalBlur2DVarying() (filter_application.cpp) exactly, but
+// re-implemented independently here for the same reason as
+// referenceGaussianBlur2D() above.
+// ---------------------------------------------------------------------------
+
+std::vector<float> referenceGaussianBlur2DVarying(const std::vector<float>& data, int width, int height,
+                                                   const std::vector<float>& sigmaPerCell) {
+    std::vector<float> result(data.size());
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const std::size_t cell = static_cast<std::size_t>(y) * width + x;
+            const float sigma = std::max(0.1f, sigmaPerCell[cell]);
+            const int radius = std::max(1, static_cast<int>(std::ceil(4.0f * sigma)));
+            const float twoSigmaSquared = 2.0f * sigma * sigma;
+            float weightedSum = 0.0f;
+            float weightTotal = 0.0f;
+            for (int dy = -radius; dy <= radius; ++dy) {
+                const int sampleY = clampIndex(y + dy, height);
+                for (int dx = -radius; dx <= radius; ++dx) {
+                    const int sampleX = clampIndex(x + dx, width);
+                    const auto distanceSquared = static_cast<float>(dx * dx + dy * dy);
+                    const float weight = std::exp(-distanceSquared / twoSigmaSquared);
+                    weightedSum += data[static_cast<std::size_t>(sampleY) * width + sampleX] * weight;
+                    weightTotal += weight;
+                }
+            }
+            result[cell] = weightedSum / weightTotal;
+        }
+    }
+    return result;
+}
+
+std::vector<float> referenceMedianBlur2DVarying(const std::vector<float>& data, int width, int height,
+                                                 const std::vector<float>& sizePerCell) {
+    std::vector<float> result(data.size());
+    std::vector<float> window;
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const std::size_t cell = static_cast<std::size_t>(y) * width + x;
+            const float rawSize = sizePerCell[cell];
+            if (rawSize <= 1.0f) {
+                result[cell] = data[cell];
+                continue;
+            }
+            int windowSize = std::max(3, static_cast<int>(std::lround(rawSize)) | 1);
+            windowSize = std::min(windowSize, 31);
+            const int half = windowSize / 2;
+            window.clear();
+            for (int dy = -half; dy <= half; ++dy) {
+                const int sampleY = clampIndex(y + dy, height);
+                for (int dx = -half; dx <= half; ++dx) {
+                    const int sampleX = clampIndex(x + dx, width);
+                    window.push_back(data[static_cast<std::size_t>(sampleY) * width + sampleX]);
+                }
+            }
+            std::sort(window.begin(), window.end());
+            result[cell] = window[window.size() / 2];
+        }
+    }
+    return result;
+}
+
+std::vector<float> referenceDirectionalBlur2DVarying(const std::vector<float>& data, int width, int height,
+                                                      const std::vector<float>& lengthPerCell,
+                                                      const std::vector<float>& angleDegreesPerCell) {
+    std::vector<float> result(data.size());
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const std::size_t cell = static_cast<std::size_t>(y) * width + x;
+            const float rawLength = lengthPerCell[cell];
+            if (rawLength <= 0.0f) {
+                result[cell] = data[cell];
+                continue;
+            }
+            const int n = std::max(1, static_cast<int>(std::lround(rawLength)));
+            const float angleRadians = angleDegreesPerCell[cell] * 3.14159265358979323846f / 180.0f;
+            const float cosA = std::cos(angleRadians);
+            const float sinA = std::sin(angleRadians);
+            float sum = 0.0f;
+            const int totalSteps = 2 * n + 1;
+            for (int step = -n; step <= n; ++step) {
+                const auto colOffset = static_cast<int>(std::lround(static_cast<float>(step) * cosA));
+                const auto rowOffset = static_cast<int>(std::lround(-static_cast<float>(step) * sinA));
+                const int sampleX = clampIndex(x + colOffset, width);
+                const int sampleY = clampIndex(y + rowOffset, height);
+                sum += data[static_cast<std::size_t>(sampleY) * width + sampleX];
+            }
+            result[cell] = sum / static_cast<float>(totalSteps);
+        }
+    }
+    return result;
+}
+
+/// @brief A deterministic, non-uniform per-cell parameter array spanning
+/// `[minValue, maxValue]` - every "varying" kernel test below needs one, to
+/// actually exercise per-cell variation rather than a uniform special case.
+std::vector<float> varyingField(std::size_t count, float minValue, float maxValue) {
+    std::vector<float> field(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        field[i] = minValue + (maxValue - minValue) * static_cast<float>(i % 7) / 6.0f;
+    }
+    return field;
+}
+
+/// @brief A deterministic, non-uniform per-cell angle array (degrees) that
+/// deliberately avoids 0/30/45/60/90/120/135/150/180 and other "nice"
+/// angles - directionalBlur2DVarying()'s own per-cell offsets round a
+/// continuous product to the nearest integer, and HLSL's own trig
+/// functions can disagree with the CPU reference's by a handful of ULPs;
+/// at a "nice" angle (e.g. cos(60 degrees) is exactly 0.5), an integer
+/// step's own product lands exactly on a rounding tie, where that tiny
+/// ULP difference can flip which side it rounds to - a real, observed
+/// GPU/CPU mismatch, not a hypothetical one. A field built from irregular
+/// angles keeps every product safely clear of a tie, matching how an
+/// actual MindWave-driven angle would behave in practice (a sine/noise
+/// field essentially never lands exactly on one either).
+std::vector<float> varyingAngleField(std::size_t count) {
+    std::vector<float> field(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        field[i] = 17.0f + 23.0f * static_cast<float>(i % 7);  // 17, 40, 63, 86, 109, 132, 155.
+    }
+    return field;
+}
+
+// ---------------------------------------------------------------------------
+// gaussianBlur2DVarying
+// ---------------------------------------------------------------------------
+
+TEST_CASE("gaussianBlur2DVarying returns an empty vector for empty input", "[gpu][compute_device][gaussian_blur_varying]") {
+    const auto result = sharedDevice().gaussianBlur2DVarying({}, 0, 0, {});
+    CHECK(result.empty());
+}
+
+TEST_CASE("gaussianBlur2DVarying throws if width * height doesn't match data.size() or sigmaPerCell.size()",
+          "[gpu][compute_device][gaussian_blur_varying]") {
+    const std::vector<float> data(12, 0.0f);
+    CHECK_THROWS_AS(sharedDevice().gaussianBlur2DVarying(data, 3, 5, varyingField(12, 1.0f, 4.0f)), std::runtime_error);
+    CHECK_THROWS_AS(sharedDevice().gaussianBlur2DVarying(data, 3, 4, varyingField(11, 1.0f, 4.0f)), std::runtime_error);
+}
+
+TEST_CASE("gaussianBlur2DVarying matches an independent CPU reference implementation, on random-ish data",
+          "[gpu][compute_device][gaussian_blur_varying]") {
+    constexpr int width = 40;
+    constexpr int height = 30;
+    std::vector<float> data(static_cast<std::size_t>(width) * height);
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        data[i] = -96.0f + 96.0f * static_cast<float>((i * 37 + 11) % 101) / 100.0f;
+    }
+    const auto sigmaPerCell = varyingField(data.size(), 0.5f, 5.0f);
+
+    const auto expected = referenceGaussianBlur2DVarying(data, width, height, sigmaPerCell);
+    const auto actual = sharedDevice().gaussianBlur2DVarying(data, width, height, sigmaPerCell);
+
+    REQUIRE(actual.size() == expected.size());
+    for (std::size_t i = 0; i < actual.size(); ++i) {
+        CHECK(actual[i] == Catch::Approx(expected[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("gaussianBlur2DVarying is measurably faster than the CPU reference on a large grid",
+          "[gpu][compute_device][gaussian_blur_varying][performance]") {
+    constexpr int width = 256;
+    constexpr int height = 256;
+    std::vector<float> data(static_cast<std::size_t>(width) * height);
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        data[i] = -96.0f + 96.0f * static_cast<float>(i % 97) / 96.0f;
+    }
+    const auto sigmaPerCell = varyingField(data.size(), 1.0f, 6.0f);  // A real, varied radius range.
+
+    const auto cpuStart = std::chrono::steady_clock::now();
+    const auto cpuResult = referenceGaussianBlur2DVarying(data, width, height, sigmaPerCell);
+    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
+
+    const auto gpuStart = std::chrono::steady_clock::now();
+    const auto gpuResult = sharedDevice().gaussianBlur2DVarying(data, width, height, sigmaPerCell);
+    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
+
+    REQUIRE(gpuResult.size() == cpuResult.size());
+    for (std::size_t i = 0; i < gpuResult.size(); i += 997) {
+        CHECK(gpuResult[i] == Catch::Approx(cpuResult[i]).margin(0.01));
+    }
+
+    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
+    CHECK(gpuDuration < cpuDuration);
+}
+
+// ---------------------------------------------------------------------------
+// medianBlur2DVarying
+// ---------------------------------------------------------------------------
+
+TEST_CASE("medianBlur2DVarying returns an empty vector for empty input", "[gpu][compute_device][median_blur_varying]") {
+    const auto result = sharedDevice().medianBlur2DVarying({}, 0, 0, {});
+    CHECK(result.empty());
+}
+
+TEST_CASE("medianBlur2DVarying throws if width * height doesn't match data.size() or sizePerCell.size()",
+          "[gpu][compute_device][median_blur_varying]") {
+    const std::vector<float> data(12, 0.0f);
+    CHECK_THROWS_AS(sharedDevice().medianBlur2DVarying(data, 3, 5, varyingField(12, 1.0f, 10.0f)), std::runtime_error);
+    CHECK_THROWS_AS(sharedDevice().medianBlur2DVarying(data, 3, 4, varyingField(11, 1.0f, 10.0f)), std::runtime_error);
+}
+
+TEST_CASE("medianBlur2DVarying matches an independent CPU reference implementation, on random-ish data",
+          "[gpu][compute_device][median_blur_varying]") {
+    constexpr int width = 40;
+    constexpr int height = 30;
+    std::vector<float> data(static_cast<std::size_t>(width) * height);
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        data[i] = -96.0f + 96.0f * static_cast<float>((i * 37 + 11) % 101) / 100.0f;
+    }
+    const auto sizePerCell = varyingField(data.size(), 1.0f, 9.0f);
+
+    const auto expected = referenceMedianBlur2DVarying(data, width, height, sizePerCell);
+    const auto actual = sharedDevice().medianBlur2DVarying(data, width, height, sizePerCell);
+
+    REQUIRE(actual.size() == expected.size());
+    for (std::size_t i = 0; i < actual.size(); ++i) {
+        CHECK(actual[i] == Catch::Approx(expected[i]).margin(0.001));
+    }
+}
+
+TEST_CASE("medianBlur2DVarying is measurably faster than the CPU reference on a large grid",
+          "[gpu][compute_device][median_blur_varying][performance]") {
+    constexpr int width = 200;
+    constexpr int height = 200;
+    std::vector<float> data(static_cast<std::size_t>(width) * height);
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        data[i] = -96.0f + 96.0f * static_cast<float>(i % 97) / 96.0f;
+    }
+    const auto sizePerCell = varyingField(data.size(), 3.0f, 15.0f);
+
+    const auto cpuStart = std::chrono::steady_clock::now();
+    const auto cpuResult = referenceMedianBlur2DVarying(data, width, height, sizePerCell);
+    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
+
+    const auto gpuStart = std::chrono::steady_clock::now();
+    const auto gpuResult = sharedDevice().medianBlur2DVarying(data, width, height, sizePerCell);
+    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
+
+    REQUIRE(gpuResult.size() == cpuResult.size());
+    for (std::size_t i = 0; i < gpuResult.size(); i += 997) {
+        CHECK(gpuResult[i] == Catch::Approx(cpuResult[i]).margin(0.001));
+    }
+
+    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
+    CHECK(gpuDuration < cpuDuration);
+}
+
+// ---------------------------------------------------------------------------
+// directionalBlur2DVarying
+// ---------------------------------------------------------------------------
+
+TEST_CASE("directionalBlur2DVarying returns an empty vector for empty input",
+          "[gpu][compute_device][directional_blur_varying]") {
+    const auto result = sharedDevice().directionalBlur2DVarying({}, 0, 0, {}, {});
+    CHECK(result.empty());
+}
+
+TEST_CASE("directionalBlur2DVarying throws if the arrays don't all agree with width * height",
+          "[gpu][compute_device][directional_blur_varying]") {
+    const std::vector<float> data(12, 0.0f);
+    const auto length = varyingField(12, 1.0f, 10.0f);
+    const auto angle = varyingField(12, 0.0f, 90.0f);
+    CHECK_THROWS_AS(sharedDevice().directionalBlur2DVarying(data, 3, 5, length, angle), std::runtime_error);
+    CHECK_THROWS_AS(sharedDevice().directionalBlur2DVarying(data, 3, 4, varyingField(11, 1.0f, 10.0f), angle),
+                    std::runtime_error);
+    CHECK_THROWS_AS(sharedDevice().directionalBlur2DVarying(data, 3, 4, length, varyingField(11, 0.0f, 90.0f)),
+                    std::runtime_error);
+}
+
+TEST_CASE("directionalBlur2DVarying matches an independent CPU reference implementation, on random-ish data",
+          "[gpu][compute_device][directional_blur_varying]") {
+    constexpr int width = 40;
+    constexpr int height = 30;
+    std::vector<float> data(static_cast<std::size_t>(width) * height);
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        data[i] = -96.0f + 96.0f * static_cast<float>((i * 37 + 11) % 101) / 100.0f;
+    }
+    const auto lengthPerCell = varyingField(data.size(), 0.0f, 12.0f);
+    const auto anglePerCell = varyingAngleField(data.size());
+
+    const auto expected = referenceDirectionalBlur2DVarying(data, width, height, lengthPerCell, anglePerCell);
+    const auto actual = sharedDevice().directionalBlur2DVarying(data, width, height, lengthPerCell, anglePerCell);
+
+    REQUIRE(actual.size() == expected.size());
+    for (std::size_t i = 0; i < actual.size(); ++i) {
+        CHECK(actual[i] == Catch::Approx(expected[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("directionalBlur2DVarying is measurably faster than the CPU reference on a large grid",
+          "[gpu][compute_device][directional_blur_varying][performance]") {
+    constexpr int width = 256;
+    constexpr int height = 256;
+    std::vector<float> data(static_cast<std::size_t>(width) * height);
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        data[i] = -96.0f + 96.0f * static_cast<float>(i % 97) / 96.0f;
+    }
+    const auto lengthPerCell = varyingField(data.size(), 5.0f, 40.0f);
+    const auto anglePerCell = varyingAngleField(data.size());
+
+    const auto cpuStart = std::chrono::steady_clock::now();
+    const auto cpuResult = referenceDirectionalBlur2DVarying(data, width, height, lengthPerCell, anglePerCell);
+    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
+
+    const auto gpuStart = std::chrono::steady_clock::now();
+    const auto gpuResult = sharedDevice().directionalBlur2DVarying(data, width, height, lengthPerCell, anglePerCell);
+    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
+
+    REQUIRE(gpuResult.size() == cpuResult.size());
+    for (std::size_t i = 0; i < gpuResult.size(); i += 997) {
+        CHECK(gpuResult[i] == Catch::Approx(cpuResult[i]).margin(0.01));
+    }
+
+    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
+    CHECK(gpuDuration < cpuDuration);
+}
+
+// ---------------------------------------------------------------------------
 // mixAmplitudePhaseSignal
 // ---------------------------------------------------------------------------
 

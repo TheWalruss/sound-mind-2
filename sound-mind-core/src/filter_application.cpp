@@ -55,6 +55,39 @@ double perCellParameterValue(const MindWave* mindWave, double baseline, double c
     return baseline + (ceiling - baseline) * field;
 }
 
+/// @brief `perCellParameterValue()` above, evaluated once for every cell
+/// in a `binCount x frameCount` grid and returned as a flat, row-major
+/// array - `v0.Y.31.1` Installment D2's own building block, needed once a
+/// GPU dispatch requires a real uploadable buffer rather than a lazily-
+/// evaluated closure. Building the array unconditionally (even on the
+/// CPU-only path) also fixes a real Installment D1 inefficiency: the
+/// lambda-based `sigmaAt()`/`sizeAt()`/etc. closures `applyFilter()`
+/// previously built were each evaluated **twice** per cell -
+/// `applyPerChannelGridFilter()` calls its own filter function once per
+/// channel (left, then right), and the per-cell parameter value doesn't
+/// depend on which channel is being processed, so the second evaluation
+/// was pure waste. Returns an all-`ceiling` array immediately, without
+/// evaluating anything, when `mindWave` is `nullptr` - the common,
+/// unbound case skips every `MindWave::evaluate()` call entirely, the
+/// same short-circuit `compositor.cpp`'s own `buildMindWaveField()`
+/// already establishes.
+std::vector<float> buildParameterField(const MindWave* mindWave, double baseline, double ceiling,
+                                        std::uint32_t binCount, std::uint32_t frameCount,
+                                        const sound_mind::codec::StreamCodecConfig& config) {
+    const std::size_t cellCount = std::size_t{binCount} * frameCount;
+    if (mindWave == nullptr) {
+        return std::vector<float>(cellCount, static_cast<float>(ceiling));
+    }
+    std::vector<float> field(cellCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            field[static_cast<std::size_t>(bin) * frameCount + frame] =
+                static_cast<float>(perCellParameterValue(mindWave, baseline, ceiling, bin, frame, config));
+        }
+    }
+    return field;
+}
+
 /// @brief A 1D Gaussian kernel for `sigma`, truncated at 4 standard
 /// deviations (matching `scipy.ndimage.gaussian_filter`'s own default
 /// `truncate`) and normalized to sum to 1.
@@ -152,25 +185,25 @@ std::vector<float> gaussianBlur2DGpuOrCpu(const std::vector<float>& grid, std::u
 }
 
 /// @brief `gaussianBlur2D()` above, but with `sigma` evaluated fresh per
-/// cell via `sigmaAt(bin, frame)` (`v0.Y.31.1` Installment D's own
-/// `blurSigma` binding) - a genuine, non-separable 2D Gaussian: each
-/// output cell computes its own weighted sum directly over its own
-/// (sigma-dependent) neighborhood, rather than two 1D passes (which would
-/// only be mathematically correct for a single, shared sigma). CPU-only
-/// for now (D1) - `v0.Y.31.1`'s own GPU-aware follow-up installment (D2)
-/// is where this gets a dedicated GPU kernel, once a sufficiently large
-/// single dispatch shape is worked out; the unbound path above keeps its
-/// own existing GPU dispatch (`gaussianBlur2DGpuOrCpu()`) unaffected.
+/// cell via `sigmaPerCell` (`v0.Y.31.1` Installment D's own `blurSigma`
+/// binding - `buildParameterField()`'s own output, one entry per cell,
+/// row-major) - a genuine, non-separable 2D Gaussian: each output cell
+/// computes its own weighted sum directly over its own (sigma-dependent)
+/// neighborhood, rather than two 1D passes (which would only be
+/// mathematically correct for a single, shared sigma). This is the CPU
+/// fallback for `gaussianBlur2DVaryingGpuOrCpu()` below (Installment D2) -
+/// the unbound path above keeps its own separate, existing GPU dispatch
+/// (`gaussianBlur2DGpuOrCpu()`) unaffected either way.
 std::vector<float> gaussianBlur2DVarying(const std::vector<float>& grid, std::uint32_t binCount,
-                                          std::uint32_t frameCount,
-                                          const std::function<double(std::uint32_t, std::uint32_t)>& sigmaAt) {
+                                          std::uint32_t frameCount, const std::vector<float>& sigmaPerCell) {
     const int rows = static_cast<int>(binCount);
     const int cols = static_cast<int>(frameCount);
     std::vector<float> result(grid.size());
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < cols; ++col) {
-            const float sigma =
-                std::max(0.1f, static_cast<float>(sigmaAt(static_cast<std::uint32_t>(row), static_cast<std::uint32_t>(col))));
+            const std::size_t cell =
+                static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) + static_cast<std::size_t>(col);
+            const float sigma = std::max(0.1f, sigmaPerCell[cell]);
             const int radius = std::max(1, static_cast<int>(std::ceil(4.0f * sigma)));
             const float twoSigmaSquared = 2.0f * sigma * sigma;
             float weightedSum = 0.0f;
@@ -187,11 +220,26 @@ std::vector<float> gaussianBlur2DVarying(const std::vector<float>& grid, std::ui
                     weightTotal += weight;
                 }
             }
-            result[static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) + static_cast<std::size_t>(col)] =
-                weightedSum / weightTotal;
+            result[cell] = weightedSum / weightTotal;
         }
     }
     return result;
+}
+
+/// @brief `gaussianBlur2DVarying()` above, preferring the GPU when
+/// available - `v0.Y.31.1` Installment D2's own dispatch point, matching
+/// `gaussianBlur2DGpuOrCpu()`'s own fallback contract (a device lost
+/// mid-session degrades to the CPU path, not a fatal error).
+std::vector<float> gaussianBlur2DVaryingGpuOrCpu(const std::vector<float>& grid, std::uint32_t binCount,
+                                                  std::uint32_t frameCount, const std::vector<float>& sigmaPerCell) {
+    if (auto* device = detail::gpuComputeDeviceOrNull()) {
+        try {
+            return device->gaussianBlur2DVarying(grid, frameCount, binCount, sigmaPerCell);
+        } catch (const std::exception&) {
+            // Fall through to the CPU path below.
+        }
+    }
+    return gaussianBlur2DVarying(grid, binCount, frameCount, sigmaPerCell);
 }
 
 /// @brief A 2D median filter over a square, clamp-to-edge window (matching
@@ -227,17 +275,23 @@ std::vector<float> medianBlur2D(const std::vector<float>& grid, std::uint32_t bi
 }
 
 /// @brief `medianBlur2D()` above, but with the window size evaluated
-/// fresh per cell via `sizeAt(bin, frame)` (`v0.Y.31.1` Installment D's
-/// own `medianSize` binding). A per-cell size of `1` or less (the
-/// baseline this parameter's own MindWave binding falls toward - see
-/// `applyFilter()`'s own docs) skips windowing entirely for that cell -
-/// the true identity a `1`-cell "window" already is, not a `3`-cell one
-/// (the unbound path's own floor, which is *not* identity). CPU-only for
-/// now (D1) - see `gaussianBlur2DVarying()`'s own docs on the deferred
-/// GPU follow-up.
+/// fresh per cell via `sizePerCell` (`v0.Y.31.1` Installment D's own
+/// `medianSize` binding - `buildParameterField()`'s own output). A
+/// per-cell size of `1` or less (the baseline this parameter's own
+/// MindWave binding falls toward - see `applyFilter()`'s own docs) skips
+/// windowing entirely for that cell - the true identity a `1`-cell
+/// "window" already is, not a `3`-cell one (the unbound path's own floor,
+/// which is *not* identity). Clamped to at most `31` (`961` samples) -
+/// added alongside Installment D2's own GPU kernel, which needs a
+/// compile-time-sized local array to gather a window into (no
+/// `std::nth_element` equivalent exists in HLSL) and would otherwise risk
+/// a real out-of-bounds write for an unrealistically large bound value;
+/// matched here so the CPU and GPU paths agree even in that edge case,
+/// not just in the realistic range `medianSize()`'s own Studio UI already
+/// limits to. This is the CPU fallback for `medianBlur2DVaryingGpuOrCpu()`
+/// below.
 std::vector<float> medianBlur2DVarying(const std::vector<float>& grid, std::uint32_t binCount,
-                                        std::uint32_t frameCount,
-                                        const std::function<double(std::uint32_t, std::uint32_t)>& sizeAt) {
+                                        std::uint32_t frameCount, const std::vector<float>& sizePerCell) {
     const int rows = static_cast<int>(binCount);
     const int cols = static_cast<int>(frameCount);
     std::vector<float> result(grid.size());
@@ -246,12 +300,13 @@ std::vector<float> medianBlur2DVarying(const std::vector<float>& grid, std::uint
         for (int col = 0; col < cols; ++col) {
             const std::size_t cell = static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) +
                                       static_cast<std::size_t>(col);
-            const double rawSize = sizeAt(static_cast<std::uint32_t>(row), static_cast<std::uint32_t>(col));
-            if (rawSize <= 1.0) {
+            const float rawSize = sizePerCell[cell];
+            if (rawSize <= 1.0f) {
                 result[cell] = grid[cell];  // Baseline: a 1-cell window is the identity.
                 continue;
             }
-            const int windowSize = std::max(3, static_cast<int>(std::lround(rawSize)) | 1);
+            int windowSize = std::max(3, static_cast<int>(std::lround(rawSize)) | 1);
+            windowSize = std::min(windowSize, 31);
             const int half = windowSize / 2;
             window.clear();
             window.reserve(static_cast<std::size_t>(windowSize) * static_cast<std::size_t>(windowSize));
@@ -269,6 +324,20 @@ std::vector<float> medianBlur2DVarying(const std::vector<float>& grid, std::uint
         }
     }
     return result;
+}
+
+/// @brief `medianBlur2DVarying()` above, preferring the GPU when
+/// available - Installment D2's own dispatch point.
+std::vector<float> medianBlur2DVaryingGpuOrCpu(const std::vector<float>& grid, std::uint32_t binCount,
+                                                std::uint32_t frameCount, const std::vector<float>& sizePerCell) {
+    if (auto* device = detail::gpuComputeDeviceOrNull()) {
+        try {
+            return device->medianBlur2DVarying(grid, frameCount, binCount, sizePerCell);
+        } catch (const std::exception&) {
+            // Fall through to the CPU path below.
+        }
+    }
+    return medianBlur2DVarying(grid, binCount, frameCount, sizePerCell);
 }
 
 /// @brief Builds `DirectionalBlur`'s own kernel as a sparse list of
@@ -331,24 +400,23 @@ std::vector<float> directionalBlur2D(const std::vector<float>& grid, std::uint32
 }
 
 /// @brief `directionalBlur2D()` above, but with `length`/`angleDegrees`
-/// both evaluated fresh per cell via `lengthAt(bin, frame)`/
-/// `angleAt(bin, frame)` (`v0.Y.31.1` Installment D's own
-/// `directionalBlurLength`/`directionalBlurAngleDegrees` bindings -
-/// independent of each other, so either, both, or neither may actually be
-/// bound; an unbound one still gets evaluated here, just always returning
-/// its own fixed configured value - see `applyFilter()`'s own dispatch).
-/// A per-cell length of `0` or less (the baseline `directionalBlurLength`
-/// falls toward) skips convolution entirely for that cell - the true
-/// identity a zero-length kernel already is. `directionalBlurOffsets()`
-/// is rebuilt fresh per cell (it depends on both length and angle, both
-/// now potentially cell-specific) rather than reused globally - real
-/// additional cost, same as the other two varying kernel-shape filters.
-/// CPU-only for now (D1) - see `gaussianBlur2DVarying()`'s own docs on
-/// the deferred GPU follow-up.
+/// both evaluated fresh per cell via `lengthPerCell`/`anglePerCell`
+/// (`v0.Y.31.1` Installment D's own `directionalBlurLength`/
+/// `directionalBlurAngleDegrees` bindings - `buildParameterField()`'s own
+/// output each, independent of each other, so either, both, or neither
+/// may actually be bound; an unbound one still has a real array here,
+/// just filled with its own fixed configured value throughout - see
+/// `applyFilter()`'s own dispatch). A per-cell length of `0` or less (the
+/// baseline `directionalBlurLength` falls toward) skips convolution
+/// entirely for that cell - the true identity a zero-length kernel
+/// already is. `directionalBlurOffsets()` is rebuilt fresh per cell (it
+/// depends on both length and angle, both now potentially cell-specific)
+/// rather than reused globally - real additional cost, same as the other
+/// two varying kernel-shape filters. This is the CPU fallback for
+/// `directionalBlur2DVaryingGpuOrCpu()` below.
 std::vector<float> directionalBlur2DVarying(const std::vector<float>& grid, std::uint32_t binCount,
-                                             std::uint32_t frameCount,
-                                             const std::function<double(std::uint32_t, std::uint32_t)>& lengthAt,
-                                             const std::function<double(std::uint32_t, std::uint32_t)>& angleAt) {
+                                             std::uint32_t frameCount, const std::vector<float>& lengthPerCell,
+                                             const std::vector<float>& anglePerCell) {
     const int rows = static_cast<int>(binCount);
     const int cols = static_cast<int>(frameCount);
     std::vector<float> result(grid.size());
@@ -356,13 +424,13 @@ std::vector<float> directionalBlur2DVarying(const std::vector<float>& grid, std:
         for (int col = 0; col < cols; ++col) {
             const std::size_t cell = static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) +
                                       static_cast<std::size_t>(col);
-            const double rawLength = lengthAt(static_cast<std::uint32_t>(row), static_cast<std::uint32_t>(col));
-            if (rawLength <= 0.0) {
+            const float rawLength = lengthPerCell[cell];
+            if (rawLength <= 0.0f) {
                 result[cell] = grid[cell];  // Baseline: a zero-length kernel is the identity.
                 continue;
             }
             const auto length = static_cast<int>(std::lround(rawLength));
-            const auto angleDegrees = static_cast<float>(angleAt(static_cast<std::uint32_t>(row), static_cast<std::uint32_t>(col)));
+            const float angleDegrees = anglePerCell[cell];
             const auto offsets = directionalBlurOffsets(length, angleDegrees);
             float sum = 0.0f;
             for (const auto& [rowOffset, colOffset, weight] : offsets) {
@@ -376,6 +444,28 @@ std::vector<float> directionalBlur2DVarying(const std::vector<float>& grid, std:
         }
     }
     return result;
+}
+
+/// @brief `directionalBlur2DVarying()` above, preferring the GPU when
+/// available - Installment D2's own dispatch point. The GPU kernel itself
+/// doesn't deduplicate offsets landing on the same integer cell the way
+/// `directionalBlurOffsets()` does (no associative container exists in
+/// HLSL) - see `sound_mind::gpu::ComputeDevice::
+/// directionalBlur2DVarying()`'s own docs for why summing each step
+/// individually is mathematically equivalent regardless, so this still
+/// agrees with the CPU path within ordinary floating-point tolerance.
+std::vector<float> directionalBlur2DVaryingGpuOrCpu(const std::vector<float>& grid, std::uint32_t binCount,
+                                                     std::uint32_t frameCount,
+                                                     const std::vector<float>& lengthPerCell,
+                                                     const std::vector<float>& anglePerCell) {
+    if (auto* device = detail::gpuComputeDeviceOrNull()) {
+        try {
+            return device->directionalBlur2DVarying(grid, frameCount, binCount, lengthPerCell, anglePerCell);
+        } catch (const std::exception&) {
+            // Fall through to the CPU path below.
+        }
+    }
+    return directionalBlur2DVarying(grid, binCount, frameCount, lengthPerCell, anglePerCell);
 }
 
 /// @brief Unsharp mask: `original + amount * (original - gaussianBlur2D(original, sigma=1.0))`,
@@ -504,17 +594,26 @@ StreamImage applyToneCurve(const StreamImage& composite, const std::vector<std::
 StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration& config,
                           const ProjectSettings& /*settings*/, const FilterParameterMindWaves& mindWaves) {
     const auto& streamConfig = composite.config;
+    const std::uint32_t binCount = streamConfig.binCount;
+    const std::uint32_t frameCount = composite.frameCount;
     switch (config.type()) {
         case FilterType::FrequencyAxisGradient:
             return applyFrequencyAxisGradient(composite, config.frequencyGradient());
         case FilterType::UniformBlur:
             if (mindWaves.blurSigma != nullptr) {
+                // Built once here, not inside the per-channel lambda below -
+                // applyPerChannelGridFilter() calls its own filter function
+                // once per channel (left, then right), and the per-cell
+                // sigma doesn't depend on which channel is being processed,
+                // so building it twice would waste half the evaluations
+                // (a real Installment D1 inefficiency, fixed alongside this
+                // installment's own GPU dispatch, which needs the array
+                // built regardless).
+                const auto sigmaField =
+                    buildParameterField(mindWaves.blurSigma, 0.0, config.blurSigma(), binCount, frameCount, streamConfig);
                 return applyPerChannelGridFilter(
-                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
-                        return gaussianBlur2DVarying(grid, bins, frames, [&](std::uint32_t bin, std::uint32_t frame) {
-                            return perCellParameterValue(mindWaves.blurSigma, 0.0, config.blurSigma(), bin, frame,
-                                                          streamConfig);
-                        });
+                    composite, [&sigmaField](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return gaussianBlur2DVaryingGpuOrCpu(grid, bins, frames, sigmaField);
                     });
             }
             return applyPerChannelGridFilter(
@@ -523,12 +622,11 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
                 });
         case FilterType::EdgePreservingBlur:
             if (mindWaves.medianSize != nullptr) {
+                const auto sizeField =
+                    buildParameterField(mindWaves.medianSize, 1.0, config.medianSize(), binCount, frameCount, streamConfig);
                 return applyPerChannelGridFilter(
-                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
-                        return medianBlur2DVarying(grid, bins, frames, [&](std::uint32_t bin, std::uint32_t frame) {
-                            return perCellParameterValue(mindWaves.medianSize, 1.0, config.medianSize(), bin, frame,
-                                                          streamConfig);
-                        });
+                    composite, [&sizeField](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return medianBlur2DVaryingGpuOrCpu(grid, bins, frames, sizeField);
                     });
             }
             return applyPerChannelGridFilter(
@@ -537,21 +635,17 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
                 });
         case FilterType::DirectionalBlur:
             if (mindWaves.directionalBlurLength != nullptr || mindWaves.directionalBlurAngle != nullptr) {
-                return applyPerChannelGridFilter(
-                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
-                        return directionalBlur2DVarying(
-                            grid, bins, frames,
-                            [&](std::uint32_t bin, std::uint32_t frame) {
-                                return perCellParameterValue(mindWaves.directionalBlurLength, 0.0,
-                                                              config.directionalBlurLength(), bin, frame,
+                const auto lengthField = buildParameterField(mindWaves.directionalBlurLength, 0.0,
+                                                              config.directionalBlurLength(), binCount, frameCount,
                                                               streamConfig);
-                            },
-                            [&](std::uint32_t bin, std::uint32_t frame) {
-                                return perCellParameterValue(mindWaves.directionalBlurAngle, 0.0,
-                                                              config.directionalBlurAngleDegrees(), bin, frame,
-                                                              streamConfig);
-                            });
-                    });
+                const auto angleField = buildParameterField(mindWaves.directionalBlurAngle, 0.0,
+                                                             config.directionalBlurAngleDegrees(), binCount,
+                                                             frameCount, streamConfig);
+                return applyPerChannelGridFilter(composite, [&lengthField, &angleField](const std::vector<float>& grid,
+                                                                                         std::uint32_t bins,
+                                                                                         std::uint32_t frames) {
+                    return directionalBlur2DVaryingGpuOrCpu(grid, bins, frames, lengthField, angleField);
+                });
             }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
@@ -560,6 +654,11 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
                 });
         case FilterType::Sharpen:
             if (mindWaves.sharpenAmount != nullptr) {
+                // sharpenAmount varies for free (it only scales an already-
+                // fixed difference term - see sharpen2DVarying()'s own
+                // docs), so this alone stays lambda-based rather than
+                // building a field array - there's no GPU dispatch here to
+                // feed one to.
                 return applyPerChannelGridFilter(
                     composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
                         return sharpen2DVarying(grid, bins, frames, [&](std::uint32_t bin, std::uint32_t frame) {

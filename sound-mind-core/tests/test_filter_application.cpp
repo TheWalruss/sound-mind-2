@@ -494,6 +494,28 @@ TEST_CASE("applyFilter's UniformBlur, bound to an alternating MindWave, varies g
     CHECK(bound.leftMagnitudeDb[4] != Catch::Approx(bound.leftMagnitudeDb[5]));
 }
 
+TEST_CASE("applyFilter's MindWave-bound blurSigma agrees with itself via the CPU fallback as via the GPU "
+          "(GPU wiring - Installment D2)",
+          "[core][filter_application][mind_wave][gpu]") {
+    GpuComputeForcedOffGuard forceCpu;
+
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(2.0f);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto wave = alternatingColumnsWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.blurSigma = &wave});
+
+    // Same scenario, same expected shape, as the GPU-preferred test above -
+    // run through the CPU fallback branch instead (Decision #4's own
+    // testing strategy: the GPU path and the CPU fallback must agree).
+    CHECK(bound.leftMagnitudeDb[5] == Catch::Approx(impulse[5]).margin(0.5));
+    CHECK(bound.leftMagnitudeDb[4] != Catch::Approx(impulse[4]));
+}
+
 TEST_CASE("applyFilter's UniformBlur, bound to a MindWave, leaves phase untouched",
           "[core][filter_application][mind_wave]") {
     FilterConfiguration config;
@@ -562,6 +584,25 @@ TEST_CASE("applyFilter's EdgePreservingBlur, bound to an alternating MindWave, v
     CHECK(bound.leftMagnitudeDb[5] == Catch::Approx(impulse[5]).margin(0.001));
 }
 
+TEST_CASE("applyFilter's MindWave-bound medianSize agrees with itself via the CPU fallback as via the GPU "
+          "(GPU wiring - Installment D2)",
+          "[core][filter_application][mind_wave][gpu]") {
+    GpuComputeForcedOffGuard forceCpu;
+
+    FilterConfiguration config;
+    config.setType(FilterType::EdgePreservingBlur);
+    config.setMedianSize(5);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto wave = alternatingColumnsWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.medianSize = &wave});
+
+    CHECK(bound.leftMagnitudeDb[4] == Catch::Approx(-96.0f).margin(0.001));
+    CHECK(bound.leftMagnitudeDb[5] == Catch::Approx(impulse[5]).margin(0.001));
+}
+
 TEST_CASE("applyFilter's DirectionalBlur, bound to a MindWave always at ceiling, matches the fixed length result",
           "[core][filter_application][mind_wave]") {
     FilterConfiguration config;
@@ -618,6 +659,27 @@ TEST_CASE("applyFilter's DirectionalBlur, bound to an alternating MindWave, vari
     // its own output (pulling in the surrounding floor); columns 3/5's own
     // low field means their own output is untouched, regardless of the
     // impulse sitting right next to them.
+    CHECK(bound.leftMagnitudeDb[4] != Catch::Approx(impulse[4]));
+    CHECK(bound.leftMagnitudeDb[3] == Catch::Approx(impulse[3]).margin(0.001));
+    CHECK(bound.leftMagnitudeDb[5] == Catch::Approx(impulse[5]).margin(0.001));
+}
+
+TEST_CASE("applyFilter's MindWave-bound directionalBlurLength agrees with itself via the CPU fallback as via "
+          "the GPU (GPU wiring - Installment D2)",
+          "[core][filter_application][mind_wave][gpu]") {
+    GpuComputeForcedOffGuard forceCpu;
+
+    FilterConfiguration config;
+    config.setType(FilterType::DirectionalBlur);
+    config.setDirectionalBlurLength(3);
+    std::vector<float> impulse(9, -96.0f);
+    impulse[4] = 0.0f;
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto wave = alternatingColumnsWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.directionalBlurLength = &wave});
+
     CHECK(bound.leftMagnitudeDb[4] != Catch::Approx(impulse[4]));
     CHECK(bound.leftMagnitudeDb[3] == Catch::Approx(impulse[3]).margin(0.001));
     CHECK(bound.leftMagnitudeDb[5] == Catch::Approx(impulse[5]).margin(0.001));

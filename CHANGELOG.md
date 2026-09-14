@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.6] - 2026-09-14
+
+Installment D2 of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - a real GPU kernel for each of the three expensive kernel-shape filter-parameter bindings (`blurSigma`, `medianSize`, `directionalBlurLength`/`directionalBlurAngleDegrees`), completing the "GPU-aware from Installment C onward" commitment for filter-parameter binding. `sharpenAmount` needs no GPU kernel (it already varied for free in D1). No Studio UI yet - D3.
+
+### Added
+
+- **Three new `ComputeDevice` methods**: `gaussianBlur2DVarying()`, `medianBlur2DVarying()`, `directionalBlur2DVarying()` - each dispatches the whole composite in one call, every GPU thread computing its own cell's own kernel independently (no cross-thread coordination needed despite the per-cell varying radius/size/length/angle). Falls back to the existing D1 CPU implementations whenever no GPU is available, or a live GPU call fails.
+
+Full regression: sound-mind-gpu 33/33 test cases (up from 21); sound-mind-core 378/378 (up from 375). Full regression (core + gpu + studio) passing. Doxygen: 0 warnings. No USER_GUIDE.md change - no UI yet.
+
 ## [0.0.31.5] - 2026-09-14
 
 Installment D1 of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - real per-cell filter-parameter binding, Core-only (no GPU kernel yet - D2; no Studio UI yet - D3). **`docs/sound-mind-design.md`'s own "Filter parameters" section was corrected as part of this installment** - its previous description (run the filter once, blend filtered/unfiltered per cell) was functionally redundant with layer-opacity binding and has been replaced with genuine per-cell parameter variation, per the user's own explicit correction.

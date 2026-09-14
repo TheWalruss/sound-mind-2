@@ -43,6 +43,9 @@ endfunction()
 sound_mind_gpu_compile_shader(multiply_by_two)
 sound_mind_gpu_compile_shader(gaussian_blur)
 sound_mind_gpu_compile_shader(mix_amplitude_phase_signal)
+sound_mind_gpu_compile_shader(gaussian_blur_varying)
+sound_mind_gpu_compile_shader(median_blur_varying)
+sound_mind_gpu_compile_shader(directional_blur_varying)
 
 add_custom_target(sound-mind-gpu-shaders DEPENDS ${SOUND_MIND_GPU_COMPILED_SHADERS})
 

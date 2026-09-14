@@ -206,6 +206,117 @@ public:
                                                      std::uint32_t height, float sigma) const;
 
     /**
+     * @brief A genuine, non-separable 2D Gaussian blur with `sigma`
+     *        evaluated fresh per output cell, entirely on the GPU -
+     *        `v0.Y.31.1` (MindWaves v1) Installment D2's own GPU-aware
+     *        follow-up to Installment D1's CPU-only `sound_mind::core`
+     *        `gaussianBlur2DVarying()` (`filter_application.cpp`), which
+     *        this matches exactly: `sigma` floored at `0.1`, kernel radius
+     *        `max(1, ceil(4*sigma))`, clamp-to-edge boundary handling -
+     *        computed directly per output cell (`O(radius^2)` work each),
+     *        since separability (`gaussianBlur2D()`'s own two-pass shape)
+     *        only holds for one shared sigma across the whole image.
+     *
+     * A single dispatch over the whole `width x height` grid - each GPU
+     * thread computes its own cell's own kernel independently, needing no
+     * cross-thread coordination despite each one potentially using a
+     * different radius (confirmed with the user: a real dedicated GPU
+     * path, conditioned on a sufficiently large single dispatch actually
+     * being achievable - one dispatch per `applyFilter()` call, covering
+     * every cell in the composite, comfortably clears that bar for any
+     * project-sized canvas).
+     *
+     * @param data The `width * height` values to blur, row-major.
+     * @param width The row length. `width * height` must equal `data.size()`.
+     * @param height The number of rows.
+     * @param sigmaPerCell Each cell's own sigma (already resolved from
+     *        whatever MindWave binding produced it, or a uniform ceiling
+     *        if unbound - `sound-mind-gpu` has no dependency on
+     *        `sound-mind-core`/`MindWave` itself, so this arrives as a
+     *        plain array), same size as `data`.
+     * @return The blurred result, same size/shape as `data`.
+     * @throws std::runtime_error if `width * height` doesn't equal both
+     *         `data.size()` and `sigmaPerCell.size()`, or if any D3D12
+     *         call fails.
+     */
+    [[nodiscard]] std::vector<float> gaussianBlur2DVarying(const std::vector<float>& data, std::uint32_t width,
+                                                            std::uint32_t height,
+                                                            const std::vector<float>& sigmaPerCell) const;
+
+    /**
+     * @brief A 2D median filter with the window size evaluated fresh per
+     *        output cell, entirely on the GPU - Installment D2's own
+     *        GPU-aware follow-up to `sound_mind::core`'s own (CPU)
+     *        `medianBlur2DVarying()`. A per-cell size of `1` or less
+     *        skips windowing entirely for that cell (the identity a
+     *        `1`-cell "window" already is), matching the CPU version's
+     *        own baseline handling exactly.
+     *
+     * The per-cell window size is clamped to at most `31` (`961` samples)
+     * here **and** in the CPU version - a deliberate, matching safety
+     * bound added alongside this GPU kernel (see `sound_mind::core::
+     * FilterConfiguration::medianSize()`'s own Studio UI range, which
+     * never exceeds this anyway): the GPU shader gathers a window's own
+     * samples into a fixed-size local array before sorting (no
+     * `std::nth_element` equivalent exists in HLSL - a plain insertion
+     * sort of up to `961` elements instead), so an unbounded window size
+     * would risk a real out-of-bounds write, not just a slow one.
+     *
+     * @param data The `width * height` values to filter, row-major.
+     * @param width The row length. `width * height` must equal `data.size()`.
+     * @param height The number of rows.
+     * @param sizePerCell Each cell's own window size (already resolved,
+     *        same convention as `gaussianBlur2DVarying()`'s own
+     *        `sigmaPerCell`), same size as `data`.
+     * @return The filtered result, same size/shape as `data`.
+     * @throws std::runtime_error if `width * height` doesn't equal both
+     *         `data.size()` and `sizePerCell.size()`, or if any D3D12
+     *         call fails.
+     */
+    [[nodiscard]] std::vector<float> medianBlur2DVarying(const std::vector<float>& data, std::uint32_t width,
+                                                          std::uint32_t height,
+                                                          const std::vector<float>& sizePerCell) const;
+
+    /**
+     * @brief A directional (motion-blur-style) kernel with length and
+     *        angle both evaluated fresh per output cell, entirely on the
+     *        GPU - Installment D2's own GPU-aware follow-up to
+     *        `sound_mind::core`'s own (CPU) `directionalBlur2DVarying()`.
+     *        A per-cell length of `0` or less skips convolution entirely
+     *        for that cell (the identity a zero-length kernel already
+     *        is), matching the CPU version's own baseline handling
+     *        exactly.
+     *
+     * Accumulates each of a cell's own `2n+1` unit steps directly into a
+     * running weighted sum (`weight = 1/(2n+1)` each), rather than first
+     * grouping steps that land on the same integer offset the way the CPU
+     * version's own `directionalBlurOffsets()` does (no associative
+     * container exists in HLSL) - mathematically equivalent by
+     * associativity of summation (grouping-then-normalizing and summing-
+     * individually-weighted-contributions compute the identical total),
+     * so this still agrees with the CPU version within ordinary floating-
+     * point tolerance, just via a different accumulation order.
+     *
+     * @param data The `width * height` values to filter, row-major.
+     * @param width The row length. `width * height` must equal `data.size()`.
+     * @param height The number of rows.
+     * @param lengthPerCell Each cell's own kernel length, in bins/columns
+     *        (already resolved, same convention as `gaussianBlur2DVarying()`'s
+     *        own `sigmaPerCell`), same size as `data`.
+     * @param angleDegreesPerCell Each cell's own kernel angle, in degrees
+     *        (already resolved the same way), same size as `data`.
+     * @return The filtered result, same size/shape as `data`.
+     * @throws std::runtime_error if `width * height` doesn't equal
+     *         `data.size()`, `lengthPerCell.size()`, and
+     *         `angleDegreesPerCell.size()` all alike, or if any D3D12
+     *         call fails.
+     */
+    [[nodiscard]] std::vector<float> directionalBlur2DVarying(const std::vector<float>& data, std::uint32_t width,
+                                                               std::uint32_t height,
+                                                               const std::vector<float>& lengthPerCell,
+                                                               const std::vector<float>& angleDegreesPerCell) const;
+
+    /**
      * @brief Mixes one layer's own (already-placed) contribution into a
      *        running composite, entirely on the GPU - the same per-cell
      *        math `sound_mind::core`'s own (CPU) `mixLayerInto()` (in

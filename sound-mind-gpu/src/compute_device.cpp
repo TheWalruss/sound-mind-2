@@ -490,6 +490,157 @@ std::vector<float> ComputeDevice::gaussianBlur2D(const std::vector<float>& data,
     return readBackFloats(readbackBuffer.Get(), data.size());
 }
 
+std::vector<float> ComputeDevice::gaussianBlur2DVarying(const std::vector<float>& data, std::uint32_t width,
+                                                         std::uint32_t height,
+                                                         const std::vector<float>& sigmaPerCell) const {
+    const auto cellCount = static_cast<std::uint64_t>(width) * height;
+    if (cellCount != data.size() || cellCount != sigmaPerCell.size()) {
+        throw std::runtime_error(
+            "sound_mind::gpu: gaussianBlur2DVarying() - width * height must equal both data.size() and "
+            "sigmaPerCell.size()");
+    }
+    if (data.empty()) {
+        return {};
+    }
+
+    const UINT64 bufferSize = static_cast<UINT64>(data.size()) * sizeof(float);
+    const ComputePipeline pipeline = loadComputePipeline(device_.Get(), "gaussian_blur_varying.cso");
+    CommandRecorder recorder = createCommandRecorder(device_.Get(), pipeline.pipelineState.Get());
+
+    const ComPtr<ID3D12Resource> inputBuffer = createUploadBuffer(device_.Get(), data.data(), bufferSize);
+    const ComPtr<ID3D12Resource> sigmaBuffer = createUploadBuffer(device_.Get(), sigmaPerCell.data(), bufferSize);
+    const ComPtr<ID3D12Resource> outputBuffer = createUavBuffer(device_.Get(), bufferSize);
+    const ComPtr<ID3D12Resource> readbackBuffer = createReadbackBuffer(device_.Get(), bufferSize);
+
+    // Root parameter indices match gaussian_blur_varying.hlsl's own root
+    // signature string order: 0 = constants (b0: width, height), 1 = the
+    // data SRV (t0), 2 = the per-cell sigma SRV (t1), 3 = the output UAV
+    // (u0). A single dispatch over the whole grid - see this method's own
+    // docs on why no cross-thread coordination is needed despite the
+    // per-cell varying radius.
+    recorder.list->SetComputeRootSignature(pipeline.rootSignature.Get());
+    const UINT constants[2] = {width, height};
+    recorder.list->SetComputeRoot32BitConstants(0, 2, constants, 0);
+    recorder.list->SetComputeRootShaderResourceView(1, inputBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootShaderResourceView(2, sigmaBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootUnorderedAccessView(3, outputBuffer->GetGPUVirtualAddress());
+
+    const UINT groupsX = (width + 7) / 8;
+    const UINT groupsY = (height + 7) / 8;
+    recorder.list->Dispatch(groupsX, groupsY, 1);
+
+    {
+        const D3D12_RESOURCE_BARRIER barrier = transitionBarrier(
+            outputBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        recorder.list->ResourceBarrier(1, &barrier);
+    }
+    recorder.list->CopyBufferRegion(readbackBuffer.Get(), 0, outputBuffer.Get(), 0, bufferSize);
+
+    executeAndWait(recorder.list.Get());
+    return readBackFloats(readbackBuffer.Get(), data.size());
+}
+
+std::vector<float> ComputeDevice::medianBlur2DVarying(const std::vector<float>& data, std::uint32_t width,
+                                                       std::uint32_t height,
+                                                       const std::vector<float>& sizePerCell) const {
+    const auto cellCount = static_cast<std::uint64_t>(width) * height;
+    if (cellCount != data.size() || cellCount != sizePerCell.size()) {
+        throw std::runtime_error(
+            "sound_mind::gpu: medianBlur2DVarying() - width * height must equal both data.size() and "
+            "sizePerCell.size()");
+    }
+    if (data.empty()) {
+        return {};
+    }
+
+    const UINT64 bufferSize = static_cast<UINT64>(data.size()) * sizeof(float);
+    const ComputePipeline pipeline = loadComputePipeline(device_.Get(), "median_blur_varying.cso");
+    CommandRecorder recorder = createCommandRecorder(device_.Get(), pipeline.pipelineState.Get());
+
+    const ComPtr<ID3D12Resource> inputBuffer = createUploadBuffer(device_.Get(), data.data(), bufferSize);
+    const ComPtr<ID3D12Resource> sizeBuffer = createUploadBuffer(device_.Get(), sizePerCell.data(), bufferSize);
+    const ComPtr<ID3D12Resource> outputBuffer = createUavBuffer(device_.Get(), bufferSize);
+    const ComPtr<ID3D12Resource> readbackBuffer = createReadbackBuffer(device_.Get(), bufferSize);
+
+    // Root parameter indices match median_blur_varying.hlsl's own root
+    // signature string order - identical shape to gaussianBlur2DVarying()'s
+    // own (2 = the per-cell size SRV, t1, in place of that one's sigma SRV).
+    recorder.list->SetComputeRootSignature(pipeline.rootSignature.Get());
+    const UINT constants[2] = {width, height};
+    recorder.list->SetComputeRoot32BitConstants(0, 2, constants, 0);
+    recorder.list->SetComputeRootShaderResourceView(1, inputBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootShaderResourceView(2, sizeBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootUnorderedAccessView(3, outputBuffer->GetGPUVirtualAddress());
+
+    const UINT groupsX = (width + 7) / 8;
+    const UINT groupsY = (height + 7) / 8;
+    recorder.list->Dispatch(groupsX, groupsY, 1);
+
+    {
+        const D3D12_RESOURCE_BARRIER barrier = transitionBarrier(
+            outputBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        recorder.list->ResourceBarrier(1, &barrier);
+    }
+    recorder.list->CopyBufferRegion(readbackBuffer.Get(), 0, outputBuffer.Get(), 0, bufferSize);
+
+    executeAndWait(recorder.list.Get());
+    return readBackFloats(readbackBuffer.Get(), data.size());
+}
+
+std::vector<float> ComputeDevice::directionalBlur2DVarying(const std::vector<float>& data, std::uint32_t width,
+                                                            std::uint32_t height,
+                                                            const std::vector<float>& lengthPerCell,
+                                                            const std::vector<float>& angleDegreesPerCell) const {
+    const auto cellCount = static_cast<std::uint64_t>(width) * height;
+    if (cellCount != data.size() || cellCount != lengthPerCell.size() || cellCount != angleDegreesPerCell.size()) {
+        throw std::runtime_error(
+            "sound_mind::gpu: directionalBlur2DVarying() - width * height must equal data.size(), "
+            "lengthPerCell.size(), and angleDegreesPerCell.size() all alike");
+    }
+    if (data.empty()) {
+        return {};
+    }
+
+    const UINT64 bufferSize = static_cast<UINT64>(data.size()) * sizeof(float);
+    const ComputePipeline pipeline = loadComputePipeline(device_.Get(), "directional_blur_varying.cso");
+    CommandRecorder recorder = createCommandRecorder(device_.Get(), pipeline.pipelineState.Get());
+
+    const ComPtr<ID3D12Resource> inputBuffer = createUploadBuffer(device_.Get(), data.data(), bufferSize);
+    const ComPtr<ID3D12Resource> lengthBuffer = createUploadBuffer(device_.Get(), lengthPerCell.data(), bufferSize);
+    const ComPtr<ID3D12Resource> angleBuffer =
+        createUploadBuffer(device_.Get(), angleDegreesPerCell.data(), bufferSize);
+    const ComPtr<ID3D12Resource> outputBuffer = createUavBuffer(device_.Get(), bufferSize);
+    const ComPtr<ID3D12Resource> readbackBuffer = createReadbackBuffer(device_.Get(), bufferSize);
+
+    // Root parameter indices match directional_blur_varying.hlsl's own
+    // root signature string order: 0 = constants, 1 = the data SRV (t0),
+    // 2 = the per-cell length SRV (t1), 3 = the per-cell angle SRV (t2),
+    // 4 = the output UAV (u0) - one more SRV than the other two varying
+    // kernels above, since this one binds two independently-varying
+    // parameters at once.
+    recorder.list->SetComputeRootSignature(pipeline.rootSignature.Get());
+    const UINT constants[2] = {width, height};
+    recorder.list->SetComputeRoot32BitConstants(0, 2, constants, 0);
+    recorder.list->SetComputeRootShaderResourceView(1, inputBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootShaderResourceView(2, lengthBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootShaderResourceView(3, angleBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootUnorderedAccessView(4, outputBuffer->GetGPUVirtualAddress());
+
+    const UINT groupsX = (width + 7) / 8;
+    const UINT groupsY = (height + 7) / 8;
+    recorder.list->Dispatch(groupsX, groupsY, 1);
+
+    {
+        const D3D12_RESOURCE_BARRIER barrier = transitionBarrier(
+            outputBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        recorder.list->ResourceBarrier(1, &barrier);
+    }
+    recorder.list->CopyBufferRegion(readbackBuffer.Get(), 0, outputBuffer.Get(), 0, bufferSize);
+
+    executeAndWait(recorder.list.Get());
+    return readBackFloats(readbackBuffer.Get(), data.size());
+}
+
 AmplitudePhaseSignal ComputeDevice::mixAmplitudePhaseSignal(const AmplitudePhaseSignal& running,
                                                              const AmplitudePhaseSignal& layer, float layerGain,
                                                              const std::vector<float>& mindWaveField) const {
