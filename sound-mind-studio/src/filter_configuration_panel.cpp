@@ -8,6 +8,7 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QScrollArea>
 #include <QSignalBlocker>
@@ -24,6 +25,27 @@ namespace {
 
 using sound_mind::core::FilterType;
 using sound_mind::core::GradientStop;
+using sound_mind::core::MindWaveId;
+
+/// @brief A `None`-plus-library MindWave-binding combo, styled to match
+/// `LayersPanel`'s own per-row `opacityMindWaveCombo` - item population
+/// happens separately, in `FilterConfigurationPanel::
+/// rebuildMindWaveCombos()`.
+QComboBox* makeMindWaveCombo(QWidget* parent, const QString& objectName) {
+    auto* combo = new QComboBox(parent);
+    combo->setObjectName(objectName);
+    combo->setToolTip(QObject::tr("Bind this parameter to a MindWave"));
+    return combo;
+}
+
+/// @brief Wraps `spinBox` and `combo` side by side - every bindable
+/// parameter's own row uses this instead of the spin box alone.
+QHBoxLayout* makeBoundFieldRow(QWidget* spinBox, QWidget* combo) {
+    auto* row = new QHBoxLayout();
+    row->addWidget(spinBox);
+    row->addWidget(combo);
+    return row;
+}
 
 /// @brief Every `FilterType`, in `docs/sound-mind-design.md`'s own
 /// family order (Blur & focus, then Tonal, then Spectral shaping) - all
@@ -164,7 +186,13 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setBlurSigma(static_cast<float>(value));
         emitConfigChanged();
     });
-    uniformBlurForm->addRow(tr("Sigma:"), blurSigmaSpinBox_);
+    blurSigmaMindWaveCombo_ = makeMindWaveCombo(uniformBlurGroup_, QStringLiteral("blurSigmaMindWaveCombo"));
+    connect(blurSigmaMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = blurSigmaMindWaveCombo_->itemData(index).toULongLong();
+        config_.setBlurSigmaMindWave(rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    uniformBlurForm->addRow(tr("Sigma:"), makeBoundFieldRow(blurSigmaSpinBox_, blurSigmaMindWaveCombo_));
     root->addWidget(uniformBlurGroup_);
 
     edgePreservingBlurGroup_ = new QGroupBox(tr("Edge-Preserving Blur"), container);
@@ -180,7 +208,13 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setMedianSize(value);
         emitConfigChanged();
     });
-    edgePreservingBlurForm->addRow(tr("Size:"), medianSizeSpinBox_);
+    medianSizeMindWaveCombo_ = makeMindWaveCombo(edgePreservingBlurGroup_, QStringLiteral("medianSizeMindWaveCombo"));
+    connect(medianSizeMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = medianSizeMindWaveCombo_->itemData(index).toULongLong();
+        config_.setMedianSizeMindWave(rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    edgePreservingBlurForm->addRow(tr("Size:"), makeBoundFieldRow(medianSizeSpinBox_, medianSizeMindWaveCombo_));
     root->addWidget(edgePreservingBlurGroup_);
 
     directionalBlurGroup_ = new QGroupBox(tr("Directional Blur"), container);
@@ -193,7 +227,16 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setDirectionalBlurLength(value);
         emitConfigChanged();
     });
-    directionalBlurForm->addRow(tr("Length:"), directionalBlurLengthSpinBox_);
+    directionalBlurLengthMindWaveCombo_ =
+        makeMindWaveCombo(directionalBlurGroup_, QStringLiteral("directionalBlurLengthMindWaveCombo"));
+    connect(directionalBlurLengthMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = directionalBlurLengthMindWaveCombo_->itemData(index).toULongLong();
+        config_.setDirectionalBlurLengthMindWave(
+            rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    directionalBlurForm->addRow(tr("Length:"),
+                                 makeBoundFieldRow(directionalBlurLengthSpinBox_, directionalBlurLengthMindWaveCombo_));
     directionalBlurAngleSpinBox_ = new QDoubleSpinBox(directionalBlurGroup_);
     directionalBlurAngleSpinBox_->setObjectName(QStringLiteral("directionalBlurAngleSpinBox"));
     directionalBlurAngleSpinBox_->setRange(0.0, 360.0);
@@ -206,7 +249,16 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setDirectionalBlurAngleDegrees(static_cast<float>(value));
         emitConfigChanged();
     });
-    directionalBlurForm->addRow(tr("Angle:"), directionalBlurAngleSpinBox_);
+    directionalBlurAngleMindWaveCombo_ =
+        makeMindWaveCombo(directionalBlurGroup_, QStringLiteral("directionalBlurAngleMindWaveCombo"));
+    connect(directionalBlurAngleMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = directionalBlurAngleMindWaveCombo_->itemData(index).toULongLong();
+        config_.setDirectionalBlurAngleMindWave(
+            rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    directionalBlurForm->addRow(tr("Angle:"),
+                                 makeBoundFieldRow(directionalBlurAngleSpinBox_, directionalBlurAngleMindWaveCombo_));
     root->addWidget(directionalBlurGroup_);
 
     sharpenGroup_ = new QGroupBox(tr("Sharpen"), container);
@@ -221,7 +273,14 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setSharpenAmount(static_cast<float>(value));
         emitConfigChanged();
     });
-    sharpenForm->addRow(tr("Amount:"), sharpenAmountSpinBox_);
+    sharpenAmountMindWaveCombo_ = makeMindWaveCombo(sharpenGroup_, QStringLiteral("sharpenAmountMindWaveCombo"));
+    connect(sharpenAmountMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = sharpenAmountMindWaveCombo_->itemData(index).toULongLong();
+        config_.setSharpenAmountMindWave(rawId == 0 ? std::nullopt
+                                                     : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    sharpenForm->addRow(tr("Amount:"), makeBoundFieldRow(sharpenAmountSpinBox_, sharpenAmountMindWaveCombo_));
     root->addWidget(sharpenGroup_);
 
     toneCurveGroup_ = new QGroupBox(tr("Tone Curve"), container);
@@ -298,6 +357,7 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     scrollArea->setWidgetResizable(true);
     setWidget(scrollArea);
 
+    rebuildMindWaveCombos();
     updateVisibleGroup();
 }
 
@@ -388,8 +448,38 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     // ToneCurveEditor::setPoints() doesn't emit pointsChanged() by its
     // own contract, so no QSignalBlocker is needed here.
     toneCurveEditor_->setPoints(config_.toneCurvePoints());
+    // rebuildMindWaveCombos() blocks its own five combos' signals
+    // internally - no separate QSignalBlocker needed here for them.
+    rebuildMindWaveCombos();
 
     updateVisibleGroup();
+}
+
+void FilterConfigurationPanel::setAvailableMindWaves(
+    const std::vector<std::pair<MindWaveId, QString>>& mindWaves) {
+    availableMindWaves_ = mindWaves;
+    rebuildMindWaveCombos();
+}
+
+void FilterConfigurationPanel::rebuildMindWaveCombos() {
+    const auto populate = [this](QComboBox* combo, std::optional<MindWaveId> boundId) {
+        const QSignalBlocker blocker(combo);
+        combo->clear();
+        combo->addItem(tr("None"), QVariant::fromValue(qulonglong{0}));
+        int selectedIndex = 0;
+        for (const auto& [mindWaveId, name] : availableMindWaves_) {
+            combo->addItem(name, QVariant::fromValue(static_cast<qulonglong>(mindWaveId)));
+            if (boundId.has_value() && *boundId == mindWaveId) {
+                selectedIndex = combo->count() - 1;
+            }
+        }
+        combo->setCurrentIndex(selectedIndex);
+    };
+    populate(blurSigmaMindWaveCombo_, config_.blurSigmaMindWave());
+    populate(medianSizeMindWaveCombo_, config_.medianSizeMindWave());
+    populate(directionalBlurLengthMindWaveCombo_, config_.directionalBlurLengthMindWave());
+    populate(directionalBlurAngleMindWaveCombo_, config_.directionalBlurAngleMindWave());
+    populate(sharpenAmountMindWaveCombo_, config_.sharpenAmountMindWave());
 }
 
 }  // namespace sound_mind::studio

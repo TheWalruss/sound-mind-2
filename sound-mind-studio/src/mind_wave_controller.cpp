@@ -3,6 +3,7 @@
 #include <utility>
 #include <vector>
 
+#include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/mind_waves_panel.h"
 
@@ -41,23 +42,28 @@ QString nextDefaultName(const std::vector<NamedMindWave>& entries) {
 
 }  // namespace
 
-MindWaveController::MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel, QObject* parent)
-    : QObject(parent), mindWavesPanel_(mindWavesPanel), layersPanel_(layersPanel) {}
+MindWaveController::MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel,
+                                        FilterConfigurationPanel* filterConfigurationPanel, QObject* parent)
+    : QObject(parent),
+      mindWavesPanel_(mindWavesPanel),
+      layersPanel_(layersPanel),
+      filterConfigurationPanel_(filterConfigurationPanel) {}
 
 void MindWaveController::setProject(sound_mind::core::Project* project) { project_ = project; }
 
 void MindWaveController::refreshMindWavesPanel() {
     std::vector<MindWavesPanel::RowData> rows;
-    std::vector<std::pair<MindWaveId, QString>> availableForLayers;
+    std::vector<std::pair<MindWaveId, QString>> availableForBinding;
     if (project_ != nullptr) {
         for (const NamedMindWave& entry : project_->mindWaves()) {
             const QString name = QString::fromStdString(entry.name);
             rows.push_back(MindWavesPanel::RowData{entry.id, name, entry.wave});
-            availableForLayers.emplace_back(entry.id, name);
+            availableForBinding.emplace_back(entry.id, name);
         }
     }
     mindWavesPanel_->setMindWaves(rows);
-    layersPanel_->setAvailableMindWaves(availableForLayers);
+    layersPanel_->setAvailableMindWaves(availableForBinding);
+    filterConfigurationPanel_->setAvailableMindWaves(availableForBinding);
 }
 
 void MindWaveController::addMindWave() {

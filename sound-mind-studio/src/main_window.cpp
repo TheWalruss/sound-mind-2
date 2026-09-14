@@ -306,7 +306,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // The MindWave library itself - add/remove/rename/edit - and keeping
     // mindWavesPanel_/layersPanel_'s own opacity-binding combo in sync
     // with it (v0.Y.31.1 Installment C2); see its own class docs.
-    mindWaveController_ = new MindWaveController(mindWavesPanel_, layersPanel_, this);
+    mindWaveController_ = new MindWaveController(mindWavesPanel_, layersPanel_, filterConfigurationPanel_, this);
     connect(mindWaveController_, &MindWaveController::mindWavesChanged, this, [this]() { hasUnsavedChanges_ = true; });
 
     // A permanent (not showMessage()'s own temporary-message) label in the

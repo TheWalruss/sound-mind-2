@@ -1,6 +1,8 @@
 #include "test_filter_configuration_panel.h"
 
+#include <array>
 #include <optional>
+#include <utility>
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -15,6 +17,7 @@
 
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterType;
+using sound_mind::core::MindWaveId;
 using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::ToneCurveEditor;
 
@@ -295,4 +298,91 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheCutSpinBoxesFro
     QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("startRightCutSpinBox"))->value(), 0.4);
     QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endLeftCutSpinBox"))->value(), 0.5);
     QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endRightCutSpinBox"))->value(), 0.6);
+}
+
+// --- v0.Y.31.1 Installment D3: filter-parameter MindWave bindings -----
+
+namespace {
+
+/// @brief Every one of the five bindable parameters' own combo object
+/// name - shared by every test below that needs to iterate all five.
+const std::array<QString, 5> kBindComboNames{{
+    QStringLiteral("blurSigmaMindWaveCombo"),
+    QStringLiteral("medianSizeMindWaveCombo"),
+    QStringLiteral("directionalBlurLengthMindWaveCombo"),
+    QStringLiteral("directionalBlurAngleMindWaveCombo"),
+    QStringLiteral("sharpenAmountMindWaveCombo"),
+}};
+
+}  // namespace
+
+void FilterConfigurationPanelTest::freshCombosOfferOnlyNoneUntilSetAvailableMindWavesIsCalled() {
+    const FilterConfigurationPanel panel;
+    for (const auto& comboName : kBindComboNames) {
+        auto* combo = panel.findChild<QComboBox*>(comboName);
+        QVERIFY(combo != nullptr);
+        QCOMPARE(combo->count(), 1);
+        QCOMPARE(combo->currentText(), QStringLiteral("None"));
+    }
+}
+
+void FilterConfigurationPanelTest::setAvailableMindWavesPopulatesEveryCombo() {
+    FilterConfigurationPanel panel;
+
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")},
+                                  {MindWaveId{6}, QStringLiteral("Fast Pulse")}});
+
+    for (const auto& comboName : kBindComboNames) {
+        auto* combo = panel.findChild<QComboBox*>(comboName);
+        QCOMPARE(combo->count(), 3);  // None + two MindWaves.
+        QCOMPARE(combo->itemText(1), QStringLiteral("Slow Pulse"));
+        QCOMPARE(combo->itemText(2), QStringLiteral("Fast Pulse"));
+    }
+}
+
+void FilterConfigurationPanelTest::changingABindCombosEmitsFilterConfigurationChangedWithTheNewBinding() {
+    FilterConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.findChild<QComboBox*>(QStringLiteral("blurSigmaMindWaveCombo"))->setCurrentIndex(1);  // "Slow Pulse".
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().blurSigmaMindWave(), std::optional<MindWaveId>(MindWaveId{5}));
+    // Every other bindable parameter is untouched.
+    QVERIFY(!panel.filterConfiguration().medianSizeMindWave().has_value());
+}
+
+void FilterConfigurationPanelTest::selectingNoneUnbindsAndEmits() {
+    FilterConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("sharpenAmountMindWaveCombo"));
+    combo->setCurrentIndex(1);  // Bind first.
+    QVERIFY(panel.filterConfiguration().sharpenAmountMindWave().has_value());
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    combo->setCurrentIndex(0);  // "None".
+
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(!panel.filterConfiguration().sharpenAmountMindWave().has_value());
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsAllFiveCombosWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    FilterConfiguration config;
+    config.setBlurSigmaMindWave(MindWaveId{5});
+    config.setMedianSizeMindWave(MindWaveId{5});
+    config.setDirectionalBlurLengthMindWave(MindWaveId{5});
+    config.setDirectionalBlurAngleMindWave(MindWaveId{5});
+    config.setSharpenAmountMindWave(MindWaveId{5});
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    for (const auto& comboName : kBindComboNames) {
+        auto* combo = panel.findChild<QComboBox*>(comboName);
+        QCOMPARE(combo->currentText(), QStringLiteral("Slow Pulse"));
+    }
 }

@@ -7,6 +7,7 @@
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/mind_wave_controller.h"
 #include "sound_mind/studio/mind_waves_panel.h"
@@ -17,6 +18,7 @@ using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
+using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::LayersPanel;
 using sound_mind::studio::MindWaveController;
 using sound_mind::studio::MindWavesPanel;
@@ -39,7 +41,8 @@ ProjectSettings testSettings() {
 struct Fixture {
     MindWavesPanel mindWavesPanel;
     LayersPanel layersPanel;
-    MindWaveController controller{&mindWavesPanel, &layersPanel};
+    FilterConfigurationPanel filterConfigurationPanel;
+    MindWaveController controller{&mindWavesPanel, &layersPanel, &filterConfigurationPanel};
 };
 
 }  // namespace
@@ -156,8 +159,14 @@ void MindWaveControllerTest::refreshMindWavesPanelPushesTheLibraryIntoBothPanels
     QTest::qWait(0);
 
     QCOMPARE(fixture.mindWavesPanel.findChild<QListWidget*>(QStringLiteral("mindWavesList"))->count(), 1);
-    const auto combos = fixture.layersPanel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
-    QCOMPARE(combos.size(), 1);
+    const auto layerCombos = fixture.layersPanel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
+    QCOMPARE(layerCombos.size(), 1);
     // "None" plus the one MindWave just added.
-    QCOMPARE(combos.front()->count(), 2);
+    QCOMPARE(layerCombos.front()->count(), 2);
+    // FilterConfigurationPanel gets the same list too (v0.Y.31.1
+    // Installment D3) - its own combos exist regardless of the currently
+    // selected FilterType, so no equivalent setLayers()-style setup is
+    // needed first.
+    QCOMPARE(fixture.filterConfigurationPanel.findChild<QComboBox*>(QStringLiteral("blurSigmaMindWaveCombo"))->count(),
+             2);
 }

@@ -24,4 +24,9 @@ private slots:
     void equalizerModeOffRestoresTheNormalPerTypeGroup();
     void editingACutSpinBoxWritesOpacityAndForcesIntensityToTheSilenceFloor();
     void setFilterConfigurationSyncsTheCutSpinBoxesFromOpacityWithoutEmitting();
+    void freshCombosOfferOnlyNoneUntilSetAvailableMindWavesIsCalled();
+    void setAvailableMindWavesPopulatesEveryCombo();
+    void changingABindCombosEmitsFilterConfigurationChangedWithTheNewBinding();
+    void selectingNoneUnbindsAndEmits();
+    void setFilterConfigurationSyncsAllFiveCombosWithoutEmitting();
 };

@@ -1,6 +1,10 @@
 #pragma once
 
+#include <utility>
+#include <vector>
+
 #include <QDockWidget>
+#include <QString>
 
 #include "sound_mind/core/filter_configuration.h"
 
@@ -57,6 +61,15 @@ class ToneCurveEditor;
  * ahead of Installment C's own implementation, in place of another
  * two-endpoint-spin-box panel like Frequency-Axis Gradient's own. See
  * that class's own docs for its interaction model.
+ *
+ * **A MindWave-binding combo next to each of the five bindable parameters**
+ * (`blurSigma`, `medianSize`, `directionalBlurLength`,
+ * `directionalBlurAngleDegrees`, `sharpenAmount` - see `sound_mind::core::
+ * FilterConfiguration`'s own docs, `v0.Y.31.1` Installment D3) - "None" or
+ * any MindWave `setAvailableMindWaves()` currently lists. `ToneCurve`'s
+ * own curve and `FrequencyAxisGradient`'s own gradient have no such combo,
+ * matching `FilterConfiguration`'s own docs on why: neither is a single
+ * number.
  *
  * **A specialized "Cut" editor for the Equalizer layer** - `setEqualizerMode()`
  * (called by `MainWindow` whenever the selected layer's own `type()` is
@@ -119,6 +132,25 @@ public:
      */
     void setEqualizerMode(bool isEqualizer);
 
+    /**
+     * @brief Sets which MindWaves each of the five bindable parameters'
+     *        own combo can offer - `MindWaveController`'s own answer to
+     *        keeping this panel in sync with the project's current
+     *        MindWave library (`v0.Y.31.1` Installment D3), the same
+     *        role `LayersPanel::setAvailableMindWaves()` already plays
+     *        for a layer's own opacity binding.
+     *
+     * Immediately rebuilds every combo's own item list (not deferred to
+     * the next `setFilterConfiguration()` call), preserving each combo's
+     * own current selection when the bound id is still present among
+     * `mindWaves`.
+     *
+     * @param mindWaves Every current library entry's own id/name, in
+     *        whatever order they should appear in each combo (after a
+     *        leading "None" entry, always first).
+     */
+    void setAvailableMindWaves(const std::vector<std::pair<sound_mind::core::MindWaveId, QString>>& mindWaves);
+
 signals:
     /// @brief Emitted whenever any parameter control changes.
     /// @param config The panel's own new, complete configuration.
@@ -131,6 +163,11 @@ private:
     /// @brief Shows the one parameter group matching `config_.type()` and
     ///        hides every other one - see this class's own docs.
     void updateVisibleGroup();
+
+    /// @brief Rebuilds every MindWave-binding combo's own item list from
+    ///        `availableMindWaves_`, preserving each combo's own current
+    ///        selection if the bound id is still present.
+    void rebuildMindWaveCombos();
 
     sound_mind::core::FilterConfiguration config_;
     bool isEqualizerMode_ = false;
@@ -151,16 +188,24 @@ private:
 
     QGroupBox* uniformBlurGroup_ = nullptr;
     QDoubleSpinBox* blurSigmaSpinBox_ = nullptr;
+    QComboBox* blurSigmaMindWaveCombo_ = nullptr;
 
     QGroupBox* edgePreservingBlurGroup_ = nullptr;
     QSpinBox* medianSizeSpinBox_ = nullptr;
+    QComboBox* medianSizeMindWaveCombo_ = nullptr;
 
     QGroupBox* directionalBlurGroup_ = nullptr;
     QSpinBox* directionalBlurLengthSpinBox_ = nullptr;
+    QComboBox* directionalBlurLengthMindWaveCombo_ = nullptr;
     QDoubleSpinBox* directionalBlurAngleSpinBox_ = nullptr;
+    QComboBox* directionalBlurAngleMindWaveCombo_ = nullptr;
 
     QGroupBox* sharpenGroup_ = nullptr;
     QDoubleSpinBox* sharpenAmountSpinBox_ = nullptr;
+    QComboBox* sharpenAmountMindWaveCombo_ = nullptr;
+
+    /// @brief See setAvailableMindWaves()'s own docs.
+    std::vector<std::pair<sound_mind::core::MindWaveId, QString>> availableMindWaves_;
 
     QGroupBox* toneCurveGroup_ = nullptr;
     ToneCurveEditor* toneCurveEditor_ = nullptr;

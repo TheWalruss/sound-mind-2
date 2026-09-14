@@ -8,30 +8,36 @@
 
 namespace sound_mind::studio {
 
+class FilterConfigurationPanel;
 class LayersPanel;
 class MindWavesPanel;
 
 /**
  * @brief Owns the current project's MindWave library - add/remove/rename/
- *        edit - and keeps `MindWavesPanel`/`LayersPanel` in sync with it.
- *        `v0.Y.31.1` (MindWaves v1) Installment C2's own controller, the
- *        same "own presentation" treatment `LayerController`/
- *        `ToolPaletteController` already received.
+ *        edit - and keeps `MindWavesPanel`/`LayersPanel`/
+ *        `FilterConfigurationPanel` in sync with it. `v0.Y.31.1`
+ *        (MindWaves v1) Installment C2's own controller (extended in
+ *        Installment D3 for `FilterConfigurationPanel`), the same "own
+ *        presentation" treatment `LayerController`/`ToolPaletteController`
+ *        already received.
  *
- * Constructed with non-owning pointers to `mindWavesPanel` and
- * `layersPanel` - both stay `MainWindow`-owned (dock widgets, like
- * `LayersPanel`/`FilterConfigurationPanel` already are for
- * `LayerController`) - and pushes the current library into both of them
- * after any mutation: `mindWavesPanel` gets the full library (name,
- * generator type, parameters); `layersPanel` gets only id/name pairs, for
- * its own per-row opacity-binding combo (`LayersPanel::
- * setAvailableMindWaves()`).
+ * Constructed with non-owning pointers to `mindWavesPanel`, `layersPanel`,
+ * and `filterConfigurationPanel` - all three stay `MainWindow`-owned (dock
+ * widgets, like they already are for `LayerController`) - and pushes the
+ * current library into all three after any mutation: `mindWavesPanel` gets
+ * the full library (name, generator type, parameters); `layersPanel` and
+ * `filterConfigurationPanel` each get only id/name pairs, for their own
+ * respective binding combos (`LayersPanel::setAvailableMindWaves()`,
+ * `FilterConfigurationPanel::setAvailableMindWaves()`).
  *
- * **Deliberately does not own `Layer::opacityMindWave()`'s own mutation** -
- * binding a *layer* to a MindWave is a layer mutation, not a MindWave-
- * library one, so it stays `LayerController::setLayerOpacityMindWave()`'s
- * job; this class only keeps `layersPanel`'s own combo populated with
- * *which* MindWaves exist to bind to.
+ * **Deliberately does not own `Layer::opacityMindWave()`'s or
+ * `FilterConfiguration`'s own parameter-binding mutation** - binding a
+ * *layer* or a *filter parameter* to a MindWave is a layer/filter
+ * mutation, not a MindWave-library one, so those stay
+ * `LayerController::setLayerOpacityMindWave()`'s and
+ * `FilterConfigurationPanel`'s own edited-config-round-trip's job
+ * respectively; this class only keeps each panel's own combo populated
+ * with *which* MindWaves exist to bind to.
  */
 class MindWaveController : public QObject {
     Q_OBJECT
@@ -43,10 +49,14 @@ public:
      *        outlive this controller.
      * @param layersPanel Non-owning; kept in sync with the library's own
      *        id/name pairs. Must outlive this controller.
+     * @param filterConfigurationPanel Non-owning; kept in sync with the
+     *        library's own id/name pairs, the same as `layersPanel`. Must
+     *        outlive this controller.
      * @param parent The owning object, per Qt's normal parent-ownership
      *        convention; may be `nullptr`.
      */
-    MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel, QObject* parent = nullptr);
+    MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel,
+                        FilterConfigurationPanel* filterConfigurationPanel, QObject* parent = nullptr);
 
     /// @brief Sets which project this controller looks up/mutates
     ///        MindWaves in. Does *not* itself refresh the panels -
@@ -102,6 +112,7 @@ signals:
 private:
     MindWavesPanel* mindWavesPanel_;
     LayersPanel* layersPanel_;
+    FilterConfigurationPanel* filterConfigurationPanel_;
     sound_mind::core::Project* project_ = nullptr;
 };
 

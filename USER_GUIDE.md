@@ -247,9 +247,12 @@ and Export are the exception - see the note above.
 The **MindWaves** panel (toggle it from the toolbar) manages a small
 library of reusable waveforms - each one a shape that varies across the
 canvas (over time, over frequency, or both) rather than a single fixed
-number. Right now, the only thing a MindWave can do is bind to a
-**layer's own opacity**: instead of a flat volume, the layer fades in and
-out following the MindWave's own shape as it plays.
+number. A MindWave can bind to a **layer's own opacity** (instead of a
+flat volume, the layer fades in and out following the MindWave's own
+shape as it plays) or to one of a **Filter layer's own scalar
+parameters** (see [Filter Layers](#filter-layers) below) - in both cases
+the bound value varies across the canvas following the MindWave's own
+shape instead of staying fixed.
 
 - **+ Add MindWave** creates a new one with a sensible default (a plain,
   audible sine wave) and selects it. Double-click a MindWave's name to
@@ -306,6 +309,16 @@ group's own controls while it was hidden.
   90° along frequency).
 - **Sharpen** is Blur's own opposite, tightening detail instead of
   softening it - one **Amount** control (higher pushes further).
+- Each of those five controls (**Sigma**, **Size**, **Length**, **Angle**,
+  **Amount**) has its own MindWave combo right beside its spin box - the
+  same **None**-or-pick-a-MindWave choice as a layer's own opacity
+  binding (see [MindWaves](#mindwaves) above), but with a genuinely
+  different effect here: binding one of these varies *that filter's own
+  parameter* across the canvas, so the filter itself computes a different
+  blur/sharpen at every cell instead of applying one fixed strength
+  everywhere. The spin box still sets that parameter's ceiling value
+  (what the MindWave's own peak maps to); **None** leaves it at a flat,
+  unvarying value the way it always worked before.
 - **Tone Curve** remaps loudness through a curve you draw yourself: click
   anywhere on the curve area to add a point, drag a point to move it, and
   double-click a point (other than the two fixed endpoints) to remove it.
@@ -736,16 +749,17 @@ milestone as a whole:
   just the two endpoint stops (`t=0`, `t=1`), via plain spin boxes. (Tone
   Curve, unlike Frequency-Axis Gradient, does have a real draggable point
   editor now.)
-- **No MindWave-bound filter parameters yet** - a filter's own strength
-  can't yet vary spatially; MindWaves (see [MindWaves](#mindwaves) above)
-  can only bind to a layer's opacity so far, not a filter's own
-  parameters.
+- **MindWave-bound filter parameters exist now** (see
+  [MindWaves](#mindwaves) above) for the five scalar controls listed
+  above - Sigma, Size, Length, Angle, and Amount. Frequency-Axis
+  Gradient/Equalizer and Tone Curve have no bindable scalar of their own
+  yet, so they're untouched by this.
 
 [MindWaves](#mindwaves) (see above) exist now, but only a narrow slice of
 what's designed for them:
 
-- Only **layer opacity** can bind to a MindWave - filter parameters and
-  brush parameters can't yet (see the two bullets above).
+- **Layer opacity and the five filter-parameter scalars** can bind to a
+  MindWave now; **brush parameters** can't yet (see the bullet above).
 - **No canvas-space vs. operation-relative choice** - every binding today
   is implicitly canvas-space (the field is a fixed mask laid over the
   whole piece); the "retriggers fresh per note" alternative doesn't exist

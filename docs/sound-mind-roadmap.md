@@ -418,7 +418,7 @@ Also where `docs/sound-mind-architecture.md`'s own still-open Decisions Needed g
 
 ## Phase 4 - Expressive Tools
 
-### v0.Y.31.1 - MindWaves v1
+### v0.Y.31.1 - MindWaves v1 ✅
 
 The core generator types (periodic, envelope, stepped/noise, spatial, a first fractal field), superposition, and binding to layer opacity and filter parameters (the pixel-local-vs-kernel-shape distinction - see the design doc's own corrected *Filter parameters* section, fixed during this installment plan's own **D** scoping pass below). Deliberately excludes the canvas-space vs. operation-relative binding coordinate frame (see `v0.Y.32.1` - that choice is specifically about how a *paint operation* binds, which doesn't exist until Sound Mind Instruments); every binding this milestone builds is implicitly canvas-space, the only frame that makes sense for a layer's or a filter's own parameters. Also implicitly excludes brush-parameter binding (the design doc's own *Brush parameters* section) - the roadmap's own scope here names only layer opacity and filter parameters.
 

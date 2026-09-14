@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.7] - 2026-09-14
+
+Installment D3 of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - the Studio UI half of filter-parameter binding, completing Installment D (D1 Core, D2 GPU, D3 this). Mechanically follows Installment C2's own `LayersPanel` bind-combo precedent.
+
+### Added
+
+- **`FilterConfigurationPanel` gains a MindWave bind combo beside each of the five bindable scalar controls** (Sigma, Size, Length, Angle, Amount) - **None** plus every MindWave in the project's library, matching the layer-opacity bind combo's own behavior. The spin box still sets that parameter's ceiling value; a binding varies the parameter across the canvas following the bound MindWave's own shape instead of holding it fixed.
+- **`MindWaveController` now keeps three panels in sync** (`MindWavesPanel`, `LayersPanel`, `FilterConfigurationPanel`) instead of two - `refreshMindWavesPanel()` pushes the current MindWave library into all three.
+
+### Changed
+
+- `USER_GUIDE.md`'s "MindWaves" and "Filter Layers" sections, and its "What's Not Here Yet" list, updated to describe filter-parameter binding as a real, usable feature rather than a gap.
+
+Full regression: sound-mind-studio all 28 QTest classes passing (new `FilterConfigurationPanel` and strengthened `MindWaveController` coverage); sound-mind-core 378/378 and sound-mind-gpu 33/33 unchanged (no Core/GPU code touched this installment). Doxygen: 0 warnings.
+
 ## [0.0.31.6] - 2026-09-14
 
 Installment D2 of the "MindWaves v1" milestone (`docs/sound-mind-roadmap.md`'s `v0.Y.31.1`) - a real GPU kernel for each of the three expensive kernel-shape filter-parameter bindings (`blurSigma`, `medianSize`, `directionalBlurLength`/`directionalBlurAngleDegrees`), completing the "GPU-aware from Installment C onward" commitment for filter-parameter binding. `sharpenAmount` needs no GPU kernel (it already varied for free in D1). No Studio UI yet - D3.
