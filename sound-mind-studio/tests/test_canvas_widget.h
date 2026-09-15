@@ -62,6 +62,7 @@ private slots:
     void wheelWithNoModifierDoesNotZoom();
     void wheelWithCtrlZoomsCoarseProportionally();
     void wheelWithAltZoomsFrequencyOnly();
+    void wheelWithAltAndAHorizontalOnlyDeltaStillZoomsFrequencyOnly();
     void wheelWithShiftZoomsTimeOnly();
     void wheelScrollingDownZoomsOut();
 };

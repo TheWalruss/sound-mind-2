@@ -236,12 +236,19 @@ void CanvasWidget::wheelEvent(QWheelEvent* event) {
         QWidget::wheelEvent(event);
         return;
     }
-    const int verticalDelta = event->angleDelta().y();
-    if (verticalDelta == 0) {
+    // Windows itself remaps a held-Alt wheel scroll onto the *horizontal*
+    // delta (angleDelta().x()), the native "Alt+wheel = horizontal scroll"
+    // convention other apps also honor - so the meaningful delta isn't
+    // reliably in .y() alone. Preferring whichever component is actually
+    // nonzero (y first, matching every other modifier's own plain vertical
+    // gesture) covers both cases without needing to special-case Alt.
+    const QPoint angleDelta = event->angleDelta();
+    const int delta = angleDelta.y() != 0 ? angleDelta.y() : angleDelta.x();
+    if (delta == 0) {
         event->ignore();
         return;
     }
-    const bool zoomingIn = verticalDelta > 0;
+    const bool zoomingIn = delta > 0;
     if (modifiers & Qt::ControlModifier) {
         zoomingIn ? zoomInCoarse() : zoomOutCoarse();
     } else if (modifiers & Qt::AltModifier) {

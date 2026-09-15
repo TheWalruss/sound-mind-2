@@ -1136,6 +1136,28 @@ void CanvasWidgetTest::wheelWithAltZoomsFrequencyOnly() {
     QCOMPARE(widget.size(), QSize(100, 50));  // Frequency (height) x1.25; time (width) untouched.
 }
 
+void CanvasWidgetTest::wheelWithAltAndAHorizontalOnlyDeltaStillZoomsFrequencyOnly() {
+    // Regression test for a real reported bug: on Windows, a held-Alt
+    // wheel scroll's own delta arrives on the *horizontal* axis
+    // (angleDelta().x()) instead of the vertical one every other modifier
+    // uses - the same native "Alt+wheel = horizontal scroll" convention
+    // other apps honor. Before the fix, reading only angleDelta().y()
+    // (which is 0 here) meant this exact event fell through to plain
+    // scrolling instead of zooming, matching the user's own report
+    // ("Alt+mousewheel does scroll vertically when zoomed in").
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+
+    QWheelEvent event(QPointF(10, 10), QPointF(10, 10), QPoint(0, 0), QPoint(120, 0), Qt::NoButton, Qt::AltModifier,
+                       Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(&widget, &event);
+
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::Manual);
+    QCOMPARE(widget.size(), QSize(100, 50));  // Frequency (height) x1.25; time (width) untouched.
+}
+
 void CanvasWidgetTest::wheelWithShiftZoomsTimeOnly() {
     const Project project = Project::createNew(zoomTestSettings());
     CanvasWidget widget;

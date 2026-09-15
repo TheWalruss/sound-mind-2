@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.11] - 2026-09-15
+
+Fixes a real, user-reported bug from `v0.0.31.10`: Alt+mousewheel didn't zoom - it scrolled vertically instead, exactly as if no modifier were held.
+
+### Fixed
+
+- **Alt+mousewheel now zooms the frequency axis, as designed.** Root cause: on Windows, a held-Alt wheel scroll's own delta arrives on the *horizontal* axis (`angleDelta().x()`) rather than the vertical one every other modifier uses - the same native "Alt+wheel = horizontal scroll" convention other apps honor. `CanvasWidget::wheelEvent()` only ever read `angleDelta().y()`, so an Alt-held scroll always looked like a zero-delta, no-op wheel event to it - falling through to the enclosing `QScrollArea`'s own plain (vertical) scrolling. Fixed by preferring the vertical delta but falling back to the horizontal one when it's zero.
+
+Full regression: sound-mind-studio all 29 QTest classes (`CanvasWidgetTest` gained 1 case, up to 61) passing; sound-mind-core 378/378 and sound-mind-gpu 33/33 unchanged (no Core/GPU code touched). Doxygen: 0 warnings.
+
 ## [0.0.31.10] - 2026-09-15
 
 Canvas Navigation: a real, independent Zoom level for the canvas, with axis-restricted zoom (time-only/frequency-only/proportional) via a new Alt/Shift/Ctrl keyboard-modifier mnemonic - `docs/sound-mind-design.md`'s new "Canvas Navigation" section.

@@ -494,10 +494,16 @@ protected:
      *        is left to `QWidget::wheelEvent()` - ordinary scrolling, once
      *        the enclosing `QScrollArea` has something to scroll.
      *
-     * Only the *sign* of the wheel's own vertical delta is used (one zoom
-     * step per event, forward or backward) - not its magnitude, which
-     * varies too much across mice/trackpads/OSes to map onto a specific
-     * zoom multiplier meaningfully.
+     * Prefers the wheel's own vertical delta, falling back to the
+     * horizontal one if that's zero - a real, reported bug: Windows
+     * itself remaps a held-`Alt` wheel scroll onto the *horizontal* delta
+     * (`angleDelta().x()`), the same native "Alt+wheel = horizontal
+     * scroll" convention other apps honor, so `Alt`+wheel's own
+     * meaningful delta isn't reliably in `.y()` alone the way `Ctrl`'s/
+     * `Shift`'s own always are. Only the resulting delta's own *sign* is
+     * used (one zoom step per event, forward or backward) - not its
+     * magnitude, which varies too much across mice/trackpads/OSes to map
+     * onto a specific zoom multiplier meaningfully.
      *
      * @param event The wheel event.
      */
