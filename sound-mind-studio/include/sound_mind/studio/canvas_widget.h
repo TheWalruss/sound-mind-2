@@ -2,10 +2,12 @@
 
 #include <optional>
 
+#include <QImage>
 #include <QPainterPath>
 #include <QRectF>
 #include <QWidget>
 
+#include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/studio/axis_labels.h"
@@ -237,6 +239,30 @@ public:
      *        `std::nullopt` draws nothing, clearing any previous overlay.
      */
     void setSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds);
+
+    /**
+     * @brief Sets (or clears) the MindWave being live-previewed, and
+     *        repaints - a semi-transparent (50% opacity) grayscale
+     *        rendering of `wave`'s own `[0, 1]` field
+     *        (`sound_mind::core::evaluateMindWaveField()`), laid over
+     *        whatever the canvas otherwise shows, per
+     *        `docs/sound-mind-design.md`'s "Low Frequency Oscillations" -
+     *        `MindWaveController`'s own answer to the MindWaves panel's
+     *        Preview toggle.
+     *
+     * The field is evaluated once here, not on every paintEvent() - a
+     * plain cached `QImage`, scaled to fill the widget the same way the
+     * main composite already is (`drawImage(rect(), ...)`), gets redrawn
+     * as many times as needed for free. A no-op (clears any existing
+     * preview instead) if no project is set - there's no canvas geometry
+     * to evaluate `wave` against yet.
+     *
+     * @param wave The MindWave to preview, by value (no lifetime tie to
+     *        wherever the caller's own copy lives - see
+     *        `MindWaveController`'s own docs on why); `std::nullopt`
+     *        clears the preview.
+     */
+    void setMindWavePreview(std::optional<sound_mind::core::MindWave> wave);
 
     /**
      * @brief Sets what the frequency (vertical) axis's own labels show,
@@ -633,6 +659,18 @@ private:
     std::optional<std::size_t> previewSelectedNodeIndex_;
     std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;
     std::optional<sound_mind::core::TimeFrequencyRect> selectionBounds_;
+
+    /// @brief The MindWave currently being previewed, if any - kept only
+    ///        so setProject() can tell whether there's actually a preview
+    ///        to clear; mindWavePreviewImage_ (already evaluated) is what
+    ///        paintEvent() actually draws.
+    std::optional<sound_mind::core::MindWave> mindWavePreview_;
+
+    /// @brief The cached grayscale rendering of mindWavePreview_'s own
+    ///        field, evaluated once in setMindWavePreview() rather than on
+    ///        every repaint - a default-constructed (null) QImage draws
+    ///        nothing.
+    QImage mindWavePreviewImage_;
     bool showBoundingBoxes_ = false;
     bool showPathGeometry_ = false;
     VerticalAxisLabelMode verticalAxisLabelMode_ = VerticalAxisLabelMode::Off;

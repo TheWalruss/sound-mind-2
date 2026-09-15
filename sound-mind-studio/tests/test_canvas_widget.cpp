@@ -11,6 +11,7 @@
 
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/path.h"
@@ -22,6 +23,8 @@
 using sound_mind::codec::StreamImage;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
+using sound_mind::core::MindWave;
+using sound_mind::core::MindWaveAxis;
 using sound_mind::core::PaintOperation;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
@@ -1182,4 +1185,62 @@ void CanvasWidgetTest::wheelScrollingDownZoomsOut() {
     QCoreApplication::sendEvent(&widget, &event);
 
     QCOMPARE(widget.size(), QSize(80, 40));  // Time (width) /1.25; frequency (height) untouched.
+}
+
+void CanvasWidgetTest::setMindWavePreviewDrawsASemiTransparentGrayscaleOverlay() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    const QImage before = widget.grab().toImage();
+
+    MindWave wave;
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(0.1);  // Short period - plenty of visible variation across the canvas width.
+    widget.setMindWavePreview(wave);
+    const QImage after = widget.grab().toImage();
+
+    bool foundDifference = false;
+    for (int y = 0; y < 50 && !foundDifference; ++y) {
+        for (int x = 0; x < 100; ++x) {
+            if (before.pixelColor(x, y) != after.pixelColor(x, y)) {
+                foundDifference = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundDifference);
+}
+
+void CanvasWidgetTest::setMindWavePreviewWithNulloptClearsIt() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    MindWave wave;
+    wave.setPeriod(0.1);
+    widget.setMindWavePreview(wave);
+    const QImage withPreview = widget.grab().toImage();
+
+    widget.setMindWavePreview(std::nullopt);
+    const QImage cleared = widget.grab().toImage();
+
+    QVERIFY(withPreview != cleared);
+}
+
+void CanvasWidgetTest::settingANewProjectClearsTheMindWavePreview() {
+    const Project firstProject = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&firstProject);
+    widget.resize(100, 50);
+    MindWave wave;
+    wave.setPeriod(0.1);
+    widget.setMindWavePreview(wave);
+    const QImage withPreview = widget.grab().toImage();
+
+    const Project secondProject = Project::createNew(mouseConversionTestSettings());
+    widget.setProject(&secondProject);
+    const QImage afterSwitch = widget.grab().toImage();
+
+    QVERIFY(withPreview != afterSwitch);
 }

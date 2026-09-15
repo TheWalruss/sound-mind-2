@@ -84,6 +84,11 @@ void CanvasWidget::setProject(const sound_mind::core::Project* project) {
     if (modeChanged) {
         emit zoomModeChanged(zoomMode_);
     }
+    // Same reasoning as the zoom reset above - a previous project's own
+    // MindWave preview (evaluated against its own, possibly different,
+    // canvas dimensions) means nothing for a different project.
+    mindWavePreview_.reset();
+    mindWavePreviewImage_ = QImage();
     updateGeometry();
     update();
 }
@@ -117,6 +122,21 @@ void CanvasWidget::setPickSelectionBounds(std::optional<sound_mind::core::TimeFr
 
 void CanvasWidget::setSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds) {
     selectionBounds_ = bounds;
+    update();
+}
+
+void CanvasWidget::setMindWavePreview(std::optional<sound_mind::core::MindWave> wave) {
+    mindWavePreview_ = std::move(wave);
+    if (!mindWavePreview_.has_value() || project_ == nullptr) {
+        mindWavePreviewImage_ = QImage();
+        update();
+        return;
+    }
+    const auto& settings = project_->settings();
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+    const auto field = sound_mind::core::evaluateMindWaveField(*mindWavePreview_, config, settings.canvasWidth);
+    const auto grayscale = sound_mind::codec::toGrayscaleImage(field, settings.canvasWidth, config.binCount);
+    mindWavePreviewImage_ = toQImageView(grayscale).copy();
     update();
 }
 
@@ -289,6 +309,17 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         // element" ordering the design doc's own "purely a display aid"
         // framing implies.
         drawGrid(painter);
+
+        // MindWave Preview (see setMindWavePreview()'s own docs) - a
+        // semi-transparent grayscale overlay, same ordering reasoning as
+        // Overlay Grids above (a display aid over the content, under any
+        // interactive overlay). setOpacity() is reset immediately after -
+        // nothing else drawn below should inherit it.
+        if (!mindWavePreviewImage_.isNull()) {
+            painter.setOpacity(0.5);
+            painter.drawImage(rect(), mindWavePreviewImage_);
+            painter.setOpacity(1.0);
+        }
     }
 
     // The playhead (v0.0.21.1, Playback position bar) is drawn last, over

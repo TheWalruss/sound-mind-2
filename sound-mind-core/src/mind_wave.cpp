@@ -351,6 +351,19 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
     return static_cast<float>(std::clamp(result, 0.0, 1.0));
 }
 
+std::vector<float> evaluateMindWaveField(const MindWave& wave, const sound_mind::codec::StreamCodecConfig& config,
+                                          std::uint32_t canvasWidth) {
+    std::vector<float> field(std::size_t{config.binCount} * canvasWidth);
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), config);
+        for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {
+            const TimeFrequencyPoint point{frameIndexToTime(frame, config), frequencyHz};
+            field[cellIndex(bin, frame, canvasWidth)] = wave.evaluate(point, config);
+        }
+    }
+    return field;
+}
+
 void to_json(nlohmann::json& json, const MindWave& mindWave) {
     json = nlohmann::json{{"type", mindWave.type()},
                           {"periodicWaveform", mindWave.periodicWaveform()},

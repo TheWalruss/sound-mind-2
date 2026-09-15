@@ -220,6 +220,10 @@ Choosing a generator type and then dialling its raw parameters (period, phase, o
 
 This is one step toward a real interaction-design pass for building and combining MindWaves — a pass the current design still needs (see [Deferred Decisions](#deferred-decisions)), not a finished answer to it.
 
+### Preview
+
+A MindWave being built or tuned can be previewed directly on the canvas, before it's bound to anything: its own field renders as a live grayscale overlay — black where it evaluates to 0, white where it evaluates to 1 — updating as the generator type, parameters, or superposition stack change. The same non-destructive, display-only spirit as [Overlay Grids](#overlay-grids): a judgment aid, never affecting encoding, decoding, or any stored pixel data. This is what lets a shape be judged against the real canvas geometry — how a period lines up against a note's own duration, say — before committing to binding it anywhere.
+
 ## Paths
 
 A **Path** is a segmented cubic Bézier curve that a brush stamps along its length. Every stroke ends up with one, one way or another — see [Painting](#painting) for how a freehand stroke gets there automatically, in real time, as opposed to the Path tool's own deliberate, node-by-node route described below. Whichever way a Path was built, it's ideal for melodic lines, precise spectral contours, and rhythmically-timed patterns that would be hard to hold steady by hand alone.

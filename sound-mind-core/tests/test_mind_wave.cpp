@@ -491,3 +491,41 @@ TEST_CASE("A NamedMindWave round-trips through JSON unchanged", "[core][mind_wav
     REQUIRE(restored.wave.period() == original.wave.period());
     REQUIRE(restored.wave.periodicWaveform() == original.wave.periodicWaveform());
 }
+
+// --- evaluateMindWaveField() - the Studio's own MindWave Preview overlay ---
+
+TEST_CASE("evaluateMindWaveField returns one value per bin/frame cell, matching evaluate() at each position",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(2.0);
+    const auto config = testConfig();
+    constexpr std::uint32_t canvasWidth = 4;
+
+    const auto field = sound_mind::core::evaluateMindWaveField(wave, config, canvasWidth);
+
+    REQUIRE(field.size() == std::size_t{config.binCount} * canvasWidth);
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), config);
+        for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {
+            const float expected =
+                wave.evaluate(TimeFrequencyPoint{sound_mind::core::frameIndexToTime(frame, config), frequencyHz},
+                              config);
+            REQUIRE(field[sound_mind::core::cellIndex(bin, frame, canvasWidth)] == Catch::Approx(expected));
+        }
+    }
+}
+
+TEST_CASE("evaluateMindWaveField's own values all fall within [0, 1]", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::SteppedNoise);
+    wave.setSteppedNoiseShape(SteppedNoiseShape::GaussianNoise);
+    const auto config = testConfig();
+
+    const auto field = sound_mind::core::evaluateMindWaveField(wave, config, 10);
+
+    for (const float value : field) {
+        REQUIRE(value >= 0.0f);
+        REQUIRE(value <= 1.0f);
+    }
+}

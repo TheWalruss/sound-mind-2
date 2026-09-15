@@ -41,6 +41,15 @@ class MindWaveEditor;
  * and emits exactly one mindWaveChanged() with it, the same "emit the
  * whole thing, not a per-field delta" convention `FilterConfigurationPanel`
  * already established.
+ *
+ * **Preview**: a checkable toggle previews the currently selected
+ * entry's own complete field (top-level generator plus its full
+ * superposition stack - never a lone stack member in isolation) as a
+ * live grayscale overlay on the canvas, per
+ * `docs/sound-mind-design.md`'s "Low Frequency Oscillations" - see
+ * previewToggled()'s own docs. This panel only ever emits the toggle;
+ * `MindWaveController` owns deciding *what* to preview and pushing it to
+ * `CanvasWidget`.
  */
 class MindWavesPanel : public QDockWidget {
     Q_OBJECT
@@ -94,6 +103,22 @@ public:
     /// @param id The entry to select.
     void selectMindWave(sound_mind::core::MindWaveId id);
 
+    /// @brief Whether the Preview toggle is currently checked.
+    /// @return `true` if Preview is on; `false` by default.
+    [[nodiscard]] bool previewEnabled() const;
+
+    /**
+     * @brief Sets the Preview toggle's own checked state, without emitting
+     *        previewToggled() - used by `MindWaveController` to turn
+     *        Preview back off on a project switch (see its own docs on
+     *        why), where re-emitting and re-triggering a fresh preview
+     *        render would be redundant/wrong (the new project's own
+     *        canvas is what's about to be shown, with nothing selected
+     *        yet to preview).
+     * @param enabled The new checked state.
+     */
+    void setPreviewEnabled(bool enabled);
+
 signals:
     /// @brief The current selection changed.
     /// @param id The newly selected entry's id, or `std::nullopt` if the
@@ -116,6 +141,21 @@ signals:
     /// @param wave Its own new, complete MindWave.
     void mindWaveChanged(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave);
 
+    /**
+     * @brief The Preview toggle was clicked by the user (see the class's
+     *        own docs) - not emitted by setPreviewEnabled()'s own
+     *        programmatic changes.
+     *
+     * `MindWaveController` reacts by pushing (or clearing) the currently
+     * selected entry's own complete MindWave onto `CanvasWidget::
+     * setMindWavePreview()` - this panel has no `CanvasWidget` of its own
+     * to push to, and no opinion on *what* gets previewed beyond "the
+     * current selection," so it only ever reports the raw toggle.
+     *
+     * @param enabled The toggle's own new checked state.
+     */
+    void previewToggled(bool enabled);
+
 private:
     /// @brief Rebuilds `stackList_` from `currentStack_`.
     void refreshStackList();
@@ -133,6 +173,7 @@ private:
     void loadStackState(const sound_mind::core::MindWave& wave);
 
     QPushButton* addButton_ = nullptr;
+    QPushButton* previewButton_ = nullptr;
     QListWidget* list_ = nullptr;
     MindWaveEditor* mindWaveEditor_ = nullptr;
 

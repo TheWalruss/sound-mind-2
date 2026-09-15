@@ -270,3 +270,37 @@ void MindWavesPanelTest::contentIsInAResizableScrollAreaSoThePanelCanShrinkBelow
 
     QVERIFY(panel.minimumSizeHint().height() < 250);
 }
+
+void MindWavesPanelTest::freshPanelHasPreviewOff() {
+    const MindWavesPanel panel;
+    QVERIFY(!panel.previewEnabled());
+}
+
+void MindWavesPanelTest::clickingThePreviewButtonEmitsPreviewToggled() {
+    MindWavesPanel panel;
+    QSignalSpy spy(&panel, &MindWavesPanel::previewToggled);
+
+    auto* previewButton = panel.findChild<QPushButton*>(QStringLiteral("previewButton"));
+    QVERIFY(previewButton != nullptr);
+    previewButton->click();
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.constFirst().at(0).toBool(), true);
+    QVERIFY(panel.previewEnabled());
+
+    previewButton->click();
+
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(spy.constLast().at(0).toBool(), false);
+    QVERIFY(!panel.previewEnabled());
+}
+
+void MindWavesPanelTest::setPreviewEnabledChangesTheButtonWithoutEmitting() {
+    MindWavesPanel panel;
+    QSignalSpy spy(&panel, &MindWavesPanel::previewToggled);
+
+    panel.setPreviewEnabled(true);
+
+    QVERIFY(panel.previewEnabled());
+    QCOMPARE(spy.count(), 0);
+}

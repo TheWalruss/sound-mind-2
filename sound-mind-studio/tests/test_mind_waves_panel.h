@@ -21,4 +21,7 @@ private slots:
     void setMindWavesDropsSelectionWhenTheIdIsGone();
     void clearSelectionDisablesBothEditorsAndEmits();
     void contentIsInAResizableScrollAreaSoThePanelCanShrinkBelowItsFullHeight();
+    void freshPanelHasPreviewOff();
+    void clickingThePreviewButtonEmitsPreviewToggled();
+    void setPreviewEnabledChangesTheButtonWithoutEmitting();
 };

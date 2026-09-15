@@ -595,6 +595,31 @@ private:
     SuperpositionBlendMode superpositionBlendMode_ = SuperpositionBlendMode::Multiply;
 };
 
+/**
+ * @brief Evaluates `wave` across an entire canvas, one value per
+ *        `[bin][frame]` cell - the Studio's own live MindWave Preview
+ *        overlay (`docs/sound-mind-design.md`'s "Low Frequency
+ *        Oscillations") is the first caller, but this is a plain,
+ *        reusable evaluation utility, not tied to that one use.
+ *
+ * Row-major, bin-major layout (see `cellIndex()`'s own docs) - the same
+ * layout every other per-cell scalar field in this codebase (a
+ * `StreamImage`'s own `leftMagnitudeDb`, a Filter's own per-cell
+ * parameter fields) already uses.
+ *
+ * @param wave The MindWave to evaluate.
+ * @param config Interprets each cell's own bin/frame position as a real
+ *        time/frequency point, the same config every other domain
+ *        conversion in Core already uses.
+ * @param canvasWidth How many frame columns to evaluate - `config`'s own
+ *        `binCount` supplies the row count.
+ * @return `wave`'s own value at every cell, each in `[0, 1]` - size
+ *         `config.binCount * canvasWidth`.
+ */
+[[nodiscard]] std::vector<float> evaluateMindWaveField(const MindWave& wave,
+                                                        const sound_mind::codec::StreamCodecConfig& config,
+                                                        std::uint32_t canvasWidth);
+
 /// @brief Serializes a MindWave to its JSON representation.
 void to_json(nlohmann::json& json, const MindWave& mindWave);
 

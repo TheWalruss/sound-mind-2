@@ -1,8 +1,10 @@
 #include "sound_mind/studio/mind_wave_controller.h"
 
+#include <optional>
 #include <utility>
 #include <vector>
 
+#include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/mind_waves_panel.h"
@@ -43,13 +45,48 @@ QString nextDefaultName(const std::vector<NamedMindWave>& entries) {
 }  // namespace
 
 MindWaveController::MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel,
-                                        FilterConfigurationPanel* filterConfigurationPanel, QObject* parent)
+                                        FilterConfigurationPanel* filterConfigurationPanel, CanvasWidget* canvas,
+                                        QObject* parent)
     : QObject(parent),
       mindWavesPanel_(mindWavesPanel),
       layersPanel_(layersPanel),
-      filterConfigurationPanel_(filterConfigurationPanel) {}
+      filterConfigurationPanel_(filterConfigurationPanel),
+      canvas_(canvas) {
+    connect(mindWavesPanel_, &MindWavesPanel::previewToggled, this, &MindWaveController::updateMindWavePreview);
+    connect(mindWavesPanel_, &MindWavesPanel::selectionChanged, this, &MindWaveController::updateMindWavePreview);
+    connect(mindWavesPanel_, &MindWavesPanel::mindWaveChanged, this,
+            &MindWaveController::handleMindWaveEditedWhilePreviewing);
+}
 
-void MindWaveController::setProject(sound_mind::core::Project* project) { project_ = project; }
+void MindWaveController::setProject(sound_mind::core::Project* project) {
+    project_ = project;
+    mindWavesPanel_->setPreviewEnabled(false);
+    canvas_->setMindWavePreview(std::nullopt);
+}
+
+void MindWaveController::updateMindWavePreview() {
+    if (!mindWavesPanel_->previewEnabled() || project_ == nullptr) {
+        canvas_->setMindWavePreview(std::nullopt);
+        return;
+    }
+    const auto selectedId = mindWavesPanel_->selectedMindWaveId();
+    if (!selectedId.has_value()) {
+        canvas_->setMindWavePreview(std::nullopt);
+        return;
+    }
+    const NamedMindWave* entry = project_->mindWaveById(*selectedId);
+    canvas_->setMindWavePreview(entry != nullptr ? std::optional<MindWave>(entry->wave) : std::nullopt);
+}
+
+void MindWaveController::handleMindWaveEditedWhilePreviewing(MindWaveId id, const MindWave& wave) {
+    if (!mindWavesPanel_->previewEnabled()) {
+        return;
+    }
+    if (mindWavesPanel_->selectedMindWaveId() != std::optional<MindWaveId>(id)) {
+        return;  // Defensive - mindWaveChanged() never fires for a non-selected entry (see its own docs).
+    }
+    canvas_->setMindWavePreview(wave);
+}
 
 void MindWaveController::refreshMindWavesPanel() {
     std::vector<MindWavesPanel::RowData> rows;

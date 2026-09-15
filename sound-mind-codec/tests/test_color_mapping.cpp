@@ -71,6 +71,44 @@ TEST_CASE("toGrayscaleImage produces equal R, G, and B at every pixel", "[color_
     }
 }
 
+TEST_CASE("toGrayscaleImage(field) maps 0.0/0.5/1.0 to 0/roughly-mid/255 linearly, not via dB",
+          "[color_mapping]") {
+    // [bin][frame], row-major: cell = bin * frameCount + frame - same
+    // layout the StreamImage overload's own test above uses.
+    const std::vector<float> field = {0.0f, 1.0f, 0.5f, 0.25f};
+    const RgbImage gray = toGrayscaleImage(field, /*frameCount=*/2, /*binCount=*/2);
+
+    REQUIRE(gray.width == 2);
+    REQUIRE(gray.height == 2);
+
+    // Row 0 = highest frequency = bin 1: cell (bin=1, frame=0) = 0.5,
+    // cell (bin=1, frame=1) = 0.25.
+    CHECK(gray.pixels[0] == 128);  // std::lround(0.5 * 255) == 128, not the StreamImage overload's dB curve.
+    CHECK(gray.pixels[3] == 64);   // std::lround(0.25 * 255) == 64.
+
+    // Row 1 = bin 0: cell (bin=0, frame=0) = 0.0, cell (bin=0, frame=1) = 1.0.
+    CHECK(gray.pixels[6] == 0);
+    CHECK(gray.pixels[9] == 255);
+}
+
+TEST_CASE("toGrayscaleImage(field) clamps out-of-range input instead of rejecting it", "[color_mapping]") {
+    const std::vector<float> field = {-1.0f, 2.0f};
+    const RgbImage gray = toGrayscaleImage(field, /*frameCount=*/2, /*binCount=*/1);
+
+    CHECK(gray.pixels[0] == 0);
+    CHECK(gray.pixels[3] == 255);
+}
+
+TEST_CASE("toGrayscaleImage(field) produces equal R, G, and B at every pixel", "[color_mapping]") {
+    const std::vector<float> field = {0.1f, 0.4f, 0.7f, 0.9f};
+    const RgbImage gray = toGrayscaleImage(field, /*frameCount=*/2, /*binCount=*/2);
+
+    for (std::size_t pixel = 0; pixel < gray.pixelCount(); ++pixel) {
+        CHECK(gray.pixels[pixel * 3 + 0] == gray.pixels[pixel * 3 + 1]);
+        CHECK(gray.pixels[pixel * 3 + 1] == gray.pixels[pixel * 3 + 2]);
+    }
+}
+
 TEST_CASE("fromRgbImage inverts toRgbImage within 8-bit quantization tolerance", "[color_mapping]") {
     StreamImage original = makeTestImage();
     // Clamp the source to the representable range first, since values below

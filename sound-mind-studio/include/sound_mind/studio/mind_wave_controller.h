@@ -8,6 +8,7 @@
 
 namespace sound_mind::studio {
 
+class CanvasWidget;
 class FilterConfigurationPanel;
 class LayersPanel;
 class MindWavesPanel;
@@ -38,6 +39,13 @@ class MindWavesPanel;
  * `FilterConfigurationPanel`'s own edited-config-round-trip's job
  * respectively; this class only keeps each panel's own combo populated
  * with *which* MindWaves exist to bind to.
+ *
+ * **Preview**: also owns pushing the currently selected MindWave onto
+ * `CanvasWidget::setMindWavePreview()` whenever `mindWavesPanel`'s own
+ * Preview toggle, selection, or the selected entry's own edits change -
+ * see `MindWavesPanel`'s own class docs for the feature, and
+ * updateMindWavePreview()'s/handleMindWaveEditedWhilePreviewing()'s own
+ * docs for why edits specifically need their own, separate handler.
  */
 class MindWaveController : public QObject {
     Q_OBJECT
@@ -52,17 +60,26 @@ public:
      * @param filterConfigurationPanel Non-owning; kept in sync with the
      *        library's own id/name pairs, the same as `layersPanel`. Must
      *        outlive this controller.
+     * @param canvas Non-owning; receives the live Preview overlay (see the
+     *        class's own docs). Must outlive this controller.
      * @param parent The owning object, per Qt's normal parent-ownership
      *        convention; may be `nullptr`.
      */
     MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel,
-                        FilterConfigurationPanel* filterConfigurationPanel, QObject* parent = nullptr);
+                        FilterConfigurationPanel* filterConfigurationPanel, CanvasWidget* canvas,
+                        QObject* parent = nullptr);
 
     /// @brief Sets which project this controller looks up/mutates
     ///        MindWaves in. Does *not* itself refresh the panels -
     ///        `MainWindow`'s own `setProject()` calls
     ///        `refreshMindWavesPanel()` separately, matching
-    ///        `LayerController::setProject()`'s own docs.
+    ///        `LayerController::setProject()`'s own docs. Also turns
+    ///        Preview back off (a previous project's own selection/
+    ///        MindWave means nothing for a different one) - `canvas_`
+    ///        itself independently clears its own preview state on a
+    ///        project switch too (see `CanvasWidget::setProject()`'s own
+    ///        docs), so this is belt-and-suspenders, not the only place
+    ///        it happens.
     /// @param project The project to target; may be `nullptr`.
     void setProject(sound_mind::core::Project* project);
 
@@ -110,9 +127,44 @@ signals:
     void mindWavesChanged();
 
 private:
+    /**
+     * @brief Pushes (or clears) the currently selected library entry's own
+     *        MindWave onto `canvas_->setMindWavePreview()`, looked up
+     *        fresh from `project_` - correct whenever `project_` is
+     *        already authoritative for it (the Preview toggle itself
+     *        changing, or a plain selection change), but **not** for an
+     *        edit to the selected entry's own MindWave - see
+     *        handleMindWaveEditedWhilePreviewing()'s own docs for why
+     *        that needs a separate handler instead of this one.
+     *
+     * Connected to `mindWavesPanel_->previewToggled()`/`selectionChanged()`.
+     */
+    void updateMindWavePreview();
+
+    /**
+     * @brief Pushes `wave` straight onto `canvas_->setMindWavePreview()`
+     *        when Preview is on and `id` is the currently selected entry -
+     *        connected to `mindWavesPanel_->mindWaveChanged()`, fired
+     *        *before* `MainWindow`'s own separate connection to the same
+     *        signal has written `wave` back into `project_` (both are
+     *        plain, independently-ordered connections to one Qt signal -
+     *        this controller's own happens to run first, since it's
+     *        connected first, in this class's own constructor, but relying
+     *        on that ordering at all would be fragile). Using `wave`
+     *        directly, rather than reading `project_->mindWaveById(id)`
+     *        the way updateMindWavePreview() does, means this handler
+     *        never depends on that ordering, and always previews the
+     *        genuinely current edit rather than the one just before it.
+     *
+     * @param id The entry that changed.
+     * @param wave Its own new, complete MindWave.
+     */
+    void handleMindWaveEditedWhilePreviewing(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave);
+
     MindWavesPanel* mindWavesPanel_;
     LayersPanel* layersPanel_;
     FilterConfigurationPanel* filterConfigurationPanel_;
+    CanvasWidget* canvas_;
     sound_mind::core::Project* project_ = nullptr;
 };
 

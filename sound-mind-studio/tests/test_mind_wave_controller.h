@@ -14,4 +14,9 @@ private slots:
     void renameMindWaveToRenamesAndRejectsEmptyNameOrUnknownId();
     void updateMindWaveWritesBackTheGivenWave();
     void refreshMindWavesPanelPushesTheLibraryIntoBothPanels();
+    void togglingPreviewOnWithASelectionShowsAnOverlayOnTheCanvas();
+    void togglingPreviewOffClearsTheOverlay();
+    void selectingADifferentMindWaveWhilePreviewingUpdatesTheOverlay();
+    void editingTheSelectedMindWaveWhilePreviewingUpdatesTheOverlayLive();
+    void settingANewProjectTurnsPreviewOffAndClearsTheOverlay();
 };

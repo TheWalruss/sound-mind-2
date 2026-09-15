@@ -298,6 +298,13 @@ shape instead of staying fixed.
 - **+ Add MindWave** creates a new one with a sensible default (a plain,
   audible sine wave) and selects it. Double-click a MindWave's name to
   rename it; the **×** button deletes it.
+- **Preview** shows the currently selected MindWave's own field directly
+  on the canvas, as a live grayscale overlay (black where it's 0, white
+  where it's 1) - updating instantly as you change its generator type,
+  parameters, or superposition stack, and as you select a different
+  MindWave while Preview stays on. A judgment aid only - it never affects
+  the actual composite, and switches off automatically when you open or
+  create a different project.
 - Selecting a MindWave shows its own editor: a **Generator Type** (Periodic,
   Envelope, Stepped/Noise, Spatial, or Fractal) and that type's own plain
   numeric parameters - a period, a phase, a seed, and so on. This is a

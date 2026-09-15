@@ -65,4 +65,7 @@ private slots:
     void wheelWithAltAndAHorizontalOnlyDeltaStillZoomsFrequencyOnly();
     void wheelWithShiftZoomsTimeOnly();
     void wheelScrollingDownZoomsOut();
+    void setMindWavePreviewDrawsASemiTransparentGrayscaleOverlay();
+    void setMindWavePreviewWithNulloptClearsIt();
+    void settingANewProjectClearsTheMindWavePreview();
 };

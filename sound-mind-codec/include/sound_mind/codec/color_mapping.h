@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <vector>
+
 #include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
@@ -30,6 +33,31 @@ namespace sound_mind::codec {
  * @return The rendered grayscale image (R == G == B at every pixel).
  */
 [[nodiscard]] RgbImage toGrayscaleImage(const StreamImage& image);
+
+/**
+ * @brief Renders an already-normalized `[0, 1]` scalar field as a
+ *        grayscale image - the Studio's own live MindWave Preview overlay
+ *        (`docs/sound-mind-design.md`'s "Low Frequency Oscillations") is
+ *        the first caller.
+ *
+ * Unlike toGrayscaleImage(const StreamImage&) above, no dB-to-brightness
+ * mapping is applied - `field`'s own values map to a pixel byte linearly
+ * (`0.0` -> `0`/black, `1.0` -> `255`/white), since a MindWave's own
+ * evaluate() already returns a plain `[0, 1]` value, not a dB magnitude.
+ * Out-of-range input is clamped rather than rejected, the same
+ * defensiveness `MindWave::evaluate()`'s own docs already call for.
+ *
+ * Same row-0-is-highest-frequency orientation, and the same row-major,
+ * bin-major input layout (see `cellIndex()`'s own docs), as every other
+ * per-cell field/image conversion in this codebase.
+ *
+ * @param field The field to render, size `binCount * frameCount`.
+ * @param frameCount The field's own width, in cells.
+ * @param binCount The field's own height, in cells.
+ * @return The rendered grayscale image (R == G == B at every pixel).
+ */
+[[nodiscard]] RgbImage toGrayscaleImage(const std::vector<float>& field, std::uint32_t frameCount,
+                                         std::uint32_t binCount);
 
 /**
  * @brief Converts an RGB image into a StreamImage - the reverse of

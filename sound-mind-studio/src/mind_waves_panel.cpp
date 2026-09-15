@@ -132,10 +132,27 @@ MindWavesPanel::MindWavesPanel(QWidget* parent) : QDockWidget(tr("MindWaves"), p
     auto* root = new QVBoxLayout(container);
     root->setContentsMargins(0, 0, 0, 0);
 
+    auto* topButtonRow = new QHBoxLayout();
+
     addButton_ = new QPushButton(tr("+ Add MindWave"));
     addButton_->setObjectName(QStringLiteral("addMindWaveButton"));
     connect(addButton_, &QPushButton::clicked, this, &MindWavesPanel::addRequested);
-    root->addWidget(addButton_);
+    topButtonRow->addWidget(addButton_, 1);
+
+    // Preview (see the class's own docs) - a plain checkable toggle, the
+    // same "checkbox-shaped QPushButton" style ToolConfigurationPanel's
+    // own "Show bounding boxes"/"Show path geometry" checkboxes established
+    // for a persistent on/off display aid, though those are QCheckBoxes;
+    // a checkable QPushButton reads better alongside addButton_ here.
+    previewButton_ = new QPushButton(tr("Preview"));
+    previewButton_->setObjectName(QStringLiteral("previewButton"));
+    previewButton_->setCheckable(true);
+    previewButton_->setToolTip(
+        tr("Show the selected MindWave's own field as a live grayscale overlay on the canvas"));
+    connect(previewButton_, &QPushButton::toggled, this, &MindWavesPanel::previewToggled);
+    topButtonRow->addWidget(previewButton_);
+
+    root->addLayout(topButtonRow);
 
     list_ = new QListWidget();
     list_->setObjectName(QStringLiteral("mindWavesList"));
@@ -365,6 +382,13 @@ void MindWavesPanel::selectMindWave(MindWaveId id) {
             return;
         }
     }
+}
+
+bool MindWavesPanel::previewEnabled() const { return previewButton_->isChecked(); }
+
+void MindWavesPanel::setPreviewEnabled(bool enabled) {
+    const QSignalBlocker blocker(previewButton_);
+    previewButton_->setChecked(enabled);
 }
 
 }  // namespace sound_mind::studio

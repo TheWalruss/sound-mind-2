@@ -95,6 +95,27 @@ RgbImage toGrayscaleImage(const StreamImage& image) {
     return rgb;
 }
 
+RgbImage toGrayscaleImage(const std::vector<float>& field, std::uint32_t frameCount, std::uint32_t binCount) {
+    RgbImage rgb;
+    rgb.width = frameCount;
+    rgb.height = binCount;
+    rgb.pixels.resize(rgb.pixelCount() * 3);
+
+    for (std::uint32_t row = 0; row < binCount; ++row) {
+        const std::uint32_t bin = binCount - 1 - row;
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * frameCount + frame;
+            const std::size_t pixel = (static_cast<std::size_t>(row) * frameCount + frame) * 3;
+            const float clamped = std::clamp(field[cell], 0.0f, 1.0f);
+            const std::uint8_t value = static_cast<std::uint8_t>(std::lround(clamped * 255.0f));
+            rgb.pixels[pixel + 0] = value;
+            rgb.pixels[pixel + 1] = value;
+            rgb.pixels[pixel + 2] = value;
+        }
+    }
+    return rgb;
+}
+
 StreamImage fromRgbImage(const RgbImage& rgb, const StreamCodecConfig& configIn) {
     StreamImage image;
     image.config = configIn;

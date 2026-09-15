@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.12] - 2026-09-15
+
+MindWave Preview: a live grayscale overlay on the canvas showing the selected MindWave's own field, updating as its settings change - `docs/sound-mind-design.md`'s "Low Frequency Oscillations" > "Preview".
+
+### Added
+
+- **A Preview toggle in the MindWaves panel** renders the currently selected MindWave's own complete field (top-level generator plus its full superposition stack) as a semi-transparent (50%) grayscale overlay on the canvas - black where the field is 0, white where it's 1. Updates live on every edit, and follows the selection if you pick a different MindWave while Preview stays on. Switches off automatically on a project switch.
+- **`sound_mind::core::evaluateMindWaveField()`** - a new Core utility evaluating a MindWave across an entire canvas, one value per cell.
+- **`sound_mind::codec::toGrayscaleImage(field, frameCount, binCount)`** - a new overload rendering an already-normalized `[0, 1]` scalar field directly to grayscale (linearly, unlike the existing `StreamImage` overload's dB-to-brightness mapping).
+
+Full regression: sound-mind-studio all 29 QTest classes (`CanvasWidgetTest` +3, `MindWavesPanelTest` +3, `MindWaveControllerTest` +5), sound-mind-core 380/380, sound-mind-codec 37/37, sound-mind-gpu 33/33 - all passing. Doxygen: 0 warnings.
+
 ## [0.0.31.11] - 2026-09-15
 
 Fixes a real, user-reported bug from `v0.0.31.10`: Alt+mousewheel didn't zoom - it scrolled vertically instead, exactly as if no modifier were held.
