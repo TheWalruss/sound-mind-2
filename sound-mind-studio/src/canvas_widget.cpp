@@ -1,5 +1,6 @@
 #include "sound_mind/studio/canvas_widget.h"
 
+#include <algorithm>
 #include <optional>
 
 #include <QFontMetrics>
@@ -9,6 +10,7 @@
 #include <QPainterPath>
 #include <QPaintEvent>
 #include <QPen>
+#include <QWheelEvent>
 
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/core/compositor.h"
@@ -21,6 +23,13 @@ namespace sound_mind::studio {
 
 namespace {
 const QSize kFallbackSize(400, 300);
+
+// Canvas Navigation's own Zoom feature (docs/sound-mind-design.md) - see
+// CanvasWidget::enterManualZoom()'s own docs for how these are used.
+constexpr double kZoomStepFactor = 1.25;
+constexpr double kZoomCoarseStepFactor = 2.0;
+constexpr double kMinZoomFactor = 0.05;
+constexpr double kMaxZoomFactor = 16.0;
 
 /// @brief The project's own real multi-layer composite (see
 /// `sound_mind::core::compositeProject()`'s own docs), converted to
@@ -64,6 +73,17 @@ CanvasWidget::CanvasWidget(QWidget* parent) : QWidget(parent) {
 
 void CanvasWidget::setProject(const sound_mind::core::Project* project) {
     project_ = project;
+    // A previous project's own zoom level means nothing for a different
+    // one (a coincidentally-similar canvas size aside) - the same
+    // "session-only UI state resets on project switch" precedent
+    // UndoStack::clear()/LayersPanel::clearSelection() already establish.
+    const bool modeChanged = zoomMode_ != ZoomMode::FitToWindow;
+    zoomMode_ = ZoomMode::FitToWindow;
+    zoomTime_ = 1.0;
+    zoomFrequency_ = 1.0;
+    if (modeChanged) {
+        emit zoomModeChanged(zoomMode_);
+    }
     updateGeometry();
     update();
 }
@@ -136,6 +156,100 @@ QSize CanvasWidget::sizeHint() const {
     }
     return QSize(static_cast<int>(project_->settings().canvasWidth),
                  static_cast<int>(project_->settings().canvasHeight));
+}
+
+void CanvasWidget::zoomToFit() {
+    const bool modeChanged = zoomMode_ != ZoomMode::FitToWindow;
+    zoomMode_ = ZoomMode::FitToWindow;
+    if (modeChanged) {
+        emit zoomModeChanged(zoomMode_);
+    }
+    update();
+}
+
+void CanvasWidget::zoomToActualSize() { enterManualZoom(1.0, 1.0); }
+
+void CanvasWidget::zoomIn() { enterManualZoom(effectiveZoomTime() * kZoomStepFactor, effectiveZoomFrequency() * kZoomStepFactor); }
+
+void CanvasWidget::zoomOut() { enterManualZoom(effectiveZoomTime() / kZoomStepFactor, effectiveZoomFrequency() / kZoomStepFactor); }
+
+void CanvasWidget::zoomInTimeOnly() { enterManualZoom(effectiveZoomTime() * kZoomStepFactor, effectiveZoomFrequency()); }
+
+void CanvasWidget::zoomOutTimeOnly() { enterManualZoom(effectiveZoomTime() / kZoomStepFactor, effectiveZoomFrequency()); }
+
+void CanvasWidget::zoomInFrequencyOnly() { enterManualZoom(effectiveZoomTime(), effectiveZoomFrequency() * kZoomStepFactor); }
+
+void CanvasWidget::zoomOutFrequencyOnly() { enterManualZoom(effectiveZoomTime(), effectiveZoomFrequency() / kZoomStepFactor); }
+
+void CanvasWidget::zoomInCoarse() {
+    enterManualZoom(effectiveZoomTime() * kZoomCoarseStepFactor, effectiveZoomFrequency() * kZoomCoarseStepFactor);
+}
+
+void CanvasWidget::zoomOutCoarse() {
+    enterManualZoom(effectiveZoomTime() / kZoomCoarseStepFactor, effectiveZoomFrequency() / kZoomCoarseStepFactor);
+}
+
+double CanvasWidget::effectiveZoomTime() const {
+    if (zoomMode_ == ZoomMode::Manual || project_ == nullptr || project_->settings().canvasWidth == 0) {
+        return zoomTime_;
+    }
+    return static_cast<double>(rect().width()) / static_cast<double>(project_->settings().canvasWidth);
+}
+
+double CanvasWidget::effectiveZoomFrequency() const {
+    if (zoomMode_ == ZoomMode::Manual || project_ == nullptr || project_->settings().canvasHeight == 0) {
+        return zoomFrequency_;
+    }
+    return static_cast<double>(rect().height()) / static_cast<double>(project_->settings().canvasHeight);
+}
+
+void CanvasWidget::enterManualZoom(double newZoomTime, double newZoomFrequency) {
+    zoomTime_ = std::clamp(newZoomTime, kMinZoomFactor, kMaxZoomFactor);
+    zoomFrequency_ = std::clamp(newZoomFrequency, kMinZoomFactor, kMaxZoomFactor);
+
+    const bool modeChanged = zoomMode_ != ZoomMode::Manual;
+    zoomMode_ = ZoomMode::Manual;
+    if (modeChanged) {
+        // Emitted before resize() below - MainWindow's own reaction
+        // (setWidgetResizable(false) on the enclosing QScrollArea) has to
+        // land first, or that scroll area would just immediately resize
+        // this widget straight back to its own viewport size, undoing the
+        // resize() call entirely (see this method's own docs).
+        emit zoomModeChanged(zoomMode_);
+    }
+    resize(contentSizeFor(zoomTime_, zoomFrequency_).toSize());
+    update();
+}
+
+QSizeF CanvasWidget::contentSizeFor(double zoomTime, double zoomFrequency) const {
+    if (project_ == nullptr) {
+        return QSizeF(kFallbackSize);
+    }
+    const auto& settings = project_->settings();
+    return QSizeF(static_cast<double>(settings.canvasWidth) * zoomTime,
+                  static_cast<double>(settings.canvasHeight) * zoomFrequency);
+}
+
+void CanvasWidget::wheelEvent(QWheelEvent* event) {
+    const auto modifiers = event->modifiers();
+    if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier | Qt::ShiftModifier))) {
+        QWidget::wheelEvent(event);
+        return;
+    }
+    const int verticalDelta = event->angleDelta().y();
+    if (verticalDelta == 0) {
+        event->ignore();
+        return;
+    }
+    const bool zoomingIn = verticalDelta > 0;
+    if (modifiers & Qt::ControlModifier) {
+        zoomingIn ? zoomInCoarse() : zoomOutCoarse();
+    } else if (modifiers & Qt::AltModifier) {
+        zoomingIn ? zoomInFrequencyOnly() : zoomOutFrequencyOnly();
+    } else {  // Qt::ShiftModifier
+        zoomingIn ? zoomInTimeOnly() : zoomOutTimeOnly();
+    }
+    event->accept();
 }
 
 void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {

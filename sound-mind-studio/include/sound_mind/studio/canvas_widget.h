@@ -14,6 +14,7 @@
 class QEvent;
 class QMouseEvent;
 class QPainter;
+class QWheelEvent;
 
 namespace sound_mind::studio {
 
@@ -42,6 +43,16 @@ namespace sound_mind::studio {
  * `MainWindow`, not this widget's own. Also emits cursorMoved()/
  * cursorLeft() on every mouse move/exit, regardless of toolMode() - see
  * their own docs.
+ *
+ * **As of Canvas Navigation's own Zoom feature:** also owns the current
+ * zoom level - see `ZoomMode`/`zoomIn()` and friends. Kept here (not in
+ * `MainWindow`) since zoom directly determines this widget's own on-screen
+ * size, and every domain/pixel conversion above already lives here too.
+ * `MainWindow` only owns the `QScrollArea` that clips and scrolls this
+ * widget once it's larger than the visible viewport, toggling that scroll
+ * area's own `setWidgetResizable()` in response to zoomModeChanged() (see
+ * that signal's own docs for why this widget doesn't just reach into its
+ * own parent scroll area directly).
  */
 class CanvasWidget : public QWidget {
     Q_OBJECT
@@ -55,6 +66,15 @@ public:
         Pick,  ///< Mouse press selects a paint object; a drag moves it.
         Select,  ///< Mouse drag draws a rectangular selection.
         Path,  ///< Each mouse press places one more Path node.
+    };
+
+    /// @brief Whether the canvas's own on-screen size tracks its
+    ///        enclosing viewport automatically, or holds a fixed,
+    ///        explicitly-chosen zoom level - see zoomToFit()'s/zoomIn()'s
+    ///        own docs.
+    enum class ZoomMode {
+        FitToWindow,  ///< Always exactly fills the visible viewport - the default.
+        Manual,  ///< A fixed size, set by a zoom action; scrolls once larger than the viewport.
     };
 
     /// @brief Constructs an empty canvas, with no project set yet.
@@ -279,7 +299,84 @@ public:
     ///         fallback size if no project is set.
     [[nodiscard]] QSize sizeHint() const override;
 
+    /// @brief Whether the canvas is auto-fitting the viewport or holding a
+    ///        fixed zoom level.
+    /// @return The current mode; `FitToWindow` by default.
+    [[nodiscard]] ZoomMode zoomMode() const noexcept { return zoomMode_; }
+
+    /**
+     * @brief Switches to `ZoomMode::FitToWindow` - the canvas always
+     *        exactly fills its enclosing viewport from here on (until the
+     *        next zoom-in/out/actual-size call switches back to `Manual`).
+     *
+     * Emits zoomModeChanged() if the mode actually changed, so
+     * `MainWindow` can put its own enclosing `QScrollArea` back into
+     * `setWidgetResizable(true)` mode - that's what actually makes Qt
+     * resize this widget to the viewport; this method itself only ever
+     * *repaints* (the resize follows from the scroll area's own reaction,
+     * not from anything this method does directly).
+     */
+    void zoomToFit();
+
+    /// @brief Switches to `ZoomMode::Manual` at exactly 100% - one screen
+    ///        pixel per encoded pixel (one column, one bin) - regardless
+    ///        of the current zoom level or mode.
+    void zoomToActualSize();
+
+    /// @brief Zooms in proportionally (time and frequency scale together)
+    ///        by the normal step - `]` with no modifier. Exits
+    ///        `FitToWindow` if that's the current mode, using whatever
+    ///        it's currently displaying as the new zoom level's own
+    ///        starting point, so the zoomed-in result looks like a
+    ///        continuation of what was already on screen rather than an
+    ///        unrelated jump.
+    void zoomIn();
+
+    /// @brief The inverse of zoomIn() - `[` with no modifier.
+    void zoomOut();
+
+    /// @brief Zooms in the **time axis only** (frequency-invariant) by
+    ///        the normal step - `Shift+]`. See zoomIn()'s own docs on
+    ///        exiting `FitToWindow`.
+    void zoomInTimeOnly();
+
+    /// @brief The inverse of zoomInTimeOnly() - `Shift+[`.
+    void zoomOutTimeOnly();
+
+    /// @brief Zooms in the **frequency axis only** (time-invariant) by
+    ///        the normal step - `Alt+]`. See zoomIn()'s own docs on
+    ///        exiting `FitToWindow`.
+    void zoomInFrequencyOnly();
+
+    /// @brief The inverse of zoomInFrequencyOnly() - `Alt+[`.
+    void zoomOutFrequencyOnly();
+
+    /// @brief Zooms in proportionally by a coarser step than zoomIn()'s
+    ///        own - `Ctrl+]`. Proportional is already `]`'s own default,
+    ///        so Ctrl's usual "proportional" meaning would be redundant
+    ///        here - this is the one zoom control where the modifier
+    ///        mnemonic bends, toward a bigger step instead (confirmed
+    ///        with the user - see `docs/sound-mind-design.md`'s "Canvas
+    ///        Navigation" > "Zoom").
+    void zoomInCoarse();
+
+    /// @brief The inverse of zoomInCoarse() - `Ctrl+[`.
+    void zoomOutCoarse();
+
 signals:
+    /// @brief zoomMode() actually changed - either a fresh zoom-in/out/
+    ///        actual-size call left `FitToWindow` for `Manual`, or
+    ///        zoomToFit() returned to `FitToWindow` from `Manual`.
+    ///        `MainWindow` listens for this to toggle its own enclosing
+    ///        `QScrollArea::setWidgetResizable()` in lockstep - `true`
+    ///        (Qt keeps this widget exactly matching the viewport) for
+    ///        `FitToWindow`, `false` (Qt leaves this widget's own explicit
+    ///        size alone, scrolling instead of stretching it) for
+    ///        `Manual`. Not emitted for a zoom action that changes the
+    ///        zoom *level* without changing which of these two modes is
+    ///        active (e.g. two zoomIn() calls in a row, both in `Manual`).
+    /// @param mode The mode now in effect.
+    void zoomModeChanged(sound_mind::studio::CanvasWidget::ZoomMode mode);
     /// @brief A paint stroke started (`Paint` tool mode, left button
     ///        pressed).
     /// @param point The press position, converted to time/frequency space.
@@ -389,7 +486,62 @@ protected:
     /// @param event Unused; required by QWidget's override signature.
     void leaveEvent(QEvent* event) override;
 
+    /**
+     * @brief Zooms via the scroll wheel - `Ctrl`/`Alt`/`Shift`+wheel,
+     *        matching the same modifier mnemonic as the `[`/`]` shortcuts
+     *        (see zoomInCoarse()'s own docs on why `Ctrl` means "coarse"
+     *        here specifically, not "proportional"). An unmodified wheel
+     *        is left to `QWidget::wheelEvent()` - ordinary scrolling, once
+     *        the enclosing `QScrollArea` has something to scroll.
+     *
+     * Only the *sign* of the wheel's own vertical delta is used (one zoom
+     * step per event, forward or backward) - not its magnitude, which
+     * varies too much across mice/trackpads/OSes to map onto a specific
+     * zoom multiplier meaningfully.
+     *
+     * @param event The wheel event.
+     */
+    void wheelEvent(QWheelEvent* event) override;
+
 private:
+    /// @brief This widget's own current effective pixels-per-column scale
+    ///        - `zoomTime_` in `Manual` mode; derived from the widget's
+    ///        own current width divided by the project's `canvasWidth`
+    ///        while `FitToWindow` (i.e. whatever the enclosing scroll
+    ///        area actually gave it), so a subsequent zoomIn()/zoomOut()/
+    ///        etc. call has a real starting point to multiply from rather
+    ///        than an arbitrary stale one.
+    /// @return The effective scale; `1.0` (falls back to `zoomTime_`'s
+    ///         own default) if no project is set.
+    [[nodiscard]] double effectiveZoomTime() const;
+
+    /// @brief The frequency-axis counterpart to effectiveZoomTime() - this
+    ///        widget's own current height divided by `canvasHeight` while
+    ///        `FitToWindow`.
+    [[nodiscard]] double effectiveZoomFrequency() const;
+
+    /// @brief The shared implementation behind every zoom-in/out/actual-
+    ///        size method: clamps both factors to a sane range, stores
+    ///        them, switches to `ZoomMode::Manual` (emitting
+    ///        zoomModeChanged() first if that's an actual mode change, so
+    ///        `MainWindow` has already put the enclosing `QScrollArea`
+    ///        into `setWidgetResizable(false)` mode by the time this
+    ///        method's own resize() call below actually runs - otherwise
+    ///        the scroll area would just immediately resize this widget
+    ///        straight back to its own viewport size), resizes this
+    ///        widget to the new zoom level's own content size, and repaints.
+    /// @param newZoomTime The new pixels-per-column scale, pre-clamping.
+    /// @param newZoomFrequency The new pixels-per-bin scale, pre-clamping.
+    void enterManualZoom(double newZoomTime, double newZoomFrequency);
+
+    /// @brief The on-screen size the canvas would have at the given zoom
+    ///        factors, given the current project's own canvas dimensions.
+    /// @param zoomTime Pixels-per-column scale.
+    /// @param zoomFrequency Pixels-per-bin scale.
+    /// @return The computed size, or `kFallbackSize` (see the .cpp) if no
+    ///         project is set.
+    [[nodiscard]] QSizeF contentSizeFor(double zoomTime, double zoomFrequency) const;
+
     /// @brief Converts a widget-local pixel position into time/frequency
     ///        space, using the current project's own canvas geometry.
     ///        Accounts for the rendered image's own top-is-highest-
@@ -481,6 +633,13 @@ private:
     HorizontalAxisLabelMode horizontalAxisLabelMode_ = HorizontalAxisLabelMode::Off;
     FrequencyGridConfig frequencyGridConfig_;
     TimingGridConfig timingGridConfig_;
+    ZoomMode zoomMode_ = ZoomMode::FitToWindow;
+    /// @brief `Manual` mode's own stored pixels-per-column scale - `1.0`
+    ///        is "Actual Size" (one screen pixel per column). Unused
+    ///        while `FitToWindow` (see effectiveZoomTime()'s own docs).
+    double zoomTime_ = 1.0;
+    /// @brief The frequency-axis counterpart to zoomTime_ - pixels per bin.
+    double zoomFrequency_ = 1.0;
 };
 
 }  // namespace sound_mind::studio

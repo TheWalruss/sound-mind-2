@@ -31,6 +31,7 @@ class QCloseEvent;
 class QDragEnterEvent;
 class QDropEvent;
 class QLabel;
+class QScrollArea;
 class QStackedWidget;
 class QString;
 class QTimer;
@@ -859,6 +860,46 @@ public slots:
     ///        `undoStack_`; a no-op if nothing is redoable.
     void redo();
 
+    /// @brief Zooms in proportionally - the actual work behind the View >
+    ///        Zoom menu's "Zoom In" action (`]`). Delegates to
+    ///        `CanvasWidget::zoomIn()`.
+    void zoomIn();
+
+    /// @brief The inverse of zoomIn() - "Zoom Out" (`[`).
+    void zoomOut();
+
+    /// @brief Zooms in the time axis only (frequency-invariant) -
+    ///        "Zoom In (Time Only)" (`Shift+]`).
+    void zoomInTimeOnly();
+
+    /// @brief The inverse of zoomInTimeOnly() - "Zoom Out (Time Only)"
+    ///        (`Shift+[`).
+    void zoomOutTimeOnly();
+
+    /// @brief Zooms in the frequency axis only (time-invariant) -
+    ///        "Zoom In (Frequency Only)" (`Alt+]`).
+    void zoomInFrequencyOnly();
+
+    /// @brief The inverse of zoomInFrequencyOnly() - "Zoom Out (Frequency
+    ///        Only)" (`Alt+[`).
+    void zoomOutFrequencyOnly();
+
+    /// @brief Zooms in proportionally, at a coarser step than zoomIn()'s
+    ///        own - "Zoom In (Coarse)" (`Ctrl+]`).
+    void zoomInCoarse();
+
+    /// @brief The inverse of zoomInCoarse() - "Zoom Out (Coarse)"
+    ///        (`Ctrl+[`).
+    void zoomOutCoarse();
+
+    /// @brief Switches to `CanvasWidget::ZoomMode::FitToWindow` - "Fit to
+    ///        Window" (`Ctrl+0`).
+    void zoomToFit();
+
+    /// @brief Switches to `CanvasWidget::ZoomMode::Manual` at exactly
+    ///        100% - "Actual Size" (`Ctrl+1`).
+    void zoomToActualSize();
+
     /// @brief Deletes the currently Picked paint object, if any - the
     ///        actual work behind the Edit menu's Delete action. Delegates
     ///        to `PickController::deleteSelection()`; a no-op if nothing
@@ -1569,10 +1610,18 @@ private:
     bool hasUnsavedChanges_ = false;
 
     /// @brief Alternates between landingPage_ (index 0, shown until a
-    /// project exists) and canvas_ (index 1) - see setProject()'s docs.
+    /// project exists) and canvasScrollArea_ (index 1) - see
+    /// setProject()'s docs.
     QStackedWidget* stack_ = nullptr;
     LandingPage* landingPage_ = nullptr;
     CanvasWidget* canvas_ = nullptr;
+
+    /// @brief Clips/scrolls canvas_ once it's larger than the visible
+    /// area (Canvas Navigation's own Zoom feature,
+    /// docs/sound-mind-design.md) - see CanvasWidget::zoomModeChanged()'s
+    /// own docs for how its setWidgetResizable() stays in sync with
+    /// canvas_'s own current zoom mode.
+    QScrollArea* canvasScrollArea_ = nullptr;
 
     /// @brief Shows the cursor's position (widget pixels and, when a
     /// project is open, time/frequency) in the status bar's normal

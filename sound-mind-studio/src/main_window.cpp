@@ -29,6 +29,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QScrollArea>
 #include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -157,9 +158,24 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
 
     canvas_ = new CanvasWidget(this);
 
+    // Canvas Navigation's own Zoom feature (docs/sound-mind-design.md) -
+    // canvas_ needs to be able to grow larger than the visible area once
+    // zoomed in, with this QScrollArea clipping/scrolling it, instead of
+    // sitting directly in stack_ and always being stretched to fill
+    // whatever space is available (the pre-Zoom behavior, and still
+    // exactly what setWidgetResizable(true) below reproduces while
+    // canvas_'s own zoomMode() is FitToWindow).
+    canvasScrollArea_ = new QScrollArea(this);
+    canvasScrollArea_->setWidget(canvas_);
+    canvasScrollArea_->setWidgetResizable(true);
+    canvasScrollArea_->setAlignment(Qt::AlignCenter);
+    connect(canvas_, &CanvasWidget::zoomModeChanged, this, [this](CanvasWidget::ZoomMode mode) {
+        canvasScrollArea_->setWidgetResizable(mode == CanvasWidget::ZoomMode::FitToWindow);
+    });
+
     stack_ = new QStackedWidget(this);
-    stack_->addWidget(landingPage_);  // index 0 - shown first, see setProject().
-    stack_->addWidget(canvas_);       // index 1
+    stack_->addWidget(landingPage_);      // index 0 - shown first, see setProject().
+    stack_->addWidget(canvasScrollArea_);  // index 1
     setCentralWidget(stack_);
 
     layersPanel_ = new LayersPanel(this);
@@ -399,24 +415,30 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
 
     // Stack order (v0.0.26.2): moves the Picked object within its own
     // layer's stack, without changing what it is or where it geometrically
-    // sits - see PickController::bringToFront()'s own docs. Shortcuts
-    // match the common Illustrator/Photoshop convention for the same four
-    // actions; no-ops (same "always present" choice deleteAction makes)
-    // with nothing Picked, or when already at the requested end.
+    // sits - see PickController::bringToFront()'s own docs. No-ops (same
+    // "always present" choice deleteAction makes) with nothing Picked, or
+    // when already at the requested end.
+    //
+    // Shortcuts moved off Ctrl+[/Ctrl+]/Ctrl+Shift+[/Ctrl+Shift+] (the
+    // common Illustrator/Photoshop convention this originally used) to
+    // Ctrl+Up/Down/Shift+Up/Down - see Canvas Navigation's own Zoom fix
+    // (docs/sound-mind-architecture.md's Decision on it): the bracket keys
+    // are now Zoom's own, and Ctrl+[/Ctrl+] specifically is Zoom's coarse
+    // step, confirmed with the user as the side that wins this conflict.
     QAction* bringToFrontAction = editMenu->addAction(tr("Bring to &Front"));
-    bringToFrontAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_BracketRight));
+    bringToFrontAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Up));
     connect(bringToFrontAction, &QAction::triggered, this, &MainWindow::bringPickedObjectToFront);
 
     QAction* sendToBackAction = editMenu->addAction(tr("Send to &Back"));
-    sendToBackAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_BracketLeft));
+    sendToBackAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Down));
     connect(sendToBackAction, &QAction::triggered, this, &MainWindow::sendPickedObjectToBack);
 
     QAction* bringForwardAction = editMenu->addAction(tr("Bring &Forward"));
-    bringForwardAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketRight));
+    bringForwardAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Up));
     connect(bringForwardAction, &QAction::triggered, this, &MainWindow::bringPickedObjectForward);
 
     QAction* sendBackwardAction = editMenu->addAction(tr("Send Back&ward"));
-    sendBackwardAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
+    sendBackwardAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Down));
     connect(sendBackwardAction, &QAction::triggered, this, &MainWindow::sendPickedObjectBackward);
 
     editMenu->addSeparator();
@@ -483,6 +505,59 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
 
     QAction* cancelPathAction = editMenu->addAction(tr("Cance&l Path"));
     connect(cancelPathAction, &QAction::triggered, this, &MainWindow::cancelPath);
+
+    // Canvas Navigation's own Zoom feature (docs/sound-mind-design.md) -
+    // keybinding mnemonic: Alt = frequency axis, Shift = time axis, Ctrl =
+    // proportional control, repurposed here as "coarser step" since plain
+    // ]/[ is already proportional by default (see CanvasWidget::
+    // zoomInCoarse()'s own docs). Fit to Window/Actual Size follow the
+    // common Ctrl+0/Ctrl+1 convention (Photoshop and others).
+    QMenu* viewMenu = menuBar()->addMenu(tr("&View"));
+    QMenu* zoomMenu = viewMenu->addMenu(tr("&Zoom"));
+
+    QAction* zoomInAction = zoomMenu->addAction(tr("Zoom &In"));
+    zoomInAction->setShortcut(QKeySequence(Qt::Key_BracketRight));
+    connect(zoomInAction, &QAction::triggered, this, &MainWindow::zoomIn);
+
+    QAction* zoomOutAction = zoomMenu->addAction(tr("Zoom &Out"));
+    zoomOutAction->setShortcut(QKeySequence(Qt::Key_BracketLeft));
+    connect(zoomOutAction, &QAction::triggered, this, &MainWindow::zoomOut);
+
+    zoomMenu->addSeparator();
+
+    QAction* zoomInFrequencyAction = zoomMenu->addAction(tr("Zoom In (&Frequency Only)"));
+    zoomInFrequencyAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_BracketRight));
+    connect(zoomInFrequencyAction, &QAction::triggered, this, &MainWindow::zoomInFrequencyOnly);
+
+    QAction* zoomOutFrequencyAction = zoomMenu->addAction(tr("Zoom Out (F&requency Only)"));
+    zoomOutFrequencyAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_BracketLeft));
+    connect(zoomOutFrequencyAction, &QAction::triggered, this, &MainWindow::zoomOutFrequencyOnly);
+
+    QAction* zoomInTimeAction = zoomMenu->addAction(tr("Zoom In (&Time Only)"));
+    zoomInTimeAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_BracketRight));
+    connect(zoomInTimeAction, &QAction::triggered, this, &MainWindow::zoomInTimeOnly);
+
+    QAction* zoomOutTimeAction = zoomMenu->addAction(tr("Zoom Out (&Time Only)"));
+    zoomOutTimeAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_BracketLeft));
+    connect(zoomOutTimeAction, &QAction::triggered, this, &MainWindow::zoomOutTimeOnly);
+
+    QAction* zoomInCoarseAction = zoomMenu->addAction(tr("Zoom In (&Coarse)"));
+    zoomInCoarseAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketRight));
+    connect(zoomInCoarseAction, &QAction::triggered, this, &MainWindow::zoomInCoarse);
+
+    QAction* zoomOutCoarseAction = zoomMenu->addAction(tr("Zoom Out (Co&arse)"));
+    zoomOutCoarseAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
+    connect(zoomOutCoarseAction, &QAction::triggered, this, &MainWindow::zoomOutCoarse);
+
+    zoomMenu->addSeparator();
+
+    QAction* zoomToFitAction = zoomMenu->addAction(tr("&Fit to Window"));
+    zoomToFitAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
+    connect(zoomToFitAction, &QAction::triggered, this, &MainWindow::zoomToFit);
+
+    QAction* zoomToActualSizeAction = zoomMenu->addAction(tr("&Actual Size"));
+    zoomToActualSizeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_1));
+    connect(zoomToActualSizeAction, &QAction::triggered, this, &MainWindow::zoomToActualSize);
 
     QToolBar* transportToolBar = addToolBar(tr("Transport"));
     // Plain text actions rather than icons - no icon assets exist yet, and
@@ -554,6 +629,19 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     transportToolBar->addAction(filterConfigurationPanel_->toggleViewAction());
     // Off by default, same reasoning - see mindWavesPanel_'s own docs.
     transportToolBar->addAction(mindWavesPanel_->toggleViewAction());
+
+    // Zoom's own toolbar, added after transportToolBar (not before) so
+    // findChild<QToolBar*>()'s own singular/first-match behavior - already
+    // relied on by existing tests to reach transportToolBar specifically -
+    // keeps finding it, not this one. The four most commonly reached-for
+    // zoom actions - the axis-restricted/coarse variants stay
+    // menu(+keyboard)-only, matching how e.g. Bring Forward/Send Backward
+    // above are menu-only despite having shortcuts.
+    QToolBar* viewToolBar = addToolBar(tr("View"));
+    viewToolBar->addAction(zoomOutAction);
+    viewToolBar->addAction(zoomInAction);
+    viewToolBar->addAction(zoomToFitAction);
+    viewToolBar->addAction(zoomToActualSizeAction);
 
     // ~30fps - frequent enough for each completed loop's spectrogram
     // update to read as prompt, without repainting so often it competes
@@ -804,7 +892,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     layerController_->setProject(&*project_);
     mindWaveController_->setProject(&*project_);
     hasUnsavedChanges_ = false;
-    stack_->setCurrentWidget(canvas_);
+    stack_->setCurrentWidget(canvasScrollArea_);
     // Layers is shown automatically the *first* time any project exists in
     // this session, then left alone - a user's own show/hide choice
     // (Playback/Record/Loop included, which start OFF and are never forced
@@ -1340,6 +1428,26 @@ void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWi
 void MainWindow::undo() { undoStack_.undo(); }
 
 void MainWindow::redo() { undoStack_.redo(); }
+
+void MainWindow::zoomIn() { canvas_->zoomIn(); }
+
+void MainWindow::zoomOut() { canvas_->zoomOut(); }
+
+void MainWindow::zoomInTimeOnly() { canvas_->zoomInTimeOnly(); }
+
+void MainWindow::zoomOutTimeOnly() { canvas_->zoomOutTimeOnly(); }
+
+void MainWindow::zoomInFrequencyOnly() { canvas_->zoomInFrequencyOnly(); }
+
+void MainWindow::zoomOutFrequencyOnly() { canvas_->zoomOutFrequencyOnly(); }
+
+void MainWindow::zoomInCoarse() { canvas_->zoomInCoarse(); }
+
+void MainWindow::zoomOutCoarse() { canvas_->zoomOutCoarse(); }
+
+void MainWindow::zoomToFit() { canvas_->zoomToFit(); }
+
+void MainWindow::zoomToActualSize() { canvas_->zoomToActualSize(); }
 
 void MainWindow::deletePickedObject() { toolPaletteController_->deleteSelection(); }
 

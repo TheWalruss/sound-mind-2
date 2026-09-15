@@ -13,21 +13,22 @@ in-app behavior is correct and this guide is due an update.
 2. [Starting Out](#starting-out)
 3. [Creating a Project](#creating-a-project)
 4. [The Main Window](#the-main-window)
-5. [Importing Media](#importing-media)
-6. [Working with Layers](#working-with-layers)
-7. [Painting](#painting)
-8. [Pick](#pick)
-9. [Selection and Fill](#selection-and-fill)
-10. [Path Tool](#path-tool)
-11. [Axis Labels](#axis-labels)
-12. [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid)
-13. [Playback](#playback)
-14. [Recording](#recording)
-15. [Loop Mode](#loop-mode)
-16. [Pooling a Layer](#pooling-a-layer)
-17. [Exporting](#exporting)
-18. [Saving and Project Files](#saving-and-project-files)
-19. [What's Not Here Yet](#whats-not-here-yet)
+5. [Canvas Navigation](#canvas-navigation)
+6. [Importing Media](#importing-media)
+7. [Working with Layers](#working-with-layers)
+8. [Painting](#painting)
+9. [Pick](#pick)
+10. [Selection and Fill](#selection-and-fill)
+11. [Path Tool](#path-tool)
+12. [Axis Labels](#axis-labels)
+13. [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid)
+14. [Playback](#playback)
+15. [Recording](#recording)
+16. [Loop Mode](#loop-mode)
+17. [Pooling a Layer](#pooling-a-layer)
+18. [Exporting](#exporting)
+19. [Saving and Project Files](#saving-and-project-files)
+20. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -104,6 +105,8 @@ Once a project is open, the title bar shows the project's name next to
   that way across New/Open Project, within the same run of the Studio.
 - **File menu** - New/Open/Save/Save As, Import Audio/Image, Export
   Audio/Video.
+- **View menu** - Zoom controls; see [Canvas Navigation](#canvas-navigation)
+  below.
 - **Pool Layer** toolbar button - see [Pooling a Layer](#pooling-a-layer).
 - **Status bar** (bottom) - the left side shows the mouse cursor's
   position while it's over the canvas, both in pixels and in time/
@@ -117,6 +120,40 @@ the edge between two stacked panels (or between a panel and the canvas)
 to make one taller/shorter or wider/narrower; if a panel's own content no
 longer fits at the size you've given it, a scrollbar appears inside it
 rather than the panel refusing to shrink.
+
+## Canvas Navigation
+
+By default the canvas always shrinks or grows to exactly fill the space
+available (**Fit to Window**) - the same behavior the Studio always had.
+Zooming in switches to a fixed size instead, scrollbars appearing once
+the canvas no longer fits.
+
+**Keyboard modifiers** carry one consistent meaning here and (as it's
+built out further) anywhere else an action could affect time and
+frequency independently: **Alt** restricts to the **frequency axis**
+(vertical), **Shift** restricts to the **time axis** (horizontal), and
+**Ctrl** is for **proportional** control - both axes together.
+
+Zoom, in the **View → Zoom** menu (the four most common of these are also
+toolbar buttons):
+
+- **Zoom In**/**Zoom Out** - `]`/`[` - proportional, the normal step.
+- **Zoom In (Frequency Only)**/**Zoom Out (Frequency Only)** -
+  `Alt+]`/`Alt+[` - stretches or compresses the vertical axis only; the
+  horizontal axis doesn't change.
+- **Zoom In (Time Only)**/**Zoom Out (Time Only)** - `Shift+]`/`Shift+[` -
+  the horizontal-axis counterpart.
+- **Zoom In (Coarse)**/**Zoom Out (Coarse)** - `Ctrl+]`/`Ctrl+[` -
+  proportional, at a bigger step than plain `]`/`[`. (Ctrl usually means
+  "proportional," but plain `]`/`[` is already proportional by default -
+  here Ctrl means a bigger step instead.)
+- **Fit to Window** - `Ctrl+0` - back to the default, always-fills-the-
+  space behavior.
+- **Actual Size** - `Ctrl+1` - exactly 100%, one screen pixel per encoded
+  pixel.
+- The **mouse wheel**, over the canvas, zooms the same way under the same
+  modifiers (Ctrl/Alt/Shift). An unmodified wheel scrolls the canvas
+  instead, once it's larger than the visible area.
 
 ## Importing Media
 
@@ -454,8 +491,8 @@ regardless of the "Show bounding boxes" setting - ready to:
   can still be moved and deleted, just not "modified" through this panel.
 - **Delete** it - **Edit → Delete** (or the Delete key).
 - **Restack** it within its own layer - **Edit → Bring to Front**
-  (Ctrl+Shift+]), **Send to Back** (Ctrl+Shift+[), **Bring Forward**
-  (Ctrl+]), or **Send Backward** (Ctrl+[). This only changes which
+  (Ctrl+Shift+Up), **Send to Back** (Ctrl+Shift+Down), **Bring Forward**
+  (Ctrl+Up), or **Send Backward** (Ctrl+Down). This only changes which
   object renders on top where they overlap - it doesn't move, modify, or
   select anything else.
 - **Edit its own path** - **Edit → Edit Path** (a brush stroke only;
@@ -718,6 +755,11 @@ what's designed for it:
   key) is here today.
 - Restacking (Bring to Front/Send to Back/Bring Forward/Send Backward)
   isn't undoable (Ctrl+Z) yet - see [Pick](#pick) above.
+- The Alt/Shift/Ctrl axis-restriction mnemonic (see
+  [Canvas Navigation](#canvas-navigation) above) only applies to Zoom so
+  far - holding a modifier while dragging to move or resize a Pick
+  selection, or while adjusting a layer's own translation/rescale, does
+  nothing extra yet.
 
 Selection (see [Selection and Fill](#selection-and-fill) above) exists,
 but only a fraction of what's designed for it:

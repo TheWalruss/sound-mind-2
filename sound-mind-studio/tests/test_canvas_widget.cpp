@@ -6,6 +6,7 @@
 #include <QEvent>
 #include <QMouseEvent>
 #include <QSignalSpy>
+#include <QWheelEvent>
 #include <QtTest/QtTest>
 
 #include "sound_mind/codec/stream_codec.h"
@@ -51,6 +52,23 @@ ProjectSettings mouseConversionTestSettings() {
     settings.minFrequencyHz = 20.0f;
     settings.maxFrequencyHz = 2020.0f;
     settings.timestepMs = 10.0;  // 100 columns * 10ms = 1 second total duration.
+    return settings;
+}
+
+/// @brief A project whose canvas is 100x40 - Canvas Navigation's own Zoom
+/// tests use this instead of mouseConversionTestSettings()' 100x50, since
+/// 40 (unlike 50) divides evenly by both the zoom step (1.25) and the
+/// coarse step (2.0) in either direction, keeping every expected resized
+/// dimension below a whole-pixel integer, with no rounding ambiguity to
+/// account for in a test's own expected values.
+ProjectSettings zoomTestSettings() {
+    ProjectSettings settings;
+    settings.canvasWidth = 100;
+    settings.canvasHeight = 40;
+    settings.binCount = 40;
+    settings.minFrequencyHz = 20.0f;
+    settings.maxFrequencyHz = 2020.0f;
+    settings.timestepMs = 10.0;
     return settings;
 }
 
@@ -949,4 +967,197 @@ void CanvasWidgetTest::setTimingGridConfigDrawsVerticalLines() {
         }
     }
     QVERIFY(foundDifference);
+}
+
+void CanvasWidgetTest::freshWidgetIsInFitToWindowMode() {
+    const CanvasWidget widget;
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::FitToWindow);
+}
+
+void CanvasWidgetTest::zoomInSwitchesToManualAndScalesBothAxesByTheNormalStep() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);  // Matches the canvas exactly - FitToWindow's own effective zoom is 1.0 on both axes.
+
+    widget.zoomIn();
+
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::Manual);
+    QCOMPARE(widget.size(), QSize(125, 50));  // 100/40 x1.25.
+}
+
+void CanvasWidgetTest::zoomOutSwitchesToManualAndScalesBothAxesByTheNormalStep() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+
+    widget.zoomOut();
+
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::Manual);
+    QCOMPARE(widget.size(), QSize(80, 32));  // 100/40 /1.25.
+}
+
+void CanvasWidgetTest::zoomInTimeOnlyLeavesTheFrequencyAxisAtItsCurrentEffectiveSize() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+
+    widget.zoomInTimeOnly();
+
+    QCOMPARE(widget.size(), QSize(125, 40));  // Time (width) x1.25; frequency (height) untouched.
+}
+
+void CanvasWidgetTest::zoomInFrequencyOnlyLeavesTheTimeAxisAtItsCurrentEffectiveSize() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+
+    widget.zoomInFrequencyOnly();
+
+    QCOMPARE(widget.size(), QSize(100, 50));  // Frequency (height) x1.25; time (width) untouched.
+}
+
+void CanvasWidgetTest::zoomInCoarseUsesABiggerStepThanZoomIn() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+
+    widget.zoomInCoarse();
+
+    QCOMPARE(widget.size(), QSize(200, 80));  // x2.0, both axes - bigger than zoomIn()'s own x1.25.
+}
+
+void CanvasWidgetTest::zoomToActualSizeSetsOnePixelPerColumnAndBin() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+    widget.zoomInCoarse();  // Start from some other zoom level entirely.
+
+    widget.zoomToActualSize();
+
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::Manual);
+    QCOMPARE(widget.size(), QSize(100, 40));  // Exactly canvasWidth x canvasHeight - one pixel each.
+}
+
+void CanvasWidgetTest::zoomToFitReturnsToFitToWindowMode() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+    widget.zoomIn();
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::Manual);
+
+    widget.zoomToFit();
+
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::FitToWindow);
+}
+
+void CanvasWidgetTest::zoomModeChangedEmitsOnlyOnAnActualModeTransition() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+    QSignalSpy spy(&widget, &CanvasWidget::zoomModeChanged);
+
+    widget.zoomIn();  // FitToWindow -> Manual: a real transition.
+    QCOMPARE(spy.count(), 1);
+
+    widget.zoomIn();  // Manual -> Manual: no transition.
+    QCOMPARE(spy.count(), 1);
+
+    widget.zoomOutTimeOnly();  // Still Manual -> Manual.
+    QCOMPARE(spy.count(), 1);
+
+    widget.zoomToFit();  // Manual -> FitToWindow: a real transition.
+    QCOMPARE(spy.count(), 2);
+
+    widget.zoomToFit();  // FitToWindow -> FitToWindow: no transition.
+    QCOMPARE(spy.count(), 2);
+}
+
+void CanvasWidgetTest::settingANewProjectResetsZoomToFitToWindow() {
+    const Project firstProject = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&firstProject);
+    widget.resize(100, 40);
+    widget.zoomIn();
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::Manual);
+
+    const Project secondProject = Project::createNew(zoomTestSettings());
+    widget.setProject(&secondProject);
+
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::FitToWindow);
+}
+
+void CanvasWidgetTest::wheelWithNoModifierDoesNotZoom() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+    QSignalSpy spy(&widget, &CanvasWidget::zoomModeChanged);
+
+    QWheelEvent event(QPointF(10, 10), QPointF(10, 10), QPoint(0, 0), QPoint(0, 120), Qt::NoButton, Qt::NoModifier,
+                       Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(&widget, &event);
+
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::FitToWindow);
+    QCOMPARE(spy.count(), 0);
+}
+
+void CanvasWidgetTest::wheelWithCtrlZoomsCoarseProportionally() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+
+    QWheelEvent event(QPointF(10, 10), QPointF(10, 10), QPoint(0, 0), QPoint(0, 120), Qt::NoButton,
+                       Qt::ControlModifier, Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(&widget, &event);
+
+    QCOMPARE(widget.zoomMode(), CanvasWidget::ZoomMode::Manual);
+    QCOMPARE(widget.size(), QSize(200, 80));  // Ctrl+wheel = coarse step (x2.0), both axes.
+}
+
+void CanvasWidgetTest::wheelWithAltZoomsFrequencyOnly() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+
+    QWheelEvent event(QPointF(10, 10), QPointF(10, 10), QPoint(0, 0), QPoint(0, 120), Qt::NoButton, Qt::AltModifier,
+                       Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(&widget, &event);
+
+    QCOMPARE(widget.size(), QSize(100, 50));  // Frequency (height) x1.25; time (width) untouched.
+}
+
+void CanvasWidgetTest::wheelWithShiftZoomsTimeOnly() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+
+    QWheelEvent event(QPointF(10, 10), QPointF(10, 10), QPoint(0, 0), QPoint(0, 120), Qt::NoButton, Qt::ShiftModifier,
+                       Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(&widget, &event);
+
+    QCOMPARE(widget.size(), QSize(125, 40));  // Time (width) x1.25; frequency (height) untouched.
+}
+
+void CanvasWidgetTest::wheelScrollingDownZoomsOut() {
+    const Project project = Project::createNew(zoomTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 40);
+
+    QWheelEvent event(QPointF(10, 10), QPointF(10, 10), QPoint(0, 0), QPoint(0, -120), Qt::NoButton, Qt::ShiftModifier,
+                       Qt::NoScrollPhase, false);
+    QCoreApplication::sendEvent(&widget, &event);
+
+    QCOMPARE(widget.size(), QSize(80, 40));  // Time (width) /1.25; frequency (height) untouched.
 }

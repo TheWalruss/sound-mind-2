@@ -6,6 +6,22 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.31.10] - 2026-09-15
+
+Canvas Navigation: a real, independent Zoom level for the canvas, with axis-restricted zoom (time-only/frequency-only/proportional) via a new Alt/Shift/Ctrl keyboard-modifier mnemonic - `docs/sound-mind-design.md`'s new "Canvas Navigation" section.
+
+### Added
+
+- **Zoom**: View → Zoom menu (also on a new toolbar for the four most common actions) - Zoom In/Out (`]`/`[`, proportional), Zoom In/Out (Frequency Only) (`Alt+]`/`Alt+[`, time-invariant), Zoom In/Out (Time Only) (`Shift+]`/`Shift+[`, frequency-invariant), Zoom In/Out (Coarse) (`Ctrl+]`/`Ctrl+[`, a bigger proportional step), Fit to Window (`Ctrl+0`), and Actual Size (`Ctrl+1`, one screen pixel per encoded pixel). The mouse wheel zooms the same way under the same modifiers; an unmodified wheel scrolls once the canvas is larger than the visible area.
+- **The canvas is now scrollable** once zoomed in past what fits - wrapped in a new `QScrollArea`, replacing its own previous "always stretched to fill the window" behavior (still exactly what Fit to Window, the default, reproduces).
+- **Keyboard Modifiers mnemonic** (design doc only so far, beyond Zoom): Alt = frequency axis, Shift = time axis, Ctrl = proportional control - see `docs/sound-mind-design.md`'s "Canvas Navigation." Not yet implemented for Pick's own move/resize drags, Selection's resize handles, or Layer translation/rescale - see `USER_GUIDE.md`'s "What's Not Here Yet."
+
+### Changed
+
+- **Pick's restacking shortcuts moved**: Bring to Front/Send to Back/Bring Forward/Send Backward are now Ctrl+Shift+Up/Ctrl+Shift+Down/Ctrl+Up/Ctrl+Down (were Ctrl+Shift+]/Ctrl+Shift+[/Ctrl+]/Ctrl+[) - freed up for Zoom, which the bracket keys were requested for explicitly.
+
+Full regression: sound-mind-studio all 29 QTest classes (`CanvasWidgetTest` gained 14 cases, up to 60) passing; sound-mind-core 378/378 and sound-mind-gpu 33/33 unchanged (no Core/GPU code touched). Doxygen: 0 warnings.
+
 ## [0.0.31.9] - 2026-09-14
 
 Two bugs fixed, one of them by adding a genuinely new mechanism: layer property changes (opacity, opacity-MindWave binding, visibility, translation, rescale) are now undoable/redoable, unified with paint-stroke undo behind a single Edit > Undo/Redo.
