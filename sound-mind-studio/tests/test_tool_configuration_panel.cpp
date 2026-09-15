@@ -1,24 +1,31 @@
 #include "test_tool_configuration_panel.h"
 
+#include <memory>
+
 #include <QCheckBox>
 #include <QColor>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QSpinBox>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/tool_configuration_panel.h"
 
 using sound_mind::core::BrushTipShape;
+using sound_mind::core::InstrumentConfiguration;
+using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
+using sound_mind::core::ToolType;
 using sound_mind::studio::ToolConfigurationPanel;
 
 void ToolConfigurationPanelTest::freshPanelIsAnOpaqueCircularBrush() {
     const ToolConfigurationPanel panel;
     const ToolConfiguration& config = panel.toolConfiguration();
-    QCOMPARE(config.tipShape(), BrushTipShape::Circle);
+    QCOMPARE(config.type(), ToolType::Procedural);
+    QCOMPARE(dynamic_cast<const ProceduralConfiguration&>(config).tipShape(), BrushTipShape::Circle);
     QCOMPARE(config.defaultGradient().stops().front().leftOpacity, 1.0f);
     QCOMPARE(config.defaultGradient().stops().front().rightOpacity, 1.0f);
     // 0 dB on both channels is byte 255 on both red and green - a bright
@@ -42,15 +49,16 @@ void ToolConfigurationPanelTest::changingTheTipShapeEmitsToolConfigurationChange
     auto* combo = panel.findChild<QComboBox*>(QStringLiteral("tipShapeCombo"));
     QVERIFY(combo != nullptr);
 
-    std::optional<ToolConfiguration> received;
+    std::unique_ptr<ToolConfiguration> received;
     connect(&panel, &ToolConfigurationPanel::toolConfigurationChanged,
-            [&](const ToolConfiguration& config) { received = config; });
+            [&](const ToolConfiguration& config) { received = config.clone(); });
 
     combo->setCurrentIndex(combo->findText(QStringLiteral("Diamond")));
 
-    QVERIFY(received.has_value());
-    QCOMPARE(received->tipShape(), BrushTipShape::Diamond);
-    QCOMPARE(panel.toolConfiguration().tipShape(), BrushTipShape::Diamond);
+    QVERIFY(received != nullptr);
+    QCOMPARE(dynamic_cast<const ProceduralConfiguration&>(*received).tipShape(), BrushTipShape::Diamond);
+    QCOMPARE(dynamic_cast<const ProceduralConfiguration&>(panel.toolConfiguration()).tipShape(),
+             BrushTipShape::Diamond);
 }
 
 void ToolConfigurationPanelTest::changingFalloffEmitsToolConfigurationChanged() {
@@ -190,7 +198,7 @@ void ToolConfigurationPanelTest::changingTheStampIntervalEmitsToolConfigurationC
 
 void ToolConfigurationPanelTest::loadingAConfigurationSyncsTheStampModeAndIntervalControls() {
     ToolConfigurationPanel panel;
-    ToolConfiguration config;
+    ProceduralConfiguration config;
     config.setStampMode(StampMode::FrequencyAxis);
     config.setStampInterval(150.0);
 
@@ -201,4 +209,141 @@ void ToolConfigurationPanelTest::loadingAConfigurationSyncsTheStampModeAndInterv
     QCOMPARE(combo->currentText(), QStringLiteral("Frequency Axis"));
     QCOMPARE(intervalSpinBox->value(), 150.0);
     QVERIFY(intervalSpinBox->isEnabled());
+}
+
+// --- Sound Mind Instruments (v0.Y.32.1) -------------------------------------
+
+void ToolConfigurationPanelTest::freshPanelDefaultsToProceduralWithTheProceduralGroupVisible() {
+    const ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    QVERIFY(toolTypeCombo != nullptr);
+    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Procedural"));
+
+    auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
+    auto* instrumentGroup = panel.findChild<QWidget*>(QStringLiteral("instrumentGroup"));
+    QVERIFY(proceduralGroup != nullptr);
+    QVERIFY(instrumentGroup != nullptr);
+    QVERIFY(!proceduralGroup->isHidden());
+    QVERIFY(instrumentGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::switchingToolTypeToInstrumentShowsItsOwnGroupAndHidesProcedural() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
+    auto* instrumentGroup = panel.findChild<QWidget*>(QStringLiteral("instrumentGroup"));
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.toolConfiguration().type(), ToolType::Instrument);
+    QVERIFY(proceduralGroup->isHidden());
+    QVERIFY(!instrumentGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::switchingToolTypeToInstrumentPreservesSharedFields() {
+    ToolConfigurationPanel panel;
+    auto* falloffSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"));
+    auto* sizeSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    falloffSpinBox->setValue(0.6);
+    sizeSpinBox->setValue(1.5);
+
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+
+    QCOMPARE(panel.toolConfiguration().falloff(), 0.6f);
+    QCOMPARE(panel.toolConfiguration().size(), 1.5);
+}
+
+void ToolConfigurationPanelTest::switchingToolTypeBackToProceduralRestoresTheProceduralGroup() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
+    auto* instrumentGroup = panel.findChild<QWidget*>(QStringLiteral("instrumentGroup"));
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Procedural")));
+
+    QCOMPARE(panel.toolConfiguration().type(), ToolType::Procedural);
+    QVERIFY(!proceduralGroup->isHidden());
+    QVERIFY(instrumentGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::changingHarmonicCountResizesTheStrengthRows() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    auto* harmonicCountSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("harmonicCountSpinBox"));
+
+    const int initialCount =
+        static_cast<int>(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration())
+                              .harmonicStrengths()
+                              .size());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox%1").arg(initialCount)) !=
+            nullptr);
+
+    harmonicCountSpinBox->setValue(initialCount + 2);
+
+    QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).harmonicStrengths().size(),
+              std::size_t{static_cast<std::size_t>(initialCount) + 2});
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox%1").arg(initialCount + 2)) !=
+            nullptr);
+
+    harmonicCountSpinBox->setValue(1);
+
+    QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).harmonicStrengths().size(),
+              std::size_t{1});
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox2")) == nullptr);
+}
+
+void ToolConfigurationPanelTest::changingAHarmonicStrengthEmitsToolConfigurationChanged() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    auto* firstHarmonicSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox1"));
+    QVERIFY(firstHarmonicSpinBox != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    firstHarmonicSpinBox->setValue(0.42);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).harmonicStrengths().front(),
+              0.42);
+}
+
+void ToolConfigurationPanelTest::changingInharmonicityEmitsToolConfigurationChanged() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    auto* inharmonicitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("inharmonicitySpinBox"));
+    QVERIFY(inharmonicitySpinBox != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    inharmonicitySpinBox->setValue(0.02);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).inharmonicity(), 0.02);
+}
+
+void ToolConfigurationPanelTest::loadingAnInstrumentConfigurationSyncsToolTypeAndHarmonicControls() {
+    ToolConfigurationPanel panel;
+    InstrumentConfiguration config;
+    config.setHarmonicStrengths({1.0, 0.7, 0.4});
+    config.setInharmonicity(0.03);
+
+    panel.setToolConfiguration(config);
+
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* harmonicCountSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("harmonicCountSpinBox"));
+    auto* inharmonicitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("inharmonicitySpinBox"));
+    auto* secondHarmonicSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox2"));
+    auto* instrumentGroup = panel.findChild<QWidget*>(QStringLiteral("instrumentGroup"));
+
+    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Instrument"));
+    QCOMPARE(harmonicCountSpinBox->value(), 3);
+    QCOMPARE(inharmonicitySpinBox->value(), 0.03);
+    QVERIFY(secondHarmonicSpinBox != nullptr);
+    QCOMPARE(secondHarmonicSpinBox->value(), 0.7);
+    QVERIFY(!instrumentGroup->isHidden());
 }

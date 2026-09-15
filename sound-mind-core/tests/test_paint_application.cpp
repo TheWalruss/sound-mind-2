@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -13,6 +15,7 @@ using sound_mind::core::binIndexToFrequency;
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::frameIndexToTime;
 using sound_mind::core::frequencyToBinIndex;
+using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::LayerId;
 using sound_mind::core::Operation;
 using sound_mind::core::OperationId;
@@ -24,7 +27,7 @@ using sound_mind::core::rebuildPaintedContent;
 using sound_mind::core::StampMode;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
-using sound_mind::core::ToolConfiguration;
+using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::timeToFrameIndex;
 
 namespace {
@@ -100,12 +103,44 @@ Path makeUniformDiagonalPath(TimeFrequencyPoint start, TimeFrequencyPoint end, f
     return path;
 }
 
-ToolConfiguration makeCircleTool(double size, float falloff) {
-    ToolConfiguration config;
-    config.setTipShape(BrushTipShape::Circle);
-    config.setFalloff(falloff);
-    config.setSize(size);
+std::unique_ptr<ProceduralConfiguration> makeCircleTool(double size, float falloff) {
+    auto config = std::make_unique<ProceduralConfiguration>();
+    config->setTipShape(BrushTipShape::Circle);
+    config->setFalloff(falloff);
+    config->setSize(size);
     return config;
+}
+
+std::unique_ptr<InstrumentConfiguration> makeInstrumentTool(std::vector<double> harmonicStrengths,
+                                                              double inharmonicity, double size, float falloff) {
+    auto config = std::make_unique<InstrumentConfiguration>();
+    config->setHarmonicStrengths(std::move(harmonicStrengths));
+    config->setInharmonicity(inharmonicity);
+    config->setSize(size);
+    config->setFalloff(falloff);
+    return config;
+}
+
+/// @brief A single-node Path (a tap, not a drag) at (timeSeconds,
+/// frequencyHz), with a uniform gradient of the given intensity/opacity -
+/// exercises applyPaintOperation()'s own single-stamp handling without any
+/// dense-resampling noise a real (even zero-length) two-node segment would
+/// introduce.
+Path makeSingleTapPath(double timeSeconds, double frequencyHz, float intensity, float opacity) {
+    Path path;
+    PathNode node;
+    node.anchor = TimeFrequencyPoint{timeSeconds, frequencyHz};
+    node.type = PathNodeType::Corner;
+    path.addNode(node);
+
+    auto stop = path.gradient().stops().front();
+    stop.leftIntensity = intensity;
+    stop.rightIntensity = intensity;
+    stop.leftOpacity = opacity;
+    stop.rightOpacity = opacity;
+    path.gradient().setStopValues(0, stop);
+    path.gradient().setStopValues(1, stop);
+    return path;
 }
 
 std::size_t pixelIndex(const StreamImage& content, int frame, int bin) {
@@ -255,14 +290,14 @@ TEST_CASE("applyPaintOperation with AlongCurve stamp mode leaves gaps between st
     StreamImage content = makeBlankContent(config, 100);
     const Path path = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);  // 0.4s span, constant frequency.
 
-    ToolConfiguration tool = makeCircleTool(0.02, 0.0f);
-    tool.setStampMode(StampMode::AlongCurve);
+    auto tool = makeCircleTool(0.02, 0.0f);
+    tool->setStampMode(StampMode::AlongCurve);
     // Seconds-equivalent arc length == plain seconds here, since this
     // path has zero frequency variation to contribute any normalized-
     // frequency distance.
-    tool.setStampInterval(0.1);
+    tool->setStampInterval(0.1);
 
-    const PaintOperation op(1, LayerId{1}, path, tool);
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
     applyPaintOperation(op, 2000.0, content);
 
     const int bin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
@@ -287,11 +322,11 @@ TEST_CASE("applyPaintOperation with TimeAxis stamp mode stamps at each time-grid
     // own docs, and applyPaintOperation()'s "Local bin-radius" comment)
     // shrinks below reaching even the nearest integer bin at this path's
     // own highest frequency (1200 Hz) - which 0.01 alone did.
-    ToolConfiguration tool = makeCircleTool(0.03, 0.0f);
-    tool.setStampMode(StampMode::TimeAxis);
-    tool.setStampInterval(0.3);
+    auto tool = makeCircleTool(0.03, 0.0f);
+    tool->setStampMode(StampMode::TimeAxis);
+    tool->setStampInterval(0.3);
 
-    const PaintOperation op(1, LayerId{1}, path, tool);
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
     applyPaintOperation(op, 2000.0, content);
 
     // The path's own start (t=0.1, always stamped), plus every 0.3s
@@ -318,11 +353,11 @@ TEST_CASE("applyPaintOperation with FrequencyAxis stamp mode stamps at each freq
         makeUniformDiagonalPath(TimeFrequencyPoint{0.1, 400.0}, TimeFrequencyPoint{0.9, 1200.0}, -10.0f, 1.0f);
 
     // See the TimeAxis test above for why this can't be too small.
-    ToolConfiguration tool = makeCircleTool(0.03, 0.0f);
-    tool.setStampMode(StampMode::FrequencyAxis);
-    tool.setStampInterval(200.0);
+    auto tool = makeCircleTool(0.03, 0.0f);
+    tool->setStampMode(StampMode::FrequencyAxis);
+    tool->setStampInterval(200.0);
 
-    const PaintOperation op(1, LayerId{1}, path, tool);
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
     applyPaintOperation(op, 2000.0, content);
 
     // The path's own start (freq 400 Hz, always stamped), plus every
@@ -368,6 +403,120 @@ TEST_CASE("applyPaintOperation does nothing for a path with fewer than two nodes
     for (const float value : content.leftMagnitudeDb) {
         REQUIRE(value == 0.0f);
     }
+}
+
+TEST_CASE("applyPaintOperation with an InstrumentConfiguration stamps one bin-exact spike per harmonic",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    const PaintOperation op(1, LayerId{1}, path, makeInstrumentTool({1.0, 0.5}, 0.0, 0.05, 0.0f));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int fundamentalBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    const int secondHarmonicBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(2000.0f, config))));
+
+    // Strength 1.0, starting from 0 dB: a full blend to the target.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == -10.0f);
+    // Strength 0.5: exactly half the blend.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, secondHarmonicBin)] == Catch::Approx(-5.0f));
+
+    // No frequency-axis blending - the bin immediately next to the
+    // fundamental's own exact bin is untouched.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin + 1)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation with an InstrumentConfiguration blends each harmonic's own spike along the time axis "
+          "only",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    const PaintOperation op(1, LayerId{1}, path, makeInstrumentTool({1.0}, 0.0, 0.05, 0.5f));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int fundamentalBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == -10.0f);
+    // A frame close to the edge of the brush radius (falloff 0.5, so the
+    // outer half of the radius fades) is only partially blended - not the
+    // full target value. frameRadius here is 5 frames (0.05s / 0.01s per
+    // frame); offset 4 sits well within the fading outer half.
+    const int nearFrame = centerFrame + 4;
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, nearFrame, fundamentalBin)] < 0.0f);
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, nearFrame, fundamentalBin)] > -10.0f);
+    // Well outside the brush radius (0.05s), nothing is painted.
+    const int farFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3 + 1.0, config)));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, farFrame, fundamentalBin)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation with an InstrumentConfiguration skips a harmonic stretched past the configured "
+          "frequency range",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();  // maxFrequencyHz == 20000.0f.
+    StreamImage content = makeBlankContent(config, 100);
+    // Fundamental at 15000 Hz: harmonic 1 (15000 Hz) is in range, harmonic
+    // 2 (30000 Hz) is well past maxFrequencyHz - it must be skipped
+    // entirely, not clamped and stacked onto the top bin.
+    const Path path = makeSingleTapPath(0.3, 15000.0, -10.0f, 1.0f);
+
+    const PaintOperation op(1, LayerId{1}, path, makeInstrumentTool({1.0, 1.0}, 0.0, 0.05, 0.0f));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int topBin = static_cast<int>(config.binCount) - 1;
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, topBin)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation with an InstrumentConfiguration stretches higher harmonics sharp per inharmonicity",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    // Only harmonic 4 has any strength, isolating its own placement.
+    // harmonicHz = 4 * 1000 * sqrt(1 + 0.01 * 4^2) = 4000 * sqrt(1.16).
+    const double inharmonicity = 0.01;
+    const PaintOperation op(1, LayerId{1}, path, makeInstrumentTool({0.0, 0.0, 0.0, 1.0}, inharmonicity, 0.05, 0.0f));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const double stretchedHz = 4.0 * 1000.0 * std::sqrt(1.0 + inharmonicity * 16.0);
+    const int stretchedBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(static_cast<float>(stretchedHz), config))));
+    const int unstretchedBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(4000.0f, config))));
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, stretchedBin)] == -10.0f);
+    if (unstretchedBin != stretchedBin) {
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, unstretchedBin)] == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation with an InstrumentConfiguration skips a non-positive-strength harmonic",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    const PaintOperation op(1, LayerId{1}, path, makeInstrumentTool({0.0, 1.0}, 0.0, 0.05, 0.0f));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int fundamentalBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    const int secondHarmonicBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(2000.0f, config))));
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == 0.0f);
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, secondHarmonicBin)] == -10.0f);
 }
 
 TEST_CASE("rebuildPaintedContent applies every PaintOperation in order, on top of a copy of base",

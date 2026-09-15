@@ -1,6 +1,8 @@
 #pragma once
 
+#include <memory>
 #include <string>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -12,15 +14,13 @@ namespace sound_mind::core {
  * @brief Which kind of painting tool a `ToolConfiguration` configures -
  *        see `docs/sound-mind-design.md`'s "Tool Configuration".
  *
- * @note Only `Procedural` exists as a real, paintable tool so far (the
- *       `v0.Y.24.1` "Basic Painting" milestone's own scope, per
- *       `docs/sound-mind-roadmap.md`) - `Instrument`/`MindShot`/
- *       `MindGrain`/`Smudge`/`OrderChaos`/`Heal`/`Soften`/`Clone` are
- *       future roadmap milestones (`v0.Y.30.1`, `v0.Y.31.1`, and others
- *       not yet scheduled). Adding a value here ahead of its own tool
- *       actually working is deliberate groundwork for the Tool
- *       Configuration Panel/Wizard's dynamic-per-type UI (this session's
- *       scope, confirmed with the user), not a claim that tool is usable.
+ * @note Only `Procedural` and (as of `v0.Y.32.1`, Sound Mind Instruments)
+ *       `Instrument` exist as real, paintable tools so far -
+ *       `MindShot`/`MindGrain`/`Smudge`/`OrderChaos`/`Heal`/`Soften`/`Clone`
+ *       are future roadmap milestones, not yet scheduled. Adding a value
+ *       here ahead of its own tool actually working is deliberate
+ *       groundwork for the Tool Configuration Panel/Wizard's dynamic-per-
+ *       type UI, not a claim that tool is usable.
  */
 enum class ToolType {
     Procedural,
@@ -50,7 +50,9 @@ NLOHMANN_JSON_SERIALIZE_ENUM(ToolType, {
 
 /**
  * @brief A brush tip's geometric footprint - see `docs/sound-mind-design.md`'s
- *        "Procedural Brushes".
+ *        "Procedural Brushes". `ProceduralConfiguration`'s own parameter -
+ *        an `Instrument`'s own "shape" comes from its harmonic content, not
+ *        a geometric footprint (see `InstrumentConfiguration`'s own docs).
  */
 enum class BrushTipShape {
     Circle,
@@ -90,7 +92,10 @@ NLOHMANN_JSON_SERIALIZE_ENUM(BrushTipShape, {
  * the Path tool's own deliberate node placement - see `path.h`'s own
  * docs on why both end up the same underlying representation): this is
  * a property of the brush stamping *along* that Path, the same as tip
- * shape or size, not of how the geometry was drawn.
+ * shape or size, not of how the geometry was drawn. Shared by every
+ * `ToolConfiguration` subtype - which cells a stamp *lands on* is a
+ * path-sampling concern independent of what a stamp actually paints once
+ * it lands.
  */
 enum class StampMode {
     /// @brief Densely overlapping stamps, blending into one continuous
@@ -121,8 +126,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(StampMode, {
 // clang-format on
 
 /**
- * @brief A named, savable/shareable painting-tool setup - see
- *        `docs/sound-mind-design.md`'s "Tool Configuration".
+ * @brief Abstract base for a named, savable/shareable painting-tool setup -
+ *        see `docs/sound-mind-design.md`'s "Tool Configuration".
  *
  * Every `PaintOperation` carries its own `ToolConfiguration` (a snapshot
  * of whatever was configured at the moment it was painted, not a
@@ -130,24 +135,36 @@ NLOHMANN_JSON_SERIALIZE_ENUM(StampMode, {
  * named presets (the Tool Configuration Panel's own "Tool Preset"
  * drop-down draws from) is a later installment of this same milestone.
  *
- * @note Only `Procedural`'s own parameters exist as real fields so far,
- *       matching `ToolType`'s own note - deliberately *not* modeled as a
- *       generic key/value `ParamSet` (see `docs/sound-mind-architecture.md`'s
- *       Decision #34): with a single real tool type, plain typed fields
- *       are simpler and safer than an opaque bag would be, at the cost of
- *       needing real rework (a tagged union, or per-type subclassing) once
- *       a second tool type's parameters actually need to coexist with
- *       these - deferred until that's a real, not speculative, need.
+ * **Polymorphic since `v0.Y.32.1` (Sound Mind Instruments)** - the
+ * previous, single flat class's own doc already anticipated this moment:
+ * with only `Procedural`'s own parameters real, "plain typed fields are
+ * simpler and safer than an opaque bag would be, at the cost of needing
+ * real rework (a tagged union, or per-type subclassing) once a second
+ * tool type's parameters actually need to coexist with these" - `Instrument`
+ * is that second type (see `docs/sound-mind-architecture.md`'s Decision on
+ * this milestone for why subclassing was chosen over a tagged union).
+ * Owned everywhere via `std::unique_ptr<ToolConfiguration>`, never held or
+ * passed by value (an abstract class can't be) - clone() is the "virtual
+ * copy constructor" every owner uses to get its own independent copy
+ * (`PaintOperation::translatedCopy()`, re-applying a Picked stroke's
+ * config, ...), the same role a real copy constructor would play for a
+ * concrete value type.
  */
 class ToolConfiguration {
 public:
-    /// @brief Constructs a Procedural configuration with a plain, medium
-    ///        circular tip and a fresh, fully transparent default gradient.
-    ToolConfiguration() = default;
+    virtual ~ToolConfiguration() = default;
 
-    /// @brief Which kind of tool this configures.
-    /// @return The tool type this configuration was constructed with.
-    [[nodiscard]] ToolType type() const noexcept { return type_; }
+    /// @brief Which kind of tool this configures - fixed per concrete
+    ///        subtype, never reassigned.
+    /// @return This configuration's own tool type.
+    [[nodiscard]] virtual ToolType type() const noexcept = 0;
+
+    /// @brief An independent copy of this configuration, of the same
+    ///        concrete subtype - the "virtual copy constructor" every
+    ///        owner uses in place of a real (impossible, on an abstract
+    ///        type) copy constructor.
+    /// @return A new, owned, deep copy.
+    [[nodiscard]] virtual std::unique_ptr<ToolConfiguration> clone() const = 0;
 
     /// @brief This configuration's own saved name.
     /// @return The name it was last saved under, or an empty string for
@@ -160,39 +177,37 @@ public:
     ///        the same division `Layer::setName()`'s own docs draw.
     void setName(std::string name) { name_ = std::move(name); }
 
-    /// @brief The Procedural brush tip's geometric footprint.
-    /// @return The currently configured tip shape.
-    [[nodiscard]] BrushTipShape tipShape() const noexcept { return tipShape_; }
-
-    /// @brief Sets the Procedural brush tip's geometric footprint.
-    /// @param shape The new tip shape.
-    void setTipShape(BrushTipShape shape) noexcept { tipShape_ = shape; }
-
     /**
-     * @brief The Procedural brush tip's edge softness.
+     * @brief How sharply a stamp's own effect fades out toward the edge
+     *        of its own footprint - see each concrete subtype's own docs
+     *        for exactly what "footprint" means for it (a 2D geometric
+     *        blob for `ProceduralConfiguration`; a time-axis-only fade for
+     *        `InstrumentConfiguration`, whose own footprint in frequency
+     *        is the harmonic series itself, not a blended blob).
      * @return A value in `[0, 1]` - `0` is a hard edge, `1` the softest
      *         falloff; not clamped or validated here.
      */
     [[nodiscard]] float falloff() const noexcept { return falloff_; }
 
-    /// @brief Sets the Procedural brush tip's edge softness.
+    /// @brief Sets the stamp's own edge softness - see falloff()'s own docs.
     /// @param falloff Intended to be in `[0, 1]`; not clamped or validated here.
     void setFalloff(float falloff) noexcept { falloff_ = falloff; }
 
     /**
-     * @brief The brush tip's own size.
+     * @brief The stamp's own size.
      *
      * In the same seconds-equivalent normalized space `fitPathToPoints()`'s
      * own `frequencyToTimeScale` parameter establishes (see `path.h`) -
      * resolution/project-agnostic, converted to real canvas pixels only at
-     * the point of actually stamping or displaying it.
+     * the point of actually stamping or displaying it. See each concrete
+     * subtype's own docs for exactly what this radius bounds.
      *
-     * @return The tip's radius, in seconds-equivalent units; not clamped
+     * @return The stamp's radius, in seconds-equivalent units; not clamped
      *         or validated here.
      */
     [[nodiscard]] double size() const noexcept { return size_; }
 
-    /// @brief Sets the brush tip's own size.
+    /// @brief Sets the stamp's own size.
     /// @param size The new radius, in seconds-equivalent units (see
     ///        size()'s own docs); intended to be positive, not clamped or
     ///        validated here.
@@ -242,13 +257,20 @@ public:
     /// @return The default gradient painting with this tool starts from.
     [[nodiscard]] Gradient& defaultGradient() noexcept { return defaultGradient_; }
 
-    friend void to_json(nlohmann::json& json, const ToolConfiguration& config);
-    friend void from_json(const nlohmann::json& json, ToolConfiguration& config);
+protected:
+    ToolConfiguration() = default;
+
+    /// @brief Protected, not public - a concrete subtype's own clone()
+    ///        uses this (via its own implicitly-generated copy
+    ///        constructor) to copy these shared fields; no other code can
+    ///        copy a `ToolConfiguration`, and an abstract base can never
+    ///        be sliced through a by-value parameter/return in the first
+    ///        place, so nothing further needs to be explicitly deleted
+    ///        here.
+    ToolConfiguration(const ToolConfiguration&) = default;
 
 private:
-    ToolType type_ = ToolType::Procedural;
     std::string name_;
-    BrushTipShape tipShape_ = BrushTipShape::Circle;
     float falloff_ = 0.5f;
     double size_ = 0.2;
     StampMode stampMode_ = StampMode::Continuous;
@@ -256,11 +278,146 @@ private:
     Gradient defaultGradient_;
 };
 
-/// @brief Serializes a tool configuration to its JSON representation.
+/**
+ * @brief A geometric-tip paintbrush - the original, `v0.Y.24.1` (Basic
+ *        Painting) tool: stamps a shape from `docs/sound-mind-design.md`'s
+ *        "Procedural Brushes" library, blended toward the stroke's own
+ *        gradient target within `falloff()`'s own soft-edged 2D footprint
+ *        (time and frequency both).
+ */
+class ProceduralConfiguration : public ToolConfiguration {
+public:
+    /// @brief Constructs a configuration with a plain, medium circular
+    ///        tip and a fresh, fully transparent default gradient.
+    ProceduralConfiguration() = default;
+
+    [[nodiscard]] ToolType type() const noexcept override { return ToolType::Procedural; }
+
+    [[nodiscard]] std::unique_ptr<ToolConfiguration> clone() const override {
+        return std::make_unique<ProceduralConfiguration>(*this);
+    }
+
+    /// @brief The brush tip's geometric footprint.
+    /// @return The currently configured tip shape.
+    [[nodiscard]] BrushTipShape tipShape() const noexcept { return tipShape_; }
+
+    /// @brief Sets the brush tip's geometric footprint.
+    /// @param shape The new tip shape.
+    void setTipShape(BrushTipShape shape) noexcept { tipShape_ = shape; }
+
+private:
+    BrushTipShape tipShape_ = BrushTipShape::Circle;
+};
+
+/**
+ * @brief A Sound Mind Instrument - `v0.Y.32.1`'s own small parametric sound
+ *        model, per `docs/sound-mind-design.md`'s "Sound Mind Instruments":
+ *        synthesizes a stamp around the stroke's own pitch from a harmonic
+ *        series above the fundamental, stretched sharp of a pure integer
+ *        series by `inharmonicity()`.
+ *
+ * **This installment's own scope**: just the harmonic series and
+ * inharmonicity - the noise component, body resonance, and ADSR envelope
+ * the design doc also describes are deliberately not here yet (each its
+ * own follow-up installment, confirmed with the user alongside this one -
+ * see `docs/sound-mind-architecture.md`'s own Decision on this class).
+ *
+ * **No `tipShape()`** - an Instrument's own "shape" in frequency *is* the
+ * harmonic series (each harmonic a single bin-exact partial, not a
+ * blended-footprint blob); `falloff()`/`size()` (inherited from the base)
+ * still apply, but only along the *time* axis, fading a stamp in/out
+ * across its own radius the same way a Procedural stamp's edge softens,
+ * not across frequency (see `applyPaintOperation()`'s own docs).
+ */
+class InstrumentConfiguration : public ToolConfiguration {
+public:
+    /// @brief Constructs a configuration with a plausible default
+    ///        harmonic series (a fundamental plus three overtones,
+    ///        each half the strength of the one before) and no
+    ///        inharmonicity (a pure integer series).
+    InstrumentConfiguration() = default;
+
+    [[nodiscard]] ToolType type() const noexcept override { return ToolType::Instrument; }
+
+    [[nodiscard]] std::unique_ptr<ToolConfiguration> clone() const override {
+        return std::make_unique<InstrumentConfiguration>(*this);
+    }
+
+    /**
+     * @brief Each harmonic's own strength above the fundamental.
+     *
+     * Index `0` is the fundamental itself (harmonic 1); index `n` is
+     * harmonic `n + 1`. A harmonic beyond the end of this list simply
+     * isn't synthesized - there's no implicit "strength 0" tail.
+     * Strengths aren't clamped or normalized here; a value above `1.0`
+     * (an overtone louder than the fundamental) is accepted as-is.
+     *
+     * @return The current per-harmonic strengths, fundamental first.
+     */
+    [[nodiscard]] const std::vector<double>& harmonicStrengths() const noexcept { return harmonicStrengths_; }
+
+    /// @brief Sets the harmonic series wholesale - see harmonicStrengths()'s
+    ///        own docs.
+    /// @param strengths The new per-harmonic strengths, fundamental first.
+    void setHarmonicStrengths(std::vector<double> strengths) { harmonicStrengths_ = std::move(strengths); }
+
+    /**
+     * @brief How far the harmonic series stretches sharp of a pure
+     *        integer series, the way a real vibrating body's own overtones
+     *        do - `0` is a perfectly harmonic series (harmonic `n` at
+     *        exactly `n` times the fundamental); higher values stretch
+     *        higher harmonics progressively sharper.
+     *
+     * Applied per harmonic `n` (1-indexed) as `n * fundamentalHz *
+     * sqrt(1 + inharmonicity * n^2)` - the same stretched-partial formula
+     * real string/bar physics follows (piano strings in particular),
+     * chosen for being simple, well-understood, and audibly plausible
+     * rather than derived from this project's own first-principles model
+     * of any specific instrument.
+     *
+     * @return The current inharmonicity coefficient; not clamped or
+     *         validated here, but intended to be small and non-negative
+     *         (e.g. `0` to `0.05`) for a physically plausible stretch.
+     */
+    [[nodiscard]] double inharmonicity() const noexcept { return inharmonicity_; }
+
+    /// @brief Sets the inharmonicity coefficient - see inharmonicity()'s
+    ///        own docs.
+    /// @param inharmonicity The new coefficient.
+    void setInharmonicity(double inharmonicity) noexcept { inharmonicity_ = inharmonicity; }
+
+private:
+    std::vector<double> harmonicStrengths_ = {1.0, 0.5, 0.25, 0.125};
+    double inharmonicity_ = 0.0;
+};
+
+/// @brief Serializes any concrete `ToolConfiguration` to its JSON
+///        representation - dispatches on `type()` internally (a `"type"`
+///        discriminator field, plus every field common to every subtype,
+///        plus whichever subtype-specific fields `type()` calls for) - see
+///        `toolConfigurationFromJson()` for the inverse.
+/// @param json Overwritten with the serialized representation.
+/// @param config The configuration to serialize.
 void to_json(nlohmann::json& json, const ToolConfiguration& config);
 
-/// @brief Parses a tool configuration from its JSON representation.
-/// @throws nlohmann::json::exception on malformed or missing required data.
-void from_json(const nlohmann::json& json, ToolConfiguration& config);
+/**
+ * @brief Parses a `ToolConfiguration` from its JSON representation,
+ *        constructing whichever concrete subtype its own `"type"` field
+ *        names.
+ *
+ * The polymorphic counterpart to a plain ADL `from_json()` - which can't
+ * construct a fresh object of a type only known at runtime (from the JSON
+ * itself) the way this factory function can; nothing else in this
+ * codebase can hand back a `ToolConfiguration` by value, since the class
+ * is abstract.
+ *
+ * @param json The JSON representation to parse.
+ * @return The parsed, owned configuration.
+ * @throws nlohmann::json::exception on malformed or missing required data.
+ * @throws std::invalid_argument for a `"type"` this factory doesn't yet
+ *         know how to construct (any value past `Procedural`/`Instrument` -
+ *         see `ToolType`'s own docs on which are real so far).
+ */
+[[nodiscard]] std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::json& json);
 
 }  // namespace sound_mind::core

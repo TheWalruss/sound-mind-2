@@ -436,6 +436,8 @@ Proposed installment shape (subject to its own scoping/confirmation round when e
 
 The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument model; the canvas-space vs. operation-relative MindWave binding-coordinate-frame choice, since that's specifically about how a paint operation (an instrument note, in particular) binds to a MindWave. Also: revisit Loop Mode (Phase 2.5) to add the operation-relative retrigger feel this unlocks.
 
+**In progress, scoped in a dedicated planning pass** (confirmed with the user, `v0.0.32.1`) the same way GPU Compute Enablement's/Filter Layers' own installment plans were worked out separately from this document's own entry: **Installment A** (harmonic series + inharmonicity only, reusing `ToolConfiguration`'s existing radius/falloff footprint model for the time-axis blend, no frequency-axis blending) is done - see `docs/sound-mind-architecture.md`'s Decision #90. The noise component, body resonance, ADSR envelope, the binding-coordinate-frame choice, and the Loop Mode retrigger revisit are each their own later installment, not yet started or scoped.
+
 **Demo:** paint with an instrument voice that actually sounds like a plausible physical source; feed the same instrument through Loop Mode and hear it retrigger per note.
 
 ### v0.Y.33.1 - Mind Shots & Mind Grains

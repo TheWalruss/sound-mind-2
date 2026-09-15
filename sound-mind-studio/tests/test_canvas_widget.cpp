@@ -31,8 +31,8 @@ using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
+using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::TimeFrequencyPoint;
-using sound_mind::core::ToolConfiguration;
 using sound_mind::studio::CanvasWidget;
 using sound_mind::studio::FrequencyGridConfig;
 using sound_mind::studio::HorizontalAxisLabelMode;
@@ -458,7 +458,8 @@ sound_mind::core::LayerId addLayerWithARealPaintOperation(Project& project) {
     path.addNode(end);
 
     const auto opId = project.operationLog().reserveId();
-    project.operationLog().append(std::make_unique<PaintOperation>(opId, layerId, path, ToolConfiguration{}));
+    project.operationLog().append(
+        std::make_unique<PaintOperation>(opId, layerId, path, std::make_unique<ProceduralConfiguration>()));
     return layerId;
 }
 

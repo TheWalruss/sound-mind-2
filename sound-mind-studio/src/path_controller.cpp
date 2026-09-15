@@ -65,12 +65,12 @@ void PathController::finishPath() {
     sound_mind::core::Path finalPath = path_;
     // Seed the new path's own gradient from the tool's default - see
     // PaintController::endStroke()'s own docs for the identical precedent.
-    finalPath.gradient() = toolConfig_.defaultGradient();
+    finalPath.gradient() = toolConfig_->defaultGradient();
 
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
-    log.append(
-        std::make_unique<sound_mind::core::PaintOperation>(id, targetLayer_, std::move(finalPath), toolConfig_));
+    log.append(std::make_unique<sound_mind::core::PaintOperation>(id, targetLayer_, std::move(finalPath),
+                                                                    toolConfig_->clone()));
     paintController_->notifyOperationCommitted();
 
     const sound_mind::core::LayerId paintedLayer = targetLayer_;

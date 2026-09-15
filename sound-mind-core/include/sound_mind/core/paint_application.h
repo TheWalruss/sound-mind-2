@@ -188,41 +188,60 @@ struct FrameBinRange {
 
 /**
  * @brief Applies a `PaintOperation`'s own stroke directly onto a
- *        `StreamImage`'s amplitude planes, in place - the procedural
- *        brush's own DSP (see `docs/sound-mind-design.md`'s "Procedural
- *        Brushes" and "What Editing Does": painting amplitude pixels
- *        brighter/darker changes that frequency's loudness at that time).
+ *        `StreamImage`'s amplitude planes, in place - dispatches on
+ *        `operation.config().type()` to whichever concrete tool's own
+ *        stamp algorithm applies (see `docs/sound-mind-design.md`'s
+ *        "Procedural Brushes"/"Sound Mind Instruments" and "What Editing
+ *        Does": painting amplitude pixels brighter/darker changes that
+ *        frequency's loudness at that time). Any tool type past
+ *        `Procedural`/`Instrument` paints nothing yet, matching
+ *        `ToolConfiguration`'s own "groundwork, not yet functional" note
+ *        for those tool types.
  *
- * Stamps the brush tip repeatedly along `operation.path()`, spaced per
+ * Stamps are placed repeatedly along `operation.path()`, spaced per
  * `operation.config().stampMode()` (see `docs/sound-mind-design.md`'s
- * "Stamp Intervals"): `Continuous` (the default) stamps densely enough
- * that consecutive stamps overlap into one continuous stroke rather than
- * a series of dots; `AlongCurve`/`TimeAxis`/`FrequencyAxis` instead space
- * stamps `stampInterval()` apart - by arc length, or wherever the path
- * crosses a time/frequency grid line, respectively - producing visibly
- * separate stamps rather than a solid stroke. At each stamp, every pixel
- * within the tip's own radius
- * blends toward `operation.path().gradient()`'s target intensity (written
- * directly as the new dB value - a `GradientStop`'s `leftIntensity`/
- * `rightIntensity` *are* target `leftMagnitudeDb`/`rightMagnitudeDb`
- * values, an interpretation choice recorded in
- * `docs/sound-mind-architecture.md`'s Decisions Made), weighted by that
- * stop's own opacity *and* the tip's own per-pixel falloff (`1` at the
- * stamp's center, fading to `0` at its edge) - `newDb = oldDb + (targetDb -
- * oldDb) * (opacity * falloffWeight)`. Overlapping stamps (a slow-moving
- * stroke, or the stroke's own path doubling back on itself) compound
- * naturally, the same way a real brush laid down more heavily builds up
- * more paint - not specially guarded against.
+ * "Stamp Intervals") the same way regardless of tool type: `Continuous`
+ * (the default) stamps densely enough that consecutive stamps overlap
+ * into one continuous stroke rather than a series of dots;
+ * `AlongCurve`/`TimeAxis`/`FrequencyAxis` instead space stamps
+ * `stampInterval()` apart - by arc length, or wherever the path crosses a
+ * time/frequency grid line, respectively - producing visibly separate
+ * stamps rather than a solid stroke. What each stamp actually *paints*
+ * differs by tool type:
  *
- * Only `BrushTipShape::Circle`/`Square`/`Diamond` have a real, distinct
- * footprint so far - every other tip shape falls back to `Circle`'s own
- * footprint (not a crash or undefined pixel data, just not yet visually
- * distinct) until each gets built, matching `ToolConfiguration`'s own
- * "groundwork, not yet functional" note for every tool type past
- * `Procedural`.
+ * - **`ProceduralConfiguration`**: every pixel within the tip's own 2D
+ *   (time and frequency) radius blends toward
+ *   `operation.path().gradient()`'s target intensity (written directly as
+ *   the new dB value - a `GradientStop`'s `leftIntensity`/`rightIntensity`
+ *   *are* target `leftMagnitudeDb`/`rightMagnitudeDb` values, an
+ *   interpretation choice recorded in `docs/sound-mind-architecture.md`'s
+ *   Decisions Made), weighted by that stop's own opacity *and* the tip's
+ *   own per-pixel falloff (`1` at the stamp's center, fading to `0` at its
+ *   edge) - `newDb = oldDb + (targetDb - oldDb) * (opacity *
+ *   falloffWeight)`. Only `BrushTipShape::Circle`/`Square`/`Diamond` have
+ *   a real, distinct footprint so far - every other tip shape falls back
+ *   to `Circle`'s own footprint (not a crash or undefined pixel data,
+ *   just not yet visually distinct).
+ * - **`InstrumentConfiguration`**: one bin-exact spike per harmonic above
+ *   the stroke's own frequency at that point (see
+ *   `InstrumentConfiguration::inharmonicity()`'s own docs for the
+ *   stretched-partial formula), each blended toward the same gradient
+ *   target as above but only along the *time* axis - `falloff()`/`size()`
+ *   still bound and soften that blend, just across time alone, since a
+ *   harmonic partial is a single exact frequency, not a 2D geometric blob -
+ *   and scaled by that harmonic's own strength
+ *   (`InstrumentConfiguration::harmonicStrengths()`). A harmonic stretched
+ *   past the configured/Nyquist frequency range is skipped entirely
+ *   (rather than clamped to the top bin, which would otherwise stack
+ *   multiple high harmonics onto one bin).
+ *
+ * Overlapping stamps (a slow-moving stroke, the stroke's own path
+ * doubling back on itself, or - for an Instrument - two harmonics landing
+ * on the same bin) compound naturally, the same way a real brush laid
+ * down more heavily builds up more paint - not specially guarded against.
  *
  * @param operation The stroke to apply - its own `path()`/`config()`
- *        (tip shape, falloff, size) fully describe the stamp.
+ *        fully describe the stamp.
  * @param frequencyToTimeScale The same per-project normalization scale
  *        `fitPathToPoints()` takes (see `path.h`'s own docs) - needed here
  *        too, since `ToolConfiguration::size()` is in that same seconds-

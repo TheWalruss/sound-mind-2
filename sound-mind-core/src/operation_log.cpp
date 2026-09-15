@@ -259,7 +259,7 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
             if (kind == kPaintOperationKind) {
                 const CommonOperationFields fields = readCommonOperationFields(entry);
                 Path path = entry.at("path").get<Path>();
-                ToolConfiguration config = entry.at("config").get<ToolConfiguration>();
+                std::unique_ptr<ToolConfiguration> config = toolConfigurationFromJson(entry.at("config"));
                 log.operations_.push_back(std::make_unique<PaintOperation>(
                     fields.id, fields.targetLayer, std::move(path), std::move(config), fields.supersedes));
             } else if (kind == kFillOperationKind) {

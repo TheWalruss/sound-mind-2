@@ -32,6 +32,7 @@ using sound_mind::core::PasteOperation;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
+using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
@@ -94,8 +95,8 @@ LayerId addBlankNormalLayer(Project& project) {
 
 /// @brief A Procedural tool configuration with a real, distinctly-sized
 /// brush - matching test_paint_controller.cpp's own makeOpaqueTool().
-ToolConfiguration makeOpaqueTool(double size = 0.02, float falloff = 0.0f, float intensity = -10.0f) {
-    ToolConfiguration config;
+ProceduralConfiguration makeOpaqueTool(double size = 0.02, float falloff = 0.0f, float intensity = -10.0f) {
+    ProceduralConfiguration config;
     config.setSize(size);
     config.setFalloff(falloff);
     auto stop = config.defaultGradient().stops().front();
@@ -125,7 +126,7 @@ OperationId addPaintOperation(Project& project, LayerId layer, double startTime,
 
     auto& log = project.operationLog();
     const OperationId id = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(id, layer, std::move(path), config));
+    log.append(std::make_unique<PaintOperation>(id, layer, std::move(path), config.clone()));
     return id;
 }
 
@@ -149,7 +150,7 @@ OperationId addSmoothPaintOperation(Project& project, LayerId layer, TimeFrequen
 
     auto& log = project.operationLog();
     const OperationId id = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(id, layer, std::move(path), config));
+    log.append(std::make_unique<PaintOperation>(id, layer, std::move(path), config.clone()));
     return id;
 }
 
@@ -210,7 +211,7 @@ void PickControllerTest::freshControllerHasNoSelection() {
     PaintController paintController;
     const PickController controller(&paintController);
     QVERIFY(!controller.hasSelection());
-    QVERIFY(!controller.selectedConfiguration().has_value());
+    QVERIFY(controller.selectedConfiguration() == nullptr);
     QVERIFY(!controller.selectionBounds().has_value());
     QVERIFY(controller.currentPreviewPath().nodes().empty());
 }
@@ -230,7 +231,7 @@ void PickControllerTest::pickSelectsAnOperationUnderThePoint() {
 
     QVERIFY(picked);
     QVERIFY(controller.hasSelection());
-    QVERIFY(controller.selectedConfiguration().has_value());
+    QVERIFY(controller.selectedConfiguration() != nullptr);
     QCOMPARE(controller.selectedConfiguration()->size(), config.size());
     QVERIFY(controller.selectionBounds().has_value());
 }
@@ -379,7 +380,7 @@ void PickControllerTest::pickPadsHitTestingByTheOperationsOwnBrushSize() {
     path.addNode(tap);
     auto& log = project.operationLog();
     const OperationId id = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(id, layerId, std::move(path), config));
+    log.append(std::make_unique<PaintOperation>(id, layerId, std::move(path), config.clone()));
 
     PaintController paintController;
     paintController.setProject(&project);
@@ -630,10 +631,10 @@ void PickControllerTest::selectedConfigurationIsNullForAFillOrPasteSelection() {
     controller.setProject(&project);
 
     QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
-    QVERIFY(!controller.selectedConfiguration().has_value());
+    QVERIFY(controller.selectedConfiguration() == nullptr);
 
     QVERIFY(controller.pick(layerId, TimeFrequencyPoint{1.1, 500.0}));
-    QVERIFY(!controller.selectedConfiguration().has_value());
+    QVERIFY(controller.selectedConfiguration() == nullptr);
 }
 
 void PickControllerTest::endMoveOnAFillOperationCommitsATranslatedSupersedingFillOperation() {
@@ -1237,7 +1238,7 @@ void PickControllerTest::toggleSelectedPathNodeTypeExtendsHandlesPerpendicularTo
 
     auto& log = project.operationLog();
     const OperationId id = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(id, layerId, std::move(path), makeOpaqueTool(0.02)));
+    log.append(std::make_unique<PaintOperation>(id, layerId, std::move(path), std::make_unique<ProceduralConfiguration>(makeOpaqueTool(0.02))));
 
     PaintController paintController;
     paintController.setProject(&project);
@@ -1294,7 +1295,7 @@ void PickControllerTest::toggleSelectedPathNodeTypeCollapsesHandlesForAnIsolated
 
     auto& log = project.operationLog();
     const OperationId id = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(id, layerId, std::move(path), makeOpaqueTool(0.02)));
+    log.append(std::make_unique<PaintOperation>(id, layerId, std::move(path), std::make_unique<ProceduralConfiguration>(makeOpaqueTool(0.02))));
 
     PaintController paintController;
     paintController.setProject(&project);

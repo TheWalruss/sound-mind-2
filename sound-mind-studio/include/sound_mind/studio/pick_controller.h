@@ -228,12 +228,18 @@ public:
 
     /// @brief The selected object's own tool configuration - exactly
     ///        what it was painted (or last modified) with, for
-    ///        pre-filling a reopened Tool Configuration Panel.
-    /// @return The selected configuration, or `std::nullopt` if nothing
+    ///        pre-filling a reopened Tool Configuration Panel. An owned
+    ///        clone (`ToolConfiguration::clone()`), not a reference into
+    ///        the log - `ToolConfiguration` is abstract, so nothing can be
+    ///        returned by value or `std::optional<...>` (the
+    ///        `optional<unique_ptr<...>>` combination it'd otherwise take
+    ///        is itself an anti-pattern - a null pointer already means
+    ///        "no value").
+    /// @return The selected configuration, cloned; or `nullptr` if nothing
     ///         is selected, or the selected object isn't a
     ///         `PaintOperation` (a `FillOperation`/`PasteOperation` has
     ///         no tool configuration of its own to reopen).
-    [[nodiscard]] std::optional<sound_mind::core::ToolConfiguration> selectedConfiguration() const;
+    [[nodiscard]] std::unique_ptr<sound_mind::core::ToolConfiguration> selectedConfiguration() const;
 
     /// @brief The selected object's own current bounding box, for
     ///        drawing its selection highlight - see `docs/sound-mind-

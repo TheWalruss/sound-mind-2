@@ -55,7 +55,7 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
         // (clicking empty space, deleting the selection) - reverting to
         // some prior "default" isn't attempted; the panel's job is "the
         // current brush settings", picked or not.
-        if (const auto config = pickController_->selectedConfiguration(); config.has_value()) {
+        if (const auto config = pickController_->selectedConfiguration(); config != nullptr) {
             toolConfigurationPanel_->setToolConfiguration(*config);
         }
     });
@@ -98,16 +98,22 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
     // brush (not ToolConfiguration's own transparent default - see the
     // panel's own docs) - applied here so a stroke painted before ever
     // opening the panel still paints something visible.
-    paintController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration());
-    pathController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration());
+    paintController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration().clone());
+    pathController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration().clone());
     connect(toolConfigurationPanel_, &ToolConfigurationPanel::toolConfigurationChanged, this,
             [this](const sound_mind::core::ToolConfiguration& config) {
-                paintController_->setToolConfiguration(config);
-                pathController_->setToolConfiguration(config);
+                // Each setToolConfiguration() below takes ownership, so
+                // paintController_/pathController_ each need their own
+                // independent clone() - the same unique_ptr can't be
+                // handed to three separate owners.
+                paintController_->setToolConfiguration(config.clone());
+                pathController_->setToolConfiguration(config.clone());
                 // Also applies to whatever's currently Picked, if anything
                 // - see PickController::applyToolConfiguration()'s own
                 // docs on why this is safe to do unconditionally alongside
-                // updating the pending default above.
+                // updating the pending default above. Takes a plain
+                // reference (clones internally at its own single
+                // construction site), so no clone() needed here.
                 if (pickController_->hasSelection()) {
                     pickController_->applyToolConfiguration(config);
                 }

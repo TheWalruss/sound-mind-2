@@ -21,9 +21,9 @@ using sound_mind::core::PasteOperation;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
+using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
-using sound_mind::core::ToolConfiguration;
 
 namespace {
 
@@ -41,7 +41,7 @@ Path makeTestPath(double startTime = 0.0, double endTime = 1.0) {
 std::unique_ptr<PaintOperation> makePaint(OperationLog& log, LayerId layer,
                                            std::optional<OperationId> supersedes = std::nullopt) {
     const OperationId id = log.reserveId();
-    return std::make_unique<PaintOperation>(id, layer, makeTestPath(), ToolConfiguration{}, supersedes);
+    return std::make_unique<PaintOperation>(id, layer, makeTestPath(), std::make_unique<ProceduralConfiguration>(), supersedes);
 }
 
 }  // namespace
@@ -64,7 +64,7 @@ TEST_CASE("reserveId returns unique, increasing ids", "[core][operation_log]") {
 TEST_CASE("append adds an operation and it becomes accessible via at()", "[core][operation_log]") {
     OperationLog log;
     const OperationId id = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(id, LayerId{1}, makeTestPath(), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(id, LayerId{1}, makeTestPath(), std::make_unique<ProceduralConfiguration>()));
 
     REQUIRE(log.size() == 1);
     REQUIRE(log.at(0).id() == id);
@@ -138,9 +138,9 @@ TEST_CASE("activeOperationsTargeting filters to the given layer only", "[core][o
 TEST_CASE("activeOperationsTargeting returns operations in log order", "[core][operation_log]") {
     OperationLog log;
     const OperationId first = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(first, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(first, LayerId{1}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId second = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(second, LayerId{1}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(second, LayerId{1}, makeTestPath(1.0, 2.0), std::make_unique<ProceduralConfiguration>()));
 
     const auto active = log.activeOperationsTargeting(LayerId{1});
     REQUIRE(active.size() == 2);
@@ -152,7 +152,7 @@ TEST_CASE("activeOperationsTargeting excludes an operation superseded by a later
           "[core][operation_log]") {
     OperationLog log;
     const OperationId original = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(original, LayerId{1}, makeTestPath(), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(original, LayerId{1}, makeTestPath(), std::make_unique<ProceduralConfiguration>()));
     log.append(makePaint(log, LayerId{1}, original));  // the replacement.
 
     const auto active = log.activeOperationsTargeting(LayerId{1});
@@ -164,7 +164,7 @@ TEST_CASE("activeOperationsTargeting excludes an operation superseded by a later
 TEST_CASE("undoing a superseding operation makes the original visible again", "[core][operation_log]") {
     OperationLog log;
     const OperationId original = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(original, LayerId{1}, makeTestPath(), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(original, LayerId{1}, makeTestPath(), std::make_unique<ProceduralConfiguration>()));
     log.append(makePaint(log, LayerId{1}, original));
 
     log.undo();  // hides the replacement, not the original.
@@ -185,11 +185,11 @@ TEST_CASE("a superseding append preserves the superseded operation's own positio
     // was: between A and C.
     OperationLog log;
     const OperationId a = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId b = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId c = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(c, LayerId{1}, makeTestPath(2.0, 3.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(c, LayerId{1}, makeTestPath(2.0, 3.0), std::make_unique<ProceduralConfiguration>()));
 
     log.append(makePaint(log, LayerId{1}, b));  // supersedes B - "moving" it, in effect.
 
@@ -205,11 +205,11 @@ TEST_CASE("a chain of several supersedes on the same original all preserve its o
           "[core][operation_log]") {
     OperationLog log;
     const OperationId a = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId b = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId c = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(c, LayerId{1}, makeTestPath(2.0, 3.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(c, LayerId{1}, makeTestPath(2.0, 3.0), std::make_unique<ProceduralConfiguration>()));
 
     log.append(makePaint(log, LayerId{1}, b));   // move B once.
     log.append(makePaint(log, LayerId{1}, log.at(3).id()));  // move it again.
@@ -225,13 +225,13 @@ TEST_CASE("a fresh, non-superseding append always places the new operation on to
           "[core][operation_log]") {
     OperationLog log;
     const OperationId a = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId b = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), std::make_unique<ProceduralConfiguration>()));
 
     log.append(makePaint(log, LayerId{1}, a));  // moves A - must NOT jump above B.
     const OperationId freshOnTop = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(freshOnTop, LayerId{1}, makeTestPath(3.0, 4.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(freshOnTop, LayerId{1}, makeTestPath(3.0, 4.0), std::make_unique<ProceduralConfiguration>()));
 
     const auto active = log.activeOperationsTargeting(LayerId{1});
     REQUIRE(active.size() == 3);
@@ -241,11 +241,11 @@ TEST_CASE("a fresh, non-superseding append always places the new operation on to
 TEST_CASE("An OperationLog's stack order round-trips through JSON", "[core][operation_log]") {
     OperationLog log;
     const OperationId a = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(a, LayerId{1}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId b = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(b, LayerId{1}, makeTestPath(1.0, 2.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId c = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(c, LayerId{1}, makeTestPath(2.0, 3.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(c, LayerId{1}, makeTestPath(2.0, 3.0), std::make_unique<ProceduralConfiguration>()));
     log.append(makePaint(log, LayerId{1}, b));
 
     const nlohmann::json json = log;
@@ -268,12 +268,12 @@ TEST_CASE("An OperationLog's pre-stack-order JSON shape (no \"stackOrder\" field
                              {"id", 1},
                              {"targetLayer", 1},
                              {"path", makeTestPath(0.0, 1.0)},
-                             {"config", ToolConfiguration{}}},
+                             {"config", ProceduralConfiguration{}}},
              nlohmann::json{{"kind", "paint"},
                              {"id", 2},
                              {"targetLayer", 1},
                              {"path", makeTestPath(1.0, 2.0)},
-                             {"config", ToolConfiguration{}}},
+                             {"config", ProceduralConfiguration{}}},
          })},
         {"activeCount", 2},
         {"nextId", 3},
@@ -290,7 +290,7 @@ TEST_CASE("An OperationLog's pre-stack-order JSON shape (no \"stackOrder\" field
 TEST_CASE("An OperationLog with real PaintOperations round-trips through JSON", "[core][operation_log]") {
     OperationLog log;
     const OperationId original = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(original, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(original, LayerId{1}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
     log.append(makePaint(log, LayerId{2}, original));
     log.undo();  // the second operation is now inactive.
 
@@ -311,7 +311,7 @@ TEST_CASE("An OperationLog with a mix of PaintOperations and FillOperations roun
           "[core][operation_log]") {
     OperationLog log;
     const OperationId paintId = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(paintId, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(paintId, LayerId{1}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId fillId = log.reserveId();
     log.append(std::make_unique<FillOperation>(fillId, LayerId{1}, TimeFrequencyRect{}, Gradient{}));
 
@@ -330,7 +330,7 @@ TEST_CASE("An OperationLog with a PasteOperation round-trips through JSON, targe
           "[core][operation_log]") {
     OperationLog log;
     const OperationId paintId = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(paintId, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(paintId, LayerId{1}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
 
     Clip clip;
     clip.frameCount = 2;
@@ -380,11 +380,11 @@ namespace {
 /// bottom-to-top - the common starting stack every reorder test below needs.
 std::array<OperationId, 3> appendThreeStacked(OperationLog& log, LayerId layer) {
     const OperationId a = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(a, layer, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(a, layer, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId b = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(b, layer, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(b, layer, makeTestPath(1.0, 2.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId c = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(c, layer, makeTestPath(2.0, 3.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(c, layer, makeTestPath(2.0, 3.0), std::make_unique<ProceduralConfiguration>()));
     return {a, b, c};
 }
 
@@ -475,9 +475,9 @@ TEST_CASE("Reordering one layer's stack never disturbs another layer's own entri
     OperationLog log;
     const auto [a, b, c] = appendThreeStacked(log, LayerId{1});
     const OperationId x = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(x, LayerId{2}, makeTestPath(0.0, 1.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(x, LayerId{2}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>()));
     const OperationId y = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(y, LayerId{2}, makeTestPath(1.0, 2.0), ToolConfiguration{}));
+    log.append(std::make_unique<PaintOperation>(y, LayerId{2}, makeTestPath(1.0, 2.0), std::make_unique<ProceduralConfiguration>()));
 
     REQUIRE(log.bringToFront(a));
 
@@ -504,7 +504,7 @@ TEST_CASE("A reorder survives a subsequent Pick-style superseding append", "[cor
     REQUIRE(log.bringToFront(a));  // now: b, c, a.
 
     const OperationId aMoved = log.reserveId();
-    log.append(std::make_unique<PaintOperation>(aMoved, LayerId{1}, makeTestPath(0.0, 1.0), ToolConfiguration{}, a));
+    log.append(std::make_unique<PaintOperation>(aMoved, LayerId{1}, makeTestPath(0.0, 1.0), std::make_unique<ProceduralConfiguration>(), a));
 
     REQUIRE(idsOf(log.activeOperationsTargeting(LayerId{1})) == std::vector<OperationId>{b, c, aMoved});
 }

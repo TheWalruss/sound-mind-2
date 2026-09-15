@@ -30,11 +30,13 @@ public:
      * @param targetLayer Which layer's content this stroke paints into.
      * @param path The Path this stroke was painted along - see path.h.
      * @param config The tool configuration this stroke was painted with -
-     *        an owned snapshot, not a shared reference.
+     *        an owned snapshot, not a shared reference. `ToolConfiguration`
+     *        is abstract (see its own docs), so this is always a
+     *        `unique_ptr` to some concrete subtype - never null.
      * @param supersedes The prior operation this one replaces, if any -
      *        see Operation::supersedes()'s own docs.
      */
-    PaintOperation(OperationId id, LayerId targetLayer, Path path, ToolConfiguration config,
+    PaintOperation(OperationId id, LayerId targetLayer, Path path, std::unique_ptr<ToolConfiguration> config,
                    std::optional<OperationId> supersedes = std::nullopt) noexcept
         : LayerContentOperation(id, targetLayer, supersedes), path_(std::move(path)), config_(std::move(config)) {}
 
@@ -50,19 +52,20 @@ public:
 
     /// @brief The tool configuration this stroke was painted with.
     /// @return This operation's own tool configuration.
-    [[nodiscard]] const ToolConfiguration& config() const noexcept { return config_; }
+    [[nodiscard]] const ToolConfiguration& config() const noexcept { return *config_; }
 
     /// @copydoc Operation::translatedCopy()
     [[nodiscard]] std::unique_ptr<Operation> translatedCopy(
         OperationId newId, double deltaTimeSeconds, double deltaFrequencyBins,
         const sound_mind::codec::StreamCodecConfig& config) const override {
         return std::make_unique<PaintOperation>(
-            newId, targetLayer_, path_.translated(deltaTimeSeconds, deltaFrequencyBins, config), config_, id());
+            newId, targetLayer_, path_.translated(deltaTimeSeconds, deltaFrequencyBins, config), config_->clone(),
+            id());
     }
 
 private:
     Path path_;
-    ToolConfiguration config_;
+    std::unique_ptr<ToolConfiguration> config_;
 };
 
 }  // namespace sound_mind::core

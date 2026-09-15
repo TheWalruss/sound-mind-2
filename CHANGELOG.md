@@ -6,6 +6,23 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.32.1] - 2026-09-15
+
+Sound Mind Instruments, Installment A: a real, second paintable tool type - `Instrument` - synthesizing a harmonic series (with inharmonicity) instead of a Procedural brush's geometric footprint. `docs/sound-mind-design.md`'s "Sound Mind Instruments" and `docs/sound-mind-roadmap.md`'s `v0.Y.32.1`.
+
+### Added
+
+- **A new "Instrument" tool type**, selectable from a new Tool Type dropdown at the top of the Tool Configuration panel. Painting with it stamps one bin-exact spike per harmonic above the stroke's own pitch at each point along the path, rather than a Procedural brush's 2D geometric blob.
+- **Harmonic series controls**: a Harmonics count spinner and one strength spin box per harmonic (fundamental first), each independently adjustable; a fresh Instrument starts with a plausible four-harmonic falling series (`1.0, 0.5, 0.25, 0.125`).
+- **Inharmonicity**: stretches the harmonic series sharp of a pure integer series, the way a real vibrating body's own overtones do (`harmonicHz = n × fundamentalHz × √(1 + inharmonicity × n²)`) - `0` (the default) is perfectly harmonic.
+- **Falloff/Size/Stamp Mode/Stamp Interval/Color/Opacity are shared with Procedural** and stay visible regardless of tool type - an Instrument's own harmonic spikes are blended toward the stroke's gradient target along the *time* axis using the same brush-size/falloff math a Procedural stamp's edge already uses (no frequency-axis blending - a harmonic partial is one exact frequency, not a blob). Switching tool type carries these shared settings over; only the outgoing type's own parameters (e.g. tip shape) reset to the incoming type's defaults.
+
+### Changed
+
+- **`ToolConfiguration` is now a polymorphic hierarchy** (`ProceduralConfiguration`/`InstrumentConfiguration` subclasses of an abstract base), replacing the previous single flat class - internal groundwork enabling a second real tool type to coexist with Procedural's own parameters. Existing project files load unchanged (the JSON shape's own pre-existing `"type"` field doubles as the new polymorphic discriminator).
+
+Full regression: sound-mind-core 392/392 (new `ProceduralConfiguration`/`InstrumentConfiguration` and harmonic-synthesis cases added), sound-mind-codec 37/37 and sound-mind-gpu 33/33 unchanged, sound-mind-studio all 33 QTest classes passing (`ToolConfigurationPanelTest` +8 new Instrument UI cases). Doxygen: 0 warnings.
+
 ## [0.0.31.12] - 2026-09-15
 
 MindWave Preview: a live grayscale overlay on the canvas showing the selected MindWave's own field, updating as its settings change - `docs/sound-mind-design.md`'s "Low Frequency Oscillations" > "Preview".

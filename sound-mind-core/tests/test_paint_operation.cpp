@@ -1,3 +1,5 @@
+#include <memory>
+
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -11,6 +13,7 @@ using sound_mind::core::PaintOperation;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
+using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::ToolConfiguration;
 
@@ -47,7 +50,7 @@ StreamCodecConfig makeTestConfig() {
 
 TEST_CASE("PaintOperation reports the id, target layer, path, and config it was constructed with",
           "[core][paint_operation]") {
-    const PaintOperation op(7, LayerId{3}, makeTestPath(), ToolConfiguration{});
+    const PaintOperation op(7, LayerId{3}, makeTestPath(), std::make_unique<ProceduralConfiguration>());
     REQUIRE(op.id() == OperationId{7});
     REQUIRE(op.targetLayer().has_value());
     REQUIRE(op.targetLayer().value() == LayerId{3});
@@ -55,19 +58,20 @@ TEST_CASE("PaintOperation reports the id, target layer, path, and config it was 
 }
 
 TEST_CASE("PaintOperation has no supersedes reference unless one is given", "[core][paint_operation]") {
-    const PaintOperation op(1, LayerId{1}, makeTestPath(), ToolConfiguration{});
+    const PaintOperation op(1, LayerId{1}, makeTestPath(), std::make_unique<ProceduralConfiguration>());
     REQUIRE_FALSE(op.supersedes().has_value());
 }
 
 TEST_CASE("PaintOperation can record which prior operation it supersedes", "[core][paint_operation]") {
-    const PaintOperation op(2, LayerId{1}, makeTestPath(), ToolConfiguration{}, OperationId{1});
+    const PaintOperation op(2, LayerId{1}, makeTestPath(), std::make_unique<ProceduralConfiguration>(),
+                             OperationId{1});
     REQUIRE(op.supersedes().has_value());
     REQUIRE(op.supersedes().value() == OperationId{1});
 }
 
 TEST_CASE("PaintOperation's bounds() is exactly its own Path's bounds()", "[core][paint_operation]") {
     const Path path = makeTestPath();
-    const PaintOperation op(1, LayerId{1}, path, ToolConfiguration{});
+    const PaintOperation op(1, LayerId{1}, path, std::make_unique<ProceduralConfiguration>());
     const auto opBounds = op.bounds();
     const auto pathBounds = path.bounds();
     REQUIRE(opBounds.startTimeSeconds == pathBounds.startTimeSeconds);
@@ -77,17 +81,17 @@ TEST_CASE("PaintOperation's bounds() is exactly its own Path's bounds()", "[core
 }
 
 TEST_CASE("PaintOperation carries its own tool configuration", "[core][paint_operation]") {
-    ToolConfiguration config;
-    config.setName("My Brush");
-    const PaintOperation op(1, LayerId{1}, makeTestPath(), config);
+    auto config = std::make_unique<ProceduralConfiguration>();
+    config->setName("My Brush");
+    const PaintOperation op(1, LayerId{1}, makeTestPath(), std::move(config));
     REQUIRE(op.config().name() == "My Brush");
 }
 
 TEST_CASE("PaintOperation::translatedCopy() shifts the path, keeps everything else, and supersedes the original",
           "[core][paint_operation]") {
-    ToolConfiguration config;
-    config.setName("My Brush");
-    const PaintOperation original(5, LayerId{2}, makeTestPath(), config);
+    auto config = std::make_unique<ProceduralConfiguration>();
+    config->setName("My Brush");
+    const PaintOperation original(5, LayerId{2}, makeTestPath(), std::move(config));
     const StreamCodecConfig codecConfig = makeTestConfig();
 
     const auto copy = original.translatedCopy(OperationId{9}, 0.5, 5.0, codecConfig);

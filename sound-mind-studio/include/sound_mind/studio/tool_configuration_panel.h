@@ -1,5 +1,8 @@
 #pragma once
 
+#include <memory>
+#include <vector>
+
 #include <QColor>
 #include <QDockWidget>
 
@@ -9,6 +12,9 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QPushButton;
+class QSpinBox;
+class QVBoxLayout;
+class QWidget;
 
 namespace sound_mind::studio {
 
@@ -26,13 +32,25 @@ namespace sound_mind::studio {
  * philosophy. What's here is the actual parameter area the design doc
  * says both entry points edit - just reached directly, by hand, for now.
  *
- * Also deliberately Procedural-only: the design doc's own "only the
- * parameters that apply to the current tool" dynamism has nothing to
- * dynamically switch between yet, since `Instrument`/`MindShot`/
- * `MindGrain`/`Smudge`/`OrderChaos`/`Heal`/`Soften`/`Clone` have no real
- * parameters of their own (see `ToolConfiguration`'s own docs) - a
- * `ToolType` selector will make sense once a second tool type actually
- * has fields to show.
+ * **Two real tool types as of `v0.Y.32.1` (Sound Mind Instruments):** a
+ * `ToolType` selector (`toolTypeCombo_`) switches between `Procedural`'s
+ * own group (tip shape) and `Instrument`'s own (harmonic count/strengths,
+ * inharmonicity) - the design doc's own "only the parameters that apply to
+ * the current tool" dynamism, one group shown at a time, the rest hidden,
+ * the same pattern `MindWaveEditor`/`FilterConfigurationPanel` already
+ * establish for their own per-type groups. `falloff()`/`size()`/
+ * `stampMode()`/`stampInterval()`/color/opacity are shared by every tool
+ * type (`ToolConfiguration`'s own base fields) and stay visible regardless
+ * of which is selected. `MindShot`/`MindGrain`/`Smudge`/`OrderChaos`/
+ * `Heal`/`Soften`/`Clone` still have no real parameters of their own (see
+ * `ToolConfiguration`'s own docs) and aren't offered in the selector yet.
+ *
+ * Switching `toolTypeCombo_` constructs a fresh configuration of the
+ * newly-selected concrete subtype, carrying over every shared base field
+ * from the one just displayed (so falloff/size/stamp settings/color survive
+ * a type switch) - only the outgoing type's own subtype-specific fields
+ * (e.g. `tipShape()`) are lost, replaced by the incoming type's own
+ * defaults.
  *
  * Purely presentational, the same division of responsibility as every
  * other dock panel: every edit emits toolConfigurationChanged() with the
@@ -61,7 +79,7 @@ public:
     ///        describe.
     /// @return The current configuration.
     [[nodiscard]] const sound_mind::core::ToolConfiguration& toolConfiguration() const noexcept {
-        return config_;
+        return *config_;
     }
 
     /**
@@ -145,8 +163,57 @@ private:
     ///        mode, so the spin box never shows a stale/wrong unit.
     void updateStampIntervalAppearance();
 
-    sound_mind::core::ToolConfiguration config_;
+    /// @brief `toolTypeCombo_`'s own `currentIndexChanged` handler:
+    ///        constructs a fresh `ProceduralConfiguration`/
+    ///        `InstrumentConfiguration` for the newly-selected `ToolType`,
+    ///        carrying over every shared base field from `config_`'s
+    ///        current value first (see the class's own docs), replaces
+    ///        `config_` with it, refreshes every control (including which
+    ///        per-type group is visible), and emits
+    ///        toolConfigurationChanged().
+    /// @param type The newly-selected tool type.
+    void changeToolType(sound_mind::core::ToolType type);
+
+    /// @brief Shows exactly one of `proceduralGroup_`/`instrumentGroup_` -
+    ///        whichever matches `config_->type()` - and hides the other,
+    ///        the same "one group per type" pattern
+    ///        `MindWaveEditor`/`FilterConfigurationPanel` already
+    ///        establish for their own per-type groups.
+    void updateVisibleToolTypeGroup();
+
+    /// @brief Rebuilds `harmonicStrengthSpinBoxes_` to match `count` rows -
+    ///        called whenever `harmonicCountSpinBox_` changes, or a loaded
+    ///        `InstrumentConfiguration` has a different harmonic count
+    ///        than the panel currently shows. Preserves each already-
+    ///        displayed row's own current value where a row at that index
+    ///        already existed; a newly-added row starts at `1.0`.
+    /// @param count The new number of harmonic strength rows to show.
+    void rebuildHarmonicStrengthRows(std::size_t count);
+
+    /// @brief Reads every one of `harmonicStrengthSpinBoxes_`'s own
+    ///        current values, in order.
+    /// @return The harmonic strengths currently displayed.
+    [[nodiscard]] std::vector<double> currentHarmonicStrengths() const;
+
+    std::unique_ptr<sound_mind::core::ToolConfiguration> config_;
+
+    QComboBox* toolTypeCombo_ = nullptr;
+
+    /// @brief `ProceduralConfiguration`'s own controls, shown only while
+    ///        `config_->type() == ToolType::Procedural` - see
+    ///        updateVisibleToolTypeGroup()'s own docs.
+    QWidget* proceduralGroup_ = nullptr;
     QComboBox* tipShapeCombo_ = nullptr;
+
+    /// @brief `InstrumentConfiguration`'s own controls, shown only while
+    ///        `config_->type() == ToolType::Instrument` - see
+    ///        updateVisibleToolTypeGroup()'s own docs.
+    QWidget* instrumentGroup_ = nullptr;
+    QSpinBox* harmonicCountSpinBox_ = nullptr;
+    QVBoxLayout* harmonicStrengthsLayout_ = nullptr;
+    std::vector<QDoubleSpinBox*> harmonicStrengthSpinBoxes_;
+    QDoubleSpinBox* inharmonicitySpinBox_ = nullptr;
+
     QDoubleSpinBox* falloffSpinBox_ = nullptr;
     QDoubleSpinBox* sizeSpinBox_ = nullptr;
     QComboBox* stampModeCombo_ = nullptr;

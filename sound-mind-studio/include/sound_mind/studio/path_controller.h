@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include <QObject>
@@ -85,14 +86,18 @@ public:
     ///        gradient from `config.defaultGradient()`.
     /// @return The configuration currently in effect.
     [[nodiscard]] const sound_mind::core::ToolConfiguration& toolConfiguration() const noexcept {
-        return toolConfig_;
+        return *toolConfig_;
     }
 
     /// @brief Sets the tool configuration a finished path is committed
     ///        with - does not affect a placement already in progress
-    ///        (only applied at finishPath() time).
-    /// @param config The new configuration.
-    void setToolConfiguration(sound_mind::core::ToolConfiguration config) { toolConfig_ = std::move(config); }
+    ///        (only applied at finishPath() time). Takes ownership -
+    ///        `ToolConfiguration` is abstract, so it can only ever be
+    ///        passed around via `unique_ptr`.
+    /// @param config The new configuration; must not be `nullptr`.
+    void setToolConfiguration(std::unique_ptr<sound_mind::core::ToolConfiguration> config) {
+        toolConfig_ = std::move(config);
+    }
 
     /// @brief Which node type placeNode() places next - the design doc's
     ///        own "standing default that can be flipped at any time".
@@ -190,7 +195,8 @@ signals:
 private:
     PaintController* paintController_;
     sound_mind::core::Project* project_ = nullptr;
-    sound_mind::core::ToolConfiguration toolConfig_;
+    std::unique_ptr<sound_mind::core::ToolConfiguration> toolConfig_ =
+        std::make_unique<sound_mind::core::ProceduralConfiguration>();
     sound_mind::core::PathNodeType defaultNodeType_ = sound_mind::core::PathNodeType::Corner;
 
     bool placementActive_ = false;

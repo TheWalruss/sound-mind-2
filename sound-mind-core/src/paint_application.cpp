@@ -268,6 +268,128 @@ float falloffWeight(double normalizedDistance, float falloff) {
     return static_cast<float>(1.0 - (normalizedDistance - softEdgeStart) / softEdgeWidth);
 }
 
+/// @brief `ProceduralConfiguration`'s own stamp: the existing 2D
+/// footprint-blend algorithm, unchanged since before `ToolConfiguration`
+/// became polymorphic - see applyPaintOperation()'s own docs.
+void applyProceduralPaintOperation(const PaintOperation& operation, const ProceduralConfiguration& toolConfig,
+                                    const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
+                                    sound_mind::codec::StreamImage& content) {
+    const double frameRadius =
+        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
+    if (frameRadius <= 0.0) {
+        return;
+    }
+
+    for (const StrokeSample& sample : samples) {
+        const GradientStop target = operation.path().gradient().evaluate(sample.pathT);
+
+        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
+        const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
+
+        // Local bin-radius: the bin index of the same Hz-radius above and
+        // below this stamp's own center frequency, averaged - a cheap
+        // linearization of the log-scale mapping, accurate enough over
+        // one brush stamp's own small span.
+        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
+        const float binAbove = frequencyToBinIndex(
+            static_cast<float>(sample.point.frequencyHz) + frequencyRadiusHz, content.config);
+        const float binBelow = frequencyToBinIndex(
+            static_cast<float>(sample.point.frequencyHz) - frequencyRadiusHz, content.config);
+        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+
+        const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
+        const auto frameHigh =
+            std::min(static_cast<int>(content.frameCount) - 1, static_cast<int>(std::ceil(frameCenter + frameRadius)));
+        const auto binLow = std::max(0, static_cast<int>(std::floor(binCenter - binRadius)));
+        const auto binHigh =
+            std::min(static_cast<int>(content.config.binCount) - 1, static_cast<int>(std::ceil(binCenter + binRadius)));
+
+        for (int frame = frameLow; frame <= frameHigh; ++frame) {
+            const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
+            for (int bin = binLow; bin <= binHigh; ++bin) {
+                const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
+                const double dist = footprintDistance(toolConfig.tipShape(), normalizedDt, normalizedDf);
+                const float weight = falloffWeight(dist, toolConfig.falloff());
+                if (weight <= 0.0f) {
+                    continue;
+                }
+
+                const std::size_t index = cellIndex(bin, frame, content.frameCount);
+                blendTowardStop(content.leftMagnitudeDb[index], content.rightMagnitudeDb[index], target, weight);
+            }
+        }
+    }
+}
+
+/// @brief `InstrumentConfiguration`'s own stamp: one bin-exact spike per
+/// harmonic above each sample's own frequency (see
+/// `InstrumentConfiguration::inharmonicity()`'s own docs for the stretched-
+/// partial formula), each blended toward the stroke's own gradient target
+/// only along the *time* axis (`falloff()`/`size()` reused, the same
+/// frame-radius/falloff math `applyProceduralPaintOperation()` uses on that
+/// axis alone) and scaled by that harmonic's own strength - no frequency-
+/// axis blending, since a harmonic partial is a single exact frequency, not
+/// a 2D geometric blob.
+void applyInstrumentPaintOperation(const PaintOperation& operation, const InstrumentConfiguration& toolConfig,
+                                    const std::vector<StrokeSample>& samples,
+                                    sound_mind::codec::StreamImage& content) {
+    const double frameRadius =
+        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
+    if (frameRadius <= 0.0) {
+        return;
+    }
+
+    const std::vector<double>& strengths = toolConfig.harmonicStrengths();
+    if (strengths.empty()) {
+        return;
+    }
+
+    // The same clamp frequencyToBinIndex() itself applies internally - a
+    // harmonic stretched past this would otherwise silently clamp to the
+    // top bin instead of being skipped, stacking multiple high harmonics
+    // onto one bin rather than just fading them out past Nyquist/the
+    // configured range.
+    const float maxFrequencyHz =
+        std::min(content.config.maxFrequencyHz, static_cast<float>(content.config.sampleRateHz) / 2.0f);
+
+    for (const StrokeSample& sample : samples) {
+        const GradientStop target = operation.path().gradient().evaluate(sample.pathT);
+        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
+        const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
+        const auto frameHigh =
+            std::min(static_cast<int>(content.frameCount) - 1, static_cast<int>(std::ceil(frameCenter + frameRadius)));
+
+        const double fundamentalHz = sample.point.frequencyHz;
+        for (std::size_t harmonicIndex = 0; harmonicIndex < strengths.size(); ++harmonicIndex) {
+            const double strength = strengths[harmonicIndex];
+            if (strength <= 0.0) {
+                continue;
+            }
+            const double n = static_cast<double>(harmonicIndex + 1);
+            const double harmonicHz = n * fundamentalHz * std::sqrt(1.0 + toolConfig.inharmonicity() * n * n);
+            if (harmonicHz > static_cast<double>(maxFrequencyHz)) {
+                continue;
+            }
+            const int bin = static_cast<int>(
+                std::round(frequencyToBinIndex(static_cast<float>(harmonicHz), content.config)));
+            if (bin < 0 || bin >= static_cast<int>(content.config.binCount)) {
+                continue;
+            }
+
+            for (int frame = frameLow; frame <= frameHigh; ++frame) {
+                const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
+                const float weight = falloffWeight(std::abs(normalizedDt), toolConfig.falloff()) *
+                                      static_cast<float>(strength);
+                if (weight <= 0.0f) {
+                    continue;
+                }
+                const std::size_t index = cellIndex(bin, frame, content.frameCount);
+                blendTowardStop(content.leftMagnitudeDb[index], content.rightMagnitudeDb[index], target, weight);
+            }
+        }
+    }
+}
+
 }  // namespace
 
 float frequencyToBinIndex(float frequencyHz, const sound_mind::codec::StreamCodecConfig& config) noexcept {
@@ -347,58 +469,20 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
         return;
     }
 
-    // The tip's own radius, converted from its seconds-equivalent
-    // normalized size (see ToolConfiguration::size()'s own docs) into
-    // real frame/bin units - the frame radius is a fixed conversion
-    // (timeToFrameIndex() is linear), but the bin radius is only
-    // meaningful *locally*, re-derived at each stamp's own center
-    // frequency below, since the frequency axis is log-scaled (equal Hz
-    // spans don't cover equal bin counts everywhere on it).
-    const double frameRadius =
-        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
-    if (frameRadius <= 0.0) {
-        return;
+    // Dispatch on concrete subtype - see each helper's own docs for what a
+    // stamp actually means for that tool type. A plain if/else-if chain,
+    // not a visitor, matching every other dynamic_cast-based dispatch in
+    // this codebase (operation_log.cpp's Operation subtypes,
+    // rebuildPaintedContent() below) - revisit if a third real tool type
+    // makes this unwieldy.
+    if (const auto* procedural = dynamic_cast<const ProceduralConfiguration*>(&toolConfig)) {
+        applyProceduralPaintOperation(operation, *procedural, samples, frequencyToTimeScale, content);
+    } else if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(&toolConfig)) {
+        applyInstrumentPaintOperation(operation, *instrument, samples, content);
     }
-
-    for (const StrokeSample& sample : samples) {
-        const GradientStop target = operation.path().gradient().evaluate(sample.pathT);
-
-        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
-        const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
-
-        // Local bin-radius: the bin index of the same Hz-radius above and
-        // below this stamp's own center frequency, averaged - a cheap
-        // linearization of the log-scale mapping, accurate enough over
-        // one brush stamp's own small span.
-        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
-        const float binAbove = frequencyToBinIndex(
-            static_cast<float>(sample.point.frequencyHz) + frequencyRadiusHz, content.config);
-        const float binBelow = frequencyToBinIndex(
-            static_cast<float>(sample.point.frequencyHz) - frequencyRadiusHz, content.config);
-        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
-
-        const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
-        const auto frameHigh =
-            std::min(static_cast<int>(content.frameCount) - 1, static_cast<int>(std::ceil(frameCenter + frameRadius)));
-        const auto binLow = std::max(0, static_cast<int>(std::floor(binCenter - binRadius)));
-        const auto binHigh =
-            std::min(static_cast<int>(content.config.binCount) - 1, static_cast<int>(std::ceil(binCenter + binRadius)));
-
-        for (int frame = frameLow; frame <= frameHigh; ++frame) {
-            const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
-            for (int bin = binLow; bin <= binHigh; ++bin) {
-                const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
-                const double dist = footprintDistance(toolConfig.tipShape(), normalizedDt, normalizedDf);
-                const float weight = falloffWeight(dist, toolConfig.falloff());
-                if (weight <= 0.0f) {
-                    continue;
-                }
-
-                const std::size_t index = cellIndex(bin, frame, content.frameCount);
-                blendTowardStop(content.leftMagnitudeDb[index], content.rightMagnitudeDb[index], target, weight);
-            }
-        }
-    }
+    // Any other/future ToolType (MindShot, MindGrain, ...) paints nothing
+    // yet - the same "groundwork, not yet functional" state
+    // ToolConfiguration's own docs describe for those tool types.
 }
 
 sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::StreamImage& base,

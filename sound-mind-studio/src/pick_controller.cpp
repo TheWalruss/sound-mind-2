@@ -211,15 +211,15 @@ void PickController::clearSelection() {
     }
 }
 
-std::optional<sound_mind::core::ToolConfiguration> PickController::selectedConfiguration() const {
+std::unique_ptr<sound_mind::core::ToolConfiguration> PickController::selectedConfiguration() const {
     if (!pickedOperationId_.has_value()) {
-        return std::nullopt;
+        return nullptr;
     }
     const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_);
     if (paint == nullptr) {
-        return std::nullopt;
+        return nullptr;
     }
-    return paint->config();
+    return paint->config().clone();
 }
 
 std::optional<sound_mind::core::TimeFrequencyRect> PickController::selectionBounds() const {
@@ -307,7 +307,7 @@ void PickController::applyToolConfiguration(const sound_mind::core::ToolConfigur
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId newId = log.reserveId();
     commitReplacement(std::make_unique<sound_mind::core::PaintOperation>(newId, pickedLayer_, std::move(newPath),
-                                                                            config, pickedOperationId_));
+                                                                            config.clone(), pickedOperationId_));
 }
 
 void PickController::deleteSelection() {
@@ -325,7 +325,7 @@ void PickController::deleteSelection() {
     std::unique_ptr<sound_mind::core::Operation> tombstone;
     if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_)) {
         tombstone = std::make_unique<sound_mind::core::PaintOperation>(
-            newId, pickedLayer_, sound_mind::core::Path{}, paint->config(), pickedOperationId_);
+            newId, pickedLayer_, sound_mind::core::Path{}, paint->config().clone(), pickedOperationId_);
     } else {
         // FillOperation/PasteOperation can't reduce to a literal zero-
         // effect copy of themselves - see this method's own docs.
@@ -400,15 +400,15 @@ void PickController::commitPathEdit() {
     // The original's own gradient carries over unchanged - editing
     // geometry shouldn't silently reset color or opacity.
     editedPath.gradient() = paint->path().gradient();
-    const sound_mind::core::ToolConfiguration config = paint->config();
+    std::unique_ptr<sound_mind::core::ToolConfiguration> config = paint->config().clone();
 
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId newId = log.reserveId();
 
     pathEditSession_.end();
 
-    commitReplacement(std::make_unique<sound_mind::core::PaintOperation>(newId, pickedLayer_, std::move(editedPath),
-                                                                            config, pickedOperationId_));
+    commitReplacement(std::make_unique<sound_mind::core::PaintOperation>(
+        newId, pickedLayer_, std::move(editedPath), std::move(config), pickedOperationId_));
     previewPath_ = sound_mind::core::Path{};
     emit pathChanged();
 }

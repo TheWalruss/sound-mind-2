@@ -418,9 +418,27 @@ The **Tool Configuration** toolbar button opens a dockable panel (off by
 default, alongside Layers/Playback/Record/Loop) with the brush's own
 settings:
 
-- **Tip Shape** - the stroke's cross-section (Circle, Square, Diamond,
-  and others - only Circle/Square/Diamond have a distinct shape so far;
-  the rest currently paint the same as Circle).
+- **Tool Type** - **Procedural** (the default) or **Instrument**; picks
+  which set of controls below applies (Tip Shape for Procedural, Harmonics/
+  Inharmonicity for Instrument). Switching keeps Falloff/Size/Stamp Mode/
+  Interval/Color/Opacity as they were - only the tip-shape-vs-harmonic
+  controls reset to the newly-picked type's own defaults.
+- **Tip Shape** (Procedural only) - the stroke's cross-section (Circle,
+  Square, Diamond, and others - only Circle/Square/Diamond have a distinct
+  shape so far; the rest currently paint the same as Circle).
+- **Harmonics** (Instrument only) - how many overtones above the
+  fundamental to synthesize, each with its own **strength** spin box
+  (fundamental first) - a fresh Instrument starts with a plausible
+  falling four-harmonic series (`1.0, 0.5, 0.25, 0.125`). Each harmonic
+  paints as a single exact-frequency spike rather than a soft geometric
+  blob - a stroke's own Falloff/Size still soften and bound it, but only
+  along the *time* axis (how the stroke fades in/out as you paint it),
+  not across frequency.
+- **Inharmonicity** (Instrument only) - stretches the harmonic series
+  sharp of a pure integer series, the way a real vibrating body's own
+  overtones do (a piano string, for instance). `0` (the default) is
+  perfectly harmonic; small positive values (try `0.01`-`0.05`) give
+  higher harmonics an audibly metallic, bell-like stretch.
 - **Falloff** - how soft the stroke's edge is, from a hard edge (`0`) to
   fully soft (`1`).
 - **Brush Size** - the tip's own radius: in seconds on the time axis, and
@@ -474,7 +492,8 @@ visibility, translation, and rescale (see
 single history, undoing/redoing whichever one actually happened most
 recently, in either order.
 
-Only the **Procedural** brush exists today - see
+Only **Procedural** and **Instrument** (harmonic series + inharmonicity
+only so far - no noise, body resonance, or envelope yet) exist today - see
 [What's Not Here Yet](#whats-not-here-yet) for the rest of what's
 planned around painting.
 
@@ -491,11 +510,12 @@ regardless of the "Show bounding boxes" setting - ready to:
   else - a stroke you cut or filled over stays cut/filled over, even
   after you move or modify it.
 - **Modify** it - open **Tool Configuration** (if it isn't already);
-  it's pre-filled with exactly the settings the stroke was painted with.
-  Change anything (tip shape, falloff, size, stamp mode/interval, color,
-  opacity) and the selected stroke updates to match. Only a brush stroke
-  has settings to reopen this way - a filled selection or a pasted region
-  can still be moved and deleted, just not "modified" through this panel.
+  it's pre-filled with exactly the settings the stroke was painted with,
+  tool type included. Change anything (tool type, tip shape/harmonics,
+  falloff, size, stamp mode/interval, color, opacity) and the selected
+  stroke updates to match. Only a brush stroke has settings to reopen this
+  way - a filled selection or a pasted region can still be moved and
+  deleted, just not "modified" through this panel.
 - **Delete** it - **Edit → Delete** (or the Delete key).
 - **Restack** it within its own layer - **Edit → Bring to Front**
   (Ctrl+Shift+Up), **Send to Back** (Ctrl+Shift+Down), **Bring Forward**
@@ -746,9 +766,12 @@ order; this guide will grow alongside it.
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:
 
-- Only the **Procedural** brush - the other paintbrush types (Sound Mind
-  Instrument, Mind Shot, Mind Grain) and other painting tools (Smudge,
-  Order/Chaos, Heal, Soften, Clone) aren't built yet.
+- Only **Procedural** and **Instrument** (harmonic series + inharmonicity
+  only - no noise component, body resonance, or ADSR envelope yet) - the
+  other paintbrush types (Mind Shot, Mind Grain) and other painting tools
+  (Smudge, Order/Chaos, Heal, Soften, Clone) aren't built yet. Instrument
+  strokes also don't yet bind to a MindWave, and Loop Mode doesn't yet
+  retrigger per note.
 - No **Tool Configuration Wizard** or **Tool Preset** drop-down - the
   Panel described above is the only way to set brush parameters today,
   and there's no way yet to save/reuse/export a particular brush setup.
@@ -819,8 +842,9 @@ what's designed for them:
   MindWave now; **brush parameters** can't yet (see the bullet above).
 - **No canvas-space vs. operation-relative choice** - every binding today
   is implicitly canvas-space (the field is a fixed mask laid over the
-  whole piece); the "retriggers fresh per note" alternative doesn't exist
-  until Sound Mind Instruments do.
+  whole piece); the "retriggers fresh per note" alternative is planned for
+  a later Sound Mind Instruments installment (harmonic series +
+  inharmonicity only exist so far - see [Painting](#painting) above).
 - **No Field Operators** - Warp (one field distorting where another
   samples from) and Reduce (collapsing a field to a plain control signal)
   aren't built. Superposition (combining several MindWaves together) is

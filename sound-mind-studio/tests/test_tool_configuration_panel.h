@@ -21,4 +21,14 @@ private slots:
     void changingTheStampModeEmitsToolConfigurationChangedAndEnablesTheIntervalSpinBox();
     void changingTheStampIntervalEmitsToolConfigurationChanged();
     void loadingAConfigurationSyncsTheStampModeAndIntervalControls();
+
+    // Sound Mind Instruments (v0.Y.32.1).
+    void freshPanelDefaultsToProceduralWithTheProceduralGroupVisible();
+    void switchingToolTypeToInstrumentShowsItsOwnGroupAndHidesProcedural();
+    void switchingToolTypeToInstrumentPreservesSharedFields();
+    void switchingToolTypeBackToProceduralRestoresTheProceduralGroup();
+    void changingHarmonicCountResizesTheStrengthRows();
+    void changingAHarmonicStrengthEmitsToolConfigurationChanged();
+    void changingInharmonicityEmitsToolConfigurationChanged();
+    void loadingAnInstrumentConfigurationSyncsToolTypeAndHarmonicControls();
 };

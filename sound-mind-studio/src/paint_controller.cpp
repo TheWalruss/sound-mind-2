@@ -75,12 +75,12 @@ void PaintController::endStroke() {
     }
     // Seed the new stroke's own gradient from the tool's default - see
     // ToolConfiguration::defaultGradient()'s own docs.
-    finalPath.gradient() = toolConfig_.defaultGradient();
+    finalPath.gradient() = toolConfig_->defaultGradient();
 
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(std::make_unique<sound_mind::core::PaintOperation>(id, strokeTargetLayer_, std::move(finalPath),
-                                                                    toolConfig_));
+                                                                    toolConfig_->clone()));
     notifyOperationCommitted();
 
     const sound_mind::core::LayerId paintedLayer = strokeTargetLayer_;

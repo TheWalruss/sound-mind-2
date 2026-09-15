@@ -1,6 +1,7 @@
 #include "test_paint_controller.h"
 
 #include <algorithm>
+#include <memory>
 
 #include <QSignalSpy>
 #include <QtTest/QtTest>
@@ -56,18 +57,18 @@ LayerId addBlankNormalLayer(Project& project) {
 /// deliberately fully transparent (see ToolConfiguration's own docs), so
 /// any test that needs painting to actually leave a visible mark needs
 /// one of these instead.
-sound_mind::core::ToolConfiguration makeOpaqueTool(double size = 0.05, float falloff = 0.0f,
-                                                    float intensity = -10.0f) {
-    sound_mind::core::ToolConfiguration config;
-    config.setSize(size);
-    config.setFalloff(falloff);
-    auto stop = config.defaultGradient().stops().front();
+std::unique_ptr<sound_mind::core::ProceduralConfiguration> makeOpaqueTool(double size = 0.05, float falloff = 0.0f,
+                                                                            float intensity = -10.0f) {
+    auto config = std::make_unique<sound_mind::core::ProceduralConfiguration>();
+    config->setSize(size);
+    config->setFalloff(falloff);
+    auto stop = config->defaultGradient().stops().front();
     stop.leftIntensity = intensity;
     stop.rightIntensity = intensity;
     stop.leftOpacity = 1.0f;
     stop.rightOpacity = 1.0f;
-    config.defaultGradient().setStopValues(0, stop);
-    config.defaultGradient().setStopValues(1, stop);
+    config->defaultGradient().setStopValues(0, stop);
+    config->defaultGradient().setStopValues(1, stop);
     return config;
 }
 
