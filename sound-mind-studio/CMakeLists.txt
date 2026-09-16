@@ -150,6 +150,37 @@ endif ()
 
 install(TARGETS sound-mind-studio RUNTIME DESTINATION . COMPONENT Runtime)
 
+# vcpkg's own VCPKG_APPLOCAL_DEPS mechanism (see CMakePresets.json; ON for
+# both the debug and release presets) already copies every non-Qt runtime
+# DLL the built executable actually needs (FFmpeg's avcodec/avformat/
+# swresample/swscale, libtiff, zlib, liblzma, libjpeg, mp3lame - the
+# vcpkg.json manifest's own dependencies) into the same directory as
+# sound-mind-studio.exe in the build tree, as a post-build step - but
+# `install(TARGETS ...)` above only installs the target's own primary
+# artifact, not its runtime dependencies, so none of those ever made it
+# into an installed/packaged build without this. Every local dev/test run
+# happens to work anyway (it runs straight from the build tree, where
+# VCPKG_APPLOCAL_DEPS already placed everything), which is exactly why
+# this went unnoticed until `v0.0.32.1`'s real installer was actually run
+# for the first time and failed to launch, missing tiff.dll/avcodec-63.dll/
+# avformat-63.dll/swresample-7.dll.
+#
+# Globbed and installed here at install time, not configure time - these
+# DLLs don't exist until VCPKG_APPLOCAL_DEPS's own post-build step has
+# run. Qt's own DLLs are deliberately excluded from this glob (vcpkg
+# happens to sweep some of those up too, alongside the third-party ones,
+# since applocal deployment walks the whole PE import tree regardless of
+# origin) and left entirely to windeployqt below - the authoritative
+# source for Qt's own runtime, which also deploys the plugins
+# (platforms/, styles/, imageformats/) a plain DLL copy wouldn't.
+install(CODE "
+    file(GLOB SOUND_MIND_THIRD_PARTY_DLLS \"$<TARGET_FILE_DIR:sound-mind-studio>/*.dll\")
+    list(FILTER SOUND_MIND_THIRD_PARTY_DLLS EXCLUDE REGEX \"[Qq]t6\")
+    if (SOUND_MIND_THIRD_PARTY_DLLS)
+        file(INSTALL \${SOUND_MIND_THIRD_PARTY_DLLS} DESTINATION \"\${CMAKE_INSTALL_PREFIX}\")
+    endif ()
+" COMPONENT Runtime)
+
 if (DEFINED ENV{QT_HOST_PATH_DIR} AND NOT "$ENV{QT_HOST_PATH_DIR}" STREQUAL "")
     find_program(SOUND_MIND_WINDEPLOYQT windeployqt HINTS "$ENV{QT_HOST_PATH_DIR}/bin" NO_DEFAULT_PATH)
 else ()

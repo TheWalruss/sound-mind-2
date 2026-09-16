@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.32.2] - 2026-09-16
+
+Fixes a real, user-reported packaging bug from `v0.0.32.1`: the installed app (both the `.msi` installer and the `.zip`) failed to launch, complaining about missing `tiff.dll`, `avcodec-63.dll`, `avformat-63.dll`, and `swresample-7.dll`.
+
+### Fixed
+
+- **The installed/packaged build is now genuinely self-contained.** Root cause: `sound-mind-studio`'s `install(TARGETS ...)` rule only ever installed the executable itself, never its FFmpeg/libtiff/zlib/... runtime dependencies - vcpkg's own `VCPKG_APPLOCAL_DEPS` mechanism does copy those next to the built `.exe` in the build tree (which is why every local dev/test run, always launched straight from that build tree, never surfaced this), but nothing carried them into an actual install/package output. The release `.zip`'s own packaging step also duplicated (and had quietly drifted out of sync with) the same deployment logic `sound-mind-studio/CMakeLists.txt`'s `install()` rules already existed to centralize.
+- Every non-Qt runtime DLL vcpkg's app-local deployment already resolves is now installed alongside the executable (`sound-mind-studio/CMakeLists.txt`); the release workflow's zip step now runs `cmake --install` instead of its own hand-rolled copy, so the zip and the `.msi` (via CPack) both go through the exact same, now-fixed path.
+
+Full regression: sound-mind-core/codec/gpu/studio test suites unchanged (no application code touched, packaging-only); verified locally via `cmake --install` into a scratch prefix - every previously-missing DLL now present, and the installed `.exe` launches successfully. Doxygen: 0 warnings (no doc comments touched).
+
 ## [0.0.32.1] - 2026-09-15
 
 Sound Mind Instruments, Installment A: a real, second paintable tool type - `Instrument` - synthesizing a harmonic series (with inharmonicity) instead of a Procedural brush's geometric footprint. `docs/sound-mind-design.md`'s "Sound Mind Instruments" and `docs/sound-mind-roadmap.md`'s `v0.Y.32.1`.
