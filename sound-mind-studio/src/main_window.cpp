@@ -12,6 +12,7 @@
 #include <exception>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 
 #include <QAction>
 #include <QCloseEvent>
@@ -493,6 +494,13 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* pasteAction = editMenu->addAction(tr("&Paste"));
     pasteAction->setShortcut(QKeySequence::Paste);
     connect(pasteAction, &QAction::triggered, this, &MainWindow::paste);
+
+    // Mind Shots (v0.Y.33.1 Installment A) - no standard shortcut (matching
+    // Fill Selection's own no-shortcut choice above); a no-op with no
+    // committed selection, the same "always present" choice deleteAction/
+    // Cut/Copy/Paste all make.
+    QAction* captureMindShotAction = editMenu->addAction(tr("Capture as &Mind Shot"));
+    connect(captureMindShotAction, &QAction::triggered, this, &MainWindow::captureMindShot);
 
     editMenu->addSeparator();
 
@@ -1514,6 +1522,16 @@ void MainWindow::paste() {
             setPickModeEnabled(true);
             toolPaletteController_->selectOperation(*layerId, *pastedId);
         }
+    }
+}
+
+void MainWindow::captureMindShot() {
+    if (!project_.has_value()) {
+        return;
+    }
+    const std::string name = "Mind Shot " + std::to_string(project_->mindShots().size() + 1);
+    if (const auto id = toolPaletteController_->captureMindShot(name); id.has_value()) {
+        statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(name)), 5000);
     }
 }
 

@@ -1,4 +1,5 @@
 #include <filesystem>
+#include <vector>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -7,15 +8,18 @@
 #include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/project.h"
 
 using sound_mind::codec::PoolImage;
 using sound_mind::codec::StreamImage;
+using sound_mind::core::Clip;
 using sound_mind::core::FilterType;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
+using sound_mind::core::MindShotId;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::Project;
@@ -260,6 +264,115 @@ TEST_CASE("A Project's MindWave library round-trips through JSON", "[core][proje
     REQUIRE(restored.mindWaves()[0].id == id);
     REQUIRE(restored.mindWaves()[0].name == "Slow Pulse");
     REQUIRE(restored.mindWaves()[0].wave.period() == 2.5);
+}
+
+namespace {
+
+Clip makeTestClip() {
+    Clip clip;
+    clip.frameCount = 2;
+    clip.binCount = 2;
+    clip.leftMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.rightMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.sharedPhaseRadians = {0.0f, 0.0f, 0.0f, 0.0f};
+    return clip;
+}
+
+}  // namespace
+
+TEST_CASE("A new Project has no Mind Shots", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.mindShots().empty());
+}
+
+TEST_CASE("addMindShot appends a named Mind Shot with a fresh, unique id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+
+    const MindShotId firstId = project.addMindShot("Piano Hit", makeTestClip());
+    const MindShotId secondId = project.addMindShot("Vocal Chop", makeTestClip());
+
+    REQUIRE(firstId != secondId);
+    REQUIRE(project.mindShots().size() == 2);
+    REQUIRE(project.mindShots()[0].id == firstId);
+    REQUIRE(project.mindShots()[0].name == "Piano Hit");
+    REQUIRE(project.mindShots()[1].id == secondId);
+    REQUIRE(project.mindShots()[1].name == "Vocal Chop");
+}
+
+TEST_CASE("mindShotById finds the entry with a matching id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const MindShotId id = project.addMindShot("Piano Hit", makeTestClip());
+
+    const auto* found = project.mindShotById(id);
+
+    REQUIRE(found != nullptr);
+    REQUIRE(found->name == "Piano Hit");
+    REQUIRE(found->clip.frameCount == 2);
+    REQUIRE(found->clip.binCount == 2);
+}
+
+TEST_CASE("mindShotById returns nullptr for an unknown id", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.mindShotById(MindShotId{999}) == nullptr);
+}
+
+TEST_CASE("mindShotById's mutable overload allows in-place edits", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const MindShotId id = project.addMindShot("Piano Hit", makeTestClip());
+
+    auto* found = project.mindShotById(id);
+    REQUIRE(found != nullptr);
+    found->name = "Renamed";
+
+    REQUIRE(project.mindShotById(id)->name == "Renamed");
+}
+
+TEST_CASE("removeMindShot removes the entry with the given id and returns true", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const MindShotId id = project.addMindShot("Piano Hit", makeTestClip());
+
+    const bool removed = project.removeMindShot(id);
+
+    REQUIRE(removed);
+    REQUIRE(project.mindShots().empty());
+}
+
+TEST_CASE("removeMindShot returns false and changes nothing for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindShot("Piano Hit", makeTestClip());
+
+    const bool removed = project.removeMindShot(MindShotId{999999});
+
+    REQUIRE_FALSE(removed);
+    REQUIRE(project.mindShots().size() == 1);
+}
+
+TEST_CASE("A Project's Mind Shot library round-trips through JSON", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    const MindShotId id = original.addMindShot("Piano Hit", makeTestClip());
+
+    const nlohmann::json json = original;
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.mindShots().size() == 1);
+    REQUIRE(restored.mindShots()[0].id == id);
+    REQUIRE(restored.mindShots()[0].name == "Piano Hit");
+    REQUIRE(restored.mindShots()[0].clip.frameCount == 2);
+    REQUIRE(restored.mindShots()[0].clip.binCount == 2);
+    REQUIRE(restored.mindShots()[0].clip.leftMagnitudeDb == std::vector<float>{-1.0f, -2.0f, -3.0f, -4.0f});
+}
+
+TEST_CASE("A Project saved before Mind Shots existed loads with an empty Mind Shot library", "[core][project]") {
+    // Lenient deserialization, matching MindWaves' own precedent - a
+    // project file saved before v0.Y.33.1 Installment A has no "mindShots"
+    // key at all.
+    Project original = Project::createNew(ProjectSettings{});
+    nlohmann::json json = original;
+    json.erase("mindShots");
+
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.mindShots().empty());
 }
 
 TEST_CASE("A Project loads from JSON missing mindWaves (a project saved before v0.Y.31.1 "

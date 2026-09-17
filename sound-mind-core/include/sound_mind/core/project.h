@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/project_settings.h"
@@ -18,12 +19,13 @@ namespace sound_mind::core {
  *        Model and "Project File & Folder".
  *
  * @note Deliberately minimal for now: most resource libraries (Sound Mind
- *       Instruments, Mind Shots, Mind Grains) and sequences aren't
- *       represented yet, since none of those features exist. Their absence
- *       from a saved file is meant to be forward-compatible - added as
- *       fields once each feature lands, not designed in speculatively now.
- *       `MindWaves` are the first exception (`v0.Y.31.1` Installment C1) -
- *       see `mindWaves()`'s own docs.
+ *       Instruments, Mind Grains) and sequences aren't represented yet,
+ *       since none of those features exist. Their absence from a saved
+ *       file is meant to be forward-compatible - added as fields once each
+ *       feature lands, not designed in speculatively now. `MindWaves`
+ *       (`v0.Y.31.1` Installment C1 - see `mindWaves()`'s own docs) and
+ *       Mind Shots (`v0.Y.33.1` Installment A - see `mindShots()`'s own
+ *       docs) are the exceptions so far.
  */
 class Project {
 public:
@@ -253,6 +255,66 @@ public:
     ///         MindWave with this id exists in this project's library.
     [[nodiscard]] NamedMindWave* mindWaveById(MindWaveId id) noexcept;
 
+    /**
+     * @brief This project's Mind Shot library - `v0.Y.33.1` Installment
+     *        A's own permanent, named store of captured selections (see
+     *        `NamedMindShot`'s own docs), the same "peer resource library"
+     *        shape `mindWaves()` already established for MindWaves.
+     * @return This project's current Mind Shot library.
+     */
+    [[nodiscard]] const std::vector<NamedMindShot>& mindShots() const noexcept { return mindShots_; }
+
+    /// @brief This project's Mind Shot library - mutable access, for
+    ///        in-place edits (renaming) that don't change the library's
+    ///        own membership (addMindShot() is still how a new entry gets
+    ///        appended).
+    /// @return This project's current Mind Shot library.
+    [[nodiscard]] std::vector<NamedMindShot>& mindShots() noexcept { return mindShots_; }
+
+    /**
+     * @brief Adds a new, named Mind Shot to this project's library.
+     * @param name Display name - see `NamedMindShot::name`'s own docs on
+     *        uniqueness being this project's own responsibility, not
+     *        enforced here.
+     * @param clip The captured content itself.
+     * @return The id assigned to the new entry - see `addLayer()`'s own
+     *         docs for the identical "fresh, project-unique id" pattern.
+     */
+    MindShotId addMindShot(std::string name, Clip clip);
+
+    /**
+     * @brief Removes the Mind Shot with the given id, if one exists.
+     *
+     * Does **not** clear any `MindShotConfiguration` (or, later, any
+     * other reference) that still embeds this Mind Shot's own captured
+     * content - a `MindShotConfiguration` snapshots the `Clip` itself at
+     * configuration time (see its own docs), not a live reference back
+     * into this library, so an already-painted stroke keeps rendering
+     * correctly even after its source entry is removed here.
+     *
+     * @param id The Mind Shot to remove.
+     * @return `true` if a Mind Shot with this id was found and removed;
+     *         `false` (no change) if none was.
+     */
+    bool removeMindShot(MindShotId id);
+
+    /**
+     * @brief Finds the Mind Shot library entry with the given id, if one
+     *        exists - the same "small, project-level lookup" `layerById()`/
+     *        `mindWaveById()` already provide.
+     * @param id The entry to find.
+     * @return A pointer to that entry, or `nullptr` if no Mind Shot with
+     *         this id exists in this project's library.
+     */
+    [[nodiscard]] const NamedMindShot* mindShotById(MindShotId id) const noexcept;
+
+    /// @brief Mutable overload of mindShotById() - for in-place edits
+    ///        (renaming).
+    /// @param id The entry to find.
+    /// @return A mutable pointer to that entry, or `nullptr` if no Mind
+    ///         Shot with this id exists in this project's library.
+    [[nodiscard]] NamedMindShot* mindShotById(MindShotId id) noexcept;
+
     friend void to_json(nlohmann::json& json, const Project& project);
     friend void from_json(const nlohmann::json& json, Project& project);
 
@@ -261,6 +323,7 @@ private:
     std::vector<Layer> layers_;
     OperationLog operationLog_;
     std::vector<NamedMindWave> mindWaves_;
+    std::vector<NamedMindShot> mindShots_;
 };
 
 /// @brief Serializes a Project to its JSON representation.

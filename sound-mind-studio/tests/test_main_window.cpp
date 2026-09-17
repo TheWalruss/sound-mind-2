@@ -3106,6 +3106,37 @@ void MainWindowTest::copySelectionIsANoOpWithNoSelection() {
     QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
 }
 
+void MainWindowTest::captureMindShotAddsANamedEntryToTheProjectsMindShotLibrary() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-capture-mind-shot.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    window.captureMindShot();
+
+    QCOMPARE(window.project()->mindShots().size(), std::size_t{1});
+    QCOMPARE(window.project()->mindShots().front().name, std::string("Mind Shot 1"));
+    // A capture never logs an Operation - it's a read, not an edit.
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}
+
+void MainWindowTest::captureMindShotIsANoOpWithNoSelection() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.captureMindShot();
+
+    QVERIFY(window.project()->mindShots().empty());
+}
+
 void MainWindowTest::clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject() {
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-path-tool.smproj";
     TestMainWindow window;

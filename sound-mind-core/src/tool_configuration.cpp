@@ -1,5 +1,6 @@
 #include "sound_mind/core/tool_configuration.h"
 
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -53,6 +54,12 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config) {
         writeCommonToolConfigurationFields(json, config);
         json["harmonicStrengths"] = instrument->harmonicStrengths();
         json["inharmonicity"] = instrument->inharmonicity();
+    } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(&config)) {
+        writeCommonToolConfigurationFields(json, config);
+        if (const auto sourceId = mindShot->sourceMindShotId(); sourceId.has_value()) {
+            json["sourceMindShotId"] = *sourceId;
+        }
+        json["clip"] = mindShot->clip();
     } else {
         // Defensive: every concrete subtype is handled above: if this is
         // ever reached, a new subtype was added without updating this
@@ -78,6 +85,16 @@ std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::jso
         instrument->setHarmonicStrengths(json.at("harmonicStrengths").get<std::vector<double>>());
         instrument->setInharmonicity(json.at("inharmonicity").get<double>());
         config = std::move(instrument);
+    } else if (type == ToolType::MindShot) {
+        auto mindShot = std::make_unique<MindShotConfiguration>();
+        // "sourceMindShotId" is UI-only metadata (see its own docs) -
+        // absent for a configuration whose clip was never set from a
+        // library entry, so its own absence isn't a format error.
+        const std::optional<MindShotId> sourceId =
+            json.contains("sourceMindShotId") ? std::optional(json.at("sourceMindShotId").get<MindShotId>())
+                                                : std::nullopt;
+        mindShot->setClip(sourceId, json.at("clip").get<Clip>());
+        config = std::move(mindShot);
     } else {
         throw std::invalid_argument("ToolConfiguration: unrecognized \"type\" in toolConfigurationFromJson()");
     }

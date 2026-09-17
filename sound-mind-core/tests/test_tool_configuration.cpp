@@ -8,12 +8,28 @@
 #include "sound_mind/core/tool_configuration.h"
 
 using sound_mind::core::BrushTipShape;
+using sound_mind::core::Clip;
 using sound_mind::core::InstrumentConfiguration;
+using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::core::toolConfigurationFromJson;
 using sound_mind::core::ToolType;
+
+namespace {
+
+Clip makeTestClip() {
+    Clip clip;
+    clip.frameCount = 2;
+    clip.binCount = 2;
+    clip.leftMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.rightMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.sharedPhaseRadians = {0.0f, 0.0f, 0.0f, 0.0f};
+    return clip;
+}
+
+}  // namespace
 
 TEST_CASE("A fresh ProceduralConfiguration is Procedural with a circular tip", "[core][tool_configuration]") {
     const ProceduralConfiguration config;
@@ -219,8 +235,75 @@ TEST_CASE("An InstrumentConfiguration round-trips through JSON", "[core][tool_co
     REQUIRE(roundTripped->size() == 0.75);
 }
 
+TEST_CASE("A fresh MindShotConfiguration is MindShot with no Mind Shot selected", "[core][tool_configuration]") {
+    const MindShotConfiguration config;
+    REQUIRE(config.type() == ToolType::MindShot);
+    REQUIRE(config.sourceMindShotId() == std::nullopt);
+    REQUIRE(config.clip().frameCount == 0);
+    REQUIRE(config.clip().binCount == 0);
+}
+
+TEST_CASE("MindShotConfiguration::setClip() sets the source id and the clip", "[core][tool_configuration]") {
+    MindShotConfiguration config;
+    config.setClip(sound_mind::core::MindShotId{7}, makeTestClip());
+
+    REQUIRE(config.sourceMindShotId() == sound_mind::core::MindShotId{7});
+    REQUIRE(config.clip().frameCount == 2);
+    REQUIRE(config.clip().binCount == 2);
+    REQUIRE(config.clip().leftMagnitudeDb == std::vector<float>{-1.0f, -2.0f, -3.0f, -4.0f});
+}
+
+TEST_CASE("A MindShotConfiguration's clone() is an independent, equal copy", "[core][tool_configuration]") {
+    MindShotConfiguration config;
+    config.setName("Piano Hit Brush");
+    config.setClip(sound_mind::core::MindShotId{3}, makeTestClip());
+
+    const std::unique_ptr<ToolConfiguration> clone = config.clone();
+    REQUIRE(clone->type() == ToolType::MindShot);
+    REQUIRE(clone->name() == "Piano Hit Brush");
+    const auto& clonedMindShot = dynamic_cast<const MindShotConfiguration&>(*clone);
+    REQUIRE(clonedMindShot.sourceMindShotId() == sound_mind::core::MindShotId{3});
+    REQUIRE(clonedMindShot.clip().frameCount == 2);
+
+    config.setClip(sound_mind::core::MindShotId{99}, Clip{});
+    REQUIRE(clonedMindShot.sourceMindShotId() == sound_mind::core::MindShotId{3});
+    REQUIRE(clonedMindShot.clip().frameCount == 2);
+}
+
+TEST_CASE("A MindShotConfiguration round-trips through JSON, source id included", "[core][tool_configuration]") {
+    MindShotConfiguration config;
+    config.setName("Piano Hit Brush");
+    config.setClip(sound_mind::core::MindShotId{3}, makeTestClip());
+    config.setFalloff(0.6f);
+
+    const nlohmann::json json = config;
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    REQUIRE(roundTripped->type() == ToolType::MindShot);
+    REQUIRE(roundTripped->name() == "Piano Hit Brush");
+    const auto& mindShot = dynamic_cast<const MindShotConfiguration&>(*roundTripped);
+    REQUIRE(mindShot.sourceMindShotId() == sound_mind::core::MindShotId{3});
+    REQUIRE(mindShot.clip().frameCount == 2);
+    REQUIRE(mindShot.clip().binCount == 2);
+    REQUIRE(mindShot.clip().leftMagnitudeDb == std::vector<float>{-1.0f, -2.0f, -3.0f, -4.0f});
+    REQUIRE(roundTripped->falloff() == 0.6f);
+}
+
+TEST_CASE("A MindShotConfiguration round-trips through JSON with no source id", "[core][tool_configuration]") {
+    // A configuration whose clip was never set from a library entry -
+    // sourceMindShotId() must round-trip as nullopt, not some default id.
+    MindShotConfiguration config;
+    nlohmann::json json = config;
+    json.erase("sourceMindShotId");  // not written in the first place, but confirm the read side too.
+
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    const auto& mindShot = dynamic_cast<const MindShotConfiguration&>(*roundTripped);
+    REQUIRE(mindShot.sourceMindShotId() == std::nullopt);
+}
+
 TEST_CASE("toolConfigurationFromJson() rejects an unrecognized type", "[core][tool_configuration]") {
     nlohmann::json json = ProceduralConfiguration{};
-    json["type"] = "mindShot";
+    json["type"] = "smudge";  // a real ToolType value, but not yet a real tool - see its own docs.
     REQUIRE_THROWS_AS(toolConfigurationFromJson(json), std::invalid_argument);
 }

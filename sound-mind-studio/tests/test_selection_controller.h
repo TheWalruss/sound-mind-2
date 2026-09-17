@@ -29,4 +29,9 @@ private slots:
 
     void continueSelectionDragSnapsToTheNearestGridLineWhenSnapToGridIsEnabled();
     void continueSelectionDragIgnoresGridConfigurationWhenSnapToGridIsDisabled();
+
+    void captureMindShotAddsANamedEntryToTheProjectsMindShotLibrary();
+    void captureMindShotIsANoOpWithNoCommittedSelection();
+    void captureMindShotDoesNotTouchTheClipboardOrSourcePixels();
+    void captureMindShotEmitsMindShotCapturedWithTheNewId();
 };

@@ -1,12 +1,14 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/core/gradient.h"
+#include "sound_mind/core/mind_shot.h"
 
 namespace sound_mind::core {
 
@@ -14,9 +16,10 @@ namespace sound_mind::core {
  * @brief Which kind of painting tool a `ToolConfiguration` configures -
  *        see `docs/sound-mind-design.md`'s "Tool Configuration".
  *
- * @note Only `Procedural` and (as of `v0.Y.32.1`, Sound Mind Instruments)
- *       `Instrument` exist as real, paintable tools so far -
- *       `MindShot`/`MindGrain`/`Smudge`/`OrderChaos`/`Heal`/`Soften`/`Clone`
+ * @note Only `Procedural`, (as of `v0.Y.32.1`, Sound Mind Instruments)
+ *       `Instrument`, and (as of `v0.Y.33.1` Installment A) `MindShot`
+ *       exist as real, paintable tools so far -
+ *       `MindGrain`/`Smudge`/`OrderChaos`/`Heal`/`Soften`/`Clone`
  *       are future roadmap milestones, not yet scheduled. Adding a value
  *       here ahead of its own tool actually working is deliberate
  *       groundwork for the Tool Configuration Panel/Wizard's dynamic-per-
@@ -407,6 +410,82 @@ private:
     double inharmonicity_ = 0.0;
 };
 
+/**
+ * @brief A Mind Shot brush - `v0.Y.33.1` Installment A, per `docs/sound-
+ *        mind-design.md`'s "Mind Shots": stamps a previously captured
+ *        selection back exactly as it was when captured.
+ *
+ * **Snapshots the captured `Clip` directly, rather than only holding a
+ * `MindShotId` reference into `Project::mindShots()`** - the same
+ * "a config is a snapshot, not a live reference into a shared, mutable
+ * list" reasoning `ToolConfiguration`'s own class docs already establish
+ * for every tool type ("so re-editing this operation later can't be
+ * affected by unrelated later changes to a saved preset of the same
+ * name"). Here it also solves a real correctness question for free: an
+ * already-painted stroke keeps rendering identically even if its source
+ * Mind Shot is later renamed or removed from the project's library -
+ * exactly what "paints back exactly as it was when captured, independent
+ * of later changes to its source" already promises.
+ *
+ * **No `tipShape()`/meaningful `falloff()`/`size()` use** - a Mind Shot
+ * stamps as a hard, Normal-only overwrite of its own captured content at
+ * its own native size, centered on each stamp position (see
+ * `applyPaintOperation()`'s own docs) - the same direct-overwrite
+ * semantics `PasteOperation` already uses, not Procedural/Instrument's
+ * gradient/falloff blend. Blend-mode selection for this stamp is
+ * confirmed deferred to `docs/sound-mind-roadmap.md`'s `v0.Y.37.1`,
+ * alongside layer compositing and Paste.
+ */
+class MindShotConfiguration : public ToolConfiguration {
+public:
+    /// @brief Constructs a configuration with no Mind Shot selected yet
+    ///        (an empty `clip()`) - paints nothing until `setClip()` is
+    ///        called with a real capture, the same "nothing happens by
+    ///        accident" default convention `InstrumentConfiguration`'s own
+    ///        zero-inharmonicity default follows.
+    MindShotConfiguration() = default;
+
+    [[nodiscard]] ToolType type() const noexcept override { return ToolType::MindShot; }
+
+    [[nodiscard]] std::unique_ptr<ToolConfiguration> clone() const override {
+        return std::make_unique<MindShotConfiguration>(*this);
+    }
+
+    /// @brief Which library entry `clip()` was last set from, if any - for
+    ///        UI purposes only (so a Tool Configuration Panel showing this
+    ///        configuration can highlight the right entry in its own Mind
+    ///        Shot picker); never consulted by painting itself, which only
+    ///        ever reads `clip()` directly.
+    /// @return The source entry's own id, or `std::nullopt` if `clip()`
+    ///         was never set from a library entry (a fresh configuration,
+    ///         or one loaded from a project file saved before this field
+    ///         existed).
+    [[nodiscard]] std::optional<MindShotId> sourceMindShotId() const noexcept { return sourceMindShotId_; }
+
+    /**
+     * @brief Sets which captured content this configuration paints -
+     *        snapshotting `clip` directly (see this class's own docs on
+     *        why).
+     * @param sourceId The library entry `clip` was captured from, for
+     *        `sourceMindShotId()`'s own UI-only purpose; `std::nullopt` if
+     *        unknown/not applicable.
+     * @param clip The captured content to paint, copied in.
+     */
+    void setClip(std::optional<MindShotId> sourceId, Clip clip) {
+        sourceMindShotId_ = sourceId;
+        clip_ = std::move(clip);
+    }
+
+    /// @brief The captured content this configuration paints.
+    /// @return The current clip - `frameCount()`/`binCount()` are both
+    ///         `0` (nothing to paint) until `setClip()` is called.
+    [[nodiscard]] const Clip& clip() const noexcept { return clip_; }
+
+private:
+    std::optional<MindShotId> sourceMindShotId_;
+    Clip clip_;
+};
+
 /// @brief Serializes any concrete `ToolConfiguration` to its JSON
 ///        representation - dispatches on `type()` internally (a `"type"`
 ///        discriminator field, plus every field common to every subtype,
@@ -431,8 +510,8 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config);
  * @return The parsed, owned configuration.
  * @throws nlohmann::json::exception on malformed or missing required data.
  * @throws std::invalid_argument for a `"type"` this factory doesn't yet
- *         know how to construct (any value past `Procedural`/`Instrument` -
- *         see `ToolType`'s own docs on which are real so far).
+ *         know how to construct (any value past `Procedural`/`Instrument`/
+ *         `MindShot` - see `ToolType`'s own docs on which are real so far).
  */
 [[nodiscard]] std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::json& json);
 

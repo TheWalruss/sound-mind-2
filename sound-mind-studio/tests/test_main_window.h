@@ -177,6 +177,8 @@ private slots:
     void pasteCanTargetADifferentLayerThanItWasCopiedFrom();
     void pasteIsANoOpWithNoClipboard();
     void copySelectionIsANoOpWithNoSelection();
+    void captureMindShotAddsANamedEntryToTheProjectsMindShotLibrary();
+    void captureMindShotIsANoOpWithNoSelection();
     void clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject();
     void cancelPathDiscardsInProgressPlacementWithoutCommittingAnything();
     void smoothNodesToggleAffectsSubsequentlyPlacedNodes();

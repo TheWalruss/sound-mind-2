@@ -179,6 +179,42 @@ NamedMindWave* Project::mindWaveById(MindWaveId id) noexcept {
     return nullptr;
 }
 
+MindShotId Project::addMindShot(std::string name, Clip clip) {
+    const auto maxId = std::max_element(mindShots_.begin(), mindShots_.end(),
+                                          [](const NamedMindShot& a, const NamedMindShot& b) { return a.id < b.id; });
+    const MindShotId newId = (maxId == mindShots_.end() ? MindShotId{0} : maxId->id) + 1;
+    mindShots_.push_back(NamedMindShot{newId, std::move(name), std::move(clip)});
+    return newId;
+}
+
+bool Project::removeMindShot(MindShotId id) {
+    const auto it =
+        std::find_if(mindShots_.begin(), mindShots_.end(), [id](const NamedMindShot& named) { return named.id == id; });
+    if (it == mindShots_.end()) {
+        return false;
+    }
+    mindShots_.erase(it);
+    return true;
+}
+
+const NamedMindShot* Project::mindShotById(MindShotId id) const noexcept {
+    for (const NamedMindShot& named : mindShots_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
+NamedMindShot* Project::mindShotById(MindShotId id) noexcept {
+    for (NamedMindShot& named : mindShots_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
 bool Project::removeLayer(LayerId id) {
     const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const Layer& layer) { return layer.id() == id; });
     if (it == layers_.end()) {
@@ -223,6 +259,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"layers", project.layers_},
         {"operationLog", project.operationLog_},
         {"mindWaves", project.mindWaves_},
+        {"mindShots", project.mindShots_},
     };
 }
 
@@ -242,6 +279,15 @@ void from_json(const nlohmann::json& json, Project& project) {
     if (json.contains("mindWaves")) {
         for (const auto& namedJson : json.at("mindWaves")) {
             project.mindWaves_.push_back(namedJson.get<NamedMindWave>());
+        }
+    }
+
+    // Lenient, same reasoning - didn't exist before v0.Y.33.1 Installment
+    // A; a project saved before it had no Mind Shots to lose.
+    project.mindShots_.clear();
+    if (json.contains("mindShots")) {
+        for (const auto& namedJson : json.at("mindShots")) {
+            project.mindShots_.push_back(namedJson.get<NamedMindShot>());
         }
     }
 }

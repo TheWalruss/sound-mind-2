@@ -390,6 +390,56 @@ void applyInstrumentPaintOperation(const PaintOperation& operation, const Instru
     }
 }
 
+/// @brief `MindShotConfiguration`'s own stamp: a hard, Normal-only
+/// overwrite of `clip`'s own cells, centered on `(frameCenter, binCenter)`
+/// - the exact same blit `applyPasteOperation()` already uses (see its
+/// own docs), just centered on a stamp position instead of an explicit
+/// placement rectangle. No falloff/gradient blend at all - "paints back
+/// exactly as it was when captured" (`docs/sound-mind-design.md`'s "Mind
+/// Shots") means every cell the clip covers is written verbatim.
+void blitClipCentered(const Clip& clip, double frameCenter, float binCenter, sound_mind::codec::StreamImage& content) {
+    const int frameOrigin = static_cast<int>(std::round(frameCenter)) - static_cast<int>(clip.frameCount / 2);
+    const int binOrigin = static_cast<int>(std::round(binCenter)) - static_cast<int>(clip.binCount / 2);
+
+    for (std::uint32_t clipBin = 0; clipBin < clip.binCount; ++clipBin) {
+        const int destBin = binOrigin + static_cast<int>(clipBin);
+        if (destBin < 0 || destBin >= static_cast<int>(content.config.binCount)) {
+            continue;  // Falls outside the destination's own bin range - silently clipped.
+        }
+        for (std::uint32_t clipFrame = 0; clipFrame < clip.frameCount; ++clipFrame) {
+            const int destFrame = frameOrigin + static_cast<int>(clipFrame);
+            if (destFrame < 0 || destFrame >= static_cast<int>(content.frameCount)) {
+                continue;  // Falls outside the destination's own frame range - silently clipped.
+            }
+
+            const std::size_t clipIndex = cellIndex(clipBin, clipFrame, clip.frameCount);
+            const std::size_t destIndex = cellIndex(destBin, destFrame, content.frameCount);
+            content.leftMagnitudeDb[destIndex] = clip.leftMagnitudeDb[clipIndex];
+            content.rightMagnitudeDb[destIndex] = clip.rightMagnitudeDb[clipIndex];
+            content.sharedPhaseRadians[destIndex] = clip.sharedPhaseRadians[clipIndex];
+        }
+    }
+}
+
+/// @brief `MindShotConfiguration`'s own stamp, applied at every stamp
+/// position along the stroke - see `blitClipCentered()`'s own docs for
+/// what happens at each one. A no-op if no Mind Shot has ever been
+/// selected (`clip.frameCount()`/`binCount()` both `0` - a fresh,
+/// never-configured `MindShotConfiguration`).
+void applyMindShotPaintOperation(const MindShotConfiguration& toolConfig, const std::vector<StrokeSample>& samples,
+                                  sound_mind::codec::StreamImage& content) {
+    const Clip& clip = toolConfig.clip();
+    if (clip.frameCount == 0 || clip.binCount == 0) {
+        return;
+    }
+
+    for (const StrokeSample& sample : samples) {
+        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
+        const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
+        blitClipCentered(clip, frameCenter, binCenter, content);
+    }
+}
+
 }  // namespace
 
 float frequencyToBinIndex(float frequencyHz, const sound_mind::codec::StreamCodecConfig& config) noexcept {
@@ -479,8 +529,10 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
         applyProceduralPaintOperation(operation, *procedural, samples, frequencyToTimeScale, content);
     } else if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(&toolConfig)) {
         applyInstrumentPaintOperation(operation, *instrument, samples, content);
+    } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(&toolConfig)) {
+        applyMindShotPaintOperation(*mindShot, samples, content);
     }
-    // Any other/future ToolType (MindShot, MindGrain, ...) paints nothing
+    // Any other/future ToolType (MindGrain, Smudge, ...) paints nothing
     // yet - the same "groundwork, not yet functional" state
     // ToolConfiguration's own docs describe for those tool types.
 }

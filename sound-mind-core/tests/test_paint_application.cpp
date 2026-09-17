@@ -13,10 +13,12 @@ using sound_mind::codec::StreamImage;
 using sound_mind::core::applyPaintOperation;
 using sound_mind::core::binIndexToFrequency;
 using sound_mind::core::BrushTipShape;
+using sound_mind::core::Clip;
 using sound_mind::core::frameIndexToTime;
 using sound_mind::core::frequencyToBinIndex;
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::LayerId;
+using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::Operation;
 using sound_mind::core::OperationId;
 using sound_mind::core::PaintOperation;
@@ -141,6 +143,12 @@ Path makeSingleTapPath(double timeSeconds, double frequencyHz, float intensity, 
     path.gradient().setStopValues(0, stop);
     path.gradient().setStopValues(1, stop);
     return path;
+}
+
+std::unique_ptr<MindShotConfiguration> makeMindShotTool(Clip clip) {
+    auto config = std::make_unique<MindShotConfiguration>();
+    config->setClip(sound_mind::core::MindShotId{1}, std::move(clip));
+    return config;
 }
 
 std::size_t pixelIndex(const StreamImage& content, int frame, int bin) {
@@ -517,6 +525,77 @@ TEST_CASE("applyPaintOperation with an InstrumentConfiguration skips a non-posit
 
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == 0.0f);
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, secondHarmonicBin)] == -10.0f);
+}
+
+TEST_CASE("applyPaintOperation with a MindShotConfiguration blits the clip centered on the stamp position, verbatim",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    // Intensity/opacity are irrelevant to a Mind Shot stamp - it never
+    // reads the path's own gradient.
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    Clip clip;
+    clip.frameCount = 3;
+    clip.binCount = 3;
+    clip.leftMagnitudeDb.assign(9, -7.0f);
+    clip.rightMagnitudeDb.assign(9, -8.0f);
+    clip.sharedPhaseRadians.assign(9, 0.25f);
+
+    const PaintOperation op(1, LayerId{1}, path, makeMindShotTool(clip));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+
+    for (int dt = -1; dt <= 1; ++dt) {
+        for (int df = -1; df <= 1; ++df) {
+            const std::size_t index = pixelIndex(content, centerFrame + dt, centerBin + df);
+            REQUIRE(content.leftMagnitudeDb[index] == -7.0f);
+            REQUIRE(content.rightMagnitudeDb[index] == -8.0f);
+            REQUIRE(content.sharedPhaseRadians[index] == 0.25f);
+        }
+    }
+    // Just outside the 3x3 clip's own extent - untouched.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame + 2, centerBin)] == 0.0f);
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin + 2)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation with a MindShotConfiguration paints nothing when no Mind Shot has been configured",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    const PaintOperation op(1, LayerId{1}, path, std::make_unique<MindShotConfiguration>());
+    applyPaintOperation(op, 2000.0, content);
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation with a MindShotConfiguration silently clips a stamp extending past the canvas edge",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    // Time 0 - a centered 3-wide clip needs one frame before frame 0,
+    // which doesn't exist.
+    const Path path = makeSingleTapPath(0.0, 1000.0, -10.0f, 1.0f);
+
+    Clip clip;
+    clip.frameCount = 3;
+    clip.binCount = 1;
+    clip.leftMagnitudeDb.assign(3, -5.0f);
+    clip.rightMagnitudeDb.assign(3, -5.0f);
+    clip.sharedPhaseRadians.assign(3, 0.0f);
+
+    const PaintOperation op(1, LayerId{1}, path, makeMindShotTool(clip));
+
+    REQUIRE_NOTHROW(applyPaintOperation(op, 2000.0, content));
+
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 0, centerBin)] == -5.0f);
 }
 
 TEST_CASE("rebuildPaintedContent applies every PaintOperation in order, on top of a copy of base",

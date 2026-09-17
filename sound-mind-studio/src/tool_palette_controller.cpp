@@ -73,6 +73,10 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
         canvas_->update();
         emit contentChanged(layer);
     });
+    // A fresh capture (v0.Y.33.1 Installment A) - the Tool Configuration
+    // Panel's own Mind Shot picker needs to know a new entry now exists.
+    connect(selectionController_, &SelectionController::mindShotCaptured, this,
+            [this](sound_mind::core::MindShotId) { toolConfigurationPanel_->refreshMindShots(); });
 
     // Paths & Grids (v0.Y.26.1), Path tool placement - shares
     // paintController_'s own pre-paint base cache, so it's constructed
@@ -129,6 +133,7 @@ void ToolPaletteController::setProject(sound_mind::core::Project* project) {
     pickController_->setProject(project);
     selectionController_->setProject(project);
     pathController_->setProject(project);
+    toolConfigurationPanel_->setProject(project);
 }
 
 void ToolPaletteController::setGridSnapping(bool enabled, const FrequencyGridConfig& frequencyGridConfig,
@@ -195,6 +200,10 @@ bool ToolPaletteController::hasSelection() const { return selectionController_->
 void ToolPaletteController::copySelection() { selectionController_->copySelection(); }
 
 void ToolPaletteController::cutSelection() { selectionController_->cutSelection(); }
+
+std::optional<sound_mind::core::MindShotId> ToolPaletteController::captureMindShot(const std::string& name) {
+    return selectionController_->captureMindShot(name);
+}
 
 std::optional<sound_mind::core::OperationId> ToolPaletteController::pasteInto(sound_mind::core::LayerId targetLayer) {
     return selectionController_->pasteInto(targetLayer);

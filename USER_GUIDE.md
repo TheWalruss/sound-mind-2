@@ -418,11 +418,12 @@ The **Tool Configuration** toolbar button opens a dockable panel (off by
 default, alongside Layers/Playback/Record/Loop) with the brush's own
 settings:
 
-- **Tool Type** - **Procedural** (the default) or **Instrument**; picks
-  which set of controls below applies (Tip Shape for Procedural, Harmonics/
-  Inharmonicity for Instrument). Switching keeps Falloff/Size/Stamp Mode/
-  Interval/Color/Opacity as they were - only the tip-shape-vs-harmonic
-  controls reset to the newly-picked type's own defaults.
+- **Tool Type** - **Procedural** (the default), **Instrument**, or **Mind
+  Shot**; picks which set of controls below applies (Tip Shape for
+  Procedural, Harmonics/Inharmonicity for Instrument, a Mind Shot picker
+  for Mind Shot). Switching keeps Falloff/Size/Stamp Mode/Interval/Color/
+  Opacity as they were - only the type-specific controls reset to the
+  newly-picked type's own defaults.
 - **Tip Shape** (Procedural only) - the stroke's cross-section (Circle,
   Square, Diamond, and others - only Circle/Square/Diamond have a distinct
   shape so far; the rest currently paint the same as Circle).
@@ -439,6 +440,12 @@ settings:
   overtones do (a piano string, for instance). `0` (the default) is
   perfectly harmonic; small positive values (try `0.01`-`0.05`) give
   higher harmonics an audibly metallic, bell-like stretch.
+- **Mind Shot** (Mind Shot only) - a drop-down of every Mind Shot you've
+  captured so far (see [Selection and Fill](#selection-and-fill)'s own
+  "Capture as Mind Shot"), empty until you capture your first one.
+  Painting with it stamps the captured content back exactly as it was
+  captured - a hard overwrite at its own original size, not blended or
+  scaled by Falloff/Size the way Procedural/Instrument are.
 - **Falloff** - how soft the stroke's edge is, from a hard edge (`0`) to
   fully soft (`1`).
 - **Brush Size** - the tip's own radius: in seconds on the time axis, and
@@ -495,10 +502,11 @@ visibility, translation, and rescale (see
 single history, undoing/redoing whichever one actually happened most
 recently, in either order.
 
-Only **Procedural** and **Instrument** (harmonic series + inharmonicity
-only so far - no noise, body resonance, or envelope yet) exist today - see
-[What's Not Here Yet](#whats-not-here-yet) for the rest of what's
-planned around painting.
+Only **Procedural**, **Instrument** (harmonic series + inharmonicity
+only so far - no noise, body resonance, or envelope yet), and **Mind Shot**
+(capture-and-restamp only - Mind Grains' own live-referenced version isn't
+built yet) exist today - see [What's Not Here Yet](#whats-not-here-yet)
+for the rest of what's planned around painting.
 
 ## Pick
 
@@ -587,6 +595,14 @@ itself, only to having drawn one.
   to paste onto it instead. Switches straight to [Pick](#pick) and
   selects the newly pasted result there - move, modify, delete, or
   restack it right away, with no separate click needed to find it again.
+- **Capture as Mind Shot** it - **Edit → Capture as Mind Shot** stores the
+  selection's own pixels permanently, named "Mind Shot 1", "Mind Shot 2",
+  and so on - unlike Copy, this doesn't touch the clipboard, and the
+  source pixels are left exactly as they were (no silencing, unlike Cut).
+  Once captured, pick **Mind Shot** as the Tool Type in
+  [Painting](#painting)'s Tool Configuration panel and select it from the
+  drop-down there to paint with it - it stamps back exactly as captured,
+  wherever you paint, on any layer.
 - **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
   actually dragging (a plain click) on the canvas while in Select mode.
 
@@ -769,12 +785,15 @@ order; this guide will grow alongside it.
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:
 
-- Only **Procedural** and **Instrument** (harmonic series + inharmonicity
-  only - no noise component, body resonance, or ADSR envelope yet) - the
-  other paintbrush types (Mind Shot, Mind Grain) and other painting tools
-  (Smudge, Order/Chaos, Heal, Soften, Clone) aren't built yet. Instrument
-  strokes also don't yet bind to a MindWave, and Loop Mode doesn't yet
-  retrigger per note.
+- Only **Procedural**, **Instrument** (harmonic series + inharmonicity
+  only - no noise component, body resonance, or ADSR envelope yet), and
+  **Mind Shot** (capture-and-restamp only) - **Mind Grain** (a *live*-
+  referenced version of Mind Shot, changing as its source layer does) and
+  the other painting tools (Smudge, Order/Chaos, Heal, Soften, Clone)
+  aren't built yet. Instrument strokes also don't yet bind to a MindWave,
+  and Loop Mode doesn't yet retrigger per note. A Mind Shot stamp always
+  overwrites verbatim - blend-mode selection (so it could blend rather
+  than overwrite) is planned alongside layer/Paste blend modes.
 - No **Tool Configuration Wizard** or **Tool Preset** drop-down - the
   Panel described above is the only way to set brush parameters today,
   and there's no way yet to save/reuse/export a particular brush setup.

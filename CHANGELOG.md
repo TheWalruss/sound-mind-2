@@ -6,6 +6,23 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.33.1] - 2026-09-17
+
+Mind Shots, Installment A: capture a selection as a permanent, named, reusable brush - `docs/sound-mind-design.md`'s "Mind Shots".
+
+### Added
+
+- **A new "Mind Shot" paintable Tool Type**, selectable from the Tool Configuration panel's Tool Type dropdown. Painting with it stamps a previously captured selection back exactly as it was captured - a hard, verbatim overwrite at its own native size, wherever you paint, following the stroke like a rubber stamp (dragging lays down a repeated pattern).
+- **"Capture as Mind Shot"**, a new Edit menu action (alongside Copy/Cut/Paste) - stores the current selection's own pixels permanently in the project's own Mind Shot library, auto-named "Mind Shot 1", "Mind Shot 2", and so on. Unlike Copy/Cut, it never touches the clipboard and never disturbs the source pixels.
+- **A Mind Shot picker** in the Tool Configuration panel's new Mind Shot group, listing every captured Mind Shot in the current project by name.
+
+### Changed
+
+- **`ToolConfiguration` gains a third concrete subtype, `MindShotConfiguration`**, alongside `ProceduralConfiguration`/`InstrumentConfiguration` - internal groundwork mirroring how Sound Mind Instruments added `InstrumentConfiguration`.
+- **`Project` gains a Mind Shot library** (`mindShots()`/`addMindShot()`/`removeMindShot()`/`mindShotById()`), mirroring the existing MindWave library. Existing project files load unchanged.
+
+Full regression: sound-mind-core 412/412 (new Mind Shot serialization, `MindShotConfiguration`, and stamp-application cases), sound-mind-codec 37/37 and sound-mind-gpu 33/33 unchanged, sound-mind-studio all 33 QTest classes passing (new capture/picker/paint-integration cases). Doxygen: 0 warnings.
+
 ## [0.0.32.3] - 2026-09-17
 
 Renames the "Continuous" stamp mode to **Stroke**, per user feedback: it never was an even, fixed spacing (unlike Along Curve/Time Axis/Frequency Axis's own chosen intervals) - it stamps exactly as densely as the stroke's own raw input was drawn, so a slow stroke stamps more densely than a fast one over the same distance, independent of brush size.

@@ -1036,6 +1036,25 @@ public slots:
     void paste();
 
     /**
+     * @brief Captures the current selection into a new, named entry in the
+     *        project's Mind Shot library - the actual work behind the Edit
+     *        menu's "Capture as Mind Shot" action (`docs/sound-mind-
+     *        design.md`'s "Mind Shots"). Delegates to
+     *        `SelectionController::captureMindShot()` (via
+     *        `toolPaletteController_`); a no-op if there's no committed
+     *        selection or no project open.
+     *
+     * Auto-names the new entry `"Mind Shot <N>"`, `N` one more than the
+     * library's own current size - no naming dialog, matching this
+     * codebase's own "quick action, not a richer flow" precedent for
+     * Copy/Cut (this is architecturally the same capture, just stored
+     * permanently). Confirms success via a status-bar message, the same
+     * lightweight feedback `importAudioFile()`/`importImageFiles()` already
+     * give for a comparably one-off, meaningfully-persistent action.
+     */
+    void captureMindShot();
+
+    /**
      * @brief Finishes the Path tool's own in-progress node placement,
      *        committing it as a new paint object - the actual work behind
      *        the Edit menu's "Finish Path" action. Delegates to

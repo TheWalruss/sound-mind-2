@@ -191,12 +191,12 @@ struct FrameBinRange {
  *        `StreamImage`'s amplitude planes, in place - dispatches on
  *        `operation.config().type()` to whichever concrete tool's own
  *        stamp algorithm applies (see `docs/sound-mind-design.md`'s
- *        "Procedural Brushes"/"Sound Mind Instruments" and "What Editing
- *        Does": painting amplitude pixels brighter/darker changes that
- *        frequency's loudness at that time). Any tool type past
- *        `Procedural`/`Instrument` paints nothing yet, matching
- *        `ToolConfiguration`'s own "groundwork, not yet functional" note
- *        for those tool types.
+ *        "Procedural Brushes"/"Sound Mind Instruments"/"Mind Shots" and
+ *        "What Editing Does": painting amplitude pixels brighter/darker
+ *        changes that frequency's loudness at that time). Any tool type
+ *        past `Procedural`/`Instrument`/`MindShot` paints nothing yet,
+ *        matching `ToolConfiguration`'s own "groundwork, not yet
+ *        functional" note for those tool types.
  *
  * Stamps are placed repeatedly along `operation.path()`, spaced per
  * `operation.config().stampMode()` (see `docs/sound-mind-design.md`'s
@@ -236,11 +236,23 @@ struct FrameBinRange {
  *   past the configured/Nyquist frequency range is skipped entirely
  *   (rather than clamped to the top bin, which would otherwise stack
  *   multiple high harmonics onto one bin).
+ * - **`MindShotConfiguration`**: a hard, Normal-only overwrite of the
+ *   configured `Clip`'s own cells, centered on the stamp position - no
+ *   gradient, no falloff, no scaling by `size()`. "Paints back exactly as
+ *   it was when captured" (`docs/sound-mind-design.md`'s "Mind Shots")
+ *   taken literally: every cell the clip covers is written verbatim, the
+ *   same direct-overwrite blit `applyPasteOperation()` already uses, just
+ *   centered on a stamp position instead of an explicit placement
+ *   rectangle. A no-op if no Mind Shot has ever been configured (an empty
+ *   clip).
  *
  * Overlapping stamps (a slow-moving stroke, the stroke's own path
- * doubling back on itself, or - for an Instrument - two harmonics landing
- * on the same bin) compound naturally, the same way a real brush laid
- * down more heavily builds up more paint - not specially guarded against.
+ * doubling back on itself, an Instrument's own two harmonics landing on
+ * the same bin, or a Mind Shot restamped repeatedly along a dragged
+ * stroke) compound naturally - for the gradient-blended tool types, the
+ * same way a real brush laid down more heavily builds up more paint; for
+ * a Mind Shot, each later stamp's own hard overwrite simply wins over an
+ * earlier one wherever they overlap. Neither is specially guarded against.
  *
  * @param operation The stroke to apply - its own `path()`/`config()`
  *        fully describe the stamp.

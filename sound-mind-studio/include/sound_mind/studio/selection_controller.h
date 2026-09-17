@@ -1,10 +1,12 @@
 #pragma once
 
 #include <optional>
+#include <string>
 
 #include <QObject>
 
 #include "sound_mind/core/gradient.h"
+#include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/path.h"
@@ -241,6 +243,31 @@ public:
      */
     std::optional<sound_mind::core::OperationId> pasteInto(sound_mind::core::LayerId targetLayer);
 
+    /**
+     * @brief Captures the current committed selection's own pixels off
+     *        `selectionLayer_` into a new, permanently-stored, named entry
+     *        in the project's Mind Shot library - the actual work behind
+     *        "Capture as Mind Shot" (`docs/sound-mind-design.md`'s "Mind
+     *        Shots"). A no-op if there's no committed selection.
+     *
+     * Shares `copySelection()`'s own `captureClip()`-from-selection
+     * plumbing (see its own docs) - capturing a Mind Shot is
+     * architecturally the same operation as Copy, just stored permanently
+     * and named in `Project::mindShots()` instead of held anonymously,
+     * transiently, on this controller's own clipboard. Does not touch the
+     * clipboard itself, or `selectionLayer_`'s own content - unlike Cut,
+     * a capture never clears its own source pixels.
+     *
+     * Emits mindShotCaptured() with the new entry's own id, so a listener
+     * (the Tool Configuration Panel's own Mind Shot picker, in particular)
+     * can refresh itself.
+     *
+     * @param name Display name for the new library entry.
+     * @return The new entry's own id, or `std::nullopt` if this was a
+     *         no-op (no committed selection).
+     */
+    std::optional<sound_mind::core::MindShotId> captureMindShot(const std::string& name);
+
 signals:
     /// @brief Emitted whenever displayBounds() would return something
     ///        different - a drag updating live, a selection committed,
@@ -257,6 +284,11 @@ signals:
     ///        a result of a committed Fill.
     /// @param layer Which layer's content changed.
     void contentChanged(sound_mind::core::LayerId layer);
+
+    /// @brief Emitted whenever captureMindShot() actually adds a new entry
+    ///        to the project's Mind Shot library.
+    /// @param id The new entry's own id.
+    void mindShotCaptured(sound_mind::core::MindShotId id);
 
 private:
     PaintController* paintController_;

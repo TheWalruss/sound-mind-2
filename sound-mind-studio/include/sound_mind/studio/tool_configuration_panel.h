@@ -16,6 +16,10 @@ class QSpinBox;
 class QVBoxLayout;
 class QWidget;
 
+namespace sound_mind::core {
+class Project;
+}  // namespace sound_mind::core
+
 namespace sound_mind::studio {
 
 /**
@@ -32,18 +36,31 @@ namespace sound_mind::studio {
  * philosophy. What's here is the actual parameter area the design doc
  * says both entry points edit - just reached directly, by hand, for now.
  *
- * **Two real tool types as of `v0.Y.32.1` (Sound Mind Instruments):** a
- * `ToolType` selector (`toolTypeCombo_`) switches between `Procedural`'s
- * own group (tip shape) and `Instrument`'s own (harmonic count/strengths,
- * inharmonicity) - the design doc's own "only the parameters that apply to
- * the current tool" dynamism, one group shown at a time, the rest hidden,
- * the same pattern `MindWaveEditor`/`FilterConfigurationPanel` already
- * establish for their own per-type groups. `falloff()`/`size()`/
- * `stampMode()`/`stampInterval()`/color/opacity are shared by every tool
- * type (`ToolConfiguration`'s own base fields) and stay visible regardless
- * of which is selected. `MindShot`/`MindGrain`/`Smudge`/`OrderChaos`/
- * `Heal`/`Soften`/`Clone` still have no real parameters of their own (see
+ * **Three real tool types as of `v0.Y.33.1` Installment A (Mind Shots):**
+ * a `ToolType` selector (`toolTypeCombo_`) switches between `Procedural`'s
+ * own group (tip shape), `Instrument`'s own (harmonic count/strengths,
+ * inharmonicity), and `MindShot`'s own (a picker over the project's own
+ * `Project::mindShots()` library) - the design doc's own "only the
+ * parameters that apply to the current tool" dynamism, one group shown at
+ * a time, the rest hidden, the same pattern `MindWaveEditor`/
+ * `FilterConfigurationPanel` already establish for their own per-type
+ * groups. `falloff()`/`size()`/`stampMode()`/`stampInterval()`/color/
+ * opacity are shared by every tool type (`ToolConfiguration`'s own base
+ * fields) and stay visible regardless of which is selected - though a Mind
+ * Shot stamp doesn't actually use falloff/size for anything (it's a hard,
+ * native-size overwrite, see `MindShotConfiguration`'s own docs); they
+ * stay visible anyway rather than hidden per-type, since nothing about
+ * this panel's own "one group per type" mechanism needs to extend to the
+ * *shared* controls too. `MindGrain`/`Smudge`/`OrderChaos`/`Heal`/`Soften`/
+ * `Clone` still have no real parameters of their own (see
  * `ToolConfiguration`'s own docs) and aren't offered in the selector yet.
+ *
+ * **Needs a live `Project*` for the Mind Shot picker alone** (`setProject()`)
+ * - every other control here is purely presentational, with no knowledge
+ * of `Project` at all; the Mind Shot group is the first exception, since
+ * "which Mind Shots exist to choose from" is real project state. Call
+ * refreshMindShots() whenever that state might have changed out from under
+ * this panel (a new capture, a project switch) to repopulate the picker.
  *
  * Switching `toolTypeCombo_` constructs a fresh configuration of the
  * newly-selected concrete subtype, carrying over every shared base field
@@ -99,6 +116,36 @@ public:
      * @param config The configuration to display.
      */
     void setToolConfiguration(const sound_mind::core::ToolConfiguration& config);
+
+    /**
+     * @brief Sets which project the Mind Shot picker draws its own entries
+     *        from - the only state on this otherwise purely presentational
+     *        panel that needs one (see the class's own docs).
+     *
+     * Repopulates the picker immediately (see refreshMindShots()'s own
+     * docs); does not otherwise touch `config_`.
+     *
+     * @param project The project to read `mindShots()` from; may be
+     *        `nullptr` (the picker shows nothing selectable until a real
+     *        one is set again).
+     */
+    void setProject(sound_mind::core::Project* project);
+
+    /**
+     * @brief Repopulates the Mind Shot picker from `project`'s own current
+     *        `mindShots()` - call whenever that library might have changed
+     *        out from under this panel (a fresh capture, in particular;
+     *        `setProject()` already calls this itself for a project
+     *        switch).
+     *
+     * Preserves the currently-selected entry, by id, if it still exists;
+     * otherwise leaves nothing selected. Purely a display refresh, like
+     * setToolConfiguration() - never itself changes `config_`, so an
+     * already-configured `MindShotConfiguration`'s own `clip()` is
+     * unaffected either way (it's a snapshot, not a live reference into
+     * this library - see that class's own docs).
+     */
+    void refreshMindShots();
 
     /**
      * @brief Sets the brush's color (stereo balance) directly - the
@@ -165,21 +212,32 @@ private:
 
     /// @brief `toolTypeCombo_`'s own `currentIndexChanged` handler:
     ///        constructs a fresh `ProceduralConfiguration`/
-    ///        `InstrumentConfiguration` for the newly-selected `ToolType`,
-    ///        carrying over every shared base field from `config_`'s
-    ///        current value first (see the class's own docs), replaces
-    ///        `config_` with it, refreshes every control (including which
-    ///        per-type group is visible), and emits
-    ///        toolConfigurationChanged().
+    ///        `InstrumentConfiguration`/`MindShotConfiguration` for the
+    ///        newly-selected `ToolType`, carrying over every shared base
+    ///        field from `config_`'s current value first (see the class's
+    ///        own docs), replaces `config_` with it, refreshes every
+    ///        control (including which per-type group is visible), and
+    ///        emits toolConfigurationChanged(). Switching to `MindShot`
+    ///        selects `mindShotCombo_`'s own current row, if any (an
+    ///        unconfigured `MindShotConfiguration` - no clip - otherwise).
     /// @param type The newly-selected tool type.
     void changeToolType(sound_mind::core::ToolType type);
 
-    /// @brief Shows exactly one of `proceduralGroup_`/`instrumentGroup_` -
-    ///        whichever matches `config_->type()` - and hides the other,
-    ///        the same "one group per type" pattern
+    /// @brief Shows exactly one of `proceduralGroup_`/`instrumentGroup_`/
+    ///        `mindShotGroup_` - whichever matches `config_->type()` - and
+    ///        hides the other two, the same "one group per type" pattern
     ///        `MindWaveEditor`/`FilterConfigurationPanel` already
     ///        establish for their own per-type groups.
     void updateVisibleToolTypeGroup();
+
+    /// @brief `mindShotCombo_`'s own `currentIndexChanged` handler: if
+    ///        `config_` is currently a `MindShotConfiguration`, sets its
+    ///        clip from the newly-selected library entry and emits
+    ///        toolConfigurationChanged() - a no-op (no config_ update) if
+    ///        the selection is the placeholder "no entries" item, or
+    ///        `project_` is `nullptr`.
+    /// @param index The combo's own newly-selected row.
+    void handleMindShotComboChanged(int index);
 
     /// @brief Rebuilds `harmonicStrengthSpinBoxes_` to match `count` rows -
     ///        called whenever `harmonicCountSpinBox_` changes, or a loaded
@@ -213,6 +271,16 @@ private:
     QVBoxLayout* harmonicStrengthsLayout_ = nullptr;
     std::vector<QDoubleSpinBox*> harmonicStrengthSpinBoxes_;
     QDoubleSpinBox* inharmonicitySpinBox_ = nullptr;
+
+    /// @brief `MindShotConfiguration`'s own controls, shown only while
+    ///        `config_->type() == ToolType::MindShot` - see
+    ///        updateVisibleToolTypeGroup()'s own docs.
+    QWidget* mindShotGroup_ = nullptr;
+    QComboBox* mindShotCombo_ = nullptr;
+
+    /// @brief Which project `mindShotCombo_`'s own entries are drawn from -
+    ///        see setProject()'s own docs. Not owned; may be `nullptr`.
+    sound_mind::core::Project* project_ = nullptr;
 
     QDoubleSpinBox* falloffSpinBox_ = nullptr;
     QDoubleSpinBox* sizeSpinBox_ = nullptr;

@@ -1,6 +1,8 @@
 #include "test_tool_configuration_panel.h"
 
+#include <cstdint>
 #include <memory>
+#include <optional>
 
 #include <QCheckBox>
 #include <QColor>
@@ -11,15 +13,37 @@
 #include <QSpinBox>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/mind_shot.h"
+#include "sound_mind/core/project.h"
+#include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
 using sound_mind::core::BrushTipShape;
+using sound_mind::core::Clip;
 using sound_mind::core::InstrumentConfiguration;
+using sound_mind::core::MindShotConfiguration;
+using sound_mind::core::MindShotId;
 using sound_mind::core::ProceduralConfiguration;
+using sound_mind::core::Project;
+using sound_mind::core::ProjectSettings;
 using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::core::ToolType;
 using sound_mind::studio::ToolConfigurationPanel;
+
+namespace {
+
+Clip makeTestClip() {
+    Clip clip;
+    clip.frameCount = 2;
+    clip.binCount = 2;
+    clip.leftMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.rightMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
+    clip.sharedPhaseRadians = {0.0f, 0.0f, 0.0f, 0.0f};
+    return clip;
+}
+
+}  // namespace
 
 void ToolConfigurationPanelTest::freshPanelIsAnOpaqueCircularBrush() {
     const ToolConfigurationPanel panel;
@@ -346,4 +370,100 @@ void ToolConfigurationPanelTest::loadingAnInstrumentConfigurationSyncsToolTypeAn
     QVERIFY(secondHarmonicSpinBox != nullptr);
     QCOMPARE(secondHarmonicSpinBox->value(), 0.7);
     QVERIFY(!instrumentGroup->isHidden());
+}
+
+// --- Mind Shots (v0.Y.33.1 Installment A) -----------------------------------
+
+void ToolConfigurationPanelTest::switchingToolTypeToMindShotShowsItsOwnGroupAndHidesProcedural() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
+    auto* mindShotGroup = panel.findChild<QWidget*>(QStringLiteral("mindShotGroup"));
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Shot")));
+
+    QCOMPARE(panel.toolConfiguration().type(), ToolType::MindShot);
+    QVERIFY(proceduralGroup->isHidden());
+    QVERIFY(!mindShotGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::setProjectPopulatesTheMindShotCombo() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindShot("Piano Hit", makeTestClip());
+    project.addMindShot("Vocal Chop", makeTestClip());
+
+    panel.setProject(&project);
+
+    auto* mindShotCombo = panel.findChild<QComboBox*>(QStringLiteral("mindShotCombo"));
+    QVERIFY(mindShotCombo != nullptr);
+    QCOMPARE(mindShotCombo->count(), 2);
+    QCOMPARE(mindShotCombo->itemText(0), QStringLiteral("Piano Hit"));
+    QCOMPARE(mindShotCombo->itemText(1), QStringLiteral("Vocal Chop"));
+}
+
+void ToolConfigurationPanelTest::refreshMindShotsAddsNewEntriesAndPreservesTheCurrentSelection() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindShot("Piano Hit", makeTestClip());
+    panel.setProject(&project);
+    auto* mindShotCombo = panel.findChild<QComboBox*>(QStringLiteral("mindShotCombo"));
+    QCOMPARE(mindShotCombo->currentText(), QStringLiteral("Piano Hit"));
+
+    project.addMindShot("Vocal Chop", makeTestClip());
+    panel.refreshMindShots();
+
+    QCOMPARE(mindShotCombo->count(), 2);
+    // The previously-selected entry stays selected across the refresh.
+    QCOMPARE(mindShotCombo->currentText(), QStringLiteral("Piano Hit"));
+}
+
+void ToolConfigurationPanelTest::refreshMindShotsShowsThePlaceholderWhenTheLibraryIsEmpty() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+
+    panel.setProject(&project);
+
+    auto* mindShotCombo = panel.findChild<QComboBox*>(QStringLiteral("mindShotCombo"));
+    QCOMPARE(mindShotCombo->count(), 1);
+    QCOMPARE(mindShotCombo->itemData(0).isValid(), false);
+}
+
+void ToolConfigurationPanelTest::selectingAMindShotEmitsToolConfigurationChangedWithItsClip() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindShot("Piano Hit", makeTestClip());
+    const MindShotId secondId = project.addMindShot("Vocal Chop", makeTestClip());
+    panel.setProject(&project);
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Shot")));
+    auto* mindShotCombo = panel.findChild<QComboBox*>(QStringLiteral("mindShotCombo"));
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    mindShotCombo->setCurrentIndex(mindShotCombo->findText(QStringLiteral("Vocal Chop")));
+
+    QCOMPARE(spy.count(), 1);
+    const auto& mindShot = dynamic_cast<const MindShotConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(mindShot.sourceMindShotId(), std::optional<MindShotId>(secondId));
+    QCOMPARE(mindShot.clip().frameCount, static_cast<std::uint32_t>(2));
+}
+
+void ToolConfigurationPanelTest::loadingAMindShotConfigurationSyncsToolTypeAndThePickerSelection() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindShot("Piano Hit", makeTestClip());
+    const MindShotId secondId = project.addMindShot("Vocal Chop", makeTestClip());
+    panel.setProject(&project);
+
+    MindShotConfiguration config;
+    config.setClip(secondId, makeTestClip());
+    panel.setToolConfiguration(config);
+
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* mindShotCombo = panel.findChild<QComboBox*>(QStringLiteral("mindShotCombo"));
+    auto* mindShotGroup = panel.findChild<QWidget*>(QStringLiteral("mindShotGroup"));
+
+    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Mind Shot"));
+    QCOMPARE(mindShotCombo->currentText(), QStringLiteral("Vocal Chop"));
+    QVERIFY(!mindShotGroup->isHidden());
 }

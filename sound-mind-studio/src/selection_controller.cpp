@@ -164,6 +164,23 @@ void SelectionController::cutSelection() {
     emit contentChanged(selectionLayer_);
 }
 
+std::optional<sound_mind::core::MindShotId> SelectionController::captureMindShot(const std::string& name) {
+    if (!committedBounds_.has_value() || project_ == nullptr) {
+        return std::nullopt;
+    }
+    // Same reasoning as copySelection()'s own identical call.
+    paintController_->rebuildLayerContent(selectionLayer_);
+    const sound_mind::core::Layer* layer = project_->layerById(selectionLayer_);
+    if (layer == nullptr || !layer->content().has_value()) {
+        return std::nullopt;
+    }
+
+    sound_mind::core::Clip clip = sound_mind::core::captureClip(*layer->content(), *committedBounds_);
+    const sound_mind::core::MindShotId id = project_->addMindShot(name, std::move(clip));
+    emit mindShotCaptured(id);
+    return id;
+}
+
 std::optional<sound_mind::core::OperationId> SelectionController::pasteInto(sound_mind::core::LayerId targetLayer) {
     if (!clipboard_.has_value() || !clipboardBounds_.has_value() || project_ == nullptr) {
         return std::nullopt;

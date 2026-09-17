@@ -31,4 +31,12 @@ private slots:
     void changingAHarmonicStrengthEmitsToolConfigurationChanged();
     void changingInharmonicityEmitsToolConfigurationChanged();
     void loadingAnInstrumentConfigurationSyncsToolTypeAndHarmonicControls();
+
+    // Mind Shots (v0.Y.33.1 Installment A).
+    void switchingToolTypeToMindShotShowsItsOwnGroupAndHidesProcedural();
+    void setProjectPopulatesTheMindShotCombo();
+    void refreshMindShotsAddsNewEntriesAndPreservesTheCurrentSelection();
+    void refreshMindShotsShowsThePlaceholderWhenTheLibraryIsEmpty();
+    void selectingAMindShotEmitsToolConfigurationChangedWithItsClip();
+    void loadingAMindShotConfigurationSyncsToolTypeAndThePickerSelection();
 };

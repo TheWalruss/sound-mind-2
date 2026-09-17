@@ -17,6 +17,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "sound_mind/core/project.h"
 #include "sound_mind/studio/color_conversion.h"
 
 namespace sound_mind::studio {
@@ -25,6 +26,8 @@ namespace {
 
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::InstrumentConfiguration;
+using sound_mind::core::MindShotConfiguration;
+using sound_mind::core::MindShotId;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
@@ -61,11 +64,12 @@ constexpr std::array<std::pair<BrushTipShape, const char*>, 11> kTipShapes{{
 }};
 
 /// @brief Every real (usable) `ToolType` paired with its display name -
-/// only `Procedural`/`Instrument` so far, see `ToolType`'s own docs on why
-/// the rest aren't offered here yet.
-constexpr std::array<std::pair<ToolType, const char*>, 2> kToolTypes{{
+/// only `Procedural`/`Instrument`/`MindShot` so far, see `ToolType`'s own
+/// docs on why the rest aren't offered here yet.
+constexpr std::array<std::pair<ToolType, const char*>, 3> kToolTypes{{
     {ToolType::Procedural, "Procedural"},
     {ToolType::Instrument, "Instrument"},
+    {ToolType::MindShot, "Mind Shot"},
 }};
 
 /// @brief The most harmonics `harmonicCountSpinBox_` allows - generous
@@ -166,6 +170,20 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     instrumentLayout->addLayout(harmonicStrengthsLayout_);
 
     root->addWidget(instrumentGroup_);
+
+    // --- Mind Shot's own group --------------------------------------------
+    mindShotGroup_ = new QWidget(container);
+    mindShotGroup_->setObjectName(QStringLiteral("mindShotGroup"));
+    auto* mindShotForm = new QFormLayout(mindShotGroup_);
+    mindShotForm->setContentsMargins(0, 0, 0, 0);
+
+    mindShotCombo_ = new QComboBox(mindShotGroup_);
+    mindShotCombo_->setObjectName(QStringLiteral("mindShotCombo"));
+    mindShotCombo_->addItem(tr("(none captured yet)"));
+    connect(mindShotCombo_, &QComboBox::currentIndexChanged, this,
+            &ToolConfigurationPanel::handleMindShotComboChanged);
+    mindShotForm->addRow(tr("Mind Shot:"), mindShotCombo_);
+    root->addWidget(mindShotGroup_);
 
     auto* form = new QFormLayout();
 
@@ -318,6 +336,19 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
         instrument->setHarmonicStrengths(currentHarmonicStrengths());
         instrument->setInharmonicity(inharmonicitySpinBox_->value());
         replacement = std::move(instrument);
+    } else if (type == ToolType::MindShot) {
+        auto mindShot = std::make_unique<MindShotConfiguration>();
+        // Selects whatever mindShotCombo_ currently shows, if it's a real
+        // entry - so switching to MindShot with something already picked
+        // in the combo (from a prior visit to this group) doesn't silently
+        // reset to "nothing selected".
+        if (const QVariant data = mindShotCombo_->currentData(); data.isValid() && project_ != nullptr) {
+            const auto id = static_cast<MindShotId>(data.toULongLong());
+            if (const auto* named = project_->mindShotById(id)) {
+                mindShot->setClip(id, named->clip);
+            }
+        }
+        replacement = std::move(mindShot);
     } else {
         return;  // Defensive: toolTypeCombo_ only ever offers real types.
     }
@@ -337,9 +368,10 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
 }
 
 void ToolConfigurationPanel::updateVisibleToolTypeGroup() {
-    const bool isInstrument = config_->type() == ToolType::Instrument;
-    proceduralGroup_->setVisible(!isInstrument);
-    instrumentGroup_->setVisible(isInstrument);
+    const ToolType type = config_->type();
+    proceduralGroup_->setVisible(type == ToolType::Procedural);
+    instrumentGroup_->setVisible(type == ToolType::Instrument);
+    mindShotGroup_->setVisible(type == ToolType::MindShot);
 }
 
 void ToolConfigurationPanel::rebuildHarmonicStrengthRows(std::size_t count) {
@@ -418,6 +450,13 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
             const QSignalBlocker blocker(inharmonicitySpinBox_);
             inharmonicitySpinBox_->setValue(instrument->inharmonicity());
         }
+    } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(config_.get())) {
+        const QSignalBlocker blocker(mindShotCombo_);
+        int index = -1;
+        if (const auto sourceId = mindShot->sourceMindShotId(); sourceId.has_value()) {
+            index = mindShotCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(*sourceId)));
+        }
+        mindShotCombo_->setCurrentIndex(index >= 0 ? index : 0);
     }
     updateVisibleToolTypeGroup();
     {
@@ -501,6 +540,49 @@ void ToolConfigurationPanel::updateStampIntervalAppearance() {
                 tr("Stamps everywhere the path crosses a frequency-axis line this many Hz apart, regardless of "
                    "the path's own shape."));
             break;
+    }
+}
+
+void ToolConfigurationPanel::setProject(sound_mind::core::Project* project) {
+    project_ = project;
+    refreshMindShots();
+}
+
+void ToolConfigurationPanel::refreshMindShots() {
+    // Preserve the current selection's own id (if any), so a still-
+    // existing entry stays selected across the rebuild below.
+    const QVariant previousData = mindShotCombo_->currentData();
+
+    const QSignalBlocker blocker(mindShotCombo_);
+    mindShotCombo_->clear();
+    if (project_ == nullptr || project_->mindShots().empty()) {
+        mindShotCombo_->addItem(tr("(none captured yet)"));
+        return;
+    }
+    for (const auto& named : project_->mindShots()) {
+        mindShotCombo_->addItem(QString::fromStdString(named.name),
+                                 QVariant::fromValue(static_cast<qulonglong>(named.id)));
+    }
+    const int index = mindShotCombo_->findData(previousData);
+    mindShotCombo_->setCurrentIndex(index >= 0 ? index : 0);
+}
+
+void ToolConfigurationPanel::handleMindShotComboChanged(int index) {
+    if (project_ == nullptr) {
+        return;
+    }
+    const QVariant data = mindShotCombo_->itemData(index);
+    if (!data.isValid()) {
+        return;  // The "(none captured yet)" placeholder.
+    }
+    const auto id = static_cast<MindShotId>(data.toULongLong());
+    const auto* named = project_->mindShotById(id);
+    if (named == nullptr) {
+        return;
+    }
+    if (auto* mindShot = dynamic_cast<MindShotConfiguration*>(config_.get())) {
+        mindShot->setClip(id, named->clip);
+        emitConfigChanged();
     }
 }
 

@@ -1,5 +1,9 @@
 #include "test_selection_controller.h"
 
+#include <cmath>
+#include <cstddef>
+#include <string>
+
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
@@ -513,4 +517,82 @@ void SelectionControllerTest::continueSelectionDragIgnoresGridConfigurationWhenS
     const auto bounds = *controller.displayBounds();
     QCOMPARE(bounds.lowFrequencyHz, 340.0);  // Raw, unsnapped value.
     QCOMPARE(bounds.highFrequencyHz, 700.0);
+}
+
+void SelectionControllerTest::captureMindShotAddsANamedEntryToTheProjectsMindShotLibrary() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    setPixel(project, layerId, 25, 10, -3.0f);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+
+    const auto id = controller.captureMindShot("Piano Hit");
+
+    QVERIFY(id.has_value());
+    QCOMPARE(project.mindShots().size(), std::size_t{1});
+    QCOMPARE(project.mindShots().front().id, *id);
+    QCOMPARE(project.mindShots().front().name, std::string("Piano Hit"));
+    // Copy alone never logs an Operation - capturing a Mind Shot doesn't
+    // either, for the same reason (a read, not an edit).
+    QCOMPARE(project.operationLog().size(), std::size_t{0});
+}
+
+void SelectionControllerTest::captureMindShotIsANoOpWithNoCommittedSelection() {
+    Project project = Project::createNew(testSettings());
+    addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+
+    const auto id = controller.captureMindShot("Piano Hit");
+
+    QVERIFY(!id.has_value());
+    QVERIFY(project.mindShots().empty());
+}
+
+void SelectionControllerTest::captureMindShotDoesNotTouchTheClipboardOrSourcePixels() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    setPixel(project, layerId, 25, 10, -3.0f);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+
+    controller.captureMindShot("Piano Hit");
+
+    QVERIFY(!controller.hasClipboard());  // Unlike Copy - captureMindShot() never touches the clipboard.
+    const auto* layer = project.layerById(layerId);
+    QVERIFY(layer != nullptr);
+    QVERIFY(layer->content().has_value());
+    // The source pixel (frame 25, bin 10 - see setPixel() above) is
+    // untouched - unlike Cut, a capture never clears its own source
+    // region.
+    QCOMPARE(layer->content()->leftMagnitudeDb[static_cast<std::size_t>(10) * layer->content()->frameCount +
+                                                 static_cast<std::size_t>(25)],
+             -3.0f);
+}
+
+void SelectionControllerTest::captureMindShotEmitsMindShotCapturedWithTheNewId() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+    QSignalSpy spy(&controller, &SelectionController::mindShotCaptured);
+
+    const auto id = controller.captureMindShot("Piano Hit");
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<sound_mind::core::MindShotId>(), *id);
 }

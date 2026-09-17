@@ -453,7 +453,7 @@ The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument m
 
 Capture-and-stamp static samples; live-reference dynamic grains from a source layer. Also: revisit Record (Phase 2) to add capture-directly-to-a-Mind-Shot.
 
-**In progress, scoped in a dedicated planning pass** (confirmed with the user, 2026-09-17), the same way Sound Mind Instruments' own installment plan was: **Installment A - Mind Shots only.** Mind Grains' own live-reference re-rendering and "only paintable on layers above the source" ordering rule are real, separate complexity Mind Shots doesn't share - confirmed as its own later installment (**B**) rather than building both together. Installment A's own confirmed shape:
+**In progress, scoped in a dedicated planning pass** (confirmed with the user, 2026-09-17), the same way Sound Mind Instruments' own installment plan was: **Installment A - Mind Shots only** is done (`v0.0.33.1` - see `docs/sound-mind-architecture.md`'s Decision #93). Mind Grains' own live-reference re-rendering and "only paintable on layers above the source" ordering rule are real, separate complexity Mind Shots doesn't share - confirmed as its own later installment (**B**), not yet started or scoped, rather than building both together. Installment A's own shape, as shipped:
 
 - **A named, Project-scoped Mind Shot library** - `NamedMindShot{id, name, Clip}`/`MindShotId`, `Project::mindShots()`/`addMindShot()`/`removeMindShot()`/`mindShotById()`, mirroring `NamedMindWave`'s own precedent exactly. Reuses the existing `Clip` struct (already Copy/Cut/Paste's own captured-content representation) rather than inventing a second image-patch format - a Mind Shot capture *is* architecturally the same thing Copy already does, just stored permanently and named instead of held anonymously on the clipboard.
 - **Captured via a new "Capture as Mind Shot" action on an active Selection** - alongside the existing Copy/Cut actions, reusing the same `captureClip()`-from-selection plumbing.
@@ -461,7 +461,7 @@ Capture-and-stamp static samples; live-reference dynamic grains from a source la
 - **Stamps as a hard, Normal-only overwrite at the clip's own native captured size, centered on each stamp position** - "paints back exactly as it was when captured" taken literally: no falloff/brush-size scaling (matching `PasteOperation`'s own direct-overwrite semantics, not Procedural/Instrument's gradient blend). Blend-mode selection for this stamp (Multiply, etc.) is confirmed deferred to `v0.Y.37.1`'s own scoping pass, alongside layer compositing and Paste - see that milestone's own updated entry.
 - **Stamp placement (Stroke/Along Curve/Time Axis/Frequency Axis) is unchanged, reused as-is** - only *what happens at* each stamp position differs by tool type; *where* stamps land is already shared, type-independent machinery.
 
-**Demo:** capture a moment as a Mind Shot and restamp it, dragging to lay down a repeated pattern the way a rubber-stamp tool would; link a Mind Grain to a source layer and watch it change live as the source does (Installment B).
+**Demo, as actually shipped:** capture a moment as a Mind Shot and restamp it, dragging to lay down a repeated pattern the way a rubber-stamp tool would. The original Demo's own "link a Mind Grain to a source layer and watch it change live" is Installment B, not yet started.
 
 ### v0.Y.34.1 - Deferred paint tools
 
