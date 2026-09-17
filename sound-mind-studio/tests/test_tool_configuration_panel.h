@@ -56,4 +56,11 @@ private slots:
     void switchingToolTypeToHealPreservesSharedFields();
     void loadingAHealConfigurationSyncsToolType();
     void loadingASoftenConfigurationSyncsToolType();
+
+    // Smudge/Order-Chaos (v0.Y.34.1 Installment B).
+    void switchingToolTypeToSmudgeHidesEveryOtherGroup();
+    void loadingASmudgeConfigurationSyncsToolType();
+    void switchingToolTypeToOrderChaosShowsItsOwnGroupAndHidesProcedural();
+    void changingAmountEmitsToolConfigurationChanged();
+    void loadingAnOrderChaosConfigurationSyncsToolTypeAndAmount();
 };

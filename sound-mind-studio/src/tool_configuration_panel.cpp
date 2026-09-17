@@ -33,7 +33,9 @@ using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::MindShotId;
+using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
+using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
@@ -79,21 +81,24 @@ constexpr std::array<std::pair<BrushTipShape, const char*>, 11> kTipShapes{{
     {BrushTipShape::Dapple, "Dapple"},
 }};
 
-/// @brief Every real (usable) `ToolType` paired with its display name -
-/// only `Procedural`/`Instrument`/`MindShot`/`MindGrain`/`Heal`/`Soften` so
-/// far, see `ToolType`'s own docs on why the rest aren't offered here yet.
-/// `Heal`/`Soften` add no group of their own (see `HealConfiguration`'s/
-/// `SoftenConfiguration`'s own docs on why) - selecting either just hides
-/// every other type's own group, leaving only the shared Falloff/Brush
-/// Size/Stamp Mode/Color/Opacity controls visible, which is all either
-/// tool actually needs.
-constexpr std::array<std::pair<ToolType, const char*>, 6> kToolTypes{{
+/// @brief Every real (usable) `ToolType` paired with its display name - see
+/// `ToolType`'s own docs on why `Clone` alone still isn't offered here.
+/// `Heal`/`Soften`/`Smudge` add no group of their own (see each
+/// `ToolConfiguration` subtype's own docs on why) - selecting any of them
+/// just hides every other type's own group, leaving only the shared
+/// Falloff/Brush Size/Stamp Mode/Color/Opacity controls visible, which is
+/// all any of the three actually needs. `OrderChaos` is the exception - the
+/// first tool type in this milestone with a field of its own
+/// (`orderChaosGroup_`'s own Amount spin box).
+constexpr std::array<std::pair<ToolType, const char*>, 8> kToolTypes{{
     {ToolType::Procedural, "Procedural"},
     {ToolType::Instrument, "Instrument"},
     {ToolType::MindShot, "Mind Shot"},
     {ToolType::MindGrain, "Mind Grain"},
     {ToolType::Heal, "Heal"},
     {ToolType::Soften, "Soften"},
+    {ToolType::Smudge, "Smudge"},
+    {ToolType::OrderChaos, "Order/Chaos"},
 }};
 
 /// @brief The most harmonics `harmonicCountSpinBox_` allows - generous
@@ -223,6 +228,29 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
             &ToolConfigurationPanel::handleMindGrainComboChanged);
     mindGrainForm->addRow(tr("Mind Grain:"), mindGrainCombo_);
     root->addWidget(mindGrainGroup_);
+
+    // --- Order/Chaos's own group -------------------------------------------
+    orderChaosGroup_ = new QWidget(container);
+    orderChaosGroup_->setObjectName(QStringLiteral("orderChaosGroup"));
+    auto* orderChaosForm = new QFormLayout(orderChaosGroup_);
+    orderChaosForm->setContentsMargins(0, 0, 0, 0);
+
+    amountSpinBox_ = new QDoubleSpinBox(orderChaosGroup_);
+    amountSpinBox_->setObjectName(QStringLiteral("amountSpinBox"));
+    amountSpinBox_->setRange(-1.0, 1.0);
+    amountSpinBox_->setSingleStep(0.05);
+    amountSpinBox_->setDecimals(2);
+    amountSpinBox_->setToolTip(
+        tr("Negative pushes toward Chaos (randomly scrambling pixel intensities), positive toward Order "
+           "(concentrating them into a horizontal/vertical cross) - 0 has no effect."));
+    connect(amountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if (auto* orderChaos = dynamic_cast<OrderChaosConfiguration*>(config_.get())) {
+            orderChaos->setAmount(value);
+            emitConfigChanged();
+        }
+    });
+    orderChaosForm->addRow(tr("Amount:"), amountSpinBox_);
+    root->addWidget(orderChaosGroup_);
 
     auto* form = new QFormLayout();
 
@@ -402,6 +430,12 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
         replacement = std::make_unique<HealConfiguration>();
     } else if (type == ToolType::Soften) {
         replacement = std::make_unique<SoftenConfiguration>();
+    } else if (type == ToolType::Smudge) {
+        replacement = std::make_unique<SmudgeConfiguration>();
+    } else if (type == ToolType::OrderChaos) {
+        auto orderChaos = std::make_unique<OrderChaosConfiguration>();
+        orderChaos->setAmount(amountSpinBox_->value());
+        replacement = std::move(orderChaos);
     } else {
         return;  // Defensive: toolTypeCombo_ only ever offers real types.
     }
@@ -426,6 +460,7 @@ void ToolConfigurationPanel::updateVisibleToolTypeGroup() {
     instrumentGroup_->setVisible(type == ToolType::Instrument);
     mindShotGroup_->setVisible(type == ToolType::MindShot);
     mindGrainGroup_->setVisible(type == ToolType::MindGrain);
+    orderChaosGroup_->setVisible(type == ToolType::OrderChaos);
     updateMindGrainValidity();
 }
 
@@ -519,6 +554,9 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
             index = mindGrainCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(*sourceId)));
         }
         mindGrainCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    } else if (const auto* orderChaos = dynamic_cast<const OrderChaosConfiguration*>(config_.get())) {
+        const QSignalBlocker blocker(amountSpinBox_);
+        amountSpinBox_->setValue(orderChaos->amount());
     }
     updateVisibleToolTypeGroup();
     {

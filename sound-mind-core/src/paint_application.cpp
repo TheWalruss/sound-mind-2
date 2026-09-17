@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numeric>
+#include <random>
+#include <utility>
 
 #include "sound_mind/core/fill_application.h"
 #include "sound_mind/core/fill_operation.h"
@@ -683,6 +686,355 @@ void applySoftenPaintOperation(const PaintOperation& operation, const SoftenConf
     }
 }
 
+/// @brief The plain average of `snapshot`'s own left/right magnitude cells
+/// sampled along the line through `(frame, bin)` oriented by
+/// `(deltaFrame, deltaBin)`, spanning `t` from `-0.5` to `+0.5` of that
+/// vector (so the sampled span covers the same distance as one hop between
+/// stroke samples, centered on the pixel) - `SmudgeConfiguration`'s own
+/// per-pixel blur target. The result is invariant to the sign of
+/// `(deltaFrame, deltaBin)` (a `t`-symmetric span visits the same points
+/// either way), so callers never need to worry about which of two
+/// neighboring samples supplied the direction.
+GradientStop lineAverageStop(const LocalMagnitudeSnapshot& snapshot, int frame, int bin, double deltaFrame,
+                              double deltaBin, const GradientStop& opacitySource) {
+    const double length = std::sqrt(deltaFrame * deltaFrame + deltaBin * deltaBin);
+    const int steps = std::max(1, static_cast<int>(std::lround(length)));
+
+    float leftSum = 0.0f;
+    float rightSum = 0.0f;
+    int count = 0;
+    for (int step = 0; step <= steps; ++step) {
+        const double t = static_cast<double>(step) / static_cast<double>(steps) - 0.5;
+        const int sampleFrame = std::clamp(static_cast<int>(std::lround(static_cast<double>(frame) + t * deltaFrame)),
+                                            snapshot.frameLow, snapshot.frameLow + snapshot.frameSpan - 1);
+        const int sampleBin = std::clamp(static_cast<int>(std::lround(static_cast<double>(bin) + t * deltaBin)),
+                                          snapshot.binLow, snapshot.binLow + snapshot.binSpan - 1);
+        const std::size_t index = snapshot.indexOf(sampleFrame, sampleBin);
+        leftSum += snapshot.left[index];
+        rightSum += snapshot.right[index];
+        ++count;
+    }
+
+    GradientStop stop;
+    if (count > 0) {
+        stop.leftIntensity = leftSum / static_cast<float>(count);
+        stop.rightIntensity = rightSum / static_cast<float>(count);
+    }
+    stop.leftOpacity = opacitySource.leftOpacity;
+    stop.rightOpacity = opacitySource.rightOpacity;
+    return stop;
+}
+
+/// @brief `SmudgeConfiguration`'s own stamp - see its own docs for the
+/// design (confirmed with the user over a stateful "brush load" carried
+/// across the whole stroke). Each stroke sample's own direction/length
+/// comes from its own neighboring sample (the previous one, or - for the
+/// very first sample, which has none - the next one instead, so the first
+/// stamp of a multi-point stroke still smears); a single-point stroke (no
+/// neighbor at all) is a no-op. Within the usual 2D falloff-weighted
+/// footprint, every pixel blends toward `lineAverageStop()`'s own
+/// per-pixel line average, from a fresh per-stamp snapshot (the same
+/// "never read from the buffer being written" precedent
+/// `blurredNeighborhoodStop()` already established).
+void applySmudgePaintOperation(const PaintOperation& operation, const SmudgeConfiguration& toolConfig,
+                                const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
+                                sound_mind::codec::StreamImage& content) {
+    if (samples.size() < 2) {
+        return;  // No neighboring sample to smear toward - see this tool's own docs.
+    }
+    const double frameRadius =
+        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
+    if (frameRadius <= 0.0) {
+        return;
+    }
+
+    // Every sample's own (frameCenter, binCenter), computed once - each
+    // sample's own smear direction needs its neighbor's position too.
+    std::vector<double> frameCenters(samples.size());
+    std::vector<double> binCenters(samples.size());
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+        frameCenters[i] = timeToFrameIndex(samples[i].point.timeSeconds, content.config);
+        binCenters[i] = static_cast<double>(frequencyToBinIndex(static_cast<float>(samples[i].point.frequencyHz), content.config));
+    }
+
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+        const std::size_t neighbor = (i == 0) ? 1 : i - 1;
+        const double deltaFrame = frameCenters[i] - frameCenters[neighbor];
+        const double deltaBin = binCenters[i] - binCenters[neighbor];
+        if (deltaFrame == 0.0 && deltaBin == 0.0) {
+            continue;  // No movement between these two samples - nothing to smear along.
+        }
+
+        const GradientStop opacitySource = operation.path().gradient().evaluate(samples[i].pathT);
+        const double frameCenter = frameCenters[i];
+        const float binCenter = static_cast<float>(binCenters[i]);
+
+        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
+        const float binAbove =
+            frequencyToBinIndex(static_cast<float>(samples[i].point.frequencyHz) + frequencyRadiusHz, content.config);
+        const float binBelow =
+            frequencyToBinIndex(static_cast<float>(samples[i].point.frequencyHz) - frequencyRadiusHz, content.config);
+        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+
+        const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
+        const auto frameHigh =
+            std::min(static_cast<int>(content.frameCount) - 1, static_cast<int>(std::ceil(frameCenter + frameRadius)));
+        const auto binLow = std::max(0, static_cast<int>(std::floor(binCenter - binRadius)));
+        const auto binHigh =
+            std::min(static_cast<int>(content.config.binCount) - 1, static_cast<int>(std::ceil(binCenter + binRadius)));
+
+        // The snapshot needs to reach half the smear vector's own extent
+        // beyond the footprint on every side, plus one cell of slack.
+        const int reachFrame = static_cast<int>(std::ceil(std::abs(deltaFrame) * 0.5)) + 1;
+        const int reachBin = static_cast<int>(std::ceil(std::abs(deltaBin) * 0.5)) + 1;
+        const int snapshotFrameLow = std::max(0, frameLow - reachFrame);
+        const int snapshotFrameHigh = std::min(static_cast<int>(content.frameCount) - 1, frameHigh + reachFrame);
+        const int snapshotBinLow = std::max(0, binLow - reachBin);
+        const int snapshotBinHigh = std::min(static_cast<int>(content.config.binCount) - 1, binHigh + reachBin);
+        const LocalMagnitudeSnapshot snapshot =
+            captureLocalSnapshot(content, snapshotFrameLow, snapshotFrameHigh, snapshotBinLow, snapshotBinHigh);
+
+        for (int frame = frameLow; frame <= frameHigh; ++frame) {
+            const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
+            for (int bin = binLow; bin <= binHigh; ++bin) {
+                const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
+                const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
+                const float weight = falloffWeight(dist, toolConfig.falloff());
+                if (weight <= 0.0f) {
+                    continue;
+                }
+                const GradientStop target = lineAverageStop(snapshot, frame, bin, deltaFrame, deltaBin, opacitySource);
+                const std::size_t index = cellIndex(bin, frame, content.frameCount);
+                blendTowardStop(content.leftMagnitudeDb[index], content.rightMagnitudeDb[index], target, weight);
+            }
+        }
+    }
+}
+
+/// @brief One footprint pixel eligible for `OrderChaosConfiguration`'s own
+/// swap/reorder, alongside the falloff weight it should be blended back
+/// with.
+struct OrderChaosPoolEntry {
+    int frame = 0;
+    int bin = 0;
+    float weight = 0.0f;
+};
+
+/// @brief `OrderChaosConfiguration`'s own Chaos branch (`amount() < 0`):
+/// randomly selects `fraction` of `pool`'s own entries and permutes their
+/// own (left, right) magnitude values among themselves - a pure
+/// permutation, so at full opacity the selected subset's own total,
+/// average, and histogram are exactly preserved (values only change
+/// position, never value). Each permuted pixel's own new value is blended
+/// back via `blendTowardStop()`, weighted by its own falloff weight and
+/// `opacitySource`'s own opacity.
+void applyChaos(const std::vector<OrderChaosPoolEntry>& pool, double fraction, const LocalMagnitudeSnapshot& snapshot,
+                const GradientStop& opacitySource, sound_mind::codec::StreamImage& content, std::mt19937& rng) {
+    const auto poolSize = pool.size();
+    const auto k = static_cast<std::size_t>(std::lround(fraction * static_cast<double>(poolSize)));
+    if (k < 2) {
+        return;  // Nothing to swap with fewer than two selected pixels.
+    }
+
+    // A uniformly random subset of size k, then an independent random
+    // shuffle of that same subset - together, a random permutation
+    // restricted to k of the pool's own poolSize entries (identity for the
+    // rest, left untouched).
+    std::vector<std::size_t> selected(poolSize);
+    std::iota(selected.begin(), selected.end(), std::size_t{0});
+    std::shuffle(selected.begin(), selected.end(), rng);
+    selected.resize(k);
+
+    std::vector<std::size_t> shuffled = selected;
+    std::shuffle(shuffled.begin(), shuffled.end(), rng);
+
+    for (std::size_t i = 0; i < k; ++i) {
+        const OrderChaosPoolEntry& destination = pool[selected[i]];
+        const OrderChaosPoolEntry& source = pool[shuffled[i]];
+        const std::size_t sourceIndex = snapshot.indexOf(source.frame, source.bin);
+
+        GradientStop target;
+        target.leftIntensity = snapshot.left[sourceIndex];
+        target.rightIntensity = snapshot.right[sourceIndex];
+        target.leftOpacity = opacitySource.leftOpacity;
+        target.rightOpacity = opacitySource.rightOpacity;
+
+        const std::size_t destinationIndex = cellIndex(destination.bin, destination.frame, content.frameCount);
+        blendTowardStop(content.leftMagnitudeDb[destinationIndex], content.rightMagnitudeDb[destinationIndex], target,
+                         destination.weight);
+    }
+}
+
+/// @brief `OrderChaosConfiguration`'s own Order branch (`amount() > 0`):
+/// builds a horizontal (per-frame, summed over `pool`'s own bin range) and
+/// a vertical (per-bin, summed over `pool`'s own frame range) energy
+/// profile from `snapshot`, finds each one's own loudest position, then
+/// reassigns `fraction` of `pool`'s own entries so the brightest end up
+/// closest to those two peak lines and the darkest end up farthest -
+/// concentrating energy into an emergent horizontal/vertical cross (see
+/// `OrderChaosConfiguration`'s own docs for the audible intent). Distance
+/// to the cross is `min(|frame - peakFrame|, |bin - peakBin|)` - however
+/// close a point comes to *either* line. Deterministic (no randomness at
+/// all) whenever `fraction` selects the entire pool, since both sorts below
+/// are then applied to every entry rather than a randomly-drawn subset.
+void applyOrder(const std::vector<OrderChaosPoolEntry>& pool, double fraction, const LocalMagnitudeSnapshot& snapshot,
+                const GradientStop& opacitySource, sound_mind::codec::StreamImage& content, std::mt19937& rng) {
+    const auto poolSize = pool.size();
+    const auto k = static_cast<std::size_t>(std::lround(fraction * static_cast<double>(poolSize)));
+    if (k < 2) {
+        return;
+    }
+
+    // A pixel's own single scalar "value" for both the histogram and the
+    // sort below - the plain average of its own two channels, the same
+    // "treat dB values directly, don't convert to linear energy first"
+    // simplicity precedent blurredNeighborhoodStop() already uses.
+    const auto valueAt = [&snapshot](int frame, int bin) {
+        const std::size_t index = snapshot.indexOf(frame, bin);
+        return (snapshot.left[index] + snapshot.right[index]) / 2.0f;
+    };
+
+    int peakFrame = pool.front().frame;
+    int peakBin = pool.front().bin;
+    {
+        // Horizontal (per-frame) and vertical (per-bin) profiles - summed
+        // only over the pool's own actual extent, not the whole canvas.
+        std::vector<float> frameProfile(snapshot.frameSpan, 0.0f);
+        std::vector<float> binProfile(snapshot.binSpan, 0.0f);
+        for (const OrderChaosPoolEntry& entry : pool) {
+            const float value = valueAt(entry.frame, entry.bin);
+            frameProfile[static_cast<std::size_t>(entry.frame - snapshot.frameLow)] += value;
+            binProfile[static_cast<std::size_t>(entry.bin - snapshot.binLow)] += value;
+        }
+        const auto peakFrameIt = std::max_element(frameProfile.begin(), frameProfile.end());
+        const auto peakBinIt = std::max_element(binProfile.begin(), binProfile.end());
+        peakFrame = snapshot.frameLow + static_cast<int>(std::distance(frameProfile.begin(), peakFrameIt));
+        peakBin = snapshot.binLow + static_cast<int>(std::distance(binProfile.begin(), peakBinIt));
+    }
+
+    // A uniformly random subset of size k (this is the only randomness
+    // Order itself uses - at k == poolSize, selecting "the entire pool"
+    // needs no randomness at all, making this branch fully deterministic).
+    std::vector<std::size_t> selected(poolSize);
+    std::iota(selected.begin(), selected.end(), std::size_t{0});
+    std::shuffle(selected.begin(), selected.end(), rng);
+    selected.resize(k);
+
+    // Sort the selected positions by their own distance to the cross
+    // (closest first) and, separately, their own current values (loudest
+    // first) - zipping the two together hands the loudest value to the
+    // closest position, down to the quietest value at the farthest one.
+    std::vector<std::size_t> byDistance = selected;
+    std::sort(byDistance.begin(), byDistance.end(), [&](std::size_t a, std::size_t b) {
+        const int distanceA = std::min(std::abs(pool[a].frame - peakFrame), std::abs(pool[a].bin - peakBin));
+        const int distanceB = std::min(std::abs(pool[b].frame - peakFrame), std::abs(pool[b].bin - peakBin));
+        return distanceA < distanceB;
+    });
+    std::vector<float> valuesLoudestFirst;
+    valuesLoudestFirst.reserve(k);
+    for (const std::size_t index : selected) {
+        valuesLoudestFirst.push_back(valueAt(pool[index].frame, pool[index].bin));
+    }
+    std::sort(valuesLoudestFirst.begin(), valuesLoudestFirst.end(), std::greater<>());
+
+    // The exact (left, right) pair each selected position's own current
+    // value maps to, read once from the snapshot before any blending below
+    // touches `content` - the loudest-first values above are averages, but
+    // the actual blend still needs each source pixel's own real per-channel
+    // pair, not a reconstructed mono value.
+    std::vector<std::size_t> byValueDescending = selected;
+    std::sort(byValueDescending.begin(), byValueDescending.end(), [&](std::size_t a, std::size_t b) {
+        return valueAt(pool[a].frame, pool[a].bin) > valueAt(pool[b].frame, pool[b].bin);
+    });
+
+    for (std::size_t i = 0; i < k; ++i) {
+        const OrderChaosPoolEntry& destination = pool[byDistance[i]];
+        const OrderChaosPoolEntry& source = pool[byValueDescending[i]];
+        const std::size_t sourceIndex = snapshot.indexOf(source.frame, source.bin);
+
+        GradientStop target;
+        target.leftIntensity = snapshot.left[sourceIndex];
+        target.rightIntensity = snapshot.right[sourceIndex];
+        target.leftOpacity = opacitySource.leftOpacity;
+        target.rightOpacity = opacitySource.rightOpacity;
+
+        const std::size_t destinationIndex = cellIndex(destination.bin, destination.frame, content.frameCount);
+        blendTowardStop(content.leftMagnitudeDb[destinationIndex], content.rightMagnitudeDb[destinationIndex], target,
+                         destination.weight);
+    }
+}
+
+/// @brief `OrderChaosConfiguration`'s own stamp - dispatches to
+/// `applyChaos()`/`applyOrder()` by the sign of `toolConfig.amount()`
+/// within the usual 2D falloff-weighted footprint (a no-op at `amount() ==
+/// 0`). Each stamp draws its own fresh per-stamp snapshot first, the same
+/// "never read from the buffer being written" precedent every other
+/// blur/rearrange tool type already establishes.
+void applyOrderChaosPaintOperation(const PaintOperation& operation, const OrderChaosConfiguration& toolConfig,
+                                    const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
+                                    sound_mind::codec::StreamImage& content) {
+    if (toolConfig.amount() == 0.0) {
+        return;
+    }
+    const double frameRadius =
+        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
+    if (frameRadius <= 0.0) {
+        return;
+    }
+
+    // One shared engine for every stamp/sample this call processes -
+    // reseeded fresh only once per applyPaintOperation() call (heap
+    // allocation/randomness are both fine here - this runs on the UI/main
+    // thread from a paint stroke, never inside a real-time audio callback).
+    thread_local std::mt19937 rng{std::random_device{}()};
+
+    for (const StrokeSample& sample : samples) {
+        const GradientStop opacitySource = operation.path().gradient().evaluate(sample.pathT);
+
+        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
+        const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
+
+        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
+        const float binAbove =
+            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) + frequencyRadiusHz, content.config);
+        const float binBelow =
+            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) - frequencyRadiusHz, content.config);
+        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+
+        const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
+        const auto frameHigh =
+            std::min(static_cast<int>(content.frameCount) - 1, static_cast<int>(std::ceil(frameCenter + frameRadius)));
+        const auto binLow = std::max(0, static_cast<int>(std::floor(binCenter - binRadius)));
+        const auto binHigh =
+            std::min(static_cast<int>(content.config.binCount) - 1, static_cast<int>(std::ceil(binCenter + binRadius)));
+
+        const LocalMagnitudeSnapshot snapshot = captureLocalSnapshot(content, frameLow, frameHigh, binLow, binHigh);
+
+        std::vector<OrderChaosPoolEntry> pool;
+        for (int frame = frameLow; frame <= frameHigh; ++frame) {
+            const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
+            for (int bin = binLow; bin <= binHigh; ++bin) {
+                const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
+                const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
+                const float weight = falloffWeight(dist, toolConfig.falloff());
+                if (weight > 0.0f) {
+                    pool.push_back(OrderChaosPoolEntry{frame, bin, weight});
+                }
+            }
+        }
+        if (pool.size() < 2) {
+            continue;
+        }
+
+        const double fraction = std::min(1.0, std::abs(toolConfig.amount()));
+        if (toolConfig.amount() < 0.0) {
+            applyChaos(pool, fraction, snapshot, opacitySource, content, rng);
+        } else {
+            applyOrder(pool, fraction, snapshot, opacitySource, content, rng);
+        }
+    }
+}
+
 }  // namespace
 
 float frequencyToBinIndex(float frequencyHz, const sound_mind::codec::StreamCodecConfig& config) noexcept {
@@ -780,10 +1132,14 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
         applyHealPaintOperation(operation, *heal, samples, frequencyToTimeScale, content);
     } else if (const auto* soften = dynamic_cast<const SoftenConfiguration*>(&toolConfig)) {
         applySoftenPaintOperation(operation, *soften, samples, frequencyToTimeScale, content);
+    } else if (const auto* smudge = dynamic_cast<const SmudgeConfiguration*>(&toolConfig)) {
+        applySmudgePaintOperation(operation, *smudge, samples, frequencyToTimeScale, content);
+    } else if (const auto* orderChaos = dynamic_cast<const OrderChaosConfiguration*>(&toolConfig)) {
+        applyOrderChaosPaintOperation(operation, *orderChaos, samples, frequencyToTimeScale, content);
     }
-    // Any other/future ToolType (Smudge, OrderChaos, Clone) paints nothing
-    // yet - the same "groundwork, not yet functional" state
-    // ToolConfiguration's own docs describe for those tool types.
+    // Any other/future ToolType (Clone) paints nothing yet - the same
+    // "groundwork, not yet functional" state ToolConfiguration's own docs
+    // describe for that tool type.
 }
 
 sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::StreamImage& base,

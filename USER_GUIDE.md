@@ -419,10 +419,11 @@ default, alongside Layers/Playback/Record/Loop) with the brush's own
 settings:
 
 - **Tool Type** - **Procedural** (the default), **Instrument**, **Mind
-  Shot**, **Mind Grain**, **Heal**, or **Soften**; picks which set of
-  controls below applies (Tip Shape for Procedural, Harmonics/Inharmonicity
-  for Instrument, a picker for Mind Shot/Mind Grain - Heal/Soften add no
-  controls of their own at all, see their own entries below). Switching
+  Shot**, **Mind Grain**, **Heal**, **Soften**, **Smudge**, or
+  **Order/Chaos**; picks which set of controls below applies (Tip Shape for
+  Procedural, Harmonics/Inharmonicity for Instrument, a picker for Mind
+  Shot/Mind Grain, an Amount slider for Order/Chaos - Heal/Soften/Smudge add
+  no controls of their own at all, see their own entries below). Switching
   keeps Falloff/Size/Stamp Mode/Interval/Color/Opacity as they were - only
   the type-specific controls reset to the newly-picked type's own
   defaults.
@@ -484,6 +485,32 @@ settings:
   time alone, for a general softening instead of Heal's own
   defect-erasing, single-axis blend. Brush Size/Opacity/Color work exactly
   the same way Heal's own do.
+- **Smudge** (Smudge only, no controls of its own) - drags pixels along the
+  direction you're actually dragging the stroke, the way a finger smudges
+  wet paint. Brush Size/Falloff/Opacity/Color all work the same way
+  Heal's/Soften's own do; the smear's own direction and reach come from how
+  you're moving the stroke itself, not a separate control. A single click
+  (no drag) has nothing to smear along, so it does nothing.
+- **Order/Chaos** (Order/Chaos only) - pushes a region toward spectral order
+  or spectral chaos, via one **Amount** slider from `-1` (full Chaos) to
+  `+1` (full Order), `0` (the default) having no effect:
+  - **Chaos** (negative) scrambles a random selection of pixel intensities
+    within the brush - at `-1`, every pixel in the stroke's own footprint
+    gets randomly reshuffled among themselves, leaving the overall loudness
+    and color of that area unchanged, just rearranged.
+  - **Order** (positive) finds the loudest moment and loudest frequency
+    within the brush and pulls a random selection of pixels toward them -
+    the loudest pixels end up closest, the quietest end up farthest,
+    building up horizontal and vertical structure. Audibly, this can turn
+    noise into a steady tone, sharpen a transient, or steady a wavering
+    pitch.
+
+  Smaller Amount magnitudes affect a smaller, randomly-chosen fraction of
+  the brush's own pixels rather than all of them. Opacity still works the
+  same way it does for Heal/Soften/Smudge - how strongly each affected
+  pixel's own new value actually replaces the original - while Amount
+  itself controls how much of the brush participates at all; the Color
+  swatch has no effect.
 - **Falloff** - how soft the stroke's edge is, from a hard edge (`0`) to
   fully soft (`1`).
 - **Brush Size** - the tip's own radius: in seconds on the time axis, and
@@ -544,7 +571,8 @@ Only **Procedural**, **Instrument** (harmonic series + inharmonicity only so
 far - no noise, body resonance, or envelope yet), **Mind Shot**
 (capture-and-restamp), **Mind Grain** (a live reference that updates
 immediately, everywhere it's used, the moment its source is repainted),
-**Heal** (temporal blur), and **Soften** (radial blur) exist today - see
+**Heal** (temporal blur), **Soften** (radial blur), **Smudge** (directional
+smear), and **Order/Chaos** (spectral order/chaos push) exist today - see
 [What's Not Here Yet](#whats-not-here-yet) for the rest of what's planned
 around painting.
 
@@ -837,11 +865,15 @@ what's designed for it:
   only - no noise component, body resonance, or ADSR envelope yet), **Mind
   Shot** (capture-and-restamp), **Mind Grain** (a live reference, updating
   immediately everywhere it's used the moment its own source is
-  repainted), **Heal** (temporal blur), and **Soften** (radial blur) exist
-  - the other painting tools (Smudge, Order/Chaos, Clone) aren't built yet,
-  and there's still no Tool Configuration Wizard or Tool Preset library
-  (see the next point). Instrument strokes also don't yet bind to a
-  MindWave, and Loop Mode doesn't yet retrigger per note. A Mind Shot/Mind
+  repainted), **Heal** (temporal blur), **Soften** (radial blur), **Smudge**
+  (a simple per-stamp directional smear, not a real stateful "brush load"
+  carried across the whole stroke the way a classic paint program's own
+  Smudge tool works), and **Order/Chaos** (concrete permutation/reordering
+  mechanics rather than a formal entropy metric) exist - **Clone** is the
+  only painting tool left unbuilt, and there's still no Tool Configuration
+  Wizard or Tool Preset library (see the next point). Instrument strokes
+  also don't yet bind to a MindWave, and Loop Mode doesn't yet retrigger
+  per note. A Mind Shot/Mind
   Grain stamp always overwrites verbatim - blend-mode selection (so it
   could blend rather than overwrite) is planned alongside
   layer/Paste blend modes. There's also no UI yet to reposition an

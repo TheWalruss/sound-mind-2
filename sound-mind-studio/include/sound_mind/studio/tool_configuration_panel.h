@@ -36,15 +36,17 @@ namespace sound_mind::studio {
  * philosophy. What's here is the actual parameter area the design doc
  * says both entry points edit - just reached directly, by hand, for now.
  *
- * **Six real tool types as of `v0.Y.34.1` Installment A (Heal/Soften):** a
- * `ToolType` selector (`toolTypeCombo_`) switches between `Procedural`'s own
- * group (tip shape), `Instrument`'s own (harmonic count/strengths,
- * inharmonicity), `MindShot`'s own (a picker over the project's own
- * `Project::mindShots()` library), `MindGrain`'s own (a picker over
+ * **Eight real tool types as of `v0.Y.34.1` Installment B (Smudge/Order-
+ * Chaos):** a `ToolType` selector (`toolTypeCombo_`) switches between
+ * `Procedural`'s own group (tip shape), `Instrument`'s own (harmonic count/
+ * strengths, inharmonicity), `MindShot`'s own (a picker over the project's
+ * own `Project::mindShots()` library), `MindGrain`'s own (a picker over
  * `Project::mindGrains()`, with a red-highlight/tooltip warning - see
- * setActiveLayer()'s own docs), and `Heal`/`Soften` (neither adds a group of
- * its own at all - see `HealConfiguration`'s/`SoftenConfiguration`'s own
- * docs on why every parameter either needs is already shared) - the design
+ * setActiveLayer()'s own docs), `Heal`/`Soften`/`Smudge` (none of the three
+ * adds a group of its own at all - see each `ToolConfiguration` subtype's
+ * own docs on why every parameter either needs is already shared), and
+ * `OrderChaos` (its own `orderChaosGroup_`, a single "Amount" spin box -
+ * the first new field this milestone's tools have needed) - the design
  * doc's own "only the parameters that apply to the current tool" dynamism,
  * one group shown at a time, the rest hidden, the same pattern
  * `MindWaveEditor`/`FilterConfigurationPanel` already establish for their
@@ -53,13 +55,13 @@ namespace sound_mind::studio {
  * base fields) and stay visible regardless of which is selected - though a
  * Mind Shot/Mind Grain stamp doesn't actually use falloff/size for anything
  * (both are a hard, native-size overwrite, see `MindShotConfiguration`'s/
- * `MindGrainConfiguration`'s own docs), and a Heal/Soften stamp doesn't use
- * the Color swatch's own intensity for anything (only Opacity, as blend
- * strength - see `HealConfiguration`'s own docs); they stay visible anyway
- * rather than hidden per-type, since nothing about this panel's own "one
- * group per type" mechanism needs to extend to the *shared* controls too.
- * `Smudge`/`OrderChaos`/`Clone` still have no real parameters of their own
- * (see `ToolConfiguration`'s own docs) and aren't offered in the selector
+ * `MindGrainConfiguration`'s own docs), and a Heal/Soften/Smudge/OrderChaos
+ * stamp doesn't use the Color swatch's own intensity for anything (only
+ * Opacity, as blend strength - see `HealConfiguration`'s own docs); they
+ * stay visible anyway rather than hidden per-type, since nothing about this
+ * panel's own "one group per type" mechanism needs to extend to the
+ * *shared* controls too. `Clone` still has no real parameters of its own
+ * (see `ToolConfiguration`'s own docs) and isn't offered in the selector
  * yet.
  *
  * **Needs a live `Project*` for the Mind Shot/Mind Grain pickers**
@@ -275,13 +277,14 @@ private:
     void changeToolType(sound_mind::core::ToolType type);
 
     /// @brief Shows exactly one of `proceduralGroup_`/`instrumentGroup_`/
-    ///        `mindShotGroup_`/`mindGrainGroup_` - whichever matches
-    ///        `config_->type()` - and hides the rest, the same "one group
-    ///        per type" pattern `MindWaveEditor`/`FilterConfigurationPanel`
-    ///        already establish for their own per-type groups. `Heal`/
-    ///        `Soften` match none of the four - both leave every group
-    ///        hidden, since neither needs a group of its own (see
-    ///        `HealConfiguration`'s own docs).
+    ///        `mindShotGroup_`/`mindGrainGroup_`/`orderChaosGroup_` -
+    ///        whichever matches `config_->type()` - and hides the rest, the
+    ///        same "one group per type" pattern `MindWaveEditor`/
+    ///        `FilterConfigurationPanel` already establish for their own
+    ///        per-type groups. `Heal`/`Soften`/`Smudge` match none of the
+    ///        five - all three leave every group hidden, since none of them
+    ///        needs a group of its own (see `HealConfiguration`'s own
+    ///        docs).
     void updateVisibleToolTypeGroup();
 
     /// @brief `mindShotCombo_`'s own `currentIndexChanged` handler: if
@@ -359,6 +362,14 @@ private:
     ///        setActiveLayer()'s own docs.
     QWidget* mindGrainGroup_ = nullptr;
     QComboBox* mindGrainCombo_ = nullptr;
+
+    /// @brief `OrderChaosConfiguration`'s own controls, shown only while
+    ///        `config_->type() == ToolType::OrderChaos` - see
+    ///        updateVisibleToolTypeGroup()'s own docs. The first per-type
+    ///        group added since Mind Grain's own - `Heal`/`Soften`/`Smudge`
+    ///        (`v0.Y.34.1` Installment A/B) all needed none at all.
+    QWidget* orderChaosGroup_ = nullptr;
+    QDoubleSpinBox* amountSpinBox_ = nullptr;
 
     /// @brief Which project `mindShotCombo_`'s/`mindGrainCombo_`'s own
     ///        entries are drawn from - see setProject()'s own docs. Not

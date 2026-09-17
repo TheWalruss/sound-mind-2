@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -24,11 +26,13 @@ using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::Operation;
 using sound_mind::core::OperationId;
+using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::PaintOperation;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
 using sound_mind::core::rebuildPaintedContent;
+using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::TimeFrequencyPoint;
@@ -171,6 +175,21 @@ std::unique_ptr<HealConfiguration> makeHealTool(double size, float falloff = 0.0
 std::unique_ptr<SoftenConfiguration> makeSoftenTool(double size, float falloff = 0.0f) {
     auto config = std::make_unique<SoftenConfiguration>();
     config->setSize(size);
+    config->setFalloff(falloff);
+    return config;
+}
+
+std::unique_ptr<SmudgeConfiguration> makeSmudgeTool(double size, float falloff = 0.0f) {
+    auto config = std::make_unique<SmudgeConfiguration>();
+    config->setSize(size);
+    config->setFalloff(falloff);
+    return config;
+}
+
+std::unique_ptr<OrderChaosConfiguration> makeOrderChaosTool(double size, double amount, float falloff = 0.0f) {
+    auto config = std::make_unique<OrderChaosConfiguration>();
+    config->setSize(size);
+    config->setAmount(amount);
     config->setFalloff(falloff);
     return config;
 }
@@ -850,6 +869,180 @@ TEST_CASE("applyPaintOperation with a SoftenConfiguration pulls in a neighboring
     // would never have picked this value up at all.
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] ==
             Catch::Approx(1000.0f / 9.0f).margin(0.001));
+}
+
+TEST_CASE("applyPaintOperation with a SmudgeConfiguration is a no-op for a single-point stroke",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    content.leftMagnitudeDb[pixelIndex(content, 50, 50)] = 20.0f;
+    const float freq = binIndexToFrequency(50.0f, config);
+
+    const Path path = makeSingleTapPath(0.5, freq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeSmudgeTool(0.02));
+    applyPaintOperation(op, 2000.0, content);
+
+    // Unchanged - no neighboring sample to derive a smear direction from.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 50, 50)] == 20.0f);
+}
+
+TEST_CASE("applyPaintOperation with a SmudgeConfiguration drags a spike's value forward along the stroke",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const int spikeFrame = 30;
+    const int spikeBin = 50;
+    content.leftMagnitudeDb[pixelIndex(content, spikeFrame, spikeBin)] = 20.0f;
+    const float freq = binIndexToFrequency(static_cast<float>(spikeBin), config);
+
+    // A straight horizontal stroke starting at the spike and moving
+    // forward in time.
+    const Path path = makeUniformHorizontalPath(0.30, 0.50, freq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeSmudgeTool(0.02));
+    applyPaintOperation(op, 2000.0, content);
+
+    // Somewhere well ahead of the spike's own original position, some of
+    // its value must have been dragged forward - a cell that was
+    // originally silent is no longer.
+    bool draggedForward = false;
+    for (int frame = spikeFrame + 3; frame <= 50; ++frame) {
+        if (content.leftMagnitudeDb[pixelIndex(content, frame, spikeBin)] != 0.0f) {
+            draggedForward = true;
+            break;
+        }
+    }
+    REQUIRE(draggedForward);
+}
+
+TEST_CASE("applyPaintOperation with a SmudgeConfiguration never touches sharedPhaseRadians",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    content.leftMagnitudeDb[pixelIndex(content, 30, 50)] = 20.0f;
+    content.sharedPhaseRadians[pixelIndex(content, 30, 50)] = 1.2345f;
+    const float freq = binIndexToFrequency(50.0f, config);
+
+    const Path path = makeUniformHorizontalPath(0.30, 0.50, freq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeSmudgeTool(0.02));
+    applyPaintOperation(op, 2000.0, content);
+
+    REQUIRE(content.sharedPhaseRadians[pixelIndex(content, 30, 50)] == 1.2345f);
+}
+
+TEST_CASE("applyPaintOperation with an OrderChaosConfiguration is a no-op at amount() == 0",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    content.leftMagnitudeDb[pixelIndex(content, 50, 50)] = 20.0f;
+    const float freq = binIndexToFrequency(50.0f, config);
+
+    const Path path = makeSingleTapPath(0.5, freq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeOrderChaosTool(0.06, 0.0));
+    applyPaintOperation(op, 20000.0, content);
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 50, 50)] == 20.0f);
+}
+
+TEST_CASE("applyPaintOperation with an OrderChaosConfiguration (Chaos) preserves the total sum while changing "
+          "positions",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    // A distinct value per cell in a small, known area - so a permutation's
+    // own exact sum-preservation is directly checkable.
+    for (int bin = 45; bin <= 55; ++bin) {
+        for (int frame = 45; frame <= 55; ++frame) {
+            content.leftMagnitudeDb[pixelIndex(content, frame, bin)] =
+                static_cast<float>((frame - 45) + (bin - 45) * 11);
+        }
+    }
+    float sumBefore = 0.0f;
+    for (const float value : content.leftMagnitudeDb) {
+        sumBefore += value;
+    }
+
+    const float freq = binIndexToFrequency(50.0f, config);
+    const Path path = makeSingleTapPath(0.5, freq, 0.0f, 1.0f);  // full opacity.
+    // falloff = 0 -> a hard edge, weight exactly 1.0 anywhere inside the
+    // radius - so the permutation below is exact, not partially blended.
+    const PaintOperation op(1, LayerId{1}, path, makeOrderChaosTool(0.06, -1.0, 0.0f));
+    applyPaintOperation(op, 20000.0, content);
+
+    float sumAfter = 0.0f;
+    for (const float value : content.leftMagnitudeDb) {
+        sumAfter += value;
+    }
+    REQUIRE(sumAfter == Catch::Approx(sumBefore).margin(0.01f));
+
+    // And it actually did something - not every original value stayed put.
+    bool anyChanged = false;
+    for (int bin = 45; bin <= 55 && !anyChanged; ++bin) {
+        for (int frame = 45; frame <= 55; ++frame) {
+            const float expectedOriginal = static_cast<float>((frame - 45) + (bin - 45) * 11);
+            if (content.leftMagnitudeDb[pixelIndex(content, frame, bin)] != expectedOriginal) {
+                anyChanged = true;
+                break;
+            }
+        }
+    }
+    REQUIRE(anyChanged);
+}
+
+TEST_CASE("applyPaintOperation with an OrderChaosConfiguration (Order) permutes values without creating or "
+          "destroying any, moving the single loudest one off its original, off-cross position",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    // A clear loud column (frame 55) and loud row (bin 55), plus a single,
+    // strictly louder "hot" value planted off both - Order's own
+    // horizontal/vertical profiles unambiguously peak at frame 55/bin 55
+    // regardless of the footprint's own exact extent (the hot value alone
+    // can't outweigh an entire loud column/row's own summed profile), so
+    // the hot value - not already on the cross - is the one entry
+    // guaranteed to move toward it.
+    for (int bin = 45; bin <= 65; ++bin) {
+        content.leftMagnitudeDb[pixelIndex(content, 55, bin)] = 5.0f;
+    }
+    for (int frame = 45; frame <= 65; ++frame) {
+        content.leftMagnitudeDb[pixelIndex(content, frame, 55)] = 5.0f;
+    }
+    content.leftMagnitudeDb[pixelIndex(content, 45, 45)] = 100.0f;
+
+    std::vector<float> sortedBefore = content.leftMagnitudeDb;
+    std::sort(sortedBefore.begin(), sortedBefore.end());
+
+    const float freq = binIndexToFrequency(55.0f, config);
+    const Path path = makeSingleTapPath(0.55, freq, 0.0f, 1.0f);
+    // size = 0.2 / frequencyToTimeScale = 4000.0 gives a footprint that
+    // comfortably covers the whole cross above, including the (45, 45)
+    // corner - not load-bearing for exactness (unlike the sum/multiset
+    // checks below, which hold regardless of the footprint's own precise
+    // extent), just needs to actually reach that corner.
+    const PaintOperation op(1, LayerId{1}, path, makeOrderChaosTool(0.2, 1.0, 0.0f));
+    applyPaintOperation(op, 4000.0, content);
+
+    std::vector<float> sortedAfter = content.leftMagnitudeDb;
+    std::sort(sortedAfter.begin(), sortedAfter.end());
+    REQUIRE(sortedBefore == sortedAfter);  // An exact permutation - nothing created or destroyed.
+
+    // The single loudest value no longer sits at its original, off-cross
+    // position - Order moved it toward the loud row/column instead.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 45, 45)] != 100.0f);
+}
+
+TEST_CASE("applyPaintOperation with an OrderChaosConfiguration never touches sharedPhaseRadians",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    content.leftMagnitudeDb[pixelIndex(content, 50, 50)] = 20.0f;
+    content.sharedPhaseRadians[pixelIndex(content, 50, 50)] = 1.2345f;
+    const float freq = binIndexToFrequency(50.0f, config);
+
+    const Path path = makeSingleTapPath(0.5, freq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeOrderChaosTool(0.06, -1.0, 0.0f));
+    applyPaintOperation(op, 20000.0, content);
+
+    REQUIRE(content.sharedPhaseRadians[pixelIndex(content, 50, 50)] == 1.2345f);
 }
 
 TEST_CASE("rebuildPaintedContent applies every PaintOperation in order, on top of a copy of base",

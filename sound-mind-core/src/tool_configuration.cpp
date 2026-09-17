@@ -73,6 +73,12 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config) {
         writeCommonToolConfigurationFields(json, config);
     } else if (dynamic_cast<const SoftenConfiguration*>(&config)) {
         writeCommonToolConfigurationFields(json, config);
+    } else if (dynamic_cast<const SmudgeConfiguration*>(&config)) {
+        // Same reasoning as Heal/Soften - see SmudgeConfiguration's own docs.
+        writeCommonToolConfigurationFields(json, config);
+    } else if (const auto* orderChaos = dynamic_cast<const OrderChaosConfiguration*>(&config)) {
+        writeCommonToolConfigurationFields(json, config);
+        json["amount"] = orderChaos->amount();
     } else {
         // Defensive: every concrete subtype is handled above: if this is
         // ever reached, a new subtype was added without updating this
@@ -121,6 +127,12 @@ std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::jso
         config = std::make_unique<HealConfiguration>();
     } else if (type == ToolType::Soften) {
         config = std::make_unique<SoftenConfiguration>();
+    } else if (type == ToolType::Smudge) {
+        config = std::make_unique<SmudgeConfiguration>();
+    } else if (type == ToolType::OrderChaos) {
+        auto orderChaos = std::make_unique<OrderChaosConfiguration>();
+        orderChaos->setAmount(json.at("amount").get<double>());
+        config = std::move(orderChaos);
     } else {
         throw std::invalid_argument("ToolConfiguration: unrecognized \"type\" in toolConfigurationFromJson()");
     }

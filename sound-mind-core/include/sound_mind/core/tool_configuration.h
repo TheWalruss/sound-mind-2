@@ -19,12 +19,12 @@ namespace sound_mind::core {
  *
  * @note Only `Procedural`, (as of `v0.Y.32.1`, Sound Mind Instruments)
  *       `Instrument`, (as of `v0.Y.33.1`) `MindShot`/`MindGrain`, and (as of
- *       `v0.Y.34.1` Installment A) `Heal`/`Soften` exist as real, paintable
- *       tools so far - `Smudge`/`OrderChaos`/`Clone` remain future roadmap
- *       work, not yet scheduled. Adding a value here ahead of its own tool
- *       actually working is deliberate groundwork for the Tool
- *       Configuration Panel/Wizard's dynamic-per-type UI, not a claim that
- *       tool is usable.
+ *       `v0.Y.34.1`) `Heal`/`Soften` (Installment A)/`Smudge`/`OrderChaos`
+ *       (Installment B) exist as real, paintable tools so far - `Clone`
+ *       remains this milestone's own final, not-yet-started installment.
+ *       Adding a value here ahead of its own tool actually working is
+ *       deliberate groundwork for the Tool Configuration Panel/Wizard's
+ *       dynamic-per-type UI, not a claim that tool is usable.
  */
 enum class ToolType {
     Procedural,
@@ -642,6 +642,127 @@ public:
     }
 };
 
+/**
+ * @brief Directional smear, per `docs/sound-mind-design.md`'s "Smudge":
+ *        "pushes pixels along the stroke direction, stretching and
+ *        blending sound in time and frequency." Confirmed with the user as
+ *        the simpler of two candidate designs (over a classic, stateful
+ *        "brush load" carried across the whole stroke): each pixel within
+ *        the stroke's own ordinary 2D falloff-weighted footprint blends
+ *        toward a plain average sampled *along a line through that pixel,
+ *        oriented along the stroke's own local direction, spanning the
+ *        distance to the neighboring stamp* - computed independently per
+ *        stamp, the same execution shape every other tool type already
+ *        uses (no new state carried between stamps). At `Stroke` mode's
+ *        own dense stamping, each individual smear is short, but
+ *        overlapping stamps compound into a continuous smeared trail as the
+ *        stroke progresses - the same "overlapping stamps compound
+ *        naturally" precedent every gradient-blended tool type already
+ *        follows.
+ *
+ * **Adds no fields of its own**, the same reasoning `HealConfiguration`'s
+ * own docs give: `size()` doubles as the footprint radius, `falloff()`
+ * softens the footprint edge, and the stroke's own gradient stop opacity
+ * sets blend strength (intensity unused). The smear's own *direction* and
+ * *length* come from the stroke's own geometry (consecutive stamp
+ * positions), not a configurable parameter - see
+ * `applyPaintOperation()`'s own `SmudgeConfiguration` dispatch branch for
+ * the exact line-sampling math. A single-point stroke (a tap, with no
+ * neighboring stamp to smear toward) is a no-op - there's no direction to
+ * smear along.
+ */
+class SmudgeConfiguration : public ToolConfiguration {
+public:
+    SmudgeConfiguration() = default;
+
+    [[nodiscard]] ToolType type() const noexcept override { return ToolType::Smudge; }
+
+    [[nodiscard]] std::unique_ptr<ToolConfiguration> clone() const override {
+        return std::make_unique<SmudgeConfiguration>(*this);
+    }
+};
+
+/**
+ * @brief Pushes a region toward spectral order or spectral chaos, per
+ *        `docs/sound-mind-design.md`'s "Order/Chaos" - a single tool type
+ *        (matching `ToolType::OrderChaos`'s own single enum value) spanning
+ *        both directions of one continuum via `amount()`, rather than two
+ *        separate tools: negative values push toward chaos, positive
+ *        toward order, `0` (the default) has no effect. Confirmed with the
+ *        user through a dedicated design pass grounded in edge-of-chaos
+ *        criticality (the legacy Python Studio's own inspiration) rather
+ *        than a formal entropy metric (Lyapunov exponent, recurrence
+ *        quantification, permutation entropy) - a concrete, directly
+ *        implementable mechanic instead:
+ *
+ * - **Chaos** (`amount() < 0`): within the stroke's own footprint, swaps
+ *   the intensity of a random subset of pixel pairs - at `amount() == -1`,
+ *   every eligible pixel participates in one random permutation among
+ *   itself, scrambling the footprint's own arrangement while - at full
+ *   opacity - leaving its total energy, average, and histogram *exactly*
+ *   unchanged (a pure permutation moves values around without creating or
+ *   destroying any of them; below full opacity, each swap is only
+ *   partially blended in, the same as everywhere else opacity applies, so
+ *   the preservation is no longer exact). Smaller magnitudes swap a
+ *   proportionally smaller random subset, leaving the rest of the footprint
+ *   untouched.
+ * - **Order** (`amount() > 0`): within the same footprint, builds a
+ *   horizontal (per-frame) and a vertical (per-bin) energy profile, finds
+ *   each one's own peak (the loudest column/row), and re-sorts a random
+ *   subset of pixels so the brightest end up closest to those two peak
+ *   lines and the darkest end up farthest - concentrating energy into an
+ *   emergent horizontal/vertical cross rather than leaving it scattered.
+ *   Audibly: noise pulled toward the horizontal line becomes a tone; a
+ *   transient pulled toward the vertical line becomes sharper; a
+ *   diagonal/chaotic tone pulled toward the horizontal line steadies into
+ *   one.
+ *
+ * **This is the first tool type in this milestone to need a field of its
+ * own** - `amount()` - unlike `HealConfiguration`/`SoftenConfiguration`/
+ * `SmudgeConfiguration`, which all reuse `size()`/`falloff()`/opacity
+ * entirely. The stroke's own gradient stop opacity is *still* reused, for
+ * a second, orthogonal purpose: `amount()` decides *what fraction of the
+ * footprint's own pixels participate* in the swap/reorder at all, while
+ * opacity decides *how strongly each participating pixel's own new value
+ * actually replaces the original* (a swap or reorder blended only
+ * partially back toward the original, the same "opacity is always the
+ * final blend-strength dial" precedent every other tool type already
+ * follows) - intensity (the Color swatch) still goes unused, same as
+ * Heal/Soften/Smudge. Never touches `sharedPhaseRadians` - only pixel
+ * *intensity* is swapped/reordered, matching every other blur/rearrange
+ * tool type's own "amplitude only" precedent.
+ */
+class OrderChaosConfiguration : public ToolConfiguration {
+public:
+    /// @brief Constructs a configuration with `amount()` at `0` - no
+    ///        effect until set.
+    OrderChaosConfiguration() = default;
+
+    [[nodiscard]] ToolType type() const noexcept override { return ToolType::OrderChaos; }
+
+    [[nodiscard]] std::unique_ptr<ToolConfiguration> clone() const override {
+        return std::make_unique<OrderChaosConfiguration>(*this);
+    }
+
+    /// @brief How far, and in which direction, this configuration pushes a
+    ///        painted region along the order/chaos continuum.
+    /// @return A value in `[-1, 1]`: negative for chaos, positive for
+    ///         order, `0` (the default) for no effect. Not clamped by this
+    ///         class itself - see `setAmount()`'s own docs.
+    [[nodiscard]] double amount() const noexcept { return amount_; }
+
+    /// @brief Sets `amount()`.
+    /// @param amount The new value - conventionally `[-1, 1]`, but not
+    ///        clamped here (the same "the Panel's own spin box enforces the
+    ///        meaningful range, this class doesn't second-guess it"
+    ///        precedent `ToolConfiguration::setFalloff()`'s own docs
+    ///        establish).
+    void setAmount(double amount) noexcept { amount_ = amount; }
+
+private:
+    double amount_ = 0.0;
+};
+
 /// @brief Serializes any concrete `ToolConfiguration` to its JSON
 ///        representation - dispatches on `type()` internally (a `"type"`
 ///        discriminator field, plus every field common to every subtype,
@@ -667,8 +788,8 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config);
  * @throws nlohmann::json::exception on malformed or missing required data.
  * @throws std::invalid_argument for a `"type"` this factory doesn't yet
  *         know how to construct (any value past `Procedural`/`Instrument`/
- *         `MindShot`/`MindGrain`/`Heal`/`Soften` - see `ToolType`'s own
- *         docs on which are real so far).
+ *         `MindShot`/`MindGrain`/`Heal`/`Soften`/`Smudge`/`OrderChaos` - see
+ *         `ToolType`'s own docs on which are real so far).
  */
 [[nodiscard]] std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::json& json);
 

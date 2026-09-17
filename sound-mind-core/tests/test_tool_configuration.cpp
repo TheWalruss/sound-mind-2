@@ -13,7 +13,9 @@ using sound_mind::core::HealConfiguration;
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindShotConfiguration;
+using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
+using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
@@ -454,8 +456,91 @@ TEST_CASE("A SoftenConfiguration round-trips through JSON", "[core][tool_configu
     REQUIRE(roundTripped->size() == 0.2);
 }
 
+TEST_CASE("A fresh SmudgeConfiguration is Smudge", "[core][tool_configuration]") {
+    const SmudgeConfiguration config;
+    REQUIRE(config.type() == ToolType::Smudge);
+}
+
+TEST_CASE("A SmudgeConfiguration's clone() is an independent, equal copy", "[core][tool_configuration]") {
+    SmudgeConfiguration config;
+    config.setName("Drag Along");
+    config.setFalloff(0.5f);
+    config.setSize(0.15);
+
+    const std::unique_ptr<ToolConfiguration> clone = config.clone();
+
+    REQUIRE(clone->type() == ToolType::Smudge);
+    REQUIRE(clone->name() == "Drag Along");
+    REQUIRE(clone->falloff() == 0.5f);
+    REQUIRE(clone->size() == 0.15);
+
+    config.setName("Renamed");
+    REQUIRE(clone->name() == "Drag Along");
+}
+
+TEST_CASE("A SmudgeConfiguration round-trips through JSON", "[core][tool_configuration]") {
+    SmudgeConfiguration config;
+    config.setName("Drag Along");
+    config.setFalloff(0.5f);
+    config.setSize(0.15);
+
+    const nlohmann::json json = config;
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    REQUIRE(roundTripped->type() == ToolType::Smudge);
+    REQUIRE(roundTripped->name() == "Drag Along");
+    REQUIRE(roundTripped->falloff() == 0.5f);
+    REQUIRE(roundTripped->size() == 0.15);
+}
+
+TEST_CASE("A fresh OrderChaosConfiguration is OrderChaos with amount() at 0", "[core][tool_configuration]") {
+    const OrderChaosConfiguration config;
+    REQUIRE(config.type() == ToolType::OrderChaos);
+    REQUIRE(config.amount() == 0.0);
+}
+
+TEST_CASE("OrderChaosConfiguration::setAmount() sets amount()", "[core][tool_configuration]") {
+    OrderChaosConfiguration config;
+    config.setAmount(-0.75);
+    REQUIRE(config.amount() == -0.75);
+    config.setAmount(0.4);
+    REQUIRE(config.amount() == 0.4);
+}
+
+TEST_CASE("An OrderChaosConfiguration's clone() is an independent, equal copy", "[core][tool_configuration]") {
+    OrderChaosConfiguration config;
+    config.setName("Toward Order");
+    config.setAmount(0.6);
+
+    const std::unique_ptr<ToolConfiguration> clone = config.clone();
+
+    REQUIRE(clone->type() == ToolType::OrderChaos);
+    REQUIRE(clone->name() == "Toward Order");
+    const auto& clonedOrderChaos = dynamic_cast<const OrderChaosConfiguration&>(*clone);
+    REQUIRE(clonedOrderChaos.amount() == 0.6);
+
+    config.setAmount(-0.9);
+    REQUIRE(clonedOrderChaos.amount() == 0.6);
+}
+
+TEST_CASE("An OrderChaosConfiguration round-trips through JSON", "[core][tool_configuration]") {
+    OrderChaosConfiguration config;
+    config.setName("Toward Chaos");
+    config.setAmount(-0.3);
+    config.setFalloff(0.2f);
+
+    const nlohmann::json json = config;
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    REQUIRE(roundTripped->type() == ToolType::OrderChaos);
+    REQUIRE(roundTripped->name() == "Toward Chaos");
+    REQUIRE(roundTripped->falloff() == 0.2f);
+    const auto& orderChaos = dynamic_cast<const OrderChaosConfiguration&>(*roundTripped);
+    REQUIRE(orderChaos.amount() == -0.3);
+}
+
 TEST_CASE("toolConfigurationFromJson() rejects an unrecognized type", "[core][tool_configuration]") {
     nlohmann::json json = ProceduralConfiguration{};
-    json["type"] = "smudge";  // a real ToolType value, but not yet a real tool - see its own docs.
+    json["type"] = "clone";  // a real ToolType value, but not yet a real tool - see its own docs.
     REQUIRE_THROWS_AS(toolConfigurationFromJson(json), std::invalid_argument);
 }

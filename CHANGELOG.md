@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.34.2] - 2026-09-17
+
+Deferred Paint Tools, Installment B: **Smudge** (directional smear) and **Order/Chaos** (spectral order/chaos push) - `docs/sound-mind-design.md`'s "Smudge"/"Order/Chaos". Second installment of the `v0.Y.34.1` milestone; only **Clone** and the Tool Configuration Wizard/Tool Preset library remain.
+
+### Added
+
+- **Smudge**, a new paintable Tool Type: drags pixels along the direction the stroke is actually moving, the way a finger smudges wet paint - a simpler per-stamp design than a classic paint program's own stateful "brush load," confirmed with the user. Brush Size/Falloff/Opacity/Color work exactly like Heal's/Soften's own; a single click (no drag) does nothing, since there's no direction to smear along.
+- **Order/Chaos**, a new paintable Tool Type spanning one continuum via a new **Amount** slider (`-1` full Chaos .. `0` no effect .. `+1` full Order) - the first tool type this milestone needed a control of its own for. **Chaos** randomly scrambles a fraction of the brush's own pixel intensities among themselves, leaving the overall loudness/color of the area unchanged, just rearranged. **Order** finds the loudest moment and frequency within the brush and pulls a fraction of pixels toward them, concentrating energy into an emergent horizontal/vertical structure - audibly, this can turn noise into a tone, sharpen a transient, or steady a wavering pitch. Smaller Amount magnitudes affect a smaller, randomly-chosen fraction of pixels rather than all of them; Opacity still controls how strongly each affected pixel's own new value replaces the original.
+
+Full regression: sound-mind-core 470/470 (up from 456), sound-mind-studio all 33 QTest classes passing (confirmed stable across repeated runs despite the real randomness Order/Chaos uses). Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #97.
+
 ## [0.0.34.1] - 2026-09-17
 
 Deferred Paint Tools, Installment A: **Heal** (temporal blur) and **Soften** (radial blur) - `docs/sound-mind-design.md`'s "Heal"/"Soften". First installment of the `v0.Y.34.1` milestone; Order/Chaos, Smudge, and Clone remain later installments.

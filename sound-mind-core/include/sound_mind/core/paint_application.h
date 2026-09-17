@@ -215,12 +215,13 @@ struct FrameBinRange {
  *        `operation.config().type()` to whichever concrete tool's own
  *        stamp algorithm applies (see `docs/sound-mind-design.md`'s
  *        "Procedural Brushes"/"Sound Mind Instruments"/"Mind Shots"/"Mind
- *        Grains"/"Heal"/"Soften" and "What Editing Does": painting
- *        amplitude pixels brighter/darker changes that frequency's
- *        loudness at that time). Any tool type past `Procedural`/
- *        `Instrument`/`MindShot`/`MindGrain`/`Heal`/`Soften` paints
- *        nothing yet, matching `ToolConfiguration`'s own "groundwork, not
- *        yet functional" note for those tool types.
+ *        Grains"/"Heal"/"Soften"/"Smudge"/"Order/Chaos" and "What Editing
+ *        Does": painting amplitude pixels brighter/darker changes that
+ *        frequency's loudness at that time). Any tool type past
+ *        `Procedural`/`Instrument`/`MindShot`/`MindGrain`/`Heal`/`Soften`/
+ *        `Smudge`/`OrderChaos` (namely `Clone`) paints nothing yet,
+ *        matching `ToolConfiguration`'s own "groundwork, not yet
+ *        functional" note for that tool type.
  *
  * Stamps are placed repeatedly along `operation.path()`, spaced per
  * `operation.config().stampMode()` (see `docs/sound-mind-design.md`'s
@@ -306,15 +307,34 @@ struct FrameBinRange {
  *   but isotropic - the box average spans both the time and frequency axes
  *   (both reusing `size()`'s own radius), for a uniform, undirected
  *   softening rather than Heal's own time-axis-only, defect-erasing blend.
+ * - **`SmudgeConfiguration`**: the same shape as `HealConfiguration` again,
+ *   but the average is sampled along a *line* through each footprint pixel
+ *   - oriented along the stroke's own local direction (from the previous
+ *   stroke sample to this one, or the next one for the very first sample)
+ *   and spanning that same hop's own distance - rather than an axis-aligned
+ *   box. A single-point stroke (no neighboring sample to derive a direction
+ *   from) is a no-op.
+ * - **`OrderChaosConfiguration`**: within the same footprint, `amount()`'s
+ *   own sign picks Chaos (negative - randomly permutes a fraction of the
+ *   footprint's own pixel values among themselves, preserving their total/
+ *   average/histogram exactly at full opacity) or Order (positive - finds
+ *   the footprint's own loudest frame/bin and reassigns a fraction of
+ *   pixels so the brightest end up closest to those two lines, the darkest
+ *   farthest, concentrating energy into an emergent cross); `0` (the
+ *   default) is a no-op. Blend strength is still the stroke's own gradient
+ *   stop opacity, same as every blur/rearrange tool type - `amount()`
+ *   itself controls *how much of the footprint participates*, an orthogonal
+ *   dial (see `OrderChaosConfiguration`'s own docs for why both exist).
  *
  * Overlapping stamps (a slow-moving stroke, the stroke's own path
  * doubling back on itself, an Instrument's own two harmonics landing on
  * the same bin, a Mind Shot/Mind Grain restamped repeatedly along a
- * dragged stroke, or a Heal/Soften brush passed over the same area more
- * than once) compound naturally - for the gradient-blended tool types
- * (Procedural/Instrument/Heal/Soften), the same way a real brush laid down
- * more heavily builds up more effect; for a Mind Shot or Mind Grain, each
- * later stamp's own hard overwrite simply wins over an earlier one
+ * dragged stroke, or a Heal/Soften/Smudge/Order-Chaos brush passed over the
+ * same area more than once) compound naturally - for the gradient-blended
+ * tool types (Procedural/Instrument/Heal/Soften/Smudge/OrderChaos), the
+ * same way a real brush laid down more heavily builds up more effect; for a
+ * Mind Shot or Mind Grain, each later stamp's own hard overwrite simply
+ * wins over an earlier one
  * wherever they overlap. Neither is specially guarded against.
  *
  * @param operation The stroke to apply - its own `path()`/`config()`

@@ -31,9 +31,11 @@ using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::MindShotId;
+using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
+using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::TimeFrequencyRect;
@@ -687,4 +689,77 @@ void ToolConfigurationPanelTest::loadingASoftenConfigurationSyncsToolType() {
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Soften"));
     QCOMPARE(panel.toolConfiguration().falloff(), 0.7f);
+}
+
+// --- Smudge/Order-Chaos (v0.Y.34.1 Installment B) ---------------------------
+
+void ToolConfigurationPanelTest::switchingToolTypeToSmudgeHidesEveryOtherGroup() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
+    auto* instrumentGroup = panel.findChild<QWidget*>(QStringLiteral("instrumentGroup"));
+    auto* mindShotGroup = panel.findChild<QWidget*>(QStringLiteral("mindShotGroup"));
+    auto* mindGrainGroup = panel.findChild<QWidget*>(QStringLiteral("mindGrainGroup"));
+    auto* orderChaosGroup = panel.findChild<QWidget*>(QStringLiteral("orderChaosGroup"));
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Smudge")));
+
+    QCOMPARE(panel.toolConfiguration().type(), ToolType::Smudge);
+    QVERIFY(proceduralGroup->isHidden());
+    QVERIFY(instrumentGroup->isHidden());
+    QVERIFY(mindShotGroup->isHidden());
+    QVERIFY(mindGrainGroup->isHidden());
+    QVERIFY(orderChaosGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::loadingASmudgeConfigurationSyncsToolType() {
+    ToolConfigurationPanel panel;
+    SmudgeConfiguration config;
+    config.setFalloff(0.4f);
+
+    panel.setToolConfiguration(config);
+
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Smudge"));
+    QCOMPARE(panel.toolConfiguration().falloff(), 0.4f);
+}
+
+void ToolConfigurationPanelTest::switchingToolTypeToOrderChaosShowsItsOwnGroupAndHidesProcedural() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
+    auto* orderChaosGroup = panel.findChild<QWidget*>(QStringLiteral("orderChaosGroup"));
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Order/Chaos")));
+
+    QCOMPARE(panel.toolConfiguration().type(), ToolType::OrderChaos);
+    QVERIFY(proceduralGroup->isHidden());
+    QVERIFY(!orderChaosGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::changingAmountEmitsToolConfigurationChanged() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Order/Chaos")));
+    auto* amountSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("amountSpinBox"));
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    amountSpinBox->setValue(-0.6);
+
+    QCOMPARE(spy.count(), 1);
+    const auto& orderChaos = dynamic_cast<const OrderChaosConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(orderChaos.amount(), -0.6);
+}
+
+void ToolConfigurationPanelTest::loadingAnOrderChaosConfigurationSyncsToolTypeAndAmount() {
+    ToolConfigurationPanel panel;
+    OrderChaosConfiguration config;
+    config.setAmount(0.35);
+
+    panel.setToolConfiguration(config);
+
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* amountSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("amountSpinBox"));
+    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Order/Chaos"));
+    QCOMPARE(amountSpinBox->value(), 0.35);
 }
