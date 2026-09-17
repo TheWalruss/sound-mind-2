@@ -453,7 +453,15 @@ The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument m
 
 Capture-and-stamp static samples; live-reference dynamic grains from a source layer. Also: revisit Record (Phase 2) to add capture-directly-to-a-Mind-Shot.
 
-**Demo:** capture a moment as a Mind Shot and restamp it; link a Mind Grain to a source layer and watch it change live as the source does.
+**In progress, scoped in a dedicated planning pass** (confirmed with the user, 2026-09-17), the same way Sound Mind Instruments' own installment plan was: **Installment A - Mind Shots only.** Mind Grains' own live-reference re-rendering and "only paintable on layers above the source" ordering rule are real, separate complexity Mind Shots doesn't share - confirmed as its own later installment (**B**) rather than building both together. Installment A's own confirmed shape:
+
+- **A named, Project-scoped Mind Shot library** - `NamedMindShot{id, name, Clip}`/`MindShotId`, `Project::mindShots()`/`addMindShot()`/`removeMindShot()`/`mindShotById()`, mirroring `NamedMindWave`'s own precedent exactly. Reuses the existing `Clip` struct (already Copy/Cut/Paste's own captured-content representation) rather than inventing a second image-patch format - a Mind Shot capture *is* architecturally the same thing Copy already does, just stored permanently and named instead of held anonymously on the clipboard.
+- **Captured via a new "Capture as Mind Shot" action on an active Selection** - alongside the existing Copy/Cut actions, reusing the same `captureClip()`-from-selection plumbing.
+- **A third `ToolConfiguration` subtype, `MindShotConfiguration`** - holds the chosen Mind Shot's own `Clip`, snapshotted at configuration time (not a live `MindShotId` reference resolved at paint/replay time) - the same "a config is a snapshot, not a reference into a shared mutable list" reasoning `ToolConfiguration`'s own class docs already establish for every other tool type, here also solving a real correctness question for free (an already-painted stroke keeps rendering correctly even if its source Mind Shot is later renamed or removed from the library).
+- **Stamps as a hard, Normal-only overwrite at the clip's own native captured size, centered on each stamp position** - "paints back exactly as it was when captured" taken literally: no falloff/brush-size scaling (matching `PasteOperation`'s own direct-overwrite semantics, not Procedural/Instrument's gradient blend). Blend-mode selection for this stamp (Multiply, etc.) is confirmed deferred to `v0.Y.37.1`'s own scoping pass, alongside layer compositing and Paste - see that milestone's own updated entry.
+- **Stamp placement (Stroke/Along Curve/Time Axis/Frequency Axis) is unchanged, reused as-is** - only *what happens at* each stamp position differs by tool type; *where* stamps land is already shared, type-independent machinery.
+
+**Demo:** capture a moment as a Mind Shot and restamp it, dragging to lay down a repeated pattern the way a rubber-stamp tool would; link a Mind Grain to a source layer and watch it change live as the source does (Installment B).
 
 ### v0.Y.34.1 - Deferred paint tools
 
@@ -476,6 +484,8 @@ The remaining scope from `docs/sound-mind-design.md`'s six Filter Layer families
 ### v0.Y.37.1 - Deferred blend modes
 
 Per `docs/sound-mind-design.md`'s own explicit "none is designed yet" - Normal (audio-style mixing, `v0.Y.27.1`) is still the only blend mode this document specifies. Real candidates it names: Multiply, Screen, and the rest of the usual image-editor catalogue, plus a MindWave-bound blend mode (making *where* and *how* layers mix spatially selective, not just the mix itself). **Needs its own scoping pass before implementation** (confirmed by the design doc's own wording, not this roadmap inventing scope for something undesigned), the same way Filter Layers'/MindWaves'/GPU Compute Enablement's own installment plans were.
+
+**Also covers per-stamp/per-paste blending, not just layer compositing** (confirmed with the user, 2026-09-17, while scoping Mind Shots & Mind Grains): a Mind Shot stamp (`v0.Y.33.1`) and a `PasteOperation` (`v0.Y.25.1`) are both, today and for `v0.Y.33.1`'s own Installment A, a hard, Normal-only overwrite of the target cells - the same real gap this milestone is already scoped to fill for layer mixing. When this milestone's own scoping pass happens, it should settle blend-mode selection for all three (layer compositing, Mind Shot stamps, Paste) together, not layer mixing alone.
 
 **Demo:** switch a layer from Normal to Multiply and hear/see the difference; bind a blend mode to a MindWave so it varies spatially across the canvas.
 
