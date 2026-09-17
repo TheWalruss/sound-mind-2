@@ -18,13 +18,13 @@ namespace sound_mind::core {
  *        see `docs/sound-mind-design.md`'s "Tool Configuration".
  *
  * @note Only `Procedural`, (as of `v0.Y.32.1`, Sound Mind Instruments)
- *       `Instrument`, and (as of `v0.Y.33.1`) `MindShot`/`MindGrain`
- *       exist as real, paintable tools so far -
- *       `Smudge`/`OrderChaos`/`Heal`/`Soften`/`Clone`
- *       are future roadmap milestones, not yet scheduled. Adding a value
- *       here ahead of its own tool actually working is deliberate
- *       groundwork for the Tool Configuration Panel/Wizard's dynamic-per-
- *       type UI, not a claim that tool is usable.
+ *       `Instrument`, (as of `v0.Y.33.1`) `MindShot`/`MindGrain`, and (as of
+ *       `v0.Y.34.1` Installment A) `Heal`/`Soften` exist as real, paintable
+ *       tools so far - `Smudge`/`OrderChaos`/`Clone` remain future roadmap
+ *       work, not yet scheduled. Adding a value here ahead of its own tool
+ *       actually working is deliberate groundwork for the Tool
+ *       Configuration Panel/Wizard's dynamic-per-type UI, not a claim that
+ *       tool is usable.
  */
 enum class ToolType {
     Procedural,
@@ -576,6 +576,72 @@ private:
     TimeFrequencyRect bounds_;
 };
 
+/**
+ * @brief Temporal blur, per `docs/sound-mind-design.md`'s "Heal": within
+ *        the stroke's own ordinary 2D falloff-weighted footprint (the same
+ *        one `ProceduralConfiguration` uses), each pixel blends toward a
+ *        plain box average of its own neighbors *along the time axis
+ *        only, at the same frequency bin* - the intended "erase a stray
+ *        mark without disturbing the surrounding texture" use, since a
+ *        genuine defect is usually a brief moment in time, not a whole
+ *        frequency band.
+ *
+ * **Adds no fields of its own** - confirmed with the user: `size()` doubles
+ * as both the stamp's own footprint radius (as for every tool type) *and*
+ * the temporal blur window's own half-width (how many neighboring frames
+ * get averaged); `falloff()` still softens the footprint's own edge,
+ * exactly as it always does; and the stroke's own gradient stop *opacity*
+ * (evaluated along the path, same as every other tool type) sets how
+ * strongly each pixel blends toward its own local average - the stop's
+ * *intensity* (the Color swatch) goes unused, the same "some shared
+ * controls are visible but inert for this tool type" precedent
+ * `MindShotConfiguration`/`MindGrainConfiguration` already established
+ * (there's no gradient "target loudness" for a blur to paint toward -
+ * only how much of the locally-averaged value to keep).
+ *
+ * See `applyPaintOperation()`'s own `HealConfiguration` dispatch branch for
+ * the actual blur math - it never touches `sharedPhaseRadians`, the same
+ * "blur only ever touches amplitude, never phase" precedent
+ * `filter_application.cpp`'s own `UniformBlur`/`DirectionalBlur`/
+ * `EdgePreservingBlur` filters already established.
+ */
+class HealConfiguration : public ToolConfiguration {
+public:
+    HealConfiguration() = default;
+
+    [[nodiscard]] ToolType type() const noexcept override { return ToolType::Heal; }
+
+    [[nodiscard]] std::unique_ptr<ToolConfiguration> clone() const override {
+        return std::make_unique<HealConfiguration>(*this);
+    }
+};
+
+/**
+ * @brief Radial blur, per `docs/sound-mind-design.md`'s "Soften": the same
+ *        idea as `HealConfiguration` above, but isotropic - each pixel
+ *        blends toward a plain box average of its own neighbors across
+ *        *both* the time and frequency axes, not time alone, for a
+ *        uniform, undirected softening rather than Heal's own
+ *        defect-erasing, time-axis-only blend.
+ *
+ * **Adds no fields of its own**, for exactly the same reasons
+ * `HealConfiguration`'s own docs give - `size()` doubles as both the
+ * footprint radius and the (now 2D) blur window's own half-extent in each
+ * direction, `falloff()` softens the footprint edge, and the stroke's own
+ * gradient stop opacity sets blend strength (intensity unused). See
+ * `applyPaintOperation()`'s own `SoftenConfiguration` dispatch branch.
+ */
+class SoftenConfiguration : public ToolConfiguration {
+public:
+    SoftenConfiguration() = default;
+
+    [[nodiscard]] ToolType type() const noexcept override { return ToolType::Soften; }
+
+    [[nodiscard]] std::unique_ptr<ToolConfiguration> clone() const override {
+        return std::make_unique<SoftenConfiguration>(*this);
+    }
+};
+
 /// @brief Serializes any concrete `ToolConfiguration` to its JSON
 ///        representation - dispatches on `type()` internally (a `"type"`
 ///        discriminator field, plus every field common to every subtype,
@@ -601,8 +667,8 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config);
  * @throws nlohmann::json::exception on malformed or missing required data.
  * @throws std::invalid_argument for a `"type"` this factory doesn't yet
  *         know how to construct (any value past `Procedural`/`Instrument`/
- *         `MindShot`/`MindGrain` - see `ToolType`'s own docs on which are
- *         real so far).
+ *         `MindShot`/`MindGrain`/`Heal`/`Soften` - see `ToolType`'s own
+ *         docs on which are real so far).
  */
 [[nodiscard]] std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::json& json);
 

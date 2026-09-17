@@ -9,10 +9,12 @@
 
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::Clip;
+using sound_mind::core::HealConfiguration;
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::ProceduralConfiguration;
+using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::core::toolConfigurationFromJson;
@@ -376,6 +378,80 @@ TEST_CASE("A MindGrainConfiguration round-trips through JSON with no source id",
     const auto& mindGrain = dynamic_cast<const MindGrainConfiguration&>(*roundTripped);
     REQUIRE(mindGrain.sourceMindGrainId() == std::nullopt);
     REQUIRE(mindGrain.sourceLayerId() == sound_mind::core::LayerId{4});
+}
+
+TEST_CASE("A fresh HealConfiguration is Heal", "[core][tool_configuration]") {
+    const HealConfiguration config;
+    REQUIRE(config.type() == ToolType::Heal);
+}
+
+TEST_CASE("A HealConfiguration's clone() is an independent, equal copy", "[core][tool_configuration]") {
+    HealConfiguration config;
+    config.setName("Defect Eraser");
+    config.setFalloff(0.4f);
+    config.setSize(0.1);
+
+    const std::unique_ptr<ToolConfiguration> clone = config.clone();
+
+    REQUIRE(clone->type() == ToolType::Heal);
+    REQUIRE(clone->name() == "Defect Eraser");
+    REQUIRE(clone->falloff() == 0.4f);
+    REQUIRE(clone->size() == 0.1);
+
+    config.setName("Renamed");
+    REQUIRE(clone->name() == "Defect Eraser");
+}
+
+TEST_CASE("A HealConfiguration round-trips through JSON", "[core][tool_configuration]") {
+    HealConfiguration config;
+    config.setName("Defect Eraser");
+    config.setFalloff(0.4f);
+    config.setSize(0.1);
+
+    const nlohmann::json json = config;
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    REQUIRE(roundTripped->type() == ToolType::Heal);
+    REQUIRE(roundTripped->name() == "Defect Eraser");
+    REQUIRE(roundTripped->falloff() == 0.4f);
+    REQUIRE(roundTripped->size() == 0.1);
+}
+
+TEST_CASE("A fresh SoftenConfiguration is Soften", "[core][tool_configuration]") {
+    const SoftenConfiguration config;
+    REQUIRE(config.type() == ToolType::Soften);
+}
+
+TEST_CASE("A SoftenConfiguration's clone() is an independent, equal copy", "[core][tool_configuration]") {
+    SoftenConfiguration config;
+    config.setName("Smooth Pass");
+    config.setFalloff(0.6f);
+    config.setSize(0.2);
+
+    const std::unique_ptr<ToolConfiguration> clone = config.clone();
+
+    REQUIRE(clone->type() == ToolType::Soften);
+    REQUIRE(clone->name() == "Smooth Pass");
+    REQUIRE(clone->falloff() == 0.6f);
+    REQUIRE(clone->size() == 0.2);
+
+    config.setName("Renamed");
+    REQUIRE(clone->name() == "Smooth Pass");
+}
+
+TEST_CASE("A SoftenConfiguration round-trips through JSON", "[core][tool_configuration]") {
+    SoftenConfiguration config;
+    config.setName("Smooth Pass");
+    config.setFalloff(0.6f);
+    config.setSize(0.2);
+
+    const nlohmann::json json = config;
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    REQUIRE(roundTripped->type() == ToolType::Soften);
+    REQUIRE(roundTripped->name() == "Smooth Pass");
+    REQUIRE(roundTripped->falloff() == 0.6f);
+    REQUIRE(roundTripped->size() == 0.2);
 }
 
 TEST_CASE("toolConfigurationFromJson() rejects an unrecognized type", "[core][tool_configuration]") {

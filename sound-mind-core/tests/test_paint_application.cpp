@@ -16,6 +16,7 @@ using sound_mind::core::BrushTipShape;
 using sound_mind::core::Clip;
 using sound_mind::core::frameIndexToTime;
 using sound_mind::core::frequencyToBinIndex;
+using sound_mind::core::HealConfiguration;
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::LayerContentResolver;
 using sound_mind::core::LayerId;
@@ -28,6 +29,7 @@ using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
 using sound_mind::core::rebuildPaintedContent;
+using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
@@ -156,6 +158,20 @@ std::unique_ptr<MindGrainConfiguration> makeMindGrainTool(LayerId sourceLayer, T
 std::unique_ptr<MindShotConfiguration> makeMindShotTool(Clip clip) {
     auto config = std::make_unique<MindShotConfiguration>();
     config->setClip(sound_mind::core::MindShotId{1}, std::move(clip));
+    return config;
+}
+
+std::unique_ptr<HealConfiguration> makeHealTool(double size, float falloff = 0.0f) {
+    auto config = std::make_unique<HealConfiguration>();
+    config->setSize(size);
+    config->setFalloff(falloff);
+    return config;
+}
+
+std::unique_ptr<SoftenConfiguration> makeSoftenTool(double size, float falloff = 0.0f) {
+    auto config = std::make_unique<SoftenConfiguration>();
+    config->setSize(size);
+    config->setFalloff(falloff);
     return config;
 }
 
@@ -711,6 +727,129 @@ TEST_CASE("applyPaintOperation with a MindGrainConfiguration paints nothing when
     for (const float value : content.leftMagnitudeDb) {
         REQUIRE(value == 0.0f);
     }
+}
+
+TEST_CASE("applyPaintOperation with a HealConfiguration blends the stamp's own center toward the box average of its "
+          "own temporal neighbors",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const int centerFrame = 50;
+    const int centerBin = 50;
+    content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] = 20.0f;
+    const float centerFreq = binIndexToFrequency(static_cast<float>(centerBin), config);
+
+    // size = 0.01 makes frameRadius exactly 1.0 (100 frames/second in
+    // makeTestConfig()'s own config) - a guaranteed 3-frame blur window
+    // (frames 49/50/51), same bin only. Full opacity, dead center (weight
+    // 1) - the healed value is exactly the 3-cell average.
+    const Path path = makeSingleTapPath(0.5, centerFreq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeHealTool(0.01));
+    applyPaintOperation(op, 2000.0, content);
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] ==
+            Catch::Approx(20.0f / 3.0f).margin(0.001));
+}
+
+TEST_CASE("applyPaintOperation with a HealConfiguration ignores neighboring bins - time axis only",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const int centerFrame = 50;
+    const int centerBin = 50;
+    content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] = 20.0f;
+    // A strong value one bin away, same frame - must NOT leak into the
+    // center pixel's own temporal-only blur average.
+    content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin + 1)] = 1000.0f;
+    const float centerFreq = binIndexToFrequency(static_cast<float>(centerBin), config);
+
+    const Path path = makeSingleTapPath(0.5, centerFreq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeHealTool(0.01));
+    applyPaintOperation(op, 2000.0, content);
+
+    // Same result as the previous test - the neighboring bin's spike had
+    // no effect at all on this pixel's own healed value.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] ==
+            Catch::Approx(20.0f / 3.0f).margin(0.001));
+}
+
+TEST_CASE("applyPaintOperation with a HealConfiguration scales blend strength by the stroke's own gradient opacity",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const int centerFrame = 50;
+    const int centerBin = 50;
+    content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] = 20.0f;
+    const float centerFreq = binIndexToFrequency(static_cast<float>(centerBin), config);
+
+    // Half opacity - the healed value only moves halfway from the
+    // original toward the local average, not all the way to it.
+    const Path path = makeSingleTapPath(0.5, centerFreq, 0.0f, 0.5f);
+    const PaintOperation op(1, LayerId{1}, path, makeHealTool(0.01));
+    applyPaintOperation(op, 2000.0, content);
+
+    const float average = 20.0f / 3.0f;
+    const float expected = 20.0f + (average - 20.0f) * 0.5f;
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] == Catch::Approx(expected).margin(0.001));
+}
+
+TEST_CASE("applyPaintOperation with a HealConfiguration never touches sharedPhaseRadians", "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const int centerFrame = 50;
+    const int centerBin = 50;
+    content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] = 20.0f;
+    content.sharedPhaseRadians[pixelIndex(content, centerFrame, centerBin)] = 1.2345f;
+    const float centerFreq = binIndexToFrequency(static_cast<float>(centerBin), config);
+
+    const Path path = makeSingleTapPath(0.5, centerFreq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeHealTool(0.01));
+    applyPaintOperation(op, 2000.0, content);
+
+    REQUIRE(content.sharedPhaseRadians[pixelIndex(content, centerFrame, centerBin)] == 1.2345f);
+}
+
+TEST_CASE("applyPaintOperation with a SoftenConfiguration blends the stamp's own center toward the box average of "
+          "its own 2D neighborhood",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const int centerFrame = 50;
+    const int centerBin = 50;
+    content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] = 20.0f;
+    const float centerFreq = binIndexToFrequency(static_cast<float>(centerBin), config);
+
+    // size = 0.01 makes frameRadius exactly 1.0, and (at frequencyToTimeScale
+    // 2000.0, this project's own default in these tests) the equivalent bin
+    // radius is well under 1.5 - both blur windows are guaranteed to be
+    // exactly 1 (`max(1, round(radius))`), giving a 3x3 = 9-cell window.
+    const Path path = makeSingleTapPath(0.5, centerFreq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeSoftenTool(0.01));
+    applyPaintOperation(op, 2000.0, content);
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] ==
+            Catch::Approx(20.0f / 9.0f).margin(0.001));
+}
+
+TEST_CASE("applyPaintOperation with a SoftenConfiguration pulls in a neighboring bin's value too - isotropic, "
+          "unlike Heal",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const int centerFrame = 50;
+    const int centerBin = 50;
+    // The spike is one bin away this time, not at the center itself.
+    content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin + 1)] = 1000.0f;
+    const float centerFreq = binIndexToFrequency(static_cast<float>(centerBin), config);
+
+    const Path path = makeSingleTapPath(0.5, centerFreq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeSoftenTool(0.01));
+    applyPaintOperation(op, 2000.0, content);
+
+    // The center pixel's own 3x3 window includes bin+1 - unlike Heal, which
+    // would never have picked this value up at all.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] ==
+            Catch::Approx(1000.0f / 9.0f).margin(0.001));
 }
 
 TEST_CASE("rebuildPaintedContent applies every PaintOperation in order, on top of a copy of base",

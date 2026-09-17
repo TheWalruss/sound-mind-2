@@ -22,6 +22,7 @@
 
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::Clip;
+using sound_mind::core::HealConfiguration;
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
@@ -33,6 +34,7 @@ using sound_mind::core::MindShotId;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
+using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ToolConfiguration;
@@ -609,4 +611,80 @@ void ToolConfigurationPanelTest::setActiveLayerClearsTheHighlightWhenTheActiveLa
     auto* mindGrainGroup = panel.findChild<QWidget*>(QStringLiteral("mindGrainGroup"));
     QVERIFY(mindGrainGroup->styleSheet().isEmpty());
     QVERIFY(mindGrainGroup->toolTip().isEmpty());
+}
+
+// --- Heal/Soften (v0.Y.34.1 Installment A) ----------------------------------
+
+void ToolConfigurationPanelTest::switchingToolTypeToHealHidesEveryOtherGroup() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
+    auto* instrumentGroup = panel.findChild<QWidget*>(QStringLiteral("instrumentGroup"));
+    auto* mindShotGroup = panel.findChild<QWidget*>(QStringLiteral("mindShotGroup"));
+    auto* mindGrainGroup = panel.findChild<QWidget*>(QStringLiteral("mindGrainGroup"));
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Heal")));
+
+    QCOMPARE(panel.toolConfiguration().type(), ToolType::Heal);
+    // Heal adds no group of its own - every other tool type's own group
+    // must be hidden, and none takes its place.
+    QVERIFY(proceduralGroup->isHidden());
+    QVERIFY(instrumentGroup->isHidden());
+    QVERIFY(mindShotGroup->isHidden());
+    QVERIFY(mindGrainGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::switchingToolTypeToSoftenHidesEveryOtherGroup() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
+    auto* instrumentGroup = panel.findChild<QWidget*>(QStringLiteral("instrumentGroup"));
+    auto* mindShotGroup = panel.findChild<QWidget*>(QStringLiteral("mindShotGroup"));
+    auto* mindGrainGroup = panel.findChild<QWidget*>(QStringLiteral("mindGrainGroup"));
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Soften")));
+
+    QCOMPARE(panel.toolConfiguration().type(), ToolType::Soften);
+    QVERIFY(proceduralGroup->isHidden());
+    QVERIFY(instrumentGroup->isHidden());
+    QVERIFY(mindShotGroup->isHidden());
+    QVERIFY(mindGrainGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::switchingToolTypeToHealPreservesSharedFields() {
+    ToolConfigurationPanel panel;
+    auto* falloffSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"));
+    auto* sizeSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    falloffSpinBox->setValue(0.6);
+    sizeSpinBox->setValue(1.5);
+
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Heal")));
+
+    QCOMPARE(panel.toolConfiguration().falloff(), 0.6f);
+    QCOMPARE(panel.toolConfiguration().size(), 1.5);
+}
+
+void ToolConfigurationPanelTest::loadingAHealConfigurationSyncsToolType() {
+    ToolConfigurationPanel panel;
+    HealConfiguration config;
+    config.setFalloff(0.3f);
+
+    panel.setToolConfiguration(config);
+
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Heal"));
+    QCOMPARE(panel.toolConfiguration().falloff(), 0.3f);
+}
+
+void ToolConfigurationPanelTest::loadingASoftenConfigurationSyncsToolType() {
+    ToolConfigurationPanel panel;
+    SoftenConfiguration config;
+    config.setFalloff(0.7f);
+
+    panel.setToolConfiguration(config);
+
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Soften"));
+    QCOMPARE(panel.toolConfiguration().falloff(), 0.7f);
 }

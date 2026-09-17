@@ -472,6 +472,217 @@ void applyMindGrainPaintOperation(const MindGrainConfiguration& toolConfig, cons
     }
 }
 
+/// @brief A snapshot of `content`'s own left/right magnitude cells over
+/// `[frameLow, frameHigh] x [binLow, binHigh]` (both inclusive, already
+/// clamped to the canvas's own valid range by the caller) - what
+/// `HealConfiguration`'s/`SoftenConfiguration`'s own per-stamp blur reads
+/// from, so a stamp's own blend is computed from what the canvas looked
+/// like *before* that stamp touched it, not a partially-already-blended
+/// value from earlier in that same stamp's own scanline order (the same
+/// "read from a separate buffer, never the one being written" precedent
+/// `filter_application.cpp`'s own `gaussianBlur2D()`/`medianBlur2D()`
+/// already establish for a whole-layer blur - a naive in-place blur would
+/// otherwise bias toward whichever direction it happens to iterate in).
+/// Stamps still compound normally across a whole stroke (or repeated
+/// strokes) - only a single stamp's own internal blend reads from a stable
+/// snapshot; the next stamp snapshots fresh, seeing everything the
+/// previous one just wrote.
+struct LocalMagnitudeSnapshot {
+    int frameLow = 0;
+    int binLow = 0;
+    int frameSpan = 0;
+    int binSpan = 0;
+    std::vector<float> left;
+    std::vector<float> right;
+
+    [[nodiscard]] std::size_t indexOf(int frame, int bin) const noexcept {
+        return static_cast<std::size_t>(bin - binLow) * static_cast<std::size_t>(frameSpan) +
+               static_cast<std::size_t>(frame - frameLow);
+    }
+};
+
+LocalMagnitudeSnapshot captureLocalSnapshot(const sound_mind::codec::StreamImage& content, int frameLow,
+                                             int frameHigh, int binLow, int binHigh) {
+    LocalMagnitudeSnapshot snapshot;
+    snapshot.frameLow = frameLow;
+    snapshot.binLow = binLow;
+    snapshot.frameSpan = frameHigh - frameLow + 1;
+    snapshot.binSpan = binHigh - binLow + 1;
+    const std::size_t cellCount =
+        static_cast<std::size_t>(snapshot.binSpan) * static_cast<std::size_t>(snapshot.frameSpan);
+    snapshot.left.resize(cellCount);
+    snapshot.right.resize(cellCount);
+    for (int bin = binLow; bin <= binHigh; ++bin) {
+        for (int frame = frameLow; frame <= frameHigh; ++frame) {
+            const std::size_t srcIndex = cellIndex(bin, frame, content.frameCount);
+            const std::size_t dstIndex = snapshot.indexOf(frame, bin);
+            snapshot.left[dstIndex] = content.leftMagnitudeDb[srcIndex];
+            snapshot.right[dstIndex] = content.rightMagnitudeDb[srcIndex];
+        }
+    }
+    return snapshot;
+}
+
+/// @brief The plain box average of `snapshot`'s own left/right magnitude
+/// cells over a `(2*frameWindow+1) x (2*binWindow+1)` neighborhood centered
+/// at `(frame, bin)`, clamped to the snapshot's own edges (never wrapping)
+/// - `HealConfiguration`'s (`binWindow == 0`) and `SoftenConfiguration`'s
+/// (both axes) own shared per-pixel blur target. `opacitySource`'s own
+/// opacity (not intensity - see `HealConfiguration`'s own docs) becomes the
+/// returned stop's own opacity, ready to hand straight to
+/// `blendTowardStop()`.
+GradientStop blurredNeighborhoodStop(const LocalMagnitudeSnapshot& snapshot, int frame, int bin, int frameWindow,
+                                      int binWindow, const GradientStop& opacitySource) {
+    const int frameLow = std::max(snapshot.frameLow, frame - frameWindow);
+    const int frameHigh = std::min(snapshot.frameLow + snapshot.frameSpan - 1, frame + frameWindow);
+    const int binLow = std::max(snapshot.binLow, bin - binWindow);
+    const int binHigh = std::min(snapshot.binLow + snapshot.binSpan - 1, bin + binWindow);
+
+    float leftSum = 0.0f;
+    float rightSum = 0.0f;
+    int count = 0;
+    for (int f = frameLow; f <= frameHigh; ++f) {
+        for (int b = binLow; b <= binHigh; ++b) {
+            const std::size_t index = snapshot.indexOf(f, b);
+            leftSum += snapshot.left[index];
+            rightSum += snapshot.right[index];
+            ++count;
+        }
+    }
+
+    GradientStop stop;
+    if (count > 0) {
+        stop.leftIntensity = leftSum / static_cast<float>(count);
+        stop.rightIntensity = rightSum / static_cast<float>(count);
+    }
+    stop.leftOpacity = opacitySource.leftOpacity;
+    stop.rightOpacity = opacitySource.rightOpacity;
+    return stop;
+}
+
+/// @brief `HealConfiguration`'s own stamp: within the usual 2D
+/// falloff-weighted footprint (identical to
+/// `applyProceduralPaintOperation()`'s own), each pixel blends toward the
+/// box average of its own neighboring cells along the time axis only, same
+/// bin - see `HealConfiguration`'s own docs for why `size()` doubles as
+/// both the footprint radius and the blur window's own half-width, and
+/// `blurredNeighborhoodStop()`'s own docs for why each stamp reads from a
+/// fresh per-stamp snapshot rather than the live, mutating `content`.
+void applyHealPaintOperation(const PaintOperation& operation, const HealConfiguration& toolConfig,
+                              const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
+                              sound_mind::codec::StreamImage& content) {
+    const double frameRadius =
+        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
+    if (frameRadius <= 0.0) {
+        return;
+    }
+    const int blurFrameWindow = std::max(1, static_cast<int>(std::lround(frameRadius)));
+
+    for (const StrokeSample& sample : samples) {
+        const GradientStop opacitySource = operation.path().gradient().evaluate(sample.pathT);
+
+        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
+        const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
+
+        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
+        const float binAbove =
+            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) + frequencyRadiusHz, content.config);
+        const float binBelow =
+            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) - frequencyRadiusHz, content.config);
+        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+
+        const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
+        const auto frameHigh =
+            std::min(static_cast<int>(content.frameCount) - 1, static_cast<int>(std::ceil(frameCenter + frameRadius)));
+        const auto binLow = std::max(0, static_cast<int>(std::floor(binCenter - binRadius)));
+        const auto binHigh =
+            std::min(static_cast<int>(content.config.binCount) - 1, static_cast<int>(std::ceil(binCenter + binRadius)));
+
+        // Snapshot region extended by the blur window itself (frames only -
+        // Heal never reaches into a neighboring bin) so every footprint
+        // pixel's own blur neighborhood is fully covered.
+        const int snapshotFrameLow = std::max(0, frameLow - blurFrameWindow);
+        const int snapshotFrameHigh = std::min(static_cast<int>(content.frameCount) - 1, frameHigh + blurFrameWindow);
+        const LocalMagnitudeSnapshot snapshot =
+            captureLocalSnapshot(content, snapshotFrameLow, snapshotFrameHigh, binLow, binHigh);
+
+        for (int frame = frameLow; frame <= frameHigh; ++frame) {
+            const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
+            for (int bin = binLow; bin <= binHigh; ++bin) {
+                const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
+                const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
+                const float weight = falloffWeight(dist, toolConfig.falloff());
+                if (weight <= 0.0f) {
+                    continue;
+                }
+                const GradientStop target = blurredNeighborhoodStop(snapshot, frame, bin, blurFrameWindow, 0, opacitySource);
+                const std::size_t index = cellIndex(bin, frame, content.frameCount);
+                blendTowardStop(content.leftMagnitudeDb[index], content.rightMagnitudeDb[index], target, weight);
+            }
+        }
+    }
+}
+
+/// @brief `SoftenConfiguration`'s own stamp - identical to
+/// `applyHealPaintOperation()` above except the blur neighborhood spans
+/// both axes (isotropic) rather than frames alone, per
+/// `SoftenConfiguration`'s own docs.
+void applySoftenPaintOperation(const PaintOperation& operation, const SoftenConfiguration& toolConfig,
+                                const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
+                                sound_mind::codec::StreamImage& content) {
+    const double frameRadius =
+        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
+    if (frameRadius <= 0.0) {
+        return;
+    }
+    const int blurFrameWindow = std::max(1, static_cast<int>(std::lround(frameRadius)));
+
+    for (const StrokeSample& sample : samples) {
+        const GradientStop opacitySource = operation.path().gradient().evaluate(sample.pathT);
+
+        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
+        const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
+
+        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
+        const float binAbove =
+            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) + frequencyRadiusHz, content.config);
+        const float binBelow =
+            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) - frequencyRadiusHz, content.config);
+        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+        const int blurBinWindow = std::max(1, static_cast<int>(std::lround(binRadius)));
+
+        const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
+        const auto frameHigh =
+            std::min(static_cast<int>(content.frameCount) - 1, static_cast<int>(std::ceil(frameCenter + frameRadius)));
+        const auto binLow = std::max(0, static_cast<int>(std::floor(binCenter - binRadius)));
+        const auto binHigh =
+            std::min(static_cast<int>(content.config.binCount) - 1, static_cast<int>(std::ceil(binCenter + binRadius)));
+
+        const int snapshotFrameLow = std::max(0, frameLow - blurFrameWindow);
+        const int snapshotFrameHigh = std::min(static_cast<int>(content.frameCount) - 1, frameHigh + blurFrameWindow);
+        const int snapshotBinLow = std::max(0, binLow - blurBinWindow);
+        const int snapshotBinHigh = std::min(static_cast<int>(content.config.binCount) - 1, binHigh + blurBinWindow);
+        const LocalMagnitudeSnapshot snapshot =
+            captureLocalSnapshot(content, snapshotFrameLow, snapshotFrameHigh, snapshotBinLow, snapshotBinHigh);
+
+        for (int frame = frameLow; frame <= frameHigh; ++frame) {
+            const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
+            for (int bin = binLow; bin <= binHigh; ++bin) {
+                const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
+                const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
+                const float weight = falloffWeight(dist, toolConfig.falloff());
+                if (weight <= 0.0f) {
+                    continue;
+                }
+                const GradientStop target =
+                    blurredNeighborhoodStop(snapshot, frame, bin, blurFrameWindow, blurBinWindow, opacitySource);
+                const std::size_t index = cellIndex(bin, frame, content.frameCount);
+                blendTowardStop(content.leftMagnitudeDb[index], content.rightMagnitudeDb[index], target, weight);
+            }
+        }
+    }
+}
+
 }  // namespace
 
 float frequencyToBinIndex(float frequencyHz, const sound_mind::codec::StreamCodecConfig& config) noexcept {
@@ -565,8 +776,12 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
         applyMindShotPaintOperation(*mindShot, samples, content);
     } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(&toolConfig)) {
         applyMindGrainPaintOperation(*mindGrain, samples, resolveLayerContent, content);
+    } else if (const auto* heal = dynamic_cast<const HealConfiguration*>(&toolConfig)) {
+        applyHealPaintOperation(operation, *heal, samples, frequencyToTimeScale, content);
+    } else if (const auto* soften = dynamic_cast<const SoftenConfiguration*>(&toolConfig)) {
+        applySoftenPaintOperation(operation, *soften, samples, frequencyToTimeScale, content);
     }
-    // Any other/future ToolType (Smudge, OrderChaos, ...) paints nothing
+    // Any other/future ToolType (Smudge, OrderChaos, Clone) paints nothing
     // yet - the same "groundwork, not yet functional" state
     // ToolConfiguration's own docs describe for those tool types.
 }

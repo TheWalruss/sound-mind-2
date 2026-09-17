@@ -419,11 +419,13 @@ default, alongside Layers/Playback/Record/Loop) with the brush's own
 settings:
 
 - **Tool Type** - **Procedural** (the default), **Instrument**, **Mind
-  Shot**, or **Mind Grain**; picks which set of controls below applies (Tip
-  Shape for Procedural, Harmonics/Inharmonicity for Instrument, a picker
-  for Mind Shot/Mind Grain). Switching keeps Falloff/Size/Stamp Mode/
-  Interval/Color/Opacity as they were - only the type-specific controls
-  reset to the newly-picked type's own defaults.
+  Shot**, **Mind Grain**, **Heal**, or **Soften**; picks which set of
+  controls below applies (Tip Shape for Procedural, Harmonics/Inharmonicity
+  for Instrument, a picker for Mind Shot/Mind Grain - Heal/Soften add no
+  controls of their own at all, see their own entries below). Switching
+  keeps Falloff/Size/Stamp Mode/Interval/Color/Opacity as they were - only
+  the type-specific controls reset to the newly-picked type's own
+  defaults.
 - **Tip Shape** (Procedural only) - the stroke's cross-section (Circle,
   Square, Diamond, and others - only Circle/Square/Diamond have a distinct
   shape so far; the rest currently paint the same as Circle).
@@ -466,6 +468,22 @@ settings:
   or deleting a layer that would break an *already-painted* Mind Grain
   stroke's own ordering is refused outright too, with a dialog explaining
   which stroke(s) would break and why.
+- **Heal** (Heal only, no controls of its own) - a temporal blur: instead of
+  painting a target color, each pixel blends toward the average of its own
+  neighboring cells *in time* (same frequency) - useful for erasing a
+  short, stray mark without disturbing the surrounding texture. **Brush
+  Size doubles as the blur window** (a bigger brush averages across more
+  neighboring moments, as well as covering more canvas), **Opacity is the
+  blend strength** (how much of the averaged result replaces the original -
+  100% fully replaces it, lower values only partially smooth it), and the
+  Color swatch has no effect (there's no fixed target color for a blur to
+  paint toward). Repeated or overlapping strokes over the same spot blur it
+  further each time, the same way a real blur brush would.
+- **Soften** (Soften only, no controls of its own) - the same idea as Heal,
+  but blurs uniformly in every direction (time *and* frequency) rather than
+  time alone, for a general softening instead of Heal's own
+  defect-erasing, single-axis blend. Brush Size/Opacity/Color work exactly
+  the same way Heal's own do.
 - **Falloff** - how soft the stroke's edge is, from a hard edge (`0`) to
   fully soft (`1`).
 - **Brush Size** - the tip's own radius: in seconds on the time axis, and
@@ -524,10 +542,11 @@ recently, in either order.
 
 Only **Procedural**, **Instrument** (harmonic series + inharmonicity only so
 far - no noise, body resonance, or envelope yet), **Mind Shot**
-(capture-and-restamp), and **Mind Grain** (a live reference that updates
-immediately, everywhere it's used, the moment its source is repainted)
-exist today - see [What's Not Here Yet](#whats-not-here-yet) for the rest
-of what's planned around painting.
+(capture-and-restamp), **Mind Grain** (a live reference that updates
+immediately, everywhere it's used, the moment its source is repainted),
+**Heal** (temporal blur), and **Soften** (radial blur) exist today - see
+[What's Not Here Yet](#whats-not-here-yet) for the rest of what's planned
+around painting.
 
 ## Pick
 
@@ -816,13 +835,15 @@ what's designed for it:
 
 - Only **Procedural**, **Instrument** (harmonic series + inharmonicity
   only - no noise component, body resonance, or ADSR envelope yet), **Mind
-  Shot** (capture-and-restamp), and **Mind Grain** (a live reference,
-  updating immediately everywhere it's used the moment its own source is
-  repainted) exist - the other painting tools (Smudge, Order/Chaos, Heal,
-  Soften, Clone) aren't built yet. Instrument strokes also don't yet bind
-  to a MindWave, and Loop Mode doesn't yet retrigger per note. A Mind
-  Shot/Mind Grain stamp always overwrites verbatim - blend-mode selection
-  (so it could blend rather than overwrite) is planned alongside
+  Shot** (capture-and-restamp), **Mind Grain** (a live reference, updating
+  immediately everywhere it's used the moment its own source is
+  repainted), **Heal** (temporal blur), and **Soften** (radial blur) exist
+  - the other painting tools (Smudge, Order/Chaos, Clone) aren't built yet,
+  and there's still no Tool Configuration Wizard or Tool Preset library
+  (see the next point). Instrument strokes also don't yet bind to a
+  MindWave, and Loop Mode doesn't yet retrigger per note. A Mind Shot/Mind
+  Grain stamp always overwrites verbatim - blend-mode selection (so it
+  could blend rather than overwrite) is planned alongside
   layer/Paste blend modes. There's also no UI yet to reposition an
   already-captured Mind Grain's own referenced region, and a Mind Grain
   only ever samples its own source *layer*'s own raw content - not the

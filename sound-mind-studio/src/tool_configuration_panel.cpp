@@ -27,12 +27,14 @@ namespace sound_mind::studio {
 namespace {
 
 using sound_mind::core::BrushTipShape;
+using sound_mind::core::HealConfiguration;
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::MindShotId;
 using sound_mind::core::ProceduralConfiguration;
+using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::core::ToolType;
@@ -78,13 +80,20 @@ constexpr std::array<std::pair<BrushTipShape, const char*>, 11> kTipShapes{{
 }};
 
 /// @brief Every real (usable) `ToolType` paired with its display name -
-/// only `Procedural`/`Instrument`/`MindShot`/`MindGrain` so far, see
-/// `ToolType`'s own docs on why the rest aren't offered here yet.
-constexpr std::array<std::pair<ToolType, const char*>, 4> kToolTypes{{
+/// only `Procedural`/`Instrument`/`MindShot`/`MindGrain`/`Heal`/`Soften` so
+/// far, see `ToolType`'s own docs on why the rest aren't offered here yet.
+/// `Heal`/`Soften` add no group of their own (see `HealConfiguration`'s/
+/// `SoftenConfiguration`'s own docs on why) - selecting either just hides
+/// every other type's own group, leaving only the shared Falloff/Brush
+/// Size/Stamp Mode/Color/Opacity controls visible, which is all either
+/// tool actually needs.
+constexpr std::array<std::pair<ToolType, const char*>, 6> kToolTypes{{
     {ToolType::Procedural, "Procedural"},
     {ToolType::Instrument, "Instrument"},
     {ToolType::MindShot, "Mind Shot"},
     {ToolType::MindGrain, "Mind Grain"},
+    {ToolType::Heal, "Heal"},
+    {ToolType::Soften, "Soften"},
 }};
 
 /// @brief The most harmonics `harmonicCountSpinBox_` allows - generous
@@ -389,6 +398,10 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
             }
         }
         replacement = std::move(mindGrain);
+    } else if (type == ToolType::Heal) {
+        replacement = std::make_unique<HealConfiguration>();
+    } else if (type == ToolType::Soften) {
+        replacement = std::make_unique<SoftenConfiguration>();
     } else {
         return;  // Defensive: toolTypeCombo_ only ever offers real types.
     }

@@ -67,6 +67,12 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config) {
         }
         json["sourceLayerId"] = mindGrain->sourceLayerId();
         json["bounds"] = mindGrain->bounds();
+    } else if (dynamic_cast<const HealConfiguration*>(&config)) {
+        // No subtype-specific fields at all - see HealConfiguration's own
+        // docs on why.
+        writeCommonToolConfigurationFields(json, config);
+    } else if (dynamic_cast<const SoftenConfiguration*>(&config)) {
+        writeCommonToolConfigurationFields(json, config);
     } else {
         // Defensive: every concrete subtype is handled above: if this is
         // ever reached, a new subtype was added without updating this
@@ -111,6 +117,10 @@ std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::jso
         mindGrain->setReference(sourceId, json.at("sourceLayerId").get<LayerId>(),
                                  json.at("bounds").get<TimeFrequencyRect>());
         config = std::move(mindGrain);
+    } else if (type == ToolType::Heal) {
+        config = std::make_unique<HealConfiguration>();
+    } else if (type == ToolType::Soften) {
+        config = std::make_unique<SoftenConfiguration>();
     } else {
         throw std::invalid_argument("ToolConfiguration: unrecognized \"type\" in toolConfigurationFromJson()");
     }

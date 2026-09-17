@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.34.1] - 2026-09-17
+
+Deferred Paint Tools, Installment A: **Heal** (temporal blur) and **Soften** (radial blur) - `docs/sound-mind-design.md`'s "Heal"/"Soften". First installment of the `v0.Y.34.1` milestone; Order/Chaos, Smudge, and Clone remain later installments.
+
+### Added
+
+- **Two new paintable Tool Types, Heal and Soften**, selectable from the Tool Configuration panel's Tool Type dropdown. Instead of painting toward a target color, each blends a stamp's own pixels toward the box average of their own neighboring cells - along the time axis only for Heal (erasing a stray mark without disturbing the surrounding texture), or isotropically (both time and frequency) for Soften. Brush Size doubles as both the stamp's own footprint radius and the blur window's own size; Opacity is blend strength (how much of the averaged result replaces the original); the Color swatch has no effect for either (there's no target color to paint toward). Neither adds any control of its own to the panel - the existing shared Falloff/Size/Stamp Mode/Color/Opacity controls are everything either tool needs.
+
+Full regression: sound-mind-core 456/456 (new `HealConfiguration`/`SoftenConfiguration` serialization and stamp-application cases, including an exact hand-computed blend value and a confirmation that Heal ignores neighboring bins while Soften doesn't), sound-mind-studio all 33 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #96.
+
 ## [0.0.33.3] - 2026-09-17
 
 Fixes a real gap found in manual testing of `v0.0.33.2`: a Mind Grain stroke didn't reflect a repaint of its own source layer until the *painted-on* layer itself happened to rebuild for some unrelated reason - `docs/sound-mind-design.md`'s "Mind Grains" always described an immediate update ("changes the stamp on every layer that uses it"), so this corrects Mind Grains to actually match it.

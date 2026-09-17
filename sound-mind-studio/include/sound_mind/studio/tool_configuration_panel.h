@@ -36,26 +36,31 @@ namespace sound_mind::studio {
  * philosophy. What's here is the actual parameter area the design doc
  * says both entry points edit - just reached directly, by hand, for now.
  *
- * **Four real tool types as of `v0.Y.33.1` Installment B (Mind Grains):**
- * a `ToolType` selector (`toolTypeCombo_`) switches between `Procedural`'s
- * own group (tip shape), `Instrument`'s own (harmonic count/strengths,
+ * **Six real tool types as of `v0.Y.34.1` Installment A (Heal/Soften):** a
+ * `ToolType` selector (`toolTypeCombo_`) switches between `Procedural`'s own
+ * group (tip shape), `Instrument`'s own (harmonic count/strengths,
  * inharmonicity), `MindShot`'s own (a picker over the project's own
- * `Project::mindShots()` library), and `MindGrain`'s own (a picker over
+ * `Project::mindShots()` library), `MindGrain`'s own (a picker over
  * `Project::mindGrains()`, with a red-highlight/tooltip warning - see
- * setActiveLayer()'s own docs) - the design doc's own "only the parameters
- * that apply to the current tool" dynamism, one group shown at a time, the
- * rest hidden, the same pattern `MindWaveEditor`/`FilterConfigurationPanel`
- * already establish for their own per-type groups. `falloff()`/`size()`/
- * `stampMode()`/`stampInterval()`/color/opacity are shared by every tool
- * type (`ToolConfiguration`'s own base fields) and stay visible regardless
- * of which is selected - though a Mind Shot/Mind Grain stamp doesn't
- * actually use falloff/size for anything (both are a hard, native-size
- * overwrite, see `MindShotConfiguration`'s/`MindGrainConfiguration`'s own
- * docs); they stay visible anyway rather than hidden per-type, since
- * nothing about this panel's own "one group per type" mechanism needs to
- * extend to the *shared* controls too. `Smudge`/`OrderChaos`/`Heal`/
- * `Soften`/`Clone` still have no real parameters of their own (see
- * `ToolConfiguration`'s own docs) and aren't offered in the selector yet.
+ * setActiveLayer()'s own docs), and `Heal`/`Soften` (neither adds a group of
+ * its own at all - see `HealConfiguration`'s/`SoftenConfiguration`'s own
+ * docs on why every parameter either needs is already shared) - the design
+ * doc's own "only the parameters that apply to the current tool" dynamism,
+ * one group shown at a time, the rest hidden, the same pattern
+ * `MindWaveEditor`/`FilterConfigurationPanel` already establish for their
+ * own per-type groups. `falloff()`/`size()`/`stampMode()`/`stampInterval()`/
+ * color/opacity are shared by every tool type (`ToolConfiguration`'s own
+ * base fields) and stay visible regardless of which is selected - though a
+ * Mind Shot/Mind Grain stamp doesn't actually use falloff/size for anything
+ * (both are a hard, native-size overwrite, see `MindShotConfiguration`'s/
+ * `MindGrainConfiguration`'s own docs), and a Heal/Soften stamp doesn't use
+ * the Color swatch's own intensity for anything (only Opacity, as blend
+ * strength - see `HealConfiguration`'s own docs); they stay visible anyway
+ * rather than hidden per-type, since nothing about this panel's own "one
+ * group per type" mechanism needs to extend to the *shared* controls too.
+ * `Smudge`/`OrderChaos`/`Clone` still have no real parameters of their own
+ * (see `ToolConfiguration`'s own docs) and aren't offered in the selector
+ * yet.
  *
  * **Needs a live `Project*` for the Mind Shot/Mind Grain pickers**
  * (`setProject()`) - every other control here is purely presentational,
@@ -270,10 +275,13 @@ private:
     void changeToolType(sound_mind::core::ToolType type);
 
     /// @brief Shows exactly one of `proceduralGroup_`/`instrumentGroup_`/
-    ///        `mindShotGroup_` - whichever matches `config_->type()` - and
-    ///        hides the other two, the same "one group per type" pattern
-    ///        `MindWaveEditor`/`FilterConfigurationPanel` already
-    ///        establish for their own per-type groups.
+    ///        `mindShotGroup_`/`mindGrainGroup_` - whichever matches
+    ///        `config_->type()` - and hides the rest, the same "one group
+    ///        per type" pattern `MindWaveEditor`/`FilterConfigurationPanel`
+    ///        already establish for their own per-type groups. `Heal`/
+    ///        `Soften` match none of the four - both leave every group
+    ///        hidden, since neither needs a group of its own (see
+    ///        `HealConfiguration`'s own docs).
     void updateVisibleToolTypeGroup();
 
     /// @brief `mindShotCombo_`'s own `currentIndexChanged` handler: if

@@ -49,4 +49,11 @@ private slots:
     void loadingAMindGrainConfigurationSyncsToolTypeAndThePickerSelection();
     void setActiveLayerHighlightsTheGroupWhenTheActiveLayerIsNotAboveTheSource();
     void setActiveLayerClearsTheHighlightWhenTheActiveLayerIsAboveTheSource();
+
+    // Heal/Soften (v0.Y.34.1 Installment A).
+    void switchingToolTypeToHealHidesEveryOtherGroup();
+    void switchingToolTypeToSoftenHidesEveryOtherGroup();
+    void switchingToolTypeToHealPreservesSharedFields();
+    void loadingAHealConfigurationSyncsToolType();
+    void loadingASoftenConfigurationSyncsToolType();
 };

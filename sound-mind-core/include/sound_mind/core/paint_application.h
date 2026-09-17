@@ -215,11 +215,12 @@ struct FrameBinRange {
  *        `operation.config().type()` to whichever concrete tool's own
  *        stamp algorithm applies (see `docs/sound-mind-design.md`'s
  *        "Procedural Brushes"/"Sound Mind Instruments"/"Mind Shots"/"Mind
- *        Grains" and "What Editing Does": painting amplitude pixels
- *        brighter/darker changes that frequency's loudness at that time).
- *        Any tool type past `Procedural`/`Instrument`/`MindShot`/
- *        `MindGrain` paints nothing yet, matching `ToolConfiguration`'s
- *        own "groundwork, not yet functional" note for those tool types.
+ *        Grains"/"Heal"/"Soften" and "What Editing Does": painting
+ *        amplitude pixels brighter/darker changes that frequency's
+ *        loudness at that time). Any tool type past `Procedural`/
+ *        `Instrument`/`MindShot`/`MindGrain`/`Heal`/`Soften` paints
+ *        nothing yet, matching `ToolConfiguration`'s own "groundwork, not
+ *        yet functional" note for those tool types.
  *
  * Stamps are placed repeatedly along `operation.path()`, spaced per
  * `operation.config().stampMode()` (see `docs/sound-mind-design.md`'s
@@ -285,15 +286,36 @@ struct FrameBinRange {
  *   is empty, the resolved layer doesn't exist/has no content, or the
  *   resulting clip is empty (`config.bounds()` outside the source's own
  *   extent).
+ * - **`HealConfiguration`**: within the same 2D falloff-weighted footprint
+ *   `ProceduralConfiguration` uses, every pixel blends toward a plain box
+ *   average of its own neighboring cells *along the time axis only, same
+ *   bin* - the window's own half-width is `size()`'s own frame-radius
+ *   (reused, not a separate parameter - see `HealConfiguration`'s own
+ *   docs), and blend strength is the stroke's own gradient stop *opacity*
+ *   at that point (intensity unused - there's no fixed target to paint
+ *   toward, only how much of the local average to keep). Never touches
+ *   `sharedPhaseRadians`, matching `filter_application.cpp`'s own blur
+ *   filters. The box average is computed from a snapshot of the canvas
+ *   taken *before* each individual stamp - not the same buffer being
+ *   written into mid-stamp - so a stamp's own blend never picks up a
+ *   scanline-order bias from cells it already touched earlier in that same
+ *   stamp (overlapping *stamps*, or a *repeated* stroke, still compound
+ *   normally on top of each other, the same as every other tool type -
+ *   only a single stamp's own internal blend is order-independent).
+ * - **`SoftenConfiguration`**: the same blend as `HealConfiguration` above,
+ *   but isotropic - the box average spans both the time and frequency axes
+ *   (both reusing `size()`'s own radius), for a uniform, undirected
+ *   softening rather than Heal's own time-axis-only, defect-erasing blend.
  *
  * Overlapping stamps (a slow-moving stroke, the stroke's own path
  * doubling back on itself, an Instrument's own two harmonics landing on
- * the same bin, or a Mind Shot/Mind Grain restamped repeatedly along a
- * dragged stroke) compound naturally - for the gradient-blended tool
- * types, the same way a real brush laid down more heavily builds up more
- * paint; for a Mind Shot or Mind Grain, each later stamp's own hard
- * overwrite simply wins over an earlier one wherever they overlap. Neither
- * is specially guarded against.
+ * the same bin, a Mind Shot/Mind Grain restamped repeatedly along a
+ * dragged stroke, or a Heal/Soften brush passed over the same area more
+ * than once) compound naturally - for the gradient-blended tool types
+ * (Procedural/Instrument/Heal/Soften), the same way a real brush laid down
+ * more heavily builds up more effect; for a Mind Shot or Mind Grain, each
+ * later stamp's own hard overwrite simply wins over an earlier one
+ * wherever they overlap. Neither is specially guarded against.
  *
  * @param operation The stroke to apply - its own `path()`/`config()`
  *        fully describe the stamp.
