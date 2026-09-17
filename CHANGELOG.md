@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.32.3] - 2026-09-17
+
+Renames the "Continuous" stamp mode to **Stroke**, per user feedback: it never was an even, fixed spacing (unlike Along Curve/Time Axis/Frequency Axis's own chosen intervals) - it stamps exactly as densely as the stroke's own raw input was drawn, so a slow stroke stamps more densely than a fast one over the same distance, independent of brush size.
+
+### Changed
+
+- **"Continuous" stamp mode is now called "Stroke"** in the Tool Configuration panel's Stamp Mode drop-down, its own tooltip text, and everywhere else it's named. Purely a rename - the underlying dense-sampling behavior is unchanged.
+
+Existing project files load unchanged (the old `"continuous"` JSON value is still recognized, just no longer written for new saves - see `docs/sound-mind-architecture.md`'s Decision #92).
+
+Full regression: sound-mind-core/codec/gpu/studio test suites passing (pure rename plus a new backward-compatibility test). Doxygen: 0 warnings.
+
 ## [0.0.32.2] - 2026-09-16
 
 Fixes a real, user-reported packaging bug from `v0.0.32.1`: the installed app (both the `.msi` installer and the `.zip`) failed to launch, complaining about missing `tiff.dll`, `avcodec-63.dll`, `avformat-63.dll`, and `swresample-7.dll`.

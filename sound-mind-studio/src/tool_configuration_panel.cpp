@@ -33,7 +33,7 @@ using sound_mind::core::ToolType;
 /// @brief Every `StampMode` paired with its display name, in the same
 /// order `docs/sound-mind-design.md`'s "Stamp Intervals" lists them.
 constexpr std::array<std::pair<StampMode, const char*>, 4> kStampModes{{
-    {StampMode::Continuous, "Continuous"},
+    {StampMode::Stroke, "Stroke"},
     {StampMode::AlongCurve, "Along Curve"},
     {StampMode::TimeAxis, "Time Axis"},
     {StampMode::FrequencyAxis, "Frequency Axis"},
@@ -473,15 +473,15 @@ void ToolConfigurationPanel::openColorDialog() {
 }
 
 void ToolConfigurationPanel::updateStampIntervalAppearance() {
-    const bool active = config_->stampMode() != StampMode::Continuous;
+    const bool active = config_->stampMode() != StampMode::Stroke;
     stampIntervalSpinBox_->setEnabled(active);
 
     switch (config_->stampMode()) {
-        case StampMode::Continuous:
+        case StampMode::Stroke:
             stampIntervalSpinBox_->setSuffix(QString());
             stampIntervalSpinBox_->setToolTip(
-                tr("Meaningless for Continuous - stamps are already spaced densely enough to overlap into one "
-                   "solid stroke."));
+                tr("Meaningless for Stroke - stamps are already spaced exactly as densely as the stroke's own "
+                   "raw input was drawn."));
             break;
         case StampMode::AlongCurve:
             stampIntervalSpinBox_->setSuffix(QStringLiteral(" s (along curve)"));

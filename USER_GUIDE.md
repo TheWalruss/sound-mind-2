@@ -449,8 +449,11 @@ settings:
   stroke on a typical project without covering too much of it at once.
 - **Stamp Mode** - how densely the brush's tip is stamped along a stroke's
   path, from a drop-down:
-  - **Continuous** (the default) - stamped as densely as the path itself
-    is drawn, with no gaps; unchanged from how painting has always worked.
+  - **Stroke** (the default) - stamped exactly as densely as the path
+    itself was drawn, with no gaps; unchanged from how painting has always
+    worked. Not an even spacing - drawing slowly stamps more densely over
+    a given distance than drawing quickly, and the spacing has nothing to
+    do with Brush Size, unlike every mode below.
   - **Along Curve** - stamped at even intervals measured along the path's
     own length, so a longer stroke gets proportionally more stamps.
   - **Time Axis** - stamped every time the path crosses an evenly-spaced
@@ -460,9 +463,9 @@ settings:
     evenly-spaced frequency, the same idea rotated onto the other axis
     ("Interval" is in Hz).
 
-  Choosing any mode but Continuous enables the **Interval** spin box next
+  Choosing any mode but Stroke enables the **Interval** spin box next
   to it, which sets the spacing (seconds for Along Curve/Time Axis, Hz for
-  Frequency Axis) - it's disabled and ignored under Continuous, where an
+  Frequency Axis) - it's disabled and ignored under Stroke, where an
   interval wouldn't mean anything. This is the same idea as the legacy
   Studio's "Curve" tool, minus its pixel-based unit (this build has no
   canvas zoom yet, so seconds/Hz are the only units that make sense).

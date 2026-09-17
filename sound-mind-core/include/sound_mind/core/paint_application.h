@@ -200,9 +200,11 @@ struct FrameBinRange {
  *
  * Stamps are placed repeatedly along `operation.path()`, spaced per
  * `operation.config().stampMode()` (see `docs/sound-mind-design.md`'s
- * "Stamp Intervals") the same way regardless of tool type: `Continuous`
- * (the default) stamps densely enough that consecutive stamps overlap
- * into one continuous stroke rather than a series of dots;
+ * "Stamp Intervals") the same way regardless of tool type: `Stroke`
+ * (the default) stamps exactly as densely as the stroke's own raw input
+ * was sampled - dense enough that consecutive stamps overlap into a
+ * solid stroke rather than a series of dots, but not a fixed, chosen
+ * spacing the way every other mode below uses;
  * `AlongCurve`/`TimeAxis`/`FrequencyAxis` instead space stamps
  * `stampInterval()` apart - by arc length, or wherever the path crosses a
  * time/frequency grid line, respectively - producing visibly separate

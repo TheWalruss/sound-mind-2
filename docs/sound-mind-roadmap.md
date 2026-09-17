@@ -436,26 +436,24 @@ Proposed installment shape (subject to its own scoping/confirmation round when e
 
 **Demo:** bind a sine MindWave to a layer's opacity; watch and hear it pulse.
 
-### v0.Y.32.1 - Sound Mind Instruments
+### v0.Y.32.1 - Sound Mind Instruments ✅
 
 The harmonic-series + inharmonicity + noise + body-resonance + ADSR instrument model; the canvas-space vs. operation-relative MindWave binding-coordinate-frame choice, since that's specifically about how a paint operation (an instrument note, in particular) binds to a MindWave. Also: revisit Loop Mode (Phase 2.5) to add the operation-relative retrigger feel this unlocks.
 
-**In progress, scoped in a dedicated planning pass** (confirmed with the user, `v0.0.32.1`) the same way GPU Compute Enablement's/Filter Layers' own installment plans were worked out separately from this document's own entry: **Installment A** (harmonic series + inharmonicity only, reusing `ToolConfiguration`'s existing radius/falloff footprint model for the time-axis blend, no frequency-axis blending) is done - see `docs/sound-mind-architecture.md`'s Decision #90. Not yet started or scoped, each its own later installment:
+**Confirmed done as shipped** (`v0.0.32.1`-`v0.0.32.3`, 2026-09-17): **Installment A** (harmonic series + inharmonicity only, reusing `ToolConfiguration`'s existing radius/falloff footprint model for the time-axis blend, no frequency-axis blending) is what this milestone actually ships - it works, and the user confirmed it's good enough to check off rather than pushing further installments through this same Z-slot. The remaining design-doc scope below is accordingly **not scheduled** (no committed future installment, unlike a normal "confirmed as its own later installment" deferral elsewhere in this document) - worth revisiting if a real need for it surfaces, but not currently planned work:
 
 - The **noise component**, **body resonance**, and **ADSR envelope** - the rest of `docs/sound-mind-design.md`'s "Sound Mind Instruments" model.
 - The **canvas-space vs. operation-relative binding-coordinate-frame choice**, and the **Loop Mode retrigger revisit** it unlocks.
 - **An audio preview** (added 2026-09-17): a preview control on the Tool Configuration panel that renders a short section of the instrument as currently configured, decodes it, and plays it back through the current audio output settings - so a shape/harmonic change can be heard immediately, without first painting a stroke to try it.
 - **A "Harmonic" stamp mode** (added 2026-09-17): `StampMode::FrequencyAxis`'s fixed-Hz-interval stamping doesn't make musical sense for an Instrument stroke - a new mode spaces stamps by the instrument's own harmonic/musical intervals instead, an audio-space equivalent to the existing frequency-space one. Instrument-specific; doesn't apply to Procedural.
 
-**Demo:** paint with an instrument voice that actually sounds like a plausible physical source; feed the same instrument through Loop Mode and hear it retrigger per note.
+**Demo, as actually shipped:** paint with a harmonic instrument voice (fundamental + adjustable overtones, with an inharmonicity stretch) and hear it. The original Demo's own "actually sounds like a plausible physical source" (needs noise/resonance/ADSR) and "feed it through Loop Mode and hear it retrigger per note" (needs the binding-coordinate-frame work) both go beyond what's now confirmed as this milestone's actual scope - left as the stated, real gap between what shipped and the design doc's own fuller vision, not silently dropped from the record.
 
 ### v0.Y.33.1 - Mind Shots & Mind Grains
 
 Capture-and-stamp static samples; live-reference dynamic grains from a source layer. Also: revisit Record (Phase 2) to add capture-directly-to-a-Mind-Shot.
 
 **Demo:** capture a moment as a Mind Shot and restamp it; link a Mind Grain to a source layer and watch it change live as the source does.
-
-**A natural point to circle back to Sound Mind Instruments' own still-open installments** (added 2026-09-17): noise/body resonance/ADSR, the binding-coordinate-frame choice, the audio preview, and the Harmonic stamp mode - see `v0.Y.32.1`'s own entry for the full, itemized list rather than repeating it here. Not a hard dependency either way (nothing about Mind Shots & Mind Grains needs Instruments finished first, or vice versa) - just a reasonable point in the sequence to close that milestone out before moving further into catch-up work below.
 
 ### v0.Y.34.1 - Deferred paint tools
 

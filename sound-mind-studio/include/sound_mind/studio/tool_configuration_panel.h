@@ -157,7 +157,7 @@ private:
 
     /// @brief Syncs stampIntervalSpinBox_'s own suffix/tooltip to
     ///        config_'s current `stampMode()`, and disables it entirely
-    ///        while that mode is `Continuous` (where an interval is
+    ///        while that mode is `Stroke` (where an interval is
     ///        meaningless - see `ToolConfiguration::stampInterval()`'s
     ///        own docs) - called after any change to config_'s stamp
     ///        mode, so the spin box never shows a stale/wrong unit.

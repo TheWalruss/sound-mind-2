@@ -98,10 +98,19 @@ NLOHMANN_JSON_SERIALIZE_ENUM(BrushTipShape, {
  * it lands.
  */
 enum class StampMode {
-    /// @brief Densely overlapping stamps, blending into one continuous
-    ///        stroke - the only mode that existed before Stamp Intervals,
-    ///        and still the default.
-    Continuous,
+    /// @brief Stamped exactly as densely as the stroke's own raw input
+    ///        was sampled - the only mode that existed before Stamp
+    ///        Intervals, and still the default. **Not** an even,
+    ///        fixed-distance spacing, and independent of brush size,
+    ///        unlike every other mode: a slowly-drawn stroke naturally
+    ///        samples (and therefore stamps) more densely over a given
+    ///        physical distance than a quickly-drawn one, since spacing
+    ///        follows raw input sampling, not a chosen interval. Named
+    ///        `Stroke` (renamed from `Continuous`, which wrongly implied
+    ///        a uniform density) rather than after the *effect* the other
+    ///        modes are named for (their own chosen spacing), since this
+    ///        one has no chosen spacing of its own to name.
+    Stroke,
     /// @brief Evenly spaced stamps measured along the Path's own arc
     ///        length, in the same seconds-equivalent normalized space
     ///        `ToolConfiguration::size()` already uses - a "dotted brush"
@@ -118,10 +127,17 @@ enum class StampMode {
 
 // clang-format off
 NLOHMANN_JSON_SERIALIZE_ENUM(StampMode, {
-    {StampMode::Continuous, "continuous"},
+    {StampMode::Stroke, "stroke"},
     {StampMode::AlongCurve, "alongCurve"},
     {StampMode::TimeAxis, "timeAxis"},
     {StampMode::FrequencyAxis, "frequencyAxis"},
+    // Legacy alias, pre-rename (v0.0.32.3) - reads a project file saved
+    // before this rename (`"stampMode": "continuous"`) back as `Stroke`;
+    // never written by to_json() (Stroke's own "stroke" entry above is
+    // listed first, so to_json()'s pair lookup always finds and writes
+    // that one instead - see NLOHMANN_JSON_SERIALIZE_ENUM's own
+    // first-match semantics for both directions).
+    {StampMode::Stroke, "continuous"},
 })
 // clang-format on
 
@@ -215,7 +231,7 @@ public:
 
     /// @brief How this tool's own stamps are spaced along whatever Path
     ///        they're applied to.
-    /// @return The currently configured stamp mode; `Continuous` by
+    /// @return The currently configured stamp mode; `Stroke` by
     ///         default (the only mode that existed before Stamp
     ///         Intervals).
     [[nodiscard]] StampMode stampMode() const noexcept { return stampMode_; }
@@ -226,8 +242,8 @@ public:
 
     /**
      * @brief The spacing `stampMode()` places stamps at - meaningless
-     *        while `stampMode()` is `Continuous` (which always uses its
-     *        own fixed, dense spacing instead).
+     *        while `stampMode()` is `Stroke` (which always follows the
+     *        raw input's own sampling density instead).
      *
      * The unit depends on `stampMode()`: seconds-equivalent arc length
      * for `AlongCurve` (the same normalized space `size()` uses), plain
@@ -273,7 +289,7 @@ private:
     std::string name_;
     float falloff_ = 0.5f;
     double size_ = 0.2;
-    StampMode stampMode_ = StampMode::Continuous;
+    StampMode stampMode_ = StampMode::Stroke;
     double stampInterval_ = 0.1;
     Gradient defaultGradient_;
 };

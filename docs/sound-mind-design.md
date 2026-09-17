@@ -319,7 +319,7 @@ A brush's **tip** defines the geometric footprint stamped at each paint event �
 
 ### Stamp Intervals
 
-By default, a stroke's own stamps are packed densely enough to overlap into one continuous line — but any brush can instead be set to space its stamps out, along its own [Path](#paths), by a chosen interval:
+By default (**Stroke** mode), a stamp lands exactly as densely as the stroke's own raw input was actually sampled — dense enough, in practice, to overlap into one continuous line, but not an even spacing: drawing slowly stamps more densely over a given distance than drawing quickly, and unlike every mode below, the spacing has nothing to do with the tip's own size. Any brush can instead be set to space its stamps out, along its own [Path](#paths), by a chosen interval:
 
 - **Along curve** — evenly spaced by the Path's own arc length, following every bend exactly as drawn.
 - **Time axis** — one stamp everywhere the Path crosses an evenly-spaced line of the [Timing Grid](#overlay-grids), regardless of the Path's own shape.
@@ -640,9 +640,9 @@ The layer panel is critical to the workflow and the general appearance and appea
 
 ### Stamp mode
 
-What is "continuous" and how is it different from "time axis"?
+Resolved (2026-09-17): what was named "Continuous" is renamed **Stroke** (`v0.0.32.3`) - it isn't actually a fixed, even spacing the way "Time Axis" (and every other mode) is; it just samples/stamps exactly as densely as the stroke's own raw input was drawn, independent of tip size, so a slow stroke stamps more densely than a fast one over the same distance. See [Stamp Intervals](#stamp-intervals) for the corrected description, and "Along curve" there for how it differs from that mode too (both follow the path's own geometry; the difference is density - dense-enough-to-look-solid vs. a deliberately sparse, countable interval).
 
-In addition to "frequency" stamp mode, add "harmonic" stamp mode, which is an appropriate audio-space stamping mode that makes more sense than a set frequency.
+In addition to "frequency" stamp mode, add "harmonic" stamp mode, which is an appropriate audio-space stamping mode that makes more sense than a set frequency. (Tracked in `docs/sound-mind-roadmap.md`'s `v0.Y.32.1`.)
 
 # Deferred Decisions
 

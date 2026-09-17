@@ -30,10 +30,10 @@ void readCommonToolConfigurationFields(const nlohmann::json& json, ToolConfigura
     config.setFalloff(json.at("falloff").get<float>());
     config.setSize(json.at("size").get<double>());
     // Absent in a project saved before Stamp Intervals existed - falls
-    // back to the same Continuous default/spacing every such project's
+    // back to the same Stroke default/spacing every such project's
     // own strokes already painted with, so an old project's own strokes
     // render identically after loading.
-    config.setStampMode(json.value("stampMode", StampMode::Continuous));
+    config.setStampMode(json.value("stampMode", StampMode::Stroke));
     config.setStampInterval(json.value("stampInterval", 0.1));
     config.defaultGradient() = json.at("defaultGradient").get<Gradient>();
 }

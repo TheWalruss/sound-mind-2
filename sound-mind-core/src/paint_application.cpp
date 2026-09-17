@@ -65,10 +65,10 @@ struct StrokeSample {
 };
 
 /// @brief The dense, evenly-parametrized (in each segment's own `t`, not
-/// arc length) sample list every `StampMode` starts from - `Continuous`
+/// arc length) sample list every `StampMode` starts from - `Stroke`
 /// mode's own final result, and the raw material `sampleStrokeAlongCurve()`/
 /// `sampleStrokeAxisCrossings()` below walk/interpolate the real stamp
-/// positions from. Dense enough (`kStepsPerRadius`) for `Continuous`
+/// positions from. Dense enough (`kStepsPerRadius`) for `Stroke`
 /// mode's own consecutive stamps to overlap into a solid stroke, which
 /// - since a stamp mode's own interval is essentially always coarser
 /// than that - is more than enough resolution for the other modes to
@@ -227,7 +227,7 @@ std::vector<StrokeSample> sampleStroke(const Path& path, double frequencyToTimeS
             return sampleStrokeAxisCrossings(dense, toolConfig.stampInterval(), StampAxis::Time);
         case StampMode::FrequencyAxis:
             return sampleStrokeAxisCrossings(dense, toolConfig.stampInterval(), StampAxis::Frequency);
-        case StampMode::Continuous:
+        case StampMode::Stroke:
         default:
             return dense;
     }

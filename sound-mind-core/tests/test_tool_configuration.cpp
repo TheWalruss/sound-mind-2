@@ -1,4 +1,5 @@
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
@@ -61,9 +62,9 @@ TEST_CASE("A ToolConfiguration's default gradient can be mutated in place", "[co
     REQUIRE(config.defaultGradient().linkChannels());
 }
 
-TEST_CASE("A fresh ToolConfiguration's stamp mode is Continuous", "[core][tool_configuration]") {
+TEST_CASE("A fresh ToolConfiguration's stamp mode is Stroke", "[core][tool_configuration]") {
     const ProceduralConfiguration config;
-    REQUIRE(config.stampMode() == StampMode::Continuous);
+    REQUIRE(config.stampMode() == StampMode::Stroke);
 }
 
 TEST_CASE("A ToolConfiguration's stamp mode can be changed", "[core][tool_configuration]") {
@@ -118,7 +119,7 @@ TEST_CASE("A ProceduralConfiguration round-trips through JSON", "[core][tool_con
     REQUIRE(roundTripped->defaultGradient().linkChannels());
 }
 
-TEST_CASE("A ToolConfiguration loaded from JSON with no stampMode/stampInterval keys falls back to Continuous",
+TEST_CASE("A ToolConfiguration loaded from JSON with no stampMode/stampInterval keys falls back to Stroke",
           "[core][tool_configuration]") {
     // A project saved before Stamp Intervals existed - its own strokes
     // must render identically after loading, not silently gain a new
@@ -130,8 +131,35 @@ TEST_CASE("A ToolConfiguration loaded from JSON with no stampMode/stampInterval 
 
     const std::unique_ptr<ToolConfiguration> loaded = toolConfigurationFromJson(json);
 
-    REQUIRE(loaded->stampMode() == StampMode::Continuous);
+    REQUIRE(loaded->stampMode() == StampMode::Stroke);
     REQUIRE(loaded->stampInterval() == 0.1);
+}
+
+TEST_CASE("A ToolConfiguration loaded from JSON with the pre-rename \"continuous\" stampMode string still loads as "
+          "Stroke",
+          "[core][tool_configuration]") {
+    // A project saved before the Continuous -> Stroke rename (v0.0.32.3) -
+    // its own strokes must render identically after loading, not silently
+    // fall back to some other mode because the old string is unrecognized.
+    nlohmann::json json = ProceduralConfiguration{};
+    json["stampMode"] = "continuous";
+
+    const std::unique_ptr<ToolConfiguration> loaded = toolConfigurationFromJson(json);
+
+    REQUIRE(loaded->stampMode() == StampMode::Stroke);
+}
+
+TEST_CASE("A ToolConfiguration round-trips StampMode::Stroke through JSON as \"stroke\", not \"continuous\"",
+          "[core][tool_configuration]") {
+    // The legacy "continuous" string is a read-only alias (see
+    // ToolConfiguration.h's own NLOHMANN_JSON_SERIALIZE_ENUM comment) -
+    // to_json() must always write the new "stroke" spelling going forward.
+    ProceduralConfiguration config;
+    config.setStampMode(StampMode::Stroke);
+
+    const nlohmann::json json = config;
+
+    REQUIRE(json.at("stampMode").get<std::string>() == "stroke");
 }
 
 TEST_CASE("A fresh InstrumentConfiguration is Instrument with a plausible default harmonic series",

@@ -159,12 +159,12 @@ void ToolConfigurationPanelTest::colorButtonExistsForOpeningTheRealDialog() {
     QCOMPARE(button->text(), panel.color().name());
 }
 
-void ToolConfigurationPanelTest::freshPanelHasStampModeContinuousAndTheIntervalSpinBoxDisabled() {
+void ToolConfigurationPanelTest::freshPanelHasStampModeStrokeAndTheIntervalSpinBoxDisabled() {
     const ToolConfigurationPanel panel;
-    QCOMPARE(panel.toolConfiguration().stampMode(), StampMode::Continuous);
+    QCOMPARE(panel.toolConfiguration().stampMode(), StampMode::Stroke);
     auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"));
     QVERIFY(intervalSpinBox != nullptr);
-    // Meaningless while Continuous - see ToolConfiguration::stampInterval()'s
+    // Meaningless while Stroke - see ToolConfiguration::stampInterval()'s
     // own docs - so disabled rather than editable-but-ignored.
     QVERIFY(!intervalSpinBox->isEnabled());
 }
