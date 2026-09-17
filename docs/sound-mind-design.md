@@ -36,6 +36,15 @@ The Sound Mind symbol is composed of five interwoven forms, each reflecting a pr
 
 # Concepts
 
+## Remember
+You are primarily _painting sound_. Painting pictures is secondary.
+Or, _hearing the image_ is primary, seeing it is secondary.
+Or, _seeing the sound_ is primary, hearing it is secondary.
+
+In this view, the emphasis of the sensory modalities is on the *inversion*: images are heard, sounds are seen. The emphasis on the action (or interaction) is in the *painting*. The alternative to this emphasis would be singing or instrumentation or musicianship, but the _logos_ of the SoundMind Studio is to support musicianship by means of the painting. 
+
+If the corollary also occurs (interesting visual arts as a consequence of music), then that is of course to be welcomed, and I would not be surprised if a Sound Mind project that emphasises the support of visual arts by means of music arises in the future.
+
 ## What is a Spectrogram?
 
 A spectrogram is a 2D representation of audio:
@@ -562,6 +571,78 @@ The standalone Studio can also load third-party plugins itself, on a layer or ac
 Both plugin roles only ever use the Stream codec on the audio thread — Pool's higher-fidelity round trip stays a manual, non-real-time step (see [Pool](#pool)), consistent with the requirement that real-time audio paths never touch anything that can allocate, block, or run for an unbounded time.
 
 ---
+
+# Additional design principles (2026-09-17)
+
+## Principal modes
+
+There shall be two principal "modes" that affect primarily procedural brush tips, translation/movement of selections or painted objects, and perhaps mindwaves and/or filters.
+
+### Sound-mode
+
+Sound-mode is what is currently (as of v0.0.32.2) the norm: painting a "circle" creates a shape that is a horizontal oval in the upper image region, and a vertical egg in the lower image region. This is because the circle's shape is defined with a fixed time-coordinate width and frequency-coordinate height, but the height scale varies on the logarithmic vertical axis.
+
+This has some advantages - a selection box that covers one octave in a high frequency range, will also cover one octave in a low frequency range. If it is square in a high range, it will be a narrow vertical rectangle in a lower range. But in sound-mode, the shape is not as important as maintaining some aspect of time-frequency invariance.
+
+Sound-mode could be called "time-frequency invariant mode".
+
+### Image-mode
+
+Image-mode is closer to what the legacy SoundMind Studio employed. Painting a "circle" appears as a circle in the image, anywhere. Moving a square from the upper image region to the lower image region will result in a square placed in the lower image region.
+
+This has some advantages - a face embedded in the music will remain undistorted, even when shifted or rotated or otherwise manipulated graphically. But, a circle in high frequencies would have a narrower perceptible frequency band than a circle in lower frequencies (so the perceived sound quality is not invariant to the translation). Moving the encoded image of a "chime sound" in image-mode vertically would not only change the pitch, but also the timbre (because the natural harmonics would end up dissonant, among other consequences).
+
+Image-mode could be called "pixel-space invariant mode".
+
+## Configure devices panel
+
+There shall be a central "configure devices" panel that allows the user to refresh input and output devices, choose the active input and output devices, test them, and adjust the master volume/gain for each.
+
+## Repeat Playback
+
+There shall be a "repeat" checkbox in the playback mode panel. This loops the output sound (starting over from the start when it reaches the end), and updates the output sound when the canvas is modified. This works in principle just like Loop Mode, but without a recording/input option. 
+
+In the Playback panel, there shall also be a "Scope" drop-down. Default is "Track", which plays the whole track.
+
+When "Delta" is selected, it restarts audio playback from the first modified column, the moment the canvas is updated. So when a user paints something, they immediately get to hear what that sounds like. It continues to the last modified column, and then halts or repeats depending on the "repeat" checkbox.
+
+When "Review" is selected, it functions just like "Delta" but continues past the last modified column. After it reaches the end of the track, it either halts or repeats from the start of the track.
+
+## Audio input clips
+
+When importing audio, check the length of the file and offer the user the clip selection dialogue BEFORE encoding. Saves potentially a lot of time, compute, and storage!
+
+## MP3
+
+MP3 and other audio formats should be available as inputs/outputs.
+
+## Documentation links
+
+The Quickstart, Readme, and Userguide shall be available from the Help menu and the Landing page. Check the legacy project for how the Help menu was structured - there's an About box and the documentation, which was helpful.
+
+## Hardware acceleration option
+
+There shall be a menu option to toggle GPU acceleration. That way, the user can evaluate the effects of having the GPU enabled - does it go faster, are the results the same, and how is power/heat/battery life affected?
+
+## Layer panel styling
+
+The layer panel is critical to the workflow and the general appearance and appeal of the SoundMind Studio. It shall be clean and functional, rich and informative.
+
+* Layer names shall be unique - this can be enforced with serial-number suffixes.
+
+* The layers are shown with their name (in a legible high-contrast font) overlaid on a rescaled representation of their visual contents. The rescaling is done diligently to minimize the effects of aliasing and to preserve salient features to help the user recognize the contents visually. Any MindWave applied for opacity is shown as a smaller, tabbed-in, "child" layer, with the visual contents being the grayscale "preview". Filter layers don't have a graphical representation - here, the name and filter type is displayed on a plain background suitable to the overall color theme.
+
+* For all unselected layers, no other controls are shown in the layer panel with the exception for the "visibility" eye.
+
+* The selected layer is expanded to show additional controls: opacity slider, "move" handle, blend mode selection, MindWave selection, "delete" x, and anything else I might have missed. Because this layer is expanded, there is plenty of room for all these controls without feeling crowded, and it is easy for the user to see which layer is active for painting or other modifications.
+
+## Painting options
+
+### Stamp mode
+
+What is "continuous" and how is it different from "time axis"?
+
+In addition to "frequency" stamp mode, add "harmonic" stamp mode, which is an appropriate audio-space stamping mode that makes more sense than a set frequency.
 
 # Deferred Decisions
 
