@@ -27,6 +27,7 @@ namespace sound_mind::studio {
 namespace {
 
 using sound_mind::core::BrushTipShape;
+using sound_mind::core::FixedStampPlacementConfiguration;
 using sound_mind::core::HealConfiguration;
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::MindGrainConfiguration;
@@ -252,7 +253,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     orderChaosForm->addRow(tr("Amount:"), amountSpinBox_);
     root->addWidget(orderChaosGroup_);
 
-    auto* form = new QFormLayout();
+    sharedControlsForm_ = new QFormLayout();
 
     falloffSpinBox_ = new QDoubleSpinBox(container);
     falloffSpinBox_->setObjectName(QStringLiteral("falloffSpinBox"));
@@ -263,7 +264,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
         config_->setFalloff(static_cast<float>(value));
         emitConfigChanged();
     });
-    form->addRow(tr("Falloff:"), falloffSpinBox_);
+    sharedControlsForm_->addRow(tr("Falloff:"), falloffSpinBox_);
 
     sizeSpinBox_ = new QDoubleSpinBox(container);
     sizeSpinBox_->setObjectName(QStringLiteral("sizeSpinBox"));
@@ -282,7 +283,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
         config_->setSize(value);
         emitConfigChanged();
     });
-    form->addRow(tr("Brush Size:"), sizeSpinBox_);
+    sharedControlsForm_->addRow(tr("Brush Size:"), sizeSpinBox_);
 
     stampModeCombo_ = new QComboBox(container);
     stampModeCombo_->setObjectName(QStringLiteral("stampModeCombo"));
@@ -294,7 +295,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
         updateStampIntervalAppearance();
         emitConfigChanged();
     });
-    form->addRow(tr("Stamp Mode:"), stampModeCombo_);
+    sharedControlsForm_->addRow(tr("Stamp Mode:"), stampModeCombo_);
 
     stampIntervalSpinBox_ = new QDoubleSpinBox(container);
     stampIntervalSpinBox_->setObjectName(QStringLiteral("stampIntervalSpinBox"));
@@ -306,7 +307,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
         config_->setStampInterval(value);
         emitConfigChanged();
     });
-    form->addRow(tr("Stamp Interval:"), stampIntervalSpinBox_);
+    sharedControlsForm_->addRow(tr("Stamp Interval:"), stampIntervalSpinBox_);
     updateStampIntervalAppearance();
 
     // Color/opacity directly below set *both* gradient stops uniformly -
@@ -320,7 +321,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     colorButton_->setToolTip(
         tr("Brush color (stereo balance) - red: left channel, green: right channel"));
     connect(colorButton_, &QPushButton::clicked, this, &ToolConfigurationPanel::openColorDialog);
-    form->addRow(tr("Color:"), colorButton_);
+    sharedControlsForm_->addRow(tr("Color:"), colorButton_);
 
     opacitySpinBox_ = new QDoubleSpinBox(container);
     opacitySpinBox_->setObjectName(QStringLiteral("opacitySpinBox"));
@@ -336,9 +337,9 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
         config_->defaultGradient().setStopValues(1, stop);
         emitConfigChanged();
     });
-    form->addRow(tr("Opacity:"), opacitySpinBox_);
+    sharedControlsForm_->addRow(tr("Opacity:"), opacitySpinBox_);
 
-    root->addLayout(form);
+    root->addLayout(sharedControlsForm_);
     root->addStretch();
 
     // Panel-own default: a real, fully-opaque brush (not the transparent
@@ -441,12 +442,24 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
     }
 
     // Every shared base field carries over from the outgoing configuration
-    // - see the class's own docs.
+    // - see the class's own docs. Stamp Mode/Interval specifically carry
+    // over via storedStampMode()/storedStampInterval() (the literal stored
+    // value), not the plain stampMode()/stampInterval() getters - if the
+    // *outgoing* configuration is one of FixedStampPlacementConfiguration's
+    // own subtypes, those getters report the forced AlongCurve/66%-of-size
+    // value, not the user's own real prior preference (still sitting,
+    // unread, in that object's own stored fields) - carrying the *forced*
+    // value forward would silently overwrite whatever Stamp Mode the user
+    // had actually chosen before switching into Heal/Soften/Smudge/
+    // OrderChaos, the moment they switch back out to a type where it's a
+    // real, live setting again. For a non-forced outgoing type, the stored
+    // and reported values are identical anyway, so this is unconditionally
+    // correct either way.
+    replacement->setStampMode(config_->storedStampMode());
+    replacement->setStampInterval(config_->storedStampInterval());
     replacement->setName(config_->name());
     replacement->setFalloff(config_->falloff());
     replacement->setSize(config_->size());
-    replacement->setStampMode(config_->stampMode());
-    replacement->setStampInterval(config_->stampInterval());
     replacement->defaultGradient() = config_->defaultGradient();
 
     config_ = std::move(replacement);
@@ -462,6 +475,24 @@ void ToolConfigurationPanel::updateVisibleToolTypeGroup() {
     mindGrainGroup_->setVisible(type == ToolType::MindGrain);
     orderChaosGroup_->setVisible(type == ToolType::OrderChaos);
     updateMindGrainValidity();
+    updateSharedControlVisibility();
+}
+
+void ToolConfigurationPanel::updateSharedControlVisibility() {
+    const ToolType type = config_->type();
+    const bool isMindShotOrGrain = type == ToolType::MindShot || type == ToolType::MindGrain;
+    const bool isFixedPlacement = dynamic_cast<const FixedStampPlacementConfiguration*>(config_.get()) != nullptr;
+
+    const bool showFalloffSizeAndOpacity = !isMindShotOrGrain;
+    const bool showStampModeAndInterval = !isFixedPlacement;
+    const bool showColor = !isMindShotOrGrain && !isFixedPlacement;
+
+    sharedControlsForm_->setRowVisible(falloffSpinBox_, showFalloffSizeAndOpacity);
+    sharedControlsForm_->setRowVisible(sizeSpinBox_, showFalloffSizeAndOpacity);
+    sharedControlsForm_->setRowVisible(stampModeCombo_, showStampModeAndInterval);
+    sharedControlsForm_->setRowVisible(stampIntervalSpinBox_, showStampModeAndInterval);
+    sharedControlsForm_->setRowVisible(colorButton_, showColor);
+    sharedControlsForm_->setRowVisible(opacitySpinBox_, showFalloffSizeAndOpacity);
 }
 
 void ToolConfigurationPanel::rebuildHarmonicStrengthRows(std::size_t count) {

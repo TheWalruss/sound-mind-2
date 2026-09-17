@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
@@ -537,6 +538,73 @@ TEST_CASE("An OrderChaosConfiguration round-trips through JSON", "[core][tool_co
     REQUIRE(roundTripped->falloff() == 0.2f);
     const auto& orderChaos = dynamic_cast<const OrderChaosConfiguration&>(*roundTripped);
     REQUIRE(orderChaos.amount() == -0.3);
+}
+
+TEST_CASE("HealConfiguration's own stampMode()/stampInterval() are forced regardless of setStampMode()/"
+          "setStampInterval()",
+          "[core][tool_configuration]") {
+    HealConfiguration config;
+    config.setStampMode(StampMode::TimeAxis);
+    config.setStampInterval(999.0);
+    config.setSize(0.5);
+
+    REQUIRE(config.stampMode() == StampMode::AlongCurve);
+    REQUIRE(config.stampInterval() == Catch::Approx(0.5 * 0.66));
+
+    // Live, not a one-time snapshot - changing size() keeps the interval
+    // proportional to it.
+    config.setSize(1.0);
+    REQUIRE(config.stampInterval() == Catch::Approx(1.0 * 0.66));
+}
+
+TEST_CASE("SoftenConfiguration's own stampMode()/stampInterval() are forced regardless of setStampMode()/"
+          "setStampInterval()",
+          "[core][tool_configuration]") {
+    SoftenConfiguration config;
+    config.setStampMode(StampMode::FrequencyAxis);
+    config.setStampInterval(999.0);
+    config.setSize(0.3);
+
+    REQUIRE(config.stampMode() == StampMode::AlongCurve);
+    REQUIRE(config.stampInterval() == Catch::Approx(0.3 * 0.66));
+}
+
+TEST_CASE("SmudgeConfiguration's own stampMode()/stampInterval() are forced regardless of setStampMode()/"
+          "setStampInterval()",
+          "[core][tool_configuration]") {
+    SmudgeConfiguration config;
+    config.setStampMode(StampMode::Stroke);
+    config.setStampInterval(999.0);
+    config.setSize(0.4);
+
+    REQUIRE(config.stampMode() == StampMode::AlongCurve);
+    REQUIRE(config.stampInterval() == Catch::Approx(0.4 * 0.66));
+}
+
+TEST_CASE("OrderChaosConfiguration's own stampMode()/stampInterval() are forced regardless of setStampMode()/"
+          "setStampInterval()",
+          "[core][tool_configuration]") {
+    OrderChaosConfiguration config;
+    config.setStampMode(StampMode::TimeAxis);
+    config.setStampInterval(999.0);
+    config.setSize(0.6);
+
+    REQUIRE(config.stampMode() == StampMode::AlongCurve);
+    REQUIRE(config.stampInterval() == Catch::Approx(0.6 * 0.66));
+}
+
+TEST_CASE("A HealConfiguration always serializes stampMode as alongCurve, regardless of what was set",
+          "[core][tool_configuration]") {
+    HealConfiguration config;
+    config.setStampMode(StampMode::Stroke);  // Ignored by the forced override.
+    config.setSize(0.2);
+
+    const nlohmann::json json = config;
+    REQUIRE(json.at("stampMode").get<std::string>() == "alongCurve");
+    REQUIRE(json.at("stampInterval").get<double>() == Catch::Approx(0.2 * 0.66));
+
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+    REQUIRE(roundTripped->stampMode() == StampMode::AlongCurve);
 }
 
 TEST_CASE("toolConfigurationFromJson() rejects an unrecognized type", "[core][tool_configuration]") {

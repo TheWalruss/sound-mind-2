@@ -233,16 +233,41 @@ public:
     ///        validated here.
     void setSize(double size) noexcept { size_ = size; }
 
-    /// @brief How this tool's own stamps are spaced along whatever Path
-    ///        they're applied to.
-    /// @return The currently configured stamp mode; `Stroke` by
-    ///         default (the only mode that existed before Stamp
-    ///         Intervals).
-    [[nodiscard]] StampMode stampMode() const noexcept { return stampMode_; }
+    /**
+     * @brief How this tool's own stamps are spaced along whatever Path
+     *        they're applied to.
+     *
+     * Virtual (as of `v0.Y.34.1` Installment C) - `FixedStampPlacementConfiguration`
+     * overrides this to always report `AlongCurve`, unconditionally, for the
+     * four tool types that need predictable, evenly-spaced stamps to look
+     * and sound right (see its own docs). `setStampMode()` still exists and
+     * still writes the same literal `stampMode_` on those types too -
+     * `storedStampMode()` (below) is how a caller (specifically
+     * `ToolConfigurationPanel::changeToolType()`'s own "carry every shared
+     * field over from the outgoing configuration" step) reads that literal
+     * value back, bypassing this override, so a value the user actually
+     * chose isn't silently replaced by whatever a *forced* type happened to
+     * report while it was briefly the active tool.
+     *
+     * @return The currently configured stamp mode; `Stroke` by
+     *         default (the only mode that existed before Stamp
+     *         Intervals).
+     */
+    [[nodiscard]] virtual StampMode stampMode() const noexcept { return stampMode_; }
 
     /// @brief Sets how this tool's own stamps are spaced along a Path.
     /// @param mode The new stamp mode.
     void setStampMode(StampMode mode) noexcept { stampMode_ = mode; }
+
+    /// @brief The literal, stored stamp mode - `stampMode()`'s own value on
+    ///        any tool type that doesn't override it, but (unlike
+    ///        `stampMode()`) still the *last value `setStampMode()` was
+    ///        actually called with* even on a `FixedStampPlacementConfiguration`
+    ///        subtype, whose own `stampMode()` override otherwise hides it.
+    ///        See `stampMode()`'s own docs for why this exists, and when to
+    ///        reach for it instead of the ordinary getter.
+    /// @return The literal stored value, ignoring any override.
+    [[nodiscard]] StampMode storedStampMode() const noexcept { return stampMode_; }
 
     /**
      * @brief The spacing `stampMode()` places stamps at - meaningless
@@ -253,17 +278,28 @@ public:
      * for `AlongCurve` (the same normalized space `size()` uses), plain
      * seconds for `TimeAxis`, Hz for `FrequencyAxis`.
      *
+     * Virtual, for the same reason `stampMode()` is - see its own docs.
+     * `FixedStampPlacementConfiguration` overrides this to always report
+     * `66%` of `size()`, live (recomputed from whatever `size()` currently
+     * is, not a stored snapshot taken once).
+     *
      * @return The current interval; not clamped or validated here, but
      *         a non-positive value stamps nothing (see
      *         `sampleStroke()`'s own docs in `paint_application.cpp`).
      */
-    [[nodiscard]] double stampInterval() const noexcept { return stampInterval_; }
+    [[nodiscard]] virtual double stampInterval() const noexcept { return stampInterval_; }
 
     /// @brief Sets `stampMode()`'s own spacing.
     /// @param interval The new interval, in whatever unit stampInterval()'s
     ///        own docs specify for the current stampMode(); intended to be
     ///        positive.
     void setStampInterval(double interval) noexcept { stampInterval_ = interval; }
+
+    /// @brief The literal, stored stamp interval - see `storedStampMode()`'s
+    ///        own docs for why this exists alongside the ordinary,
+    ///        possibly-overridden `stampInterval()` getter.
+    /// @return The literal stored value, ignoring any override.
+    [[nodiscard]] double storedStampInterval() const noexcept { return stampInterval_; }
 
     /// @brief This tool's own default gradient - seeds a new Path's own
     ///        gradient (see `path.h`) whenever painting starts with this
@@ -577,6 +613,50 @@ private:
 };
 
 /**
+ * @brief An intermediate base for tool types whose own stamp placement is
+ *        always `AlongCurve`, at `66%` of `size()`, unconditionally -
+ *        `HealConfiguration`/`SoftenConfiguration`/`SmudgeConfiguration`/
+ *        `OrderChaosConfiguration` (`v0.Y.34.1` Installment C), confirmed
+ *        with the user: these four tools' own results only look/sound good
+ *        with stamps evenly spaced along the path at a size-proportional
+ *        interval - `Stroke` mode's own raw-input-density spacing (or any
+ *        of the other, differently-spaced modes) can leave visible gaps or
+ *        uneven overlap for a blur/rearrange effect in a way it never does
+ *        for a color-blended brush stamp. Rather than trust every caller to
+ *        configure this by hand, it's enforced structurally: neither
+ *        `stampMode()` nor `stampInterval()` can be set to anything else on
+ *        any of the four, from any entry point (the Tool Configuration
+ *        Panel, a loaded project file, or direct construction) - see
+ *        `ToolConfiguration::stampMode()`'s own docs for why the setters
+ *        still exist and still write their own now-ignored stored values
+ *        harmlessly. The Tool Configuration Panel hides its own Stamp
+ *        Mode/Stamp Interval controls entirely for these four tool types,
+ *        rather than showing disabled controls with no effect.
+ *
+ * `size()` itself is unaffected - still each tool's own real, user-set
+ * footprint radius; only the derived placement interval is forced.
+ */
+class FixedStampPlacementConfiguration : public ToolConfiguration {
+public:
+    [[nodiscard]] StampMode stampMode() const noexcept final { return StampMode::AlongCurve; }
+
+    /// @brief `66%` of `size()`, recomputed live from whatever `size()`
+    ///        currently is - not a stored snapshot taken once, so changing
+    ///        Brush Size keeps the stamp interval proportional to it.
+    /// @return `size() * 0.66`.
+    [[nodiscard]] double stampInterval() const noexcept final { return size() * 0.66; }
+
+protected:
+    /// @brief Default-constructs with the base class's own defaults; only
+    ///        reachable through a concrete subtype's own constructor.
+    FixedStampPlacementConfiguration() = default;
+
+    /// @brief Copy-constructs from another instance; only reachable through
+    ///        a concrete subtype's own `clone()`.
+    FixedStampPlacementConfiguration(const FixedStampPlacementConfiguration&) = default;
+};
+
+/**
  * @brief Temporal blur, per `docs/sound-mind-design.md`'s "Heal": within
  *        the stroke's own ordinary 2D falloff-weighted footprint (the same
  *        one `ProceduralConfiguration` uses), each pixel blends toward a
@@ -597,7 +677,8 @@ private:
  * controls are visible but inert for this tool type" precedent
  * `MindShotConfiguration`/`MindGrainConfiguration` already established
  * (there's no gradient "target loudness" for a blur to paint toward -
- * only how much of the locally-averaged value to keep).
+ * only how much of the locally-averaged value to keep). Stamp placement is
+ * fixed too - see `FixedStampPlacementConfiguration`'s own docs.
  *
  * See `applyPaintOperation()`'s own `HealConfiguration` dispatch branch for
  * the actual blur math - it never touches `sharedPhaseRadians`, the same
@@ -605,7 +686,7 @@ private:
  * `filter_application.cpp`'s own `UniformBlur`/`DirectionalBlur`/
  * `EdgePreservingBlur` filters already established.
  */
-class HealConfiguration : public ToolConfiguration {
+class HealConfiguration : public FixedStampPlacementConfiguration {
 public:
     HealConfiguration() = default;
 
@@ -628,10 +709,12 @@ public:
  * `HealConfiguration`'s own docs give - `size()` doubles as both the
  * footprint radius and the (now 2D) blur window's own half-extent in each
  * direction, `falloff()` softens the footprint edge, and the stroke's own
- * gradient stop opacity sets blend strength (intensity unused). See
- * `applyPaintOperation()`'s own `SoftenConfiguration` dispatch branch.
+ * gradient stop opacity sets blend strength (intensity unused). Stamp
+ * placement is fixed too - see `FixedStampPlacementConfiguration`'s own
+ * docs. See `applyPaintOperation()`'s own `SoftenConfiguration` dispatch
+ * branch.
  */
-class SoftenConfiguration : public ToolConfiguration {
+class SoftenConfiguration : public FixedStampPlacementConfiguration {
 public:
     SoftenConfiguration() = default;
 
@@ -653,12 +736,13 @@ public:
  *        oriented along the stroke's own local direction, spanning the
  *        distance to the neighboring stamp* - computed independently per
  *        stamp, the same execution shape every other tool type already
- *        uses (no new state carried between stamps). At `Stroke` mode's
- *        own dense stamping, each individual smear is short, but
- *        overlapping stamps compound into a continuous smeared trail as the
- *        stroke progresses - the same "overlapping stamps compound
- *        naturally" precedent every gradient-blended tool type already
- *        follows.
+ *        uses (no new state carried between stamps). Forced to `AlongCurve`
+ *        placement (see `FixedStampPlacementConfiguration`'s own docs), so
+ *        every stamp's own neighbor is a real, evenly-spaced one rather than
+ *        `Stroke` mode's own raw-input-density samples - overlapping stamps
+ *        still compound into a continuous smeared trail as the stroke
+ *        progresses, the same "overlapping stamps compound naturally"
+ *        precedent every gradient-blended tool type already follows.
  *
  * **Adds no fields of its own**, the same reasoning `HealConfiguration`'s
  * own docs give: `size()` doubles as the footprint radius, `falloff()`
@@ -671,7 +755,7 @@ public:
  * neighboring stamp to smear toward) is a no-op - there's no direction to
  * smear along.
  */
-class SmudgeConfiguration : public ToolConfiguration {
+class SmudgeConfiguration : public FixedStampPlacementConfiguration {
 public:
     SmudgeConfiguration() = default;
 
@@ -730,9 +814,11 @@ public:
  * follows) - intensity (the Color swatch) still goes unused, same as
  * Heal/Soften/Smudge. Never touches `sharedPhaseRadians` - only pixel
  * *intensity* is swapped/reordered, matching every other blur/rearrange
- * tool type's own "amplitude only" precedent.
+ * tool type's own "amplitude only" precedent. Stamp placement is fixed too,
+ * the same as Heal/Soften/Smudge - see
+ * `FixedStampPlacementConfiguration`'s own docs.
  */
-class OrderChaosConfiguration : public ToolConfiguration {
+class OrderChaosConfiguration : public FixedStampPlacementConfiguration {
 public:
     /// @brief Constructs a configuration with `amount()` at `0` - no
     ///        effect until set.

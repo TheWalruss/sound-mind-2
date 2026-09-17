@@ -423,10 +423,13 @@ settings:
   **Order/Chaos**; picks which set of controls below applies (Tip Shape for
   Procedural, Harmonics/Inharmonicity for Instrument, a picker for Mind
   Shot/Mind Grain, an Amount slider for Order/Chaos - Heal/Soften/Smudge add
-  no controls of their own at all, see their own entries below). Switching
-  keeps Falloff/Size/Stamp Mode/Interval/Color/Opacity as they were - only
-  the type-specific controls reset to the newly-picked type's own
-  defaults.
+  no controls of their own at all, see their own entries below). The panel
+  also hides whichever of the shared controls below (Falloff, Brush Size,
+  Stamp Mode, Stamp Interval, Color, Opacity) the selected type doesn't
+  actually use - see each control's own entry for which types hide it.
+  Switching still keeps every shared value as it was underneath, even a
+  currently-hidden one - only the type-specific controls reset to the
+  newly-picked type's own defaults.
 - **Tip Shape** (Procedural only) - the stroke's cross-section (Circle,
   Square, Diamond, and others - only Circle/Square/Diamond have a distinct
   shape so far; the rest currently paint the same as Circle).
@@ -448,7 +451,10 @@ settings:
   "Capture as Mind Shot"), empty until you capture your first one.
   Painting with it stamps the captured content back exactly as it was
   captured - a hard overwrite at its own original size, not blended or
-  scaled by Falloff/Size the way Procedural/Instrument are.
+  scaled by Falloff/Size the way Procedural/Instrument are. The panel hides
+  Falloff, Brush Size, Color, and Opacity for Mind Shot, since none of them
+  have any effect on it - only Stamp Mode/Interval (which control the
+  stamp's own placement, not its content) still apply.
 - **Mind Grain** (Mind Grain only) - a drop-down of every Mind Grain you've
   captured so far (see [Selection and Fill](#selection-and-fill)'s own
   "Capture as Mind Grain"), empty until you capture your first one. The
@@ -468,7 +474,8 @@ settings:
   higher in the stack, or reorder the layers, to paint with it. Reordering
   or deleting a layer that would break an *already-painted* Mind Grain
   stroke's own ordering is refused outright too, with a dialog explaining
-  which stroke(s) would break and why.
+  which stroke(s) would break and why. The panel hides Falloff, Brush Size,
+  Color, and Opacity for Mind Grain, the same as Mind Shot.
 - **Heal** (Heal only, no controls of its own) - a temporal blur: instead of
   painting a target color, each pixel blends toward the average of its own
   neighboring cells *in time* (same frequency) - useful for erasing a
@@ -479,18 +486,23 @@ settings:
   100% fully replaces it, lower values only partially smooth it), and the
   Color swatch has no effect (there's no fixed target color for a blur to
   paint toward). Repeated or overlapping strokes over the same spot blur it
-  further each time, the same way a real blur brush would.
+  further each time, the same way a real blur brush would. **Stamp Mode is
+  always Along Curve and Stamp Interval is always fixed to 66% of Brush
+  Size** - both hidden from the panel, for consistent results; see Stamp
+  Mode's own entry below.
 - **Soften** (Soften only, no controls of its own) - the same idea as Heal,
   but blurs uniformly in every direction (time *and* frequency) rather than
   time alone, for a general softening instead of Heal's own
   defect-erasing, single-axis blend. Brush Size/Opacity/Color work exactly
-  the same way Heal's own do.
+  the same way Heal's own do, and Stamp Mode/Interval are fixed the same
+  way too.
 - **Smudge** (Smudge only, no controls of its own) - drags pixels along the
   direction you're actually dragging the stroke, the way a finger smudges
   wet paint. Brush Size/Falloff/Opacity/Color all work the same way
-  Heal's/Soften's own do; the smear's own direction and reach come from how
-  you're moving the stroke itself, not a separate control. A single click
-  (no drag) has nothing to smear along, so it does nothing.
+  Heal's/Soften's own do, and Stamp Mode/Interval are fixed the same way
+  too; the smear's own direction and reach come from how you're moving the
+  stroke itself, not a separate control. A single click (no drag) has
+  nothing to smear along, so it does nothing.
 - **Order/Chaos** (Order/Chaos only) - pushes a region toward spectral order
   or spectral chaos, via one **Amount** slider from `-1` (full Chaos) to
   `+1` (full Order), `0` (the default) having no effect:
@@ -510,17 +522,22 @@ settings:
   same way it does for Heal/Soften/Smudge - how strongly each affected
   pixel's own new value actually replaces the original - while Amount
   itself controls how much of the brush participates at all; the Color
-  swatch has no effect.
+  swatch has no effect, and Stamp Mode/Interval are fixed the same way as
+  Heal/Soften/Smudge.
 - **Falloff** - how soft the stroke's edge is, from a hard edge (`0`) to
-  fully soft (`1`).
+  fully soft (`1`). Hidden for Mind Shot/Mind Grain, which don't use it.
 - **Brush Size** - the tip's own radius: in seconds on the time axis, and
   the equivalent frequency span on the frequency axis (using this
   project's own Hz-per-second scale, so the same number always describes
   the same *shape*, not the same pixel size, regardless of canvas
   resolution). The panel's own default (`0.2`) is a comfortably visible
   stroke on a typical project without covering too much of it at once.
+  Hidden for Mind Shot/Mind Grain, which don't use it.
 - **Stamp Mode** - how densely the brush's tip is stamped along a stroke's
-  path, from a drop-down:
+  path, from a drop-down. **Hidden for Heal, Soften, Smudge, and
+  Order/Chaos**, where it's fixed to Along Curve instead - manual testing
+  showed these four tools only look consistently good with dense,
+  curve-following stamping, so they no longer expose the choice:
   - **Stroke** (the default) - stamped exactly as densely as the path
     itself was drawn, with no gaps; unchanged from how painting has always
     worked. Not an even spacing - drawing slowly stamps more densely over
@@ -540,17 +557,22 @@ settings:
   Frequency Axis) - it's disabled and ignored under Stroke, where an
   interval wouldn't mean anything. This is the same idea as the legacy
   Studio's "Curve" tool, minus its pixel-based unit (this build has no
-  canvas zoom yet, so seconds/Hz are the only units that make sense).
+  canvas zoom yet, so seconds/Hz are the only units that make sense). For
+  Heal/Soften/Smudge/Order-Chaos, Interval is likewise hidden - it's always
+  66% of Brush Size, so it stays proportional as Brush Size changes.
 - **Color** - a swatch button; click it to open a color picker. This is
   how loud the stroke paints, *and* its stereo balance, at once: the
   picked color's red channel sets the left channel's loudness, green
   sets the right channel's - full red with no green paints loud on the
   left and silent on the right, and so on. The swatch shows the color's
   hex code as well as its fill. The panel's own default (bright yellow -
-  full red and green) paints loud on both channels equally.
+  full red and green) paints loud on both channels equally. Hidden for
+  Mind Shot, Mind Grain, Heal, Soften, Smudge, and Order/Chaos - none of
+  them paint toward a fixed color.
 - **Opacity** - how strongly the stroke's color is actually applied,
   regardless of what it is. The panel's own default (100%) paints at
-  full strength right away, no setup required.
+  full strength right away, no setup required. Hidden for Mind Shot/Mind
+  Grain, which don't use it.
 
 Two checkboxes at the top of the panel, both off by default:
 
@@ -869,9 +891,10 @@ what's designed for it:
   (a simple per-stamp directional smear, not a real stateful "brush load"
   carried across the whole stroke the way a classic paint program's own
   Smudge tool works), and **Order/Chaos** (concrete permutation/reordering
-  mechanics rather than a formal entropy metric) exist - **Clone** is the
-  only painting tool left unbuilt, and there's still no Tool Configuration
-  Wizard or Tool Preset library (see the next point). Instrument strokes
+  mechanics rather than a formal entropy metric) exist - **Clone** and the
+  Tool Configuration Wizard/Tool Preset library (see the next point) are
+  **permanently deferred, until further notice**, not merely not yet
+  scheduled. Instrument strokes
   also don't yet bind to a MindWave, and Loop Mode doesn't yet retrigger
   per note. A Mind Shot/Mind
   Grain stamp always overwrites verbatim - blend-mode selection (so it
@@ -885,6 +908,7 @@ what's designed for it:
 - No **Tool Configuration Wizard** or **Tool Preset** drop-down - the
   Panel described above is the only way to set brush parameters today,
   and there's no way yet to save/reuse/export a particular brush setup.
+  Permanently deferred, until further notice, along with Clone above.
 - Pick can't **copy** a picked object yet - only move, modify a stroke's
   own brush settings, delete it, restack it within its own layer, or (for
   a brush stroke) edit its own path.

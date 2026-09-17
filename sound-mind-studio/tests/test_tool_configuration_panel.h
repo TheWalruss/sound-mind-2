@@ -63,4 +63,14 @@ private slots:
     void switchingToolTypeToOrderChaosShowsItsOwnGroupAndHidesProcedural();
     void changingAmountEmitsToolConfigurationChanged();
     void loadingAnOrderChaosConfigurationSyncsToolTypeAndAmount();
+
+    // Shared control visibility review (v0.Y.34.1 Installment C).
+    void proceduralShowsEverySharedControl();
+    void mindShotHidesFalloffSizeColorAndOpacityButKeepsStampControls();
+    void mindGrainHidesFalloffSizeColorAndOpacityButKeepsStampControls();
+    void healHidesColorAndStampControlsButKeepsFalloffSizeAndOpacity();
+    void softenHidesColorAndStampControls();
+    void smudgeHidesColorAndStampControls();
+    void orderChaosHidesColorAndStampControls();
+    void switchingFromHealBackToProceduralPreservesTheOriginalStampMode();
 };

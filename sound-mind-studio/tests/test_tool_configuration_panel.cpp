@@ -763,3 +763,115 @@ void ToolConfigurationPanelTest::loadingAnOrderChaosConfigurationSyncsToolTypeAn
     QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Order/Chaos"));
     QCOMPARE(amountSpinBox->value(), 0.35);
 }
+
+// --- Shared control visibility review (v0.Y.34.1 Installment C) ------------
+
+void ToolConfigurationPanelTest::proceduralShowsEverySharedControl() {
+    const ToolConfigurationPanel panel;  // Fresh - already Procedural.
+
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+}
+
+void ToolConfigurationPanelTest::mindShotHidesFalloffSizeColorAndOpacityButKeepsStampControls() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Shot")));
+
+    // Never consulted by applyMindShotPaintOperation() - see its own docs.
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+    // Still a real, meaningful placement choice.
+    QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+}
+
+void ToolConfigurationPanelTest::mindGrainHidesFalloffSizeColorAndOpacityButKeepsStampControls() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Grain")));
+
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+}
+
+void ToolConfigurationPanelTest::healHidesColorAndStampControlsButKeepsFalloffSizeAndOpacity() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Heal")));
+
+    // Real, load-bearing parameters for Heal.
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+    // Never consulted, or no longer settable.
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+}
+
+void ToolConfigurationPanelTest::softenHidesColorAndStampControls() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Soften")));
+
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+}
+
+void ToolConfigurationPanelTest::smudgeHidesColorAndStampControls() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Smudge")));
+
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+}
+
+void ToolConfigurationPanelTest::orderChaosHidesColorAndStampControls() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Order/Chaos")));
+
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+}
+
+void ToolConfigurationPanelTest::switchingFromHealBackToProceduralPreservesTheOriginalStampMode() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* stampModeCombo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
+    // A real, deliberate choice, different from Heal's own forced AlongCurve.
+    stampModeCombo->setCurrentIndex(stampModeCombo->findText(QStringLiteral("Time Axis")));
+    QCOMPARE(panel.toolConfiguration().stampMode(), StampMode::TimeAxis);
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Heal")));
+    QCOMPARE(panel.toolConfiguration().stampMode(), StampMode::AlongCurve);  // Forced, not Time Axis.
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Procedural")));
+
+    // The detour through Heal didn't silently overwrite the original choice.
+    QCOMPARE(panel.toolConfiguration().stampMode(), StampMode::TimeAxis);
+}

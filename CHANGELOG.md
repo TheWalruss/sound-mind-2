@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.34.3] - 2026-09-17
+
+Deferred Paint Tools, Installment C: **Tool Configuration Panel control visibility review**, plus **forced Stamp Mode/Interval** for Heal/Soften/Smudge/Order-Chaos - prompted by manual testing of Installment B. Closes out the `v0.Y.34.1` milestone: **Clone** and the **Tool Configuration Wizard**/Tool Preset library are now permanently deferred, until further notice, rather than a later installment of this milestone.
+
+### Changed
+
+- **The Tool Configuration Panel now hides shared controls a selected tool type doesn't actually use**, instead of leaving them visible but inert: Mind Shot/Mind Grain hide Falloff, Brush Size, Color, and Opacity (their placement-only painting never reads any of them); Heal, Soften, Smudge, and Order/Chaos hide the Color swatch (these tools compute their own target value per pixel and never paint toward a fixed color).
+- **Heal, Soften, Smudge, and Order/Chaos now always stamp along the stroke's curve, at an interval fixed to 66% of Brush Size** - no longer user-configurable for these four tools, since a sparse or non-curve-following placement could make them look inconsistent or broken. Stamp Mode and Stamp Interval are hidden from the panel for these tool types accordingly. The other tool types (Procedural, Instrument, Mind Shot, Mind Grain) are unaffected - Stamp Mode/Interval remain fully user-configurable there.
+
+Full regression: sound-mind-core 475/475 (up from 470), sound-mind-studio all 33 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #98.
+
 ## [0.0.34.2] - 2026-09-17
 
 Deferred Paint Tools, Installment B: **Smudge** (directional smear) and **Order/Chaos** (spectral order/chaos push) - `docs/sound-mind-design.md`'s "Smudge"/"Order/Chaos". Second installment of the `v0.Y.34.1` milestone; only **Clone** and the Tool Configuration Wizard/Tool Preset library remain.

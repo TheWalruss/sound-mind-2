@@ -11,6 +11,7 @@
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
+class QFormLayout;
 class QPushButton;
 class QSpinBox;
 class QVBoxLayout;
@@ -287,6 +288,43 @@ private:
     ///        docs).
     void updateVisibleToolTypeGroup();
 
+    /**
+     * @brief Hides/shows Falloff/Brush Size/Stamp Mode/Stamp Interval/
+     *        Color/Opacity's own individual rows in `sharedControlsForm_`
+     *        (via `QFormLayout::setRowVisible()`) according to which of
+     *        them `config_`'s own current type actually consults - a
+     *        review pass confirmed with the user (`v0.Y.34.1` Installment
+     *        C): a control the active tool type never reads is hidden
+     *        entirely, the same "don't build placeholder UI for something
+     *        that doesn't do anything" philosophy this panel's own class
+     *        docs already establish for the Wizard/Tool Preset drop-down,
+     *        rather than left visible but silently inert.
+     *
+     * - **`MindShotConfiguration`/`MindGrainConfiguration`**: hides
+     *   Falloff/Brush Size/Color/Opacity - both stamp a captured/live
+     *   `Clip` verbatim (`blitClipCentered()`), never reading `size()`/
+     *   `falloff()`, and never touching the stroke's own gradient at all
+     *   (no blend of any kind, so neither intensity nor opacity matters).
+     *   Stamp Mode/Interval stay visible - still a real, meaningful
+     *   placement choice for a repeated stamp.
+     * - **`FixedStampPlacementConfiguration`'s own four subtypes** (`Heal`/
+     *   `Soften`/`Smudge`/`OrderChaos`): hides Color (never consulted - see
+     *   each one's own docs on why only the stroke's own gradient
+     *   *opacity*, not intensity, feeds into their blend) and Stamp Mode/
+     *   Stamp Interval (forced to `AlongCurve`/`66%` of `size()` - see
+     *   `FixedStampPlacementConfiguration`'s own docs on why showing a
+     *   control the value can no longer actually change would be
+     *   misleading, not just inert). Falloff/Brush Size/Opacity stay
+     *   visible - all three are real, load-bearing parameters for every
+     *   one of the four.
+     * - **`ProceduralConfiguration`/`InstrumentConfiguration`**: every
+     *   shared control stays visible - both genuinely use all six.
+     *
+     * Called wherever `updateVisibleToolTypeGroup()` already is, right
+     * alongside it - the same "config_'s type just changed" trigger.
+     */
+    void updateSharedControlVisibility();
+
     /// @brief `mindShotCombo_`'s own `currentIndexChanged` handler: if
     ///        `config_` is currently a `MindShotConfiguration`, sets its
     ///        clip from the newly-selected library entry and emits
@@ -380,6 +418,12 @@ private:
     ///        - see `Layer`'s own docs on why ids start at `1`) until the
     ///        first real setActiveLayer() call.
     sound_mind::core::LayerId activeLayer_ = 0;
+
+    /// @brief The layout holding every *shared* control below - stored (not
+    ///        a local constructor variable) so updateSharedControlVisibility()
+    ///        can hide/show individual rows via `QFormLayout::setRowVisible()`
+    ///        per the current tool type - see that method's own docs.
+    QFormLayout* sharedControlsForm_ = nullptr;
 
     QDoubleSpinBox* falloffSpinBox_ = nullptr;
     QDoubleSpinBox* sizeSpinBox_ = nullptr;
