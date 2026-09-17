@@ -26,4 +26,6 @@ private slots:
     void beginStrokeStartsNormallyWhenTheMindGrainToolIsAllowedOnTheTargetLayer();
     void endStrokeWithAMindGrainToolPaintsFromTheSourceLayersCurrentContent();
     void rebuildLayerContentRereadsTheSourceLayersCurrentContentEachTime();
+    void paintingOnASourceLayerImmediatelyCascadesToDependentMindGrainLayers();
+    void cascadeVisitsEachDependentLayerOnlyOncePerRebuild();
 };

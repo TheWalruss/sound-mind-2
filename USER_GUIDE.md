@@ -451,10 +451,10 @@ settings:
   "Capture as Mind Grain"), empty until you capture your first one. The
   opposite of Mind Shot: no pixels are ever captured, only a reference to
   the region and the layer it was selected on - painting with it always
-  reads that layer's *current* content, so if you later repaint the source
-  layer, a Mind Grain stroke shows the new content the next time it's
-  redrawn (a new stroke on the same layer, Undo/Redo, or reopening the
-  project) - not instantly the moment the source changes.
+  reads that layer's *current* content, and repainting the source layer
+  updates every Mind Grain stroke that reads from it immediately, wherever
+  it's painted, not just the next time that stroke's own layer happens to
+  be redrawn for some other reason.
 
   **A Mind Grain can only paint onto a layer above its own source** - the
   panel won't even let you attempt it on the wrong layer: the Mind Grain
@@ -524,10 +524,10 @@ recently, in either order.
 
 Only **Procedural**, **Instrument** (harmonic series + inharmonicity only so
 far - no noise, body resonance, or envelope yet), **Mind Shot**
-(capture-and-restamp), and **Mind Grain** (live reference, re-read on its
-own layer's next rebuild - not an instant cross-layer update) exist today -
-see [What's Not Here Yet](#whats-not-here-yet) for the rest of what's
-planned around painting.
+(capture-and-restamp), and **Mind Grain** (a live reference that updates
+immediately, everywhere it's used, the moment its source is repainted)
+exist today - see [What's Not Here Yet](#whats-not-here-yet) for the rest
+of what's planned around painting.
 
 ## Pick
 
@@ -816,17 +816,19 @@ what's designed for it:
 
 - Only **Procedural**, **Instrument** (harmonic series + inharmonicity
   only - no noise component, body resonance, or ADSR envelope yet), **Mind
-  Shot** (capture-and-restamp), and **Mind Grain** (live reference,
-  re-read only on its own layer's next rebuild - not an instant, reactive
-  update the moment its source changes elsewhere; that would be this
-  codebase's first cross-layer reactive dependency graph, and isn't built)
-  exist - the other painting tools (Smudge, Order/Chaos, Heal, Soften,
-  Clone) aren't built yet. Instrument strokes also don't yet bind to a
-  MindWave, and Loop Mode doesn't yet retrigger per note. A Mind Shot/Mind
-  Grain stamp always overwrites verbatim - blend-mode selection (so it
-  could blend rather than overwrite) is planned alongside layer/Paste
-  blend modes. There's also no UI yet to reposition an already-captured
-  Mind Grain's own referenced region.
+  Shot** (capture-and-restamp), and **Mind Grain** (a live reference,
+  updating immediately everywhere it's used the moment its own source is
+  repainted) exist - the other painting tools (Smudge, Order/Chaos, Heal,
+  Soften, Clone) aren't built yet. Instrument strokes also don't yet bind
+  to a MindWave, and Loop Mode doesn't yet retrigger per note. A Mind
+  Shot/Mind Grain stamp always overwrites verbatim - blend-mode selection
+  (so it could blend rather than overwrite) is planned alongside
+  layer/Paste blend modes. There's also no UI yet to reposition an
+  already-captured Mind Grain's own referenced region, and a Mind Grain
+  only ever samples its own source *layer*'s own raw content - not the
+  full composite (every layer up through it, blended together) as it
+  actually appears at that point in the stack; see
+  `docs/sound-mind-design.md`'s own Deferred Decisions for that one.
 - No **Tool Configuration Wizard** or **Tool Preset** drop-down - the
   Panel described above is the only way to set brush parameters today,
   and there's no way yet to save/reuse/export a particular brush setup.

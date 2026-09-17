@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <QObject>
@@ -202,11 +203,28 @@ public:
      * Also supplies `rebuildPaintedContent()`'s own
      * `sound_mind::core::LayerContentResolver`, reading straight from the
      * live `Project` - the mechanism that gives a Mind Grain stroke its own
-     * "re-samples on the target layer's own next rebuild" liveness (see
-     * `docs/sound-mind-design.md`'s "Mind Grains"): every call to this
-     * method re-resolves whatever a Mind Grain stroke's own source layer
-     * currently holds, rather than replaying a stale copy from whenever the
-     * stroke was first drawn.
+     * liveness (see `docs/sound-mind-design.md`'s "Mind Grains"): every call
+     * to this method re-resolves whatever a Mind Grain stroke's own source
+     * layer currently holds, rather than replaying a stale copy from
+     * whenever the stroke was first drawn.
+     *
+     * **Cascades immediately to every dependent Mind Grain layer.** After
+     * rebuilding `layer` itself, this also calls itself (internally) for
+     * every other layer with an active Mind Grain stroke sourced from
+     * `layer` (`sound_mind::core::layersWithMindGrainOperationsSourcedFrom()`),
+     * and so on transitively - so repainting a layer that something else
+     * reads from live is reflected everywhere that reads it *immediately*,
+     * not only the next time each dependent layer happens to rebuild for
+     * some unrelated reason of its own. Every dependent layer is rebuilt
+     * (and its own `contentChanged()` emitted) at most once per outer call,
+     * even if it's reachable through more than one dependency chain (a
+     * diamond: two different layers both feeding a third) - tracked via an
+     * internal visited set for the duration of one `rebuildLayerContent()`
+     * call. This cascade can only ever walk *upward* through the layer
+     * stack (a Mind Grain's own source is always below wherever it's
+     * painted - see `sound_mind::core::isLayerAbove()`'s own docs), so it's
+     * bounded by the stack's own height and can never cycle back down to a
+     * layer already visited on its way up.
      *
      * @param layer Which layer to rebuild.
      */
@@ -251,6 +269,17 @@ signals:
     void contentChanged(sound_mind::core::LayerId layer);
 
 private:
+    /// @brief The actual rebuild + cascade recursion behind
+    ///        rebuildLayerContent() - see its own docs. `visited` is shared
+    ///        across one whole outer call's own recursion, so a layer
+    ///        reachable through more than one dependency chain (a diamond)
+    ///        is still only ever rebuilt once.
+    /// @param layer Which layer to rebuild.
+    /// @param visited Every layer already rebuilt so far this outer call -
+    ///        mutated in place as the recursion proceeds.
+    void rebuildLayerContentAndCascade(sound_mind::core::LayerId layer,
+                                        std::unordered_set<sound_mind::core::LayerId>& visited);
+
     UndoStack* undoStack_;
     sound_mind::core::Project* project_ = nullptr;
     std::unique_ptr<sound_mind::core::ToolConfiguration> toolConfig_ =

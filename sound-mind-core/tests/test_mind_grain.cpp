@@ -16,6 +16,7 @@ using sound_mind::core::isLayerAbove;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
+using sound_mind::core::layersWithMindGrainOperationsSourcedFrom;
 using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::mindGrainOperationsBrokenByReorder;
 using sound_mind::core::mindGrainOperationsBrokenByRemovingLayer;
@@ -176,4 +177,47 @@ TEST_CASE("mindGrainOperationsBrokenByReorder conservatively treats a missing la
 
     REQUIRE(broken.size() == 1);
     REQUIRE(broken.front() == opId);
+}
+
+TEST_CASE("layersWithMindGrainOperationsSourcedFrom finds a layer with an active stroke sourced from it",
+          "[core][mind_grain]") {
+    TestProjectWithTwoLayers fixture;
+    appendMindGrainPaint(fixture.project, fixture.upper, fixture.lower);
+
+    const auto dependents = layersWithMindGrainOperationsSourcedFrom(fixture.project, fixture.lower);
+
+    REQUIRE(dependents.size() == 1);
+    REQUIRE(dependents.front() == fixture.upper);
+}
+
+TEST_CASE("layersWithMindGrainOperationsSourcedFrom lists a dependent layer only once, regardless of how many "
+          "strokes on it source the same layer",
+          "[core][mind_grain]") {
+    TestProjectWithTwoLayers fixture;
+    appendMindGrainPaint(fixture.project, fixture.upper, fixture.lower);
+    appendMindGrainPaint(fixture.project, fixture.upper, fixture.lower);
+
+    const auto dependents = layersWithMindGrainOperationsSourcedFrom(fixture.project, fixture.lower);
+
+    REQUIRE(dependents.size() == 1);
+}
+
+TEST_CASE("layersWithMindGrainOperationsSourcedFrom finds nothing for a layer nothing sources from",
+          "[core][mind_grain]") {
+    TestProjectWithTwoLayers fixture;
+
+    const auto dependents = layersWithMindGrainOperationsSourcedFrom(fixture.project, fixture.lower);
+
+    REQUIRE(dependents.empty());
+}
+
+TEST_CASE("layersWithMindGrainOperationsSourcedFrom ignores a stroke sourced from a different layer",
+          "[core][mind_grain]") {
+    TestProjectWithTwoLayers fixture;
+    appendMindGrainPaint(fixture.project, fixture.upper, fixture.lower);
+
+    // Nothing sources from `upper` itself.
+    const auto dependents = layersWithMindGrainOperationsSourcedFrom(fixture.project, fixture.upper);
+
+    REQUIRE(dependents.empty());
 }

@@ -136,4 +136,29 @@ void from_json(const nlohmann::json& json, NamedMindGrain& namedMindGrain);
 [[nodiscard]] std::vector<OperationId> mindGrainOperationsBrokenByReorder(
     const Project& project, const std::vector<LayerId>& newOrderBottomToTop);
 
+/**
+ * @brief Every layer (by id, each appearing at most once) with at least one
+ *        currently-active `PaintOperation` whose own `MindGrainConfiguration`
+ *        reads live from `sourceLayer` - the layers a repaint of
+ *        `sourceLayer` needs to immediately cascade a rebuild into, so a
+ *        Mind Grain stroke reflects its source's own new content right
+ *        away rather than only the next time its *own* layer happens to
+ *        rebuild for an unrelated reason.
+ *
+ * Direct dependents only - not transitive. `PaintController::
+ * rebuildLayerContent()` is what actually walks the full cascade (calling
+ * this again for each dependent layer it just rebuilt, to find *that*
+ * layer's own dependents in turn) - this function only ever answers "who
+ * depends on this one layer," the same single-hop shape
+ * `mindGrainOperationsBrokenByRemovingLayer()` above already has (it
+ * likewise only checks a `sourceLayerId` match, not any transitive chain).
+ *
+ * @param project The project to check.
+ * @param sourceLayer The layer whose content just changed.
+ * @return Every directly-dependent layer's own id; empty if nothing reads
+ *         live from `sourceLayer`.
+ */
+[[nodiscard]] std::vector<LayerId> layersWithMindGrainOperationsSourcedFrom(const Project& project,
+                                                                              LayerId sourceLayer);
+
 }  // namespace sound_mind::core

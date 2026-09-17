@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.33.3] - 2026-09-17
+
+Fixes a real gap found in manual testing of `v0.0.33.2`: a Mind Grain stroke didn't reflect a repaint of its own source layer until the *painted-on* layer itself happened to rebuild for some unrelated reason - `docs/sound-mind-design.md`'s "Mind Grains" always described an immediate update ("changes the stamp on every layer that uses it"), so this corrects Mind Grains to actually match it.
+
+### Fixed
+
+- **Repainting a Mind Grain's source layer now cascades an immediate rebuild into every layer that reads from it**, however many dependency hops away, rather than only being picked up the next time each dependent layer separately rebuilds. A new Core query, `layersWithMindGrainOperationsSourcedFrom()`, finds a layer's direct dependents; `PaintController::rebuildLayerContent()` now recurses through them automatically after any content mutation (painting, Pick, Fill, Paste, Undo/Redo all already funnel through this one method, so all of them are covered). A shared visited-set guarantees a layer reachable through more than one dependency chain (a diamond) is still only rebuilt once - and the existing "a Mind Grain's source is always below where it's painted" ordering invariant guarantees this can only ever cascade upward, so it can't cycle.
+
+### Added
+
+- A **delegated future-phase item**, per the user's own request while testing this fix: a Mind Grain should eventually be able to sample the full composite as it renders at its own defining layer, not just that one layer's own raw, isolated content - added to `docs/sound-mind-design.md`'s Deferred Decisions (item 8), not resolved now.
+
+Full regression: sound-mind-core 444/444 (up from 440, 4 new cascade-discovery cases), sound-mind-studio all 33 QTest classes passing (2 new cascade cases, including a three-layer diamond proving no double-rebuild). Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #95.
+
 ## [0.0.33.2] - 2026-09-17
 
 Mind Grains, Installment B: a live-referenced counterpart to Mind Shots - `docs/sound-mind-design.md`'s "Mind Grains". Closes out the `v0.Y.33.1 - Mind Shots & Mind Grains` roadmap milestone.

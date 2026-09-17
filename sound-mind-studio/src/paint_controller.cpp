@@ -147,9 +147,17 @@ void PaintController::notifyOperationCommitted() {
 }
 
 void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {
-    if (project_ == nullptr) {
+    std::unordered_set<sound_mind::core::LayerId> visited;
+    rebuildLayerContentAndCascade(layer, visited);
+}
+
+void PaintController::rebuildLayerContentAndCascade(sound_mind::core::LayerId layer,
+                                                     std::unordered_set<sound_mind::core::LayerId>& visited) {
+    if (project_ == nullptr || visited.contains(layer)) {
         return;
     }
+    visited.insert(layer);
+
     sound_mind::core::Layer* target = project_->layerById(layer);
     if (target == nullptr) {
         return;
@@ -173,9 +181,7 @@ void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {
     // Resolves another layer's own *current* content for a Mind Grain
     // stamp (see paint_application.h's own LayerContentResolver docs) -
     // reading straight from the live Project, so a Mind Grain stroke
-    // rebuilt here always sees its source layer as of *this* rebuild, the
-    // "re-samples on the target layer's own next rebuild" liveness
-    // docs/sound-mind-design.md's "Mind Grains" describes.
+    // rebuilt here always sees its source layer as of *this* rebuild.
     const sound_mind::core::Project* project = project_;
     const auto resolveLayerContent =
         [project](sound_mind::core::LayerId id) -> const sound_mind::codec::StreamImage* {
@@ -190,6 +196,15 @@ void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {
     target->setContent(std::move(rebuilt));
 
     emit contentChanged(layer);
+
+    // Cascade immediately to every layer with a Mind Grain stroke sourced
+    // from this one - see rebuildLayerContent()'s own docs. `visited`
+    // already guards against re-rebuilding a layer reachable through more
+    // than one dependency chain (a diamond).
+    for (const sound_mind::core::LayerId dependent :
+         sound_mind::core::layersWithMindGrainOperationsSourcedFrom(*project_, layer)) {
+        rebuildLayerContentAndCascade(dependent, visited);
+    }
 }
 
 }  // namespace sound_mind::studio

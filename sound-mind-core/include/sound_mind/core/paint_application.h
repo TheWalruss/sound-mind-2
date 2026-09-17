@@ -273,16 +273,18 @@ struct FrameBinRange {
  *   captured up front - each and every stamp re-resolves
  *   `resolveLayerContent(config.sourceLayerId())` and re-extracts a fresh
  *   `Clip` from `config.bounds()` of whatever that call returns, right
- *   before blitting it. "Live" here specifically means "as of this
- *   *rebuild*" (see `rebuildPaintedContent()`'s own docs) - painting a
- *   Mind Grain stroke reads its source layer's content at the moment the
- *   stroke itself is (re)applied, not a snapshot frozen at configure time
- *   the way a Mind Shot is; it does **not** mean an immediate, reactive
- *   cascade the instant the source layer changes elsewhere (see
- *   `docs/sound-mind-design.md`'s "Mind Grains" for why that's out of
- *   scope for now). A no-op if `resolveLayerContent` is empty, the
- *   resolved layer doesn't exist/has no content, or the resulting clip is
- *   empty (`config.bounds()` outside the source's own extent).
+ *   before blitting it. "Live" here means "as of whenever this function is
+ *   called" (see `rebuildPaintedContent()`'s own docs) - painting a Mind
+ *   Grain stroke reads its source layer's content at the moment the stroke
+ *   itself is (re)applied, not a snapshot frozen at configure time the way
+ *   a Mind Shot is. This function itself never decides *when* that
+ *   happens - `PaintController::rebuildLayerContent()` (Studio-side) is
+ *   what actually cascades a fresh call here the instant a Mind Grain's own
+ *   source layer changes, rather than waiting for this stroke's own layer
+ *   to rebuild for some unrelated reason. A no-op if `resolveLayerContent`
+ *   is empty, the resolved layer doesn't exist/has no content, or the
+ *   resulting clip is empty (`config.bounds()` outside the source's own
+ *   extent).
  *
  * Overlapping stamps (a slow-moving stroke, the stroke's own path
  * doubling back on itself, an Instrument's own two harmonics landing on
@@ -343,15 +345,17 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
  *        each `PaintOperation` replayed, unused by every other operation
  *        type - see its own docs. Defaults to an empty resolver, meaning
  *        "no Mind Grain support" (any `MindGrainConfiguration` stroke
- *        replayed becomes a no-op) unless the caller supplies one. Since
- *        this function rebuilds a layer's content from scratch on demand
- *        (a new stroke on that layer, undo/redo, project load - see this
- *        function's own callers), a Mind Grain stroke painted here always
- *        reads its source layer's *current* content as of `resolveLayerContent`'s
- *        own call, which is exactly what gives Mind Grains their "re-samples
- *        on the target layer's own next rebuild" liveness (see
- *        `docs/sound-mind-design.md`'s "Mind Grains") without this function
- *        needing any special-casing of its own.
+ *        replayed becomes a no-op) unless the caller supplies one. This
+ *        function itself has no notion of *when* it's called or why - a
+ *        Mind Grain stroke replayed here always reads its source layer's
+ *        content as of whatever `resolveLayerContent` returns *right now*,
+ *        whether that's this layer's own routine rebuild or a caller
+ *        deliberately cascading a rebuild here because some other layer's
+ *        content just changed (see `PaintController::rebuildLayerContent()`'s
+ *        own docs, Studio-side, for that cascade - this function has no
+ *        cascade logic of its own, and doesn't need any: reading "whatever
+ *        the resolver says right now" is already correct regardless of
+ *        what prompted the call).
  * @return A fresh `StreamImage`: `base`, with every operation in
  *         `operations` applied on top, in order.
  */

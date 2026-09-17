@@ -79,6 +79,27 @@ std::vector<OperationId> mindGrainOperationsBrokenByRemovingLayer(const Project&
     return broken;
 }
 
+std::vector<LayerId> layersWithMindGrainOperationsSourcedFrom(const Project& project, LayerId sourceLayer) {
+    std::vector<LayerId> dependents;
+    for (const Layer& layer : project.layers()) {
+        for (const Operation* operation : project.operationLog().activeOperationsTargeting(layer.id())) {
+            const auto* paint = dynamic_cast<const PaintOperation*>(operation);
+            if (paint == nullptr) {
+                continue;
+            }
+            const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(&paint->config());
+            if (mindGrain == nullptr) {
+                continue;
+            }
+            if (mindGrain->sourceLayerId() == sourceLayer) {
+                dependents.push_back(layer.id());
+                break;  // Already counted this layer - one match is enough.
+            }
+        }
+    }
+    return dependents;
+}
+
 std::vector<OperationId> mindGrainOperationsBrokenByReorder(const Project& project,
                                                               const std::vector<LayerId>& newOrderBottomToTop) {
     std::vector<OperationId> broken;

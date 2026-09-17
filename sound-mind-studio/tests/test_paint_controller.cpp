@@ -365,3 +365,85 @@ void PaintControllerTest::rebuildLayerContentRereadsTheSourceLayersCurrentConten
                                                [](float value) { return value == -9.0f; });
     QVERIFY(anyFromNewSource);
 }
+
+void PaintControllerTest::paintingOnASourceLayerImmediatelyCascadesToDependentMindGrainLayers() {
+    Project project = Project::createNew(testSettings());
+    const LayerId lower = addBlankNormalLayer(project);
+    const LayerId upper = addBlankNormalLayer(project);
+    PaintController controller;
+    controller.setProject(&project);
+
+    // A Mind Grain stroke on `upper`, sourced from `lower`.
+    auto config = std::make_unique<MindGrainConfiguration>();
+    config->setReference(std::nullopt, lower, TimeFrequencyRect{0.0, 1.0, 20.0, 2020.0});
+    controller.setToolConfiguration(std::move(config));
+    controller.beginStroke(upper, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    // `lower` is still blank - nothing visible was actually painted yet.
+    {
+        const auto& content = *project.layerById(upper)->content();
+        QVERIFY(std::none_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                              [](float value) { return value != 0.0f; }));
+    }
+
+    // Paint directly on `lower` - a plain, unrelated stroke - and never
+    // touch `upper` again ourselves (no rebuildLayerContent(upper) call).
+    controller.setToolConfiguration(makeOpaqueTool());
+    controller.beginStroke(lower, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    // `upper`'s own Mind Grain stroke must already reflect it - the whole
+    // point of this fix: a repaint of the source cascades immediately,
+    // rather than waiting for `upper`'s own next, unrelated rebuild.
+    const auto& content = *project.layerById(upper)->content();
+    QVERIFY(std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                         [](float value) { return value != 0.0f; }));
+}
+
+void PaintControllerTest::cascadeVisitsEachDependentLayerOnlyOncePerRebuild() {
+    Project project = Project::createNew(testSettings());
+    const LayerId a = addBlankNormalLayer(project);
+    const LayerId b = addBlankNormalLayer(project);
+    const LayerId c = addBlankNormalLayer(project);
+    PaintController controller;
+    controller.setProject(&project);
+
+    // `b` has a Mind Grain sourced from `a`.
+    auto configB = std::make_unique<MindGrainConfiguration>();
+    configB->setReference(std::nullopt, a, TimeFrequencyRect{0.0, 1.0, 20.0, 2020.0});
+    controller.setToolConfiguration(std::move(configB));
+    controller.beginStroke(b, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    // `c` has two Mind Grains: one sourced from `a` directly, another from
+    // `b` - a diamond (`a` -> `b` -> `c`, and `a` -> `c` directly), so a
+    // naive cascade could visit `c` twice for a single repaint of `a`.
+    auto configCFromA = std::make_unique<MindGrainConfiguration>();
+    configCFromA->setReference(std::nullopt, a, TimeFrequencyRect{0.0, 1.0, 20.0, 2020.0});
+    controller.setToolConfiguration(std::move(configCFromA));
+    controller.beginStroke(c, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    auto configCFromB = std::make_unique<MindGrainConfiguration>();
+    configCFromB->setReference(std::nullopt, b, TimeFrequencyRect{0.0, 1.0, 20.0, 2020.0});
+    controller.setToolConfiguration(std::move(configCFromB));
+    controller.beginStroke(c, TimeFrequencyPoint{0.6, 700.0});
+    controller.endStroke();
+
+    // Repaint `a` directly - the cascade must visit `b` and `c` exactly
+    // once each, not once per dependency edge.
+    controller.setToolConfiguration(makeOpaqueTool());
+    QSignalSpy spy(&controller, &PaintController::contentChanged);
+    controller.beginStroke(a, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    QCOMPARE(spy.count(), 3);  // a, b, c - each exactly once.
+    std::vector<LayerId> seen;
+    for (const auto& args : spy) {
+        seen.push_back(args.at(0).value<LayerId>());
+    }
+    QVERIFY(std::find(seen.begin(), seen.end(), a) != seen.end());
+    QVERIFY(std::find(seen.begin(), seen.end(), b) != seen.end());
+    QVERIFY(std::find(seen.begin(), seen.end(), c) != seen.end());
+}
