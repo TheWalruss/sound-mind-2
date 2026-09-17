@@ -483,7 +483,7 @@ The Tool Configuration Wizard (deferred since `v0.Y.24.1`'s own Basic Painting i
 
 **Demo, as actually shipped:** paint a stray mark and Heal it away by brushing over it; Soften a busy passage into a smoother wash; Smudge a stroke's own tone across the canvas; push a passage toward Chaos and hear it scramble into noise, or toward Order and hear a steadier tone emerge; the Tool Configuration Panel shows only the controls a given tool type actually uses. Clone and the Tool Configuration Wizard - the original Demo's own "open the Tool Configuration Wizard and build up a Clone tool step by step" - are permanently deferred, until further notice.
 
-### v0.Y.35.1 - Deferred selection
+### v0.Y.35.1 - Deferred selection 🔜
 
 Every `docs/sound-mind-design.md` Selection feature `v0.Y.25.1` explicitly left open: **Lasso** (freehand polygon selection), **Wand** (flood-fill by amplitude similarity, optionally harmonics-aware - extending along a note's overtone rows, not just its fundamental), **boolean combination** between selections (union/intersect/subtract, needing a real mask/region representation `FillOperation`'s current plain `TimeFrequencyRect` bounds doesn't have), Rectangle's own **rotate handle**, and **Warp** (warping a selection along a Path curve, in time or frequency - distinct from MindWaves v2's own field-level Warp operator, `v0.Y.39.1`).
 
