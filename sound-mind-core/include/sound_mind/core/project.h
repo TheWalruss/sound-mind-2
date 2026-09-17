@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/operation_log.h"
@@ -19,12 +20,13 @@ namespace sound_mind::core {
  *        Model and "Project File & Folder".
  *
  * @note Deliberately minimal for now: most resource libraries (Sound Mind
- *       Instruments, Mind Grains) and sequences aren't represented yet,
- *       since none of those features exist. Their absence from a saved
- *       file is meant to be forward-compatible - added as fields once each
- *       feature lands, not designed in speculatively now. `MindWaves`
- *       (`v0.Y.31.1` Installment C1 - see `mindWaves()`'s own docs) and
- *       Mind Shots (`v0.Y.33.1` Installment A - see `mindShots()`'s own
+ *       Instruments) and sequences aren't represented yet, since none of
+ *       those features exist. Their absence from a saved file is meant to
+ *       be forward-compatible - added as fields once each feature lands,
+ *       not designed in speculatively now. `MindWaves` (`v0.Y.31.1`
+ *       Installment C1 - see `mindWaves()`'s own docs), Mind Shots
+ *       (`v0.Y.33.1` Installment A - see `mindShots()`'s own docs), and
+ *       Mind Grains (`v0.Y.33.1` Installment B - see `mindGrains()`'s own
  *       docs) are the exceptions so far.
  */
 class Project {
@@ -315,6 +317,69 @@ public:
     ///         Shot with this id exists in this project's library.
     [[nodiscard]] NamedMindShot* mindShotById(MindShotId id) noexcept;
 
+    /**
+     * @brief This project's Mind Grain library - `v0.Y.33.1` Installment
+     *        B's own permanent, named store of *live references* to a
+     *        region on a layer (see `NamedMindGrain`'s own docs), the same
+     *        "peer resource library" shape `mindShots()`/`mindWaves()`
+     *        already establish.
+     * @return This project's current Mind Grain library.
+     */
+    [[nodiscard]] const std::vector<NamedMindGrain>& mindGrains() const noexcept { return mindGrains_; }
+
+    /// @brief This project's Mind Grain library - mutable access, for
+    ///        in-place edits (renaming) that don't change the library's
+    ///        own membership (addMindGrain() is still how a new entry gets
+    ///        appended).
+    /// @return This project's current Mind Grain library.
+    [[nodiscard]] std::vector<NamedMindGrain>& mindGrains() noexcept { return mindGrains_; }
+
+    /**
+     * @brief Adds a new, named Mind Grain to this project's library.
+     * @param name Display name - see `NamedMindGrain::name`'s own docs on
+     *        uniqueness being this project's own responsibility, not
+     *        enforced here.
+     * @param sourceLayerId The layer this grain reads its live content
+     *        from.
+     * @param bounds The region within `sourceLayerId` this grain reads.
+     * @return The id assigned to the new entry - see `addLayer()`'s own
+     *         docs for the identical "fresh, project-unique id" pattern.
+     */
+    MindGrainId addMindGrain(std::string name, LayerId sourceLayerId, TimeFrequencyRect bounds);
+
+    /**
+     * @brief Removes the Mind Grain with the given id, if one exists.
+     *
+     * Does **not** clear any `MindGrainConfiguration` that still
+     * references this entry - see `removeMindShot()`'s own docs for the
+     * identical "dangling reference is treated as never-bound" reasoning,
+     * here applying to `sourceMindGrainId()` (UI-only metadata) rather
+     * than the actual painted content, which a `MindGrainConfiguration`
+     * resolves independently via its own `sourceLayerId()`/`bounds()`.
+     *
+     * @param id The Mind Grain to remove.
+     * @return `true` if a Mind Grain with this id was found and removed;
+     *         `false` (no change) if none was.
+     */
+    bool removeMindGrain(MindGrainId id);
+
+    /**
+     * @brief Finds the Mind Grain library entry with the given id, if one
+     *        exists - the same "small, project-level lookup" `layerById()`/
+     *        `mindShotById()` already provide.
+     * @param id The entry to find.
+     * @return A pointer to that entry, or `nullptr` if no Mind Grain with
+     *         this id exists in this project's library.
+     */
+    [[nodiscard]] const NamedMindGrain* mindGrainById(MindGrainId id) const noexcept;
+
+    /// @brief Mutable overload of mindGrainById() - for in-place edits
+    ///        (renaming).
+    /// @param id The entry to find.
+    /// @return A mutable pointer to that entry, or `nullptr` if no Mind
+    ///         Grain with this id exists in this project's library.
+    [[nodiscard]] NamedMindGrain* mindGrainById(MindGrainId id) noexcept;
+
     friend void to_json(nlohmann::json& json, const Project& project);
     friend void from_json(const nlohmann::json& json, Project& project);
 
@@ -324,6 +389,7 @@ private:
     OperationLog operationLog_;
     std::vector<NamedMindWave> mindWaves_;
     std::vector<NamedMindShot> mindShots_;
+    std::vector<NamedMindGrain> mindGrains_;
 };
 
 /// @brief Serializes a Project to its JSON representation.

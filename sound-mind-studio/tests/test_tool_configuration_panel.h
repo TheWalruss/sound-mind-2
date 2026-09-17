@@ -39,4 +39,14 @@ private slots:
     void refreshMindShotsShowsThePlaceholderWhenTheLibraryIsEmpty();
     void selectingAMindShotEmitsToolConfigurationChangedWithItsClip();
     void loadingAMindShotConfigurationSyncsToolTypeAndThePickerSelection();
+
+    // Mind Grains (v0.Y.33.1 Installment B).
+    void switchingToolTypeToMindGrainShowsItsOwnGroupAndHidesProcedural();
+    void setProjectPopulatesTheMindGrainCombo();
+    void refreshMindGrainsAddsNewEntriesAndPreservesTheCurrentSelection();
+    void refreshMindGrainsShowsThePlaceholderWhenTheLibraryIsEmpty();
+    void selectingAMindGrainEmitsToolConfigurationChangedWithItsReference();
+    void loadingAMindGrainConfigurationSyncsToolTypeAndThePickerSelection();
+    void setActiveLayerHighlightsTheGroupWhenTheActiveLayerIsNotAboveTheSource();
+    void setActiveLayerClearsTheHighlightWhenTheActiveLayerIsAboveTheSource();
 };

@@ -77,6 +77,10 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
     // Panel's own Mind Shot picker needs to know a new entry now exists.
     connect(selectionController_, &SelectionController::mindShotCaptured, this,
             [this](sound_mind::core::MindShotId) { toolConfigurationPanel_->refreshMindShots(); });
+    // Same reasoning, for a fresh Mind Grain capture (v0.Y.33.1 Installment
+    // B).
+    connect(selectionController_, &SelectionController::mindGrainCaptured, this,
+            [this](sound_mind::core::MindGrainId) { toolConfigurationPanel_->refreshMindGrains(); });
 
     // Paths & Grids (v0.Y.26.1), Path tool placement - shares
     // paintController_'s own pre-paint base cache, so it's constructed
@@ -203,6 +207,10 @@ void ToolPaletteController::cutSelection() { selectionController_->cutSelection(
 
 std::optional<sound_mind::core::MindShotId> ToolPaletteController::captureMindShot(const std::string& name) {
     return selectionController_->captureMindShot(name);
+}
+
+std::optional<sound_mind::core::MindGrainId> ToolPaletteController::captureMindGrain(const std::string& name) {
+    return selectionController_->captureMindGrain(name);
 }
 
 std::optional<sound_mind::core::OperationId> ToolPaletteController::pasteInto(sound_mind::core::LayerId targetLayer) {

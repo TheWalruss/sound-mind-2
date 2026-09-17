@@ -37,4 +37,9 @@ private slots:
     void changingARowsMindWaveComboEmitsOpacityMindWaveChanged();
     void selectingNoneEmitsOpacityMindWaveChangedWithNullopt();
     void contentIsInAResizableScrollAreaSoThePanelCanShrinkBelowItsFullHeight();
+
+    // Mind Grains ordering-rule guardrail (v0.Y.33.1 Installment B).
+    void setDisallowedLayersMarksTheGivenRowsWithARedX();
+    void setDisallowedLayersLeavesOtherRowsUnmarked();
+    void setDisallowedLayersWithAnEmptyListClearsEveryMark();
 };

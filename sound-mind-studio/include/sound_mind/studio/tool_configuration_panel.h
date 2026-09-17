@@ -36,31 +36,37 @@ namespace sound_mind::studio {
  * philosophy. What's here is the actual parameter area the design doc
  * says both entry points edit - just reached directly, by hand, for now.
  *
- * **Three real tool types as of `v0.Y.33.1` Installment A (Mind Shots):**
+ * **Four real tool types as of `v0.Y.33.1` Installment B (Mind Grains):**
  * a `ToolType` selector (`toolTypeCombo_`) switches between `Procedural`'s
  * own group (tip shape), `Instrument`'s own (harmonic count/strengths,
- * inharmonicity), and `MindShot`'s own (a picker over the project's own
- * `Project::mindShots()` library) - the design doc's own "only the
- * parameters that apply to the current tool" dynamism, one group shown at
- * a time, the rest hidden, the same pattern `MindWaveEditor`/
- * `FilterConfigurationPanel` already establish for their own per-type
- * groups. `falloff()`/`size()`/`stampMode()`/`stampInterval()`/color/
- * opacity are shared by every tool type (`ToolConfiguration`'s own base
- * fields) and stay visible regardless of which is selected - though a Mind
- * Shot stamp doesn't actually use falloff/size for anything (it's a hard,
- * native-size overwrite, see `MindShotConfiguration`'s own docs); they
- * stay visible anyway rather than hidden per-type, since nothing about
- * this panel's own "one group per type" mechanism needs to extend to the
- * *shared* controls too. `MindGrain`/`Smudge`/`OrderChaos`/`Heal`/`Soften`/
- * `Clone` still have no real parameters of their own (see
+ * inharmonicity), `MindShot`'s own (a picker over the project's own
+ * `Project::mindShots()` library), and `MindGrain`'s own (a picker over
+ * `Project::mindGrains()`, with a red-highlight/tooltip warning - see
+ * setActiveLayer()'s own docs) - the design doc's own "only the parameters
+ * that apply to the current tool" dynamism, one group shown at a time, the
+ * rest hidden, the same pattern `MindWaveEditor`/`FilterConfigurationPanel`
+ * already establish for their own per-type groups. `falloff()`/`size()`/
+ * `stampMode()`/`stampInterval()`/color/opacity are shared by every tool
+ * type (`ToolConfiguration`'s own base fields) and stay visible regardless
+ * of which is selected - though a Mind Shot/Mind Grain stamp doesn't
+ * actually use falloff/size for anything (both are a hard, native-size
+ * overwrite, see `MindShotConfiguration`'s/`MindGrainConfiguration`'s own
+ * docs); they stay visible anyway rather than hidden per-type, since
+ * nothing about this panel's own "one group per type" mechanism needs to
+ * extend to the *shared* controls too. `Smudge`/`OrderChaos`/`Heal`/
+ * `Soften`/`Clone` still have no real parameters of their own (see
  * `ToolConfiguration`'s own docs) and aren't offered in the selector yet.
  *
- * **Needs a live `Project*` for the Mind Shot picker alone** (`setProject()`)
- * - every other control here is purely presentational, with no knowledge
- * of `Project` at all; the Mind Shot group is the first exception, since
- * "which Mind Shots exist to choose from" is real project state. Call
- * refreshMindShots() whenever that state might have changed out from under
- * this panel (a new capture, a project switch) to repopulate the picker.
+ * **Needs a live `Project*` for the Mind Shot/Mind Grain pickers**
+ * (`setProject()`) - every other control here is purely presentational,
+ * with no knowledge of `Project` at all; those two groups are the
+ * exception, since "which entries exist to choose from" is real project
+ * state. Call refreshMindShots()/refreshMindGrains() whenever that state
+ * might have changed out from under this panel (a new capture, a project
+ * switch) to repopulate the pickers. **Also needs to know the current
+ * active layer** (`setActiveLayer()`) - the second piece of live state
+ * `MindGrainConfiguration`'s own ordering rule needs to warn about (see
+ * that method's own docs).
  *
  * Switching `toolTypeCombo_` constructs a fresh configuration of the
  * newly-selected concrete subtype, carrying over every shared base field
@@ -146,6 +152,46 @@ public:
      * this library - see that class's own docs).
      */
     void refreshMindShots();
+
+    /**
+     * @brief Repopulates the Mind Grain picker from `project`'s own current
+     *        `mindGrains()` - call whenever that library might have changed
+     *        out from under this panel (a fresh capture, in particular;
+     *        `setProject()` already calls this itself for a project
+     *        switch).
+     *
+     * Preserves the currently-selected entry, by id, if it still exists;
+     * otherwise leaves nothing selected. Purely a display refresh, like
+     * refreshMindShots() - never itself changes `config_`. Also refreshes
+     * the red-highlight/tooltip validity display (see setActiveLayer()'s
+     * own docs), since a fresh capture can change which entries even exist
+     * to check.
+     */
+    void refreshMindGrains();
+
+    /**
+     * @brief Sets which layer a freehand stroke started right now would
+     *        paint into - the only other piece of live project state this
+     *        otherwise purely presentational panel needs (see the class's
+     *        own docs), specifically for the Mind Grain group's own red-
+     *        highlight/tooltip warning (`docs/sound-mind-design.md`'s "Mind
+     *        Grains" ordering rule: a Mind Grain can only paint onto a layer
+     *        above its own source).
+     *
+     * A no-op on `config_` itself - purely a display refresh, like
+     * setToolConfiguration()/refreshMindShots(). Recomputes the warning
+     * immediately: if `config_` is currently a `MindGrainConfiguration` and
+     * `layer` is not above its own `sourceLayerId()` (per
+     * `sound_mind::core::isLayerAbove()`), `mindGrainGroup_` is shown with a
+     * red background and a tooltip explaining why; otherwise the group
+     * looks and behaves normally. Call whenever the active layer might have
+     * changed (`LayersPanel`'s own selection changing) or whenever `config_`
+     * itself changes (a type switch, a different Mind Grain picked, a fresh
+     * `setToolConfiguration()` load).
+     *
+     * @param layer The layer a stroke would currently paint into.
+     */
+    void setActiveLayer(sound_mind::core::LayerId layer);
 
     /**
      * @brief Sets the brush's color (stereo balance) directly - the
@@ -239,6 +285,26 @@ private:
     /// @param index The combo's own newly-selected row.
     void handleMindShotComboChanged(int index);
 
+    /// @brief `mindGrainCombo_`'s own `currentIndexChanged` handler: if
+    ///        `config_` is currently a `MindGrainConfiguration`, sets its
+    ///        reference from the newly-selected library entry and emits
+    ///        toolConfigurationChanged() - a no-op (no config_ update) if
+    ///        the selection is the placeholder "no entries" item, or
+    ///        `project_` is `nullptr`. Also refreshes the red-highlight
+    ///        validity display (see setActiveLayer()'s own docs) - a newly
+    ///        picked Mind Grain can have a different source layer than the
+    ///        one just displayed.
+    /// @param index The combo's own newly-selected row.
+    void handleMindGrainComboChanged(int index);
+
+    /// @brief Recomputes `mindGrainGroup_`'s own red-highlight/tooltip -
+    ///        see setActiveLayer()'s own docs. Called after anything that
+    ///        could change either input to that check: `activeLayer_`
+    ///        itself changing, `config_` changing (type switch, a different
+    ///        Mind Grain picked, a fresh setToolConfiguration() load), or
+    ///        the Mind Grain library being refreshed.
+    void updateMindGrainValidity();
+
     /// @brief Rebuilds `harmonicStrengthSpinBoxes_` to match `count` rows -
     ///        called whenever `harmonicCountSpinBox_` changes, or a loaded
     ///        `InstrumentConfiguration` has a different harmonic count
@@ -278,9 +344,23 @@ private:
     QWidget* mindShotGroup_ = nullptr;
     QComboBox* mindShotCombo_ = nullptr;
 
-    /// @brief Which project `mindShotCombo_`'s own entries are drawn from -
-    ///        see setProject()'s own docs. Not owned; may be `nullptr`.
+    /// @brief `MindGrainConfiguration`'s own controls, shown only while
+    ///        `config_->type() == ToolType::MindGrain` - see
+    ///        updateVisibleToolTypeGroup()'s own docs. `mindGrainGroup_`
+    ///        itself carries the red-highlight/tooltip warning - see
+    ///        setActiveLayer()'s own docs.
+    QWidget* mindGrainGroup_ = nullptr;
+    QComboBox* mindGrainCombo_ = nullptr;
+
+    /// @brief Which project `mindShotCombo_`'s/`mindGrainCombo_`'s own
+    ///        entries are drawn from - see setProject()'s own docs. Not
+    ///        owned; may be `nullptr`.
     sound_mind::core::Project* project_ = nullptr;
+
+    /// @brief See setActiveLayer()'s own docs. `0` (never a real `LayerId`
+    ///        - see `Layer`'s own docs on why ids start at `1`) until the
+    ///        first real setActiveLayer() call.
+    sound_mind::core::LayerId activeLayer_ = 0;
 
     QDoubleSpinBox* falloffSpinBox_ = nullptr;
     QDoubleSpinBox* sizeSpinBox_ = nullptr;

@@ -83,7 +83,18 @@ public:
      * @brief Starts a new freehand stroke.
      *
      * Does nothing if a project isn't set, or a stroke is already in
-     * progress (call endStroke()/cancelStroke() first).
+     * progress (call endStroke()/cancelStroke() first). Also refuses
+     * silently - the stroke simply never starts - if the current tool
+     * configuration is a `MindGrainConfiguration` and `targetLayer` isn't
+     * above its own source layer (see
+     * `sound_mind::core::isLayerAbove()`'s own docs): this is the last-line
+     * backstop of `docs/sound-mind-design.md`'s "Mind Grains" ordering
+     * rule - callers are expected to already prevent reaching this call in
+     * the first place (Tool Configuration's own red highlight, the Layers
+     * Panel's red X, and the Paint button's own disabled state all exist so
+     * a user can't even attempt this), but this guard is what actually
+     * makes an invalid Mind Grain stroke impossible rather than merely
+     * discouraged.
      *
      * @param targetLayer Which layer this stroke will paint into.
      * @param point The stroke's own first point, already converted to
@@ -187,6 +198,15 @@ public:
      * through this same controller, so the replay uses the identical
      * cached pre-paint base a plain paint stroke would - rather than
      * duplicating the rebuild logic in a second place.
+     *
+     * Also supplies `rebuildPaintedContent()`'s own
+     * `sound_mind::core::LayerContentResolver`, reading straight from the
+     * live `Project` - the mechanism that gives a Mind Grain stroke its own
+     * "re-samples on the target layer's own next rebuild" liveness (see
+     * `docs/sound-mind-design.md`'s "Mind Grains"): every call to this
+     * method re-resolves whatever a Mind Grain stroke's own source layer
+     * currently holds, rather than replaying a stale copy from whenever the
+     * stroke was first drawn.
      *
      * @param layer Which layer to rebuild.
      */

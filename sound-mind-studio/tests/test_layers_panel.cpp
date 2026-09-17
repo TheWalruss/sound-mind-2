@@ -491,3 +491,45 @@ void LayersPanelTest::contentIsInAResizableScrollAreaSoThePanelCanShrinkBelowIts
     QVERIFY(scrollArea != nullptr);
     QVERIFY(scrollArea->widgetResizable());
 }
+
+void LayersPanelTest::setDisallowedLayersMarksTheGivenRowsWithARedX() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());  // id 1 ("Bottom"), id 2 ("Top").
+
+    panel.setDisallowedLayers({LayerId{1}});
+
+    const auto marks = panel.findChildren<QLabel*>(QStringLiteral("mindGrainDisallowedLabel"));
+    QCOMPARE(marks.size(), 1);
+}
+
+void LayersPanelTest::setDisallowedLayersLeavesOtherRowsUnmarked() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+
+    panel.setDisallowedLayers({LayerId{1}});
+
+    // "Top" (id 2) isn't in the disallowed list - its own row gets no mark
+    // at all (not just a hidden one - see LayersPanel's own docs).
+    const auto nameLabels = panel.findChildren<QLabel*>(QStringLiteral("nameLabel"));
+    QCOMPARE(nameLabels.at(0)->text(), QStringLiteral("Top"));
+    // "Top" is rendered first (top-first display order) - its own row
+    // widget is the first LayerRowWidget child, which must contain no
+    // mindGrainDisallowedLabel of its own.
+    const auto marks = panel.findChildren<QLabel*>(QStringLiteral("mindGrainDisallowedLabel"));
+    QCOMPARE(marks.size(), 1);  // Only "Bottom"'s row has one.
+}
+
+void LayersPanelTest::setDisallowedLayersWithAnEmptyListClearsEveryMark() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    panel.setDisallowedLayers({LayerId{1}, LayerId{2}});
+    QCOMPARE(panel.findChildren<QLabel*>(QStringLiteral("mindGrainDisallowedLabel")).size(), 2);
+
+    panel.setDisallowedLayers({});
+    // setDisallowedLayers() rebuilds rows via deleteLater() (see
+    // setLayersReplacesThePreviousRows()'s own docs) - spin the event loop
+    // once so that's actually happened before counting children below.
+    QTest::qWait(0);
+
+    QVERIFY(panel.findChildren<QLabel*>(QStringLiteral("mindGrainDisallowedLabel")).empty());
+}

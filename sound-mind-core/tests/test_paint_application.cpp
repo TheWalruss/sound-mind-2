@@ -17,7 +17,9 @@ using sound_mind::core::Clip;
 using sound_mind::core::frameIndexToTime;
 using sound_mind::core::frequencyToBinIndex;
 using sound_mind::core::InstrumentConfiguration;
+using sound_mind::core::LayerContentResolver;
 using sound_mind::core::LayerId;
+using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::Operation;
 using sound_mind::core::OperationId;
@@ -143,6 +145,12 @@ Path makeSingleTapPath(double timeSeconds, double frequencyHz, float intensity, 
     path.gradient().setStopValues(0, stop);
     path.gradient().setStopValues(1, stop);
     return path;
+}
+
+std::unique_ptr<MindGrainConfiguration> makeMindGrainTool(LayerId sourceLayer, TimeFrequencyRect bounds) {
+    auto config = std::make_unique<MindGrainConfiguration>();
+    config->setReference(std::nullopt, sourceLayer, bounds);
+    return config;
 }
 
 std::unique_ptr<MindShotConfiguration> makeMindShotTool(Clip clip) {
@@ -596,6 +604,113 @@ TEST_CASE("applyPaintOperation with a MindShotConfiguration silently clips a sta
 
     const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 0, centerBin)] == -5.0f);
+}
+
+TEST_CASE("applyPaintOperation with a MindGrainConfiguration blits a clip resolved live from resolveLayerContent",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    // The whole source is one uniform value - see this test file's own
+    // reasoning: makes the resulting clip's own exact size/position (which
+    // rangeFor()'s rounding governs) irrelevant to what's being tested
+    // here (that applyPaintOperation() actually reads through
+    // resolveLayerContent() rather than needing its own pixel content).
+    StreamImage source = makeBlankContent(config, 100);
+    std::fill(source.leftMagnitudeDb.begin(), source.leftMagnitudeDb.end(), -7.0f);
+    std::fill(source.rightMagnitudeDb.begin(), source.rightMagnitudeDb.end(), -8.0f);
+
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+    const TimeFrequencyRect bounds{0.1, 0.5, 500.0, 2000.0};
+    const PaintOperation op(1, LayerId{1}, path, makeMindGrainTool(LayerId{2}, bounds));
+
+    const LayerContentResolver resolve = [&source](LayerId id) -> const StreamImage* {
+        return id == LayerId{2} ? &source : nullptr;
+    };
+    applyPaintOperation(op, 2000.0, content, resolve);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] == -7.0f);
+    REQUIRE(content.rightMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] == -8.0f);
+}
+
+TEST_CASE("applyPaintOperation with a MindGrainConfiguration re-reads the source fresh on every call, not a cached "
+          "copy",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+    const TimeFrequencyRect bounds{0.1, 0.5, 500.0, 2000.0};
+    const PaintOperation op(1, LayerId{1}, path, makeMindGrainTool(LayerId{2}, bounds));
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+
+    StreamImage sourceBefore = makeBlankContent(config, 100);
+    std::fill(sourceBefore.leftMagnitudeDb.begin(), sourceBefore.leftMagnitudeDb.end(), -7.0f);
+    StreamImage contentA = makeBlankContent(config, 100);
+    applyPaintOperation(
+        op, 2000.0, contentA, [&sourceBefore](LayerId) -> const StreamImage* { return &sourceBefore; });
+    REQUIRE(contentA.leftMagnitudeDb[pixelIndex(contentA, centerFrame, centerBin)] == -7.0f);
+
+    // The exact same operation, replayed against a *different* current
+    // source (as if the source layer had since been repainted) - the new
+    // stamp must reflect the new value, not -7.0f again.
+    StreamImage sourceAfter = makeBlankContent(config, 100);
+    std::fill(sourceAfter.leftMagnitudeDb.begin(), sourceAfter.leftMagnitudeDb.end(), -3.0f);
+    StreamImage contentB = makeBlankContent(config, 100);
+    applyPaintOperation(
+        op, 2000.0, contentB, [&sourceAfter](LayerId) -> const StreamImage* { return &sourceAfter; });
+    REQUIRE(contentB.leftMagnitudeDb[pixelIndex(contentB, centerFrame, centerBin)] == -3.0f);
+}
+
+TEST_CASE("applyPaintOperation with a MindGrainConfiguration paints nothing with the default (empty) resolver",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+    const TimeFrequencyRect bounds{0.1, 0.5, 500.0, 2000.0};
+    const PaintOperation op(1, LayerId{1}, path, makeMindGrainTool(LayerId{2}, bounds));
+
+    // No resolver passed at all - the default parameter.
+    applyPaintOperation(op, 2000.0, content);
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation with a MindGrainConfiguration paints nothing when the resolver finds no layer",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+    const TimeFrequencyRect bounds{0.1, 0.5, 500.0, 2000.0};
+    const PaintOperation op(1, LayerId{1}, path, makeMindGrainTool(LayerId{2}, bounds));
+
+    applyPaintOperation(op, 2000.0, content, [](LayerId) -> const StreamImage* { return nullptr; });
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation with a MindGrainConfiguration paints nothing when the resolved layer has no content "
+          "yet (a degenerate, zero-frame source)",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    // A resolvable but genuinely empty source - captureClip() returns an
+    // empty Clip for this (see its own docs), the same as a layer that
+    // was never actually painted/imported into yet.
+    const StreamImage emptySource = makeBlankContent(config, 0);
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+    const TimeFrequencyRect bounds{0.1, 0.5, 500.0, 2000.0};
+    const PaintOperation op(1, LayerId{1}, path, makeMindGrainTool(LayerId{2}, bounds));
+
+    applyPaintOperation(op, 2000.0, content, [&emptySource](LayerId) -> const StreamImage* { return &emptySource; });
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
 }
 
 TEST_CASE("rebuildPaintedContent applies every PaintOperation in order, on top of a copy of base",

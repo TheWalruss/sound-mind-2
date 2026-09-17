@@ -181,6 +181,18 @@ std::optional<sound_mind::core::MindShotId> SelectionController::captureMindShot
     return id;
 }
 
+std::optional<sound_mind::core::MindGrainId> SelectionController::captureMindGrain(const std::string& name) {
+    if (!committedBounds_.has_value() || project_ == nullptr) {
+        return std::nullopt;
+    }
+    // Unlike captureMindShot(), no content capture at all - a Mind Grain
+    // stores only the reference {selectionLayer_, bounds}; see this
+    // method's own docs.
+    const sound_mind::core::MindGrainId id = project_->addMindGrain(name, selectionLayer_, *committedBounds_);
+    emit mindGrainCaptured(id);
+    return id;
+}
+
 std::optional<sound_mind::core::OperationId> SelectionController::pasteInto(sound_mind::core::LayerId targetLayer) {
     if (!clipboard_.has_value() || !clipboardBounds_.has_value() || project_ == nullptr) {
         return std::nullopt;

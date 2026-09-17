@@ -6,6 +6,25 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.33.2] - 2026-09-17
+
+Mind Grains, Installment B: a live-referenced counterpart to Mind Shots - `docs/sound-mind-design.md`'s "Mind Grains". Closes out the `v0.Y.33.1 - Mind Shots & Mind Grains` roadmap milestone.
+
+### Added
+
+- **A new "Mind Grain" paintable Tool Type**, selectable from the Tool Configuration panel's Tool Type dropdown. The deliberate opposite of Mind Shot: no pixels are ever captured, only a reference to `{sourceLayer, region}` - painting with it re-reads that layer's own *current* content fresh every time the stroke is (re)applied, so repainting the source layer changes what a Mind-Grain-painted stroke shows the next time that stroke's own layer rebuilds (a new stroke there, Undo/Redo, or a project reload) - not an instant cross-layer update the moment the source changes.
+- **"Capture as Mind Grain"**, a new Edit menu action (alongside Copy/Cut/Paste/Capture as Mind Shot) - stores the current selection's own `{layer, bounds}` permanently in the project's own Mind Grain library, auto-named "Mind Grain 1", "Mind Grain 2", and so on. Touches neither the clipboard nor any pixel content at all.
+- **A Mind Grain picker** in the Tool Configuration panel's new Mind Grain group, listing every captured Mind Grain in the current project by name.
+- **A full ordering-rule guardrail, enforced in layers**: a Mind Grain can only be painted onto a layer above its own source. Starting a stroke on a disallowed layer is refused silently (the backstop); while it would be disallowed, the Tool Configuration panel's Mind Grain group turns red with an explanatory tooltip, the Layers panel marks every disallowed layer with a red "✕" (with its own tooltip), and the Paint toolbar action is disabled (also with an explanatory tooltip, and force-deactivated if it was already on). Reordering or deleting a layer that would break an *already-painted* Mind Grain stroke's own ordering is refused outright via a modal dialog naming what would break and why, rather than silently allowed or merely warned about.
+
+### Changed
+
+- **`ToolConfiguration` gains a fourth concrete subtype, `MindGrainConfiguration`**, alongside `ProceduralConfiguration`/`InstrumentConfiguration`/`MindShotConfiguration`.
+- **`Project` gains a Mind Grain library** (`mindGrains()`/`addMindGrain()`/`removeMindGrain()`/`mindGrainById()`), mirroring the Mind Shot library. Existing project files load unchanged.
+- **`applyPaintOperation()`/`rebuildPaintedContent()` gain an optional `LayerContentResolver` parameter** - the first time anything in this codebase's paint-application path has ever needed visibility into another layer's content; defaults to an empty resolver (a no-op for any Mind Grain stroke), so every other existing call site is unaffected.
+
+Full regression: sound-mind-core 440/440 (28 new Mind Grain cases: `isLayerAbove()`, the two layer-reorder/removal break-detection queries, `MindGrainConfiguration` serialization/`clone()`, live-resolver paint-application including a freshness check), sound-mind-codec/sound-mind-gpu unchanged, sound-mind-studio all 33 QTest classes passing (new capture/picker/stroke-guard/red-highlight/red-X cases). The reorder/delete-blocking modal itself isn't unit-tested (a real, blocking `QMessageBox`, the same reason this codebase's other modal-showing branches go untested) - see the summary's manual-test list. Doxygen: 0 warnings.
+
 ## [0.0.33.1] - 2026-09-17
 
 Mind Shots, Installment A: capture a selection as a permanent, named, reusable brush - `docs/sound-mind-design.md`'s "Mind Shots".

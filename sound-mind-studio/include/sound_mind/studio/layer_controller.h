@@ -186,8 +186,13 @@ public:
 
     /// @brief Deletes the layer with the given id. Refuses (no-op) for a
     ///        `Background`/`Equalizer` layer, or if no layer with this id
-    ///        exists. Repaints the canvas and invalidates cached playback
-    ///        audio, then refreshes the Layers Panel, on success.
+    ///        exists. Also refuses - showing an explanatory modal instead -
+    ///        if any active Mind Grain stroke elsewhere in the project
+    ///        reads its own content live from this layer (see
+    ///        `sound_mind::core::mindGrainOperationsBrokenByRemovingLayer()`'s
+    ///        own docs); the deletion is cancelled outright, not just
+    ///        warned about. Repaints the canvas and invalidates cached
+    ///        playback audio, then refreshes the Layers Panel, on success.
     /// @param id The layer to delete.
     void deleteLayer(sound_mind::core::LayerId id);
 
@@ -225,10 +230,16 @@ public:
     /// @param config The panel's own new, complete configuration.
     void applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config);
 
-    /// @brief Reorders the current project's layer stack. Refreshes the
-    ///        Layers Panel either way (even a rejected reorder needs the
-    ///        panel snapped back to the authoritative order); repaints
-    ///        the canvas only if the reorder actually applied.
+    /// @brief Reorders the current project's layer stack. Refuses -
+    ///        showing an explanatory modal, and cancelling outright rather
+    ///        than just warning - if the requested order would put any
+    ///        active Mind Grain stroke's own target layer at-or-below its
+    ///        own source layer (see
+    ///        `sound_mind::core::mindGrainOperationsBrokenByReorder()`'s own
+    ///        docs). Refreshes the Layers Panel either way (even a
+    ///        rejected reorder needs the panel snapped back to the
+    ///        authoritative order); repaints the canvas only if the
+    ///        reorder actually applied.
     /// @param newOrderBottomToTop Every current layer's id, exactly once
     ///        each, in the desired new bottom-to-top order.
     void reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop);

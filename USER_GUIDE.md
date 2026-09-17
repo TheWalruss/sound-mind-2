@@ -418,12 +418,12 @@ The **Tool Configuration** toolbar button opens a dockable panel (off by
 default, alongside Layers/Playback/Record/Loop) with the brush's own
 settings:
 
-- **Tool Type** - **Procedural** (the default), **Instrument**, or **Mind
-  Shot**; picks which set of controls below applies (Tip Shape for
-  Procedural, Harmonics/Inharmonicity for Instrument, a Mind Shot picker
-  for Mind Shot). Switching keeps Falloff/Size/Stamp Mode/Interval/Color/
-  Opacity as they were - only the type-specific controls reset to the
-  newly-picked type's own defaults.
+- **Tool Type** - **Procedural** (the default), **Instrument**, **Mind
+  Shot**, or **Mind Grain**; picks which set of controls below applies (Tip
+  Shape for Procedural, Harmonics/Inharmonicity for Instrument, a picker
+  for Mind Shot/Mind Grain). Switching keeps Falloff/Size/Stamp Mode/
+  Interval/Color/Opacity as they were - only the type-specific controls
+  reset to the newly-picked type's own defaults.
 - **Tip Shape** (Procedural only) - the stroke's cross-section (Circle,
   Square, Diamond, and others - only Circle/Square/Diamond have a distinct
   shape so far; the rest currently paint the same as Circle).
@@ -446,6 +446,26 @@ settings:
   Painting with it stamps the captured content back exactly as it was
   captured - a hard overwrite at its own original size, not blended or
   scaled by Falloff/Size the way Procedural/Instrument are.
+- **Mind Grain** (Mind Grain only) - a drop-down of every Mind Grain you've
+  captured so far (see [Selection and Fill](#selection-and-fill)'s own
+  "Capture as Mind Grain"), empty until you capture your first one. The
+  opposite of Mind Shot: no pixels are ever captured, only a reference to
+  the region and the layer it was selected on - painting with it always
+  reads that layer's *current* content, so if you later repaint the source
+  layer, a Mind Grain stroke shows the new content the next time it's
+  redrawn (a new stroke on the same layer, Undo/Redo, or reopening the
+  project) - not instantly the moment the source changes.
+
+  **A Mind Grain can only paint onto a layer above its own source** - the
+  panel won't even let you attempt it on the wrong layer: the Mind Grain
+  group turns red (with a tooltip explaining why) whenever the active
+  layer isn't above the configured grain's source, the Layers panel marks
+  every disallowed layer with a red **✕**, and the Paint toolbar button
+  itself is disabled (its own tooltip explains why) - switch to a layer
+  higher in the stack, or reorder the layers, to paint with it. Reordering
+  or deleting a layer that would break an *already-painted* Mind Grain
+  stroke's own ordering is refused outright too, with a dialog explaining
+  which stroke(s) would break and why.
 - **Falloff** - how soft the stroke's edge is, from a hard edge (`0`) to
   fully soft (`1`).
 - **Brush Size** - the tip's own radius: in seconds on the time axis, and
@@ -502,11 +522,12 @@ visibility, translation, and rescale (see
 single history, undoing/redoing whichever one actually happened most
 recently, in either order.
 
-Only **Procedural**, **Instrument** (harmonic series + inharmonicity
-only so far - no noise, body resonance, or envelope yet), and **Mind Shot**
-(capture-and-restamp only - Mind Grains' own live-referenced version isn't
-built yet) exist today - see [What's Not Here Yet](#whats-not-here-yet)
-for the rest of what's planned around painting.
+Only **Procedural**, **Instrument** (harmonic series + inharmonicity only so
+far - no noise, body resonance, or envelope yet), **Mind Shot**
+(capture-and-restamp), and **Mind Grain** (live reference, re-read on its
+own layer's next rebuild - not an instant cross-layer update) exist today -
+see [What's Not Here Yet](#whats-not-here-yet) for the rest of what's
+planned around painting.
 
 ## Pick
 
@@ -603,6 +624,14 @@ itself, only to having drawn one.
   [Painting](#painting)'s Tool Configuration panel and select it from the
   drop-down there to paint with it - it stamps back exactly as captured,
   wherever you paint, on any layer.
+- **Capture as Mind Grain** it - **Edit → Capture as Mind Grain** stores a
+  *reference* to the selection's own layer and region, named "Mind Grain 1",
+  "Mind Grain 2", and so on - unlike Capture as Mind Shot, no pixels are
+  captured at all, and neither the clipboard nor the source layer's content
+  is touched. Once captured, pick **Mind Grain** as the Tool Type and
+  select it from the drop-down there to paint with it - see
+  [Painting](#painting)'s own Mind Grain entry for the "only paintable
+  above its own source layer" rule and the guardrails that enforce it.
 - **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
   actually dragging (a plain click) on the canvas while in Select mode.
 
@@ -786,14 +815,18 @@ Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:
 
 - Only **Procedural**, **Instrument** (harmonic series + inharmonicity
-  only - no noise component, body resonance, or ADSR envelope yet), and
-  **Mind Shot** (capture-and-restamp only) - **Mind Grain** (a *live*-
-  referenced version of Mind Shot, changing as its source layer does) and
-  the other painting tools (Smudge, Order/Chaos, Heal, Soften, Clone)
-  aren't built yet. Instrument strokes also don't yet bind to a MindWave,
-  and Loop Mode doesn't yet retrigger per note. A Mind Shot stamp always
-  overwrites verbatim - blend-mode selection (so it could blend rather
-  than overwrite) is planned alongside layer/Paste blend modes.
+  only - no noise component, body resonance, or ADSR envelope yet), **Mind
+  Shot** (capture-and-restamp), and **Mind Grain** (live reference,
+  re-read only on its own layer's next rebuild - not an instant, reactive
+  update the moment its source changes elsewhere; that would be this
+  codebase's first cross-layer reactive dependency graph, and isn't built)
+  exist - the other painting tools (Smudge, Order/Chaos, Heal, Soften,
+  Clone) aren't built yet. Instrument strokes also don't yet bind to a
+  MindWave, and Loop Mode doesn't yet retrigger per note. A Mind Shot/Mind
+  Grain stamp always overwrites verbatim - blend-mode selection (so it
+  could blend rather than overwrite) is planned alongside layer/Paste
+  blend modes. There's also no UI yet to reposition an already-captured
+  Mind Grain's own referenced region.
 - No **Tool Configuration Wizard** or **Tool Preset** drop-down - the
   Panel described above is the only way to set brush parameters today,
   and there's no way yet to save/reuse/export a particular brush setup.

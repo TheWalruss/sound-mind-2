@@ -9,6 +9,7 @@ add_executable(sound-mind-core-tests
     test_tone_curve.cpp
     test_mind_wave.cpp
     test_mind_shot.cpp
+    test_mind_grain.cpp
     test_filter_application.cpp
     test_paint_operation.cpp
     test_fill_operation.cpp

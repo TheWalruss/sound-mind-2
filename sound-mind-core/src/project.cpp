@@ -215,6 +215,43 @@ NamedMindShot* Project::mindShotById(MindShotId id) noexcept {
     return nullptr;
 }
 
+MindGrainId Project::addMindGrain(std::string name, LayerId sourceLayerId, TimeFrequencyRect bounds) {
+    const auto maxId = std::max_element(
+        mindGrains_.begin(), mindGrains_.end(),
+        [](const NamedMindGrain& a, const NamedMindGrain& b) { return a.id < b.id; });
+    const MindGrainId newId = (maxId == mindGrains_.end() ? MindGrainId{0} : maxId->id) + 1;
+    mindGrains_.push_back(NamedMindGrain{newId, std::move(name), sourceLayerId, bounds});
+    return newId;
+}
+
+bool Project::removeMindGrain(MindGrainId id) {
+    const auto it = std::find_if(mindGrains_.begin(), mindGrains_.end(),
+                                   [id](const NamedMindGrain& named) { return named.id == id; });
+    if (it == mindGrains_.end()) {
+        return false;
+    }
+    mindGrains_.erase(it);
+    return true;
+}
+
+const NamedMindGrain* Project::mindGrainById(MindGrainId id) const noexcept {
+    for (const NamedMindGrain& named : mindGrains_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
+NamedMindGrain* Project::mindGrainById(MindGrainId id) noexcept {
+    for (NamedMindGrain& named : mindGrains_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
 bool Project::removeLayer(LayerId id) {
     const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const Layer& layer) { return layer.id() == id; });
     if (it == layers_.end()) {
@@ -260,6 +297,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"operationLog", project.operationLog_},
         {"mindWaves", project.mindWaves_},
         {"mindShots", project.mindShots_},
+        {"mindGrains", project.mindGrains_},
     };
 }
 
@@ -288,6 +326,15 @@ void from_json(const nlohmann::json& json, Project& project) {
     if (json.contains("mindShots")) {
         for (const auto& namedJson : json.at("mindShots")) {
             project.mindShots_.push_back(namedJson.get<NamedMindShot>());
+        }
+    }
+
+    // Lenient, same reasoning - didn't exist before v0.Y.33.1 Installment
+    // B; a project saved before it had no Mind Grains to lose.
+    project.mindGrains_.clear();
+    if (json.contains("mindGrains")) {
+        for (const auto& namedJson : json.at("mindGrains")) {
+            project.mindGrains_.push_back(namedJson.get<NamedMindGrain>());
         }
     }
 }

@@ -20,4 +20,10 @@ private slots:
     void cancelStrokeDiscardsTheStrokeWithoutAppendingAnOperation();
     void undoRevertsTheLayersContentAndRedoReappliesIt();
     void setProjectClearsAnyInProgressStroke();
+
+    // Mind Grains (v0.Y.33.1 Installment B).
+    void beginStrokeRefusesSilentlyWhenTheMindGrainToolIsNotAllowedOnTheTargetLayer();
+    void beginStrokeStartsNormallyWhenTheMindGrainToolIsAllowedOnTheTargetLayer();
+    void endStrokeWithAMindGrainToolPaintsFromTheSourceLayersCurrentContent();
+    void rebuildLayerContentRereadsTheSourceLayersCurrentContentEachTime();
 };

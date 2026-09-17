@@ -440,6 +440,38 @@ void applyMindShotPaintOperation(const MindShotConfiguration& toolConfig, const 
     }
 }
 
+/// @brief `MindGrainConfiguration`'s own stamp, applied at every stamp
+/// position along the stroke - unlike `applyMindShotPaintOperation()`
+/// above, `toolConfig` itself holds no pixel content: `resolveLayerContent`
+/// is called once here (not once per stamp - the source layer's own
+/// content can't change mid-stroke) to fetch the source layer's *current*
+/// content, and a fresh `Clip` is captured from `toolConfig.bounds()` of
+/// it, then blitted with the exact same `blitClipCentered()` helper Mind
+/// Shot uses. A no-op if `resolveLayerContent` is empty, the resolved
+/// layer doesn't exist/has no content, or the captured clip turns out
+/// empty (`bounds()` outside the source's own current extent).
+void applyMindGrainPaintOperation(const MindGrainConfiguration& toolConfig, const std::vector<StrokeSample>& samples,
+                                   const LayerContentResolver& resolveLayerContent,
+                                   sound_mind::codec::StreamImage& content) {
+    if (!resolveLayerContent) {
+        return;
+    }
+    const sound_mind::codec::StreamImage* source = resolveLayerContent(toolConfig.sourceLayerId());
+    if (source == nullptr) {
+        return;
+    }
+    const Clip clip = captureClip(*source, toolConfig.bounds());
+    if (clip.frameCount == 0 || clip.binCount == 0) {
+        return;
+    }
+
+    for (const StrokeSample& sample : samples) {
+        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
+        const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
+        blitClipCentered(clip, frameCenter, binCenter, content);
+    }
+}
+
 }  // namespace
 
 float frequencyToBinIndex(float frequencyHz, const sound_mind::codec::StreamCodecConfig& config) noexcept {
@@ -508,7 +540,7 @@ FrameBinRange rangeFor(const TimeFrequencyRect& bounds, const sound_mind::codec:
 }
 
 void applyPaintOperation(const PaintOperation& operation, double frequencyToTimeScale,
-                          sound_mind::codec::StreamImage& content) {
+                          sound_mind::codec::StreamImage& content, const LayerContentResolver& resolveLayerContent) {
     if (frequencyToTimeScale <= 0.0 || content.frameCount == 0 || content.config.binCount == 0) {
         return;
     }
@@ -531,19 +563,22 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
         applyInstrumentPaintOperation(operation, *instrument, samples, content);
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(&toolConfig)) {
         applyMindShotPaintOperation(*mindShot, samples, content);
+    } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(&toolConfig)) {
+        applyMindGrainPaintOperation(*mindGrain, samples, resolveLayerContent, content);
     }
-    // Any other/future ToolType (MindGrain, Smudge, ...) paints nothing
+    // Any other/future ToolType (Smudge, OrderChaos, ...) paints nothing
     // yet - the same "groundwork, not yet functional" state
     // ToolConfiguration's own docs describe for those tool types.
 }
 
 sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::StreamImage& base,
                                                        const std::vector<const Operation*>& operations,
-                                                       double frequencyToTimeScale) {
+                                                       double frequencyToTimeScale,
+                                                       const LayerContentResolver& resolveLayerContent) {
     sound_mind::codec::StreamImage result = base;
     for (const Operation* operation : operations) {
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation)) {
-            applyPaintOperation(*paint, frequencyToTimeScale, result);
+            applyPaintOperation(*paint, frequencyToTimeScale, result, resolveLayerContent);
         } else if (const auto* fill = dynamic_cast<const FillOperation*>(operation)) {
             applyFillOperation(*fill, result);
         } else if (const auto* paste = dynamic_cast<const PasteOperation*>(operation)) {

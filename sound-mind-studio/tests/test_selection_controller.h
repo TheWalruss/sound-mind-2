@@ -34,4 +34,9 @@ private slots:
     void captureMindShotIsANoOpWithNoCommittedSelection();
     void captureMindShotDoesNotTouchTheClipboardOrSourcePixels();
     void captureMindShotEmitsMindShotCapturedWithTheNewId();
+
+    void captureMindGrainAddsANamedEntryToTheProjectsMindGrainLibrary();
+    void captureMindGrainIsANoOpWithNoCommittedSelection();
+    void captureMindGrainDoesNotTouchTheClipboardOrSourceLayerContent();
+    void captureMindGrainEmitsMindGrainCapturedWithTheNewId();
 };

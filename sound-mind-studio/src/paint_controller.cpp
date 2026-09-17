@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
@@ -24,6 +25,19 @@ void PaintController::setProject(sound_mind::core::Project* project) {
 void PaintController::beginStroke(sound_mind::core::LayerId targetLayer, sound_mind::core::TimeFrequencyPoint point) {
     if (project_ == nullptr || strokeInProgress_) {
         return;
+    }
+    // Silent refusal to even start a Mind Grain stroke on/below its own
+    // source layer - the backstop layer of defense described in
+    // docs/sound-mind-design.md's "Mind Grains"; every other guardrail
+    // (Tool Configuration's own red highlight, the Layers Panel's red X,
+    // the Paint button's own disabled state) exists so the user practically
+    // never reaches this point in the first place, but this check is what
+    // actually makes an invalid stroke impossible rather than just
+    // discouraged.
+    if (const auto* mindGrain = dynamic_cast<const sound_mind::core::MindGrainConfiguration*>(toolConfig_.get())) {
+        if (!sound_mind::core::isLayerAbove(*project_, targetLayer, mindGrain->sourceLayerId())) {
+            return;
+        }
     }
     strokeInProgress_ = true;
     strokeTargetLayer_ = targetLayer;
@@ -156,9 +170,23 @@ void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {
         baseContent_.emplace(layer, base);
     }
 
+    // Resolves another layer's own *current* content for a Mind Grain
+    // stamp (see paint_application.h's own LayerContentResolver docs) -
+    // reading straight from the live Project, so a Mind Grain stroke
+    // rebuilt here always sees its source layer as of *this* rebuild, the
+    // "re-samples on the target layer's own next rebuild" liveness
+    // docs/sound-mind-design.md's "Mind Grains" describes.
+    const sound_mind::core::Project* project = project_;
+    const auto resolveLayerContent =
+        [project](sound_mind::core::LayerId id) -> const sound_mind::codec::StreamImage* {
+        const sound_mind::core::Layer* layer = project->layerById(id);
+        return (layer != nullptr && layer->content().has_value()) ? &*layer->content() : nullptr;
+    };
+
     const auto activeOperations = project_->operationLog().activeOperationsTargeting(layer);
     sound_mind::codec::StreamImage rebuilt = sound_mind::core::rebuildPaintedContent(
-        baseContent_.at(layer), activeOperations, sound_mind::core::frequencyToTimeScaleFor(project_->settings()));
+        baseContent_.at(layer), activeOperations, sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
+        resolveLayerContent);
     target->setContent(std::move(rebuilt));
 
     emit contentChanged(layer);

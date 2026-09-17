@@ -596,3 +596,80 @@ void SelectionControllerTest::captureMindShotEmitsMindShotCapturedWithTheNewId()
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).value<sound_mind::core::MindShotId>(), *id);
 }
+
+void SelectionControllerTest::captureMindGrainAddsANamedEntryToTheProjectsMindGrainLibrary() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+
+    const auto id = controller.captureMindGrain("Rain Texture");
+
+    QVERIFY(id.has_value());
+    QCOMPARE(project.mindGrains().size(), std::size_t{1});
+    QCOMPARE(project.mindGrains().front().id, *id);
+    QCOMPARE(project.mindGrains().front().name, std::string("Rain Texture"));
+    QCOMPARE(project.mindGrains().front().sourceLayerId, layerId);
+    // Unlike captureMindShot(), no content capture at all - never even
+    // logs an Operation, the same "a read, not an edit" reasoning.
+    QCOMPARE(project.operationLog().size(), std::size_t{0});
+}
+
+void SelectionControllerTest::captureMindGrainIsANoOpWithNoCommittedSelection() {
+    Project project = Project::createNew(testSettings());
+    addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+
+    const auto id = controller.captureMindGrain("Rain Texture");
+
+    QVERIFY(!id.has_value());
+    QVERIFY(project.mindGrains().empty());
+}
+
+void SelectionControllerTest::captureMindGrainDoesNotTouchTheClipboardOrSourceLayerContent() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    setPixel(project, layerId, 25, 10, -3.0f);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+
+    controller.captureMindGrain("Rain Texture");
+
+    QVERIFY(!controller.hasClipboard());  // Never touches the clipboard - see the class's own docs.
+    const auto* layer = project.layerById(layerId);
+    QVERIFY(layer != nullptr);
+    QVERIFY(layer->content().has_value());
+    // Never even reads the source layer's own content, let alone changes
+    // it - unlike captureMindShot(), which reads (but never clears) it.
+    QCOMPARE(layer->content()->leftMagnitudeDb[static_cast<std::size_t>(10) * layer->content()->frameCount +
+                                                 static_cast<std::size_t>(25)],
+             -3.0f);
+}
+
+void SelectionControllerTest::captureMindGrainEmitsMindGrainCapturedWithTheNewId() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+    QSignalSpy spy(&controller, &SelectionController::mindGrainCaptured);
+
+    const auto id = controller.captureMindGrain("Rain Texture");
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<sound_mind::core::MindGrainId>(), *id);
+}

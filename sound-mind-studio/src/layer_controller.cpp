@@ -1,6 +1,9 @@
 #include "sound_mind/studio/layer_controller.h"
 
+#include <QMessageBox>
+
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/layers_panel.h"
@@ -241,6 +244,23 @@ void LayerController::deleteLayer(sound_mind::core::LayerId id) {
         return;
     }
 
+    // Refuse (with an explanatory modal) rather than silently deleting a
+    // layer any active Mind Grain stroke elsewhere in the project reads
+    // its own content from live - see docs/sound-mind-design.md's "Mind
+    // Grains" ordering rule, and mindGrainOperationsBrokenByRemovingLayer()'s
+    // own docs.
+    const auto broken = sound_mind::core::mindGrainOperationsBrokenByRemovingLayer(*project_, id);
+    if (!broken.empty()) {
+        QMessageBox::warning(
+            canvas_, tr("Can't Delete Layer"),
+            tr("Deleting \"%1\" would break %2 Mind Grain stroke(s) painted elsewhere in this project - each one "
+               "reads its own painted content live from this layer, and would lose its source. Remove or repaint "
+               "those strokes first, or choose a different layer to delete.")
+                .arg(QString::fromStdString(layer->name()))
+                .arg(static_cast<int>(broken.size())));
+        return;
+    }
+
     if (project_->removeLayer(id)) {
         emit layersChanged();
         playbackController_->invalidate();
@@ -319,6 +339,26 @@ void LayerController::reorderLayers(const std::vector<sound_mind::core::LayerId>
     if (project_ == nullptr) {
         return;
     }
+
+    // Refuse (with an explanatory modal), and cancel outright, rather than
+    // applying a reorder that would put an active Mind Grain stroke's own
+    // target layer at-or-below its own source - see
+    // docs/sound-mind-design.md's "Mind Grains" ordering rule, and
+    // mindGrainOperationsBrokenByReorder()'s own docs. The panel is still
+    // refreshed below (snapping its own optimistic drag-and-drop display
+    // back to the authoritative, unchanged order), the same as any other
+    // rejected reorder.
+    const auto broken = sound_mind::core::mindGrainOperationsBrokenByReorder(*project_, newOrderBottomToTop);
+    if (!broken.empty()) {
+        QMessageBox::warning(
+            canvas_, tr("Can't Reorder Layers"),
+            tr("This reorder would break %1 Mind Grain stroke(s) painted elsewhere in this project - each one must "
+               "stay above its own source layer. Cancelled; nothing was moved.")
+                .arg(static_cast<int>(broken.size())));
+        refreshLayersPanel();
+        return;
+    }
+
     if (project_->reorderLayers(newOrderBottomToTop)) {
         emit layersChanged();
         canvas_->update();

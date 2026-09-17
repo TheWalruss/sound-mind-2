@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/core/gradient.h"
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
 
 namespace sound_mind::core {
@@ -17,9 +18,9 @@ namespace sound_mind::core {
  *        see `docs/sound-mind-design.md`'s "Tool Configuration".
  *
  * @note Only `Procedural`, (as of `v0.Y.32.1`, Sound Mind Instruments)
- *       `Instrument`, and (as of `v0.Y.33.1` Installment A) `MindShot`
+ *       `Instrument`, and (as of `v0.Y.33.1`) `MindShot`/`MindGrain`
  *       exist as real, paintable tools so far -
- *       `MindGrain`/`Smudge`/`OrderChaos`/`Heal`/`Soften`/`Clone`
+ *       `Smudge`/`OrderChaos`/`Heal`/`Soften`/`Clone`
  *       are future roadmap milestones, not yet scheduled. Adding a value
  *       here ahead of its own tool actually working is deliberate
  *       groundwork for the Tool Configuration Panel/Wizard's dynamic-per-
@@ -486,6 +487,95 @@ private:
     Clip clip_;
 };
 
+/**
+ * @brief A Mind Grain brush - `v0.Y.33.1` Installment B, per `docs/sound-
+ *        mind-design.md`'s "Mind Grains": stamps a *live* reference to a
+ *        region on another layer, redrawn fresh from that layer's own
+ *        current content every time it's actually rendered.
+ *
+ * **The deliberate opposite of `MindShotConfiguration`**: holds no pixel
+ * content at all, only `sourceLayerId()`/`bounds()` - the reference
+ * itself. `applyPaintOperation()`'s own `MindGrainConfiguration` branch
+ * resolves the actual pixels fresh from `sourceLayerId()`'s own current
+ * content at paint-application time (via a caller-supplied
+ * `LayerContentResolver`), the same way `NamedMindGrain`'s own docs
+ * describe. **How "live" this actually is, in this installment**: a
+ * grain-painted layer only re-samples its source the next time *that*
+ * layer's own content is rebuilt for any reason (a new stroke there,
+ * undo/redo, project load) - not the instant the source layer changes
+ * elsewhere. Confirmed with the user as this installment's own scope,
+ * over a full, immediately-reactive cross-layer rebuild cascade.
+ *
+ * **Only paintable on a layer above `sourceLayerId()`** - see
+ * `isLayerAbove()`'s own docs for where this is actually enforced (stroke
+ * start, and defensively against layer reorder/removal); this class
+ * itself never checks it - a `MindGrainConfiguration` can be constructed
+ * with any `sourceLayerId()` at all, same as `MindShotConfiguration` can
+ * be constructed with an empty `Clip`.
+ *
+ * **No `tipShape()`/meaningful `falloff()`/`size()` use, same as
+ * `MindShotConfiguration`** - a hard, Normal-only overwrite of whatever
+ * region `sourceLayerId()`'s own current content has at `bounds()`,
+ * centered on each stamp position, not scaled or blended.
+ */
+class MindGrainConfiguration : public ToolConfiguration {
+public:
+    /// @brief Constructs a configuration with no Mind Grain selected yet
+    ///        (`sourceLayerId()` is `0`, an id no real layer below the
+    ///        `Background` layer's own id could ever have - see
+    ///        `LayerId`'s own docs) - paints nothing until `setReference()`
+    ///        is called with a real capture.
+    MindGrainConfiguration() = default;
+
+    [[nodiscard]] ToolType type() const noexcept override { return ToolType::MindGrain; }
+
+    [[nodiscard]] std::unique_ptr<ToolConfiguration> clone() const override {
+        return std::make_unique<MindGrainConfiguration>(*this);
+    }
+
+    /// @brief Which library entry this configuration references, if any -
+    ///        for UI purposes only (so a Tool Configuration Panel showing
+    ///        this configuration can highlight the right entry in its own
+    ///        Mind Grain picker); never consulted by painting itself,
+    ///        which only ever reads `sourceLayerId()`/`bounds()` directly.
+    /// @return The source entry's own id, or `std::nullopt` if this
+    ///         configuration was never set from a library entry (a fresh
+    ///         configuration, or one loaded from a project file saved
+    ///         before this field existed).
+    [[nodiscard]] std::optional<MindGrainId> sourceMindGrainId() const noexcept { return sourceMindGrainId_; }
+
+    /**
+     * @brief Sets which region this configuration reads its live content
+     *        from.
+     * @param sourceId The library entry this reference was picked from,
+     *        for `sourceMindGrainId()`'s own UI-only purpose;
+     *        `std::nullopt` if unknown/not applicable.
+     * @param sourceLayerId The layer to read live content from.
+     * @param bounds The region within `sourceLayerId` to read.
+     */
+    void setReference(std::optional<MindGrainId> sourceId, LayerId sourceLayerId, TimeFrequencyRect bounds) {
+        sourceMindGrainId_ = sourceId;
+        sourceLayerId_ = sourceLayerId;
+        bounds_ = bounds;
+    }
+
+    /// @brief Which layer this configuration reads its live content from.
+    /// @return The current source layer id - `0` (see the default
+    ///         constructor's own docs) until `setReference()` is called.
+    [[nodiscard]] LayerId sourceLayerId() const noexcept { return sourceLayerId_; }
+
+    /// @brief The region within `sourceLayerId()` this configuration reads
+    ///        its live content from.
+    /// @return The current bounds - default-constructed (a degenerate,
+    ///         zero-area rect) until `setReference()` is called.
+    [[nodiscard]] const TimeFrequencyRect& bounds() const noexcept { return bounds_; }
+
+private:
+    std::optional<MindGrainId> sourceMindGrainId_;
+    LayerId sourceLayerId_ = 0;
+    TimeFrequencyRect bounds_;
+};
+
 /// @brief Serializes any concrete `ToolConfiguration` to its JSON
 ///        representation - dispatches on `type()` internally (a `"type"`
 ///        discriminator field, plus every field common to every subtype,
@@ -511,7 +601,8 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config);
  * @throws nlohmann::json::exception on malformed or missing required data.
  * @throws std::invalid_argument for a `"type"` this factory doesn't yet
  *         know how to construct (any value past `Procedural`/`Instrument`/
- *         `MindShot` - see `ToolType`'s own docs on which are real so far).
+ *         `MindShot`/`MindGrain` - see `ToolType`'s own docs on which are
+ *         real so far).
  */
 [[nodiscard]] std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::json& json);
 

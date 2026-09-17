@@ -60,6 +60,13 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config) {
             json["sourceMindShotId"] = *sourceId;
         }
         json["clip"] = mindShot->clip();
+    } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(&config)) {
+        writeCommonToolConfigurationFields(json, config);
+        if (const auto sourceId = mindGrain->sourceMindGrainId(); sourceId.has_value()) {
+            json["sourceMindGrainId"] = *sourceId;
+        }
+        json["sourceLayerId"] = mindGrain->sourceLayerId();
+        json["bounds"] = mindGrain->bounds();
     } else {
         // Defensive: every concrete subtype is handled above: if this is
         // ever reached, a new subtype was added without updating this
@@ -95,6 +102,15 @@ std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::jso
                                                 : std::nullopt;
         mindShot->setClip(sourceId, json.at("clip").get<Clip>());
         config = std::move(mindShot);
+    } else if (type == ToolType::MindGrain) {
+        auto mindGrain = std::make_unique<MindGrainConfiguration>();
+        // "sourceMindGrainId" is UI-only metadata, same as MindShot's own.
+        const std::optional<MindGrainId> sourceId =
+            json.contains("sourceMindGrainId") ? std::optional(json.at("sourceMindGrainId").get<MindGrainId>())
+                                                 : std::nullopt;
+        mindGrain->setReference(sourceId, json.at("sourceLayerId").get<LayerId>(),
+                                 json.at("bounds").get<TimeFrequencyRect>());
+        config = std::move(mindGrain);
     } else {
         throw std::invalid_argument("ToolConfiguration: unrecognized \"type\" in toolConfigurationFromJson()");
     }

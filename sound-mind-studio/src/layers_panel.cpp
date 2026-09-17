@@ -126,7 +126,8 @@ class LayerRowWidget : public QWidget {
 
 public:
     LayerRowWidget(const LayersPanel::RowData& data, QListWidget* list,
-                   const std::vector<std::pair<MindWaveId, QString>>& availableMindWaves, QWidget* parent = nullptr)
+                   const std::vector<std::pair<MindWaveId, QString>>& availableMindWaves, bool disallowedForMindGrain,
+                   QWidget* parent = nullptr)
         : QWidget(parent), id_(data.id) {
         auto* layout = new QHBoxLayout(this);
         layout->setContentsMargins(2, 1, 2, 1);
@@ -145,6 +146,25 @@ public:
             auto* handle = new DragHandleLabel(list);
             handle->setObjectName(QStringLiteral("dragHandle"));
             layout->addWidget(handle);
+        }
+
+        // Mind Grain ordering-rule guardrail (v0.Y.33.1 Installment B, see
+        // LayersPanel::setDisallowedLayers()'s own docs) - a small red "✕"
+        // next to any row the currently configured Mind Grain can't paint
+        // onto, with a tooltip explaining why. Absent entirely (not merely
+        // hidden) when this row isn't disallowed, matching this panel's own
+        // "no dead placeholder UI" precedent (the lock icon/drag handle
+        // pair above).
+        if (disallowedForMindGrain) {
+            auto* disallowedMark = new QLabel(QStringLiteral("✕"));
+            disallowedMark->setObjectName(QStringLiteral("mindGrainDisallowedLabel"));
+            disallowedMark->setFixedWidth(16);
+            disallowedMark->setAlignment(Qt::AlignCenter);
+            disallowedMark->setStyleSheet(QStringLiteral("color: #c04040; font-weight: bold;"));
+            disallowedMark->setToolTip(
+                tr("The currently configured Mind Grain can't paint onto this layer - it must stay above its own "
+                   "source layer."));
+            layout->addWidget(disallowedMark);
         }
 
         auto* visibilityButton = new QPushButton(data.visible ? QStringLiteral("●") : QStringLiteral("○"));
@@ -368,6 +388,11 @@ void LayersPanel::setAvailableMindWaves(const std::vector<std::pair<MindWaveId, 
     rebuildRows();
 }
 
+void LayersPanel::setDisallowedLayers(const std::vector<sound_mind::core::LayerId>& disallowed) {
+    disallowedLayers_ = disallowed;
+    rebuildRows();
+}
+
 void LayersPanel::rebuildRows() {
     // QListWidget::clear() deletes the QListWidgetItems but *not* the
     // LayerRowWidgets set via setItemWidget() on them (a real, easy-to-miss
@@ -402,7 +427,9 @@ void LayersPanel::rebuildRows() {
             item->setFlags(item->flags() & ~Qt::ItemIsDragEnabled);
         }
         list_->addItem(item);
-        list_->setItemWidget(item, new LayerRowWidget(*it, list_, availableMindWaves_));
+        const bool disallowedForMindGrain =
+            std::find(disallowedLayers_.begin(), disallowedLayers_.end(), it->id) != disallowedLayers_.end();
+        list_->setItemWidget(item, new LayerRowWidget(*it, list_, availableMindWaves_, disallowedForMindGrain));
 
         auto* row = qobject_cast<LayerRowWidget*>(list_->itemWidget(item));
         connect(row, &LayerRowWidget::visibilityToggled, this, &LayersPanel::visibilityToggled);

@@ -148,6 +148,25 @@ public:
     void setAvailableMindWaves(
         const std::vector<std::pair<sound_mind::core::MindWaveId, QString>>& mindWaves);
 
+    /**
+     * @brief Marks every layer id in `disallowed` with a small red "✕"
+     *        overlay and an explanatory tooltip - the Layers Panel's own
+     *        half of `docs/sound-mind-design.md`'s "Mind Grains" ordering-
+     *        rule guardrail (`v0.Y.33.1` Installment B): while a Mind Grain
+     *        tool is configured, every layer at-or-below that Mind Grain's
+     *        own source layer can't be painted onto with it.
+     *
+     * Immediately rebuilds every row (not deferred to the next setLayers()
+     * call) - the same "changes independently of a layer mutation"
+     * treatment setAvailableMindWaves() already gets. Pass an empty vector
+     * to clear the marking entirely (no Mind Grain tool configured, or the
+     * active tool isn't a Mind Grain at all).
+     *
+     * @param disallowed Every layer id the current Mind Grain tool can't
+     *        paint onto right now.
+     */
+    void setDisallowedLayers(const std::vector<sound_mind::core::LayerId>& disallowed);
+
 signals:
     /// @brief The current selection changed - a row was clicked,
     ///        selectLayer() was called, or clearSelection() was called.
@@ -240,6 +259,9 @@ private:
 
     /// @brief See setAvailableMindWaves()'s own docs.
     std::vector<std::pair<sound_mind::core::MindWaveId, QString>> availableMindWaves_;
+
+    /// @brief See setDisallowedLayers()'s own docs.
+    std::vector<sound_mind::core::LayerId> disallowedLayers_;
 
     /// @brief See selectedLayerId()'s own docs.
     std::optional<sound_mind::core::LayerId> selectedLayerId_;

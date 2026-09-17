@@ -6,6 +6,7 @@
 #include <QObject>
 
 #include "sound_mind/core/gradient.h"
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/path.h"
@@ -215,6 +216,14 @@ public:
     /// @return The new entry's own id, or `std::nullopt` if there was no
     ///         committed selection to capture.
     std::optional<sound_mind::core::MindShotId> captureMindShot(const std::string& name);
+
+    /// @brief Captures the current selection's own `{layer, bounds}` into a
+    ///        new, named Mind Grain - forwards to
+    ///        `SelectionController::captureMindGrain()`.
+    /// @param name Display name for the new library entry.
+    /// @return The new entry's own id, or `std::nullopt` if there was no
+    ///         committed selection to capture.
+    std::optional<sound_mind::core::MindGrainId> captureMindGrain(const std::string& name);
 
     /// @brief Pastes the clipboard onto `targetLayer` - forwards to
     ///        `SelectionController::pasteInto()`.

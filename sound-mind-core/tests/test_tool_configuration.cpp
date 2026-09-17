@@ -10,6 +10,7 @@
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::Clip;
 using sound_mind::core::InstrumentConfiguration;
+using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::StampMode;
@@ -300,6 +301,81 @@ TEST_CASE("A MindShotConfiguration round-trips through JSON with no source id", 
 
     const auto& mindShot = dynamic_cast<const MindShotConfiguration&>(*roundTripped);
     REQUIRE(mindShot.sourceMindShotId() == std::nullopt);
+}
+
+TEST_CASE("A fresh MindGrainConfiguration is MindGrain with no Mind Grain selected", "[core][tool_configuration]") {
+    const MindGrainConfiguration config;
+    REQUIRE(config.type() == ToolType::MindGrain);
+    REQUIRE(config.sourceMindGrainId() == std::nullopt);
+    REQUIRE(config.sourceLayerId() == 0);
+}
+
+TEST_CASE("MindGrainConfiguration::setReference() sets the source id, layer, and bounds",
+          "[core][tool_configuration]") {
+    MindGrainConfiguration config;
+    const sound_mind::core::TimeFrequencyRect bounds{0.5, 1.5, 200.0, 800.0};
+    config.setReference(sound_mind::core::MindGrainId{7}, sound_mind::core::LayerId{3}, bounds);
+
+    REQUIRE(config.sourceMindGrainId() == sound_mind::core::MindGrainId{7});
+    REQUIRE(config.sourceLayerId() == sound_mind::core::LayerId{3});
+    REQUIRE(config.bounds().startTimeSeconds == 0.5);
+    REQUIRE(config.bounds().endTimeSeconds == 1.5);
+    REQUIRE(config.bounds().lowFrequencyHz == 200.0);
+    REQUIRE(config.bounds().highFrequencyHz == 800.0);
+}
+
+TEST_CASE("A MindGrainConfiguration's clone() is an independent, equal copy", "[core][tool_configuration]") {
+    MindGrainConfiguration config;
+    config.setName("Rain Texture Brush");
+    config.setReference(sound_mind::core::MindGrainId{3}, sound_mind::core::LayerId{4},
+                         sound_mind::core::TimeFrequencyRect{0.0, 1.0, 100.0, 200.0});
+
+    const std::unique_ptr<ToolConfiguration> clone = config.clone();
+    REQUIRE(clone->type() == ToolType::MindGrain);
+    REQUIRE(clone->name() == "Rain Texture Brush");
+    const auto& clonedMindGrain = dynamic_cast<const MindGrainConfiguration&>(*clone);
+    REQUIRE(clonedMindGrain.sourceMindGrainId() == sound_mind::core::MindGrainId{3});
+    REQUIRE(clonedMindGrain.sourceLayerId() == sound_mind::core::LayerId{4});
+
+    config.setReference(sound_mind::core::MindGrainId{99}, sound_mind::core::LayerId{50},
+                         sound_mind::core::TimeFrequencyRect{});
+    REQUIRE(clonedMindGrain.sourceMindGrainId() == sound_mind::core::MindGrainId{3});
+    REQUIRE(clonedMindGrain.sourceLayerId() == sound_mind::core::LayerId{4});
+}
+
+TEST_CASE("A MindGrainConfiguration round-trips through JSON, source id included", "[core][tool_configuration]") {
+    MindGrainConfiguration config;
+    config.setName("Rain Texture Brush");
+    config.setReference(sound_mind::core::MindGrainId{3}, sound_mind::core::LayerId{4},
+                         sound_mind::core::TimeFrequencyRect{0.5, 1.5, 200.0, 800.0});
+    config.setFalloff(0.6f);
+
+    const nlohmann::json json = config;
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    REQUIRE(roundTripped->type() == ToolType::MindGrain);
+    REQUIRE(roundTripped->name() == "Rain Texture Brush");
+    const auto& mindGrain = dynamic_cast<const MindGrainConfiguration&>(*roundTripped);
+    REQUIRE(mindGrain.sourceMindGrainId() == sound_mind::core::MindGrainId{3});
+    REQUIRE(mindGrain.sourceLayerId() == sound_mind::core::LayerId{4});
+    REQUIRE(mindGrain.bounds().startTimeSeconds == 0.5);
+    REQUIRE(mindGrain.bounds().highFrequencyHz == 800.0);
+    REQUIRE(roundTripped->falloff() == 0.6f);
+}
+
+TEST_CASE("A MindGrainConfiguration round-trips through JSON with no source id", "[core][tool_configuration]") {
+    // A configuration whose reference was never set from a library entry -
+    // sourceMindGrainId() must round-trip as nullopt, not some default id.
+    MindGrainConfiguration config;
+    config.setReference(std::nullopt, sound_mind::core::LayerId{4}, sound_mind::core::TimeFrequencyRect{});
+    nlohmann::json json = config;
+    json.erase("sourceMindGrainId");  // not written in the first place, but confirm the read side too.
+
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    const auto& mindGrain = dynamic_cast<const MindGrainConfiguration&>(*roundTripped);
+    REQUIRE(mindGrain.sourceMindGrainId() == std::nullopt);
+    REQUIRE(mindGrain.sourceLayerId() == sound_mind::core::LayerId{4});
 }
 
 TEST_CASE("toolConfigurationFromJson() rejects an unrecognized type", "[core][tool_configuration]") {

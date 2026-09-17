@@ -1055,6 +1055,22 @@ public slots:
     void captureMindShot();
 
     /**
+     * @brief Captures the current selection's own `{layer, bounds}` into a
+     *        new, named entry in the project's Mind Grain library - the
+     *        actual work behind the Edit menu's "Capture as Mind Grain"
+     *        action (`docs/sound-mind-design.md`'s "Mind Grains"). Delegates
+     *        to `SelectionController::captureMindGrain()` (via
+     *        `toolPaletteController_`); a no-op if there's no committed
+     *        selection or no project open.
+     *
+     * Unlike captureMindShot(), no pixel content is ever captured - see
+     * `SelectionController::captureMindGrain()`'s own docs. Auto-names the
+     * new entry `"Mind Grain <N>"`, the same convention captureMindShot()
+     * uses, and confirms success the same way (a status-bar message).
+     */
+    void captureMindGrain();
+
+    /**
      * @brief Finishes the Path tool's own in-progress node placement,
      *        committing it as a new paint object - the actual work behind
      *        the Edit menu's "Finish Path" action. Delegates to
@@ -1581,6 +1597,38 @@ private:
      * @param mode The tool mode `activated` corresponds to.
      */
     void setExclusiveToolMode(QAction* activated, bool enabled, CanvasWidget::ToolMode mode);
+
+    /**
+     * @brief Recomputes every UI guardrail for `docs/sound-mind-design.md`'s
+     *        "Mind Grains" ordering rule ("only paintable on a layer above
+     *        its own source") - `v0.Y.33.1` Installment B.
+     *
+     * Called whenever either input to the check could have changed: the
+     * active layer (`layerController_->paintTargetLayerId()` - Layers Panel
+     * selection changing, or a fresh `setProject()`), or the currently
+     * configured tool (`toolConfigurationPanel_->toolConfigurationChanged()`
+     * - a type switch, a different Mind Grain picked, or any other edit).
+     *
+     * Drives every layer of the guardrail at once, all from this single
+     * recomputation:
+     * - `toolConfigurationPanel_->setActiveLayer()` - its own red-highlight/
+     *   tooltip on the Mind Grain group (see that method's own docs).
+     * - `layersPanel_->setDisallowedLayers()` - a red "✕" on every layer
+     *   at-or-below the configured Mind Grain's own source, whenever the
+     *   configured tool actually is one; an empty list (clearing every
+     *   mark) otherwise.
+     * - `paintAction_->setEnabled()`/`setToolTip()` - disabled, with an
+     *   explanatory tooltip, whenever the configured tool is a Mind Grain
+     *   not usable on the *active* layer specifically; force-deactivates
+     *   Paint mode first (`setPaintModeEnabled(false)`) if it was currently
+     *   checked, so a user can never be left with Paint mode still active
+     *   on a now-disabled button. Re-enabled, tooltip cleared, otherwise.
+     *
+     * A no-op-safe default (nothing disabled/marked) whenever no project is
+     * open, no layer is active yet, or the configured tool isn't a Mind
+     * Grain at all.
+     */
+    void updateMindGrainGuardrails();
 
     /**
      * @brief If hasUnsavedChanges() is `false`, returns `true` immediately

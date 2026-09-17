@@ -6,16 +6,20 @@
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/paint_controller.h"
 
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
+using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
+using sound_mind::core::TimeFrequencyRect;
 using sound_mind::studio::PaintController;
 
 namespace {
@@ -263,4 +267,101 @@ void PaintControllerTest::setProjectClearsAnyInProgressStroke() {
     controller.setProject(&secondProject);
 
     QVERIFY(!controller.isStrokeInProgress());
+}
+
+// --- Mind Grains (v0.Y.33.1 Installment B) ----------------------------------
+
+void PaintControllerTest::beginStrokeRefusesSilentlyWhenTheMindGrainToolIsNotAllowedOnTheTargetLayer() {
+    Project project = Project::createNew(testSettings());
+    const LayerId lower = addBlankNormalLayer(project);
+    const LayerId upper = addBlankNormalLayer(project);
+    PaintController controller;
+    controller.setProject(&project);
+    auto config = std::make_unique<MindGrainConfiguration>();
+    config->setReference(std::nullopt, upper, TimeFrequencyRect{});
+    controller.setToolConfiguration(std::move(config));
+
+    // lower is NOT above upper (its own configured source) - must refuse
+    // to even start the stroke.
+    controller.beginStroke(lower, TimeFrequencyPoint{0.1, 500.0});
+
+    QVERIFY(!controller.isStrokeInProgress());
+    QCOMPARE(project.operationLog().size(), std::size_t{0});
+}
+
+void PaintControllerTest::beginStrokeStartsNormallyWhenTheMindGrainToolIsAllowedOnTheTargetLayer() {
+    Project project = Project::createNew(testSettings());
+    const LayerId lower = addBlankNormalLayer(project);
+    const LayerId upper = addBlankNormalLayer(project);
+    PaintController controller;
+    controller.setProject(&project);
+    auto config = std::make_unique<MindGrainConfiguration>();
+    config->setReference(std::nullopt, lower, TimeFrequencyRect{});
+    controller.setToolConfiguration(std::move(config));
+
+    // upper IS above lower (its own configured source) - allowed.
+    controller.beginStroke(upper, TimeFrequencyPoint{0.1, 500.0});
+
+    QVERIFY(controller.isStrokeInProgress());
+}
+
+void PaintControllerTest::endStrokeWithAMindGrainToolPaintsFromTheSourceLayersCurrentContent() {
+    Project project = Project::createNew(testSettings());
+    const LayerId lower = addBlankNormalLayer(project);
+    const LayerId upper = addBlankNormalLayer(project);
+    // Give the source layer real, non-zero content to read from.
+    auto sourceContent = *project.layerById(lower)->content();
+    std::fill(sourceContent.leftMagnitudeDb.begin(), sourceContent.leftMagnitudeDb.end(), -6.0f);
+    project.layerById(lower)->setContent(sourceContent);
+
+    PaintController controller;
+    controller.setProject(&project);
+    auto config = std::make_unique<MindGrainConfiguration>();
+    config->setReference(std::nullopt, lower, TimeFrequencyRect{0.0, 1.0, 20.0, 2020.0});
+    controller.setToolConfiguration(std::move(config));
+
+    controller.beginStroke(upper, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    const auto& content = *project.layerById(upper)->content();
+    const bool anyPaintedFromSource = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                                   [](float value) { return value == -6.0f; });
+    QVERIFY(anyPaintedFromSource);
+}
+
+void PaintControllerTest::rebuildLayerContentRereadsTheSourceLayersCurrentContentEachTime() {
+    Project project = Project::createNew(testSettings());
+    const LayerId lower = addBlankNormalLayer(project);
+    const LayerId upper = addBlankNormalLayer(project);
+    PaintController controller;
+    controller.setProject(&project);
+    auto config = std::make_unique<MindGrainConfiguration>();
+    config->setReference(std::nullopt, lower, TimeFrequencyRect{0.0, 1.0, 20.0, 2020.0});
+    controller.setToolConfiguration(std::move(config));
+    controller.beginStroke(upper, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    // lower's own content is still blank at this point - nothing visible
+    // was actually painted onto upper yet.
+    {
+        const auto& content = *project.layerById(upper)->content();
+        const bool anyNonZero = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                             [](float value) { return value != 0.0f; });
+        QVERIFY(!anyNonZero);
+    }
+
+    // The source layer is repainted directly (as if a fresh stroke had
+    // just been drawn there) - the existing Mind Grain stroke on `upper`
+    // must reflect it on its *own* next rebuild, without upper's own
+    // stroke ever being redrawn.
+    auto sourceContent = *project.layerById(lower)->content();
+    std::fill(sourceContent.leftMagnitudeDb.begin(), sourceContent.leftMagnitudeDb.end(), -9.0f);
+    project.layerById(lower)->setContent(sourceContent);
+
+    controller.rebuildLayerContent(upper);
+
+    const auto& content = *project.layerById(upper)->content();
+    const bool anyFromNewSource = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                               [](float value) { return value == -9.0f; });
+    QVERIFY(anyFromNewSource);
 }

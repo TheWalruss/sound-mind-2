@@ -45,6 +45,7 @@
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/layer_export.h"
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
@@ -239,6 +240,15 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     toolConfigurationPanel_ = new ToolConfigurationPanel(this);
     toolConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, toolConfigurationPanel_);
+    // Mind Grain ordering-rule guardrail (v0.Y.33.1 Installment B) - a type
+    // switch, a different Mind Grain picked, or any other edit could change
+    // whether the active layer is currently paintable with it. layerController_/
+    // paintAction_ aren't constructed yet at this exact point in the
+    // constructor, but this lambda only ever runs later, on a real signal -
+    // safe by the time either one fires, the same reasoning
+    // toolPaletteController_'s own lambdas just above rely on.
+    connect(toolConfigurationPanel_, &ToolConfigurationPanel::toolConfigurationChanged, this,
+            [this](const sound_mind::core::ToolConfiguration&) { updateMindGrainGuardrails(); });
 
     // Basic Painting/Pick/Selection & Fill/Paths & Grids (Phase 3,
     // v0.Y.24.1-v0.Y.26.1) - extracted as its own class (Refactor & Clean
@@ -501,6 +511,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // Cut/Copy/Paste all make.
     QAction* captureMindShotAction = editMenu->addAction(tr("Capture as &Mind Shot"));
     connect(captureMindShotAction, &QAction::triggered, this, &MainWindow::captureMindShot);
+
+    // Mind Grains (v0.Y.33.1 Installment B) - the same "no shortcut, no-op
+    // with no committed selection" treatment as Mind Shot's own action
+    // right above.
+    QAction* captureMindGrainAction = editMenu->addAction(tr("Capture as Mind &Grain"));
+    connect(captureMindGrainAction, &QAction::triggered, this, &MainWindow::captureMindGrain);
 
     editMenu->addSeparator();
 
@@ -926,6 +942,10 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     }
     layerController_->refreshLayersPanel();
     mindWaveController_->refreshMindWavesPanel();
+    // The new project's own layer stack/active layer are both different
+    // from whatever the guardrail last computed - see
+    // updateMindGrainGuardrails()'s own docs.
+    updateMindGrainGuardrails();
 }
 
 void MainWindow::newProject() {
@@ -1340,6 +1360,9 @@ void MainWindow::addFilterLayer() { layerController_->addFilterLayer(); }
 
 void MainWindow::handleLayerSelectionChanged(std::optional<sound_mind::core::LayerId> id) {
     layerController_->handleLayerSelectionChanged(id);
+    // The active layer (paintTargetLayerId()) may have just changed - see
+    // updateMindGrainGuardrails()'s own docs.
+    updateMindGrainGuardrails();
 }
 
 void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
@@ -1431,6 +1454,49 @@ void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWi
         if (activated != pathAction_) {
             pathAction_->setChecked(false);
         }
+    }
+}
+
+void MainWindow::updateMindGrainGuardrails() {
+    const auto activeLayer = layerController_->paintTargetLayerId();
+    if (activeLayer.has_value()) {
+        toolConfigurationPanel_->setActiveLayer(*activeLayer);
+    }
+
+    const auto* mindGrain =
+        dynamic_cast<const sound_mind::core::MindGrainConfiguration*>(&toolConfigurationPanel_->toolConfiguration());
+
+    std::vector<sound_mind::core::LayerId> disallowed;
+    bool activeLayerDisallowed = false;
+    if (mindGrain != nullptr && project_.has_value()) {
+        const sound_mind::core::LayerId sourceLayer = mindGrain->sourceLayerId();
+        for (const sound_mind::core::Layer& layer : project_->layers()) {
+            if (!sound_mind::core::isLayerAbove(*project_, layer.id(), sourceLayer)) {
+                disallowed.push_back(layer.id());
+            }
+        }
+        activeLayerDisallowed =
+            !activeLayer.has_value() || !sound_mind::core::isLayerAbove(*project_, *activeLayer, sourceLayer);
+    }
+    layersPanel_->setDisallowedLayers(disallowed);
+
+    if (activeLayerDisallowed) {
+        if (paintAction_->isChecked()) {
+            setPaintModeEnabled(false);
+        }
+        paintAction_->setEnabled(false);
+        paintAction_->setToolTip(
+            tr("The configured Mind Grain can't paint onto the active layer - it must stay above its own source "
+               "layer. Select a layer higher in the stack, or reorder the layers, first."));
+    } else {
+        paintAction_->setEnabled(true);
+        // Restores the plain default (Qt only auto-derives a tooltip from
+        // an action's own text() as long as setToolTip() has never been
+        // called on it at all - once the branch above has called it once,
+        // that auto-derivation is gone for good, so this has to be spelled
+        // out explicitly from here on rather than cleared to an empty
+        // string).
+        paintAction_->setToolTip(paintAction_->text());
     }
 }
 
@@ -1531,6 +1597,16 @@ void MainWindow::captureMindShot() {
     }
     const std::string name = "Mind Shot " + std::to_string(project_->mindShots().size() + 1);
     if (const auto id = toolPaletteController_->captureMindShot(name); id.has_value()) {
+        statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(name)), 5000);
+    }
+}
+
+void MainWindow::captureMindGrain() {
+    if (!project_.has_value()) {
+        return;
+    }
+    const std::string name = "Mind Grain " + std::to_string(project_->mindGrains().size() + 1);
+    if (const auto id = toolPaletteController_->captureMindGrain(name); id.has_value()) {
         statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(name)), 5000);
     }
 }

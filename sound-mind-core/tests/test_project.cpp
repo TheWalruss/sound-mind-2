@@ -8,6 +8,7 @@
 #include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/project.h"
@@ -19,11 +20,13 @@ using sound_mind::core::FilterType;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
+using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotId;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
+using sound_mind::core::TimeFrequencyRect;
 
 TEST_CASE("A new Project has a Background layer at the bottom and an Equalizer layer at the top",
           "[core][project]") {
@@ -373,6 +376,103 @@ TEST_CASE("A Project saved before Mind Shots existed loads with an empty Mind Sh
     const Project restored = json.get<Project>();
 
     REQUIRE(restored.mindShots().empty());
+}
+
+TEST_CASE("A new Project has no Mind Grains", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.mindGrains().empty());
+}
+
+TEST_CASE("addMindGrain appends a named Mind Grain with a fresh, unique id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+
+    const MindGrainId firstId = project.addMindGrain("Rain Texture", LayerId{1}, TimeFrequencyRect{});
+    const MindGrainId secondId = project.addMindGrain("Wind Noise", LayerId{1}, TimeFrequencyRect{});
+
+    REQUIRE(firstId != secondId);
+    REQUIRE(project.mindGrains().size() == 2);
+    REQUIRE(project.mindGrains()[0].id == firstId);
+    REQUIRE(project.mindGrains()[0].name == "Rain Texture");
+    REQUIRE(project.mindGrains()[1].id == secondId);
+    REQUIRE(project.mindGrains()[1].name == "Wind Noise");
+}
+
+TEST_CASE("mindGrainById finds the entry with a matching id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const TimeFrequencyRect bounds{0.5, 1.5, 200.0, 800.0};
+    const MindGrainId id = project.addMindGrain("Rain Texture", LayerId{1}, bounds);
+
+    const auto* found = project.mindGrainById(id);
+
+    REQUIRE(found != nullptr);
+    REQUIRE(found->name == "Rain Texture");
+    REQUIRE(found->sourceLayerId == LayerId{1});
+    REQUIRE(found->bounds.startTimeSeconds == 0.5);
+}
+
+TEST_CASE("mindGrainById returns nullptr for an unknown id", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.mindGrainById(MindGrainId{999}) == nullptr);
+}
+
+TEST_CASE("mindGrainById's mutable overload allows in-place edits", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const MindGrainId id = project.addMindGrain("Rain Texture", LayerId{1}, TimeFrequencyRect{});
+
+    auto* found = project.mindGrainById(id);
+    REQUIRE(found != nullptr);
+    found->name = "Renamed";
+
+    REQUIRE(project.mindGrainById(id)->name == "Renamed");
+}
+
+TEST_CASE("removeMindGrain removes the entry with the given id and returns true", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const MindGrainId id = project.addMindGrain("Rain Texture", LayerId{1}, TimeFrequencyRect{});
+
+    const bool removed = project.removeMindGrain(id);
+
+    REQUIRE(removed);
+    REQUIRE(project.mindGrains().empty());
+}
+
+TEST_CASE("removeMindGrain returns false and changes nothing for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindGrain("Rain Texture", LayerId{1}, TimeFrequencyRect{});
+
+    const bool removed = project.removeMindGrain(MindGrainId{999999});
+
+    REQUIRE_FALSE(removed);
+    REQUIRE(project.mindGrains().size() == 1);
+}
+
+TEST_CASE("A Project's Mind Grain library round-trips through JSON", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    const TimeFrequencyRect bounds{0.5, 1.5, 200.0, 800.0};
+    const MindGrainId id = original.addMindGrain("Rain Texture", LayerId{1}, bounds);
+
+    const nlohmann::json json = original;
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.mindGrains().size() == 1);
+    REQUIRE(restored.mindGrains()[0].id == id);
+    REQUIRE(restored.mindGrains()[0].name == "Rain Texture");
+    REQUIRE(restored.mindGrains()[0].sourceLayerId == LayerId{1});
+    REQUIRE(restored.mindGrains()[0].bounds.startTimeSeconds == 0.5);
+    REQUIRE(restored.mindGrains()[0].bounds.highFrequencyHz == 800.0);
+}
+
+TEST_CASE("A Project saved before Mind Grains existed loads with an empty Mind Grain library", "[core][project]") {
+    // Lenient deserialization, matching Mind Shots' own precedent - a
+    // project file saved before v0.Y.33.1 Installment B has no "mindGrains"
+    // key at all.
+    Project original = Project::createNew(ProjectSettings{});
+    nlohmann::json json = original;
+    json.erase("mindGrains");
+
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.mindGrains().empty());
 }
 
 TEST_CASE("A Project loads from JSON missing mindWaves (a project saved before v0.Y.31.1 "

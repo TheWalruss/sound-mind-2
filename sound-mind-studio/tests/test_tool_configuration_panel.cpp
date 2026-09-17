@@ -13,6 +13,8 @@
 #include <QSpinBox>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
@@ -21,12 +23,18 @@
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::Clip;
 using sound_mind::core::InstrumentConfiguration;
+using sound_mind::core::Layer;
+using sound_mind::core::LayerId;
+using sound_mind::core::LayerType;
+using sound_mind::core::MindGrainConfiguration;
+using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::MindShotId;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::StampMode;
+using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::core::ToolType;
 using sound_mind::studio::ToolConfigurationPanel;
@@ -466,4 +474,139 @@ void ToolConfigurationPanelTest::loadingAMindShotConfigurationSyncsToolTypeAndTh
     QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Mind Shot"));
     QCOMPARE(mindShotCombo->currentText(), QStringLiteral("Vocal Chop"));
     QVERIFY(!mindShotGroup->isHidden());
+}
+
+// --- Mind Grains (v0.Y.33.1 Installment B) ----------------------------------
+
+void ToolConfigurationPanelTest::switchingToolTypeToMindGrainShowsItsOwnGroupAndHidesProcedural() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
+    auto* mindGrainGroup = panel.findChild<QWidget*>(QStringLiteral("mindGrainGroup"));
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Grain")));
+
+    QCOMPARE(panel.toolConfiguration().type(), ToolType::MindGrain);
+    QVERIFY(proceduralGroup->isHidden());
+    QVERIFY(!mindGrainGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::setProjectPopulatesTheMindGrainCombo() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindGrain("Rain Texture", LayerId{1}, TimeFrequencyRect{});
+    project.addMindGrain("Wind Noise", LayerId{1}, TimeFrequencyRect{});
+
+    panel.setProject(&project);
+
+    auto* mindGrainCombo = panel.findChild<QComboBox*>(QStringLiteral("mindGrainCombo"));
+    QVERIFY(mindGrainCombo != nullptr);
+    QCOMPARE(mindGrainCombo->count(), 2);
+    QCOMPARE(mindGrainCombo->itemText(0), QStringLiteral("Rain Texture"));
+    QCOMPARE(mindGrainCombo->itemText(1), QStringLiteral("Wind Noise"));
+}
+
+void ToolConfigurationPanelTest::refreshMindGrainsAddsNewEntriesAndPreservesTheCurrentSelection() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindGrain("Rain Texture", LayerId{1}, TimeFrequencyRect{});
+    panel.setProject(&project);
+    auto* mindGrainCombo = panel.findChild<QComboBox*>(QStringLiteral("mindGrainCombo"));
+    QCOMPARE(mindGrainCombo->currentText(), QStringLiteral("Rain Texture"));
+
+    project.addMindGrain("Wind Noise", LayerId{1}, TimeFrequencyRect{});
+    panel.refreshMindGrains();
+
+    QCOMPARE(mindGrainCombo->count(), 2);
+    // The previously-selected entry stays selected across the refresh.
+    QCOMPARE(mindGrainCombo->currentText(), QStringLiteral("Rain Texture"));
+}
+
+void ToolConfigurationPanelTest::refreshMindGrainsShowsThePlaceholderWhenTheLibraryIsEmpty() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+
+    panel.setProject(&project);
+
+    auto* mindGrainCombo = panel.findChild<QComboBox*>(QStringLiteral("mindGrainCombo"));
+    QCOMPARE(mindGrainCombo->count(), 1);
+    QCOMPARE(mindGrainCombo->itemData(0).isValid(), false);
+}
+
+void ToolConfigurationPanelTest::selectingAMindGrainEmitsToolConfigurationChangedWithItsReference() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindGrain("Rain Texture", LayerId{1}, TimeFrequencyRect{});
+    const MindGrainId secondId = project.addMindGrain("Wind Noise", LayerId{1}, TimeFrequencyRect{0.5, 1.5, 200.0, 800.0});
+    panel.setProject(&project);
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Grain")));
+    auto* mindGrainCombo = panel.findChild<QComboBox*>(QStringLiteral("mindGrainCombo"));
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    mindGrainCombo->setCurrentIndex(mindGrainCombo->findText(QStringLiteral("Wind Noise")));
+
+    QCOMPARE(spy.count(), 1);
+    const auto& mindGrain = dynamic_cast<const MindGrainConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(mindGrain.sourceMindGrainId(), std::optional<MindGrainId>(secondId));
+    QCOMPARE(mindGrain.sourceLayerId(), LayerId{1});
+    QCOMPARE(mindGrain.bounds().startTimeSeconds, 0.5);
+}
+
+void ToolConfigurationPanelTest::loadingAMindGrainConfigurationSyncsToolTypeAndThePickerSelection() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addMindGrain("Rain Texture", LayerId{1}, TimeFrequencyRect{});
+    const MindGrainId secondId = project.addMindGrain("Wind Noise", LayerId{1}, TimeFrequencyRect{});
+    panel.setProject(&project);
+
+    MindGrainConfiguration config;
+    config.setReference(secondId, LayerId{1}, TimeFrequencyRect{});
+    panel.setToolConfiguration(config);
+
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* mindGrainCombo = panel.findChild<QComboBox*>(QStringLiteral("mindGrainCombo"));
+    auto* mindGrainGroup = panel.findChild<QWidget*>(QStringLiteral("mindGrainGroup"));
+
+    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Mind Grain"));
+    QCOMPARE(mindGrainCombo->currentText(), QStringLiteral("Wind Noise"));
+    QVERIFY(!mindGrainGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::setActiveLayerHighlightsTheGroupWhenTheActiveLayerIsNotAboveTheSource() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    const LayerId lower = project.addLayer(Layer(0, "Lower", LayerType::Normal));
+    const LayerId upper = project.addLayer(Layer(0, "Upper", LayerType::Normal));
+    panel.setProject(&project);
+
+    MindGrainConfiguration config;
+    config.setReference(std::nullopt, upper, TimeFrequencyRect{});  // Source is `upper`.
+    panel.setToolConfiguration(config);
+
+    // `lower` is not above `upper` (its own configured source).
+    panel.setActiveLayer(lower);
+
+    auto* mindGrainGroup = panel.findChild<QWidget*>(QStringLiteral("mindGrainGroup"));
+    QVERIFY(!mindGrainGroup->styleSheet().isEmpty());
+    QVERIFY(!mindGrainGroup->toolTip().isEmpty());
+}
+
+void ToolConfigurationPanelTest::setActiveLayerClearsTheHighlightWhenTheActiveLayerIsAboveTheSource() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    const LayerId lower = project.addLayer(Layer(0, "Lower", LayerType::Normal));
+    const LayerId upper = project.addLayer(Layer(0, "Upper", LayerType::Normal));
+    panel.setProject(&project);
+
+    MindGrainConfiguration config;
+    config.setReference(std::nullopt, lower, TimeFrequencyRect{});  // Source is `lower`.
+    panel.setToolConfiguration(config);
+
+    // `upper` IS above `lower` (its own configured source).
+    panel.setActiveLayer(upper);
+
+    auto* mindGrainGroup = panel.findChild<QWidget*>(QStringLiteral("mindGrainGroup"));
+    QVERIFY(mindGrainGroup->styleSheet().isEmpty());
+    QVERIFY(mindGrainGroup->toolTip().isEmpty());
 }

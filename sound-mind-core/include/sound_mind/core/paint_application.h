@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "sound_mind/codec/stream_codec.h"
@@ -10,6 +11,28 @@
 #include "sound_mind/core/paint_operation.h"
 
 namespace sound_mind::core {
+
+/**
+ * @brief Resolves a layer's own *current* rendered content, by id - what
+ *        a `MindGrainConfiguration` stamp needs to read its live source
+ *        from (see `applyPaintOperation()`'s own `MindGrainConfiguration`
+ *        branch), since every other tool type here needs no visibility
+ *        into any layer but the one actually being painted.
+ *
+ * A default-constructed (empty) `LayerContentResolver` is a valid,
+ * meaningful value - "no way to resolve another layer's content," which
+ * `applyPaintOperation()` treats as a no-op for a Mind Grain stamp (the
+ * same "nothing to paint" convention an empty `Clip` already gets for a
+ * Mind Shot) rather than an error - callers with no Mind Grain support to
+ * offer (most of the test suite) simply omit this parameter.
+ *
+ * @param layerId The layer to resolve.
+ * @return A pointer to that layer's own current content, or `nullptr` if
+ *         the layer doesn't exist or has no content yet. The pointer is
+ *         only valid for the duration of the call it was returned from -
+ *         never cached past that.
+ */
+using LayerContentResolver = std::function<const sound_mind::codec::StreamImage*(LayerId layerId)>;
 
 /**
  * @brief The flat index into a `StreamImage`'s own row-major
@@ -191,12 +214,12 @@ struct FrameBinRange {
  *        `StreamImage`'s amplitude planes, in place - dispatches on
  *        `operation.config().type()` to whichever concrete tool's own
  *        stamp algorithm applies (see `docs/sound-mind-design.md`'s
- *        "Procedural Brushes"/"Sound Mind Instruments"/"Mind Shots" and
- *        "What Editing Does": painting amplitude pixels brighter/darker
- *        changes that frequency's loudness at that time). Any tool type
- *        past `Procedural`/`Instrument`/`MindShot` paints nothing yet,
- *        matching `ToolConfiguration`'s own "groundwork, not yet
- *        functional" note for those tool types.
+ *        "Procedural Brushes"/"Sound Mind Instruments"/"Mind Shots"/"Mind
+ *        Grains" and "What Editing Does": painting amplitude pixels
+ *        brighter/darker changes that frequency's loudness at that time).
+ *        Any tool type past `Procedural`/`Instrument`/`MindShot`/
+ *        `MindGrain` paints nothing yet, matching `ToolConfiguration`'s
+ *        own "groundwork, not yet functional" note for those tool types.
  *
  * Stamps are placed repeatedly along `operation.path()`, spaced per
  * `operation.config().stampMode()` (see `docs/sound-mind-design.md`'s
@@ -245,14 +268,30 @@ struct FrameBinRange {
  *   centered on a stamp position instead of an explicit placement
  *   rectangle. A no-op if no Mind Shot has ever been configured (an empty
  *   clip).
+ * - **`MindGrainConfiguration`**: the same hard, Normal-only overwrite blit
+ *   as `MindShotConfiguration` above, but the cells it stamps are never
+ *   captured up front - each and every stamp re-resolves
+ *   `resolveLayerContent(config.sourceLayerId())` and re-extracts a fresh
+ *   `Clip` from `config.bounds()` of whatever that call returns, right
+ *   before blitting it. "Live" here specifically means "as of this
+ *   *rebuild*" (see `rebuildPaintedContent()`'s own docs) - painting a
+ *   Mind Grain stroke reads its source layer's content at the moment the
+ *   stroke itself is (re)applied, not a snapshot frozen at configure time
+ *   the way a Mind Shot is; it does **not** mean an immediate, reactive
+ *   cascade the instant the source layer changes elsewhere (see
+ *   `docs/sound-mind-design.md`'s "Mind Grains" for why that's out of
+ *   scope for now). A no-op if `resolveLayerContent` is empty, the
+ *   resolved layer doesn't exist/has no content, or the resulting clip is
+ *   empty (`config.bounds()` outside the source's own extent).
  *
  * Overlapping stamps (a slow-moving stroke, the stroke's own path
  * doubling back on itself, an Instrument's own two harmonics landing on
- * the same bin, or a Mind Shot restamped repeatedly along a dragged
- * stroke) compound naturally - for the gradient-blended tool types, the
- * same way a real brush laid down more heavily builds up more paint; for
- * a Mind Shot, each later stamp's own hard overwrite simply wins over an
- * earlier one wherever they overlap. Neither is specially guarded against.
+ * the same bin, or a Mind Shot/Mind Grain restamped repeatedly along a
+ * dragged stroke) compound naturally - for the gradient-blended tool
+ * types, the same way a real brush laid down more heavily builds up more
+ * paint; for a Mind Shot or Mind Grain, each later stamp's own hard
+ * overwrite simply wins over an earlier one wherever they overlap. Neither
+ * is specially guarded against.
  *
  * @param operation The stroke to apply - its own `path()`/`config()`
  *        fully describe the stamp.
@@ -263,9 +302,17 @@ struct FrameBinRange {
  * @param content The `StreamImage` to paint into, mutated in place - its
  *        own `config` supplies the `frequencyToBinIndex()`/
  *        `timeToFrameIndex()` mapping actually used.
+ * @param resolveLayerContent Resolves another layer's own current content
+ *        by id - only consulted when `operation.config()` is a
+ *        `MindGrainConfiguration` (see that branch above); every other
+ *        tool type ignores it entirely. Defaults to an empty resolver,
+ *        which makes any `MindGrainConfiguration` stroke a no-op - the
+ *        correct behavior for every call site with no Mind Grain support
+ *        to offer (nearly all of the existing test suite).
  */
 void applyPaintOperation(const PaintOperation& operation, double frequencyToTimeScale,
-                          sound_mind::codec::StreamImage& content);
+                          sound_mind::codec::StreamImage& content,
+                          const LayerContentResolver& resolveLayerContent = {});
 
 /**
  * @brief Rebuilds a layer's own painted content from scratch: a copy of
@@ -292,11 +339,25 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
  *        each `PaintOperation` replayed - see its own docs. `FillOperation`
  *        and `PasteOperation` have no equivalent need for it (see their own
  *        docs).
+ * @param resolveLayerContent Passed through to applyPaintOperation() for
+ *        each `PaintOperation` replayed, unused by every other operation
+ *        type - see its own docs. Defaults to an empty resolver, meaning
+ *        "no Mind Grain support" (any `MindGrainConfiguration` stroke
+ *        replayed becomes a no-op) unless the caller supplies one. Since
+ *        this function rebuilds a layer's content from scratch on demand
+ *        (a new stroke on that layer, undo/redo, project load - see this
+ *        function's own callers), a Mind Grain stroke painted here always
+ *        reads its source layer's *current* content as of `resolveLayerContent`'s
+ *        own call, which is exactly what gives Mind Grains their "re-samples
+ *        on the target layer's own next rebuild" liveness (see
+ *        `docs/sound-mind-design.md`'s "Mind Grains") without this function
+ *        needing any special-casing of its own.
  * @return A fresh `StreamImage`: `base`, with every operation in
  *         `operations` applied on top, in order.
  */
 [[nodiscard]] sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::StreamImage& base,
                                                                      const std::vector<const Operation*>& operations,
-                                                                     double frequencyToTimeScale);
+                                                                     double frequencyToTimeScale,
+                                                                     const LayerContentResolver& resolveLayerContent = {});
 
 }  // namespace sound_mind::core

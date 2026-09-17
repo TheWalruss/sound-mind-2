@@ -17,6 +17,8 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/studio/color_conversion.h"
 
@@ -26,12 +28,24 @@ namespace {
 
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::InstrumentConfiguration;
+using sound_mind::core::MindGrainConfiguration;
+using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::MindShotId;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::core::ToolType;
+
+/// @brief The style sheet applied to `mindGrainGroup_` while its currently-
+/// configured Mind Grain can't be painted onto the active layer - see
+/// `ToolConfigurationPanel::setActiveLayer()`'s own docs. A soft red wash,
+/// not a harsh full-saturation red - legible against both light and dark
+/// palettes, and consistent with `LayersPanel`'s own red delete-button text
+/// color for "this is the thing to pay attention to" without reading as a
+/// hard error dialog.
+const char* const kMindGrainInvalidStyleSheet =
+    "background-color: rgba(192, 64, 64, 60);";
 
 /// @brief Every `StampMode` paired with its display name, in the same
 /// order `docs/sound-mind-design.md`'s "Stamp Intervals" lists them.
@@ -64,12 +78,13 @@ constexpr std::array<std::pair<BrushTipShape, const char*>, 11> kTipShapes{{
 }};
 
 /// @brief Every real (usable) `ToolType` paired with its display name -
-/// only `Procedural`/`Instrument`/`MindShot` so far, see `ToolType`'s own
-/// docs on why the rest aren't offered here yet.
-constexpr std::array<std::pair<ToolType, const char*>, 3> kToolTypes{{
+/// only `Procedural`/`Instrument`/`MindShot`/`MindGrain` so far, see
+/// `ToolType`'s own docs on why the rest aren't offered here yet.
+constexpr std::array<std::pair<ToolType, const char*>, 4> kToolTypes{{
     {ToolType::Procedural, "Procedural"},
     {ToolType::Instrument, "Instrument"},
     {ToolType::MindShot, "Mind Shot"},
+    {ToolType::MindGrain, "Mind Grain"},
 }};
 
 /// @brief The most harmonics `harmonicCountSpinBox_` allows - generous
@@ -184,6 +199,21 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
             &ToolConfigurationPanel::handleMindShotComboChanged);
     mindShotForm->addRow(tr("Mind Shot:"), mindShotCombo_);
     root->addWidget(mindShotGroup_);
+
+    // --- Mind Grain's own group -------------------------------------------
+    mindGrainGroup_ = new QWidget(container);
+    mindGrainGroup_->setObjectName(QStringLiteral("mindGrainGroup"));
+    mindGrainGroup_->setAutoFillBackground(true);  // so its own styleSheet background actually paints - see below.
+    auto* mindGrainForm = new QFormLayout(mindGrainGroup_);
+    mindGrainForm->setContentsMargins(0, 0, 0, 0);
+
+    mindGrainCombo_ = new QComboBox(mindGrainGroup_);
+    mindGrainCombo_->setObjectName(QStringLiteral("mindGrainCombo"));
+    mindGrainCombo_->addItem(tr("(none captured yet)"));
+    connect(mindGrainCombo_, &QComboBox::currentIndexChanged, this,
+            &ToolConfigurationPanel::handleMindGrainComboChanged);
+    mindGrainForm->addRow(tr("Mind Grain:"), mindGrainCombo_);
+    root->addWidget(mindGrainGroup_);
 
     auto* form = new QFormLayout();
 
@@ -349,6 +379,16 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
             }
         }
         replacement = std::move(mindShot);
+    } else if (type == ToolType::MindGrain) {
+        auto mindGrain = std::make_unique<MindGrainConfiguration>();
+        // Same reasoning as MindShot's own branch above.
+        if (const QVariant data = mindGrainCombo_->currentData(); data.isValid() && project_ != nullptr) {
+            const auto id = static_cast<MindGrainId>(data.toULongLong());
+            if (const auto* named = project_->mindGrainById(id)) {
+                mindGrain->setReference(id, named->sourceLayerId, named->bounds);
+            }
+        }
+        replacement = std::move(mindGrain);
     } else {
         return;  // Defensive: toolTypeCombo_ only ever offers real types.
     }
@@ -372,6 +412,8 @@ void ToolConfigurationPanel::updateVisibleToolTypeGroup() {
     proceduralGroup_->setVisible(type == ToolType::Procedural);
     instrumentGroup_->setVisible(type == ToolType::Instrument);
     mindShotGroup_->setVisible(type == ToolType::MindShot);
+    mindGrainGroup_->setVisible(type == ToolType::MindGrain);
+    updateMindGrainValidity();
 }
 
 void ToolConfigurationPanel::rebuildHarmonicStrengthRows(std::size_t count) {
@@ -457,6 +499,13 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
             index = mindShotCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(*sourceId)));
         }
         mindShotCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(config_.get())) {
+        const QSignalBlocker blocker(mindGrainCombo_);
+        int index = -1;
+        if (const auto sourceId = mindGrain->sourceMindGrainId(); sourceId.has_value()) {
+            index = mindGrainCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(*sourceId)));
+        }
+        mindGrainCombo_->setCurrentIndex(index >= 0 ? index : 0);
     }
     updateVisibleToolTypeGroup();
     {
@@ -546,6 +595,7 @@ void ToolConfigurationPanel::updateStampIntervalAppearance() {
 void ToolConfigurationPanel::setProject(sound_mind::core::Project* project) {
     project_ = project;
     refreshMindShots();
+    refreshMindGrains();
 }
 
 void ToolConfigurationPanel::refreshMindShots() {
@@ -584,6 +634,66 @@ void ToolConfigurationPanel::handleMindShotComboChanged(int index) {
         mindShot->setClip(id, named->clip);
         emitConfigChanged();
     }
+}
+
+void ToolConfigurationPanel::refreshMindGrains() {
+    // Same reasoning as refreshMindShots()'s own identical structure.
+    const QVariant previousData = mindGrainCombo_->currentData();
+
+    const QSignalBlocker blocker(mindGrainCombo_);
+    mindGrainCombo_->clear();
+    if (project_ == nullptr || project_->mindGrains().empty()) {
+        mindGrainCombo_->addItem(tr("(none captured yet)"));
+    } else {
+        for (const auto& named : project_->mindGrains()) {
+            mindGrainCombo_->addItem(QString::fromStdString(named.name),
+                                       QVariant::fromValue(static_cast<qulonglong>(named.id)));
+        }
+        const int index = mindGrainCombo_->findData(previousData);
+        mindGrainCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    }
+    updateMindGrainValidity();
+}
+
+void ToolConfigurationPanel::handleMindGrainComboChanged(int index) {
+    if (project_ != nullptr) {
+        const QVariant data = mindGrainCombo_->itemData(index);
+        if (data.isValid()) {  // Not the "(none captured yet)" placeholder.
+            const auto id = static_cast<MindGrainId>(data.toULongLong());
+            if (const auto* named = project_->mindGrainById(id)) {
+                if (auto* mindGrain = dynamic_cast<MindGrainConfiguration*>(config_.get())) {
+                    mindGrain->setReference(id, named->sourceLayerId, named->bounds);
+                    emitConfigChanged();
+                }
+            }
+        }
+    }
+    updateMindGrainValidity();
+}
+
+void ToolConfigurationPanel::setActiveLayer(sound_mind::core::LayerId layer) {
+    activeLayer_ = layer;
+    updateMindGrainValidity();
+}
+
+void ToolConfigurationPanel::updateMindGrainValidity() {
+    bool invalid = false;
+    QString reason;
+    if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(config_.get())) {
+        if (project_ != nullptr &&
+            !sound_mind::core::isLayerAbove(*project_, activeLayer_, mindGrain->sourceLayerId())) {
+            invalid = true;
+            const sound_mind::core::Layer* sourceLayer = project_->layerById(mindGrain->sourceLayerId());
+            reason = tr("This Mind Grain can only paint onto a layer above \"%1\" (its own source) - "
+                        "the active layer isn't. Select a layer higher in the stack, or reorder the layers, "
+                        "before painting with it.")
+                         .arg(sourceLayer != nullptr ? QString::fromStdString(sourceLayer->name())
+                                                       : tr("its source layer"));
+        }
+    }
+    mindGrainGroup_->setStyleSheet(invalid ? QString::fromUtf8(kMindGrainInvalidStyleSheet) : QString());
+    mindGrainGroup_->setToolTip(reason);
+    mindGrainCombo_->setToolTip(reason);
 }
 
 void ToolConfigurationPanel::updateColorButtonAppearance() {

@@ -6,6 +6,7 @@
 #include <QObject>
 
 #include "sound_mind/core/gradient.h"
+#include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/paste_operation.h"
@@ -268,6 +269,32 @@ public:
      */
     std::optional<sound_mind::core::MindShotId> captureMindShot(const std::string& name);
 
+    /**
+     * @brief Captures the current committed selection's own `selectionLayer_`
+     *        and bounds - not any pixel data - into a new, permanently-
+     *        stored, named entry in the project's Mind Grain library - the
+     *        actual work behind "Capture as Mind Grain"
+     *        (`docs/sound-mind-design.md`'s "Mind Grains"). A no-op if
+     *        there's no committed selection.
+     *
+     * The deliberate opposite of captureMindShot(): a Mind Grain never
+     * touches `captureClip()`/the layer's own content at all - only the
+     * reference `{selectionLayer_, *committedBounds_}` is stored, since a
+     * Mind Grain's whole point is to re-read its source *live*, at whatever
+     * content it holds when each stroke painted with it is (re)applied -
+     * see `sound_mind::core::LayerContentResolver`'s own docs. Does not
+     * touch the clipboard, or `selectionLayer_`'s own content.
+     *
+     * Emits mindGrainCaptured() with the new entry's own id, so a listener
+     * (the Tool Configuration Panel's own Mind Grain picker, in particular)
+     * can refresh itself.
+     *
+     * @param name Display name for the new library entry.
+     * @return The new entry's own id, or `std::nullopt` if this was a
+     *         no-op (no committed selection).
+     */
+    std::optional<sound_mind::core::MindGrainId> captureMindGrain(const std::string& name);
+
 signals:
     /// @brief Emitted whenever displayBounds() would return something
     ///        different - a drag updating live, a selection committed,
@@ -289,6 +316,11 @@ signals:
     ///        to the project's Mind Shot library.
     /// @param id The new entry's own id.
     void mindShotCaptured(sound_mind::core::MindShotId id);
+
+    /// @brief Emitted whenever captureMindGrain() actually adds a new entry
+    ///        to the project's Mind Grain library.
+    /// @param id The new entry's own id.
+    void mindGrainCaptured(sound_mind::core::MindGrainId id);
 
 private:
     PaintController* paintController_;
