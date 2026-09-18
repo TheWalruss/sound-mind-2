@@ -390,3 +390,69 @@ TEST_CASE("A FilterConfiguration loads from JSON missing every ChannelBalance/Co
     REQUIRE_FALSE(restored.convolveNormalize());
     REQUIRE(restored.convolveAmount() == 1.0f);
 }
+
+// --- v0.Y.36.1 Installment C: Geometric --------------------------------
+
+TEST_CASE("A fresh FilterConfiguration has sensible Displace/ChannelCycle defaults",
+          "[core][filter_configuration]") {
+    const FilterConfiguration config;
+    REQUIRE(config.displaceDistance() == 10.0f);
+    REQUIRE(config.displaceAngleDegrees() == 0.0f);
+    REQUIRE(config.channelCycleAngleDegrees() == 0.0f);
+}
+
+TEST_CASE("Every new Geometric FilterType can be set", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    for (const FilterType type : {FilterType::Displace, FilterType::ChannelCycle}) {
+        config.setType(type);
+        REQUIRE(config.type() == type);
+    }
+}
+
+TEST_CASE("A FilterConfiguration's Displace/ChannelCycle parameters can be changed",
+          "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setDisplaceDistance(25.0f);
+    config.setDisplaceAngleDegrees(90.0f);
+    config.setChannelCycleAngleDegrees(120.0f);
+
+    REQUIRE(config.displaceDistance() == 25.0f);
+    REQUIRE(config.displaceAngleDegrees() == 90.0f);
+    REQUIRE(config.channelCycleAngleDegrees() == 120.0f);
+}
+
+TEST_CASE("A FilterConfiguration's Displace/ChannelCycle parameters round-trip through JSON",
+          "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Displace);
+    config.setDisplaceDistance(25.0f);
+    config.setDisplaceAngleDegrees(90.0f);
+    config.setChannelCycleAngleDegrees(120.0f);
+
+    const nlohmann::json json = config;
+    const FilterConfiguration roundTripped = json.get<FilterConfiguration>();
+
+    REQUIRE(roundTripped.type() == FilterType::Displace);
+    REQUIRE(roundTripped.displaceDistance() == 25.0f);
+    REQUIRE(roundTripped.displaceAngleDegrees() == 90.0f);
+    REQUIRE(roundTripped.channelCycleAngleDegrees() == 120.0f);
+}
+
+TEST_CASE("A FilterConfiguration loads from JSON missing every Displace/ChannelCycle key "
+          "(a configuration saved before v0.Y.36.1 Installment C) using sensible defaults",
+          "[core][filter_configuration]") {
+    const nlohmann::json json{{"type", "uniformBlur"},
+                               {"blurSigma", 2.0f},
+                               {"medianSize", 3},
+                               {"directionalBlurLength", 10},
+                               {"directionalBlurAngleDegrees", 0.0f},
+                               {"sharpenAmount", 1.0f},
+                               {"toneCurvePoints", std::vector<std::array<float, 2>>{{0.0f, 0.0f}, {1.0f, 1.0f}}},
+                               {"frequencyGradient", FilterConfiguration{}.frequencyGradient()}};
+
+    const FilterConfiguration restored = json.get<FilterConfiguration>();
+
+    REQUIRE(restored.displaceDistance() == 10.0f);
+    REQUIRE(restored.displaceAngleDegrees() == 0.0f);
+    REQUIRE(restored.channelCycleAngleDegrees() == 0.0f);
+}

@@ -816,3 +816,76 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsChannelBalanceAndT
     // Convolve's own group is now the visible one.
     QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("convolveGroup"))->isHidden());
 }
+
+// --- v0.Y.36.1 Installment C: Geometric --------------------------------
+
+void FilterConfigurationPanelTest::freshPanelHasDisplaceAndChannelCycleGroupsHidden() {
+    const FilterConfigurationPanel panel;
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("displaceGroup"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("channelCycleGroup"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::selectingDisplaceAndChannelCycleShowsOnlyThatOwnGroup() {
+    FilterConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
+    QVERIFY(combo != nullptr);
+    const std::array<QString, 2> groupNames{QStringLiteral("displaceGroup"), QStringLiteral("channelCycleGroup")};
+    const std::array<FilterType, 2> types{FilterType::Displace, FilterType::ChannelCycle};
+
+    for (std::size_t i = 0; i < types.size(); ++i) {
+        const int index = combo->findData(QVariant::fromValue(static_cast<int>(types[i])));
+        QVERIFY(index >= 0);
+        combo->setCurrentIndex(index);
+
+        for (std::size_t j = 0; j < groupNames.size(); ++j) {
+            QCOMPARE(!panel.findChild<QGroupBox*>(groupNames[j])->isHidden(), i == j);
+        }
+    }
+}
+
+void FilterConfigurationPanelTest::changingDisplaceDistanceAndAngleUpdateConfigAndEmit() {
+    FilterConfigurationPanel panel;
+    auto* distanceSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("displaceDistanceSpinBox"));
+    auto* angleSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("displaceAngleSpinBox"));
+    QVERIFY(distanceSpinBox != nullptr);
+    QVERIFY(angleSpinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    distanceSpinBox->setValue(42.0);
+    angleSpinBox->setValue(90.0);
+
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(panel.filterConfiguration().displaceDistance(), 42.0f);
+    QCOMPARE(panel.filterConfiguration().displaceAngleDegrees(), 90.0f);
+}
+
+void FilterConfigurationPanelTest::changingChannelCycleAngleUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("channelCycleAngleSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(120.0);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().channelCycleAngleDegrees(), 120.0f);
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsDisplaceAndChannelCycleWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelCycle);
+    config.setDisplaceDistance(42.0f);
+    config.setDisplaceAngleDegrees(90.0f);
+    config.setChannelCycleAngleDegrees(240.0f);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("displaceDistanceSpinBox"))->value(), 42.0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("displaceAngleSpinBox"))->value(), 90.0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("channelCycleAngleSpinBox"))->value(), 240.0);
+    // ChannelCycle's own group is now the visible one.
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("channelCycleGroup"))->isHidden());
+}

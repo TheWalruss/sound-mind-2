@@ -936,6 +936,97 @@ std::vector<float> applyConvolve(const std::vector<float>& grid, std::uint32_t b
     return result;
 }
 
+// ---------------------------------------------------------------------------
+// v0.Y.36.1 Installment C: Geometric.
+// ---------------------------------------------------------------------------
+
+/// @brief Bilinearly samples `grid` at fractional position `(rowF, colF)`,
+/// clamp-to-edge at the boundary - `Displace`'s own sampling primitive.
+float sampleBilinear(const std::vector<float>& grid, std::uint32_t binCount, std::uint32_t frameCount, float rowF,
+                      float colF) {
+    const int rows = static_cast<int>(binCount);
+    const int cols = static_cast<int>(frameCount);
+    const int row0 = static_cast<int>(std::floor(rowF));
+    const int col0 = static_cast<int>(std::floor(colF));
+    const float fr = rowF - static_cast<float>(row0);
+    const float fc = colF - static_cast<float>(col0);
+    const int row1 = row0 + 1;
+    const int col1 = col0 + 1;
+
+    const auto at = [&](int row, int col) {
+        return grid[static_cast<std::size_t>(clampIndex(row, rows)) * static_cast<std::size_t>(cols) +
+                    static_cast<std::size_t>(clampIndex(col, cols))];
+    };
+    const float top = at(row0, col0) + fc * (at(row0, col1) - at(row0, col0));
+    const float bottom = at(row1, col0) + fc * (at(row1, col1) - at(row1, col0));
+    return top + fr * (bottom - top);
+}
+
+/// @brief `Displace`'s own implementation - see `applyFilter()`'s docs.
+/// Confirmed with the user against the legacy Python Studio's own
+/// `offset_filter()`: same `output(row, col) = input(row - dRow, col -
+/// dCol)` source-shift formula and the same bilinear sampling, but
+/// clamp-to-edge at the boundary (not legacy's own silence-fill) for
+/// consistency with every other spatial filter in this file.
+std::vector<float> applyDisplace(const std::vector<float>& grid, std::uint32_t binCount, std::uint32_t frameCount,
+                                  float distance, float angleDegrees) {
+    const float angleRadians = angleDegrees * std::numbers::pi_v<float> / 180.0f;
+    const float dCol = distance * std::cos(angleRadians);
+    const float dRow = distance * std::sin(angleRadians);
+    std::vector<float> result(grid.size());
+    for (std::uint32_t row = 0; row < binCount; ++row) {
+        for (std::uint32_t col = 0; col < frameCount; ++col) {
+            const float sourceRow = static_cast<float>(row) - dRow;
+            const float sourceCol = static_cast<float>(col) - dCol;
+            result[static_cast<std::size_t>(row) * frameCount + col] =
+                sampleBilinear(grid, binCount, frameCount, sourceRow, sourceCol);
+        }
+    }
+    return result;
+}
+
+/// @brief `ChannelCycle`'s own implementation - see `applyFilter()`'s
+/// docs. The direct 3-channel analog of the legacy Python Studio's own
+/// `color_rotate()`: left loudness, right loudness, and phase are
+/// normalized to a shared `[0, 1]` domain (matching legacy's own pages,
+/// which are *already* stored that way - amplitude via `dbToUnit()`,
+/// phase via wrapping into a `[0, 1]` turn fraction), continuously
+/// rotated among each other by `angleDegrees`, then converted back.
+/// Unlike every other filter type, this one genuinely mixes all three
+/// channels together, so it doesn't go through `applyPerChannelGridFilter()`.
+StreamImage applyChannelCycle(const StreamImage& composite, float angleDegrees) {
+    StreamImage result = composite;
+    float wrappedDegrees = std::fmod(angleDegrees, 360.0f);
+    if (wrappedDegrees < 0.0f) {
+        wrappedDegrees += 360.0f;
+    }
+    const float t = wrappedDegrees / 360.0f * 3.0f;
+    const int step = static_cast<int>(std::floor(t)) % 3;
+    const float fraction = t - std::floor(t);
+
+    for (std::size_t i = 0; i < composite.leftMagnitudeDb.size(); ++i) {
+        const float twoPi = 2.0f * std::numbers::pi_v<float>;
+        float phaseTurns = std::fmod(composite.sharedPhaseRadians[i], twoPi) / twoPi;
+        if (phaseTurns < 0.0f) {
+            phaseTurns += 1.0f;
+        }
+        const std::array<float, 3> channels{dbToUnit(composite.leftMagnitudeDb[i]),
+                                              dbToUnit(composite.rightMagnitudeDb[i]), phaseTurns};
+        std::array<float, 3> rotated{};
+        for (int destination = 0; destination < 3; ++destination) {
+            const int source0 = ((destination - step) % 3 + 3) % 3;
+            const int source1 = ((destination - step - 1) % 3 + 3) % 3;
+            rotated[static_cast<std::size_t>(destination)] =
+                (1.0f - fraction) * channels[static_cast<std::size_t>(source0)] +
+                fraction * channels[static_cast<std::size_t>(source1)];
+        }
+        result.leftMagnitudeDb[i] = unitToDb(rotated[0]);
+        result.rightMagnitudeDb[i] = unitToDb(rotated[1]);
+        result.sharedPhaseRadians[i] = rotated[2] * twoPi;
+    }
+    return result;
+}
+
 }  // namespace
 
 StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration& config,
@@ -1075,6 +1166,13 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
                     return applyConvolve(grid, bins, frames, config.convolveKernel(), config.convolveKernelSize(),
                                           config.convolveNormalize(), config.convolveAmount());
                 });
+        case FilterType::Displace:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                    return applyDisplace(grid, bins, frames, config.displaceDistance(), config.displaceAngleDegrees());
+                });
+        case FilterType::ChannelCycle:
+            return applyChannelCycle(composite, config.channelCycleAngleDegrees());
     }
     return composite;
 }

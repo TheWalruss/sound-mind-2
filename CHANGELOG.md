@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.36.3] - 2026-09-18
+
+Deferred Filters, Installment C: **Displace** and **Channel Cycle**, closing out the Geometric filter family - `docs/sound-mind-design.md`'s "Filter Layer". Third installment of the `v0.Y.36.1` milestone; Space remains the final installment.
+
+### Added
+
+- **Displace**, a new Filter Layer type: shifts content from a source position offset by **Distance** and **Angle** (`0`° shifts along time, `90`° along frequency), smoothly interpolated between cells.
+- **Channel Cycle**, a new Filter Layer type: continuously rotates left loudness, right loudness, and phase into each other with a single **Angle** control (`0`°/`360`° is no effect, every `120`° is one full step) - a wild, glitchy creative effect, not a corrective one.
+
+Full regression: sound-mind-core 607/607 (up from 593), sound-mind-studio all 35 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #104.
+
 ## [0.0.36.2] - 2026-09-18
 
 Deferred Filters, Installment B: **Channel Balance**, **Invert**, and **Convolve**, closing out the Tonal and Spectral shaping filter families - `docs/sound-mind-design.md`'s "Filter Layer". Second installment of the `v0.Y.36.1` milestone; Geometric and Space remain later installments.

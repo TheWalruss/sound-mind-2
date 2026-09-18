@@ -47,7 +47,10 @@ void to_json(nlohmann::json& json, const FilterConfiguration& config) {
                            {"convolveKernel", config.convolveKernel_},
                            {"convolveKernelSize", config.convolveKernelSize_},
                            {"convolveNormalize", config.convolveNormalize_},
-                           {"convolveAmount", config.convolveAmount_}};
+                           {"convolveAmount", config.convolveAmount_},
+                           {"displaceDistance", config.displaceDistance_},
+                           {"displaceAngleDegrees", config.displaceAngleDegrees_},
+                           {"channelCycleAngleDegrees", config.channelCycleAngleDegrees_}};
     writeOptionalMindWaveId(json, "blurSigmaMindWaveId", config.blurSigmaMindWave_);
     writeOptionalMindWaveId(json, "medianSizeMindWaveId", config.medianSizeMindWave_);
     writeOptionalMindWaveId(json, "directionalBlurLengthMindWaveId", config.directionalBlurLengthMindWave_);
@@ -92,6 +95,10 @@ void from_json(const nlohmann::json& json, FilterConfiguration& config) {
     config.convolveKernelSize_ = json.value("convolveKernelSize", config.convolveKernelSize_);
     config.convolveNormalize_ = json.value("convolveNormalize", config.convolveNormalize_);
     config.convolveAmount_ = json.value("convolveAmount", config.convolveAmount_);
+    // Lenient, same reasoning - didn't exist before v0.Y.36.1 Installment C.
+    config.displaceDistance_ = json.value("displaceDistance", config.displaceDistance_);
+    config.displaceAngleDegrees_ = json.value("displaceAngleDegrees", config.displaceAngleDegrees_);
+    config.channelCycleAngleDegrees_ = json.value("channelCycleAngleDegrees", config.channelCycleAngleDegrees_);
 }
 
 }  // namespace sound_mind::core

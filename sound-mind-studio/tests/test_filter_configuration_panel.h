@@ -57,4 +57,11 @@ private slots:
     void setAvailableConvolutionKernelsPopulatesTheLoadCombo();
     void selectingALoadedKernelAppliesItAndResetsTheComboToThePlaceholder();
     void setFilterConfigurationSyncsChannelBalanceAndTheConvolveKernelGridWithoutEmitting();
+
+    // --- v0.Y.36.1 Installment C: Geometric ---
+    void freshPanelHasDisplaceAndChannelCycleGroupsHidden();
+    void selectingDisplaceAndChannelCycleShowsOnlyThatOwnGroup();
+    void changingDisplaceDistanceAndAngleUpdateConfigAndEmit();
+    void changingChannelCycleAngleUpdatesConfigAndEmits();
+    void setFilterConfigurationSyncsDisplaceAndChannelCycleWithoutEmitting();
 };

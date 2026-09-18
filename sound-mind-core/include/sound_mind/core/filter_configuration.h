@@ -93,6 +93,14 @@ enum class FilterType {
     ///        spectrogram, per `convolveKernel()`/`convolveKernelSize()`/
     ///        `convolveNormalize()`/`convolveAmount()`.
     Convolve,
+    /// @brief Shifts content from a source position offset by
+    ///        `displaceDistance()`/`displaceAngleDegrees()`, bilinearly
+    ///        interpolated, clamp-to-edge at the boundary. Phase untouched.
+    Displace,
+    /// @brief Continuously rotates left loudness, right loudness, and
+    ///        phase into each other (normalized to a shared `[0, 1]`
+    ///        domain first), per `channelCycleAngleDegrees()`.
+    ChannelCycle,
 };
 
 // clang-format off
@@ -114,6 +122,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
     {FilterType::ChannelBalance, "channelBalance"},
     {FilterType::Invert, "invert"},
     {FilterType::Convolve, "convolve"},
+    {FilterType::Displace, "displace"},
+    {FilterType::ChannelCycle, "channelCycle"},
 })
 // clang-format on
 
@@ -141,12 +151,13 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
  * parameters". `toneCurvePoints`/`frequencyGradient` have no such binding:
  * neither is a single number, so there's nothing for a MindWave's own
  * `[0, 1]` output to become the *value* of. **The eight `v0.Y.36.1`
- * Installment A "Noise & distortion" parameters, plus Installment B's own
- * `channelBalance`/`convolveKernel`-family fields below, all have no
- * MindWave binding either, deliberately** - matching how the original six
- * filter types shipped unbound in `v0.Y.28.1` and only gained binding in a
- * later, dedicated milestone (`v0.Y.31.1` Installment D); binding these is
- * left the same way, a known future-work item, not attempted here.
+ * Installment A "Noise & distortion" parameters, Installment B's own
+ * `channelBalance`/`convolveKernel`-family fields, and Installment C's own
+ * `displace`/`channelCycle` fields below, all have no MindWave binding
+ * either, deliberately** - matching how the original six filter types
+ * shipped unbound in `v0.Y.28.1` and only gained binding in a later,
+ * dedicated milestone (`v0.Y.31.1` Installment D); binding these is left
+ * the same way, a known future-work item, not attempted here.
  */
 class FilterConfiguration {
 public:
@@ -607,6 +618,61 @@ public:
     /// @param amount The new amount, intended within `[0, 1]`.
     void setConvolveAmount(float amount) noexcept { convolveAmount_ = amount; }
 
+    /**
+     * @brief `Displace`'s own shift distance, in bins/columns - confirmed
+     *        with the user against the legacy Python Studio's own
+     *        `offset_filter()`: content is read from a source position
+     *        offset by `(distance * cos(angle), distance * sin(angle))`,
+     *        the same angle convention `directionalBlurAngleDegrees()`
+     *        already establishes (`0`° along the time axis/columns, `90`°
+     *        along the frequency axis/bins). Clamp-to-edge at the
+     *        boundary (confirmed with the user over legacy's own
+     *        silence-fill, for consistency with every other spatial
+     *        filter in this codebase); phase is always left untouched
+     *        (confirmed with the user over legacy's own optional
+     *        "apply to phase" toggle, not built here).
+     * @return The current distance; meaningless unless `type()` is
+     *         `Displace`. Not clamped here.
+     */
+    [[nodiscard]] float displaceDistance() const noexcept { return displaceDistance_; }
+
+    /// @brief Sets `Displace`'s own shift distance.
+    /// @param distance The new distance, in bins/columns.
+    void setDisplaceDistance(float distance) noexcept { displaceDistance_ = distance; }
+
+    /**
+     * @brief `Displace`'s own shift direction, in degrees - see
+     *        `displaceDistance()`'s own docs for the exact convention.
+     * @return The current angle; meaningless unless `type()` is
+     *         `Displace`. Not clamped here.
+     */
+    [[nodiscard]] float displaceAngleDegrees() const noexcept { return displaceAngleDegrees_; }
+
+    /// @brief Sets `Displace`'s own shift direction.
+    /// @param degrees The new angle, in degrees.
+    void setDisplaceAngleDegrees(float degrees) noexcept { displaceAngleDegrees_ = degrees; }
+
+    /**
+     * @brief `ChannelCycle`'s own rotation angle, in degrees - `0`° (and
+     *        every exact multiple of `360`°) is a true no-op (identity);
+     *        every `120`° is one full step of a 3-way rotation among left
+     *        loudness, right loudness, and phase (normalized to a shared
+     *        `[0, 1]` domain first - see `applyFilter()`'s own docs for
+     *        why), with a fractional angle linearly interpolating between
+     *        adjacent steps. Confirmed with the user as the direct
+     *        3-channel analog of the legacy Python Studio's own
+     *        `color_rotate()`, simplified from its own configurable
+     *        4-page/9-mapping system (this codebase has no separate
+     *        left/right phase to make that configurability meaningful).
+     * @return The current angle; meaningless unless `type()` is
+     *         `ChannelCycle`. Not clamped here.
+     */
+    [[nodiscard]] float channelCycleAngleDegrees() const noexcept { return channelCycleAngleDegrees_; }
+
+    /// @brief Sets `ChannelCycle`'s own rotation angle.
+    /// @param degrees The new angle, in degrees.
+    void setChannelCycleAngleDegrees(float degrees) noexcept { channelCycleAngleDegrees_ = degrees; }
+
     friend void to_json(nlohmann::json& json, const FilterConfiguration& config);
     friend void from_json(const nlohmann::json& json, FilterConfiguration& config);
 
@@ -640,6 +706,9 @@ private:
     int convolveKernelSize_ = 3;
     bool convolveNormalize_ = false;
     float convolveAmount_ = 1.0f;
+    float displaceDistance_ = 10.0f;
+    float displaceAngleDegrees_ = 0.0f;
+    float channelCycleAngleDegrees_ = 0.0f;
 };
 
 /// @brief Serializes a filter configuration to its JSON representation.

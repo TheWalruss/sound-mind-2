@@ -76,12 +76,13 @@ QHBoxLayout* makeBoundFieldRow(QWidget* spinBox, QWidget* combo) {
 }
 
 /// @brief Every `FilterType`, in `docs/sound-mind-design.md`'s own family
-/// order (Blur & focus, then Noise & distortion, then Tonal, then
-/// Spectral shaping), and each family's own listed sub-order - the first
-/// six shipped in `v0.Y.28.1`, the eight Noise & distortion types in
-/// `v0.Y.36.1` Installment A, and ChannelBalance/Invert/Convolve in that
-/// same milestone's own Installment B.
-constexpr std::array<std::pair<FilterType, const char*>, 17> kSelectableFilterTypes{{
+/// order (Blur & focus, then Noise & distortion, then Geometric, then
+/// Tonal, then Spectral shaping), and each family's own listed sub-order -
+/// the first six shipped in `v0.Y.28.1`, the eight Noise & distortion
+/// types in `v0.Y.36.1` Installment A, ChannelBalance/Invert/Convolve in
+/// that same milestone's own Installment B, and Displace/ChannelCycle in
+/// Installment C.
+constexpr std::array<std::pair<FilterType, const char*>, 19> kSelectableFilterTypes{{
     {FilterType::UniformBlur, "Uniform Blur"},
     {FilterType::EdgePreservingBlur, "Edge-Preserving Blur"},
     {FilterType::DirectionalBlur, "Directional Blur"},
@@ -94,6 +95,8 @@ constexpr std::array<std::pair<FilterType, const char*>, 17> kSelectableFilterTy
     {FilterType::DynamicSpeckle, "Dynamic Speckle"},
     {FilterType::FeedbackDistortion, "Feedback Distortion"},
     {FilterType::SpectralWavefold, "Spectral Wavefold"},
+    {FilterType::Displace, "Displace"},
+    {FilterType::ChannelCycle, "Channel Cycle"},
     {FilterType::ToneCurve, "Tone Curve"},
     {FilterType::ChannelBalance, "Channel Balance"},
     {FilterType::Invert, "Invert"},
@@ -502,6 +505,52 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     spectralWavefoldForm->addRow(tr("Fold Gain:"), foldGainSpinBox_);
     root->addWidget(spectralWavefoldGroup_);
 
+    displaceGroup_ = new QGroupBox(tr("Displace"), container);
+    displaceGroup_->setObjectName(QStringLiteral("displaceGroup"));
+    auto* displaceForm = new QFormLayout(displaceGroup_);
+    displaceDistanceSpinBox_ = new QDoubleSpinBox(displaceGroup_);
+    displaceDistanceSpinBox_->setObjectName(QStringLiteral("displaceDistanceSpinBox"));
+    displaceDistanceSpinBox_->setRange(0.0, 500.0);
+    displaceDistanceSpinBox_->setSingleStep(1.0);
+    connect(displaceDistanceSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setDisplaceDistance(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    displaceForm->addRow(tr("Distance:"), displaceDistanceSpinBox_);
+    displaceAngleSpinBox_ = new QDoubleSpinBox(displaceGroup_);
+    displaceAngleSpinBox_->setObjectName(QStringLiteral("displaceAngleSpinBox"));
+    displaceAngleSpinBox_->setRange(0.0, 360.0);
+    displaceAngleSpinBox_->setSingleStep(1.0);
+    displaceAngleSpinBox_->setDecimals(1);
+    displaceAngleSpinBox_->setSuffix(QStringLiteral("°"));
+    displaceAngleSpinBox_->setToolTip(
+        tr("0° shifts along the time axis (columns), 90° along the frequency axis (bins)."));
+    connect(displaceAngleSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setDisplaceAngleDegrees(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    displaceForm->addRow(tr("Angle:"), displaceAngleSpinBox_);
+    root->addWidget(displaceGroup_);
+
+    channelCycleGroup_ = new QGroupBox(tr("Channel Cycle"), container);
+    channelCycleGroup_->setObjectName(QStringLiteral("channelCycleGroup"));
+    auto* channelCycleForm = new QFormLayout(channelCycleGroup_);
+    channelCycleAngleSpinBox_ = new QDoubleSpinBox(channelCycleGroup_);
+    channelCycleAngleSpinBox_->setObjectName(QStringLiteral("channelCycleAngleSpinBox"));
+    channelCycleAngleSpinBox_->setRange(0.0, 360.0);
+    channelCycleAngleSpinBox_->setSingleStep(1.0);
+    channelCycleAngleSpinBox_->setDecimals(1);
+    channelCycleAngleSpinBox_->setSuffix(QStringLiteral("°"));
+    channelCycleAngleSpinBox_->setToolTip(
+        tr("0°/360° is no effect; every 120° is one full step rotating left loudness, right loudness, and phase "
+           "into each other."));
+    connect(channelCycleAngleSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setChannelCycleAngleDegrees(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    channelCycleForm->addRow(tr("Angle:"), channelCycleAngleSpinBox_);
+    root->addWidget(channelCycleGroup_);
+
     toneCurveGroup_ = new QGroupBox(tr("Tone Curve"), container);
     toneCurveGroup_->setObjectName(QStringLiteral("toneCurveGroup"));
     auto* toneCurveLayout = new QVBoxLayout(toneCurveGroup_);
@@ -759,6 +808,8 @@ void FilterConfigurationPanel::updateVisibleGroup() {
     dynamicSpeckleGroup_->setVisible(!isEqualizerMode_ && type == FilterType::DynamicSpeckle);
     feedbackDistortionGroup_->setVisible(!isEqualizerMode_ && type == FilterType::FeedbackDistortion);
     spectralWavefoldGroup_->setVisible(!isEqualizerMode_ && type == FilterType::SpectralWavefold);
+    displaceGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Displace);
+    channelCycleGroup_->setVisible(!isEqualizerMode_ && type == FilterType::ChannelCycle);
     toneCurveGroup_->setVisible(!isEqualizerMode_ && type == FilterType::ToneCurve);
     channelBalanceGroup_->setVisible(!isEqualizerMode_ && type == FilterType::ChannelBalance);
     invertGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Invert);
@@ -804,6 +855,9 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     const QSignalBlocker dynamicSpeckleIntensityBlocker(dynamicSpeckleIntensitySpinBox_);
     const QSignalBlocker feedbackAmountBlocker(feedbackAmountSpinBox_);
     const QSignalBlocker foldGainBlocker(foldGainSpinBox_);
+    const QSignalBlocker displaceDistanceBlocker(displaceDistanceSpinBox_);
+    const QSignalBlocker displaceAngleBlocker(displaceAngleSpinBox_);
+    const QSignalBlocker channelCycleAngleBlocker(channelCycleAngleSpinBox_);
     const QSignalBlocker channelBalanceBlocker(channelBalanceSpinBox_);
     const QSignalBlocker convolveKernelSizeBlocker(convolveKernelSizeSpinBox_);
     const QSignalBlocker convolveNormalizeBlocker(convolveNormalizeCheckBox_);
@@ -856,6 +910,9 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     grainAmountSpinBox_->setValue(config_.grainAmountDb());
     feedbackAmountSpinBox_->setValue(config_.feedbackAmount());
     foldGainSpinBox_->setValue(config_.foldGain());
+    displaceDistanceSpinBox_->setValue(config_.displaceDistance());
+    displaceAngleSpinBox_->setValue(config_.displaceAngleDegrees());
+    channelCycleAngleSpinBox_->setValue(config_.channelCycleAngleDegrees());
     channelBalanceSpinBox_->setValue(config_.channelBalance());
     convolveKernelSizeSpinBox_->setValue(config_.convolveKernelSize());
     convolveNormalizeCheckBox_->setChecked(config_.convolveNormalize());

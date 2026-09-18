@@ -440,9 +440,18 @@ group's own controls while it was hidden.
     grid (again, a one-time copy you can keep editing, not a live link -
     editing it afterward doesn't change the saved copy, and deleting the
     saved copy later wouldn't affect this Filter layer).
+- **Displace** shifts content sideways from a source position - **Distance**
+  (how far) and **Angle** (`0`° shifts along time, `90`° along frequency),
+  smoothly blended between cells rather than jumping in whole steps.
+- **Channel Cycle** continuously rotates left loudness, right loudness, and
+  phase into each other - one **Angle** control (`0`°/`360`° is no effect;
+  every `120`° is one full step of the rotation, with anything in between
+  blending smoothly). This is a wild, glitchy creative effect - the result
+  won't sound or look like a "corrected" version of the original, and
+  that's the point.
 
-Every one of the seventeen designed-so-far filter types now has a real,
-working algorithm - Speckle Add through Convolve don't yet have a
+Every one of the nineteen designed-so-far filter types now has a real,
+working algorithm - Speckle Add through Channel Cycle don't yet have a
 MindWave-binding combo the way Sigma/Size/Length/Angle/Amount above do
 (a later pass, not yet scheduled).
 
@@ -1014,9 +1023,9 @@ above) has made a real start - layer opacity binding works - but it's
 far from its own full scope either; see the note further down. Filter
 layers (see
 [Filter Layers](#filter-layers) above) are further along than most -
-seventeen designed filter types work now, the Equalizer layer included -
+nineteen designed filter types work now, the Equalizer layer included -
 but the milestone as a whole isn't finished; see the note further down
-for exactly what's still missing (Geometric and Space).
+for exactly what's still missing (Space).
 `docs/sound-mind-roadmap.md` tracks what's actually being built next, in
 order; this guide will grow alongside it.
 
@@ -1102,10 +1111,10 @@ designed for it:
 - **Playback decodes the composite once, at Play** - it doesn't yet keep
   re-decoding live as you make further edits during playback.
 
-[Filter Layers](#filter-layers) (see above) have seventeen designed filter
+[Filter Layers](#filter-layers) (see above) have nineteen designed filter
 types working now (the original six, all eight Noise & distortion types,
-and Channel Balance/Invert/Convolve), but still only a slice of what's
-designed for the milestone as a whole:
+Channel Balance/Invert/Convolve, and Displace/Channel Cycle), but still
+only a slice of what's designed for the milestone as a whole:
 
 - **No draggable visual gradient editor for Frequency-Axis Gradient
   (including the Equalizer's own Cut editor), and no interior stops** -
@@ -1116,12 +1125,12 @@ designed for the milestone as a whole:
   [MindWaves](#mindwaves) above) for the five scalar controls listed
   above - Sigma, Size, Length, Angle, and Amount. Frequency-Axis
   Gradient/Equalizer, Tone Curve, all eight Noise & distortion types, and
-  Channel Balance/Convolve have no bindable scalar of their own yet, so
-  they're untouched by this.
-- **Geometric and Space (spectral reverberation)** aren't built yet - the
-  last two installments of the same milestone Noise & distortion and
-  Channel Balance/Invert/Convolve already finished the first two pieces
-  of.
+  Channel Balance/Convolve/Displace/Channel Cycle have no bindable scalar
+  of their own yet, so they're untouched by this.
+- **Space (spectral reverberation)** isn't built yet - the final
+  installment of the same milestone Noise & distortion, Channel
+  Balance/Invert/Convolve, and Displace/Channel Cycle already finished the
+  first three pieces of.
 - **Convolve's own saved kernels have no rename or delete UI yet** - once
   saved, a kernel stays in the project's own library permanently (there's
   no way to remove or rename one from within the Studio itself).

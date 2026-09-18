@@ -1352,3 +1352,162 @@ TEST_CASE("applyFilter's Convolve leaves phase untouched", "[core][filter_applic
         CHECK(phase == 0.5f);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Displace/ChannelCycle - v0.Y.36.1 Installment C.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("applyFilter's Displace is a no-op at zero distance", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Displace);
+    config.setDisplaceDistance(0.0f);
+    std::vector<float> profile = {-10.0f, -20.0f, -30.0f, -40.0f, -50.0f};
+    const auto composite = makeSingleRowComposite(profile);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    for (std::size_t i = 0; i < profile.size(); ++i) {
+        CHECK(filtered.leftMagnitudeDb[i] == Catch::Approx(profile[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's Displace shifts content along the time axis at angle 0",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Displace);
+    config.setDisplaceDistance(2.0f);
+    config.setDisplaceAngleDegrees(0.0f);
+    std::vector<float> profile = {-10.0f, -20.0f, -30.0f, -40.0f, -50.0f};
+    const auto composite = makeSingleRowComposite(profile);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // output(col) = input(col - 2) - column 2 reads column 0's own value.
+    CHECK(filtered.leftMagnitudeDb[2] == Catch::Approx(profile[0]).margin(0.01));
+    CHECK(filtered.leftMagnitudeDb[3] == Catch::Approx(profile[1]).margin(0.01));
+    CHECK(filtered.leftMagnitudeDb[4] == Catch::Approx(profile[2]).margin(0.01));
+    // Column 0/1 - shifted-in source is before the start, clamped to the
+    // first column's own value (not legacy's own silence-fill).
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(profile[0]).margin(0.01));
+    CHECK(filtered.leftMagnitudeDb[1] == Catch::Approx(profile[0]).margin(0.01));
+}
+
+TEST_CASE("applyFilter's Displace shifts content along the frequency axis at angle 90",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Displace);
+    config.setDisplaceDistance(1.0f);
+    config.setDisplaceAngleDegrees(90.0f);
+    StreamImage composite;
+    composite.config.binCount = 3;
+    composite.frameCount = 1;
+    composite.leftMagnitudeDb = {-10.0f, -20.0f, -30.0f};  // bin 0, 1, 2.
+    composite.rightMagnitudeDb = {-10.0f, -20.0f, -30.0f};
+    composite.sharedPhaseRadians = {0.5f, 0.5f, 0.5f};
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // output(row) = input(row - 1) - bin 1 reads bin 0's own value, bin 2
+    // reads bin 1's own value, bin 0's own source is clamped to itself.
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-10.0f).margin(0.01));
+    CHECK(filtered.leftMagnitudeDb[1] == Catch::Approx(-10.0f).margin(0.01));
+    CHECK(filtered.leftMagnitudeDb[2] == Catch::Approx(-20.0f).margin(0.01));
+}
+
+TEST_CASE("applyFilter's Displace bilinearly interpolates a fractional distance",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Displace);
+    config.setDisplaceDistance(0.5f);
+    config.setDisplaceAngleDegrees(0.0f);
+    std::vector<float> profile = {-10.0f, -20.0f, -30.0f, -40.0f};
+    const auto composite = makeSingleRowComposite(profile);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // Column 2's own source is column 1.5 - exactly halfway between
+    // profile[1] and profile[2].
+    CHECK(filtered.leftMagnitudeDb[2] == Catch::Approx((profile[1] + profile[2]) / 2.0f).margin(0.01));
+}
+
+TEST_CASE("applyFilter's Displace leaves phase untouched", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Displace);
+    config.setDisplaceDistance(3.0f);
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    for (const float phase : filtered.sharedPhaseRadians) {
+        CHECK(phase == 0.5f);
+    }
+}
+
+TEST_CASE("applyFilter's ChannelCycle is a no-op at angle 0", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelCycle);
+    config.setChannelCycleAngleDegrees(0.0f);
+    const auto composite = makeUniformGridComposite(1, 1, -20.0f, -40.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-20.0f).margin(0.01));
+    CHECK(filtered.rightMagnitudeDb[0] == Catch::Approx(-40.0f).margin(0.01));
+    CHECK(filtered.sharedPhaseRadians[0] == Catch::Approx(composite.sharedPhaseRadians[0]).margin(0.01));
+}
+
+TEST_CASE("applyFilter's ChannelCycle rotates left/right/phase by one full step at angle 120",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelCycle);
+    config.setChannelCycleAngleDegrees(120.0f);
+    StreamImage composite;
+    composite.config.binCount = 1;
+    composite.frameCount = 1;
+    composite.leftMagnitudeDb = {-96.0f};  // unit 0.
+    composite.rightMagnitudeDb = {0.0f};   // unit 1.
+    composite.sharedPhaseRadians = {std::numbers::pi_v<float>};  // 0.5 turn.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // new left <- old phase (0.5 turn -> -48dB); new right <- old left
+    // (unit 0 -> -96dB); new phase <- old right (unit 1 -> a full turn).
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-48.0f).margin(0.01));
+    CHECK(filtered.rightMagnitudeDb[0] == Catch::Approx(-96.0f).margin(0.01));
+    CHECK(filtered.sharedPhaseRadians[0] == Catch::Approx(2.0f * std::numbers::pi_v<float>).margin(0.01));
+}
+
+TEST_CASE("applyFilter's ChannelCycle interpolates halfway between steps at angle 60",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelCycle);
+    config.setChannelCycleAngleDegrees(60.0f);
+    StreamImage composite;
+    composite.config.binCount = 1;
+    composite.frameCount = 1;
+    composite.leftMagnitudeDb = {-96.0f};  // unit 0.
+    composite.rightMagnitudeDb = {0.0f};   // unit 1.
+    composite.sharedPhaseRadians = {0.0f};  // 0 turn.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // Halfway between identity and the angle-120 step: new left = 0.5*
+    // (left + phase) = 0.5*(0+0) = 0 -> -96dB; new right = 0.5*(right +
+    // left) = 0.5*(1+0) = 0.5 -> -48dB; new phase = 0.5*(phase + right) =
+    // 0.5*(0+1) = 0.5 turn -> pi.
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-96.0f).margin(0.01));
+    CHECK(filtered.rightMagnitudeDb[0] == Catch::Approx(-48.0f).margin(0.01));
+    CHECK(filtered.sharedPhaseRadians[0] == Catch::Approx(std::numbers::pi_v<float>).margin(0.01));
+}
+
+TEST_CASE("applyFilter's ChannelCycle is a no-op at angle 360, matching angle 0",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelCycle);
+    config.setChannelCycleAngleDegrees(360.0f);
+    const auto composite = makeUniformGridComposite(1, 1, -20.0f, -40.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-20.0f).margin(0.01));
+    CHECK(filtered.rightMagnitudeDb[0] == Catch::Approx(-40.0f).margin(0.01));
+}

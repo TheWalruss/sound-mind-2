@@ -195,6 +195,36 @@ struct FilterParameterMindWaves {
  *     matching `kernelSize * kernelSize` - a corrupted/hand-edited project
  *     file) is treated as a no-op rather than indexed out of bounds.
  *
+ * - **`Displace`/`ChannelCycle`** (`v0.Y.36.1` Installment C, "Geometric"):
+ *   confirmed with the user directly against the legacy Python Studio's
+ *   own implementations of both. Neither binds to a MindWave yet, the
+ *   same deliberate deferral every other `v0.Y.36.1` installment
+ *   established.
+ *   - `Displace`: shifts content from a source position offset by
+ *     `(displaceDistance() * cos(angle), displaceDistance() * sin(angle))`
+ *     - the same `0`°-along-time-axis/`90`°-along-frequency-axis
+ *     convention `directionalBlurAngleDegrees()` already establishes -
+ *     bilinearly interpolated (`sampleBilinear()`), clamp-to-edge at the
+ *     boundary (confirmed with the user over legacy's own silence-fill,
+ *     for consistency with every other spatial filter above). Phase is
+ *     always left untouched (confirmed with the user over legacy's own
+ *     optional "apply to phase" toggle, not built here).
+ *   - `ChannelCycle`: the direct 3-channel analog of legacy's own
+ *     `color_rotate()`, confirmed with the user as a deliberate
+ *     simplification of that function's own configurable 4-page/9-mapping
+ *     system - this codebase has no separate left/right phase (only one
+ *     `sharedPhaseRadians`), so there's only one meaningful set of 3
+ *     channels to cycle: left loudness, right loudness, and phase. All
+ *     three are normalized to a shared `[0, 1]` domain first (amplitude
+ *     via `dbToUnit()`, phase via wrapping into a `[0, 1]` turn fraction -
+ *     matching legacy's own pages, which are *already* stored that way),
+ *     continuously rotated among each other by `channelCycleAngleDegrees()`
+ *     (`0`°/`360`° is identity; every `120`° is one full step; a
+ *     fractional angle linearly interpolates between adjacent steps), then
+ *     converted back. The only other filter type besides `ChannelBalance`
+ *     that genuinely mixes multiple channels together rather than
+ *     processing each independently.
+ *
  * As of `v0.Y.31.1` (MindWaves v1) Installment D, any of the four
  * kernel-shape parameters (`blurSigma`/`medianSize`/
  * `directionalBlurLength`/`directionalBlurAngleDegrees`) named in
