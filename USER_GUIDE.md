@@ -408,10 +408,42 @@ group's own controls while it was hidden.
 - **Spectral Wavefold** is a classic wavefolder distortion - one **Fold
   Gain** control (`1` is no effect; higher values fold loudness back on
   itself repeatedly for a harsher, more harmonically dense sound).
+- **Channel Balance** redistributes loudness between the left and right
+  channels - one **Balance** control (`0` sends everything to the left
+  channel, `1` to the right; `0.5` leaves an already-balanced signal
+  untouched, but isn't a no-op if the two channels differ - loudness is
+  redistributed from their shared total, not scaled independently).
+- **Invert** flips loudness inside out - quiet becomes loud, loud becomes
+  quiet. No controls of its own.
+- **Convolve** applies an arbitrary, hand-edited convolution kernel over
+  the spectrogram:
+  - **Preset** picks one of eight classic starting kernels (Identity,
+    Sharpen, Edge Detect, Emboss, Box Blur, Gaussian Blur, Sobel X, Sobel
+    Y) and drops it straight into the grid below, ready for further
+    hand-editing - it's a one-time starting point, not a sticky choice,
+    so the dropdown resets itself right after.
+  - **Kernel Size** sets the grid's own side length (always odd - an even
+    value rounds up); changing it replaces the current kernel with a
+    fresh, blank (identity) one of the new size rather than trying to
+    preserve the old values.
+  - The grid itself is a size-by-size block of editable cells - each one
+    a coefficient the corresponding neighboring pixel is weighted by.
+  - **Normalize** divides the kernel by the sum of its own positive
+    coefficients first, so a pure-positive kernel (a blur) doesn't
+    brighten or darken the image overall.
+  - **Amount** is a dry/wet mix - `0` is no effect regardless of the
+    kernel, `1` is the fully convolved result.
+  - **Save As New Kernel** stores the current grid permanently, named
+    "Kernel 1", "Kernel 2", and so on, for reuse later - on this Filter
+    layer, a different one, or a different project entirely. **Load
+    Saved Kernel** drops a previously saved kernel's own values into the
+    grid (again, a one-time copy you can keep editing, not a live link -
+    editing it afterward doesn't change the saved copy, and deleting the
+    saved copy later wouldn't affect this Filter layer).
 
-Every one of the fourteen designed-so-far filter types now has a real,
-working algorithm - Speckle Add through Spectral Wavefold don't yet have
-a MindWave-binding combo the way Sigma/Size/Length/Angle/Amount above do
+Every one of the seventeen designed-so-far filter types now has a real,
+working algorithm - Speckle Add through Convolve don't yet have a
+MindWave-binding combo the way Sigma/Size/Length/Angle/Amount above do
 (a later pass, not yet scheduled).
 
 A Filter layer with nothing beneath it (or with everything beneath it
@@ -982,10 +1014,9 @@ above) has made a real start - layer opacity binding works - but it's
 far from its own full scope either; see the note further down. Filter
 layers (see
 [Filter Layers](#filter-layers) above) are further along than most -
-fourteen designed filter types work now, the Equalizer layer included -
+seventeen designed filter types work now, the Equalizer layer included -
 but the milestone as a whole isn't finished; see the note further down
-for exactly what's still missing (Geometric, the rest of Tonal/Spectral
-shaping, and Space).
+for exactly what's still missing (Geometric and Space).
 `docs/sound-mind-roadmap.md` tracks what's actually being built next, in
 order; this guide will grow alongside it.
 
@@ -1071,10 +1102,10 @@ designed for it:
 - **Playback decodes the composite once, at Play** - it doesn't yet keep
   re-decoding live as you make further edits during playback.
 
-[Filter Layers](#filter-layers) (see above) have fourteen designed filter
-types working now (the original six, plus all eight Noise & distortion
-types), but still only a slice of what's designed for the milestone as a
-whole:
+[Filter Layers](#filter-layers) (see above) have seventeen designed filter
+types working now (the original six, all eight Noise & distortion types,
+and Channel Balance/Invert/Convolve), but still only a slice of what's
+designed for the milestone as a whole:
 
 - **No draggable visual gradient editor for Frequency-Axis Gradient
   (including the Equalizer's own Cut editor), and no interior stops** -
@@ -1084,12 +1115,16 @@ whole:
 - **MindWave-bound filter parameters exist now** (see
   [MindWaves](#mindwaves) above) for the five scalar controls listed
   above - Sigma, Size, Length, Angle, and Amount. Frequency-Axis
-  Gradient/Equalizer, Tone Curve, and all eight Noise & distortion types
-  have no bindable scalar of their own yet, so they're untouched by this.
-- **Geometric, the rest of Tonal (channel balance, inversion), the rest
-  of Spectral shaping (an arbitrary convolution kernel), and Space
-  (spectral reverberation)** aren't built yet - later installments of the
-  same milestone Noise & distortion just finished its own first piece of.
+  Gradient/Equalizer, Tone Curve, all eight Noise & distortion types, and
+  Channel Balance/Convolve have no bindable scalar of their own yet, so
+  they're untouched by this.
+- **Geometric and Space (spectral reverberation)** aren't built yet - the
+  last two installments of the same milestone Noise & distortion and
+  Channel Balance/Invert/Convolve already finished the first two pieces
+  of.
+- **Convolve's own saved kernels have no rename or delete UI yet** - once
+  saved, a kernel stays in the project's own library permanently (there's
+  no way to remove or rename one from within the Studio itself).
 
 [MindWaves](#mindwaves) (see above) exist now, but only a narrow slice of
 what's designed for them:

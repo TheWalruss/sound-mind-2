@@ -301,3 +301,92 @@ TEST_CASE("A FilterConfiguration loads from JSON missing every Noise & distortio
     REQUIRE(restored.feedbackAmount() == 0.5f);
     REQUIRE(restored.foldGain() == 2.0f);
 }
+
+// --- v0.Y.36.1 Installment B: Tonal/Spectral shaping -------------------
+
+TEST_CASE("A fresh FilterConfiguration has sensible ChannelBalance/Convolve defaults",
+          "[core][filter_configuration]") {
+    const FilterConfiguration config;
+    REQUIRE(config.channelBalance() == 0.5f);
+    REQUIRE(config.convolveKernel() == std::vector<float>{0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+    REQUIRE(config.convolveKernelSize() == 3);
+    REQUIRE_FALSE(config.convolveNormalize());
+    REQUIRE(config.convolveAmount() == 1.0f);
+}
+
+TEST_CASE("Every new Tonal/Spectral-shaping FilterType can be set", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    for (const FilterType type : {FilterType::ChannelBalance, FilterType::Invert, FilterType::Convolve}) {
+        config.setType(type);
+        REQUIRE(config.type() == type);
+    }
+}
+
+TEST_CASE("A FilterConfiguration's ChannelBalance can be changed", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setChannelBalance(0.2f);
+    REQUIRE(config.channelBalance() == 0.2f);
+}
+
+TEST_CASE("A FilterConfiguration's Convolve parameters can be changed", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    const std::vector<float> sharpen{0.0f, -1.0f, 0.0f, -1.0f, 5.0f, -1.0f, 0.0f, -1.0f, 0.0f};
+    config.setConvolveKernel(sharpen);
+    config.setConvolveKernelSize(3);
+    config.setConvolveNormalize(true);
+    config.setConvolveAmount(0.6f);
+
+    REQUIRE(config.convolveKernel() == sharpen);
+    REQUIRE(config.convolveKernelSize() == 3);
+    REQUIRE(config.convolveNormalize());
+    REQUIRE(config.convolveAmount() == 0.6f);
+}
+
+TEST_CASE("A FilterConfiguration's Convolve kernel can be mutated in place", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.convolveKernel()[4] = 2.0f;
+    REQUIRE(config.convolveKernel()[4] == 2.0f);
+}
+
+TEST_CASE("A FilterConfiguration's ChannelBalance/Convolve parameters round-trip through JSON",
+          "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Convolve);
+    config.setChannelBalance(0.3f);
+    const std::vector<float> sharpen{0.0f, -1.0f, 0.0f, -1.0f, 5.0f, -1.0f, 0.0f, -1.0f, 0.0f};
+    config.setConvolveKernel(sharpen);
+    config.setConvolveKernelSize(3);
+    config.setConvolveNormalize(true);
+    config.setConvolveAmount(0.6f);
+
+    const nlohmann::json json = config;
+    const FilterConfiguration roundTripped = json.get<FilterConfiguration>();
+
+    REQUIRE(roundTripped.type() == FilterType::Convolve);
+    REQUIRE(roundTripped.channelBalance() == 0.3f);
+    REQUIRE(roundTripped.convolveKernel() == sharpen);
+    REQUIRE(roundTripped.convolveKernelSize() == 3);
+    REQUIRE(roundTripped.convolveNormalize());
+    REQUIRE(roundTripped.convolveAmount() == 0.6f);
+}
+
+TEST_CASE("A FilterConfiguration loads from JSON missing every ChannelBalance/Convolve key "
+          "(a configuration saved before v0.Y.36.1 Installment B) using sensible defaults",
+          "[core][filter_configuration]") {
+    const nlohmann::json json{{"type", "uniformBlur"},
+                               {"blurSigma", 2.0f},
+                               {"medianSize", 3},
+                               {"directionalBlurLength", 10},
+                               {"directionalBlurAngleDegrees", 0.0f},
+                               {"sharpenAmount", 1.0f},
+                               {"toneCurvePoints", std::vector<std::array<float, 2>>{{0.0f, 0.0f}, {1.0f, 1.0f}}},
+                               {"frequencyGradient", FilterConfiguration{}.frequencyGradient()}};
+
+    const FilterConfiguration restored = json.get<FilterConfiguration>();
+
+    REQUIRE(restored.channelBalance() == 0.5f);
+    REQUIRE(restored.convolveKernel() == std::vector<float>{0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+    REQUIRE(restored.convolveKernelSize() == 3);
+    REQUIRE_FALSE(restored.convolveNormalize());
+    REQUIRE(restored.convolveAmount() == 1.0f);
+}

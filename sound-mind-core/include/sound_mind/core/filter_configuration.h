@@ -83,6 +83,16 @@ enum class FilterType {
     /// @brief A classic wavefolder - loudness beyond a threshold reflects
     ///        back into range rather than clipping, per `foldGain()`.
     SpectralWavefold,
+    /// @brief Redistributes loudness between the left and right channels -
+    ///        an energy-conserving pan law, per `channelBalance()`.
+    ChannelBalance,
+    /// @brief Inverts loudness (`out = 1 - dbToUnit(in)`) - quiet becomes
+    ///        loud and loud becomes quiet. No parameters of its own.
+    Invert,
+    /// @brief An arbitrary, user-edited 2D convolution kernel over the
+    ///        spectrogram, per `convolveKernel()`/`convolveKernelSize()`/
+    ///        `convolveNormalize()`/`convolveAmount()`.
+    Convolve,
 };
 
 // clang-format off
@@ -101,6 +111,9 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
     {FilterType::DynamicSpeckle, "dynamicSpeckle"},
     {FilterType::FeedbackDistortion, "feedbackDistortion"},
     {FilterType::SpectralWavefold, "spectralWavefold"},
+    {FilterType::ChannelBalance, "channelBalance"},
+    {FilterType::Invert, "invert"},
+    {FilterType::Convolve, "convolve"},
 })
 // clang-format on
 
@@ -128,10 +141,11 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
  * parameters". `toneCurvePoints`/`frequencyGradient` have no such binding:
  * neither is a single number, so there's nothing for a MindWave's own
  * `[0, 1]` output to become the *value* of. **The eight `v0.Y.36.1`
- * Installment A "Noise & distortion" parameters below have no MindWave
- * binding either, deliberately** - matching how the original six filter
- * types shipped unbound in `v0.Y.28.1` and only gained binding in a later,
- * dedicated milestone (`v0.Y.31.1` Installment D); binding these eight is
+ * Installment A "Noise & distortion" parameters, plus Installment B's own
+ * `channelBalance`/`convolveKernel`-family fields below, all have no
+ * MindWave binding either, deliberately** - matching how the original six
+ * filter types shipped unbound in `v0.Y.28.1` and only gained binding in a
+ * later, dedicated milestone (`v0.Y.31.1` Installment D); binding these is
  * left the same way, a known future-work item, not attempted here.
  */
 class FilterConfiguration {
@@ -514,6 +528,85 @@ public:
     /// @param gain The new gain; intended to be at least `1.0`.
     void setFoldGain(float gain) noexcept { foldGain_ = gain; }
 
+    /**
+     * @brief `ChannelBalance`'s own balance, in `[0, 1]` - confirmed with
+     *        the user against the legacy Python Studio's own
+     *        `channel_balance()`, an energy-conserving pan law rather than
+     *        independent per-channel gain: at each cell, `total = left +
+     *        right`, then `left = total * (1 - balance)`, `right = total *
+     *        balance`. `0.5` is a true no-op only on an already-balanced
+     *        signal (`left == right` at every cell) - unlike every other
+     *        filter's own "no-op" value, this one depends on the input,
+     *        not just the parameter.
+     * @return The current balance; meaningless unless `type()` is
+     *         `ChannelBalance`. Not clamped here.
+     */
+    [[nodiscard]] float channelBalance() const noexcept { return channelBalance_; }
+
+    /// @brief Sets `ChannelBalance`'s own balance.
+    /// @param balance The new balance, intended within `[0, 1]`.
+    void setChannelBalance(float balance) noexcept { channelBalance_ = balance; }
+
+    /**
+     * @brief `Convolve`'s own kernel, row-major, exactly
+     *        `convolveKernelSize() * convolveKernelSize()` entries - see
+     *        `NamedConvolutionKernel`'s own docs for the identical
+     *        representation a saved library entry uses (loading one here
+     *        is a one-time copy, not a live reference).
+     * @return The current kernel; meaningless unless `type()` is
+     *         `Convolve`. Not validated here.
+     */
+    [[nodiscard]] const std::vector<float>& convolveKernel() const noexcept { return convolveKernel_; }
+
+    /// @brief Mutable access to `Convolve`'s own kernel, for in-place edits.
+    /// @return The current kernel.
+    [[nodiscard]] std::vector<float>& convolveKernel() noexcept { return convolveKernel_; }
+
+    /// @brief Sets `Convolve`'s own kernel wholesale.
+    /// @param kernel The new kernel - see convolveKernel()'s own docs.
+    void setConvolveKernel(std::vector<float> kernel) { convolveKernel_ = std::move(kernel); }
+
+    /**
+     * @brief `Convolve`'s own kernel side length - always odd, so the
+     *        kernel has a well-defined center cell (matching
+     *        `NamedConvolutionKernel::size`'s own docs).
+     * @return The current size; meaningless unless `type()` is `Convolve`.
+     *         Not forced odd here - `applyFilter()`'s own docs cover how
+     *         an even value is handled.
+     */
+    [[nodiscard]] int convolveKernelSize() const noexcept { return convolveKernelSize_; }
+
+    /// @brief Sets `Convolve`'s own kernel side length.
+    /// @param size The new size; intended to be a positive odd number.
+    void setConvolveKernelSize(int size) noexcept { convolveKernelSize_ = size; }
+
+    /**
+     * @brief Whether `Convolve` divides its own kernel by the sum of its
+     *        positive coefficients before applying it - see
+     *        `applyFilter()`'s own docs for why (a pure-positive kernel
+     *        would otherwise brighten/darken the whole image by that sum).
+     * @return The current setting; meaningless unless `type()` is
+     *         `Convolve`.
+     */
+    [[nodiscard]] bool convolveNormalize() const noexcept { return convolveNormalize_; }
+
+    /// @brief Sets `Convolve`'s own normalize setting.
+    /// @param normalize The new setting.
+    void setConvolveNormalize(bool normalize) noexcept { convolveNormalize_ = normalize; }
+
+    /**
+     * @brief `Convolve`'s own dry/wet mix, in `[0, 1]` - `0` is a true
+     *        no-op (identity, regardless of the kernel); `1` is the fully
+     *        convolved result.
+     * @return The current amount; meaningless unless `type()` is
+     *         `Convolve`. Not clamped here.
+     */
+    [[nodiscard]] float convolveAmount() const noexcept { return convolveAmount_; }
+
+    /// @brief Sets `Convolve`'s own dry/wet mix.
+    /// @param amount The new amount, intended within `[0, 1]`.
+    void setConvolveAmount(float amount) noexcept { convolveAmount_ = amount; }
+
     friend void to_json(nlohmann::json& json, const FilterConfiguration& config);
     friend void from_json(const nlohmann::json& json, FilterConfiguration& config);
 
@@ -542,6 +635,11 @@ private:
     float grainAmountDb_ = 6.0f;
     float feedbackAmount_ = 0.5f;
     float foldGain_ = 2.0f;
+    float channelBalance_ = 0.5f;
+    std::vector<float> convolveKernel_{0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    int convolveKernelSize_ = 3;
+    bool convolveNormalize_ = false;
+    float convolveAmount_ = 1.0f;
 };
 
 /// @brief Serializes a filter configuration to its JSON representation.

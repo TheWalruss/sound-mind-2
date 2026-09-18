@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.36.2] - 2026-09-18
+
+Deferred Filters, Installment B: **Channel Balance**, **Invert**, and **Convolve**, closing out the Tonal and Spectral shaping filter families - `docs/sound-mind-design.md`'s "Filter Layer". Second installment of the `v0.Y.36.1` milestone; Geometric and Space remain later installments.
+
+### Added
+
+- **Channel Balance**, a new Filter Layer type: redistributes loudness between the left and right channels with a single **Balance** control (`0` sends everything to the left channel, `1` to the right, `0.5` leaves an already-balanced signal untouched).
+- **Invert**, a new Filter Layer type: flips loudness inside out - quiet becomes loud, loud becomes quiet. No controls of its own.
+- **Convolve**, a new Filter Layer type: an arbitrary, hand-editable convolution kernel over the spectrogram, with a configurable odd kernel size, eight built-in presets (Identity, Sharpen, Edge Detect, Emboss, Box Blur, Gaussian Blur, Sobel X, Sobel Y), a Normalize option, and an Amount (dry/wet) control. Kernels can be saved for reuse across Filter layers and projects via **Save As New Kernel** and loaded back via the **Load Saved Kernel** drop-down.
+
+Full regression: sound-mind-core 593/593 (up from 561), sound-mind-studio all 35 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #103.
+
 ## [0.0.36.1] - 2026-09-18
 
 Deferred Filters, Installment A: **Noise & distortion**, in full - `docs/sound-mind-design.md`'s "Filter Layer". First installment of the `v0.Y.36.1` milestone; Geometric, the rest of Tonal/Spectral shaping, and Space remain later installments.

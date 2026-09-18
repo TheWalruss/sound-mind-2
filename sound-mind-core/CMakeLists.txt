@@ -34,6 +34,7 @@ add_library(sound-mind-core
     src/warp_application.cpp
     src/mind_shot.cpp
     src/mind_grain.cpp
+    src/convolution_kernel.cpp
     src/music_theory.cpp
     src/layer.cpp
     src/project_settings.cpp

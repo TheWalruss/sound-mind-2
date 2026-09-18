@@ -715,6 +715,34 @@ public slots:
     void applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config);
 
     /**
+     * @brief Appends a new, auto-named entry to the current project's own
+     *        convolution kernel library and refreshes `filterConfigurationPanel_`'s
+     *        own Load Kernel combo - the actual work behind
+     *        `FilterConfigurationPanel::saveConvolutionKernelRequested()`.
+     *
+     * Named "Kernel 1", "Kernel 2", and so on, the same auto-naming
+     * `captureMindShot()`/`captureMindGrain()` already establish (no
+     * naming prompt). A no-op if no project is open.
+     *
+     * @param size The kernel's own current side length.
+     * @param coefficients The kernel's own current coefficients, row-major.
+     * @param normalize The kernel's own current Normalize setting.
+     */
+    void saveConvolutionKernel(int size, std::vector<float> coefficients, bool normalize);
+
+    /**
+     * @brief Feeds the current project's own convolution kernel library
+     *        into `filterConfigurationPanel_->setAvailableConvolutionKernels()`
+     *        - called whenever a project is opened/created and after
+     *        `saveConvolutionKernel()` appends a new entry, the same
+     *        "refresh after every library change" role
+     *        `MindWaveController::refreshMindWavesPanel()` plays for
+     *        MindWaves. An empty library (no project open) simply clears
+     *        the panel's own Load Kernel combo down to its placeholder.
+     */
+    void refreshConvolutionKernelCombo();
+
+    /**
      * @brief Reorders the current project's layer stack - the actual work
      *        behind `LayersPanel`'s drag-to-reorder.
      *

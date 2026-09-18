@@ -567,6 +567,19 @@ float dbToUnit(float db) {
 
 float unitToDb(float unit) { return kToneCurveMinDb + unit * (kToneCurveMaxDb - kToneCurveMinDb); }
 
+// `compositor.cpp`'s own private `dbToLinearAmplitude()`/
+// `linearAmplitudeToDb()`, duplicated here rather than shared - the same
+// "duplicated, not shared" reasoning Decision #59 already gives (an
+// internal, unexported `src/`-only helper isn't a header this file can
+// depend on). `ChannelBalance`'s own energy-redistribution formula needs
+// genuine linear-amplitude arithmetic - dB values can't be meaningfully
+// summed directly the way `total = left + right` requires.
+constexpr float kMinLinearAmplitude = 1e-7f;
+
+float dbToLinearAmplitude(float db) { return std::pow(10.0f, db / 20.0f); }
+
+float linearAmplitudeToDb(float amplitude) { return 20.0f * std::log10(std::max(amplitude, kMinLinearAmplitude)); }
+
 /// @brief `applyFilter()`'s own `ToneCurve` implementation - see its docs
 /// for the exact remap.
 StreamImage applyToneCurve(const StreamImage& composite, const std::vector<std::array<float, 2>>& points) {
@@ -817,6 +830,112 @@ std::vector<float> applySpectralWavefold(const std::vector<float>& grid, float f
     return result;
 }
 
+// ---------------------------------------------------------------------------
+// v0.Y.36.1 Installment B: the rest of Tonal, plus the rest of Spectral
+// shaping.
+// ---------------------------------------------------------------------------
+
+/// @brief `ChannelBalance`'s own implementation - see `applyFilter()`'s
+/// docs for the exact energy-redistribution pan law, confirmed with the
+/// user against the legacy Python Studio's own `channel_balance()`. Unlike
+/// every other filter type, this one genuinely mixes the two channels
+/// together rather than processing each independently, so it doesn't go
+/// through `applyPerChannelGridFilter()`.
+StreamImage applyChannelBalance(const StreamImage& composite, float balance) {
+    StreamImage result = composite;
+    const float b = std::clamp(balance, 0.0f, 1.0f);
+    for (std::size_t i = 0; i < composite.leftMagnitudeDb.size(); ++i) {
+        const float total = dbToLinearAmplitude(composite.leftMagnitudeDb[i]) +
+                             dbToLinearAmplitude(composite.rightMagnitudeDb[i]);
+        result.leftMagnitudeDb[i] = linearAmplitudeToDb(total * (1.0f - b));
+        result.rightMagnitudeDb[i] = linearAmplitudeToDb(total * b);
+    }
+    // Phase is left untouched, matching every other filter's own precedent.
+    return result;
+}
+
+/// @brief `Invert`'s own implementation - see `applyFilter()`'s docs.
+std::vector<float> applyInvert(const std::vector<float>& grid) {
+    std::vector<float> result(grid.size());
+    for (std::size_t i = 0; i < grid.size(); ++i) {
+        result[i] = unitToDb(1.0f - dbToUnit(grid[i]));
+    }
+    return result;
+}
+
+/// @brief A plain 2D spatial convolution over a `binCount` x `frameCount`
+/// grid, clamp-to-edge boundary handling (matching every other spatial
+/// filter in this file) - `Convolve`'s own core algorithm, confirmed with
+/// the user against the legacy Python Studio's own `custom_convolve_filter()`
+/// (`scipy.ndimage.convolve(..., mode="nearest")`). `kernelSize` is forced
+/// odd (`| 1`, matching `medianBlur2D()`'s own precedent) and at least `1`;
+/// a `kernel` whose own length doesn't match `kernelSize * kernelSize`
+/// (a corrupted/hand-edited project file) is treated as a no-op rather
+/// than indexed out of bounds. `normalize`, when set, first divides the
+/// kernel by the sum of its own positive coefficients - otherwise a
+/// pure-positive kernel (a blur) would brighten or darken the whole image
+/// by that sum, matching legacy's own `custom_convolve_filter()` exactly.
+std::vector<float> convolve2D(const std::vector<float>& grid, std::uint32_t binCount, std::uint32_t frameCount,
+                               const std::vector<float>& kernel, int kernelSize, bool normalize) {
+    const int size = std::max(1, kernelSize | 1);
+    if (kernel.size() != static_cast<std::size_t>(size) * static_cast<std::size_t>(size)) {
+        return grid;
+    }
+    std::vector<float> effectiveKernel = kernel;
+    if (normalize) {
+        float positiveSum = 0.0f;
+        for (const float coefficient : effectiveKernel) {
+            if (coefficient > 0.0f) {
+                positiveSum += coefficient;
+            }
+        }
+        if (positiveSum > 1e-9f) {
+            for (float& coefficient : effectiveKernel) {
+                coefficient /= positiveSum;
+            }
+        }
+    }
+
+    const int half = size / 2;
+    const int rows = static_cast<int>(binCount);
+    const int cols = static_cast<int>(frameCount);
+    std::vector<float> result(grid.size());
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            float sum = 0.0f;
+            for (int kr = -half; kr <= half; ++kr) {
+                const int sourceRow = clampIndex(row + kr, rows);
+                for (int kc = -half; kc <= half; ++kc) {
+                    const int sourceCol = clampIndex(col + kc, cols);
+                    const float weight = effectiveKernel[static_cast<std::size_t>(kr + half) *
+                                                              static_cast<std::size_t>(size) +
+                                                          static_cast<std::size_t>(kc + half)];
+                    sum += grid[static_cast<std::size_t>(sourceRow) * static_cast<std::size_t>(cols) +
+                                static_cast<std::size_t>(sourceCol)] *
+                           weight;
+                }
+            }
+            result[static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) + static_cast<std::size_t>(col)] =
+                sum;
+        }
+    }
+    return result;
+}
+
+/// @brief `convolve2D()` above, blended against the original by `amount`
+/// (`0` = fully dry/no-op, `1` = the fully convolved result) - `Convolve`'s
+/// own dispatch entry point.
+std::vector<float> applyConvolve(const std::vector<float>& grid, std::uint32_t binCount, std::uint32_t frameCount,
+                                  const std::vector<float>& kernel, int kernelSize, bool normalize, float amount) {
+    const auto convolved = convolve2D(grid, binCount, frameCount, kernel, kernelSize, normalize);
+    const float wet = std::clamp(amount, 0.0f, 1.0f);
+    std::vector<float> result(grid.size());
+    for (std::size_t i = 0; i < grid.size(); ++i) {
+        result[i] = grid[i] + wet * (convolved[i] - grid[i]);
+    }
+    return result;
+}
+
 }  // namespace
 
 StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration& config,
@@ -942,6 +1061,19 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t, std::uint32_t) {
                     return applySpectralWavefold(grid, config.foldGain());
+                });
+        case FilterType::ChannelBalance:
+            return applyChannelBalance(composite, config.channelBalance());
+        case FilterType::Invert:
+            return applyPerChannelGridFilter(
+                composite, [](const std::vector<float>& grid, std::uint32_t, std::uint32_t) {
+                    return applyInvert(grid);
+                });
+        case FilterType::Convolve:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                    return applyConvolve(grid, bins, frames, config.convolveKernel(), config.convolveKernelSize(),
+                                          config.convolveNormalize(), config.convolveAmount());
                 });
     }
     return composite;

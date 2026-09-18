@@ -252,6 +252,45 @@ NamedMindGrain* Project::mindGrainById(MindGrainId id) noexcept {
     return nullptr;
 }
 
+ConvolutionKernelId Project::addConvolutionKernel(std::string name, int size, std::vector<float> coefficients,
+                                                   bool normalize) {
+    const auto maxId = std::max_element(
+        convolutionKernels_.begin(), convolutionKernels_.end(),
+        [](const NamedConvolutionKernel& a, const NamedConvolutionKernel& b) { return a.id < b.id; });
+    const ConvolutionKernelId newId = (maxId == convolutionKernels_.end() ? ConvolutionKernelId{0} : maxId->id) + 1;
+    convolutionKernels_.push_back(
+        NamedConvolutionKernel{newId, std::move(name), size, std::move(coefficients), normalize});
+    return newId;
+}
+
+bool Project::removeConvolutionKernel(ConvolutionKernelId id) {
+    const auto it = std::find_if(convolutionKernels_.begin(), convolutionKernels_.end(),
+                                   [id](const NamedConvolutionKernel& named) { return named.id == id; });
+    if (it == convolutionKernels_.end()) {
+        return false;
+    }
+    convolutionKernels_.erase(it);
+    return true;
+}
+
+const NamedConvolutionKernel* Project::convolutionKernelById(ConvolutionKernelId id) const noexcept {
+    for (const NamedConvolutionKernel& named : convolutionKernels_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
+NamedConvolutionKernel* Project::convolutionKernelById(ConvolutionKernelId id) noexcept {
+    for (NamedConvolutionKernel& named : convolutionKernels_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
 bool Project::removeLayer(LayerId id) {
     const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const Layer& layer) { return layer.id() == id; });
     if (it == layers_.end()) {
@@ -298,6 +337,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"mindWaves", project.mindWaves_},
         {"mindShots", project.mindShots_},
         {"mindGrains", project.mindGrains_},
+        {"convolutionKernels", project.convolutionKernels_},
     };
 }
 
@@ -335,6 +375,15 @@ void from_json(const nlohmann::json& json, Project& project) {
     if (json.contains("mindGrains")) {
         for (const auto& namedJson : json.at("mindGrains")) {
             project.mindGrains_.push_back(namedJson.get<NamedMindGrain>());
+        }
+    }
+
+    // Lenient, same reasoning - didn't exist before v0.Y.36.1 Installment
+    // B; a project saved before it had no saved convolution kernels to lose.
+    project.convolutionKernels_.clear();
+    if (json.contains("convolutionKernels")) {
+        for (const auto& namedJson : json.at("convolutionKernels")) {
+            project.convolutionKernels_.push_back(namedJson.get<NamedConvolutionKernel>());
         }
     }
 }

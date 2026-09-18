@@ -42,7 +42,12 @@ void to_json(nlohmann::json& json, const FilterConfiguration& config) {
                            {"grainSize", config.grainSize_},
                            {"grainAmountDb", config.grainAmountDb_},
                            {"feedbackAmount", config.feedbackAmount_},
-                           {"foldGain", config.foldGain_}};
+                           {"foldGain", config.foldGain_},
+                           {"channelBalance", config.channelBalance_},
+                           {"convolveKernel", config.convolveKernel_},
+                           {"convolveKernelSize", config.convolveKernelSize_},
+                           {"convolveNormalize", config.convolveNormalize_},
+                           {"convolveAmount", config.convolveAmount_}};
     writeOptionalMindWaveId(json, "blurSigmaMindWaveId", config.blurSigmaMindWave_);
     writeOptionalMindWaveId(json, "medianSizeMindWaveId", config.medianSizeMindWave_);
     writeOptionalMindWaveId(json, "directionalBlurLengthMindWaveId", config.directionalBlurLengthMindWave_);
@@ -81,6 +86,12 @@ void from_json(const nlohmann::json& json, FilterConfiguration& config) {
     config.grainAmountDb_ = json.value("grainAmountDb", config.grainAmountDb_);
     config.feedbackAmount_ = json.value("feedbackAmount", config.feedbackAmount_);
     config.foldGain_ = json.value("foldGain", config.foldGain_);
+    // Lenient, same reasoning - didn't exist before v0.Y.36.1 Installment B.
+    config.channelBalance_ = json.value("channelBalance", config.channelBalance_);
+    config.convolveKernel_ = json.value("convolveKernel", config.convolveKernel_);
+    config.convolveKernelSize_ = json.value("convolveKernelSize", config.convolveKernelSize_);
+    config.convolveNormalize_ = json.value("convolveNormalize", config.convolveNormalize_);
+    config.convolveAmount_ = json.value("convolveAmount", config.convolveAmount_);
 }
 
 }  // namespace sound_mind::core

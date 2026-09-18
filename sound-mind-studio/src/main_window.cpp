@@ -366,6 +366,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layersPanel_, &LayersPanel::selectionChanged, this, &MainWindow::handleLayerSelectionChanged);
     connect(filterConfigurationPanel_, &FilterConfigurationPanel::filterConfigurationChanged, this,
             &MainWindow::applyFilterConfiguration);
+    connect(filterConfigurationPanel_, &FilterConfigurationPanel::saveConvolutionKernelRequested, this,
+            &MainWindow::saveConvolutionKernel);
 
     // Layer-stack lookup/mutation and Layers/Filter Configuration Panel
     // refresh - extracted as its own class (Refactor & Clean Up,
@@ -993,6 +995,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     }
     layerController_->refreshLayersPanel();
     mindWaveController_->refreshMindWavesPanel();
+    refreshConvolutionKernelCombo();
     // The new project's own layer stack/active layer are both different
     // from whatever the guardrail last computed - see
     // updateMindGrainGuardrails()'s own docs.
@@ -1675,6 +1678,22 @@ void MainWindow::captureMindGrain() {
     if (const auto id = toolPaletteController_->captureMindGrain(name); id.has_value()) {
         statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(name)), 5000);
     }
+}
+
+void MainWindow::saveConvolutionKernel(int size, std::vector<float> coefficients, bool normalize) {
+    if (!project_.has_value()) {
+        return;
+    }
+    const std::string name = "Kernel " + std::to_string(project_->convolutionKernels().size() + 1);
+    project_->addConvolutionKernel(name, size, std::move(coefficients), normalize);
+    refreshConvolutionKernelCombo();
+    hasUnsavedChanges_ = true;
+    statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(name)), 5000);
+}
+
+void MainWindow::refreshConvolutionKernelCombo() {
+    filterConfigurationPanel_->setAvailableConvolutionKernels(
+        project_.has_value() ? project_->convolutionKernels() : std::vector<sound_mind::core::NamedConvolutionKernel>{});
 }
 
 void MainWindow::startPlayback() {

@@ -1,12 +1,16 @@
 #include "test_filter_configuration_panel.h"
 
 #include <array>
+#include <cstddef>
 #include <optional>
 #include <utility>
+#include <vector>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QGroupBox>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QVariant>
@@ -18,6 +22,7 @@
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterType;
 using sound_mind::core::MindWaveId;
+using sound_mind::core::NamedConvolutionKernel;
 using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::ToneCurveEditor;
 
@@ -589,4 +594,225 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsAllNoiseSpinBoxesW
     QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("foldGainSpinBox"))->value(), 3.0);
     // GranularNoise's own group is now the visible one.
     QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("granularNoiseGroup"))->isHidden());
+}
+
+// --- v0.Y.36.1 Installment B: the rest of Tonal/Spectral shaping -------
+
+void FilterConfigurationPanelTest::freshPanelHasChannelBalanceInvertConvolveGroupsHidden() {
+    const FilterConfigurationPanel panel;
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("channelBalanceGroup"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("invertGroup"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("convolveGroup"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::selectingChannelBalanceInvertConvolveShowsOnlyThatOwnGroup() {
+    FilterConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
+    QVERIFY(combo != nullptr);
+    const std::array<QString, 3> groupNames{QStringLiteral("channelBalanceGroup"), QStringLiteral("invertGroup"),
+                                              QStringLiteral("convolveGroup")};
+    const std::array<FilterType, 3> types{FilterType::ChannelBalance, FilterType::Invert, FilterType::Convolve};
+
+    for (std::size_t i = 0; i < types.size(); ++i) {
+        const int index = combo->findData(QVariant::fromValue(static_cast<int>(types[i])));
+        QVERIFY(index >= 0);
+        combo->setCurrentIndex(index);
+
+        for (std::size_t j = 0; j < groupNames.size(); ++j) {
+            QCOMPARE(!panel.findChild<QGroupBox*>(groupNames[j])->isHidden(), i == j);
+        }
+    }
+}
+
+void FilterConfigurationPanelTest::changingChannelBalanceUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("channelBalanceSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(0.2);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().channelBalance(), 0.2f);
+}
+
+void FilterConfigurationPanelTest::freshConvolveGroupHasAThreeByThreeIdentityGrid() {
+    const FilterConfigurationPanel panel;
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            auto* spinBox = panel.findChild<QDoubleSpinBox*>(
+                QStringLiteral("convolveKernelSpinBox_%1_%2").arg(row).arg(col));
+            QVERIFY(spinBox != nullptr);
+            QCOMPARE(spinBox->value(), (row == 1 && col == 1) ? 1.0 : 0.0);
+        }
+    }
+}
+
+void FilterConfigurationPanelTest::editingAConvolveKernelCellUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* centerSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_1_1"));
+    QVERIFY(centerSpinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    centerSpinBox->setValue(5.0);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().convolveKernel(),
+              (std::vector<float>{0.0f, 0.0f, 0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f, 0.0f}));
+}
+
+void FilterConfigurationPanelTest::changingConvolveKernelSizeRebuildsTheGridAsAFreshIdentityKernel() {
+    FilterConfigurationPanel panel;
+    // Edit the 3x3 kernel away from identity first, to confirm a size
+    // change really does discard it rather than partially preserving it.
+    panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_0_0"))->setValue(9.0);
+    auto* sizeSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("convolveKernelSizeSpinBox"));
+    QVERIFY(sizeSpinBox != nullptr);
+
+    sizeSpinBox->setValue(5);
+
+    QCOMPARE(panel.filterConfiguration().convolveKernelSize(), 5);
+    QCOMPARE(panel.filterConfiguration().convolveKernel().size(), std::size_t{25});
+    // Old 3x3 widgets are gone; a fresh 5x5 identity grid exists instead.
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_0_0")) != nullptr);
+    for (int row = 0; row < 5; ++row) {
+        for (int col = 0; col < 5; ++col) {
+            auto* spinBox = panel.findChild<QDoubleSpinBox*>(
+                QStringLiteral("convolveKernelSpinBox_%1_%2").arg(row).arg(col));
+            QVERIFY(spinBox != nullptr);
+            QCOMPARE(spinBox->value(), (row == 2 && col == 2) ? 1.0 : 0.0);
+        }
+    }
+}
+
+void FilterConfigurationPanelTest::selectingAConvolvePresetAppliesItAndResetsTheComboToThePlaceholder() {
+    FilterConfigurationPanel panel;
+    auto* presetCombo = panel.findChild<QComboBox*>(QStringLiteral("convolvePresetCombo"));
+    QVERIFY(presetCombo != nullptr);
+    const int sharpenIndex = presetCombo->findText(QStringLiteral("Sharpen"));
+    QVERIFY(sharpenIndex > 0);
+
+    presetCombo->setCurrentIndex(sharpenIndex);
+
+    QCOMPARE(panel.filterConfiguration().convolveKernelSize(), 3);
+    QCOMPARE(panel.filterConfiguration().convolveKernel(),
+              (std::vector<float>{0.0f, -1.0f, 0.0f, -1.0f, 5.0f, -1.0f, 0.0f, -1.0f, 0.0f}));
+    QVERIFY(!panel.filterConfiguration().convolveNormalize());
+    // The grid itself reflects the preset too, not just the model.
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_1_1"))->value(), 5.0);
+    // A one-shot trigger - reset back to its own placeholder afterward.
+    QCOMPARE(presetCombo->currentIndex(), 0);
+}
+
+void FilterConfigurationPanelTest::togglingConvolveNormalizeUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("convolveNormalizeCheckBox"));
+    QVERIFY(checkBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    checkBox->setChecked(true);
+
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(panel.filterConfiguration().convolveNormalize());
+}
+
+void FilterConfigurationPanelTest::changingConvolveAmountUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveAmountSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(0.5);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().convolveAmount(), 0.5f);
+}
+
+void FilterConfigurationPanelTest::clickingSaveAsNewKernelEmitsSaveConvolutionKernelRequestedWithTheCurrentKernel() {
+    FilterConfigurationPanel panel;
+    panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_1_1"))->setValue(3.0);
+    panel.findChild<QCheckBox*>(QStringLiteral("convolveNormalizeCheckBox"))->setChecked(true);
+    auto* button = panel.findChild<QPushButton*>(QStringLiteral("convolveSaveKernelButton"));
+    QVERIFY(button != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::saveConvolutionKernelRequested);
+
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+    const auto arguments = spy.takeFirst();
+    QCOMPARE(arguments.at(0).toInt(), 3);
+    QCOMPARE(arguments.at(1).value<std::vector<float>>(),
+              (std::vector<float>{0.0f, 0.0f, 0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0.0f, 0.0f}));
+    QCOMPARE(arguments.at(2).toBool(), true);
+}
+
+void FilterConfigurationPanelTest::setAvailableConvolutionKernelsPopulatesTheLoadCombo() {
+    FilterConfigurationPanel panel;
+    NamedConvolutionKernel first;
+    first.id = 1;
+    first.name = "My Blur";
+    NamedConvolutionKernel second;
+    second.id = 2;
+    second.name = "My Sharpen";
+
+    panel.setAvailableConvolutionKernels({first, second});
+
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("convolveLoadKernelCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(combo->count(), 3);  // placeholder + two kernels.
+    QCOMPARE(combo->itemText(1), QStringLiteral("My Blur"));
+    QCOMPARE(combo->itemText(2), QStringLiteral("My Sharpen"));
+}
+
+void FilterConfigurationPanelTest::selectingALoadedKernelAppliesItAndResetsTheComboToThePlaceholder() {
+    FilterConfigurationPanel panel;
+    NamedConvolutionKernel saved;
+    saved.id = 42;
+    saved.name = "My Edge Kernel";
+    saved.size = 3;
+    saved.coefficients = {-1.0f, -1.0f, -1.0f, -1.0f, 8.0f, -1.0f, -1.0f, -1.0f, -1.0f};
+    saved.normalize = true;
+    panel.setAvailableConvolutionKernels({saved});
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("convolveLoadKernelCombo"));
+    QVERIFY(combo != nullptr);
+
+    combo->setCurrentIndex(1);
+
+    QCOMPARE(panel.filterConfiguration().convolveKernelSize(), 3);
+    QCOMPARE(panel.filterConfiguration().convolveKernel(), saved.coefficients);
+    QVERIFY(panel.filterConfiguration().convolveNormalize());
+    QVERIFY(panel.findChild<QCheckBox*>(QStringLiteral("convolveNormalizeCheckBox"))->isChecked());
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_1_1"))->value(), 8.0);
+    // A one-shot trigger - reset back to its own placeholder afterward.
+    QCOMPARE(combo->currentIndex(), 0);
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsChannelBalanceAndTheConvolveKernelGridWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    FilterConfiguration config;
+    config.setType(FilterType::Convolve);
+    config.setChannelBalance(0.3f);
+    config.setConvolveKernelSize(5);
+    config.setConvolveKernel(std::vector<float>(25, 2.0f));
+    config.setConvolveNormalize(true);
+    config.setConvolveAmount(0.4f);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("channelBalanceSpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("convolveKernelSizeSpinBox"))->value(), 5);
+    QCOMPARE(panel.findChild<QCheckBox*>(QStringLiteral("convolveNormalizeCheckBox"))->isChecked(), true);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveAmountSpinBox"))->value(), 0.4);
+    for (int row = 0; row < 5; ++row) {
+        for (int col = 0; col < 5; ++col) {
+            auto* spinBox = panel.findChild<QDoubleSpinBox*>(
+                QStringLiteral("convolveKernelSpinBox_%1_%2").arg(row).arg(col));
+            QVERIFY(spinBox != nullptr);
+            QCOMPARE(spinBox->value(), 2.0);
+        }
+    }
+    // Convolve's own group is now the visible one.
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("convolveGroup"))->isHidden());
 }

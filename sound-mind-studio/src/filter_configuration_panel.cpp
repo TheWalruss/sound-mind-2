@@ -1,15 +1,20 @@
 #include "sound_mind/studio/filter_configuration_panel.h"
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <utility>
 #include <vector>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -23,9 +28,32 @@ namespace sound_mind::studio {
 
 namespace {
 
+using sound_mind::core::ConvolutionKernelId;
 using sound_mind::core::FilterType;
 using sound_mind::core::GradientStop;
 using sound_mind::core::MindWaveId;
+
+/// @brief One of Convolve's own eight built-in presets - a name plus a
+/// classic 3x3 image-processing kernel, matching the legacy Python
+/// Studio's own `CONVOLVE_PRESETS` exactly. Box Blur/Gaussian Blur default
+/// `normalize` to `true` (their own coefficients don't already sum to 1);
+/// the rest default it to `false`.
+struct ConvolvePreset {
+    const char* name;
+    std::array<float, 9> kernel;
+    bool normalize;
+};
+
+constexpr std::array<ConvolvePreset, 8> kConvolvePresets{{
+    {"Identity", {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f}, false},
+    {"Sharpen", {0.0f, -1.0f, 0.0f, -1.0f, 5.0f, -1.0f, 0.0f, -1.0f, 0.0f}, false},
+    {"Edge Detect", {-1.0f, -1.0f, -1.0f, -1.0f, 8.0f, -1.0f, -1.0f, -1.0f, -1.0f}, false},
+    {"Emboss", {-2.0f, -1.0f, 0.0f, -1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 2.0f}, false},
+    {"Box Blur", {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f}, true},
+    {"Gaussian Blur", {1.0f, 2.0f, 1.0f, 2.0f, 4.0f, 2.0f, 1.0f, 2.0f, 1.0f}, true},
+    {"Sobel X", {-1.0f, 0.0f, 1.0f, -2.0f, 0.0f, 2.0f, -1.0f, 0.0f, 1.0f}, false},
+    {"Sobel Y", {-1.0f, -2.0f, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 2.0f, 1.0f}, false},
+}};
 
 /// @brief A `None`-plus-library MindWave-binding combo, styled to match
 /// `LayersPanel`'s own per-row `opacityMindWaveCombo` - item population
@@ -49,9 +77,11 @@ QHBoxLayout* makeBoundFieldRow(QWidget* spinBox, QWidget* combo) {
 
 /// @brief Every `FilterType`, in `docs/sound-mind-design.md`'s own family
 /// order (Blur & focus, then Noise & distortion, then Tonal, then
-/// Spectral shaping) - the first six shipped in `v0.Y.28.1`, the eight
-/// Noise & distortion types in `v0.Y.36.1` Installment A.
-constexpr std::array<std::pair<FilterType, const char*>, 14> kSelectableFilterTypes{{
+/// Spectral shaping), and each family's own listed sub-order - the first
+/// six shipped in `v0.Y.28.1`, the eight Noise & distortion types in
+/// `v0.Y.36.1` Installment A, and ChannelBalance/Invert/Convolve in that
+/// same milestone's own Installment B.
+constexpr std::array<std::pair<FilterType, const char*>, 17> kSelectableFilterTypes{{
     {FilterType::UniformBlur, "Uniform Blur"},
     {FilterType::EdgePreservingBlur, "Edge-Preserving Blur"},
     {FilterType::DirectionalBlur, "Directional Blur"},
@@ -65,7 +95,10 @@ constexpr std::array<std::pair<FilterType, const char*>, 14> kSelectableFilterTy
     {FilterType::FeedbackDistortion, "Feedback Distortion"},
     {FilterType::SpectralWavefold, "Spectral Wavefold"},
     {FilterType::ToneCurve, "Tone Curve"},
+    {FilterType::ChannelBalance, "Channel Balance"},
+    {FilterType::Invert, "Invert"},
     {FilterType::FrequencyAxisGradient, "Frequency-Axis Gradient"},
+    {FilterType::Convolve, "Convolve"},
 }};
 
 /// @brief A `[-96, 0]` dB spin box, matching `silenceGradient()`'s own
@@ -486,6 +519,157 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     toneCurveLayout->addWidget(toneCurveEditor_);
     root->addWidget(toneCurveGroup_);
 
+    channelBalanceGroup_ = new QGroupBox(tr("Channel Balance"), container);
+    channelBalanceGroup_->setObjectName(QStringLiteral("channelBalanceGroup"));
+    auto* channelBalanceForm = new QFormLayout(channelBalanceGroup_);
+    channelBalanceSpinBox_ = new QDoubleSpinBox(channelBalanceGroup_);
+    channelBalanceSpinBox_->setObjectName(QStringLiteral("channelBalanceSpinBox"));
+    channelBalanceSpinBox_->setRange(0.0, 1.0);
+    channelBalanceSpinBox_->setSingleStep(0.05);
+    channelBalanceSpinBox_->setDecimals(2);
+    channelBalanceSpinBox_->setToolTip(
+        tr("0 sends all energy to the left channel, 1 to the right; 0.5 only reproduces the input exactly when "
+           "left and right are already equal."));
+    connect(channelBalanceSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setChannelBalance(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    channelBalanceForm->addRow(tr("Balance:"), channelBalanceSpinBox_);
+    root->addWidget(channelBalanceGroup_);
+
+    invertGroup_ = new QGroupBox(tr("Invert"), container);
+    invertGroup_->setObjectName(QStringLiteral("invertGroup"));
+    auto* invertLayout = new QVBoxLayout(invertGroup_);
+    auto* invertLabel = new QLabel(
+        tr("Inverts loudness: quiet becomes loud, loud becomes quiet. No parameters."), invertGroup_);
+    invertLabel->setWordWrap(true);
+    invertLayout->addWidget(invertLabel);
+    root->addWidget(invertGroup_);
+
+    convolveGroup_ = new QGroupBox(tr("Convolve"), container);
+    convolveGroup_->setObjectName(QStringLiteral("convolveGroup"));
+    auto* convolveLayout = new QVBoxLayout(convolveGroup_);
+
+    auto* convolveTopForm = new QFormLayout();
+    convolvePresetCombo_ = new QComboBox(convolveGroup_);
+    convolvePresetCombo_->setObjectName(QStringLiteral("convolvePresetCombo"));
+    convolvePresetCombo_->addItem(tr("-- Presets --"));
+    for (const auto& preset : kConvolvePresets) {
+        convolvePresetCombo_->addItem(tr(preset.name));
+    }
+    connect(convolvePresetCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (index <= 0) {
+            return;
+        }
+        const auto& preset = kConvolvePresets[static_cast<std::size_t>(index - 1)];
+        config_.setConvolveKernelSize(3);
+        config_.setConvolveKernel(std::vector<float>(preset.kernel.begin(), preset.kernel.end()));
+        config_.setConvolveNormalize(preset.normalize);
+        const QSignalBlocker sizeBlocker(convolveKernelSizeSpinBox_);
+        convolveKernelSizeSpinBox_->setValue(3);
+        rebuildConvolveKernelGrid(3);
+        const QSignalBlocker normalizeBlocker(convolveNormalizeCheckBox_);
+        convolveNormalizeCheckBox_->setChecked(preset.normalize);
+        emitConfigChanged();
+        // A one-shot trigger, not a sticky selection - see this class's
+        // own docs.
+        const QSignalBlocker comboBlocker(convolvePresetCombo_);
+        convolvePresetCombo_->setCurrentIndex(0);
+    });
+    convolveTopForm->addRow(tr("Preset:"), convolvePresetCombo_);
+
+    convolveKernelSizeSpinBox_ = new QSpinBox(convolveGroup_);
+    convolveKernelSizeSpinBox_->setObjectName(QStringLiteral("convolveKernelSizeSpinBox"));
+    convolveKernelSizeSpinBox_->setRange(3, 21);
+    convolveKernelSizeSpinBox_->setSingleStep(2);
+    convolveKernelSizeSpinBox_->setToolTip(
+        tr("Always odd - an even value is rounded up. Changing this replaces the current kernel with a fresh "
+           "identity kernel of the new size."));
+    connect(convolveKernelSizeSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+        const int size = std::max(3, value | 1);
+        if (size != value) {
+            const QSignalBlocker blocker(convolveKernelSizeSpinBox_);
+            convolveKernelSizeSpinBox_->setValue(size);
+        }
+        std::vector<float> identity(static_cast<std::size_t>(size) * static_cast<std::size_t>(size), 0.0f);
+        identity[static_cast<std::size_t>(size / 2) * static_cast<std::size_t>(size) +
+                  static_cast<std::size_t>(size / 2)] = 1.0f;
+        config_.setConvolveKernelSize(size);
+        config_.setConvolveKernel(identity);
+        rebuildConvolveKernelGrid(size);
+        emitConfigChanged();
+    });
+    convolveTopForm->addRow(tr("Kernel Size:"), convolveKernelSizeSpinBox_);
+    convolveLayout->addLayout(convolveTopForm);
+
+    convolveKernelGridContainer_ = new QWidget(convolveGroup_);
+    convolveKernelGridContainer_->setObjectName(QStringLiteral("convolveKernelGridContainer"));
+    convolveKernelGridLayout_ = new QGridLayout(convolveKernelGridContainer_);
+    convolveLayout->addWidget(convolveKernelGridContainer_);
+
+    convolveNormalizeCheckBox_ = new QCheckBox(tr("Normalize"), convolveGroup_);
+    convolveNormalizeCheckBox_->setObjectName(QStringLiteral("convolveNormalizeCheckBox"));
+    convolveNormalizeCheckBox_->setToolTip(
+        tr("Divides the kernel by the sum of its own positive coefficients first, so a pure-positive kernel "
+           "(a blur) doesn't brighten or darken the whole image."));
+    connect(convolveNormalizeCheckBox_, &QCheckBox::toggled, this, [this](bool checked) {
+        config_.setConvolveNormalize(checked);
+        emitConfigChanged();
+    });
+    convolveLayout->addWidget(convolveNormalizeCheckBox_);
+
+    auto* convolveBottomForm = new QFormLayout();
+    convolveAmountSpinBox_ = new QDoubleSpinBox(convolveGroup_);
+    convolveAmountSpinBox_->setObjectName(QStringLiteral("convolveAmountSpinBox"));
+    convolveAmountSpinBox_->setRange(0.0, 1.0);
+    convolveAmountSpinBox_->setSingleStep(0.05);
+    convolveAmountSpinBox_->setDecimals(2);
+    connect(convolveAmountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setConvolveAmount(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    convolveBottomForm->addRow(tr("Amount:"), convolveAmountSpinBox_);
+    convolveLayout->addLayout(convolveBottomForm);
+
+    auto* convolveLibraryRow = new QHBoxLayout();
+    convolveSaveKernelButton_ = new QPushButton(tr("Save As New Kernel"), convolveGroup_);
+    convolveSaveKernelButton_->setObjectName(QStringLiteral("convolveSaveKernelButton"));
+    connect(convolveSaveKernelButton_, &QPushButton::clicked, this, [this]() {
+        emit saveConvolutionKernelRequested(config_.convolveKernelSize(), config_.convolveKernel(),
+                                              config_.convolveNormalize());
+    });
+    convolveLibraryRow->addWidget(convolveSaveKernelButton_);
+    convolveLoadKernelCombo_ = new QComboBox(convolveGroup_);
+    convolveLoadKernelCombo_->setObjectName(QStringLiteral("convolveLoadKernelCombo"));
+    convolveLoadKernelCombo_->addItem(tr("-- Load Saved Kernel --"), QVariant::fromValue(qulonglong{0}));
+    connect(convolveLoadKernelCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (index <= 0) {
+            return;
+        }
+        const auto id = static_cast<ConvolutionKernelId>(convolveLoadKernelCombo_->itemData(index).toULongLong());
+        const auto it = std::find_if(
+            availableConvolutionKernels_.begin(), availableConvolutionKernels_.end(),
+            [id](const sound_mind::core::NamedConvolutionKernel& entry) { return entry.id == id; });
+        if (it != availableConvolutionKernels_.end()) {
+            config_.setConvolveKernelSize(it->size);
+            config_.setConvolveKernel(it->coefficients);
+            config_.setConvolveNormalize(it->normalize);
+            const QSignalBlocker sizeBlocker(convolveKernelSizeSpinBox_);
+            convolveKernelSizeSpinBox_->setValue(it->size);
+            rebuildConvolveKernelGrid(it->size);
+            const QSignalBlocker normalizeBlocker(convolveNormalizeCheckBox_);
+            convolveNormalizeCheckBox_->setChecked(it->normalize);
+            emitConfigChanged();
+        }
+        const QSignalBlocker comboBlocker(convolveLoadKernelCombo_);
+        convolveLoadKernelCombo_->setCurrentIndex(0);
+    });
+    convolveLibraryRow->addWidget(convolveLoadKernelCombo_);
+    convolveLayout->addLayout(convolveLibraryRow);
+
+    rebuildConvolveKernelGrid(config_.convolveKernelSize());
+    root->addWidget(convolveGroup_);
+
     equalizerCutGroup_ = new QGroupBox(tr("Cut"), container);
     equalizerCutGroup_->setObjectName(QStringLiteral("equalizerCutGroup"));
     auto* cutLayout = new QVBoxLayout(equalizerCutGroup_);
@@ -576,6 +760,9 @@ void FilterConfigurationPanel::updateVisibleGroup() {
     feedbackDistortionGroup_->setVisible(!isEqualizerMode_ && type == FilterType::FeedbackDistortion);
     spectralWavefoldGroup_->setVisible(!isEqualizerMode_ && type == FilterType::SpectralWavefold);
     toneCurveGroup_->setVisible(!isEqualizerMode_ && type == FilterType::ToneCurve);
+    channelBalanceGroup_->setVisible(!isEqualizerMode_ && type == FilterType::ChannelBalance);
+    invertGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Invert);
+    convolveGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Convolve);
 }
 
 void FilterConfigurationPanel::setEqualizerMode(bool isEqualizer) {
@@ -617,6 +804,10 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     const QSignalBlocker dynamicSpeckleIntensityBlocker(dynamicSpeckleIntensitySpinBox_);
     const QSignalBlocker feedbackAmountBlocker(feedbackAmountSpinBox_);
     const QSignalBlocker foldGainBlocker(foldGainSpinBox_);
+    const QSignalBlocker channelBalanceBlocker(channelBalanceSpinBox_);
+    const QSignalBlocker convolveKernelSizeBlocker(convolveKernelSizeSpinBox_);
+    const QSignalBlocker convolveNormalizeBlocker(convolveNormalizeCheckBox_);
+    const QSignalBlocker convolveAmountBlocker(convolveAmountSpinBox_);
     const QSignalBlocker startLeftCutBlocker(startLeftCutSpinBox_);
     const QSignalBlocker startRightCutBlocker(startRightCutSpinBox_);
     const QSignalBlocker endLeftCutBlocker(endLeftCutSpinBox_);
@@ -665,6 +856,18 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     grainAmountSpinBox_->setValue(config_.grainAmountDb());
     feedbackAmountSpinBox_->setValue(config_.feedbackAmount());
     foldGainSpinBox_->setValue(config_.foldGain());
+    channelBalanceSpinBox_->setValue(config_.channelBalance());
+    convolveKernelSizeSpinBox_->setValue(config_.convolveKernelSize());
+    convolveNormalizeCheckBox_->setChecked(config_.convolveNormalize());
+    convolveAmountSpinBox_->setValue(config_.convolveAmount());
+    // rebuildConvolveKernelGrid() reads the freshly-loaded config_.convolveKernel()
+    // itself when its own length already matches the new size - see its
+    // own docs - so this always ends up showing the loaded kernel's own
+    // actual values, not a reset-to-identity.
+    rebuildConvolveKernelGrid(config_.convolveKernelSize());
+    // The Preset/Load Kernel combos have no "current selection" to
+    // restore - see this class's own docs on why both are one-shot
+    // triggers, already reset to their own placeholder after every use.
     // ToneCurveEditor::setPoints() doesn't emit pointsChanged() by its
     // own contract, so no QSignalBlocker is needed here.
     toneCurveEditor_->setPoints(config_.toneCurvePoints());
@@ -700,6 +903,63 @@ void FilterConfigurationPanel::rebuildMindWaveCombos() {
     populate(directionalBlurLengthMindWaveCombo_, config_.directionalBlurLengthMindWave());
     populate(directionalBlurAngleMindWaveCombo_, config_.directionalBlurAngleMindWave());
     populate(sharpenAmountMindWaveCombo_, config_.sharpenAmountMindWave());
+}
+
+void FilterConfigurationPanel::setAvailableConvolutionKernels(
+    const std::vector<sound_mind::core::NamedConvolutionKernel>& kernels) {
+    availableConvolutionKernels_ = kernels;
+    const QSignalBlocker blocker(convolveLoadKernelCombo_);
+    convolveLoadKernelCombo_->clear();
+    convolveLoadKernelCombo_->addItem(tr("-- Load Saved Kernel --"), QVariant::fromValue(qulonglong{0}));
+    for (const auto& kernel : availableConvolutionKernels_) {
+        convolveLoadKernelCombo_->addItem(QString::fromStdString(kernel.name),
+                                           QVariant::fromValue(static_cast<qulonglong>(kernel.id)));
+    }
+    convolveLoadKernelCombo_->setCurrentIndex(0);
+}
+
+void FilterConfigurationPanel::rebuildConvolveKernelGrid(int size) {
+    // delete, not deleteLater() - a deferred delete would leave the old
+    // widgets alive (with the same object names as their replacements)
+    // until the next event loop iteration, so an immediate findChild()
+    // lookup (as every test here does) would find the stale one instead.
+    for (QDoubleSpinBox* spinBox : convolveKernelSpinBoxes_) {
+        convolveKernelGridLayout_->removeWidget(spinBox);
+        delete spinBox;
+    }
+    convolveKernelSpinBoxes_.clear();
+
+    const auto& currentKernel = config_.convolveKernel();
+    const bool reuseCurrentValues =
+        currentKernel.size() == static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
+    const int center = size / 2;
+    for (int row = 0; row < size; ++row) {
+        for (int col = 0; col < size; ++col) {
+            const std::size_t cell = static_cast<std::size_t>(row) * static_cast<std::size_t>(size) +
+                                       static_cast<std::size_t>(col);
+            auto* spinBox = new QDoubleSpinBox(convolveKernelGridContainer_);
+            spinBox->setObjectName(QStringLiteral("convolveKernelSpinBox_%1_%2").arg(row).arg(col));
+            spinBox->setRange(-20.0, 20.0);
+            spinBox->setSingleStep(0.1);
+            spinBox->setDecimals(2);
+            const QSignalBlocker blocker(spinBox);
+            spinBox->setValue(reuseCurrentValues ? currentKernel[cell] : (row == center && col == center ? 1.0 : 0.0));
+            connect(spinBox, &QDoubleSpinBox::valueChanged, this,
+                    [this](double) { applyConvolveKernelFromGrid(); });
+            convolveKernelGridLayout_->addWidget(spinBox, row, col);
+            convolveKernelSpinBoxes_.push_back(spinBox);
+        }
+    }
+}
+
+void FilterConfigurationPanel::applyConvolveKernelFromGrid() {
+    std::vector<float> kernel;
+    kernel.reserve(convolveKernelSpinBoxes_.size());
+    for (QDoubleSpinBox* spinBox : convolveKernelSpinBoxes_) {
+        kernel.push_back(static_cast<float>(spinBox->value()));
+    }
+    config_.setConvolveKernel(std::move(kernel));
+    emitConfigChanged();
 }
 
 }  // namespace sound_mind::studio

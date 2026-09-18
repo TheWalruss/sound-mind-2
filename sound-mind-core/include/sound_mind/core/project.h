@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/convolution_kernel.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -380,6 +381,74 @@ public:
     ///         Grain with this id exists in this project's library.
     [[nodiscard]] NamedMindGrain* mindGrainById(MindGrainId id) noexcept;
 
+    /**
+     * @brief This project's convolution kernel library - `v0.Y.36.1`
+     *        (Deferred Filters) Installment B's own permanent, named store
+     *        of saved kernels (see `NamedConvolutionKernel`'s own docs),
+     *        the same "peer resource library" shape `mindWaves()`/
+     *        `mindShots()`/`mindGrains()` already establish.
+     * @return This project's current convolution kernel library.
+     */
+    [[nodiscard]] const std::vector<NamedConvolutionKernel>& convolutionKernels() const noexcept {
+        return convolutionKernels_;
+    }
+
+    /// @brief This project's convolution kernel library - mutable access,
+    ///        for in-place edits (renaming) that don't change the
+    ///        library's own membership (addConvolutionKernel() is still
+    ///        how a new entry gets appended).
+    /// @return This project's current convolution kernel library.
+    [[nodiscard]] std::vector<NamedConvolutionKernel>& convolutionKernels() noexcept { return convolutionKernels_; }
+
+    /**
+     * @brief Adds a new, named convolution kernel to this project's
+     *        library.
+     * @param name Display name - see `NamedConvolutionKernel::name`'s own
+     *        docs on uniqueness being this project's own responsibility,
+     *        not enforced here.
+     * @param size The kernel's own side length - see
+     *        `NamedConvolutionKernel::size`'s own docs.
+     * @param coefficients The kernel's own coefficients, row-major.
+     * @param normalize See `NamedConvolutionKernel::normalize`'s own docs.
+     * @return The id assigned to the new entry - see `addLayer()`'s own
+     *         docs for the identical "fresh, project-unique id" pattern.
+     */
+    ConvolutionKernelId addConvolutionKernel(std::string name, int size, std::vector<float> coefficients,
+                                              bool normalize);
+
+    /**
+     * @brief Removes the convolution kernel with the given id, if one
+     *        exists.
+     *
+     * Does **not** affect any `FilterConfiguration` that already loaded
+     * this kernel's own coefficients - see `removeMindShot()`'s own docs
+     * for the identical "a loaded copy is independent, not a live
+     * reference" reasoning, here applying to `FilterConfiguration::
+     * convolveKernel()`'s own one-time-copy-on-load contract.
+     *
+     * @param id The kernel to remove.
+     * @return `true` if a kernel with this id was found and removed;
+     *         `false` (no change) if none was.
+     */
+    bool removeConvolutionKernel(ConvolutionKernelId id);
+
+    /**
+     * @brief Finds the convolution kernel library entry with the given id,
+     *        if one exists - the same "small, project-level lookup"
+     *        `layerById()`/`mindWaveById()` already provide.
+     * @param id The entry to find.
+     * @return A pointer to that entry, or `nullptr` if no kernel with this
+     *         id exists in this project's library.
+     */
+    [[nodiscard]] const NamedConvolutionKernel* convolutionKernelById(ConvolutionKernelId id) const noexcept;
+
+    /// @brief Mutable overload of convolutionKernelById() - for in-place
+    ///        edits (renaming).
+    /// @param id The entry to find.
+    /// @return A mutable pointer to that entry, or `nullptr` if no kernel
+    ///         with this id exists in this project's library.
+    [[nodiscard]] NamedConvolutionKernel* convolutionKernelById(ConvolutionKernelId id) noexcept;
+
     friend void to_json(nlohmann::json& json, const Project& project);
     friend void from_json(const nlohmann::json& json, Project& project);
 
@@ -390,6 +459,7 @@ private:
     std::vector<NamedMindWave> mindWaves_;
     std::vector<NamedMindShot> mindShots_;
     std::vector<NamedMindGrain> mindGrains_;
+    std::vector<NamedConvolutionKernel> convolutionKernels_;
 };
 
 /// @brief Serializes a Project to its JSON representation.

@@ -42,4 +42,19 @@ private slots:
     void changingFeedbackAmountUpdatesConfigAndEmits();
     void changingFoldGainUpdatesConfigAndEmits();
     void setFilterConfigurationSyncsAllNoiseSpinBoxesWithoutEmitting();
+
+    // --- v0.Y.36.1 Installment B: the rest of Tonal/Spectral shaping ---
+    void freshPanelHasChannelBalanceInvertConvolveGroupsHidden();
+    void selectingChannelBalanceInvertConvolveShowsOnlyThatOwnGroup();
+    void changingChannelBalanceUpdatesConfigAndEmits();
+    void freshConvolveGroupHasAThreeByThreeIdentityGrid();
+    void editingAConvolveKernelCellUpdatesConfigAndEmits();
+    void changingConvolveKernelSizeRebuildsTheGridAsAFreshIdentityKernel();
+    void selectingAConvolvePresetAppliesItAndResetsTheComboToThePlaceholder();
+    void togglingConvolveNormalizeUpdatesConfigAndEmits();
+    void changingConvolveAmountUpdatesConfigAndEmits();
+    void clickingSaveAsNewKernelEmitsSaveConvolutionKernelRequestedWithTheCurrentKernel();
+    void setAvailableConvolutionKernelsPopulatesTheLoadCombo();
+    void selectingALoadedKernelAppliesItAndResetsTheComboToThePlaceholder();
+    void setFilterConfigurationSyncsChannelBalanceAndTheConvolveKernelGridWithoutEmitting();
 };

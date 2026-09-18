@@ -1140,3 +1140,215 @@ TEST_CASE("applyFilter's SpectralWavefold leaves phase untouched", "[core][filte
         CHECK(phase == 0.5f);
     }
 }
+
+// ---------------------------------------------------------------------------
+// ChannelBalance/Invert/Convolve - v0.Y.36.1 Installment B.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("applyFilter's ChannelBalance reproduces an already-balanced signal at balance 0.5",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelBalance);
+    config.setChannelBalance(0.5f);
+    const auto composite = makeUniformGridComposite(2, 2, -20.0f, -20.0f);  // left == right already.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    for (std::size_t i = 0; i < filtered.leftMagnitudeDb.size(); ++i) {
+        CHECK(filtered.leftMagnitudeDb[i] == Catch::Approx(-20.0f).margin(0.01));
+        CHECK(filtered.rightMagnitudeDb[i] == Catch::Approx(-20.0f).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's ChannelBalance sends all energy to the left channel at balance 0",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelBalance);
+    config.setChannelBalance(0.0f);
+    const auto composite = makeUniformGridComposite(2, 2, -20.0f, -10.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // total (linear) = 10^(-20/20) + 10^(-10/20) = 0.1 + 0.31623 = 0.41623;
+    // left = total, right = 0 (floored to kMinLinearAmplitude's own -140dB).
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(20.0f * std::log10(0.41623f)).margin(0.01));
+    CHECK(filtered.rightMagnitudeDb[0] == Catch::Approx(-140.0f).margin(0.5));
+}
+
+TEST_CASE("applyFilter's ChannelBalance sends all energy to the right channel at balance 1",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelBalance);
+    config.setChannelBalance(1.0f);
+    const auto composite = makeUniformGridComposite(2, 2, -20.0f, -10.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-140.0f).margin(0.5));
+    CHECK(filtered.rightMagnitudeDb[0] == Catch::Approx(20.0f * std::log10(0.41623f)).margin(0.01));
+}
+
+TEST_CASE("applyFilter's ChannelBalance conserves total linear energy at an intermediate balance",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelBalance);
+    config.setChannelBalance(0.3f);
+    const auto composite = makeUniformGridComposite(2, 2, -20.0f, -10.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    const auto toLinear = [](float db) { return std::pow(10.0f, db / 20.0f); };
+    const float originalTotal = toLinear(-20.0f) + toLinear(-10.0f);
+    const float filteredTotal = toLinear(filtered.leftMagnitudeDb[0]) + toLinear(filtered.rightMagnitudeDb[0]);
+    CHECK(filteredTotal == Catch::Approx(originalTotal).margin(0.001));
+}
+
+TEST_CASE("applyFilter's ChannelBalance leaves phase untouched", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelBalance);
+    config.setChannelBalance(0.2f);
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    for (const float phase : filtered.sharedPhaseRadians) {
+        CHECK(phase == 0.5f);
+    }
+}
+
+TEST_CASE("applyFilter's Invert maps 0dB to the silence floor and the silence floor to 0dB",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Invert);
+    const auto composite = makeUniformGridComposite(1, 1, 0.0f, -96.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-96.0f).margin(0.01));
+    CHECK(filtered.rightMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("applyFilter's Invert is its own inverse at the midpoint", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Invert);
+    const auto composite = makeUniformGridComposite(1, 1, -48.0f, -48.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-48.0f).margin(0.01));
+}
+
+TEST_CASE("applyFilter's Invert leaves phase untouched", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Invert);
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    for (const float phase : filtered.sharedPhaseRadians) {
+        CHECK(phase == 0.5f);
+    }
+}
+
+TEST_CASE("applyFilter's Convolve is a no-op with the default identity kernel", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Convolve);  // default kernel/amount - identity, full wet.
+    const auto composite = makeUniformGridComposite(4, 4, -37.25f, -12.8f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb == composite.leftMagnitudeDb);
+    CHECK(filtered.rightMagnitudeDb == composite.rightMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's Convolve is a no-op at amount 0 regardless of the kernel",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Convolve);
+    config.setConvolveKernel({1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f});  // a real box-blur kernel.
+    config.setConvolveKernelSize(3);
+    config.setConvolveAmount(0.0f);
+    const auto composite = makeUniformGridComposite(4, 4, -37.25f, -12.8f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's Convolve applies a 3x3 box blur matching a hand-computed average",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Convolve);
+    // A pre-normalized box blur (sums to 1 already) - normalize left off,
+    // so the result should match a plain 3x3 average exactly.
+    config.setConvolveKernel(std::vector<float>(9, 1.0f / 9.0f));
+    config.setConvolveKernelSize(3);
+    config.setConvolveNormalize(false);
+    config.setConvolveAmount(1.0f);
+    StreamImage composite;
+    composite.config.binCount = 3;
+    composite.frameCount = 3;
+    composite.leftMagnitudeDb = {-10.0f, -20.0f, -10.0f, -20.0f, -90.0f, -20.0f, -10.0f, -20.0f, -10.0f};
+    composite.rightMagnitudeDb.assign(9, -30.0f);
+    composite.sharedPhaseRadians.assign(9, 0.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // Center cell (row 1, col 1) - a full, unclamped 3x3 neighborhood.
+    const float expectedCenter = (-10.0f - 20.0f - 10.0f - 20.0f - 90.0f - 20.0f - 10.0f - 20.0f - 10.0f) / 9.0f;
+    CHECK(filtered.leftMagnitudeDb[4] == Catch::Approx(expectedCenter).margin(0.001));
+    // A uniform field's own average is itself, regardless of the kernel.
+    CHECK(filtered.rightMagnitudeDb[4] == Catch::Approx(-30.0f).margin(0.001));
+}
+
+TEST_CASE("applyFilter's Convolve normalizing a non-unit-sum kernel matches the same kernel pre-divided",
+          "[core][filter_application]") {
+    FilterConfiguration normalizedConfig;
+    normalizedConfig.setType(FilterType::Convolve);
+    normalizedConfig.setConvolveKernel(std::vector<float>(9, 1.0f));  // sums to 9, not 1.
+    normalizedConfig.setConvolveKernelSize(3);
+    normalizedConfig.setConvolveNormalize(true);
+    normalizedConfig.setConvolveAmount(1.0f);
+
+    FilterConfiguration preDividedConfig = normalizedConfig;
+    preDividedConfig.setConvolveKernel(std::vector<float>(9, 1.0f / 9.0f));
+    preDividedConfig.setConvolveNormalize(false);
+
+    StreamImage composite;
+    composite.config.binCount = 3;
+    composite.frameCount = 3;
+    composite.leftMagnitudeDb = {-10.0f, -20.0f, -10.0f, -20.0f, -90.0f, -20.0f, -10.0f, -20.0f, -10.0f};
+    composite.rightMagnitudeDb.assign(9, -30.0f);
+    composite.sharedPhaseRadians.assign(9, 0.0f);
+
+    const auto normalized = applyFilter(composite, normalizedConfig, ProjectSettings{});
+    const auto preDivided = applyFilter(composite, preDividedConfig, ProjectSettings{});
+
+    for (std::size_t i = 0; i < normalized.leftMagnitudeDb.size(); ++i) {
+        CHECK(normalized.leftMagnitudeDb[i] == Catch::Approx(preDivided.leftMagnitudeDb[i]).margin(0.001));
+    }
+}
+
+TEST_CASE("applyFilter's Convolve is a no-op for a malformed kernel whose size doesn't match its own coefficient count",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Convolve);
+    config.setConvolveKernel({1.0f, 2.0f, 3.0f});  // 3 coefficients, but size claims 3x3=9.
+    config.setConvolveKernelSize(3);
+    const auto composite = makeUniformGridComposite(4, 4, -37.25f, -12.8f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's Convolve leaves phase untouched", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Convolve);
+    config.setConvolveKernel(std::vector<float>(9, 1.0f / 9.0f));
+    config.setConvolveKernelSize(3);
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    for (const float phase : filtered.sharedPhaseRadians) {
+        CHECK(phase == 0.5f);
+    }
+}

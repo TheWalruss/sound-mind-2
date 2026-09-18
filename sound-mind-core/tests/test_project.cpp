@@ -7,6 +7,7 @@
 
 #include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/convolution_kernel.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -16,6 +17,7 @@
 using sound_mind::codec::PoolImage;
 using sound_mind::codec::StreamImage;
 using sound_mind::core::Clip;
+using sound_mind::core::ConvolutionKernelId;
 using sound_mind::core::FilterType;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
@@ -376,6 +378,112 @@ TEST_CASE("A Project saved before Mind Shots existed loads with an empty Mind Sh
     const Project restored = json.get<Project>();
 
     REQUIRE(restored.mindShots().empty());
+}
+
+// --- v0.Y.36.1 Installment B: the convolution kernel library ----------
+
+TEST_CASE("A new Project has no saved convolution kernels", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.convolutionKernels().empty());
+}
+
+TEST_CASE("addConvolutionKernel appends a named kernel with a fresh, unique id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const std::vector<float> identity{0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+
+    const ConvolutionKernelId firstId = project.addConvolutionKernel("Identity", 3, identity, false);
+    const ConvolutionKernelId secondId = project.addConvolutionKernel("Sharpen", 3, identity, true);
+
+    REQUIRE(firstId != secondId);
+    REQUIRE(project.convolutionKernels().size() == 2);
+    REQUIRE(project.convolutionKernels()[0].id == firstId);
+    REQUIRE(project.convolutionKernels()[0].name == "Identity");
+    REQUIRE_FALSE(project.convolutionKernels()[0].normalize);
+    REQUIRE(project.convolutionKernels()[1].id == secondId);
+    REQUIRE(project.convolutionKernels()[1].name == "Sharpen");
+    REQUIRE(project.convolutionKernels()[1].normalize);
+}
+
+TEST_CASE("convolutionKernelById finds the entry with a matching id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const std::vector<float> identity{0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    const ConvolutionKernelId id = project.addConvolutionKernel("Identity", 3, identity, false);
+
+    const auto* found = project.convolutionKernelById(id);
+
+    REQUIRE(found != nullptr);
+    REQUIRE(found->name == "Identity");
+    REQUIRE(found->size == 3);
+    REQUIRE(found->coefficients == identity);
+}
+
+TEST_CASE("convolutionKernelById returns nullptr for an unknown id", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.convolutionKernelById(ConvolutionKernelId{999}) == nullptr);
+}
+
+TEST_CASE("convolutionKernelById's mutable overload allows in-place edits", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const std::vector<float> identity{0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    const ConvolutionKernelId id = project.addConvolutionKernel("Identity", 3, identity, false);
+
+    auto* found = project.convolutionKernelById(id);
+    REQUIRE(found != nullptr);
+    found->name = "Renamed";
+
+    REQUIRE(project.convolutionKernelById(id)->name == "Renamed");
+}
+
+TEST_CASE("removeConvolutionKernel removes the entry with the given id and returns true", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const std::vector<float> identity{0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    const ConvolutionKernelId id = project.addConvolutionKernel("Identity", 3, identity, false);
+
+    const bool removed = project.removeConvolutionKernel(id);
+
+    REQUIRE(removed);
+    REQUIRE(project.convolutionKernels().empty());
+}
+
+TEST_CASE("removeConvolutionKernel returns false and changes nothing for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const std::vector<float> identity{0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    project.addConvolutionKernel("Identity", 3, identity, false);
+
+    const bool removed = project.removeConvolutionKernel(ConvolutionKernelId{999999});
+
+    REQUIRE_FALSE(removed);
+    REQUIRE(project.convolutionKernels().size() == 1);
+}
+
+TEST_CASE("A Project's convolution kernel library round-trips through JSON", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    const std::vector<float> sharpen{0.0f, -1.0f, 0.0f, -1.0f, 5.0f, -1.0f, 0.0f, -1.0f, 0.0f};
+    const ConvolutionKernelId id = original.addConvolutionKernel("Sharpen", 3, sharpen, true);
+
+    const nlohmann::json json = original;
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.convolutionKernels().size() == 1);
+    REQUIRE(restored.convolutionKernels()[0].id == id);
+    REQUIRE(restored.convolutionKernels()[0].name == "Sharpen");
+    REQUIRE(restored.convolutionKernels()[0].size == 3);
+    REQUIRE(restored.convolutionKernels()[0].coefficients == sharpen);
+    REQUIRE(restored.convolutionKernels()[0].normalize);
+}
+
+TEST_CASE("A Project saved before the convolution kernel library existed loads with an empty one",
+          "[core][project]") {
+    // Lenient deserialization, matching MindWaves'/Mind Shots' own
+    // precedent - a project file saved before v0.Y.36.1 Installment B has
+    // no "convolutionKernels" key at all.
+    Project original = Project::createNew(ProjectSettings{});
+    nlohmann::json json = original;
+    json.erase("convolutionKernels");
+
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.convolutionKernels().empty());
 }
 
 TEST_CASE("A new Project has no Mind Grains", "[core][project]") {

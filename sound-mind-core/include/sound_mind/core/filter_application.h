@@ -154,6 +154,47 @@ struct FilterParameterMindWaves {
  *     rather than clipping, gained by `foldGain()` first (`1.0` is a true
  *     no-op; higher values produce progressively more folds).
  *
+ * - **`ChannelBalance`/`Invert`/`Convolve`** (`v0.Y.36.1` Installment B,
+ *   the rest of Tonal plus the rest of Spectral shaping): confirmed with
+ *   the user directly against the legacy Python Studio's own
+ *   implementations of all three. None of the three bind to a MindWave
+ *   yet, the same deliberate deferral Installment A's eight Noise &
+ *   distortion types already established.
+ *   - `ChannelBalance`: the **only** filter type that genuinely mixes the
+ *     two channels together rather than processing each independently -
+ *     an energy-conserving pan law in *linear* amplitude (dB values can't
+ *     be meaningfully summed directly): `total = left + right`, then
+ *     `left = total * (1 - balance)`, `right = total * balance`.
+ *     `balance = 0.5` only reproduces the input exactly on an
+ *     already-balanced signal (`left == right` everywhere) - unlike every
+ *     other filter's own input-independent "no-op" value.
+ *   - `Invert`: `out = 1 - dbToUnit(in)` - an amplitude negative (quiet
+ *     becomes loud, loud becomes quiet), matching legacy's own
+ *     `invert_filter()` exactly. Not audio polarity/phase inversion
+ *     (`out = -in` on a signed sample) - every filter in this codebase
+ *     already operates in the normalized-amplitude/dB spectrogram domain,
+ *     never on raw time-domain samples, so this is the operation that's
+ *     actually consistent with every other filter type here. No
+ *     parameters of its own.
+ *   - `Convolve`: a plain 2D spatial convolution (`convolve2D()`) over the
+ *     `binCount` x `frameCount` grid, clamp-to-edge boundary handling
+ *     (matching every other spatial filter above), with an arbitrary,
+ *     user-edited odd-sized square kernel (`convolveKernel()`/
+ *     `convolveKernelSize()` - forced odd via `| 1`, matching
+ *     `medianBlur2D()`'s own precedent), optional positive-coefficient-sum
+ *     normalization (`convolveNormalize()` - otherwise a pure-positive
+ *     kernel would brighten/darken the whole image by that sum), and a
+ *     dry/wet mix (`convolveAmount()`, `0` = no-op regardless of the
+ *     kernel). Ported directly from legacy's own `custom_convolve_filter()`
+ *     (`scipy.ndimage.convolve(..., mode="nearest")`) - the design doc's
+ *     own "custom spectral or temporal responses" phrasing is a single
+ *     mechanism doing double duty by kernel shape/orientation (a
+ *     horizontal-only kernel acts mostly across time, a vertical-only one
+ *     mostly across frequency), not two separate implementations, matching
+ *     legacy exactly. A malformed kernel (its own coefficient count not
+ *     matching `kernelSize * kernelSize` - a corrupted/hand-edited project
+ *     file) is treated as a no-op rather than indexed out of bounds.
+ *
  * As of `v0.Y.31.1` (MindWaves v1) Installment D, any of the four
  * kernel-shape parameters (`blurSigma`/`medianSize`/
  * `directionalBlurLength`/`directionalBlurAngleDegrees`) named in
