@@ -6,8 +6,10 @@
 #include <cstdint>
 #include <exception>
 #include <functional>
+#include <limits>
 #include <map>
 #include <numbers>
+#include <random>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -589,6 +591,232 @@ StreamImage applyToneCurve(const StreamImage& composite, const std::vector<std::
     return result;
 }
 
+// ---------------------------------------------------------------------------
+// v0.Y.36.1 Installment A: Noise & distortion.
+// ---------------------------------------------------------------------------
+//
+// All eight operate directly in dB space, leave phase untouched, and use no
+// MindWave binding at all - see FilterConfiguration's own docs for why the
+// last point is a deliberate, matching-precedent deferral, not an oversight.
+
+/// @brief A fast, well-distributed, fully deterministic hash of
+/// `(seed, a, b)` - `SpeckleAdd`/`GranularNoise`'s own noise source, so the
+/// same `FilterConfiguration` always produces the same noise pattern
+/// (stable across every recomposite and reload) without needing to persist
+/// an entire noise buffer. A standard iterative mix (in the spirit of
+/// MurmurHash3's own finalizer), not cryptographic - only speed and a
+/// visually/aurally even distribution matter here.
+std::uint32_t hashCell(std::uint32_t seed, std::uint32_t a, std::uint32_t b) {
+    std::uint32_t h = seed;
+    h ^= a + 0x9e3779b9u + (h << 6) + (h >> 2);
+    h ^= b + 0x9e3779b9u + (h << 6) + (h >> 2);
+    h ^= h >> 16;
+    h *= 0x85ebca6bu;
+    h ^= h >> 13;
+    h *= 0xc2b2ae35u;
+    h ^= h >> 16;
+    return h;
+}
+
+/// @brief `hashCell()`'s own output, rescaled to `[0, 1)`.
+float hashToUnitFloat(std::uint32_t hash) {
+    return static_cast<float>(hash) / (static_cast<float>(std::numeric_limits<std::uint32_t>::max()) + 1.0f);
+}
+
+/// @brief `SpeckleAdd`'s own implementation - see `applyFilter()`'s docs.
+/// A no-op whenever `density` or `intensity` is non-positive, without
+/// touching the hash at all.
+std::vector<float> applySpeckleAdd(const std::vector<float>& grid, std::uint32_t binCount, std::uint32_t frameCount,
+                                    std::uint32_t seed, float density, float intensity) {
+    if (density <= 0.0f || intensity <= 0.0f) {
+        return grid;
+    }
+    std::vector<float> result = grid;
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * cols + frame;
+            if (hashToUnitFloat(hashCell(seed, bin, frame)) < density) {
+                result[cell] = grid[cell] + intensity * (kToneCurveMaxDb - grid[cell]);
+            }
+        }
+    }
+    return result;
+}
+
+/// @brief `SpeckleRemove`'s own implementation - see `applyFilter()`'s docs.
+/// Reuses `medianBlur2D()`'s own fixed 3x3 window rather than a bespoke
+/// median routine.
+std::vector<float> applySpeckleRemove(const std::vector<float>& grid, std::uint32_t binCount,
+                                       std::uint32_t frameCount, float thresholdDb) {
+    const auto median = medianBlur2D(grid, binCount, frameCount, 3);
+    std::vector<float> result(grid.size());
+    for (std::size_t i = 0; i < grid.size(); ++i) {
+        result[i] = (std::abs(grid[i] - median[i]) > thresholdDb) ? median[i] : grid[i];
+    }
+    return result;
+}
+
+/// @brief `Denoise`'s own implementation - see `applyFilter()`'s docs. A
+/// per-cell downward expander/spectral gate with a `kKneeWidthDb`-wide soft
+/// knee straddling `noiseFloorDb`, avoiding a hard on/off click right at
+/// the threshold.
+std::vector<float> applyDenoise(const std::vector<float>& grid, float noiseFloorDb, float reductionDb) {
+    constexpr float kKneeWidthDb = 6.0f;
+    std::vector<float> result(grid.size());
+    for (std::size_t i = 0; i < grid.size(); ++i) {
+        const float db = grid[i];
+        float attenuationFraction;
+        if (db >= noiseFloorDb + kKneeWidthDb) {
+            attenuationFraction = 0.0f;
+        } else if (db <= noiseFloorDb - kKneeWidthDb) {
+            attenuationFraction = 1.0f;
+        } else {
+            attenuationFraction = (noiseFloorDb + kKneeWidthDb - db) / (2.0f * kKneeWidthDb);
+        }
+        result[i] = db - attenuationFraction * reductionDb;
+    }
+    return result;
+}
+
+/// @brief `BitDepthCrush`'s own implementation - see `applyFilter()`'s
+/// docs. A true no-op at `crushAmount <= 0`; otherwise quantizes the
+/// `dbToUnit()`-normalized loudness into `lerp(256, 2, crushAmount)`
+/// discrete steps.
+std::vector<float> applyBitDepthCrush(const std::vector<float>& grid, float crushAmount) {
+    const float amount = std::clamp(crushAmount, 0.0f, 1.0f);
+    if (amount <= 0.0f) {
+        return grid;
+    }
+    const float levels = std::max(2.0f, 256.0f - amount * 254.0f);
+    std::vector<float> result(grid.size());
+    for (std::size_t i = 0; i < grid.size(); ++i) {
+        const float unit = dbToUnit(grid[i]);
+        const float quantized = std::clamp(std::floor(unit * levels) / levels, 0.0f, 1.0f);
+        result[i] = unitToDb(quantized);
+    }
+    return result;
+}
+
+/// @brief `GranularNoise`'s own implementation - see `applyFilter()`'s
+/// docs. Deterministic per `seed` and block position (`hashCell()`, keyed
+/// by the block's own top-left corner, not each individual cell) - every
+/// cell within a `size` x `size` block gets the exact same offset. A
+/// no-op whenever `amountDb` is non-positive.
+std::vector<float> applyGranularNoise(const std::vector<float>& grid, std::uint32_t binCount,
+                                       std::uint32_t frameCount, std::uint32_t seed, int size, float amountDb) {
+    if (amountDb <= 0.0f) {
+        return grid;
+    }
+    const int blockSize = std::max(1, size);
+    std::vector<float> result = grid;
+    const int rows = static_cast<int>(binCount);
+    const int cols = static_cast<int>(frameCount);
+    for (int blockRow = 0; blockRow < rows; blockRow += blockSize) {
+        for (int blockCol = 0; blockCol < cols; blockCol += blockSize) {
+            const float unit = hashToUnitFloat(hashCell(seed, static_cast<std::uint32_t>(blockRow),
+                                                          static_cast<std::uint32_t>(blockCol)));
+            const float offset = (unit * 2.0f - 1.0f) * amountDb;
+            const int rowEnd = std::min(rows, blockRow + blockSize);
+            const int colEnd = std::min(cols, blockCol + blockSize);
+            for (int row = blockRow; row < rowEnd; ++row) {
+                for (int col = blockCol; col < colEnd; ++col) {
+                    result[static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) +
+                           static_cast<std::size_t>(col)] += offset;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+/// @brief `DynamicSpeckle`'s own implementation - see `applyFilter()`'s
+/// docs. Deliberately *not* `hashCell()`-deterministic (unlike
+/// `SpeckleAdd`/`GranularNoise` above) - a genuinely fresh
+/// `thread_local` RNG roll every call, the whole point being visible
+/// flicker across recomposites. Computed over fixed 2x2 blocks (one RNG
+/// roll per block, not per cell) specifically to stay cheap on a large
+/// canvas, confirmed with the user over a per-cell version.
+std::vector<float> applyDynamicSpeckle(const std::vector<float>& grid, std::uint32_t binCount,
+                                        std::uint32_t frameCount, float density, float intensity) {
+    if (density <= 0.0f || intensity <= 0.0f) {
+        return grid;
+    }
+    constexpr int kBlockSize = 2;
+    std::vector<float> result = grid;
+    thread_local std::mt19937 rng{std::random_device{}()};
+    std::uniform_real_distribution<float> uniform(0.0f, 1.0f);
+    const int rows = static_cast<int>(binCount);
+    const int cols = static_cast<int>(frameCount);
+    for (int blockRow = 0; blockRow < rows; blockRow += kBlockSize) {
+        for (int blockCol = 0; blockCol < cols; blockCol += kBlockSize) {
+            if (uniform(rng) >= density) {
+                continue;
+            }
+            const int rowEnd = std::min(rows, blockRow + kBlockSize);
+            const int colEnd = std::min(cols, blockCol + kBlockSize);
+            for (int row = blockRow; row < rowEnd; ++row) {
+                for (int col = blockCol; col < colEnd; ++col) {
+                    const std::size_t cell =
+                        static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) + static_cast<std::size_t>(col);
+                    result[cell] = grid[cell] + intensity * (kToneCurveMaxDb - grid[cell]);
+                }
+            }
+        }
+    }
+    return result;
+}
+
+/// @brief `FeedbackDistortion`'s own implementation - see `applyFilter()`'s
+/// docs. A one-pole recursive filter along the time axis (frames),
+/// independently per bin - `amount` is clamped to `[0, 0.99]` internally
+/// regardless of what's stored, guaranteeing stability (a value at or past
+/// `1.0` would never decay). Each bin's own first frame is seeded to its
+/// own original value, so it's always exactly unchanged - there is no
+/// prior frame to feed back from yet.
+std::vector<float> applyFeedbackDistortion(const std::vector<float>& grid, std::uint32_t binCount,
+                                            std::uint32_t frameCount, float feedbackAmount) {
+    if (frameCount == 0) {
+        return grid;
+    }
+    const float amount = std::clamp(feedbackAmount, 0.0f, 0.99f);
+    std::vector<float> result(grid.size());
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        const std::size_t rowStart = static_cast<std::size_t>(bin) * cols;
+        float previous = grid[rowStart];
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = rowStart + frame;
+            previous = (1.0f - amount) * grid[cell] + amount * previous;
+            result[cell] = previous;
+        }
+    }
+    return result;
+}
+
+/// @brief A period-2 triangle wave folding `x` into `[0, 1]` - the classic
+/// wavefolder mechanic `SpectralWavefold` uses.
+float triangleFold(float x) {
+    float m = std::fmod(x, 2.0f);
+    if (m < 0.0f) {
+        m += 2.0f;
+    }
+    return (m <= 1.0f) ? m : (2.0f - m);
+}
+
+/// @brief `SpectralWavefold`'s own implementation - see `applyFilter()`'s
+/// docs. A true no-op at `foldGain <= 1.0` (any in-range value stays
+/// within the triangle wave's own unfolded `[0, 1]` segment).
+std::vector<float> applySpectralWavefold(const std::vector<float>& grid, float foldGain) {
+    const float gain = std::max(1.0f, foldGain);
+    std::vector<float> result(grid.size());
+    for (std::size_t i = 0; i < grid.size(); ++i) {
+        const float unit = dbToUnit(grid[i]);
+        result[i] = unitToDb(triangleFold(unit * gain));
+    }
+    return result;
+}
+
 }  // namespace
 
 StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration& config,
@@ -673,6 +901,48 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
                 });
         case FilterType::ToneCurve:
             return applyToneCurve(composite, config.toneCurvePoints());
+        case FilterType::SpeckleAdd:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                    return applySpeckleAdd(grid, bins, frames, config.noiseSeed(), config.speckleDensity(),
+                                            config.speckleIntensity());
+                });
+        case FilterType::SpeckleRemove:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                    return applySpeckleRemove(grid, bins, frames, config.speckleThresholdDb());
+                });
+        case FilterType::Denoise:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t, std::uint32_t) {
+                    return applyDenoise(grid, config.noiseFloorDb(), config.reductionDb());
+                });
+        case FilterType::BitDepthCrush:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t, std::uint32_t) {
+                    return applyBitDepthCrush(grid, config.crushAmount());
+                });
+        case FilterType::GranularNoise:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                    return applyGranularNoise(grid, bins, frames, config.noiseSeed(), config.grainSize(),
+                                               config.grainAmountDb());
+                });
+        case FilterType::DynamicSpeckle:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                    return applyDynamicSpeckle(grid, bins, frames, config.speckleDensity(), config.speckleIntensity());
+                });
+        case FilterType::FeedbackDistortion:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                    return applyFeedbackDistortion(grid, bins, frames, config.feedbackAmount());
+                });
+        case FilterType::SpectralWavefold:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t, std::uint32_t) {
+                    return applySpectralWavefold(grid, config.foldGain());
+                });
     }
     return composite;
 }

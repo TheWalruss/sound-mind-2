@@ -31,7 +31,18 @@ void to_json(nlohmann::json& json, const FilterConfiguration& config) {
                            {"directionalBlurAngleDegrees", config.directionalBlurAngleDegrees_},
                            {"sharpenAmount", config.sharpenAmount_},
                            {"toneCurvePoints", config.toneCurvePoints_},
-                           {"frequencyGradient", config.frequencyGradient_}};
+                           {"frequencyGradient", config.frequencyGradient_},
+                           {"noiseSeed", config.noiseSeed_},
+                           {"speckleDensity", config.speckleDensity_},
+                           {"speckleIntensity", config.speckleIntensity_},
+                           {"speckleThresholdDb", config.speckleThresholdDb_},
+                           {"noiseFloorDb", config.noiseFloorDb_},
+                           {"reductionDb", config.reductionDb_},
+                           {"crushAmount", config.crushAmount_},
+                           {"grainSize", config.grainSize_},
+                           {"grainAmountDb", config.grainAmountDb_},
+                           {"feedbackAmount", config.feedbackAmount_},
+                           {"foldGain", config.foldGain_}};
     writeOptionalMindWaveId(json, "blurSigmaMindWaveId", config.blurSigmaMindWave_);
     writeOptionalMindWaveId(json, "medianSizeMindWaveId", config.medianSizeMindWave_);
     writeOptionalMindWaveId(json, "directionalBlurLengthMindWaveId", config.directionalBlurLengthMindWave_);
@@ -56,6 +67,20 @@ void from_json(const nlohmann::json& json, FilterConfiguration& config) {
     config.directionalBlurLengthMindWave_ = readOptionalMindWaveId(json, "directionalBlurLengthMindWaveId");
     config.directionalBlurAngleMindWave_ = readOptionalMindWaveId(json, "directionalBlurAngleMindWaveId");
     config.sharpenAmountMindWave_ = readOptionalMindWaveId(json, "sharpenAmountMindWaveId");
+    // Lenient (defaults to the already-freshly-seeded/constructed value if
+    // absent) - didn't exist before v0.Y.36.1 Installment A; a project
+    // saved before this installment never had any of these fields at all.
+    config.noiseSeed_ = json.value("noiseSeed", config.noiseSeed_);
+    config.speckleDensity_ = json.value("speckleDensity", config.speckleDensity_);
+    config.speckleIntensity_ = json.value("speckleIntensity", config.speckleIntensity_);
+    config.speckleThresholdDb_ = json.value("speckleThresholdDb", config.speckleThresholdDb_);
+    config.noiseFloorDb_ = json.value("noiseFloorDb", config.noiseFloorDb_);
+    config.reductionDb_ = json.value("reductionDb", config.reductionDb_);
+    config.crushAmount_ = json.value("crushAmount", config.crushAmount_);
+    config.grainSize_ = json.value("grainSize", config.grainSize_);
+    config.grainAmountDb_ = json.value("grainAmountDb", config.grainAmountDb_);
+    config.feedbackAmount_ = json.value("feedbackAmount", config.feedbackAmount_);
+    config.foldGain_ = json.value("foldGain", config.foldGain_);
 }
 
 }  // namespace sound_mind::core

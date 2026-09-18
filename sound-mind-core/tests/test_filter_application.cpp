@@ -758,3 +758,385 @@ TEST_CASE("applyFilter's Sharpen, bound to an alternating MindWave, varies genui
     CHECK(bound.leftMagnitudeDb[4] == Catch::Approx(fullySharpened.leftMagnitudeDb[4]).margin(0.001));
     CHECK(bound.leftMagnitudeDb[5] == Catch::Approx(impulse[5]).margin(0.001));
 }
+
+// ---------------------------------------------------------------------------
+// Noise & distortion - v0.Y.36.1 Installment A.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// @brief A uniform `binCount` x `frameCount` composite - large enough for
+/// the statistical (density-based) Noise & distortion cases below to stay
+/// robust rather than flaky.
+StreamImage makeUniformGridComposite(std::uint32_t binCount, std::uint32_t frameCount, float leftDb, float rightDb) {
+    StreamImage composite;
+    composite.config.binCount = binCount;
+    composite.frameCount = frameCount;
+    const std::size_t cellCount = std::size_t{binCount} * frameCount;
+    composite.leftMagnitudeDb.assign(cellCount, leftDb);
+    composite.rightMagnitudeDb.assign(cellCount, rightDb);
+    composite.sharedPhaseRadians.assign(cellCount, 0.5f);
+    return composite;
+}
+
+}  // namespace
+
+TEST_CASE("applyFilter's SpeckleAdd is a no-op at zero density", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleAdd);
+    config.setSpeckleDensity(0.0f);
+    config.setSpeckleIntensity(1.0f);
+    const auto composite = makeUniformGridComposite(10, 10, -40.0f, -30.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's SpeckleAdd is a no-op at zero intensity", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleAdd);
+    config.setSpeckleDensity(1.0f);
+    config.setSpeckleIntensity(0.0f);
+    const auto composite = makeUniformGridComposite(10, 10, -40.0f, -30.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's SpeckleAdd hits roughly its own configured density of cells, deterministically",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleAdd);
+    config.setNoiseSeed(7u);
+    config.setSpeckleDensity(0.5f);
+    config.setSpeckleIntensity(1.0f);  // full jump to 0dB, easy to detect.
+    const auto composite = makeUniformGridComposite(20, 20, -40.0f, -40.0f);
+
+    const auto first = applyFilter(composite, config, ProjectSettings{});
+    const auto second = applyFilter(composite, config, ProjectSettings{});
+
+    // Deterministic - the same configuration applied twice agrees exactly.
+    REQUIRE(first.leftMagnitudeDb == second.leftMagnitudeDb);
+
+    const auto hitCount = std::count(first.leftMagnitudeDb.begin(), first.leftMagnitudeDb.end(), 0.0f);
+    const auto total = static_cast<std::ptrdiff_t>(first.leftMagnitudeDb.size());
+    // A generous band around the configured 50% density - 400 independent
+    // cells at p=0.5 landing outside [30%, 70%] is astronomically unlikely.
+    CHECK(hitCount > total * 3 / 10);
+    CHECK(hitCount < total * 7 / 10);
+}
+
+TEST_CASE("applyFilter's SpeckleAdd produces a different pattern for a different noiseSeed",
+          "[core][filter_application]") {
+    FilterConfiguration configA;
+    configA.setType(FilterType::SpeckleAdd);
+    configA.setNoiseSeed(1u);
+    configA.setSpeckleDensity(0.5f);
+    configA.setSpeckleIntensity(1.0f);
+    FilterConfiguration configB = configA;
+    configB.setNoiseSeed(2u);
+    const auto composite = makeUniformGridComposite(20, 20, -40.0f, -40.0f);
+
+    const auto filteredA = applyFilter(composite, configA, ProjectSettings{});
+    const auto filteredB = applyFilter(composite, configB, ProjectSettings{});
+
+    CHECK(filteredA.leftMagnitudeDb != filteredB.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's SpeckleAdd leaves phase untouched", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleAdd);
+    config.setSpeckleDensity(1.0f);
+    config.setSpeckleIntensity(1.0f);
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    for (const float phase : filtered.sharedPhaseRadians) {
+        CHECK(phase == 0.5f);
+    }
+}
+
+TEST_CASE("applyFilter's SpeckleRemove replaces an isolated outlier with its local median",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleRemove);
+    config.setSpeckleThresholdDb(10.0f);
+    auto composite = makeUniformGridComposite(5, 5, -40.0f, -40.0f);
+    const std::size_t spikeCell = 2 * 5 + 2;  // dead center - a full 3x3 neighborhood.
+    composite.leftMagnitudeDb[spikeCell] = 0.0f;  // a 40dB outlier, well past the threshold.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[spikeCell] == Catch::Approx(-40.0f));
+}
+
+TEST_CASE("applyFilter's SpeckleRemove leaves a cell within threshold of its local median untouched",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleRemove);
+    config.setSpeckleThresholdDb(10.0f);
+    auto composite = makeUniformGridComposite(5, 5, -40.0f, -40.0f);
+    const std::size_t cell = 2 * 5 + 2;
+    composite.leftMagnitudeDb[cell] = -35.0f;  // only 5dB off - within the 10dB threshold.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[cell] == Catch::Approx(-35.0f));
+}
+
+TEST_CASE("applyFilter's Denoise fully attenuates a cell well below the noise floor",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Denoise);
+    config.setNoiseFloorDb(-60.0f);
+    config.setReductionDb(24.0f);
+    const auto composite = makeUniformGridComposite(3, 3, -80.0f, -80.0f);  // 20dB below the floor.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-104.0f));  // full 24dB reduction applied.
+}
+
+TEST_CASE("applyFilter's Denoise leaves a cell well above the noise floor untouched",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Denoise);
+    config.setNoiseFloorDb(-60.0f);
+    config.setReductionDb(24.0f);
+    const auto composite = makeUniformGridComposite(3, 3, -20.0f, -20.0f);  // well above the floor.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-20.0f));
+}
+
+TEST_CASE("applyFilter's Denoise applies half its own reduction exactly at the noise floor",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Denoise);
+    config.setNoiseFloorDb(-60.0f);
+    config.setReductionDb(24.0f);
+    const auto composite = makeUniformGridComposite(3, 3, -60.0f, -60.0f);  // exactly at the floor - the knee's center.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-72.0f));  // -60 - (0.5 * 24).
+}
+
+TEST_CASE("applyFilter's BitDepthCrush is a no-op at crushAmount 0", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::BitDepthCrush);
+    config.setCrushAmount(0.0f);
+    const auto composite = makeUniformGridComposite(3, 3, -37.25f, -12.8f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb == composite.leftMagnitudeDb);
+    CHECK(filtered.rightMagnitudeDb == composite.rightMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's BitDepthCrush collapses nearby values onto the same quantized step at full amount",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::BitDepthCrush);
+    config.setCrushAmount(1.0f);  // levels = 2 - the harshest setting.
+    auto composite = makeUniformGridComposite(1, 2, 0.0f, 0.0f);
+    composite.leftMagnitudeDb = {-10.0f, -20.0f};  // both well within the same half of the range.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(filtered.leftMagnitudeDb[1]));
+}
+
+TEST_CASE("applyFilter's BitDepthCrush leaves phase untouched", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::BitDepthCrush);
+    config.setCrushAmount(1.0f);
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    for (const float phase : filtered.sharedPhaseRadians) {
+        CHECK(phase == 0.5f);
+    }
+}
+
+TEST_CASE("applyFilter's GranularNoise is a no-op at zero amount", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::GranularNoise);
+    config.setGrainAmountDb(0.0f);
+    const auto composite = makeUniformGridComposite(10, 10, -40.0f, -30.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's GranularNoise applies the exact same offset to every cell within a block, deterministically",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::GranularNoise);
+    config.setNoiseSeed(11u);
+    config.setGrainSize(2);
+    config.setGrainAmountDb(6.0f);
+    const auto composite = makeUniformGridComposite(4, 4, -40.0f, -40.0f);
+
+    const auto first = applyFilter(composite, config, ProjectSettings{});
+    const auto second = applyFilter(composite, config, ProjectSettings{});
+
+    REQUIRE(first.leftMagnitudeDb == second.leftMagnitudeDb);  // deterministic.
+    // Top-left 2x2 block (bin 0-1, frame 0-1) - all four cells share one offset.
+    const float offset = first.leftMagnitudeDb[0] - composite.leftMagnitudeDb[0];
+    CHECK(first.leftMagnitudeDb[1] == Catch::Approx(composite.leftMagnitudeDb[1] + offset));
+    CHECK(first.leftMagnitudeDb[4] == Catch::Approx(composite.leftMagnitudeDb[4] + offset));   // bin 1, frame 0.
+    CHECK(first.leftMagnitudeDb[5] == Catch::Approx(composite.leftMagnitudeDb[5] + offset));   // bin 1, frame 1.
+}
+
+TEST_CASE("applyFilter's DynamicSpeckle sets every cell to full loudness at density 1 and intensity 1, "
+          "regardless of its own live randomness",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::DynamicSpeckle);
+    config.setSpeckleDensity(1.0f);
+    config.setSpeckleIntensity(1.0f);
+    const auto composite = makeUniformGridComposite(6, 6, -40.0f, -50.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    for (const float db : filtered.leftMagnitudeDb) {
+        CHECK(db == Catch::Approx(0.0f));
+    }
+}
+
+TEST_CASE("applyFilter's DynamicSpeckle is a no-op at zero density", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::DynamicSpeckle);
+    config.setSpeckleDensity(0.0f);
+    config.setSpeckleIntensity(1.0f);
+    const auto composite = makeUniformGridComposite(10, 10, -40.0f, -30.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's DynamicSpeckle produces a genuinely different pattern from one call to the next",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::DynamicSpeckle);
+    config.setSpeckleDensity(0.5f);
+    config.setSpeckleIntensity(1.0f);
+    const auto composite = makeUniformGridComposite(20, 20, -40.0f, -40.0f);
+
+    const auto first = applyFilter(composite, config, ProjectSettings{});
+    const auto second = applyFilter(composite, config, ProjectSettings{});
+
+    // 100 independent 2x2 blocks at p=0.5 landing on the exact same pattern
+    // twice in a row is astronomically unlikely - a real regression (e.g.
+    // accidentally made hashCell()-deterministic) would fail this reliably.
+    CHECK(first.leftMagnitudeDb != second.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's FeedbackDistortion is a no-op at zero amount", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::FeedbackDistortion);
+    config.setFeedbackAmount(0.0f);
+    std::vector<float> profile = {-96.0f, -50.0f, 0.0f, -20.0f, -96.0f};
+    const auto composite = makeSingleRowComposite(profile);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    for (std::size_t i = 0; i < profile.size(); ++i) {
+        CHECK(filtered.leftMagnitudeDb[i] == Catch::Approx(profile[i]));
+    }
+}
+
+TEST_CASE("applyFilter's FeedbackDistortion produces a decaying smear following an impulse",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::FeedbackDistortion);
+    config.setFeedbackAmount(0.5f);
+    std::vector<float> impulse = {0.0f, -96.0f, -96.0f, -96.0f};
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // Hand-derived: y0=0 (seeded to its own original value); y1 = 0.5*
+    // (-96) + 0.5*0 = -48; y2 = 0.5*(-96) + 0.5*(-48) = -72; y3 = 0.5*
+    // (-96) + 0.5*(-72) = -84 - decaying back toward the floor, never
+    // discontinuous.
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(0.0f));
+    CHECK(filtered.leftMagnitudeDb[1] == Catch::Approx(-48.0f));
+    CHECK(filtered.leftMagnitudeDb[2] == Catch::Approx(-72.0f));
+    CHECK(filtered.leftMagnitudeDb[3] == Catch::Approx(-84.0f));
+}
+
+TEST_CASE("applyFilter's FeedbackDistortion clamps its own amount internally, staying stable past 1.0",
+          "[core][filter_application]") {
+    FilterConfiguration configHigh;
+    configHigh.setType(FilterType::FeedbackDistortion);
+    configHigh.setFeedbackAmount(10.0f);  // clamps to 0.99 internally.
+    FilterConfiguration configClamped = configHigh;
+    configClamped.setFeedbackAmount(0.99f);
+    std::vector<float> impulse = {0.0f, -96.0f, -96.0f, -96.0f};
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto filteredHigh = applyFilter(composite, configHigh, ProjectSettings{});
+    const auto filteredClamped = applyFilter(composite, configClamped, ProjectSettings{});
+
+    for (std::size_t i = 0; i < impulse.size(); ++i) {
+        CHECK(filteredHigh.leftMagnitudeDb[i] == Catch::Approx(filteredClamped.leftMagnitudeDb[i]));
+        CHECK(std::isfinite(filteredHigh.leftMagnitudeDb[i]));
+    }
+}
+
+TEST_CASE("applyFilter's SpectralWavefold is a no-op at foldGain 1.0", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralWavefold);
+    config.setFoldGain(1.0f);
+    const auto composite = makeUniformGridComposite(3, 3, -24.0f, -60.0f);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-24.0f).margin(0.01));
+    CHECK(filtered.rightMagnitudeDb[0] == Catch::Approx(-60.0f).margin(0.01));
+}
+
+TEST_CASE("applyFilter's SpectralWavefold folds a value exceeding the threshold back into range",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralWavefold);
+    config.setFoldGain(2.0f);
+    const auto composite = makeUniformGridComposite(1, 1, -24.0f, -24.0f);  // unit = 0.75.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // unit*gain = 1.5 -> triangle-folds to 0.5 -> back to -48dB.
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-48.0f).margin(0.01));
+}
+
+TEST_CASE("applyFilter's SpectralWavefold produces a second fold at a higher gain",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralWavefold);
+    config.setFoldGain(4.0f);
+    const auto composite = makeUniformGridComposite(1, 1, -24.0f, -24.0f);  // unit = 0.75.
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // unit*gain = 3.0 -> triangle-folds to 1.0 -> back to 0dB.
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("applyFilter's SpectralWavefold leaves phase untouched", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralWavefold);
+    config.setFoldGain(3.0f);
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    for (const float phase : filtered.sharedPhaseRadians) {
+        CHECK(phase == 0.5f);
+    }
+}

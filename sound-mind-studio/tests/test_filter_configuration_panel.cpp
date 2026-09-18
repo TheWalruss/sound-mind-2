@@ -386,3 +386,207 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsAllFiveCombosWitho
         QCOMPARE(combo->currentText(), QStringLiteral("Slow Pulse"));
     }
 }
+
+// --- v0.Y.36.1 Installment A: Noise & distortion -----------------------
+
+namespace {
+
+/// @brief Every one of the eight new Noise & distortion groups' own
+/// object name - shared by every test below that needs to iterate them.
+const std::array<QString, 8> kNoiseGroupNames{{
+    QStringLiteral("speckleAddGroup"),
+    QStringLiteral("speckleRemoveGroup"),
+    QStringLiteral("denoiseGroup"),
+    QStringLiteral("bitDepthCrushGroup"),
+    QStringLiteral("granularNoiseGroup"),
+    QStringLiteral("dynamicSpeckleGroup"),
+    QStringLiteral("feedbackDistortionGroup"),
+    QStringLiteral("spectralWavefoldGroup"),
+}};
+
+const std::array<FilterType, 8> kNoiseTypesInGroupOrder{{
+    FilterType::SpeckleAdd,
+    FilterType::SpeckleRemove,
+    FilterType::Denoise,
+    FilterType::BitDepthCrush,
+    FilterType::GranularNoise,
+    FilterType::DynamicSpeckle,
+    FilterType::FeedbackDistortion,
+    FilterType::SpectralWavefold,
+}};
+
+}  // namespace
+
+void FilterConfigurationPanelTest::freshPanelHasAllEightNoiseGroupsHidden() {
+    const FilterConfigurationPanel panel;
+    for (const auto& groupName : kNoiseGroupNames) {
+        QVERIFY(panel.findChild<QGroupBox*>(groupName)->isHidden());
+    }
+}
+
+void FilterConfigurationPanelTest::selectingEachNoiseTypeShowsOnlyItsOwnGroup() {
+    FilterConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
+    QVERIFY(combo != nullptr);
+
+    for (std::size_t i = 0; i < kNoiseTypesInGroupOrder.size(); ++i) {
+        const int index = combo->findData(QVariant::fromValue(static_cast<int>(kNoiseTypesInGroupOrder[i])));
+        QVERIFY(index >= 0);
+        combo->setCurrentIndex(index);
+
+        for (std::size_t j = 0; j < kNoiseGroupNames.size(); ++j) {
+            const bool shouldBeVisible = (i == j);
+            QCOMPARE(!panel.findChild<QGroupBox*>(kNoiseGroupNames[j])->isHidden(), shouldBeVisible);
+        }
+    }
+}
+
+void FilterConfigurationPanelTest::changingSpeckleAddDensityAndIntensityUpdateConfigAndEmit() {
+    FilterConfigurationPanel panel;
+    auto* densitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddDensitySpinBox"));
+    auto* intensitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddIntensitySpinBox"));
+    QVERIFY(densitySpinBox != nullptr);
+    QVERIFY(intensitySpinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    densitySpinBox->setValue(0.3);
+    intensitySpinBox->setValue(0.6);
+
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(panel.filterConfiguration().speckleDensity(), 0.3f);
+    QCOMPARE(panel.filterConfiguration().speckleIntensity(), 0.6f);
+}
+
+void FilterConfigurationPanelTest::changingSpeckleThresholdUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleThresholdSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(20.0);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().speckleThresholdDb(), 20.0f);
+}
+
+void FilterConfigurationPanelTest::changingDenoiseNoiseFloorAndReductionUpdateConfigAndEmit() {
+    FilterConfigurationPanel panel;
+    auto* floorSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("noiseFloorSpinBox"));
+    auto* reductionSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("reductionSpinBox"));
+    QVERIFY(floorSpinBox != nullptr);
+    QVERIFY(reductionSpinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    floorSpinBox->setValue(-50.0);
+    reductionSpinBox->setValue(18.0);
+
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(panel.filterConfiguration().noiseFloorDb(), -50.0f);
+    QCOMPARE(panel.filterConfiguration().reductionDb(), 18.0f);
+}
+
+void FilterConfigurationPanelTest::changingCrushAmountUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("crushAmountSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(0.9);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().crushAmount(), 0.9f);
+}
+
+void FilterConfigurationPanelTest::changingGrainSizeAndAmountUpdateConfigAndEmit() {
+    FilterConfigurationPanel panel;
+    auto* sizeSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("grainSizeSpinBox"));
+    auto* amountSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("grainAmountSpinBox"));
+    QVERIFY(sizeSpinBox != nullptr);
+    QVERIFY(amountSpinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    sizeSpinBox->setValue(8);
+    amountSpinBox->setValue(3.0);
+
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(panel.filterConfiguration().grainSize(), 8);
+    QCOMPARE(panel.filterConfiguration().grainAmountDb(), 3.0f);
+}
+
+void FilterConfigurationPanelTest::changingDynamicSpeckleDensityAndIntensityUpdateTheSameFieldsAsSpeckleAdd() {
+    FilterConfigurationPanel panel;
+    auto* densitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("dynamicSpeckleDensitySpinBox"));
+    auto* intensitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("dynamicSpeckleIntensitySpinBox"));
+    QVERIFY(densitySpinBox != nullptr);
+    QVERIFY(intensitySpinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    densitySpinBox->setValue(0.4);
+    intensitySpinBox->setValue(0.7);
+
+    QCOMPARE(spy.count(), 2);
+    // Shares SpeckleAdd's own underlying fields - see this class's own docs.
+    QCOMPARE(panel.filterConfiguration().speckleDensity(), 0.4f);
+    QCOMPARE(panel.filterConfiguration().speckleIntensity(), 0.7f);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddDensitySpinBox"))->value(), 0.4);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddIntensitySpinBox"))->value(), 0.7);
+}
+
+void FilterConfigurationPanelTest::changingFeedbackAmountUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("feedbackAmountSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(0.75);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().feedbackAmount(), 0.75f);
+}
+
+void FilterConfigurationPanelTest::changingFoldGainUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("foldGainSpinBox"));
+    QVERIFY(spinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    spinBox->setValue(4.0);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().foldGain(), 4.0f);
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsAllNoiseSpinBoxesWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    FilterConfiguration config;
+    config.setType(FilterType::GranularNoise);
+    config.setSpeckleDensity(0.3f);
+    config.setSpeckleIntensity(0.6f);
+    config.setSpeckleThresholdDb(15.0f);
+    config.setNoiseFloorDb(-45.0f);
+    config.setReductionDb(15.0f);
+    config.setCrushAmount(0.4f);
+    config.setGrainSize(6);
+    config.setGrainAmountDb(4.0f);
+    config.setFeedbackAmount(0.6f);
+    config.setFoldGain(3.0f);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddDensitySpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddIntensitySpinBox"))->value(), 0.6);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("dynamicSpeckleDensitySpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("dynamicSpeckleIntensitySpinBox"))->value(), 0.6);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleThresholdSpinBox"))->value(), 15.0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("noiseFloorSpinBox"))->value(), -45.0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reductionSpinBox"))->value(), 15.0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("crushAmountSpinBox"))->value(), 0.4);
+    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("grainSizeSpinBox"))->value(), 6);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("grainAmountSpinBox"))->value(), 4.0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("feedbackAmountSpinBox"))->value(), 0.6);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("foldGainSpinBox"))->value(), 3.0);
+    // GranularNoise's own group is now the visible one.
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("granularNoiseGroup"))->isHidden());
+}

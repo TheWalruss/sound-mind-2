@@ -29,4 +29,17 @@ private slots:
     void changingABindCombosEmitsFilterConfigurationChangedWithTheNewBinding();
     void selectingNoneUnbindsAndEmits();
     void setFilterConfigurationSyncsAllFiveCombosWithoutEmitting();
+
+    // --- v0.Y.36.1 Installment A: Noise & distortion ---
+    void freshPanelHasAllEightNoiseGroupsHidden();
+    void selectingEachNoiseTypeShowsOnlyItsOwnGroup();
+    void changingSpeckleAddDensityAndIntensityUpdateConfigAndEmit();
+    void changingSpeckleThresholdUpdatesConfigAndEmits();
+    void changingDenoiseNoiseFloorAndReductionUpdateConfigAndEmit();
+    void changingCrushAmountUpdatesConfigAndEmits();
+    void changingGrainSizeAndAmountUpdateConfigAndEmit();
+    void changingDynamicSpeckleDensityAndIntensityUpdateTheSameFieldsAsSpeckleAdd();
+    void changingFeedbackAmountUpdatesConfigAndEmits();
+    void changingFoldGainUpdatesConfigAndEmits();
+    void setFilterConfigurationSyncsAllNoiseSpinBoxesWithoutEmitting();
 };

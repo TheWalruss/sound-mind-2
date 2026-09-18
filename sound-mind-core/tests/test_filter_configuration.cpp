@@ -170,3 +170,134 @@ TEST_CASE("A FilterConfiguration loads from JSON missing the five MindWave bindi
     REQUIRE_FALSE(restored.directionalBlurAngleMindWave().has_value());
     REQUIRE_FALSE(restored.sharpenAmountMindWave().has_value());
 }
+
+// --- v0.Y.36.1 Installment A: Noise & distortion ----------------------
+
+TEST_CASE("A fresh FilterConfiguration has sensible Noise & distortion defaults", "[core][filter_configuration]") {
+    const FilterConfiguration config;
+    REQUIRE(config.speckleDensity() == 0.05f);
+    REQUIRE(config.speckleIntensity() == 0.8f);
+    REQUIRE(config.speckleThresholdDb() == 12.0f);
+    REQUIRE(config.noiseFloorDb() == -60.0f);
+    REQUIRE(config.reductionDb() == 24.0f);
+    REQUIRE(config.crushAmount() == 0.5f);
+    REQUIRE(config.grainSize() == 4);
+    REQUIRE(config.grainAmountDb() == 6.0f);
+    REQUIRE(config.feedbackAmount() == 0.5f);
+    REQUIRE(config.foldGain() == 2.0f);
+}
+
+TEST_CASE("Two freshly-constructed FilterConfigurations get different noise seeds", "[core][filter_configuration]") {
+    // Not a hard guarantee (std::random_device could theoretically repeat),
+    // but astronomically unlikely for two back-to-back constructions - a
+    // real, catchable regression if noiseSeed() were ever accidentally
+    // hardcoded to a fixed default instead of freshly seeded.
+    const FilterConfiguration first;
+    const FilterConfiguration second;
+    REQUIRE(first.noiseSeed() != second.noiseSeed());
+}
+
+TEST_CASE("A FilterConfiguration's noiseSeed can be set explicitly", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setNoiseSeed(42u);
+    REQUIRE(config.noiseSeed() == 42u);
+}
+
+TEST_CASE("Each of a FilterConfiguration's Noise & distortion parameters can be changed",
+          "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setSpeckleDensity(0.2f);
+    config.setSpeckleIntensity(0.5f);
+    config.setSpeckleThresholdDb(20.0f);
+    config.setNoiseFloorDb(-40.0f);
+    config.setReductionDb(12.0f);
+    config.setCrushAmount(0.9f);
+    config.setGrainSize(8);
+    config.setGrainAmountDb(3.0f);
+    config.setFeedbackAmount(0.75f);
+    config.setFoldGain(4.0f);
+
+    REQUIRE(config.speckleDensity() == 0.2f);
+    REQUIRE(config.speckleIntensity() == 0.5f);
+    REQUIRE(config.speckleThresholdDb() == 20.0f);
+    REQUIRE(config.noiseFloorDb() == -40.0f);
+    REQUIRE(config.reductionDb() == 12.0f);
+    REQUIRE(config.crushAmount() == 0.9f);
+    REQUIRE(config.grainSize() == 8);
+    REQUIRE(config.grainAmountDb() == 3.0f);
+    REQUIRE(config.feedbackAmount() == 0.75f);
+    REQUIRE(config.foldGain() == 4.0f);
+}
+
+TEST_CASE("Every new Noise & distortion FilterType can be set", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    for (const FilterType type : {FilterType::SpeckleAdd, FilterType::SpeckleRemove, FilterType::Denoise,
+                                   FilterType::BitDepthCrush, FilterType::GranularNoise, FilterType::DynamicSpeckle,
+                                   FilterType::FeedbackDistortion, FilterType::SpectralWavefold}) {
+        config.setType(type);
+        REQUIRE(config.type() == type);
+    }
+}
+
+TEST_CASE("A FilterConfiguration's Noise & distortion parameters round-trip through JSON",
+          "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setType(FilterType::GranularNoise);
+    config.setNoiseSeed(123u);
+    config.setSpeckleDensity(0.2f);
+    config.setSpeckleIntensity(0.5f);
+    config.setSpeckleThresholdDb(20.0f);
+    config.setNoiseFloorDb(-40.0f);
+    config.setReductionDb(12.0f);
+    config.setCrushAmount(0.9f);
+    config.setGrainSize(8);
+    config.setGrainAmountDb(3.0f);
+    config.setFeedbackAmount(0.75f);
+    config.setFoldGain(4.0f);
+
+    const nlohmann::json json = config;
+    const FilterConfiguration roundTripped = json.get<FilterConfiguration>();
+
+    REQUIRE(roundTripped.type() == FilterType::GranularNoise);
+    REQUIRE(roundTripped.noiseSeed() == 123u);
+    REQUIRE(roundTripped.speckleDensity() == 0.2f);
+    REQUIRE(roundTripped.speckleIntensity() == 0.5f);
+    REQUIRE(roundTripped.speckleThresholdDb() == 20.0f);
+    REQUIRE(roundTripped.noiseFloorDb() == -40.0f);
+    REQUIRE(roundTripped.reductionDb() == 12.0f);
+    REQUIRE(roundTripped.crushAmount() == 0.9f);
+    REQUIRE(roundTripped.grainSize() == 8);
+    REQUIRE(roundTripped.grainAmountDb() == 3.0f);
+    REQUIRE(roundTripped.feedbackAmount() == 0.75f);
+    REQUIRE(roundTripped.foldGain() == 4.0f);
+}
+
+TEST_CASE("A FilterConfiguration loads from JSON missing every Noise & distortion key "
+          "(a configuration saved before v0.Y.36.1 Installment A) using sensible defaults",
+          "[core][filter_configuration]") {
+    const nlohmann::json json{{"type", "uniformBlur"},
+                               {"blurSigma", 2.0f},
+                               {"medianSize", 3},
+                               {"directionalBlurLength", 10},
+                               {"directionalBlurAngleDegrees", 0.0f},
+                               {"sharpenAmount", 1.0f},
+                               {"toneCurvePoints", std::vector<std::array<float, 2>>{{0.0f, 0.0f}, {1.0f, 1.0f}}},
+                               {"frequencyGradient", FilterConfiguration{}.frequencyGradient()}};
+
+    const FilterConfiguration restored = json.get<FilterConfiguration>();
+
+    // noiseSeed() isn't asserted to an exact value here - a configuration
+    // missing this key keeps whatever fresh, real seed its own default
+    // construction already generated (see from_json()'s own docs), not a
+    // fixed fallback - only the other, plain-scalar defaults are checked.
+    REQUIRE(restored.speckleDensity() == 0.05f);
+    REQUIRE(restored.speckleIntensity() == 0.8f);
+    REQUIRE(restored.speckleThresholdDb() == 12.0f);
+    REQUIRE(restored.noiseFloorDb() == -60.0f);
+    REQUIRE(restored.reductionDb() == 24.0f);
+    REQUIRE(restored.crushAmount() == 0.5f);
+    REQUIRE(restored.grainSize() == 4);
+    REQUIRE(restored.grainAmountDb() == 6.0f);
+    REQUIRE(restored.feedbackAmount() == 0.5f);
+    REQUIRE(restored.foldGain() == 2.0f);
+}

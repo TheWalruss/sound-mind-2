@@ -108,6 +108,52 @@ struct FilterParameterMindWaves {
  *   mean a fresh Filter layer of this type has no effect until a point
  *   is moved.
  *
+ * - **`SpeckleAdd`/`SpeckleRemove`/`Denoise`/`BitDepthCrush`/
+ *   `GranularNoise`/`DynamicSpeckle`/`FeedbackDistortion`/
+ *   `SpectralWavefold`** (`v0.Y.36.1` Installment A, "Noise & distortion"):
+ *   all eight operate on `leftMagnitudeDb`/`rightMagnitudeDb`
+ *   independently, directly in dB space, phase left untouched - the same
+ *   contract every prior filter type keeps. None of the eight bind to a
+ *   MindWave yet (see `FilterConfiguration`'s own docs for why that's a
+ *   deliberate deferral, not an oversight).
+ *   - `SpeckleAdd`: randomly boosts `speckleDensity()`'s own fraction of
+ *     cells toward `0`dB by `speckleIntensity()`, deterministically -
+ *     which cells get hit is a hash of `noiseSeed()` and the cell's own
+ *     `(bin, frame)` position, not a live RNG, so the same configuration
+ *     always produces the same pattern (stable across every recomposite
+ *     and reload).
+ *   - `SpeckleRemove`: replaces a cell with its own local 3x3 median only
+ *     where it differs by more than `speckleThresholdDb()` - narrower
+ *     than `EdgePreservingBlur`'s own always-applied median, which also
+ *     smooths real detail.
+ *   - `Denoise`: a per-cell downward expander/spectral gate - attenuates
+ *     anything at or below `noiseFloorDb()` by up to `reductionDb()`,
+ *     with a 6dB soft knee straddling the floor to avoid a hard on/off
+ *     click right at the threshold.
+ *   - `BitDepthCrush`: quantizes the `dbToUnit()`-normalized loudness
+ *     into `lerp(256, 2, crushAmount())` discrete steps - a true no-op at
+ *     `crushAmount() <= 0`.
+ *   - `GranularNoise`: like `SpeckleAdd`, deterministic per `noiseSeed()`,
+ *     but hashed per `grainSize()` x `grainSize()` *block* (not per cell)
+ *     - every cell in a block gets the exact same random dB offset within
+ *     `[-grainAmountDb(), +grainAmountDb()]`.
+ *   - `DynamicSpeckle`: `SpeckleAdd`'s live-noise sibling, sharing its
+ *     `speckleDensity()`/`speckleIntensity()` fields - deliberately *not*
+ *     `noiseSeed()`-deterministic, a genuinely fresh `thread_local` RNG
+ *     roll every call (visible flicker across recomposites, confirmed
+ *     with the user), computed over fixed 2x2 blocks rather than per cell
+ *     to stay cheap on a large canvas.
+ *   - `FeedbackDistortion`: a one-pole recursive filter along the time
+ *     axis per bin (`y[frame] = (1 - amount) * x[frame] + amount *
+ *     y[frame - 1]`, `amount` clamped to `[0, 0.99]` internally for
+ *     stability) - a decaying resonant smear, not a static effect. Each
+ *     bin's own first frame is always exactly unchanged (nothing to feed
+ *     back from yet).
+ *   - `SpectralWavefold`: a classic wavefolder - loudness beyond a
+ *     threshold reflects back into range via a period-2 triangle wave
+ *     rather than clipping, gained by `foldGain()` first (`1.0` is a true
+ *     no-op; higher values produce progressively more folds).
+ *
  * As of `v0.Y.31.1` (MindWaves v1) Installment D, any of the four
  * kernel-shape parameters (`blurSigma`/`medianSize`/
  * `directionalBlurLength`/`directionalBlurAngleDegrees`) named in

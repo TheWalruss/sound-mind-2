@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <random>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -29,9 +30,11 @@ using MindWaveId = std::uint64_t;
  * @note This milestone's own confirmed scope (`docs/sound-mind-roadmap.md`'s
  *       `v0.Y.28.1`): all three "Blur & focus" variants, Sharpen, a Tone
  *       Curve, and Frequency-Axis Gradient (the Equalizer layer's own
- *       basis) - the design doc's other Filter Layer families (Noise &
- *       distortion, Geometric, Space) aren't represented here yet, left
- *       for a later filter-set expansion.
+ *       basis). `v0.Y.36.1` (Deferred Filters) Installment A added the
+ *       full "Noise & distortion" family below - the design doc's
+ *       remaining families (Geometric, the rest of Tonal/Spectral
+ *       shaping, Space) aren't represented here yet, left for later
+ *       installments of that same milestone.
  */
 enum class FilterType {
     /// @brief Isotropic softening - Gaussian blur, per `blurSigma()`.
@@ -51,6 +54,35 @@ enum class FilterType {
     /// @brief A gradient controlling loudness across the frequency axis -
     ///        the Equalizer layer's own basis, per `frequencyGradient()`.
     FrequencyAxisGradient,
+    /// @brief Randomly boosts a fraction of cells toward full loudness -
+    ///        deterministic per `noiseSeed()`/cell position, per
+    ///        `speckleDensity()`/`speckleIntensity()`.
+    SpeckleAdd,
+    /// @brief Speckle Add's own inverse - replaces a cell with its local
+    ///        median only where it stands out as an outlier, per
+    ///        `speckleThresholdDb()`.
+    SpeckleRemove,
+    /// @brief A per-cell downward expander/spectral gate - attenuates
+    ///        anything below `noiseFloorDb()` by up to `reductionDb()`.
+    Denoise,
+    /// @brief Quantizes loudness into a limited number of discrete steps -
+    ///        a bitcrush-style effect, per `crushAmount()`.
+    BitDepthCrush,
+    /// @brief Overlays a coarse, block-based random texture - deterministic
+    ///        per `noiseSeed()`/block position, per `grainSize()`/
+    ///        `grainAmountDb()`.
+    GranularNoise,
+    /// @brief Speckle Add's own live-noise sibling - the same
+    ///        `speckleDensity()`/`speckleIntensity()` knobs, but computed
+    ///        over fixed 2x2 blocks with genuinely fresh randomness on
+    ///        every recomposite, not `noiseSeed()`-deterministic.
+    DynamicSpeckle,
+    /// @brief A resonant, decaying smear along the time axis - a one-pole
+    ///        recursive filter per bin, per `feedbackAmount()`.
+    FeedbackDistortion,
+    /// @brief A classic wavefolder - loudness beyond a threshold reflects
+    ///        back into range rather than clipping, per `foldGain()`.
+    SpectralWavefold,
 };
 
 // clang-format off
@@ -61,6 +93,14 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
     {FilterType::Sharpen, "sharpen"},
     {FilterType::ToneCurve, "toneCurve"},
     {FilterType::FrequencyAxisGradient, "frequencyAxisGradient"},
+    {FilterType::SpeckleAdd, "speckleAdd"},
+    {FilterType::SpeckleRemove, "speckleRemove"},
+    {FilterType::Denoise, "denoise"},
+    {FilterType::BitDepthCrush, "bitDepthCrush"},
+    {FilterType::GranularNoise, "granularNoise"},
+    {FilterType::DynamicSpeckle, "dynamicSpeckle"},
+    {FilterType::FeedbackDistortion, "feedbackDistortion"},
+    {FilterType::SpectralWavefold, "spectralWavefold"},
 })
 // clang-format on
 
@@ -87,7 +127,12 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
  * own `*MindWave()` accessor and `docs/sound-mind-design.md`'s "Filter
  * parameters". `toneCurvePoints`/`frequencyGradient` have no such binding:
  * neither is a single number, so there's nothing for a MindWave's own
- * `[0, 1]` output to become the *value* of.
+ * `[0, 1]` output to become the *value* of. **The eight `v0.Y.36.1`
+ * Installment A "Noise & distortion" parameters below have no MindWave
+ * binding either, deliberately** - matching how the original six filter
+ * types shipped unbound in `v0.Y.28.1` and only gained binding in a later,
+ * dedicated milestone (`v0.Y.31.1` Installment D); binding these eight is
+ * left the same way, a known future-work item, not attempted here.
  */
 class FilterConfiguration {
 public:
@@ -96,8 +141,10 @@ public:
     ///        own docs) - a fresh Filter layer has no audible effect
     ///        until its own parameters are deliberately set, the same
     ///        "nothing happens by accident" default `ToolConfiguration`'s
-    ///        own gradient already establishes for painting.
-    FilterConfiguration() = default;
+    ///        own gradient already establishes for painting. Also seeds
+    ///        `noiseSeed()` fresh via `std::random_device` - see its own
+    ///        docs for why every configuration needs its own seed.
+    FilterConfiguration() : noiseSeed_(std::random_device{}()) {}
 
     /// @brief Which filter algorithm this configures.
     /// @return The currently configured filter type.
@@ -307,6 +354,166 @@ public:
     /// @return The current gradient.
     [[nodiscard]] Gradient& frequencyGradient() noexcept { return frequencyGradient_; }
 
+    /**
+     * @brief The seed `SpeckleAdd`/`GranularNoise` hash against cell
+     *        position for their own deterministic noise - see
+     *        `applyFilter()`'s own docs. Generated fresh (via
+     *        `std::random_device`) whenever a `FilterConfiguration` is
+     *        default-constructed, then persisted like any other field, so
+     *        a given Filter layer's own noise pattern stays stable across
+     *        every recomposite (any edit, scroll, or repaint) and reload,
+     *        while a *different* Filter layer (or the same one recreated)
+     *        doesn't look identical to it. `DynamicSpeckle` deliberately
+     *        ignores this - see its own docs.
+     * @return The current seed.
+     */
+    [[nodiscard]] std::uint32_t noiseSeed() const noexcept { return noiseSeed_; }
+
+    /// @brief Sets `noiseSeed()` explicitly - mainly for deterministic
+    ///        testing; a fresh `FilterConfiguration` already seeds itself
+    ///        randomly, so there's no ordinary-use reason to call this.
+    /// @param seed The new seed.
+    void setNoiseSeed(std::uint32_t seed) noexcept { noiseSeed_ = seed; }
+
+    /**
+     * @brief `SpeckleAdd`/`DynamicSpeckle`'s own shared density - the
+     *        fraction of cells (`SpeckleAdd`) or 2x2 blocks
+     *        (`DynamicSpeckle`) that get hit on a given application, in
+     *        `[0, 1]`.
+     * @return The current density; meaningless unless `type()` is
+     *         `SpeckleAdd` or `DynamicSpeckle`. Not clamped here.
+     */
+    [[nodiscard]] float speckleDensity() const noexcept { return speckleDensity_; }
+
+    /// @brief Sets `SpeckleAdd`/`DynamicSpeckle`'s own shared density.
+    /// @param density The new density, intended within `[0, 1]`.
+    void setSpeckleDensity(float density) noexcept { speckleDensity_ = density; }
+
+    /**
+     * @brief `SpeckleAdd`/`DynamicSpeckle`'s own shared intensity - how far
+     *        a hit cell blends toward full loudness (`0`dB), in `[0, 1]`
+     *        (`0` = no change even when hit, `1` = jumps all the way to
+     *        `0`dB).
+     * @return The current intensity; meaningless unless `type()` is
+     *         `SpeckleAdd` or `DynamicSpeckle`. Not clamped here.
+     */
+    [[nodiscard]] float speckleIntensity() const noexcept { return speckleIntensity_; }
+
+    /// @brief Sets `SpeckleAdd`/`DynamicSpeckle`'s own shared intensity.
+    /// @param intensity The new intensity, intended within `[0, 1]`.
+    void setSpeckleIntensity(float intensity) noexcept { speckleIntensity_ = intensity; }
+
+    /**
+     * @brief `SpeckleRemove`'s own outlier threshold, in dB - a cell more
+     *        than this many dB louder or quieter than its own local
+     *        (3x3) median is replaced by that median; everything else is
+     *        left untouched.
+     * @return The current threshold; meaningless unless `type()` is
+     *         `SpeckleRemove`. Not clamped here.
+     */
+    [[nodiscard]] float speckleThresholdDb() const noexcept { return speckleThresholdDb_; }
+
+    /// @brief Sets `SpeckleRemove`'s own outlier threshold.
+    /// @param thresholdDb The new threshold, in dB; intended to be positive.
+    void setSpeckleThresholdDb(float thresholdDb) noexcept { speckleThresholdDb_ = thresholdDb; }
+
+    /**
+     * @brief `Denoise`'s own noise-floor threshold, in dB - cells at or
+     *        below this loudness (with a soft knee, not a hard cutoff)
+     *        are attenuated by up to `reductionDb()`.
+     * @return The current floor; meaningless unless `type()` is `Denoise`.
+     *         Not clamped here.
+     */
+    [[nodiscard]] float noiseFloorDb() const noexcept { return noiseFloorDb_; }
+
+    /// @brief Sets `Denoise`'s own noise-floor threshold.
+    /// @param floorDb The new floor, in dB.
+    void setNoiseFloorDb(float floorDb) noexcept { noiseFloorDb_ = floorDb; }
+
+    /**
+     * @brief `Denoise`'s own maximum attenuation, in dB - applied in full
+     *        to a cell well below `noiseFloorDb()`, ramping to none at
+     *        the floor's own soft-knee edge.
+     * @return The current reduction; meaningless unless `type()` is
+     *         `Denoise`. Not clamped here.
+     */
+    [[nodiscard]] float reductionDb() const noexcept { return reductionDb_; }
+
+    /// @brief Sets `Denoise`'s own maximum attenuation.
+    /// @param reductionDb The new reduction, in dB; intended to be positive.
+    void setReductionDb(float reductionDb) noexcept { reductionDb_ = reductionDb; }
+
+    /**
+     * @brief `BitDepthCrush`'s own strength, in `[0, 1]` - `0` is a true
+     *        no-op (identity, no quantization at all); `1` quantizes down
+     *        to a harsh, roughly 2-level loudness range.
+     * @return The current amount; meaningless unless `type()` is
+     *         `BitDepthCrush`. Not clamped here.
+     */
+    [[nodiscard]] float crushAmount() const noexcept { return crushAmount_; }
+
+    /// @brief Sets `BitDepthCrush`'s own strength.
+    /// @param amount The new amount, intended within `[0, 1]`.
+    void setCrushAmount(float amount) noexcept { crushAmount_ = amount; }
+
+    /**
+     * @brief `GranularNoise`'s own block size, in bins/columns - the
+     *        composite is divided into `grainSize()` x `grainSize()`
+     *        blocks, each getting one random dB offset applied uniformly
+     *        across every cell in it.
+     * @return The current size; meaningless unless `type()` is
+     *         `GranularNoise`. Not clamped here.
+     */
+    [[nodiscard]] int grainSize() const noexcept { return grainSize_; }
+
+    /// @brief Sets `GranularNoise`'s own block size.
+    /// @param size The new size, in bins/columns; intended to be positive.
+    void setGrainSize(int size) noexcept { grainSize_ = size; }
+
+    /**
+     * @brief `GranularNoise`'s own per-block offset range, in dB - each
+     *        block's own random offset falls within `[-grainAmountDb(),
+     *        +grainAmountDb()]`.
+     * @return The current amount; meaningless unless `type()` is
+     *         `GranularNoise`. Not clamped here.
+     */
+    [[nodiscard]] float grainAmountDb() const noexcept { return grainAmountDb_; }
+
+    /// @brief Sets `GranularNoise`'s own per-block offset range.
+    /// @param amountDb The new amount, in dB; intended to be positive.
+    void setGrainAmountDb(float amountDb) noexcept { grainAmountDb_ = amountDb; }
+
+    /**
+     * @brief `FeedbackDistortion`'s own resonance amount, in `[0, 1)` - a
+     *        one-pole recursive filter along the time axis per bin
+     *        (`y[frame] = (1 - amount) * x[frame] + amount * y[frame -
+     *        1]`); `0` is a true no-op (identity), values approaching `1`
+     *        ring/smear for progressively longer. Internally clamped to
+     *        `0.99` regardless of what's stored here, to guarantee
+     *        stability.
+     * @return The current amount; meaningless unless `type()` is
+     *         `FeedbackDistortion`. Not clamped here.
+     */
+    [[nodiscard]] float feedbackAmount() const noexcept { return feedbackAmount_; }
+
+    /// @brief Sets `FeedbackDistortion`'s own resonance amount.
+    /// @param amount The new amount, intended within `[0, 1)`.
+    void setFeedbackAmount(float amount) noexcept { feedbackAmount_ = amount; }
+
+    /**
+     * @brief `SpectralWavefold`'s own pre-fold gain - `1.0` is a true
+     *        no-op (identity); higher values push loudness further past
+     *        the fold threshold, producing progressively more folds (and
+     *        harsher, more harmonically dense distortion).
+     * @return The current gain; meaningless unless `type()` is
+     *         `SpectralWavefold`. Not clamped here.
+     */
+    [[nodiscard]] float foldGain() const noexcept { return foldGain_; }
+
+    /// @brief Sets `SpectralWavefold`'s own pre-fold gain.
+    /// @param gain The new gain; intended to be at least `1.0`.
+    void setFoldGain(float gain) noexcept { foldGain_ = gain; }
+
     friend void to_json(nlohmann::json& json, const FilterConfiguration& config);
     friend void from_json(const nlohmann::json& json, FilterConfiguration& config);
 
@@ -324,6 +531,17 @@ private:
     std::optional<MindWaveId> sharpenAmountMindWave_;
     std::vector<std::array<float, 2>> toneCurvePoints_{{0.0f, 0.0f}, {1.0f, 1.0f}};
     Gradient frequencyGradient_;
+    std::uint32_t noiseSeed_;
+    float speckleDensity_ = 0.05f;
+    float speckleIntensity_ = 0.8f;
+    float speckleThresholdDb_ = 12.0f;
+    float noiseFloorDb_ = -60.0f;
+    float reductionDb_ = 24.0f;
+    float crushAmount_ = 0.5f;
+    int grainSize_ = 4;
+    float grainAmountDb_ = 6.0f;
+    float feedbackAmount_ = 0.5f;
+    float foldGain_ = 2.0f;
 };
 
 /// @brief Serializes a filter configuration to its JSON representation.

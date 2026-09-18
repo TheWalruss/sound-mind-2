@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.36.1] - 2026-09-18
+
+Deferred Filters, Installment A: **Noise & distortion**, in full - `docs/sound-mind-design.md`'s "Filter Layer". First installment of the `v0.Y.36.1` milestone; Geometric, the rest of Tonal/Spectral shaping, and Space remain later installments.
+
+### Added
+
+- **Eight new Filter Layer types**, selectable from the Filter Configuration Panel's own Filter Type drop-down: **Speckle Add** (randomly boosts a fraction of cells toward full loudness), **Speckle Remove** (removes isolated loud/quiet outliers without smoothing real detail), **Denoise** (attenuates anything below a noise floor), **Bit-Depth Crush** (a lo-fi quantization effect), **Granular Noise** (a coarse, blocky noise texture), **Dynamic Speckle** (Speckle Add's live counterpart - flickers on every edit/scroll/repaint instead of staying fixed), **Feedback Distortion** (a resonant, decaying smear along time), and **Spectral Wavefold** (a classic wavefolder distortion).
+- **Speckle Add, Granular Noise, and every other Filter Layer type stay visually stable across repaints** - their noise pattern only changes when you touch that layer's own controls or the content underneath, not on every unrelated edit elsewhere in the project. Dynamic Speckle is the deliberate exception, genuinely re-randomizing live.
+
+Full regression: sound-mind-core 561/561 (up from 529), sound-mind-studio all 35 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #102.
+
 ## [0.0.35.3] - 2026-09-18
 
 Deferred Selection, Installment C: Rectangle's own **rotate handle** and **Warp** (displacing a selection's content along a hand-drawn curve) - `docs/sound-mind-design.md`'s "Selection". Third and final installment of the `v0.Y.35.1` milestone, which is now complete.

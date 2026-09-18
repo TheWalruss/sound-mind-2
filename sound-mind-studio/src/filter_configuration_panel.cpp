@@ -47,15 +47,23 @@ QHBoxLayout* makeBoundFieldRow(QWidget* spinBox, QWidget* combo) {
     return row;
 }
 
-/// @brief Every `FilterType`, in `docs/sound-mind-design.md`'s own
-/// family order (Blur & focus, then Tonal, then Spectral shaping) - all
-/// six now have a real algorithm behind them (`applyFilter()`'s own
-/// docs), so this panel lists all six.
-constexpr std::array<std::pair<FilterType, const char*>, 6> kSelectableFilterTypes{{
+/// @brief Every `FilterType`, in `docs/sound-mind-design.md`'s own family
+/// order (Blur & focus, then Noise & distortion, then Tonal, then
+/// Spectral shaping) - the first six shipped in `v0.Y.28.1`, the eight
+/// Noise & distortion types in `v0.Y.36.1` Installment A.
+constexpr std::array<std::pair<FilterType, const char*>, 14> kSelectableFilterTypes{{
     {FilterType::UniformBlur, "Uniform Blur"},
     {FilterType::EdgePreservingBlur, "Edge-Preserving Blur"},
     {FilterType::DirectionalBlur, "Directional Blur"},
     {FilterType::Sharpen, "Sharpen"},
+    {FilterType::SpeckleAdd, "Speckle Add"},
+    {FilterType::SpeckleRemove, "Speckle Remove"},
+    {FilterType::Denoise, "Denoise"},
+    {FilterType::BitDepthCrush, "Bit-Depth Crush"},
+    {FilterType::GranularNoise, "Granular Noise"},
+    {FilterType::DynamicSpeckle, "Dynamic Speckle"},
+    {FilterType::FeedbackDistortion, "Feedback Distortion"},
+    {FilterType::SpectralWavefold, "Spectral Wavefold"},
     {FilterType::ToneCurve, "Tone Curve"},
     {FilterType::FrequencyAxisGradient, "Frequency-Axis Gradient"},
 }};
@@ -283,6 +291,184 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     sharpenForm->addRow(tr("Amount:"), makeBoundFieldRow(sharpenAmountSpinBox_, sharpenAmountMindWaveCombo_));
     root->addWidget(sharpenGroup_);
 
+    speckleAddGroup_ = new QGroupBox(tr("Speckle Add"), container);
+    speckleAddGroup_->setObjectName(QStringLiteral("speckleAddGroup"));
+    auto* speckleAddForm = new QFormLayout(speckleAddGroup_);
+    speckleAddDensitySpinBox_ = new QDoubleSpinBox(speckleAddGroup_);
+    speckleAddDensitySpinBox_->setObjectName(QStringLiteral("speckleAddDensitySpinBox"));
+    speckleAddDensitySpinBox_->setRange(0.0, 1.0);
+    speckleAddDensitySpinBox_->setSingleStep(0.01);
+    speckleAddDensitySpinBox_->setDecimals(2);
+    connect(speckleAddDensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setSpeckleDensity(static_cast<float>(value));
+        // Keeps DynamicSpeckle's own sibling widget in sync - see this
+        // class's own docs on why the two share a field but not a widget.
+        const QSignalBlocker blocker(dynamicSpeckleDensitySpinBox_);
+        dynamicSpeckleDensitySpinBox_->setValue(value);
+        emitConfigChanged();
+    });
+    speckleAddForm->addRow(tr("Density:"), speckleAddDensitySpinBox_);
+    speckleAddIntensitySpinBox_ = new QDoubleSpinBox(speckleAddGroup_);
+    speckleAddIntensitySpinBox_->setObjectName(QStringLiteral("speckleAddIntensitySpinBox"));
+    speckleAddIntensitySpinBox_->setRange(0.0, 1.0);
+    speckleAddIntensitySpinBox_->setSingleStep(0.01);
+    speckleAddIntensitySpinBox_->setDecimals(2);
+    connect(speckleAddIntensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setSpeckleIntensity(static_cast<float>(value));
+        const QSignalBlocker blocker(dynamicSpeckleIntensitySpinBox_);
+        dynamicSpeckleIntensitySpinBox_->setValue(value);
+        emitConfigChanged();
+    });
+    speckleAddForm->addRow(tr("Intensity:"), speckleAddIntensitySpinBox_);
+    speckleAddGroup_->setToolTip(
+        tr("Deterministic per Filter layer - the same pattern every recomposite, only changing if you touch these "
+           "controls or the content underneath."));
+    root->addWidget(speckleAddGroup_);
+
+    speckleRemoveGroup_ = new QGroupBox(tr("Speckle Remove"), container);
+    speckleRemoveGroup_->setObjectName(QStringLiteral("speckleRemoveGroup"));
+    auto* speckleRemoveForm = new QFormLayout(speckleRemoveGroup_);
+    speckleThresholdSpinBox_ = new QDoubleSpinBox(speckleRemoveGroup_);
+    speckleThresholdSpinBox_->setObjectName(QStringLiteral("speckleThresholdSpinBox"));
+    speckleThresholdSpinBox_->setRange(0.0, 96.0);
+    speckleThresholdSpinBox_->setSingleStep(1.0);
+    speckleThresholdSpinBox_->setSuffix(QStringLiteral(" dB"));
+    connect(speckleThresholdSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setSpeckleThresholdDb(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    speckleRemoveForm->addRow(tr("Threshold:"), speckleThresholdSpinBox_);
+    root->addWidget(speckleRemoveGroup_);
+
+    denoiseGroup_ = new QGroupBox(tr("Denoise"), container);
+    denoiseGroup_->setObjectName(QStringLiteral("denoiseGroup"));
+    auto* denoiseForm = new QFormLayout(denoiseGroup_);
+    noiseFloorSpinBox_ = new QDoubleSpinBox(denoiseGroup_);
+    noiseFloorSpinBox_->setObjectName(QStringLiteral("noiseFloorSpinBox"));
+    noiseFloorSpinBox_->setRange(-96.0, 0.0);
+    noiseFloorSpinBox_->setSingleStep(1.0);
+    noiseFloorSpinBox_->setSuffix(QStringLiteral(" dB"));
+    connect(noiseFloorSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setNoiseFloorDb(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    denoiseForm->addRow(tr("Noise Floor:"), noiseFloorSpinBox_);
+    reductionSpinBox_ = new QDoubleSpinBox(denoiseGroup_);
+    reductionSpinBox_->setObjectName(QStringLiteral("reductionSpinBox"));
+    reductionSpinBox_->setRange(0.0, 96.0);
+    reductionSpinBox_->setSingleStep(1.0);
+    reductionSpinBox_->setSuffix(QStringLiteral(" dB"));
+    connect(reductionSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setReductionDb(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    denoiseForm->addRow(tr("Reduction:"), reductionSpinBox_);
+    root->addWidget(denoiseGroup_);
+
+    bitDepthCrushGroup_ = new QGroupBox(tr("Bit-Depth Crush"), container);
+    bitDepthCrushGroup_->setObjectName(QStringLiteral("bitDepthCrushGroup"));
+    auto* bitDepthCrushForm = new QFormLayout(bitDepthCrushGroup_);
+    crushAmountSpinBox_ = new QDoubleSpinBox(bitDepthCrushGroup_);
+    crushAmountSpinBox_->setObjectName(QStringLiteral("crushAmountSpinBox"));
+    crushAmountSpinBox_->setRange(0.0, 1.0);
+    crushAmountSpinBox_->setSingleStep(0.01);
+    crushAmountSpinBox_->setDecimals(2);
+    connect(crushAmountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setCrushAmount(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    bitDepthCrushForm->addRow(tr("Amount:"), crushAmountSpinBox_);
+    root->addWidget(bitDepthCrushGroup_);
+
+    granularNoiseGroup_ = new QGroupBox(tr("Granular Noise"), container);
+    granularNoiseGroup_->setObjectName(QStringLiteral("granularNoiseGroup"));
+    auto* granularNoiseForm = new QFormLayout(granularNoiseGroup_);
+    grainSizeSpinBox_ = new QSpinBox(granularNoiseGroup_);
+    grainSizeSpinBox_->setObjectName(QStringLiteral("grainSizeSpinBox"));
+    grainSizeSpinBox_->setRange(1, 64);
+    grainSizeSpinBox_->setToolTip(tr("The grain block's own size, in bins/columns."));
+    connect(grainSizeSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+        config_.setGrainSize(value);
+        emitConfigChanged();
+    });
+    granularNoiseForm->addRow(tr("Grain Size:"), grainSizeSpinBox_);
+    grainAmountSpinBox_ = new QDoubleSpinBox(granularNoiseGroup_);
+    grainAmountSpinBox_->setObjectName(QStringLiteral("grainAmountSpinBox"));
+    grainAmountSpinBox_->setRange(0.0, 50.0);
+    grainAmountSpinBox_->setSingleStep(0.5);
+    grainAmountSpinBox_->setSuffix(QStringLiteral(" dB"));
+    connect(grainAmountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setGrainAmountDb(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    granularNoiseForm->addRow(tr("Grain Amount:"), grainAmountSpinBox_);
+    granularNoiseGroup_->setToolTip(
+        tr("Deterministic per Filter layer - the same pattern every recomposite, only changing if you touch these "
+           "controls or the content underneath."));
+    root->addWidget(granularNoiseGroup_);
+
+    dynamicSpeckleGroup_ = new QGroupBox(tr("Dynamic Speckle"), container);
+    dynamicSpeckleGroup_->setObjectName(QStringLiteral("dynamicSpeckleGroup"));
+    auto* dynamicSpeckleForm = new QFormLayout(dynamicSpeckleGroup_);
+    dynamicSpeckleDensitySpinBox_ = new QDoubleSpinBox(dynamicSpeckleGroup_);
+    dynamicSpeckleDensitySpinBox_->setObjectName(QStringLiteral("dynamicSpeckleDensitySpinBox"));
+    dynamicSpeckleDensitySpinBox_->setRange(0.0, 1.0);
+    dynamicSpeckleDensitySpinBox_->setSingleStep(0.01);
+    dynamicSpeckleDensitySpinBox_->setDecimals(2);
+    connect(dynamicSpeckleDensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setSpeckleDensity(static_cast<float>(value));
+        const QSignalBlocker blocker(speckleAddDensitySpinBox_);
+        speckleAddDensitySpinBox_->setValue(value);
+        emitConfigChanged();
+    });
+    dynamicSpeckleForm->addRow(tr("Density:"), dynamicSpeckleDensitySpinBox_);
+    dynamicSpeckleIntensitySpinBox_ = new QDoubleSpinBox(dynamicSpeckleGroup_);
+    dynamicSpeckleIntensitySpinBox_->setObjectName(QStringLiteral("dynamicSpeckleIntensitySpinBox"));
+    dynamicSpeckleIntensitySpinBox_->setRange(0.0, 1.0);
+    dynamicSpeckleIntensitySpinBox_->setSingleStep(0.01);
+    dynamicSpeckleIntensitySpinBox_->setDecimals(2);
+    connect(dynamicSpeckleIntensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setSpeckleIntensity(static_cast<float>(value));
+        const QSignalBlocker blocker(speckleAddIntensitySpinBox_);
+        speckleAddIntensitySpinBox_->setValue(value);
+        emitConfigChanged();
+    });
+    dynamicSpeckleForm->addRow(tr("Intensity:"), dynamicSpeckleIntensitySpinBox_);
+    dynamicSpeckleGroup_->setToolTip(
+        tr("Live - freshly re-randomized on every recomposite (any edit, scroll, or repaint), computed over fixed "
+           "2x2 blocks to stay cheap on a large canvas."));
+    root->addWidget(dynamicSpeckleGroup_);
+
+    feedbackDistortionGroup_ = new QGroupBox(tr("Feedback Distortion"), container);
+    feedbackDistortionGroup_->setObjectName(QStringLiteral("feedbackDistortionGroup"));
+    auto* feedbackDistortionForm = new QFormLayout(feedbackDistortionGroup_);
+    feedbackAmountSpinBox_ = new QDoubleSpinBox(feedbackDistortionGroup_);
+    feedbackAmountSpinBox_->setObjectName(QStringLiteral("feedbackAmountSpinBox"));
+    feedbackAmountSpinBox_->setRange(0.0, 0.99);
+    feedbackAmountSpinBox_->setSingleStep(0.01);
+    feedbackAmountSpinBox_->setDecimals(2);
+    connect(feedbackAmountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setFeedbackAmount(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    feedbackDistortionForm->addRow(tr("Amount:"), feedbackAmountSpinBox_);
+    root->addWidget(feedbackDistortionGroup_);
+
+    spectralWavefoldGroup_ = new QGroupBox(tr("Spectral Wavefold"), container);
+    spectralWavefoldGroup_->setObjectName(QStringLiteral("spectralWavefoldGroup"));
+    auto* spectralWavefoldForm = new QFormLayout(spectralWavefoldGroup_);
+    foldGainSpinBox_ = new QDoubleSpinBox(spectralWavefoldGroup_);
+    foldGainSpinBox_->setObjectName(QStringLiteral("foldGainSpinBox"));
+    foldGainSpinBox_->setRange(1.0, 20.0);
+    foldGainSpinBox_->setSingleStep(0.1);
+    foldGainSpinBox_->setDecimals(1);
+    connect(foldGainSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setFoldGain(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    spectralWavefoldForm->addRow(tr("Fold Gain:"), foldGainSpinBox_);
+    root->addWidget(spectralWavefoldGroup_);
+
     toneCurveGroup_ = new QGroupBox(tr("Tone Curve"), container);
     toneCurveGroup_->setObjectName(QStringLiteral("toneCurveGroup"));
     auto* toneCurveLayout = new QVBoxLayout(toneCurveGroup_);
@@ -381,6 +567,14 @@ void FilterConfigurationPanel::updateVisibleGroup() {
     edgePreservingBlurGroup_->setVisible(!isEqualizerMode_ && type == FilterType::EdgePreservingBlur);
     directionalBlurGroup_->setVisible(!isEqualizerMode_ && type == FilterType::DirectionalBlur);
     sharpenGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Sharpen);
+    speckleAddGroup_->setVisible(!isEqualizerMode_ && type == FilterType::SpeckleAdd);
+    speckleRemoveGroup_->setVisible(!isEqualizerMode_ && type == FilterType::SpeckleRemove);
+    denoiseGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Denoise);
+    bitDepthCrushGroup_->setVisible(!isEqualizerMode_ && type == FilterType::BitDepthCrush);
+    granularNoiseGroup_->setVisible(!isEqualizerMode_ && type == FilterType::GranularNoise);
+    dynamicSpeckleGroup_->setVisible(!isEqualizerMode_ && type == FilterType::DynamicSpeckle);
+    feedbackDistortionGroup_->setVisible(!isEqualizerMode_ && type == FilterType::FeedbackDistortion);
+    spectralWavefoldGroup_->setVisible(!isEqualizerMode_ && type == FilterType::SpectralWavefold);
     toneCurveGroup_->setVisible(!isEqualizerMode_ && type == FilterType::ToneCurve);
 }
 
@@ -411,6 +605,18 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     const QSignalBlocker directionalBlurLengthBlocker(directionalBlurLengthSpinBox_);
     const QSignalBlocker directionalBlurAngleBlocker(directionalBlurAngleSpinBox_);
     const QSignalBlocker sharpenAmountBlocker(sharpenAmountSpinBox_);
+    const QSignalBlocker speckleAddDensityBlocker(speckleAddDensitySpinBox_);
+    const QSignalBlocker speckleAddIntensityBlocker(speckleAddIntensitySpinBox_);
+    const QSignalBlocker speckleThresholdBlocker(speckleThresholdSpinBox_);
+    const QSignalBlocker noiseFloorBlocker(noiseFloorSpinBox_);
+    const QSignalBlocker reductionBlocker(reductionSpinBox_);
+    const QSignalBlocker crushAmountBlocker(crushAmountSpinBox_);
+    const QSignalBlocker grainSizeBlocker(grainSizeSpinBox_);
+    const QSignalBlocker grainAmountBlocker(grainAmountSpinBox_);
+    const QSignalBlocker dynamicSpeckleDensityBlocker(dynamicSpeckleDensitySpinBox_);
+    const QSignalBlocker dynamicSpeckleIntensityBlocker(dynamicSpeckleIntensitySpinBox_);
+    const QSignalBlocker feedbackAmountBlocker(feedbackAmountSpinBox_);
+    const QSignalBlocker foldGainBlocker(foldGainSpinBox_);
     const QSignalBlocker startLeftCutBlocker(startLeftCutSpinBox_);
     const QSignalBlocker startRightCutBlocker(startRightCutSpinBox_);
     const QSignalBlocker endLeftCutBlocker(endLeftCutSpinBox_);
@@ -445,6 +651,20 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     directionalBlurLengthSpinBox_->setValue(config_.directionalBlurLength());
     directionalBlurAngleSpinBox_->setValue(config_.directionalBlurAngleDegrees());
     sharpenAmountSpinBox_->setValue(config_.sharpenAmount());
+    // SpeckleAdd and DynamicSpeckle share the same underlying fields (see
+    // this class's own docs) - both sets of widgets sync to them here.
+    speckleAddDensitySpinBox_->setValue(config_.speckleDensity());
+    speckleAddIntensitySpinBox_->setValue(config_.speckleIntensity());
+    dynamicSpeckleDensitySpinBox_->setValue(config_.speckleDensity());
+    dynamicSpeckleIntensitySpinBox_->setValue(config_.speckleIntensity());
+    speckleThresholdSpinBox_->setValue(config_.speckleThresholdDb());
+    noiseFloorSpinBox_->setValue(config_.noiseFloorDb());
+    reductionSpinBox_->setValue(config_.reductionDb());
+    crushAmountSpinBox_->setValue(config_.crushAmount());
+    grainSizeSpinBox_->setValue(config_.grainSize());
+    grainAmountSpinBox_->setValue(config_.grainAmountDb());
+    feedbackAmountSpinBox_->setValue(config_.feedbackAmount());
+    foldGainSpinBox_->setValue(config_.foldGain());
     // ToneCurveEditor::setPoints() doesn't emit pointsChanged() by its
     // own contract, so no QSignalBlocker is needed here.
     toneCurveEditor_->setPoints(config_.toneCurvePoints());

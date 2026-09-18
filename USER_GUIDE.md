@@ -378,9 +378,41 @@ group's own controls while it was hidden.
   curve gets between them. A fresh Filter layer of this type starts as a
   straight diagonal line (input equals output - no effect) until you
   drag a point.
+- **Speckle Add** randomly boosts a scattering of cells toward full
+  loudness - **Density** (how many cells get hit) and **Intensity** (how
+  far they jump toward full loudness when hit). The pattern is fixed for
+  a given Filter layer - it won't change on its own from one repaint to
+  the next, only if you touch these controls or the content underneath.
+- **Speckle Remove** cleans up isolated loud/quiet flecks without
+  softening real detail the way Edge-Preserving Blur would - one
+  **Threshold** control (how far a cell has to stand out from its own
+  immediate surroundings before it's corrected).
+- **Denoise** quietens anything below a loudness floor - **Noise Floor**
+  (the threshold) and **Reduction** (how much quieter anything below it
+  gets).
+- **Bit-Depth Crush** is a lo-fi, "crunchy" quantization effect - one
+  **Amount** control (`0` is no effect at all; higher values quantize
+  loudness into fewer and fewer discrete steps).
+- **Granular Noise** overlays a coarse, blocky noise texture - **Grain
+  Size** (how big each block is) and **Grain Amount** (how loud the
+  texture is). Like Speckle Add, its own pattern stays fixed until you
+  change these controls or the content underneath.
+- **Dynamic Speckle** is Speckle Add's live counterpart - the same
+  **Density**/**Intensity** controls (editing either Speckle Add's or
+  Dynamic Speckle's own copy updates both, since they're the same
+  setting), but the pattern genuinely re-randomizes on every repaint
+  instead of staying put - a flickering, static-like texture rather than
+  a fixed one.
+- **Feedback Distortion** pushes a passage into a resonant, decaying
+  smear along time - one **Amount** control (higher rings/smears longer).
+- **Spectral Wavefold** is a classic wavefolder distortion - one **Fold
+  Gain** control (`1` is no effect; higher values fold loudness back on
+  itself repeatedly for a harsher, more harmonically dense sound).
 
-Every one of the six designed filter types now has a real, working
-algorithm.
+Every one of the fourteen designed-so-far filter types now has a real,
+working algorithm - Speckle Add through Spectral Wavefold don't yet have
+a MindWave-binding combo the way Sigma/Size/Length/Angle/Amount above do
+(a later pass, not yet scheduled).
 
 A Filter layer with nothing beneath it (or with everything beneath it
 hidden) has nothing to filter, so it has no effect. An ordinary Filter
@@ -949,9 +981,11 @@ Studio yet. MindWave-driven modulation (see [MindWaves](#mindwaves)
 above) has made a real start - layer opacity binding works - but it's
 far from its own full scope either; see the note further down. Filter
 layers (see
-[Filter Layers](#filter-layers) above) are further along than most - all
-six designed filter types work now - but the milestone as a whole isn't
-finished (no Equalizer layer yet, in particular).
+[Filter Layers](#filter-layers) above) are further along than most -
+fourteen designed filter types work now, the Equalizer layer included -
+but the milestone as a whole isn't finished; see the note further down
+for exactly what's still missing (Geometric, the rest of Tonal/Spectral
+shaping, and Space).
 `docs/sound-mind-roadmap.md` tracks what's actually being built next, in
 order; this guide will grow alongside it.
 
@@ -1037,9 +1071,10 @@ designed for it:
 - **Playback decodes the composite once, at Play** - it doesn't yet keep
   re-decoding live as you make further edits during playback.
 
-[Filter Layers](#filter-layers) (see above) have all six designed filter
-types working now, but still only a slice of what's designed for the
-milestone as a whole:
+[Filter Layers](#filter-layers) (see above) have fourteen designed filter
+types working now (the original six, plus all eight Noise & distortion
+types), but still only a slice of what's designed for the milestone as a
+whole:
 
 - **No draggable visual gradient editor for Frequency-Axis Gradient
   (including the Equalizer's own Cut editor), and no interior stops** -
@@ -1049,8 +1084,12 @@ milestone as a whole:
 - **MindWave-bound filter parameters exist now** (see
   [MindWaves](#mindwaves) above) for the five scalar controls listed
   above - Sigma, Size, Length, Angle, and Amount. Frequency-Axis
-  Gradient/Equalizer and Tone Curve have no bindable scalar of their own
-  yet, so they're untouched by this.
+  Gradient/Equalizer, Tone Curve, and all eight Noise & distortion types
+  have no bindable scalar of their own yet, so they're untouched by this.
+- **Geometric, the rest of Tonal (channel balance, inversion), the rest
+  of Spectral shaping (an arbitrary convolution kernel), and Space
+  (spectral reverberation)** aren't built yet - later installments of the
+  same milestone Noise & distortion just finished its own first piece of.
 
 [MindWaves](#mindwaves) (see above) exist now, but only a narrow slice of
 what's designed for them:

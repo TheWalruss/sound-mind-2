@@ -36,15 +36,31 @@ class ToneCurveEditor;
  *
  * **A `FilterType` selector, listing only the types with a real algorithm
  * behind them** - `docs/sound-mind-roadmap.md`'s `v0.Y.28.1` (Filter
- * Layers) milestone's own multi-installment scope: every one of the six
- * designed filter types now has one (see `sound_mind::core::
- * applyFilter()`'s own docs), in `docs/sound-mind-design.md`'s own
- * family order (Blur & focus, then Tonal, then Spectral shaping) - so
- * this selector now lists all six. Selecting a type shows only that
- * type's own parameter group; every other group stays hidden
- * (`QWidget::setVisible(false)`), the same "meaningless unless `type()`
- * matches" contract `FilterConfiguration`'s own per-field docs already
- * state.
+ * Layers) milestone's own multi-installment scope built the first six;
+ * `v0.Y.36.1` (Deferred Filters) Installment A added the eight "Noise &
+ * distortion" types below them, in `docs/sound-mind-design.md`'s own
+ * family order (Blur & focus, then Noise & distortion, then Tonal, then
+ * Spectral shaping) - so this selector now lists fourteen. Selecting a
+ * type shows only that type's own parameter group; every other group
+ * stays hidden (`QWidget::setVisible(false)`), the same "meaningless
+ * unless `type()` matches" contract `FilterConfiguration`'s own
+ * per-field docs already state. **None of the eight Noise & distortion
+ * groups offer a MindWave-binding combo** - matching
+ * `FilterConfiguration`'s own docs on why binding those eight is
+ * deferred, not built here. **`SpeckleAdd`'s own Density/Intensity
+ * controls and `DynamicSpeckle`'s own are separate widgets that both
+ * read/write the same underlying `speckleDensity()`/`speckleIntensity()`
+ * fields** - the two types share those fields, but each gets its own
+ * group (with its own tooltip explaining the live-vs-deterministic
+ * distinction) rather than one group doing double duty under two
+ * different titles. **Editing either group's own Density/Intensity spin
+ * box immediately pushes the same value onto its sibling in the other
+ * group too** (each change handler updates the other widget directly,
+ * `QSignalBlocker`-guarded against re-triggering itself) - without this,
+ * switching the `FilterType` combo between the two would show a stale
+ * value on whichever group wasn't visible while the other's own field was
+ * last edited (caught by a test written for exactly this scenario, not by
+ * inspection).
  *
  * **A basic, two-endpoint-stop gradient editor for `FrequencyAxisGradient`,
  * not a rich visual one** - `Gradient` always has at least its two
@@ -206,6 +222,37 @@ private:
 
     /// @brief See setAvailableMindWaves()'s own docs.
     std::vector<std::pair<sound_mind::core::MindWaveId, QString>> availableMindWaves_;
+
+    // --- v0.Y.36.1 Installment A: Noise & distortion - none of these
+    // eight bind to a MindWave, see this class's own docs.
+
+    QGroupBox* speckleAddGroup_ = nullptr;
+    QDoubleSpinBox* speckleAddDensitySpinBox_ = nullptr;
+    QDoubleSpinBox* speckleAddIntensitySpinBox_ = nullptr;
+
+    QGroupBox* speckleRemoveGroup_ = nullptr;
+    QDoubleSpinBox* speckleThresholdSpinBox_ = nullptr;
+
+    QGroupBox* denoiseGroup_ = nullptr;
+    QDoubleSpinBox* noiseFloorSpinBox_ = nullptr;
+    QDoubleSpinBox* reductionSpinBox_ = nullptr;
+
+    QGroupBox* bitDepthCrushGroup_ = nullptr;
+    QDoubleSpinBox* crushAmountSpinBox_ = nullptr;
+
+    QGroupBox* granularNoiseGroup_ = nullptr;
+    QSpinBox* grainSizeSpinBox_ = nullptr;
+    QDoubleSpinBox* grainAmountSpinBox_ = nullptr;
+
+    QGroupBox* dynamicSpeckleGroup_ = nullptr;
+    QDoubleSpinBox* dynamicSpeckleDensitySpinBox_ = nullptr;
+    QDoubleSpinBox* dynamicSpeckleIntensitySpinBox_ = nullptr;
+
+    QGroupBox* feedbackDistortionGroup_ = nullptr;
+    QDoubleSpinBox* feedbackAmountSpinBox_ = nullptr;
+
+    QGroupBox* spectralWavefoldGroup_ = nullptr;
+    QDoubleSpinBox* foldGainSpinBox_ = nullptr;
 
     QGroupBox* toneCurveGroup_ = nullptr;
     ToneCurveEditor* toneCurveEditor_ = nullptr;
