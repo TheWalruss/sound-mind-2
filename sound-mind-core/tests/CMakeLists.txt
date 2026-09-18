@@ -16,6 +16,8 @@ add_executable(sound-mind-core-tests
     test_paint_operation.cpp
     test_fill_operation.cpp
     test_paste_operation.cpp
+    test_warp_operation.cpp
+    test_warp_application.cpp
     test_music_theory.cpp
     test_operation_log.cpp
     test_paint_application.cpp

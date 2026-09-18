@@ -1,5 +1,7 @@
 #include "sound_mind/studio/tool_palette_controller.h"
 
+#include <utility>
+
 #include <QPointF>
 
 #include "sound_mind/core/tool_configuration.h"
@@ -71,6 +73,7 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
         canvas_->setSelectionBounds(selectionController_->displayBounds());
         canvas_->setSelectionBoundary(selectionController_->displayBoundary());
         canvas_->setSelectionHasMaskShape(selectionController_->hasMaskShapedSelection());
+        canvas_->setSelectionRotationHandle(selectionController_->displayRotationHandle());
     });
     connect(selectionController_, &SelectionController::contentChanged, this, [this](sound_mind::core::LayerId layer) {
         canvas_->update();
@@ -188,6 +191,18 @@ void ToolPaletteController::setWandHarmonicsAware(bool harmonicsAware) {
     selectionController_->setWandHarmonicsAware(harmonicsAware);
 }
 
+void ToolPaletteController::beginRotateDrag(sound_mind::core::TimeFrequencyPoint point) {
+    selectionController_->beginRotateDrag(point);
+}
+
+void ToolPaletteController::continueRotateDrag(sound_mind::core::TimeFrequencyPoint point) {
+    selectionController_->continueRotateDrag(point);
+}
+
+void ToolPaletteController::endRotateDrag() { selectionController_->endRotateDrag(); }
+
+void ToolPaletteController::cancelRotateDrag() { selectionController_->cancelRotateDrag(); }
+
 void ToolPaletteController::cancelPathPlacement() { pathController_->cancelPath(); }
 
 void ToolPaletteController::undo() { paintController_->undo(); }
@@ -215,6 +230,15 @@ void ToolPaletteController::cancelPathEdit() { pickController_->cancelPathEdit()
 void ToolPaletteController::clearSelection() { selectionController_->clearSelection(); }
 
 void ToolPaletteController::fill(const sound_mind::core::Gradient& gradient) { selectionController_->fill(gradient); }
+
+void ToolPaletteController::warpSelection(sound_mind::core::Path curve, sound_mind::core::WarpAxis axis,
+                                           sound_mind::core::WarpMode mode) {
+    selectionController_->warpSelection(std::move(curve), axis, mode);
+}
+
+std::optional<sound_mind::core::Path> ToolPaletteController::selectedPath() const {
+    return pickController_->selectedPath();
+}
 
 bool ToolPaletteController::hasSelection() const { return selectionController_->hasSelection(); }
 

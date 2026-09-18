@@ -1,5 +1,7 @@
+#include <algorithm>
 #include <cmath>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
@@ -12,7 +14,9 @@ using sound_mind::core::fitPathToPoints;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
+using sound_mind::core::rotatedRectangle;
 using sound_mind::core::TimeFrequencyPoint;
+using sound_mind::core::TimeFrequencyRect;
 
 namespace {
 
@@ -406,4 +410,70 @@ TEST_CASE("containsPoint is always false for a path with fewer than 3 nodes", "[
     twoPoints.addNode(cornerNodeAt(0.0, 0.0));
     twoPoints.addNode(cornerNodeAt(10.0, 10.0));
     REQUIRE_FALSE(containsPoint(twoPoints, TimeFrequencyPoint{5.0, 5.0}));
+}
+
+TEST_CASE("rotatedRectangle with a zero angle reproduces the rectangle's own four corners", "[core][path]") {
+    TimeFrequencyRect rect;
+    rect.startTimeSeconds = 0.0;
+    rect.endTimeSeconds = 4.0;
+    rect.lowFrequencyHz = 1000.0;
+    rect.highFrequencyHz = 3000.0;
+
+    const Path path = rotatedRectangle(rect, 0.0, 1000.0);
+
+    REQUIRE(path.nodes().size() == 4);
+    REQUIRE(path.nodes()[0].anchor.timeSeconds == Catch::Approx(0.0));
+    REQUIRE(path.nodes()[0].anchor.frequencyHz == Catch::Approx(1000.0));
+    REQUIRE(path.nodes()[2].anchor.timeSeconds == Catch::Approx(4.0));
+    REQUIRE(path.nodes()[2].anchor.frequencyHz == Catch::Approx(3000.0));
+}
+
+TEST_CASE("rotatedRectangle rotates in frequencyToTimeScale-normalized space, swapping normalized dimensions "
+          "at 90 degrees",
+          "[core][path]") {
+    TimeFrequencyRect rect;
+    rect.startTimeSeconds = 0.0;
+    rect.endTimeSeconds = 4.0;      // width 4 (already in normalized units - time isn't scaled).
+    rect.lowFrequencyHz = 1000.0;
+    rect.highFrequencyHz = 3000.0;  // normalized height (3000-1000)/1000 = 2.
+
+    const double kPi = 3.14159265358979323846;
+    const Path path = rotatedRectangle(rect, kPi / 2.0, 1000.0);  // 90 degrees counterclockwise.
+
+    REQUIRE(path.nodes().size() == 4);
+    // Hand-computed: center is (2s, 2000Hz); a 90-degree rotation carries
+    // (0, 1000Hz) to (3s, 0Hz) - see this test's own derivation.
+    REQUIRE(path.nodes()[0].anchor.timeSeconds == Catch::Approx(3.0).margin(1e-9));
+    REQUIRE(path.nodes()[0].anchor.frequencyHz == Catch::Approx(0.0).margin(1e-6));
+
+    // The rectangle's own normalized dimensions swap under a 90-degree
+    // turn: the new time span's own width should equal the old normalized
+    // frequency height (2), and the new normalized frequency height should
+    // equal the old time width (4).
+    double minTime = path.nodes()[0].anchor.timeSeconds;
+    double maxTime = minTime;
+    double minFreq = path.nodes()[0].anchor.frequencyHz;
+    double maxFreq = minFreq;
+    for (const auto& node : path.nodes()) {
+        minTime = std::min(minTime, node.anchor.timeSeconds);
+        maxTime = std::max(maxTime, node.anchor.timeSeconds);
+        minFreq = std::min(minFreq, node.anchor.frequencyHz);
+        maxFreq = std::max(maxFreq, node.anchor.frequencyHz);
+    }
+    REQUIRE((maxTime - minTime) == Catch::Approx(2.0).margin(1e-9));
+    REQUIRE(((maxFreq - minFreq) / 1000.0) == Catch::Approx(4.0).margin(1e-6));
+}
+
+TEST_CASE("rotatedRectangle's own shape still contains its own center regardless of angle", "[core][path]") {
+    TimeFrequencyRect rect;
+    rect.startTimeSeconds = 1.0;
+    rect.endTimeSeconds = 5.0;
+    rect.lowFrequencyHz = 500.0;
+    rect.highFrequencyHz = 1500.0;
+    const TimeFrequencyPoint center{3.0, 1000.0};
+
+    for (double angle : {0.3, 1.1, 2.4}) {
+        const Path path = rotatedRectangle(rect, angle, 1000.0);
+        REQUIRE(containsPoint(path, center));
+    }
 }

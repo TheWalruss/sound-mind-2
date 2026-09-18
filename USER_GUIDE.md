@@ -710,6 +710,35 @@ to carve a piece back out. A combining drag/click that ends up selecting
 nothing leaves your existing selection exactly as it was, rather than
 clearing it.
 
+**Rotating a Rectangle selection**: a plain, freshly-drawn Rectangle
+selection (not Lasso, Wand, a combined selection, or a pasted one) shows a
+small handle above its own top edge - drag it to rotate the whole
+selection around its own center. Fill/Copy/Cut/Paste all confine
+themselves to the rotated shape exactly like they do for a Lasso
+selection. Rotating back to (approximately) no rotation returns the
+selection to a plain, axis-aligned rectangle.
+
+**Warping a selection's content**: draw a curve as an ordinary paint
+stroke, switch to [Pick](#pick) and click the curve to select it, then
+make (or keep) a selection and choose **Edit → Warp Selection...** while
+still in Pick mode - leaving Pick mode first loses track of which curve
+you picked. A dialog then asks for:
+
+- **Axis** - **Frequency** shifts each column of the selection up or down
+  in pitch, following the curve's own vertical deflection there;
+  **Time** shifts each row left or right instead, following the curve's
+  own horizontal deflection.
+- **Mode** - **Displace** shifts every column/row by the curve's own full
+  deflection at that position. **Stretch** ramps the shift from none at
+  one edge of the selection to the curve's full deflection at the other,
+  scaling smoothly in between.
+
+Warp always displaces content within the selection's own plain bounding
+box, even for a Lasso, Wand, or rotated selection - not yet confined to
+its exact shape. Shifted content can spill outside the selection's own
+box, overwriting whatever was there; anywhere nothing shifts in to fill a
+gap is left silent.
+
 - **Fill** it - **Edit → Fill Selection...** opens a color picker; the
   picked color fills the selection at full strength, confined exactly to
   its own boundary. The color's red channel controls how loud the left
@@ -752,9 +781,9 @@ clearing it.
 Filling and pasting are both undoable (Ctrl+Z), the same as painting a
 stroke; so is Cut's own silencing of the source region.
 
-Rectangle, Lasso, and Wand selections all exist today, and can be
-combined with each other - see [What's Not Here Yet](#whats-not-here-yet)
-for what's still planned (Rectangle's own rotate handle, and Warp).
+Rectangle, Lasso, and Wand selections all exist today, can be combined
+with each other, a Rectangle selection can be rotated, and a selection's
+content can be Warped along a hand-drawn curve.
 
 ## Path Tool
 
@@ -974,16 +1003,17 @@ what's designed for it:
 Selection (see [Selection and Fill](#selection-and-fill) above) exists,
 but only a fraction of what's designed for it:
 
-- **Rectangle**, **Lasso** (freehand), and **Wand** (flood-fill by
-  amplitude similarity, optionally harmonics-aware) selection all exist,
-  and can be combined (add/subtract/intersect); Rectangle has no rotate
-  handle yet, and there's no Warp (bending a selection along a hand-drawn
-  curve). A Wand or combined selection shows as a dashed bounding box
+- **Rectangle** (rotatable), **Lasso** (freehand), and **Wand**
+  (flood-fill by amplitude similarity, optionally harmonics-aware)
+  selection all exist, can be combined (add/subtract/intersect), and
+  **Warp** (bending a selection's own content along a hand-drawn curve) is
+  here too. A Wand or combined selection shows as a dashed bounding box
   rather than its own exact outline (a Lasso selection still gets a real
   curve) - the underlying Fill/Copy/Cut/Paste still respect its precise
-  shape regardless. Mind Shot/Mind Grain capture from a Lasso/Wand/
-  combined selection still captures/references its full bounding box, not
-  confined to its actual shape.
+  shape regardless; Warp always operates on a selection's plain bounding
+  box, whatever its actual shape. Mind Shot/Mind Grain capture from a
+  Lasso/Wand/combined selection still captures/references its full
+  bounding box, not confined to its actual shape.
 - **Paste** always lands back at the exact position it was copied/cut
   from - there's no click-to-place gesture yet to paste somewhere else on
   the same layer (pasting onto a *different* layer is supported today;

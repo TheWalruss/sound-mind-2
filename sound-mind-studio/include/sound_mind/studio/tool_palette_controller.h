@@ -145,6 +145,25 @@ public:
     /// @param harmonicsAware The new value.
     void setWandHarmonicsAware(bool harmonicsAware);
 
+    /// @brief Starts dragging the committed selection's own rotate handle
+    ///        - forwards to `SelectionController::beginRotateDrag()`.
+    /// @param point Where the drag starts.
+    void beginRotateDrag(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief Continues an in-progress rotate drag - forwards to
+    ///        `SelectionController::continueRotateDrag()`.
+    /// @param point The cursor's current position.
+    void continueRotateDrag(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief Ends an in-progress rotate drag - forwards to
+    ///        `SelectionController::endRotateDrag()`.
+    void endRotateDrag();
+
+    /// @brief Cancels any in-progress rotate drag - forwards to
+    ///        `SelectionController::cancelRotateDrag()`. Called by
+    ///        `MainWindow` before turning Select mode off.
+    void cancelRotateDrag();
+
     /// @brief Places the next Path tool node - forwards to
     ///        `PathController::placeNode()`.
     /// @param layer Which layer the path is being placed onto - resolved
@@ -226,6 +245,21 @@ public:
     ///        `SelectionController::fill()`.
     /// @param gradient The color (or gradient) to fill with.
     void fill(const sound_mind::core::Gradient& gradient);
+
+    /// @brief Warps the current selection along `curve` - forwards to
+    ///        `SelectionController::warpSelection()`.
+    /// @param curve The warp curve.
+    /// @param axis Which direction content is displaced.
+    /// @param mode How far along each column/row the deflection carries.
+    void warpSelection(sound_mind::core::Path curve, sound_mind::core::WarpAxis axis, sound_mind::core::WarpMode mode);
+
+    /// @brief The currently Picked object's own `Path`, if any - forwards
+    ///        to `PickController::selectedPath()`. The actual mechanism
+    ///        behind supplying `warpSelection()` with a curve - see
+    ///        `MainWindow::warpSelection()`'s own docs.
+    /// @return The selected path, or `std::nullopt` if nothing suitable
+    ///         is Picked.
+    [[nodiscard]] std::optional<sound_mind::core::Path> selectedPath() const;
 
     /// @brief Whether there's a committed selection right now - forwards
     ///        to `SelectionController::hasSelection()`.

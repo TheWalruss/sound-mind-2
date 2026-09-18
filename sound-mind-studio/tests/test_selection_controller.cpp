@@ -15,6 +15,7 @@
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/core/warp_operation.h"
 #include "sound_mind/studio/grid_config.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/selection_controller.h"
@@ -29,10 +30,16 @@ using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
 using sound_mind::core::PasteOperation;
+using sound_mind::core::Path;
+using sound_mind::core::PathNode;
+using sound_mind::core::PathNodeType;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::timeToFrameIndex;
 using sound_mind::core::TimeFrequencyPoint;
+using sound_mind::core::WarpAxis;
+using sound_mind::core::WarpMode;
+using sound_mind::core::WarpOperation;
 using sound_mind::studio::FrequencyGridConfig;
 using sound_mind::studio::PaintController;
 using sound_mind::studio::SelectionCombineMode;
@@ -1078,4 +1085,174 @@ void SelectionControllerTest::aWhiffedCombineGestureLeavesTheExistingSelectionUn
     QVERIFY(controller.hasSelection());
     controller.fill(makeUniformGradient(-1.0f, 1.0f));
     QCOMPARE(readPixel(project, layerId, 12, 12), -1.0f);
+}
+
+void SelectionControllerTest::freshControllerCannotRotate() {
+    PaintController paintController;
+    const SelectionController controller(&paintController);
+    QVERIFY(!controller.canRotateSelection());
+    QVERIFY(!controller.displayRotationHandle().has_value());
+}
+
+void SelectionControllerTest::canRotateSelectionIsTrueOnlyAfterAPlainRectangleCommit() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+
+    selectRect(controller, layerId, config, 20, 40, 10, 30);
+    QVERIFY(controller.canRotateSelection());
+
+    controller.setSelectionShape(SelectionShape::Lasso);
+    dragLasso(controller, layerId, config, {{20, 5}, {30, 5}, {25, 15}});
+    QVERIFY(!controller.canRotateSelection());
+
+    // A boolean-combined result is never rotatable, even starting from
+    // two plain Rectangles.
+    controller.setSelectionShape(SelectionShape::Rectangle);
+    selectRect(controller, layerId, config, 10, 15, 10, 15);
+    controller.setSelectionCombineMode(SelectionCombineMode::Add);
+    selectRect(controller, layerId, config, 30, 35, 30, 35);
+    QVERIFY(!controller.canRotateSelection());
+}
+
+void SelectionControllerTest::rotatingAppliesARotatedPathBoundaryAndBackToNulloptAtZero() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 40, 10, 30);
+    QVERIFY(controller.canRotateSelection());
+    QVERIFY(!controller.displayBoundary().has_value());  // unrotated - still a plain rectangle.
+
+    const auto bounds = *controller.displayBounds();
+    const TimeFrequencyPoint center{(bounds.startTimeSeconds + bounds.endTimeSeconds) / 2.0,
+                                      (bounds.lowFrequencyHz + bounds.highFrequencyHz) / 2.0};
+    // "East" (angle 0) and "north" (angle 90 degrees) of center - a sweep
+    // between them is exactly 90 degrees regardless of this project's own
+    // frequencyToTimeScale value (atan2 of a purely-positive single axis
+    // offset is always 0 or pi/2, whatever that offset's own magnitude).
+    const TimeFrequencyPoint east{center.timeSeconds + 1.0, center.frequencyHz};
+    const TimeFrequencyPoint north{center.timeSeconds, center.frequencyHz + 100.0};
+
+    controller.beginRotateDrag(east);
+    controller.continueRotateDrag(north);
+
+    QVERIFY(controller.displayBoundary().has_value());  // now a real rotated Path.
+    QVERIFY(!controller.hasMaskShapedSelection());        // still Path-kind, not Mask-kind.
+
+    controller.continueRotateDrag(east);  // swept back to the start angle - net rotation ~0.
+    controller.endRotateDrag();
+
+    QVERIFY(!controller.displayBoundary().has_value());  // back to a plain rectangle.
+}
+
+void SelectionControllerTest::cancelRotateDragRevertsToThePriorRotation() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 40, 10, 30);
+    const auto bounds = *controller.displayBounds();
+    const TimeFrequencyPoint center{(bounds.startTimeSeconds + bounds.endTimeSeconds) / 2.0,
+                                      (bounds.lowFrequencyHz + bounds.highFrequencyHz) / 2.0};
+    const TimeFrequencyPoint east{center.timeSeconds + 1.0, center.frequencyHz};
+    const TimeFrequencyPoint north{center.timeSeconds, center.frequencyHz + 100.0};
+    const TimeFrequencyPoint west{center.timeSeconds - 1.0, center.frequencyHz};
+
+    controller.beginRotateDrag(east);
+    controller.continueRotateDrag(north);
+    controller.endRotateDrag();
+    const auto priorHandle = controller.displayRotationHandle();
+    QVERIFY(priorHandle.has_value());
+
+    controller.beginRotateDrag(north);
+    controller.continueRotateDrag(west);  // rotate further.
+    controller.cancelRotateDrag();
+
+    const auto revertedHandle = controller.displayRotationHandle();
+    QVERIFY(revertedHandle.has_value());
+    QVERIFY(qAbs(revertedHandle->timeSeconds - priorHandle->timeSeconds) < 1e-6);
+    QVERIFY(qAbs(revertedHandle->frequencyHz - priorHandle->frequencyHz) < 1e-3);
+}
+
+void SelectionControllerTest::displayRotationHandleIsPresentOnlyWhenRotatable() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+
+    QVERIFY(!controller.displayRotationHandle().has_value());
+
+    selectRect(controller, layerId, config, 20, 40, 10, 30);
+    QVERIFY(controller.displayRotationHandle().has_value());
+
+    controller.setSelectionShape(SelectionShape::Lasso);
+    dragLasso(controller, layerId, config, {{20, 5}, {30, 5}, {25, 15}});
+    QVERIFY(!controller.displayRotationHandle().has_value());
+}
+
+void SelectionControllerTest::warpSelectionAppendsAWarpOperationOverTheCommittedSelection() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 40, 10, 30);
+    QSignalSpy contentSpy(&controller, &SelectionController::contentChanged);
+
+    Path curve;
+    PathNode start;
+    start.anchor = TimeFrequencyPoint{0.2, 400.0};
+    start.type = PathNodeType::Corner;
+    curve.addNode(start);
+    PathNode end;
+    end.anchor = TimeFrequencyPoint{0.4, 500.0};
+    end.type = PathNodeType::Corner;
+    curve.addNode(end);
+
+    controller.warpSelection(curve, WarpAxis::Frequency, WarpMode::Stretch);
+
+    QCOMPARE(project.operationLog().size(), std::size_t{1});
+    QCOMPARE(contentSpy.count(), 1);
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* warpOp = dynamic_cast<const WarpOperation*>(active.front());
+    QVERIFY(warpOp != nullptr);
+    QCOMPARE(warpOp->axis(), WarpAxis::Frequency);
+    QCOMPARE(warpOp->mode(), WarpMode::Stretch);
+    QCOMPARE(warpOp->curve().nodes().size(), std::size_t{2});
+}
+
+void SelectionControllerTest::warpSelectionIsANoOpWithNoCommittedSelection() {
+    Project project = Project::createNew(testSettings());
+    addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+
+    Path curve;
+    PathNode start;
+    start.anchor = TimeFrequencyPoint{0.2, 400.0};
+    start.type = PathNodeType::Corner;
+    curve.addNode(start);
+
+    controller.warpSelection(curve, WarpAxis::Frequency, WarpMode::Displace);
+
+    QCOMPARE(project.operationLog().size(), std::size_t{0});
 }

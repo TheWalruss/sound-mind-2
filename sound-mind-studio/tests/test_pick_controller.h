@@ -60,4 +60,7 @@ private slots:
     void continueMoveSnapsToTheNearestGridLineWhenSnapToGridIsEnabled();
     void continueMoveIgnoresGridConfigurationWhenSnapToGridIsDisabled();
     void continuePathNodeDragSnapsToTheNearestGridLineWhenSnapToGridIsEnabled();
+
+    void selectedPathReturnsTheGeometryOfASelectedPaintOperation();
+    void selectedPathIsNulloptForAFillOrPasteSelectionOrNoSelection();
 };

@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.35.3] - 2026-09-18
+
+Deferred Selection, Installment C: Rectangle's own **rotate handle** and **Warp** (displacing a selection's content along a hand-drawn curve) - `docs/sound-mind-design.md`'s "Selection". Third and final installment of the `v0.Y.35.1` milestone, which is now complete.
+
+### Added
+
+- **A rotate handle on a plain, freshly-drawn Rectangle selection**: a small handle appears above the selection - drag it to rotate the whole selection about its own center. Fill/Copy/Cut/Paste all respect the rotated shape, the same as a Lasso selection already does. Only available for a plain Rectangle selection, not Lasso, Wand, a boolean-combined selection, or a pasted one.
+- **Warp**, a new Edit menu command: displaces a selection's own content along a hand-drawn curve. Draw the curve as an ordinary paint stroke, switch to Pick and click it to select it, make (or keep) a selection, then choose **Edit → Warp Selection...** while still in Pick mode. A dialog lets you choose **Axis** (Frequency or Time) and **Mode** (Displace - every line shifts by the curve's own full deflection; or Stretch - the shift ramps from none at one edge of the selection to the full deflection at the other).
+
+Full regression: sound-mind-core 529/529 (up from 515), sound-mind-studio all 35 QTest classes passing (a new one, Warp Dialog's own). Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #101. Closes out the `v0.Y.35.1` Deferred Selection milestone in full.
+
 ## [0.0.35.2] - 2026-09-18
 
 Deferred Selection, Installment B: **Wand** (flood-fill by amplitude similarity, optionally harmonics-aware) and **boolean combination** (Add/Subtract/Intersect between selections) - `docs/sound-mind-design.md`'s "Selection". Second installment of the `v0.Y.35.1` milestone; Rectangle's own rotate handle and Warp remain the final installment.

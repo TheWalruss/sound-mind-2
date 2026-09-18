@@ -14,6 +14,7 @@
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/selection_region.h"
+#include "sound_mind/core/warp_operation.h"
 #include "sound_mind/studio/grid_config.h"
 
 namespace sound_mind::studio {
@@ -301,6 +302,83 @@ public:
     ///        showing.
     void cancelSelectionDrag();
 
+    /// @brief Whether the *committed* selection currently accepts a
+    ///        rotate-handle drag - `true` exactly when it originated from
+    ///        a Rectangle drag (a Lasso/Wand/boolean-combined selection
+    ///        never does, regardless of what `selectionShape()` is
+    ///        currently set to for the *next* drag).
+    /// @return `true` if `beginRotateDrag()` would do anything.
+    [[nodiscard]] bool canRotateSelection() const noexcept { return committedRotationRadians_.has_value(); }
+
+    /**
+     * @brief Starts dragging the committed selection's own rotate handle -
+     *        `v0.Y.35.1` Installment C - a no-op unless `canRotateSelection()`.
+     *
+     * Modeled directly on `PickController`'s own `pick()`/`continueMove()`/
+     * `endMove()` shape (the closest existing precedent for "drag a handle
+     * on an already-committed selection", though Pick's own handle is the
+     * whole object, not a dedicated point) - a *separate* method quartet
+     * from `beginSelectionDrag()`'s own, since this transforms an
+     * *existing* committed selection rather than drawing a new one.
+     *
+     * @param point Where the drag starts, in time/frequency space -
+     *        typically wherever the rotate handle itself is, though any
+     *        point works (only the drag's own angular *change* from this
+     *        anchor matters, not its exact distance from the selection's
+     *        own center).
+     */
+    void beginRotateDrag(sound_mind::core::TimeFrequencyPoint point);
+
+    /**
+     * @brief Continues an in-progress rotate drag, live-updating the
+     *        committed selection's own rotation angle by however far
+     *        `point` has swept around the selection's own center since
+     *        `beginRotateDrag()`. A no-op if no rotate drag is in
+     *        progress.
+     *
+     * Unlike `continueSelectionDrag()` (which only live-previews an
+     * as-yet-uncommitted shape), this directly updates the *committed*
+     * selection on every call - there's no separate "commit" step,
+     * since a rotate drag only ever acts on a selection that's already
+     * committed. Emits both `boundsChanged()` and `selectionChanged()`.
+     *
+     * @param point The cursor's current position, in time/frequency
+     *        space.
+     */
+    void continueRotateDrag(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief Ends an in-progress rotate drag - the rotation applied by
+    ///        continueRotateDrag() along the way is already fully
+    ///        committed, so this only clears the drag-active bookkeeping.
+    ///        A no-op if no rotate drag is in progress.
+    void endRotateDrag();
+
+    /// @brief Abandons an in-progress rotate drag, reverting the
+    ///        committed selection's own rotation back to whatever it was
+    ///        when `beginRotateDrag()` started. A no-op if no rotate drag
+    ///        is in progress. Emits `boundsChanged()`/`selectionChanged()`
+    ///        if the rotation actually reverted to something different.
+    void cancelRotateDrag();
+
+    /**
+     * @brief The rotate handle's own current position, to draw and hit-
+     *        test against - `docs/sound-mind-design.md`'s "Selection"
+     *        ("Rectangle" - "resize and rotate handles"; only the rotate
+     *        handle is built so far).
+     *
+     * A fixed proportion of the (unrotated) rectangle's own normalized
+     * height above its own top edge, at its own horizontal midpoint,
+     * carried along with the shape's own current rotation - a simple,
+     * zoom-proportionate placement rather than a fixed on-screen pixel
+     * offset, confirmed as reasonable by not needing `CanvasWidget` to
+     * hand this class any screen-space geometry at all.
+     *
+     * @return The handle's own position, or `std::nullopt` if
+     *         `canRotateSelection()` is `false` (no committed Rectangle-
+     *         origin selection to rotate).
+     */
+    [[nodiscard]] std::optional<sound_mind::core::TimeFrequencyPoint> displayRotationHandle() const;
+
     /// @brief Clears the current selection ("Deselect") - a no-op if
     ///        there isn't one. Emits boundsChanged() and
     ///        selectionChanged().
@@ -356,6 +434,31 @@ public:
      * @param gradient The color (or gradient) to fill with.
      */
     void fill(const sound_mind::core::Gradient& gradient);
+
+    /**
+     * @brief Warps the current committed selection's own bounding box
+     *        along `curve` - the actual work behind Edit → Warp Selection
+     *        (`docs/sound-mind-design.md`'s "Selection" ("Warp"),
+     *        `v0.Y.35.1` Installment C). A no-op if there's no committed
+     *        selection.
+     *
+     * Appends a new `WarpOperation` (not superseding anything, the same
+     * "a fresh, additive edit" reasoning `fill()`'s own docs give) and
+     * rebuilds the target layer's content via `paintController_`. Always
+     * scoped to `committedBounds_` - the selection's own plain bounding
+     * box - regardless of its actual shape (Rectangle, rotated Rectangle,
+     * Lasso, Wand, or a boolean-combined result); see
+     * `sound_mind::core::WarpOperation`'s own docs for why.
+     *
+     * Emits contentChanged() for the affected layer.
+     *
+     * @param curve The warp curve - typically `PickController::
+     *        selectedPath()`'s own result (see `MainWindow::
+     *        warpSelection()`'s own docs for the full workflow).
+     * @param axis Which direction content is displaced.
+     * @param mode How far along each column/row the deflection carries.
+     */
+    void warpSelection(sound_mind::core::Path curve, sound_mind::core::WarpAxis axis, sound_mind::core::WarpMode mode);
 
     /// @brief Whether a clip is currently on the clipboard (from a prior
     ///        copySelection()/cutSelection()).
@@ -513,6 +616,15 @@ private:
     void combineIntoCommittedSelection(const sound_mind::core::TimeFrequencyRect& newBounds,
                                         const std::optional<sound_mind::core::SelectionRegion>& newBoundary);
 
+    /// @brief Applies committedRotationRadians_ to committedUnrotatedRect_,
+    /// updating committedBounds_/committedBoundary_ to match - shared by
+    /// continueRotateDrag() and cancelRotateDrag()'s own revert. Sets
+    /// committedBoundary_ back to std::nullopt (a plain rectangle) rather
+    /// than a degenerate zero-rotation Path when the angle is close enough
+    /// to zero, the same "nullopt is the well-understood default" economy
+    /// every other shape already follows.
+    void refreshRotatedSelection();
+
     PaintController* paintController_;
     sound_mind::core::Project* project_ = nullptr;
 
@@ -534,6 +646,31 @@ private:
     /// box, when present) - see this class's own docs.
     std::optional<sound_mind::core::SelectionRegion> committedBoundary_;
     sound_mind::core::LayerId selectionLayer_ = 0;
+
+    /// @brief The committed selection's own current rotation, in radians -
+    /// present (starting at 0.0) exactly when the committed selection
+    /// came from a Rectangle drag (rotatable); std::nullopt for Lasso/
+    /// Wand/boolean-combined selections - see canRotateSelection()'s own
+    /// docs.
+    std::optional<double> committedRotationRadians_;
+    /// @brief The committed selection's own *original*, never-rotated
+    /// bounding rectangle - rotatedRectangle() is always computed fresh
+    /// from this (never compounded from an already-rotated shape, which
+    /// would accumulate floating-point drift over repeated small drags).
+    /// Only meaningful alongside committedRotationRadians_.
+    sound_mind::core::TimeFrequencyRect committedUnrotatedRect_;
+
+    bool rotateDragActive_ = false;
+    /// @brief The angle (frequencyToTimeScale-normalized radians, from
+    /// committedUnrotatedRect_'s own center) beginRotateDrag()'s own
+    /// anchor point sat at - continueRotateDrag() compares each new
+    /// point's own angle against this to derive how far the drag has
+    /// swept.
+    double rotateDragStartAngleRadians_ = 0.0;
+    /// @brief committedRotationRadians_'s own value when the rotate drag
+    /// started - continueRotateDrag() adds the drag's own angular sweep
+    /// to this, and cancelRotateDrag() reverts straight back to it.
+    double rotateDragStartRotation_ = 0.0;
 
     std::optional<sound_mind::core::Clip> clipboard_;
     std::optional<sound_mind::core::TimeFrequencyRect> clipboardBounds_;

@@ -46,6 +46,7 @@
 #include "test_tool_configuration_panel.h"
 #include "test_tool_palette_controller.h"
 #include "test_undo_stack.h"
+#include "test_warp_dialog.h"
 
 int main(int argc, char** argv) {
     // Redirects ini-format QSettings storage (MainWindow's recentProjects_,
@@ -162,6 +163,9 @@ int main(int argc, char** argv) {
 
     UndoStackTest undoStackTest;
     status |= QTest::qExec(&undoStackTest, argc, argv);
+
+    WarpDialogTest warpDialogTest;
+    status |= QTest::qExec(&warpDialogTest, argc, argv);
 
     return status;
 }

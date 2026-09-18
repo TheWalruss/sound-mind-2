@@ -249,6 +249,22 @@ public:
     [[nodiscard]] std::optional<sound_mind::core::TimeFrequencyRect> selectionBounds() const;
 
     /**
+     * @brief The selected object's own `Path`, if it's a `PaintOperation`
+     *        - the actual mechanism behind supplying Warp with a curve
+     *        (`docs/sound-mind-design.md`'s "Selection" ("Warp"),
+     *        `v0.Y.35.1` Installment C): draw a stroke as an ordinary
+     *        paint stroke, then Pick it, and Edit → Warp Selection reads
+     *        its own `Path` from here - no dedicated curve-drawing mode
+     *        needed at all. An owned copy, same "owned, not shared"
+     *        reasoning `selectedConfiguration()`'s own docs give.
+     * @return The selected object's own path, or `std::nullopt` if
+     *         nothing is selected, or the selected object isn't a
+     *         `PaintOperation` (a `FillOperation`/`PasteOperation`/
+     *         `WarpOperation` has no `Path` of its own to warp along).
+     */
+    [[nodiscard]] std::optional<sound_mind::core::Path> selectedPath() const;
+
+    /**
      * @brief Continues an in-progress drag, live-previewing the selected
      *        object translated by how far the cursor has moved since
      *        pick(). A no-op if nothing is selected.

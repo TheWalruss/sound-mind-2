@@ -277,6 +277,36 @@ Path fitPathToPoints(const std::vector<TimeFrequencyPoint>& rawPoints, double fr
     return path;
 }
 
+Path rotatedRectangle(TimeFrequencyRect rect, double angleRadians, double frequencyToTimeScale) {
+    const TimeFrequencyPoint center{(rect.startTimeSeconds + rect.endTimeSeconds) / 2.0,
+                                     (rect.lowFrequencyHz + rect.highFrequencyHz) / 2.0};
+    const double cosA = std::cos(angleRadians);
+    const double sinA = std::sin(angleRadians);
+
+    const auto rotateCorner = [&](TimeFrequencyPoint corner) {
+        const double dt = corner.timeSeconds - center.timeSeconds;
+        const double df = (corner.frequencyHz - center.frequencyHz) / frequencyToTimeScale;
+        const double rotatedDt = dt * cosA - df * sinA;
+        const double rotatedDf = dt * sinA + df * cosA;
+        return TimeFrequencyPoint{center.timeSeconds + rotatedDt,
+                                   center.frequencyHz + rotatedDf * frequencyToTimeScale};
+    };
+
+    Path path;
+    for (const TimeFrequencyPoint& corner : {
+             TimeFrequencyPoint{rect.startTimeSeconds, rect.lowFrequencyHz},
+             TimeFrequencyPoint{rect.endTimeSeconds, rect.lowFrequencyHz},
+             TimeFrequencyPoint{rect.endTimeSeconds, rect.highFrequencyHz},
+             TimeFrequencyPoint{rect.startTimeSeconds, rect.highFrequencyHz},
+         }) {
+        PathNode node;
+        node.anchor = rotateCorner(corner);
+        node.type = PathNodeType::Corner;
+        path.addNode(node);
+    }
+    return path;
+}
+
 bool containsPoint(const Path& path, TimeFrequencyPoint point) noexcept {
     const std::vector<PathNode>& nodes = path.nodes();
     const std::size_t nodeCount = nodes.size();

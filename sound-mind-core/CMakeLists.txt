@@ -31,6 +31,7 @@ add_library(sound-mind-core
     src/fill_application.cpp
     src/paste_operation.cpp
     src/paste_application.cpp
+    src/warp_application.cpp
     src/mind_shot.cpp
     src/mind_grain.cpp
     src/music_theory.cpp

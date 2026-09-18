@@ -103,6 +103,7 @@ void CanvasWidget::setToolMode(ToolMode mode) {
     paintStrokeActive_ = false;
     pickStrokeActive_ = false;
     selectStrokeActive_ = false;
+    rotateHandleDragActive_ = false;
 }
 
 void CanvasWidget::setPaintPreviewPath(sound_mind::core::Path path) {
@@ -132,6 +133,11 @@ void CanvasWidget::setSelectionBounds(std::optional<sound_mind::core::TimeFreque
 
 void CanvasWidget::setSelectionHasMaskShape(bool hasMaskShape) {
     selectionHasMaskShape_ = hasMaskShape;
+    update();
+}
+
+void CanvasWidget::setSelectionRotationHandle(std::optional<sound_mind::core::TimeFrequencyPoint> handlePosition) {
+    selectionRotationHandle_ = handlePosition;
     update();
 }
 
@@ -413,6 +419,23 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         painter.drawRect(widgetRectFor(*selectionBounds_));
     }
 
+    // The current selection's own rotate handle (Rectangle only) - see
+    // setSelectionRotationHandle()'s own docs. A small filled dot, the
+    // same visual weight kPathHandleRadius-equivalent path-editing
+    // handles elsewhere already use, connected back to the selection's
+    // own center with a thin line so the handle doesn't read as an
+    // unrelated, floating mark.
+    if (project_ != nullptr && selectionRotationHandle_.has_value() && selectionBounds_.has_value()) {
+        constexpr double kRotationHandleRadius = 4.0;
+        const QPointF handlePoint = timeFrequencyToWidgetPoint(*selectionRotationHandle_);
+        const QPointF centerPoint = widgetRectFor(*selectionBounds_).center();
+        painter.setPen(QPen(Qt::white, 1));
+        painter.drawLine(centerPoint, handlePoint);
+        painter.setBrush(Qt::white);
+        painter.drawEllipse(handlePoint, kRotationHandleRadius, kRotationHandleRadius);
+        painter.setBrush(Qt::NoBrush);
+    }
+
     // Axis Labels (see setVerticalAxisLabelMode()'s/
     // setHorizontalAxisLabelMode()'s own docs) - drawn last, over
     // everything else, the same "always legible" precedent the playhead
@@ -635,6 +658,20 @@ void CanvasWidget::mousePressEvent(QMouseEvent* event) {
         pickStrokeActive_ = true;
         emit pickStrokeStarted(*point);
     } else if (toolMode_ == ToolMode::Select) {
+        // A press within the rotate handle's own hit radius takes
+        // priority over starting a brand-new selection - the same
+        // kHitRadiusPixels convention ToneCurveEditor's own handle
+        // hit-testing already established.
+        constexpr double kHitRadiusPixels = 8.0;
+        if (selectionRotationHandle_.has_value()) {
+            const QPointF handleScreen = timeFrequencyToWidgetPoint(*selectionRotationHandle_);
+            const QPointF delta = event->position() - handleScreen;
+            if (delta.x() * delta.x() + delta.y() * delta.y() <= kHitRadiusPixels * kHitRadiusPixels) {
+                rotateHandleDragActive_ = true;
+                emit selectionRotateStarted(*point);
+                return;
+            }
+        }
         selectStrokeActive_ = true;
         emit selectStrokeStarted(*point, event->modifiers());
     } else {
@@ -663,6 +700,12 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
         }
         return;
     }
+    if (toolMode_ == ToolMode::Select && rotateHandleDragActive_) {
+        if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
+            emit selectionRotateContinued(*point);
+        }
+        return;
+    }
     if (toolMode_ == ToolMode::Select && selectStrokeActive_) {
         if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
             emit selectStrokeContinued(*point);
@@ -687,6 +730,11 @@ void CanvasWidget::mouseReleaseEvent(QMouseEvent* event) {
     if (toolMode_ == ToolMode::Pick && pickStrokeActive_) {
         pickStrokeActive_ = false;
         emit pickStrokeEnded();
+        return;
+    }
+    if (toolMode_ == ToolMode::Select && rotateHandleDragActive_) {
+        rotateHandleDragActive_ = false;
+        emit selectionRotateEnded();
         return;
     }
     if (toolMode_ == ToolMode::Select && selectStrokeActive_) {

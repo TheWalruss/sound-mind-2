@@ -277,6 +277,21 @@ public:
     void setSelectionHasMaskShape(bool hasMaskShape);
 
     /**
+     * @brief Sets (or clears) the current Rectangle selection's own
+     *        rotate handle overlay and repaints - a small circle drawn
+     *        over whatever the canvas otherwise shows, `v0.Y.35.1`
+     *        Installment C. Also the handle's own hit-test target - a
+     *        press within its own hit radius starts a rotate drag
+     *        (`selectionRotateStarted()`) instead of a new selection.
+     * @param handlePosition The handle's own position - either
+     *        `SelectionController::displayRotationHandle()`'s own live
+     *        or committed value; `std::nullopt` for a non-rotatable
+     *        selection (Lasso, Wand, a combined result, or none at all)
+     *        draws (and hit-tests) nothing.
+     */
+    void setSelectionRotationHandle(std::optional<sound_mind::core::TimeFrequencyPoint> handlePosition);
+
+    /**
      * @brief Sets (or clears) the MindWave being live-previewed, and
      *        repaints - a semi-transparent (50% opacity) grayscale
      *        rendering of `wave`'s own `[0, 1]` field
@@ -486,6 +501,24 @@ signals:
     /// @brief The in-progress selection drag ended (`Select` tool mode,
     ///        left button released).
     void selectStrokeEnded();
+
+    /// @brief A rotate-handle drag started (`Select` tool mode, left
+    ///        button pressed within the handle's own hit-test radius -
+    ///        `docs/sound-mind-design.md`'s "Selection" ("Rectangle"),
+    ///        `v0.Y.35.1` Installment C). Takes priority over starting a
+    ///        new `selectStrokeStarted()` gesture whenever the press
+    ///        lands on the handle.
+    /// @param point The press position, converted to time/frequency space.
+    void selectionRotateStarted(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief The in-progress rotate-handle drag continued (`Select` tool
+    ///        mode, left button held and moved).
+    /// @param point The new position, converted to time/frequency space.
+    void selectionRotateContinued(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief The in-progress rotate-handle drag ended (`Select` tool
+    ///        mode, left button released).
+    void selectionRotateEnded();
 
     /**
      * @brief A new Path node was placed (`Path` tool mode, left button
@@ -701,6 +734,8 @@ private:
     std::optional<sound_mind::core::TimeFrequencyRect> selectionBounds_;
     std::optional<sound_mind::core::Path> selectionBoundary_;
     bool selectionHasMaskShape_ = false;
+    std::optional<sound_mind::core::TimeFrequencyPoint> selectionRotationHandle_;
+    bool rotateHandleDragActive_ = false;
 
     /// @brief The MindWave currently being previewed, if any - kept only
     ///        so setProject() can tell whether there's actually a preview

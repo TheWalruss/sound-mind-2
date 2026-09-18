@@ -1002,6 +1002,31 @@ public slots:
     void fillSelection();
 
     /**
+     * @brief Shows `WarpDialog` and, if accepted, warps the current
+     *        selection along the currently Picked object's own `Path` -
+     *        the actual work behind the Edit menu's Warp Selection action
+     *        (`docs/sound-mind-design.md`'s "Selection" ("Warp"),
+     *        `v0.Y.35.1` Installment C).
+     *
+     * **The workflow, in full**: draw a curve as an ordinary paint
+     * stroke, switch to Pick and click it (selecting it the same way
+     * Pick already selects anything), then choose Edit → Warp Selection -
+     * no dedicated curve-drawing mode exists, or is needed, since Pick's
+     * own existing click-to-select mechanic already supplies exactly
+     * this. A no-op (dialog never shown) unless *both* a selection
+     * (`ToolPaletteController::hasSelection()`) and a Picked, `Path`-
+     * bearing object (`ToolPaletteController::selectedPath()`) exist -
+     * Select and Pick can be used in either order beforehand, since a
+     * committed selection persists across tool-mode switches independent
+     * of whatever is currently Picked (Pick's own selection, by contrast,
+     * is what actually needs to still be live - stay in Pick mode, don't
+     * switch back to Select, right up until choosing this action).
+     * Cancelling the dialog leaves everything untouched, the same
+     * convention `fillSelection()`'s own docs describe.
+     */
+    void warpSelection();
+
+    /**
      * @brief Copies the current selection's own pixels onto the clipboard -
      *        the actual work behind the Edit menu's Copy action. Delegates
      *        to `SelectionController::copySelection()`; a no-op if there's

@@ -229,6 +229,17 @@ std::optional<sound_mind::core::TimeFrequencyRect> PickController::selectionBoun
     return pickedOperation_->bounds();
 }
 
+std::optional<sound_mind::core::Path> PickController::selectedPath() const {
+    if (!pickedOperationId_.has_value()) {
+        return std::nullopt;
+    }
+    const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_);
+    if (paint == nullptr) {
+        return std::nullopt;
+    }
+    return paint->path();
+}
+
 void PickController::continueMove(sound_mind::core::TimeFrequencyPoint point) {
     if (pathEditSession_.isActive()) {
         if (gridSnappingEnabled_) {

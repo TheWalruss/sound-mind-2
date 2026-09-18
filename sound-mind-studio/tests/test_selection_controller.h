@@ -62,4 +62,15 @@ private slots:
     void subtractCarvesTheNewRectangleOutOfTheExistingSelection();
     void intersectKeepsOnlyTheOverlapBetweenOldAndNewSelections();
     void aWhiffedCombineGestureLeavesTheExistingSelectionUntouched();
+
+    // Rectangle's own rotate handle (v0.Y.35.1 Installment C).
+    void freshControllerCannotRotate();
+    void canRotateSelectionIsTrueOnlyAfterAPlainRectangleCommit();
+    void rotatingAppliesARotatedPathBoundaryAndBackToNulloptAtZero();
+    void cancelRotateDragRevertsToThePriorRotation();
+    void displayRotationHandleIsPresentOnlyWhenRotatable();
+
+    // Warp (v0.Y.35.1 Installment C).
+    void warpSelectionAppendsAWarpOperationOverTheCommittedSelection();
+    void warpSelectionIsANoOpWithNoCommittedSelection();
 };

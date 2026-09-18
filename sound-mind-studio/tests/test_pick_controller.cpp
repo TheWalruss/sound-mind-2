@@ -1494,3 +1494,48 @@ void PickControllerTest::continuePathNodeDragSnapsToTheNearestGridLineWhenSnapTo
     QCOMPARE(node.anchor.timeSeconds, 0.3);  // 0.2 + 0.1 delta.
     QCOMPARE(node.anchor.frequencyHz, expectedTranslatedFrequency(400.0, 400.0, 300.0));
 }
+
+void PickControllerTest::selectedPathReturnsTheGeometryOfASelectedPaintOperation() {
+    // Warp's own curve-input workflow (Deferred Selection, Installment C)
+    // relies on selectedPath() to hand back a Picked stroke's own Path -
+    // this is the mechanism, exercised directly rather than through
+    // MainWindow's own UI glue.
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    const auto path = controller.selectedPath();
+
+    QVERIFY(path.has_value());
+    QCOMPARE(path->nodes().size(), std::size_t{2});
+    QCOMPARE(path->nodes().at(0).anchor.timeSeconds, 0.2);
+    QCOMPARE(path->nodes().at(0).anchor.frequencyHz, 400.0);
+    QCOMPARE(path->nodes().at(1).anchor.timeSeconds, 0.4);
+    QCOMPARE(path->nodes().at(1).anchor.frequencyHz, 600.0);
+}
+
+void PickControllerTest::selectedPathIsNulloptForAFillOrPasteSelectionOrNoSelection() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addFillOperation(project, layerId, 0.2, 400.0, 0.4, 600.0);
+    addPasteOperation(project, layerId, 1.0, 400.0, 1.2, 600.0);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    QVERIFY(!controller.selectedPath().has_value());  // no selection yet.
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+    QVERIFY(!controller.selectedPath().has_value());
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{1.1, 500.0}));
+    QVERIFY(!controller.selectedPath().has_value());
+}

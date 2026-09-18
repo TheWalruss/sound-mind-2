@@ -238,6 +238,39 @@ void from_json(const nlohmann::json& json, Path& path);
                                     double simplifyToleranceSeconds);
 
 /**
+ * @brief `rect`'s own four corners, rotated by `angleRadians` around the
+ *        rectangle's own center, as a closed 4-node `Path` - the actual
+ *        shape behind Rectangle's own rotate handle
+ *        (`docs/sound-mind-design.md`'s "Selection" ("Rectangle"),
+ *        `v0.Y.35.1` Installment C).
+ *
+ * Rotation happens in the same `frequencyToTimeScale`-normalized space
+ * `fitPathToPoints()`/brush sizing already use as their own common
+ * yardstick between `timeSeconds` and `frequencyHz` - confirmed with the
+ * user over rotating in raw on-screen pixel space, since a normalized
+ * rotation stays geometrically consistent regardless of canvas zoom,
+ * while a screen-space one would visibly change shape (in real time/Hz
+ * terms) if the user zoomed in or out first. Unlike a Lasso's own
+ * boundary, this normalization is already exactly linear (a plain
+ * division, not a log-bin conversion) - `frequencyHz / frequencyToTimeScale`
+ * gives a normalized value directly usable in an ordinary 2D rotation
+ * matrix alongside `timeSeconds`, with no bin/log-scale math needed at all.
+ *
+ * @param rect The rectangle to rotate.
+ * @param angleRadians How far to rotate, counterclockwise (matching the
+ *        conventional mathematical sense in this normalized space -
+ *        increasing `timeSeconds` to the right, increasing normalized
+ *        frequency upward).
+ * @param frequencyToTimeScale The same per-project normalization scale
+ *        `fitPathToPoints()`'s own docs describe; must be positive.
+ * @return A 4-node, straight-edged (`PathNodeType::Corner`) closed `Path` -
+ *         all four of `rect`'s own corners, each rotated around `rect`'s
+ *         own center. A fresh, fully transparent `Gradient` (`Path`'s own
+ *         default), same as `fitPathToPoints()`'s own result.
+ */
+[[nodiscard]] Path rotatedRectangle(TimeFrequencyRect rect, double angleRadians, double frequencyToTimeScale);
+
+/**
  * @brief Whether `point` falls within the closed region `path`'s own
  *        curve traces - the membership test behind a Lasso selection
  *        (`docs/sound-mind-design.md`'s "Lasso", `v0.Y.35.1` Installment

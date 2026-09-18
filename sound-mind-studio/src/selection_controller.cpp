@@ -1,6 +1,7 @@
 #include "sound_mind/studio/selection_controller.h"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 
 #include "sound_mind/core/fill_operation.h"
@@ -9,6 +10,7 @@
 #include "sound_mind/core/paste_application.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/wand_selection.h"
+#include "sound_mind/core/warp_operation.h"
 #include "sound_mind/studio/paint_controller.h"
 
 namespace sound_mind::studio {
@@ -56,6 +58,31 @@ sound_mind::core::FrameBinRange unionRange(sound_mind::core::FrameBinRange a, so
     return result;
 }
 
+/// @brief `rect`'s own center point.
+sound_mind::core::TimeFrequencyPoint rectCenter(const sound_mind::core::TimeFrequencyRect& rect) {
+    return sound_mind::core::TimeFrequencyPoint{(rect.startTimeSeconds + rect.endTimeSeconds) / 2.0,
+                                                 (rect.lowFrequencyHz + rect.highFrequencyHz) / 2.0};
+}
+
+/// @brief The angle (radians) from `center` to `point`, in the same
+/// frequencyToTimeScale-normalized space rotatedRectangle() itself
+/// rotates in - the shared geometry beginRotateDrag()/continueRotateDrag()
+/// use to turn a dragged point into an angle.
+double angleOfPoint(sound_mind::core::TimeFrequencyPoint point, sound_mind::core::TimeFrequencyPoint center,
+                    double frequencyToTimeScale) {
+    const double dt = point.timeSeconds - center.timeSeconds;
+    const double df = (point.frequencyHz - center.frequencyHz) / frequencyToTimeScale;
+    return std::atan2(df, dt);
+}
+
+/// @brief How far above rect's own top edge, as a fraction of its own
+/// normalized height, the rotate handle sits - see
+/// SelectionController::displayRotationHandle()'s own docs. A floor
+/// height (in normalized units) keeps the handle from crowding a very
+/// short/flat rectangle right up against its own top edge.
+constexpr double kRotationHandleHeightFraction = 0.2;
+constexpr double kRotationHandleMinNormalizedOffset = 0.5;
+
 }  // namespace
 
 SelectionController::SelectionController(PaintController* paintController, QObject* parent)
@@ -76,6 +103,8 @@ void SelectionController::setProject(sound_mind::core::Project* project) {
     lassoPreviewPath_ = sound_mind::core::Path{};
     pendingWandRegion_.reset();
     pendingWandBounds_.reset();
+    rotateDragActive_ = false;
+    committedRotationRadians_.reset();
     const bool hadSelection = committedBounds_.has_value();
     committedBounds_.reset();
     committedBoundary_.reset();
@@ -206,6 +235,7 @@ void SelectionController::endSelectionDrag() {
             const bool hadSelection = committedBounds_.has_value();
             committedBounds_.reset();
             committedBoundary_.reset();
+            committedRotationRadians_.reset();
             emit boundsChanged();
             if (hadSelection) {
                 emit selectionChanged();
@@ -214,11 +244,24 @@ void SelectionController::endSelectionDrag() {
         return;
     }
 
-    if (currentCombineMode_ == SelectionCombineMode::Replace || !committedBounds_.has_value()) {
+    const bool effectivelyReplacing = currentCombineMode_ == SelectionCombineMode::Replace || !committedBounds_.has_value();
+    if (effectivelyReplacing) {
         committedBounds_ = newBounds;
         committedBoundary_ = std::move(newBoundary);
     } else {
+        // A boolean-combined result is always Mask-kind (see
+        // SelectionRegion::combine()'s own docs) - never rotatable,
+        // regardless of what shape either operand started out as.
         combineIntoCommittedSelection(*newBounds, newBoundary);
+    }
+    // Only a plain, freshly-drawn Rectangle (never a Lasso, a Wand
+    // selection, or any combined result) is rotatable - see
+    // canRotateSelection()'s own docs.
+    if (effectivelyReplacing && currentShape_ == SelectionShape::Rectangle) {
+        committedRotationRadians_ = 0.0;
+        committedUnrotatedRect_ = *committedBounds_;
+    } else {
+        committedRotationRadians_.reset();
     }
     emit boundsChanged();
     emit selectionChanged();
@@ -267,10 +310,99 @@ void SelectionController::cancelSelectionDrag() {
     emit boundsChanged();  // reverts the display back to the committed selection (or none).
 }
 
+void SelectionController::refreshRotatedSelection() {
+    if (project_ == nullptr) {
+        return;
+    }
+    const double scale = sound_mind::core::frequencyToTimeScaleFor(project_->settings());
+    // Close enough to zero stays a plain rectangle (std::nullopt) rather
+    // than a degenerate zero-rotation Path - see this method's own docs.
+    if (std::abs(*committedRotationRadians_) < 1e-9) {
+        committedBoundary_.reset();
+        committedBounds_ = committedUnrotatedRect_;
+        return;
+    }
+    sound_mind::core::Path rotated =
+        sound_mind::core::rotatedRectangle(committedUnrotatedRect_, *committedRotationRadians_, scale);
+    committedBounds_ = rotated.bounds();
+    committedBoundary_ = sound_mind::core::SelectionRegion(std::move(rotated));
+}
+
+void SelectionController::beginRotateDrag(sound_mind::core::TimeFrequencyPoint point) {
+    if (!canRotateSelection() || project_ == nullptr) {
+        return;
+    }
+    rotateDragActive_ = true;
+    rotateDragStartRotation_ = *committedRotationRadians_;
+    const double scale = sound_mind::core::frequencyToTimeScaleFor(project_->settings());
+    rotateDragStartAngleRadians_ = angleOfPoint(point, rectCenter(committedUnrotatedRect_), scale);
+}
+
+void SelectionController::continueRotateDrag(sound_mind::core::TimeFrequencyPoint point) {
+    if (!rotateDragActive_ || project_ == nullptr) {
+        return;
+    }
+    const double scale = sound_mind::core::frequencyToTimeScaleFor(project_->settings());
+    const double currentAngle = angleOfPoint(point, rectCenter(committedUnrotatedRect_), scale);
+    const double sweep = currentAngle - rotateDragStartAngleRadians_;
+    committedRotationRadians_ = rotateDragStartRotation_ + sweep;
+    refreshRotatedSelection();
+    emit boundsChanged();
+    emit selectionChanged();
+}
+
+void SelectionController::endRotateDrag() {
+    // The rotation is already fully committed live, via
+    // continueRotateDrag() - nothing further to do here.
+    rotateDragActive_ = false;
+}
+
+void SelectionController::cancelRotateDrag() {
+    if (!rotateDragActive_) {
+        return;
+    }
+    rotateDragActive_ = false;
+    const bool changed = committedRotationRadians_.has_value() && *committedRotationRadians_ != rotateDragStartRotation_;
+    committedRotationRadians_ = rotateDragStartRotation_;
+    refreshRotatedSelection();
+    if (changed) {
+        emit boundsChanged();
+        emit selectionChanged();
+    }
+}
+
+std::optional<sound_mind::core::TimeFrequencyPoint> SelectionController::displayRotationHandle() const {
+    if (!canRotateSelection()) {
+        return std::nullopt;
+    }
+    const double scale = sound_mind::core::frequencyToTimeScaleFor(project_ != nullptr ? project_->settings()
+                                                                                          : sound_mind::core::ProjectSettings{});
+    const double normalizedHeight =
+        (committedUnrotatedRect_.highFrequencyHz - committedUnrotatedRect_.lowFrequencyHz) / scale;
+    const double offsetNormalized =
+        std::max(normalizedHeight * kRotationHandleHeightFraction, kRotationHandleMinNormalizedOffset);
+
+    // The handle's own position before rotation: directly above the
+    // rectangle's own top-center, offsetNormalized further up.
+    const sound_mind::core::TimeFrequencyPoint unrotatedHandle{
+        (committedUnrotatedRect_.startTimeSeconds + committedUnrotatedRect_.endTimeSeconds) / 2.0,
+        committedUnrotatedRect_.highFrequencyHz + offsetNormalized * scale};
+
+    const sound_mind::core::TimeFrequencyPoint center = rectCenter(committedUnrotatedRect_);
+    const double angle = *committedRotationRadians_;
+    const double dt = unrotatedHandle.timeSeconds - center.timeSeconds;
+    const double df = (unrotatedHandle.frequencyHz - center.frequencyHz) / scale;
+    const double rotatedDt = dt * std::cos(angle) - df * std::sin(angle);
+    const double rotatedDf = dt * std::sin(angle) + df * std::cos(angle);
+    return sound_mind::core::TimeFrequencyPoint{center.timeSeconds + rotatedDt,
+                                                 center.frequencyHz + rotatedDf * scale};
+}
+
 void SelectionController::clearSelection() {
     const bool hadSelection = committedBounds_.has_value();
     committedBounds_.reset();
     committedBoundary_.reset();
+    committedRotationRadians_.reset();
     if (hadSelection) {
         emit boundsChanged();
         emit selectionChanged();
@@ -322,6 +454,20 @@ void SelectionController::fill(const sound_mind::core::Gradient& gradient) {
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_, gradient,
                                                                     std::nullopt, committedBoundary_));
+    paintController_->notifyOperationCommitted();
+    paintController_->rebuildLayerContent(selectionLayer_);
+    emit contentChanged(selectionLayer_);
+}
+
+void SelectionController::warpSelection(sound_mind::core::Path curve, sound_mind::core::WarpAxis axis,
+                                          sound_mind::core::WarpMode mode) {
+    if (!committedBounds_.has_value() || project_ == nullptr) {
+        return;
+    }
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    const sound_mind::core::OperationId id = log.reserveId();
+    log.append(std::make_unique<sound_mind::core::WarpOperation>(id, selectionLayer_, *committedBounds_,
+                                                                    std::move(curve), axis, mode));
     paintController_->notifyOperationCommitted();
     paintController_->rebuildLayerContent(selectionLayer_);
     emit contentChanged(selectionLayer_);
@@ -415,6 +561,9 @@ std::optional<sound_mind::core::OperationId> SelectionController::pasteInto(soun
     selectionLayer_ = targetLayer;
     committedBounds_ = *clipboardBounds_;
     committedBoundary_ = clipboardBoundary_;
+    // Never a rotatable Rectangle - a pasted selection was never drawn
+    // fresh, regardless of what shape it was originally copied from.
+    committedRotationRadians_.reset();
     emit boundsChanged();
     emit selectionChanged();
 

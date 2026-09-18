@@ -64,6 +64,7 @@
 #include "sound_mind/studio/qt_image_conversion.h"
 #include "sound_mind/studio/record_panel.h"
 #include "sound_mind/studio/theme.h"
+#include "sound_mind/studio/warp_dialog.h"
 
 #ifndef SOUND_MIND_VERSION
 #define SOUND_MIND_VERSION "unknown"
@@ -308,6 +309,18 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
                     toolPaletteController_->beginSelectionDrag(*layerId, point);
                 }
             });
+    // Rectangle's own rotate handle (v0.Y.35.1 Installment C) - a
+    // separate gesture from selectStrokeStarted() above (it transforms
+    // an *existing* committed selection, needing no target-layer
+    // resolution at all - SelectionController already knows which layer
+    // its own committed selection belongs to).
+    connect(canvas_, &CanvasWidget::selectionRotateStarted, this,
+            [this](sound_mind::core::TimeFrequencyPoint point) { toolPaletteController_->beginRotateDrag(point); });
+    connect(canvas_, &CanvasWidget::selectionRotateContinued, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        toolPaletteController_->continueRotateDrag(point);
+    });
+    connect(canvas_, &CanvasWidget::selectionRotateEnded, this,
+            [this]() { toolPaletteController_->endRotateDrag(); });
     connect(canvas_, &CanvasWidget::pathNodePlaced, this, [this](sound_mind::core::TimeFrequencyPoint point) {
         if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->placePathNode(*layerId, point);
@@ -547,6 +560,13 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // right above.
     QAction* captureMindGrainAction = editMenu->addAction(tr("Capture as Mind &Grain"));
     connect(captureMindGrainAction, &QAction::triggered, this, &MainWindow::captureMindGrain);
+
+    // Deferred Selection, Installment C (v0.Y.35.1) - no standard shortcut
+    // (matching Fill Selection's own no-shortcut choice above); a no-op
+    // with no selection or no suitable Picked curve, the same "always
+    // present" choice deleteAction/Cut/Copy/Paste all make.
+    QAction* warpSelectionAction = editMenu->addAction(tr("&Warp Selection..."));
+    connect(warpSelectionAction, &QAction::triggered, this, &MainWindow::warpSelection);
 
     editMenu->addSeparator();
 
@@ -1448,6 +1468,7 @@ void MainWindow::setPickModeEnabled(bool enabled) {
 void MainWindow::setSelectModeEnabled(bool enabled) {
     if (!enabled) {
         toolPaletteController_->cancelSelectionDrag();
+        toolPaletteController_->cancelRotateDrag();
     }
     setExclusiveToolMode(selectAction_, enabled, CanvasWidget::ToolMode::Select);
 }
@@ -1600,6 +1621,20 @@ void MainWindow::fillSelection() {
     const QColor picked = QColorDialog::getColor(QColor(255, 255, 0), this, tr("Fill Selection"));
     if (picked.isValid()) {
         fillSelectionWith(picked);
+    }
+}
+
+void MainWindow::warpSelection() {
+    if (!toolPaletteController_->hasSelection()) {
+        return;
+    }
+    const auto curve = toolPaletteController_->selectedPath();
+    if (!curve.has_value()) {
+        return;
+    }
+    WarpDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        toolPaletteController_->warpSelection(*curve, dialog.selectedAxis(), dialog.selectedMode());
     }
 }
 
