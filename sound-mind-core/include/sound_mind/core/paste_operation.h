@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/core/operation.h"
+#include "sound_mind/core/path.h"
 
 namespace sound_mind::core {
 
@@ -67,6 +68,18 @@ void from_json(const nlohmann::json& json, Clip& clip);
  * `FillOperation`/`PaintOperation`, applying a paste is a direct overwrite
  * of `bounds()`'s own cells from the clip's own pixel grid, not a gradient-
  * blended edit - see `applyPasteOperation()`'s own docs.
+ *
+ * **Lasso-shaped pastes** (`v0.Y.35.1` Installment A): the same
+ * bounding-box-vs-narrowing-shape split `FillOperation` establishes -
+ * `bounds()` is always the placement's own bounding box; `boundary()`,
+ * when present, additionally narrows which of the clip's own cells
+ * actually get written, leaving the destination's own prior content
+ * untouched everywhere else within that bounding box - see
+ * `applyPasteOperation()`'s own docs. The clip itself (`clip()`) is
+ * always a plain rectangular raster regardless - a Lasso Copy still
+ * captures its own full bounding box's worth of pixels, exactly like a
+ * Rectangle Copy always has; only where those pixels actually get
+ * *written back* on paste is narrowed.
  */
 class PasteOperation : public LayerContentOperation {
 public:
@@ -77,17 +90,30 @@ public:
      * @param placement Where on `targetLayer` the clip lands - its own
      *        time/frequency extent, an owned snapshot (same "owned, not
      *        shared" reasoning `FillOperation::bounds` already
-     *        established).
+     *        established). Always this paste's own bounding box, even
+     *        when `boundary` narrows it to a non-rectangular shape.
      * @param clip The captured pixel data to paste - an owned copy.
      * @param supersedes The prior operation this one replaces, if any -
      *        see Operation::supersedes()'s own docs.
+     * @param boundary The Lasso selection `clip` was originally copied
+     *        through, in the same coordinate space as `placement` -
+     *        narrowing which of `clip`'s own cells actually get written -
+     *        see `boundary()`'s own docs. `std::nullopt` (the default)
+     *        for a plain Rectangle-shaped paste, unchanged from every
+     *        paste this class supported before `v0.Y.35.1`.
      */
     PasteOperation(OperationId id, LayerId targetLayer, TimeFrequencyRect placement, Clip clip,
-                    std::optional<OperationId> supersedes = std::nullopt) noexcept
-        : LayerContentOperation(id, targetLayer, supersedes), placement_(placement), clip_(std::move(clip)) {}
+                    std::optional<OperationId> supersedes = std::nullopt,
+                    std::optional<Path> boundary = std::nullopt) noexcept
+        : LayerContentOperation(id, targetLayer, supersedes),
+          placement_(placement),
+          clip_(std::move(clip)),
+          boundary_(std::move(boundary)) {}
 
     /// @brief This operation's own time/frequency footprint - exactly
-    ///        where the clip was placed.
+    ///        where the clip was placed. Always the *bounding box*, even
+    ///        for a Lasso-shaped paste - see boundary()'s own docs and
+    ///        this class's own docs on why.
     /// @return This operation's own bounds.
     [[nodiscard]] TimeFrequencyRect bounds() const override { return placement_; }
 
@@ -95,17 +121,35 @@ public:
     /// @return This operation's own clip.
     [[nodiscard]] const Clip& clip() const noexcept { return clip_; }
 
+    /**
+     * @brief The Lasso selection this paste's own clip was originally
+     *        copied through, if any - narrows `applyPasteOperation()`'s
+     *        own write to cells `sound_mind::core::containsPoint()`
+     *        actually places inside it, leaving the destination's own
+     *        prior content at every other cell in `bounds()` untouched.
+     * @return The boundary curve, or `std::nullopt` for a plain
+     *         Rectangle-shaped paste (every cell in `clip()` is written,
+     *         exactly as before this field existed).
+     */
+    [[nodiscard]] const std::optional<Path>& boundary() const noexcept { return boundary_; }
+
     /// @copydoc Operation::translatedCopy()
     [[nodiscard]] std::unique_ptr<Operation> translatedCopy(
         OperationId newId, double deltaTimeSeconds, double deltaFrequencyBins,
         const sound_mind::codec::StreamCodecConfig& config) const override {
+        std::optional<Path> translatedBoundary;
+        if (boundary_) {
+            translatedBoundary = boundary_->translated(deltaTimeSeconds, deltaFrequencyBins, config);
+        }
         return std::make_unique<PasteOperation>(
-            newId, targetLayer_, translated(placement_, deltaTimeSeconds, deltaFrequencyBins, config), clip_, id());
+            newId, targetLayer_, translated(placement_, deltaTimeSeconds, deltaFrequencyBins, config), clip_, id(),
+            std::move(translatedBoundary));
     }
 
 private:
     TimeFrequencyRect placement_;
     Clip clip_;
+    std::optional<Path> boundary_;
 };
 
 }  // namespace sound_mind::core

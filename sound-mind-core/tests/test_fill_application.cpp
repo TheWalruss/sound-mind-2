@@ -13,6 +13,10 @@ using sound_mind::core::frameIndexToTime;
 using sound_mind::core::Gradient;
 using sound_mind::core::GradientStop;
 using sound_mind::core::LayerId;
+using sound_mind::core::Path;
+using sound_mind::core::PathNode;
+using sound_mind::core::PathNodeType;
+using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 
 namespace {
@@ -148,6 +152,53 @@ TEST_CASE("applyFillOperation clamps bounds extending past content's own edges, 
     const std::size_t edgeIndex = std::size_t{99} * content.frameCount + 99;
     REQUIRE(content.leftMagnitudeDb[edgeIndex] == Catch::Approx(-10.0f));
     REQUIRE(content.rightMagnitudeDb[edgeIndex] == Catch::Approx(-10.0f));
+}
+
+TEST_CASE("applyFillOperation with a boundary only writes cells actually inside it, leaving the rest of "
+          "bounds()'s own bounding box untouched",
+          "[core][fill_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+
+    TimeFrequencyRect bounds;
+    bounds.startTimeSeconds = frameIndexToTime(60.0, config);
+    bounds.endTimeSeconds = frameIndexToTime(63.0, config);
+    bounds.lowFrequencyHz = binIndexToFrequency(10.0f, config);
+    bounds.highFrequencyHz = binIndexToFrequency(13.0f, config);
+
+    // A rectangle covering only bounds()'s own left half (frames 60-61),
+    // with a generous margin clear of any cell's own exact grid point on
+    // either edge - matching test_paste_application.cpp's own analogous
+    // boundary-narrowing test.
+    Path boundary;
+    PathNode a;
+    a.anchor = TimeFrequencyPoint{frameIndexToTime(59.5, config), binIndexToFrequency(9.5f, config)};
+    a.type = PathNodeType::Corner;
+    PathNode b;
+    b.anchor = TimeFrequencyPoint{frameIndexToTime(61.5, config), binIndexToFrequency(9.5f, config)};
+    b.type = PathNodeType::Corner;
+    PathNode c;
+    c.anchor = TimeFrequencyPoint{frameIndexToTime(61.5, config), binIndexToFrequency(13.5f, config)};
+    c.type = PathNodeType::Corner;
+    PathNode d;
+    d.anchor = TimeFrequencyPoint{frameIndexToTime(59.5, config), binIndexToFrequency(13.5f, config)};
+    d.type = PathNodeType::Corner;
+    boundary.addNode(a);
+    boundary.addNode(b);
+    boundary.addNode(c);
+    boundary.addNode(d);
+
+    const FillOperation op(1, LayerId{1}, bounds, makeUniformGradient(-10.0f, 1.0f), std::nullopt, boundary);
+    applyFillOperation(op, content);
+
+    // Inside the boundary (left half): filled.
+    REQUIRE(content.leftMagnitudeDb[std::size_t{10} * content.frameCount + 60] == Catch::Approx(-10.0f));
+    REQUIRE(content.leftMagnitudeDb[std::size_t{13} * content.frameCount + 61] == Catch::Approx(-10.0f));
+    // Inside bounds()'s own bounding box, but outside the boundary (right
+    // half): left untouched, even though a plain, boundary-less fill
+    // would have written it.
+    REQUIRE(content.leftMagnitudeDb[std::size_t{13} * content.frameCount + 63] == 0.0f);
+    REQUIRE(content.leftMagnitudeDb[std::size_t{10} * content.frameCount + 62] == 0.0f);
 }
 
 TEST_CASE("applyFillOperation does nothing for a degenerate (zero-sized) content buffer", "[core][fill_application]") {

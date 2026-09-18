@@ -664,10 +664,25 @@ handle from its own mirrored pair - see
 
 Click the **Select** toolbar button (next to Paint/Pick) to switch the
 canvas into select mode; click it again (or Paint/Pick) to leave it.
-While it's on, drag a rectangle on the canvas to select that region -
-shown as a green outline. A selection stays active (and visible) even
-after switching to a different tool - it isn't tied to Select mode
-itself, only to having drawn one.
+While it's on, drag on the canvas to select a region - shown as a green
+outline. A selection stays active (and visible) even after switching to
+a different tool - it isn't tied to Select mode itself, only to having
+drawn one.
+
+The **Selection Configuration** toolbar button opens a dockable panel
+(off by default, alongside the others) with one control:
+
+- **Selection Type** - **Rectangle** (the default) drags out an
+  axis-aligned box, corner to corner. **Lasso** instead traces a
+  freehand, irregularly-shaped region as you drag - rendered live as a
+  smooth curve while you draw it, the same way a paint stroke's own
+  preview is. Fill/Copy/Cut/Paste (below) all confine themselves exactly
+  to a Lasso's own shape, not just its bounding box - copying an
+  irregular region and pasting it elsewhere leaves whatever was already
+  on the destination, outside that shape, untouched. A Lasso drag that
+  never gathers enough points to enclose any real area (a short click, or
+  a straight two-point line) clears the selection instead, the same as a
+  Rectangle drag that never really moved.
 
 - **Fill** it - **Edit → Fill Selection...** opens a color picker; the
   picked color fills the selection at full strength, confined exactly to
@@ -692,7 +707,9 @@ itself, only to having drawn one.
   Once captured, pick **Mind Shot** as the Tool Type in
   [Painting](#painting)'s Tool Configuration panel and select it from the
   drop-down there to paint with it - it stamps back exactly as captured,
-  wherever you paint, on any layer.
+  wherever you paint, on any layer. Always captures the selection's own
+  full bounding box, even for a Lasso selection - not yet confined to its
+  actual shape.
 - **Capture as Mind Grain** it - **Edit → Capture as Mind Grain** stores a
   *reference* to the selection's own layer and region, named "Mind Grain 1",
   "Mind Grain 2", and so on - unlike Capture as Mind Shot, no pixels are
@@ -701,14 +718,18 @@ itself, only to having drawn one.
   select it from the drop-down there to paint with it - see
   [Painting](#painting)'s own Mind Grain entry for the "only paintable
   above its own source layer" rule and the guardrails that enforce it.
+  Also always references the selection's own full bounding box, same as
+  Mind Shot above.
 - **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
   actually dragging (a plain click) on the canvas while in Select mode.
 
 Filling and pasting are both undoable (Ctrl+Z), the same as painting a
 stroke; so is Cut's own silencing of the source region.
 
-Only rectangular selections exist today - see
-[What's Not Here Yet](#whats-not-here-yet) for what's still planned.
+Only Rectangle and Lasso selections exist today - see
+[What's Not Here Yet](#whats-not-here-yet) for what's still planned
+(Wand, boolean combination between selections, Rectangle's own rotate
+handle, and Warp).
 
 ## Path Tool
 
@@ -928,9 +949,12 @@ what's designed for it:
 Selection (see [Selection and Fill](#selection-and-fill) above) exists,
 but only a fraction of what's designed for it:
 
-- Only **Rectangle** selection - Lasso (freehand) and Wand (flood-fill by
-  amplitude similarity) aren't built yet, and there's no way yet to
-  combine multiple selections (add/subtract/intersect).
+- **Rectangle** and **Lasso** (freehand) selection exist; **Wand**
+  (flood-fill by amplitude similarity) isn't built yet, there's no way yet
+  to combine multiple selections (add/subtract/intersect), and Rectangle
+  has no rotate handle yet. Mind Shot/Mind Grain capture from a Lasso
+  selection still captures/references its full bounding box, not confined
+  to its actual shape.
 - **Paste** always lands back at the exact position it was copied/cut
   from - there's no click-to-place gesture yet to paste somewhere else on
   the same layer (pasting onto a *different* layer is supported today;

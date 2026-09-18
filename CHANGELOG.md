@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.35.1] - 2026-09-17
+
+Deferred Selection, Installment A: **Lasso** (freehand polygon selection) - `docs/sound-mind-design.md`'s "Selection". First installment of the `v0.Y.35.1` milestone; Wand, boolean combination, Rectangle's own rotate handle, and Warp remain later installments.
+
+### Added
+
+- **Lasso**, a new Selection shape: drag out a freehand, irregularly-shaped selection instead of a Rectangle - drawn live as you drag, exactly like a paint stroke's own preview. Fill, Copy, Cut, and Paste all confine themselves exactly to the Lasso's own shape, not just its bounding box - copying a Lasso-shaped region and pasting it elsewhere leaves the destination's own surrounding content untouched, the same as a real paint program's own Lasso tool.
+- A new **Selection Configuration** panel (off by default, alongside the other dockable panels) with a **Selection Type** dropdown choosing Rectangle or Lasso.
+
+Full regression: sound-mind-core 492/492 (up from 475), sound-mind-studio all 34 QTest classes passing (a new one, Selection Configuration Panel's own). Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #99.
+
 ## [0.0.34.3] - 2026-09-17
 
 Deferred Paint Tools, Installment C: **Tool Configuration Panel control visibility review**, plus **forced Stamp Mode/Interval** for Heal/Soften/Smudge/Order-Chaos - prompted by manual testing of Installment B. Closes out the `v0.Y.34.1` milestone: **Clone** and the **Tool Configuration Wizard**/Tool Preset library are now permanently deferred, until further notice, rather than a later installment of this milestone.

@@ -54,6 +54,7 @@ add_library(sound-mind-studio-lib
     src/qt_image_conversion.cpp
     src/record_panel.cpp
     src/recent_projects.cpp
+    src/selection_configuration_panel.cpp
     src/selection_controller.cpp
     src/theme.cpp
     src/tone_curve_editor.cpp
@@ -86,6 +87,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/qt_image_conversion.h
     include/sound_mind/studio/record_panel.h
     include/sound_mind/studio/recent_projects.h
+    include/sound_mind/studio/selection_configuration_panel.h
     include/sound_mind/studio/selection_controller.h
     include/sound_mind/studio/theme.h
     include/sound_mind/studio/tone_curve_editor.h

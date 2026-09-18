@@ -44,8 +44,13 @@ namespace sound_mind::core {
  * invent or drop anyway - dropping the whole overhanging cell is the more
  * honest choice.
  *
- * @param operation The paste to apply - its own `bounds()`/`clip()` fully
- *        describe it.
+ * A Lasso-shaped paste (`operation.boundary()` present, `v0.Y.35.1`
+ * Installment A) additionally skips any clip cell that falls outside the
+ * boundary, leaving the destination's own prior content untouched there
+ * too - on top of, not instead of, the out-of-range skipping above.
+ *
+ * @param operation The paste to apply - its own `bounds()`/`clip()` (and
+ *        `boundary()`, if present) fully describe it.
  * @param content The `StreamImage` to paste into, mutated in place - its
  *        own `config` supplies the `frequencyToBinIndex()`/
  *        `timeToFrameIndex()` mapping actually used.

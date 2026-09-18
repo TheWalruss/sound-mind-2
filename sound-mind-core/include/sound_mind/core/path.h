@@ -237,4 +237,37 @@ void from_json(const nlohmann::json& json, Path& path);
 [[nodiscard]] Path fitPathToPoints(const std::vector<TimeFrequencyPoint>& rawPoints, double frequencyToTimeScale,
                                     double simplifyToleranceSeconds);
 
+/**
+ * @brief Whether `point` falls within the closed region `path`'s own
+ *        curve traces - the membership test behind a Lasso selection
+ *        (`docs/sound-mind-design.md`'s "Lasso", `v0.Y.35.1` Installment
+ *        A), and the same test `FillOperation`/`PasteOperation` consult
+ *        per-cell whenever a Lasso-shaped `boundary()` is present (see
+ *        each class's own docs).
+ *
+ * `path` is treated as implicitly *closed* regardless of how it was
+ * built: its own last node connects straight back to its first (this
+ * closing edge is always a straight line, never a curve, even if the
+ * first/last nodes happen to carry handles of their own - a real Lasso
+ * drag never fits a smooth closing curve back to its own start, it just
+ * snaps there). `path.nodes()` having fewer than 3 nodes can't enclose
+ * any area at all, so `point` is never considered inside one.
+ *
+ * A `Smooth` node's own curved segments are tessellated into straight
+ * sub-segments first (via `evaluateCubicBezier()`, a fixed, generous
+ * subdivision count rather than the adaptive, scale-aware sampling
+ * `fitPathToPoints()`/`sampleStrokeDense()` use for simplification/
+ * stamping - a hit-test only needs a close-enough polygon, not a
+ * perceptually-tuned one, so it needs no `frequencyToTimeScale` of its
+ * own), then tested via the standard even-odd ray-casting rule - which,
+ * being a pure crossing-count test, is unaffected by `timeSeconds`/
+ * `frequencyHz` being wildly different-scaled units (unlike distance- or
+ * angle-based tests, which would need normalizing first).
+ *
+ * @param path The boundary to test against.
+ * @param point The point to test.
+ * @return `true` if `point` falls within `path`'s own enclosed area.
+ */
+[[nodiscard]] bool containsPoint(const Path& path, TimeFrequencyPoint point) noexcept;
+
 }  // namespace sound_mind::core

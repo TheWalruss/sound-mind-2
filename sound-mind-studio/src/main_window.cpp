@@ -240,6 +240,17 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     toolConfigurationPanel_ = new ToolConfigurationPanel(this);
     toolConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, toolConfigurationPanel_);
+
+    // Selection & Fill (v0.Y.25.1), Selection Type (v0.Y.35.1 Installment
+    // A) - toolPaletteController_ isn't constructed until just below, but
+    // this lambda only ever runs later, on a real dropdown change - safe
+    // by the time it fires, the same reasoning every other lambda in this
+    // constructor relies on.
+    selectionConfigurationPanel_ = new SelectionConfigurationPanel(this);
+    selectionConfigurationPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, selectionConfigurationPanel_);
+    connect(selectionConfigurationPanel_, &SelectionConfigurationPanel::selectionShapeChanged, this,
+            [this](SelectionShape shape) { toolPaletteController_->setSelectionShape(shape); });
     // Mind Grain ordering-rule guardrail (v0.Y.33.1 Installment B) - a type
     // switch, a different Mind Grain picked, or any other edit could change
     // whether the active layer is currently paintable with it. layerController_/
@@ -648,6 +659,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // Off by default, the same as Playback/Record/Loop above - see
     // toolConfigurationPanel_'s own docs.
     transportToolBar->addAction(toolConfigurationPanel_->toggleViewAction());
+    transportToolBar->addAction(selectionConfigurationPanel_->toggleViewAction());
     // Off by default, same reasoning - see gridPanel_'s own docs.
     transportToolBar->addAction(gridPanel_->toggleViewAction());
     // Off by default, same reasoning - see filterConfigurationPanel_'s own docs.

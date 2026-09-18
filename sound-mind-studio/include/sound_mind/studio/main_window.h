@@ -22,6 +22,7 @@
 #include "sound_mind/studio/mind_wave_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/recent_projects.h"
+#include "sound_mind/studio/selection_configuration_panel.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 #include "sound_mind/studio/tool_palette_controller.h"
 #include "sound_mind/studio/undo_stack.h"
@@ -1811,6 +1812,12 @@ private:
     /// by default, matching Playback/Record/Loop's own "off until shown"
     /// convention (not Layers', which is shown automatically once).
     ToolConfigurationPanel* toolConfigurationPanel_ = nullptr;
+
+    /// @brief The dockable panel exposing Select mode's own Selection Type
+    /// (Rectangle/Lasso) - see its own class docs. Hidden by default, the
+    /// same "off until shown" convention toolConfigurationPanel_ already
+    /// follows.
+    SelectionConfigurationPanel* selectionConfigurationPanel_ = nullptr;
 
     /// @brief The dockable panel exposing canvas-overlay settings - Axis
     /// Labels for now, growing into Overlay Grids/Snap to Grid in later

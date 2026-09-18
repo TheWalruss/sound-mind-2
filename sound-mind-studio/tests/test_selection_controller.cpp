@@ -3,12 +3,16 @@
 #include <cmath>
 #include <cstddef>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_application.h"
+#include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/grid_config.h"
@@ -16,6 +20,7 @@
 #include "sound_mind/studio/selection_controller.h"
 
 using sound_mind::core::binIndexToFrequency;
+using sound_mind::core::FillOperation;
 using sound_mind::core::frameIndexToTime;
 using sound_mind::core::frequencyToBinIndex;
 using sound_mind::core::Gradient;
@@ -23,6 +28,7 @@ using sound_mind::core::GradientStop;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
+using sound_mind::core::PasteOperation;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::timeToFrameIndex;
@@ -30,6 +36,7 @@ using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::studio::FrequencyGridConfig;
 using sound_mind::studio::PaintController;
 using sound_mind::studio::SelectionController;
+using sound_mind::studio::SelectionShape;
 using sound_mind::studio::TimingGridConfig;
 
 namespace {
@@ -110,6 +117,22 @@ void selectRect(SelectionController& controller, LayerId layerId, const sound_mi
                                   binIndexToFrequency(static_cast<float>(binHigh), config)};
     controller.beginSelectionDrag(layerId, anchor);
     controller.continueSelectionDrag(far);
+    controller.endSelectionDrag();
+}
+
+/// @brief Drags out and commits a Lasso selection through a sequence of
+/// `(frame, bin)` points - the caller's own responsibility to set
+/// `SelectionShape::Lasso` first (via `setSelectionShape()`).
+void dragLasso(SelectionController& controller, LayerId layerId, const sound_mind::codec::StreamCodecConfig& config,
+               const std::vector<std::pair<int, int>>& frameBinPoints) {
+    const auto toPoint = [&](std::pair<int, int> frameBin) {
+        return TimeFrequencyPoint{frameIndexToTime(frameBin.first, config),
+                                   binIndexToFrequency(static_cast<float>(frameBin.second), config)};
+    };
+    controller.beginSelectionDrag(layerId, toPoint(frameBinPoints.front()));
+    for (std::size_t i = 1; i < frameBinPoints.size(); ++i) {
+        controller.continueSelectionDrag(toPoint(frameBinPoints[i]));
+    }
     controller.endSelectionDrag();
 }
 
@@ -672,4 +695,201 @@ void SelectionControllerTest::captureMindGrainEmitsMindGrainCapturedWithTheNewId
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).value<sound_mind::core::MindGrainId>(), *id);
+}
+
+void SelectionControllerTest::freshControllerDefaultsToRectangleShape() {
+    PaintController paintController;
+    const SelectionController controller(&paintController);
+    QVERIFY(controller.selectionShape() == SelectionShape::Rectangle);
+}
+
+void SelectionControllerTest::lassoDragCommitsABoundaryAndItsOwnBoundingBox() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.setSelectionShape(SelectionShape::Lasso);
+
+    dragLasso(controller, layerId, config, {{20, 5}, {30, 5}, {25, 15}});
+
+    QVERIFY(controller.hasSelection());
+    QVERIFY(controller.displayBoundary().has_value());
+    QVERIFY(controller.displayBoundary()->nodes().size() >= 3);
+    // The bounding box always exists too, regardless of shape - see the
+    // class's own docs.
+    QVERIFY(controller.displayBounds().has_value());
+    const auto bounds = *controller.displayBounds();
+    const auto boundaryBounds = controller.displayBoundary()->bounds();
+    QCOMPARE(bounds.startTimeSeconds, boundaryBounds.startTimeSeconds);
+    QCOMPARE(bounds.endTimeSeconds, boundaryBounds.endTimeSeconds);
+    QCOMPARE(bounds.lowFrequencyHz, boundaryBounds.lowFrequencyHz);
+    QCOMPARE(bounds.highFrequencyHz, boundaryBounds.highFrequencyHz);
+}
+
+void SelectionControllerTest::lassoDragShowsALiveBoundaryOnceEnoughPointsExist() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.setSelectionShape(SelectionShape::Lasso);
+
+    controller.beginSelectionDrag(layerId, TimeFrequencyPoint{frameIndexToTime(20, config),
+                                                                binIndexToFrequency(5.0f, config)});
+    // A single point can't have a meaningful curve yet.
+    QVERIFY(!controller.displayBoundary().has_value());
+
+    controller.continueSelectionDrag(
+        TimeFrequencyPoint{frameIndexToTime(30, config), binIndexToFrequency(5.0f, config)});
+    controller.continueSelectionDrag(
+        TimeFrequencyPoint{frameIndexToTime(25, config), binIndexToFrequency(15.0f, config)});
+
+    QVERIFY(controller.displayBoundary().has_value());
+    controller.cancelSelectionDrag();
+}
+
+void SelectionControllerTest::lassoDragWithFewerThanThreePointsClearsAnyExistingSelection() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.setSelectionShape(SelectionShape::Lasso);
+    dragLasso(controller, layerId, config, {{20, 5}, {30, 5}, {25, 15}});
+    QVERIFY(controller.hasSelection());
+
+    // A two-point "drag" (a straight line) can't enclose any area - the
+    // same "drew nothing meaningful" convention endSelectionDrag()'s own
+    // docs describe.
+    dragLasso(controller, layerId, config, {{40, 5}, {45, 5}});
+
+    QVERIFY(!controller.hasSelection());
+    QVERIFY(!controller.displayBoundary().has_value());
+}
+
+void SelectionControllerTest::cancelSelectionDragDuringALassoDragRevertsToThePriorCommittedSelection() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.setSelectionShape(SelectionShape::Lasso);
+    dragLasso(controller, layerId, config, {{20, 5}, {30, 5}, {25, 15}});
+    const auto priorBoundary = controller.displayBoundary();
+
+    controller.beginSelectionDrag(layerId,
+                                    TimeFrequencyPoint{frameIndexToTime(60, config), binIndexToFrequency(5.0f, config)});
+    controller.continueSelectionDrag(
+        TimeFrequencyPoint{frameIndexToTime(70, config), binIndexToFrequency(5.0f, config)});
+    controller.cancelSelectionDrag();
+
+    QVERIFY(controller.hasSelection());
+    QCOMPARE(controller.displayBoundary()->nodes().size(), priorBoundary->nodes().size());
+}
+
+void SelectionControllerTest::setSelectionShapeCancelsAnInProgressDrag() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.beginSelectionDrag(layerId, TimeFrequencyPoint{frameIndexToTime(20, config),
+                                                                binIndexToFrequency(5.0f, config)});
+    controller.continueSelectionDrag(
+        TimeFrequencyPoint{frameIndexToTime(30, config), binIndexToFrequency(15.0f, config)});
+    QVERIFY(controller.displayBounds().has_value());
+
+    // Switching shape mid-drag cancels it rather than leaving it half-
+    // finished under the new shape's own bookkeeping.
+    controller.setSelectionShape(SelectionShape::Lasso);
+
+    QVERIFY(!controller.hasSelection());
+    controller.endSelectionDrag();  // must be a no-op - no drag is active.
+    QVERIFY(!controller.hasSelection());
+}
+
+void SelectionControllerTest::rectangleSelectionHasNoDisplayBoundary() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+
+    QVERIFY(controller.hasSelection());
+    QVERIFY(!controller.displayBoundary().has_value());
+}
+
+void SelectionControllerTest::fillWithALassoSelectionCarriesItsBoundary() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.setSelectionShape(SelectionShape::Lasso);
+    dragLasso(controller, layerId, config, {{20, 5}, {30, 5}, {25, 15}});
+
+    controller.fill(makeUniformGradient(-10.0f, 1.0f));
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* fillOp = dynamic_cast<const FillOperation*>(active[0]);
+    QVERIFY(fillOp != nullptr);
+    QVERIFY(fillOp->boundary().has_value());
+}
+
+void SelectionControllerTest::fillWithARectangleSelectionCarriesNoBoundary() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+
+    controller.fill(makeUniformGradient(-10.0f, 1.0f));
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    const auto* fillOp = dynamic_cast<const FillOperation*>(active[0]);
+    QVERIFY(fillOp != nullptr);
+    QVERIFY(!fillOp->boundary().has_value());
+}
+
+void SelectionControllerTest::copySelectionThenPasteIntoCarriesTheLassoBoundaryForward() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.setSelectionShape(SelectionShape::Lasso);
+    dragLasso(controller, layerId, config, {{20, 5}, {30, 5}, {25, 15}});
+
+    controller.copySelection();
+    controller.pasteInto(layerId);
+
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    const auto* pasteOp = dynamic_cast<const PasteOperation*>(active.back());
+    QVERIFY(pasteOp != nullptr);
+    QVERIFY(pasteOp->boundary().has_value());
+    // The re-highlighted selection after paste carries the same shape too.
+    QVERIFY(controller.displayBoundary().has_value());
 }

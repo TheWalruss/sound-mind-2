@@ -6,6 +6,7 @@
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paste_application.h"
+#include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/paint_controller.h"
 
 namespace sound_mind::studio {
@@ -40,22 +41,37 @@ void SelectionController::setProject(sound_mind::core::Project* project) {
     project_ = project;
     dragActive_ = false;
     dragMoved_ = false;
+    lassoRawPoints_.clear();
+    lassoPreviewPath_ = sound_mind::core::Path{};
     const bool hadSelection = committedBounds_.has_value();
     committedBounds_.reset();
+    committedBoundary_.reset();
     clipboard_.reset();
     clipboardBounds_.reset();
+    clipboardBoundary_.reset();
     emit boundsChanged();
     if (hadSelection) {
         emit selectionChanged();
     }
 }
 
+void SelectionController::setSelectionShape(SelectionShape shape) {
+    cancelSelectionDrag();
+    currentShape_ = shape;
+}
+
 void SelectionController::beginSelectionDrag(sound_mind::core::LayerId layer, sound_mind::core::TimeFrequencyPoint point) {
     dragActive_ = true;
     dragMoved_ = false;
-    dragAnchor_ = point;
     selectionLayer_ = layer;
-    dragPreviewBounds_ = rectFromCorners(point, point);
+    if (currentShape_ == SelectionShape::Lasso) {
+        lassoRawPoints_.clear();
+        lassoRawPoints_.push_back(point);
+        lassoPreviewPath_ = sound_mind::core::Path{};
+    } else {
+        dragAnchor_ = point;
+        dragPreviewBounds_ = rectFromCorners(point, point);
+    }
     emit boundsChanged();
 }
 
@@ -67,7 +83,19 @@ void SelectionController::continueSelectionDrag(sound_mind::core::TimeFrequencyP
         point = snapToGrid(point, frequencyGridConfig_, timingGridConfig_, project_->settings());
     }
     dragMoved_ = true;
-    dragPreviewBounds_ = rectFromCorners(dragAnchor_, point);
+    if (currentShape_ == SelectionShape::Lasso) {
+        lassoRawPoints_.push_back(point);
+        // Cheap enough to refit on every sample - the same
+        // "PaintController::continueStroke()'s own precedent" this
+        // class's own docs already cite.
+        if (lassoRawPoints_.size() >= 2 && project_ != nullptr) {
+            lassoPreviewPath_ = sound_mind::core::fitPathToPoints(
+                lassoRawPoints_, sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
+                /*simplifyToleranceSeconds=*/0.01);
+        }
+    } else {
+        dragPreviewBounds_ = rectFromCorners(dragAnchor_, point);
+    }
     emit boundsChanged();
 }
 
@@ -77,11 +105,44 @@ void SelectionController::endSelectionDrag() {
     }
     dragActive_ = false;
 
+    if (currentShape_ == SelectionShape::Lasso) {
+        // Refit once more from the final point set (continueSelectionDrag()
+        // may never have run at all for a plain click) - fewer than 3
+        // resulting nodes can't enclose any area, so that's treated the
+        // same as "drew nothing", below.
+        sound_mind::core::Path fitted;
+        if (dragMoved_ && lassoRawPoints_.size() >= 3 && project_ != nullptr) {
+            fitted = sound_mind::core::fitPathToPoints(
+                lassoRawPoints_, sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
+                /*simplifyToleranceSeconds=*/0.01);
+        }
+        lassoRawPoints_.clear();
+        lassoPreviewPath_ = sound_mind::core::Path{};
+
+        if (fitted.nodes().size() < 3) {
+            const bool hadSelection = committedBounds_.has_value();
+            committedBounds_.reset();
+            committedBoundary_.reset();
+            emit boundsChanged();
+            if (hadSelection) {
+                emit selectionChanged();
+            }
+            return;
+        }
+
+        committedBounds_ = fitted.bounds();
+        committedBoundary_ = std::move(fitted);
+        emit boundsChanged();
+        emit selectionChanged();
+        return;
+    }
+
     if (!dragMoved_) {
         // A plain click, not a drag - deselect, matching Pick's own
         // "clicking empty space clears the selection" convention.
         const bool hadSelection = committedBounds_.has_value();
         committedBounds_.reset();
+        committedBoundary_.reset();
         emit boundsChanged();
         if (hadSelection) {
             emit selectionChanged();
@@ -90,6 +151,7 @@ void SelectionController::endSelectionDrag() {
     }
 
     committedBounds_ = dragPreviewBounds_;
+    committedBoundary_.reset();
     emit boundsChanged();
     emit selectionChanged();
 }
@@ -100,12 +162,15 @@ void SelectionController::cancelSelectionDrag() {
     }
     dragActive_ = false;
     dragMoved_ = false;
+    lassoRawPoints_.clear();
+    lassoPreviewPath_ = sound_mind::core::Path{};
     emit boundsChanged();  // reverts the display back to the committed selection (or none).
 }
 
 void SelectionController::clearSelection() {
     const bool hadSelection = committedBounds_.has_value();
     committedBounds_.reset();
+    committedBoundary_.reset();
     if (hadSelection) {
         emit boundsChanged();
         emit selectionChanged();
@@ -114,9 +179,23 @@ void SelectionController::clearSelection() {
 
 std::optional<sound_mind::core::TimeFrequencyRect> SelectionController::displayBounds() const {
     if (dragActive_) {
+        if (currentShape_ == SelectionShape::Lasso) {
+            return lassoPreviewPath_.nodes().empty() ? std::nullopt
+                                                       : std::optional(lassoPreviewPath_.bounds());
+        }
         return dragPreviewBounds_;
     }
     return committedBounds_;
+}
+
+std::optional<sound_mind::core::Path> SelectionController::displayBoundary() const {
+    if (dragActive_) {
+        if (currentShape_ == SelectionShape::Lasso && !lassoPreviewPath_.nodes().empty()) {
+            return lassoPreviewPath_;
+        }
+        return std::nullopt;
+    }
+    return committedBoundary_;
 }
 
 void SelectionController::fill(const sound_mind::core::Gradient& gradient) {
@@ -125,7 +204,8 @@ void SelectionController::fill(const sound_mind::core::Gradient& gradient) {
     }
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
-    log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_, gradient));
+    log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_, gradient,
+                                                                    std::nullopt, committedBoundary_));
     paintController_->notifyOperationCommitted();
     paintController_->rebuildLayerContent(selectionLayer_);
     emit contentChanged(selectionLayer_);
@@ -147,6 +227,7 @@ void SelectionController::copySelection() {
 
     clipboard_ = sound_mind::core::captureClip(*layer->content(), *committedBounds_);
     clipboardBounds_ = *committedBounds_;
+    clipboardBoundary_ = committedBoundary_;
 }
 
 void SelectionController::cutSelection() {
@@ -158,7 +239,8 @@ void SelectionController::cutSelection() {
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_,
-                                                                    sound_mind::core::silenceGradient()));
+                                                                    sound_mind::core::silenceGradient(), std::nullopt,
+                                                                    committedBoundary_));
     paintController_->notifyOperationCommitted();
     paintController_->rebuildLayerContent(selectionLayer_);
     emit contentChanged(selectionLayer_);
@@ -203,7 +285,8 @@ std::optional<sound_mind::core::OperationId> SelectionController::pasteInto(soun
 
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
-    log.append(std::make_unique<sound_mind::core::PasteOperation>(id, targetLayer, *clipboardBounds_, *clipboard_));
+    log.append(std::make_unique<sound_mind::core::PasteOperation>(id, targetLayer, *clipboardBounds_, *clipboard_,
+                                                                     std::nullopt, clipboardBoundary_));
     paintController_->notifyOperationCommitted();
     paintController_->rebuildLayerContent(targetLayer);
     emit contentChanged(targetLayer);
@@ -211,9 +294,11 @@ std::optional<sound_mind::core::OperationId> SelectionController::pasteInto(soun
     // The pasted region becomes the new committed selection, on the layer
     // it was actually pasted onto - visual confirmation of both where it
     // landed and (via selectionLayer_) which layer that was, the same way
-    // a freshly drawn selection would be.
+    // a freshly drawn selection would be. Carries the same Lasso shape
+    // forward too, if that's what was copied.
     selectionLayer_ = targetLayer;
     committedBounds_ = *clipboardBounds_;
+    committedBoundary_ = clipboardBoundary_;
     emit boundsChanged();
     emit selectionChanged();
 

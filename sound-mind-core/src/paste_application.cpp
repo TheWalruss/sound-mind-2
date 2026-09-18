@@ -52,6 +52,8 @@ void applyPasteOperation(const PasteOperation& operation, sound_mind::codec::Str
     const int frameOrigin = static_cast<int>(std::round(frameOriginD));
     const int binOrigin = static_cast<int>(std::round(std::min(binAtLow, binAtHigh)));
 
+    const std::optional<Path>& boundary = operation.boundary();
+
     for (std::uint32_t clipBin = 0; clipBin < clip.binCount; ++clipBin) {
         const int destBin = binOrigin + static_cast<int>(clipBin);
         if (destBin < 0 || destBin >= static_cast<int>(content.config.binCount)) {
@@ -61,6 +63,19 @@ void applyPasteOperation(const PasteOperation& operation, sound_mind::codec::Str
             const int destFrame = frameOrigin + static_cast<int>(clipFrame);
             if (destFrame < 0 || destFrame >= static_cast<int>(content.frameCount)) {
                 continue;  // Falls outside the destination's own frame range - silently clipped.
+            }
+
+            // A Lasso-shaped paste narrows to cells actually inside its own
+            // boundary() - see PasteOperation's own docs. Absent, every
+            // clip cell is written, unchanged from before this field
+            // existed.
+            if (boundary) {
+                const TimeFrequencyPoint cellPoint{frameIndexToTime(static_cast<double>(destFrame), content.config),
+                                                    static_cast<double>(binIndexToFrequency(
+                                                        static_cast<float>(destBin), content.config))};
+                if (!containsPoint(*boundary, cellPoint)) {
+                    continue;
+                }
             }
 
             const std::size_t clipIndex = cellIndex(clipBin, clipFrame, clip.frameCount);

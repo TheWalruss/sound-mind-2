@@ -67,8 +67,10 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
     connect(canvas_, &CanvasWidget::selectStrokeContinued, this,
             [this](sound_mind::core::TimeFrequencyPoint point) { selectionController_->continueSelectionDrag(point); });
     connect(canvas_, &CanvasWidget::selectStrokeEnded, this, [this]() { selectionController_->endSelectionDrag(); });
-    connect(selectionController_, &SelectionController::boundsChanged, this,
-            [this]() { canvas_->setSelectionBounds(selectionController_->displayBounds()); });
+    connect(selectionController_, &SelectionController::boundsChanged, this, [this]() {
+        canvas_->setSelectionBounds(selectionController_->displayBounds());
+        canvas_->setSelectionBoundary(selectionController_->displayBoundary());
+    });
     connect(selectionController_, &SelectionController::contentChanged, this, [this](sound_mind::core::LayerId layer) {
         canvas_->update();
         emit contentChanged(layer);
@@ -170,6 +172,8 @@ void ToolPaletteController::cancelPaintStroke() { paintController_->cancelStroke
 void ToolPaletteController::clearPickSelection() { pickController_->clearSelection(); }
 
 void ToolPaletteController::cancelSelectionDrag() { selectionController_->cancelSelectionDrag(); }
+
+void ToolPaletteController::setSelectionShape(SelectionShape shape) { selectionController_->setSelectionShape(shape); }
 
 void ToolPaletteController::cancelPathPlacement() { pathController_->cancelPath(); }
 

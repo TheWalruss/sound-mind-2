@@ -325,6 +325,61 @@ TEST_CASE("An OperationLog with a mix of PaintOperations and FillOperations roun
     REQUIRE(dynamic_cast<const FillOperation*>(active[1]) != nullptr);
 }
 
+TEST_CASE("An OperationLog with a Lasso-shaped FillOperation round-trips its own boundary through JSON",
+          "[core][operation_log]") {
+    OperationLog log;
+    const OperationId fillId = log.reserveId();
+    log.append(std::make_unique<FillOperation>(fillId, LayerId{1}, TimeFrequencyRect{}, Gradient{}, std::nullopt,
+                                                makeTestPath(0.0, 1.0)));
+
+    const nlohmann::json json = log;
+    const OperationLog roundTripped = json.get<OperationLog>();
+
+    const auto active = roundTripped.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 1);
+    const auto* restoredFill = dynamic_cast<const FillOperation*>(active[0]);
+    REQUIRE(restoredFill != nullptr);
+    REQUIRE(restoredFill->boundary().has_value());
+    REQUIRE(restoredFill->boundary()->nodes().size() == 2);
+}
+
+TEST_CASE("An OperationLog with a plain Rectangle-shaped FillOperation round-trips with no boundary at all",
+          "[core][operation_log]") {
+    OperationLog log;
+    const OperationId fillId = log.reserveId();
+    log.append(std::make_unique<FillOperation>(fillId, LayerId{1}, TimeFrequencyRect{}, Gradient{}));
+
+    const nlohmann::json json = log;
+    REQUIRE_FALSE(json.at("operations")[0].contains("boundary"));
+
+    const OperationLog roundTripped = json.get<OperationLog>();
+    const auto* restoredFill = dynamic_cast<const FillOperation*>(roundTripped.activeOperationsTargeting(LayerId{1})[0]);
+    REQUIRE(restoredFill != nullptr);
+    REQUIRE_FALSE(restoredFill->boundary().has_value());
+}
+
+TEST_CASE("An OperationLog with a PasteOperation round-trips with a Lasso-shaped boundary too", "[core][operation_log]") {
+    OperationLog log;
+    Clip clip;
+    clip.frameCount = 1;
+    clip.binCount = 1;
+    clip.leftMagnitudeDb = {-1.0f};
+    clip.rightMagnitudeDb = {-1.0f};
+    clip.sharedPhaseRadians = {0.0f};
+    const OperationId pasteId = log.reserveId();
+    log.append(std::make_unique<PasteOperation>(pasteId, LayerId{1}, TimeFrequencyRect{}, clip, std::nullopt,
+                                                 makeTestPath(0.0, 1.0)));
+
+    const nlohmann::json json = log;
+    const OperationLog roundTripped = json.get<OperationLog>();
+
+    const auto* restoredPaste =
+        dynamic_cast<const PasteOperation*>(roundTripped.activeOperationsTargeting(LayerId{1})[0]);
+    REQUIRE(restoredPaste != nullptr);
+    REQUIRE(restoredPaste->boundary().has_value());
+    REQUIRE(restoredPaste->boundary()->nodes().size() == 2);
+}
+
 TEST_CASE("An OperationLog with a PasteOperation round-trips through JSON, targeting a different layer than "
           "the clip's own bounds might suggest",
           "[core][operation_log]") {

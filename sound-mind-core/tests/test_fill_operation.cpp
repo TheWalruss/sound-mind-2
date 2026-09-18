@@ -9,6 +9,10 @@ using sound_mind::core::FillOperation;
 using sound_mind::core::Gradient;
 using sound_mind::core::LayerId;
 using sound_mind::core::OperationId;
+using sound_mind::core::Path;
+using sound_mind::core::PathNode;
+using sound_mind::core::PathNodeType;
+using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 
 namespace {
@@ -20,6 +24,27 @@ TimeFrequencyRect makeTestBounds() {
     bounds.lowFrequencyHz = 300.0;
     bounds.highFrequencyHz = 900.0;
     return bounds;
+}
+
+/// @brief A plain triangular boundary - just enough nodes to exercise the
+/// boundary-carrying constructor/accessor/translatedCopy() path; its own
+/// exact shape doesn't matter to these tests (only applyFillOperation()'s
+/// own tests, in test_fill_application.cpp, care about actual membership).
+Path makeTestBoundary() {
+    Path path;
+    PathNode a;
+    a.anchor = TimeFrequencyPoint{0.2, 300.0};
+    a.type = PathNodeType::Corner;
+    PathNode b;
+    b.anchor = TimeFrequencyPoint{0.5, 300.0};
+    b.type = PathNodeType::Corner;
+    PathNode c;
+    c.anchor = TimeFrequencyPoint{0.35, 900.0};
+    c.type = PathNodeType::Corner;
+    path.addNode(a);
+    path.addNode(b);
+    path.addNode(c);
+    return path;
 }
 
 /// @brief Matching test_paint_application.cpp's own makeTestConfig() -
@@ -109,4 +134,43 @@ TEST_CASE("FillOperation::translatedCopy() shifts bounds, keeps the gradient, an
 
     // The original is untouched.
     REQUIRE(original.bounds().startTimeSeconds == 0.2);
+}
+
+TEST_CASE("FillOperation has no boundary unless one is given", "[core][fill_operation]") {
+    const FillOperation op(1, LayerId{1}, makeTestBounds(), Gradient{});
+    REQUIRE_FALSE(op.boundary().has_value());
+}
+
+TEST_CASE("FillOperation can carry a Lasso boundary, independent of its own bounding-box bounds()",
+          "[core][fill_operation]") {
+    const TimeFrequencyRect bounds = makeTestBounds();
+    const FillOperation op(1, LayerId{1}, bounds, Gradient{}, std::nullopt, makeTestBoundary());
+    REQUIRE(op.boundary().has_value());
+    REQUIRE(op.boundary()->nodes().size() == 3);
+    // bounds() is still the plain bounding box, regardless of boundary().
+    REQUIRE(op.bounds().startTimeSeconds == bounds.startTimeSeconds);
+    REQUIRE(op.bounds().endTimeSeconds == bounds.endTimeSeconds);
+}
+
+TEST_CASE("FillOperation::translatedCopy() shifts a Lasso boundary the same way it shifts bounds()",
+          "[core][fill_operation]") {
+    const FillOperation original(5, LayerId{2}, makeTestBounds(), Gradient{}, std::nullopt, makeTestBoundary());
+    const StreamCodecConfig codecConfig = makeTestConfig();
+
+    const auto copy = original.translatedCopy(OperationId{9}, 0.1, 5.0, codecConfig);
+
+    const auto* fillCopy = dynamic_cast<const FillOperation*>(copy.get());
+    REQUIRE(fillCopy != nullptr);
+    REQUIRE(fillCopy->boundary().has_value());
+    REQUIRE(fillCopy->boundary()->nodes().size() == 3);
+    // Each node's own anchor shifted by the same delta translated(bounds_,
+    // ...) already applies - time by a flat offset, frequency by a bin
+    // shift (Path::translated()'s own docs).
+    REQUIRE(fillCopy->boundary()->nodes()[0].anchor.timeSeconds == Catch::Approx(0.3));
+    const float expectedFrequency = sound_mind::core::binIndexToFrequency(
+        sound_mind::core::frequencyToBinIndex(300.0f, codecConfig) + 5.0f, codecConfig);
+    REQUIRE(fillCopy->boundary()->nodes()[0].anchor.frequencyHz == Catch::Approx(expectedFrequency));
+
+    // The original's own boundary is untouched.
+    REQUIRE(original.boundary()->nodes()[0].anchor.timeSeconds == 0.2);
 }

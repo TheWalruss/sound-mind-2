@@ -232,6 +232,9 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
             writeCommonOperationFields(entry, *fill);
             entry["bounds"] = fill->bounds();
             entry["gradient"] = fill->gradient();
+            if (fill->boundary()) {
+                entry["boundary"] = *fill->boundary();
+            }
             operations.push_back(std::move(entry));
         } else if (const auto* paste = dynamic_cast<const PasteOperation*>(operation.get())) {
             nlohmann::json entry;
@@ -239,6 +242,9 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
             writeCommonOperationFields(entry, *paste);
             entry["placement"] = paste->bounds();
             entry["clip"] = paste->clip();
+            if (paste->boundary()) {
+                entry["boundary"] = *paste->boundary();
+            }
             operations.push_back(std::move(entry));
         }
     }
@@ -266,14 +272,20 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
                 const CommonOperationFields fields = readCommonOperationFields(entry);
                 TimeFrequencyRect bounds = entry.at("bounds").get<TimeFrequencyRect>();
                 Gradient gradient = entry.at("gradient").get<Gradient>();
-                log.operations_.push_back(std::make_unique<FillOperation>(fields.id, fields.targetLayer, bounds,
-                                                                           std::move(gradient), fields.supersedes));
+                std::optional<Path> boundary =
+                    entry.contains("boundary") ? std::optional(entry.at("boundary").get<Path>()) : std::nullopt;
+                log.operations_.push_back(std::make_unique<FillOperation>(
+                    fields.id, fields.targetLayer, bounds, std::move(gradient), fields.supersedes,
+                    std::move(boundary)));
             } else if (kind == kPasteOperationKind) {
                 const CommonOperationFields fields = readCommonOperationFields(entry);
                 TimeFrequencyRect placement = entry.at("placement").get<TimeFrequencyRect>();
                 Clip clip = entry.at("clip").get<Clip>();
+                std::optional<Path> boundary =
+                    entry.contains("boundary") ? std::optional(entry.at("boundary").get<Path>()) : std::nullopt;
                 log.operations_.push_back(std::make_unique<PasteOperation>(
-                    fields.id, fields.targetLayer, placement, std::move(clip), fields.supersedes));
+                    fields.id, fields.targetLayer, placement, std::move(clip), fields.supersedes,
+                    std::move(boundary)));
             } else {
                 throw std::invalid_argument("OperationLog: unrecognized operation kind \"" + kind + "\"");
             }

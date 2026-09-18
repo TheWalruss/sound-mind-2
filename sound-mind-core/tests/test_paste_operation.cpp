@@ -9,7 +9,11 @@ using sound_mind::codec::StreamCodecConfig;
 using sound_mind::core::Clip;
 using sound_mind::core::LayerId;
 using sound_mind::core::OperationId;
+using sound_mind::core::Path;
 using sound_mind::core::PasteOperation;
+using sound_mind::core::PathNode;
+using sound_mind::core::PathNodeType;
+using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 
 namespace {
@@ -21,6 +25,25 @@ TimeFrequencyRect makeTestBounds() {
     bounds.lowFrequencyHz = 300.0;
     bounds.highFrequencyHz = 900.0;
     return bounds;
+}
+
+/// @brief Matching test_fill_operation.cpp's own makeTestBoundary() - see
+/// its own docs for why the exact shape doesn't matter here.
+Path makeTestBoundary() {
+    Path path;
+    PathNode a;
+    a.anchor = TimeFrequencyPoint{0.2, 300.0};
+    a.type = PathNodeType::Corner;
+    PathNode b;
+    b.anchor = TimeFrequencyPoint{0.5, 300.0};
+    b.type = PathNodeType::Corner;
+    PathNode c;
+    c.anchor = TimeFrequencyPoint{0.35, 900.0};
+    c.type = PathNodeType::Corner;
+    path.addNode(a);
+    path.addNode(b);
+    path.addNode(c);
+    return path;
 }
 
 /// @brief Matching test_paint_application.cpp's own makeTestConfig() -
@@ -119,6 +142,36 @@ TEST_CASE("PasteOperation::translatedCopy() shifts the placement, keeps the clip
 
     // The original is untouched.
     REQUIRE(original.bounds().startTimeSeconds == 0.2);
+}
+
+TEST_CASE("PasteOperation has no boundary unless one is given", "[core][paste_operation]") {
+    const PasteOperation op(1, LayerId{1}, makeTestBounds(), makeTestClip());
+    REQUIRE_FALSE(op.boundary().has_value());
+}
+
+TEST_CASE("PasteOperation can carry a Lasso boundary, independent of its own bounding-box bounds()",
+          "[core][paste_operation]") {
+    const TimeFrequencyRect bounds = makeTestBounds();
+    const PasteOperation op(1, LayerId{1}, bounds, makeTestClip(), std::nullopt, makeTestBoundary());
+    REQUIRE(op.boundary().has_value());
+    REQUIRE(op.boundary()->nodes().size() == 3);
+    REQUIRE(op.bounds().startTimeSeconds == bounds.startTimeSeconds);
+}
+
+TEST_CASE("PasteOperation::translatedCopy() shifts a Lasso boundary the same way it shifts bounds()",
+          "[core][paste_operation]") {
+    const PasteOperation original(5, LayerId{2}, makeTestBounds(), makeTestClip(), std::nullopt, makeTestBoundary());
+    const StreamCodecConfig codecConfig = makeTestConfig();
+
+    const auto copy = original.translatedCopy(OperationId{9}, 0.1, 5.0, codecConfig);
+
+    const auto* pasteCopy = dynamic_cast<const PasteOperation*>(copy.get());
+    REQUIRE(pasteCopy != nullptr);
+    REQUIRE(pasteCopy->boundary().has_value());
+    REQUIRE(pasteCopy->boundary()->nodes()[0].anchor.timeSeconds == Catch::Approx(0.3));
+
+    // The original's own boundary is untouched.
+    REQUIRE(original.boundary()->nodes()[0].anchor.timeSeconds == 0.2);
 }
 
 TEST_CASE("A Clip round-trips through JSON", "[core][paste_operation]") {

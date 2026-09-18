@@ -241,6 +241,29 @@ public:
     void setSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds);
 
     /**
+     * @brief Sets (or clears) a Lasso selection's own curve overlay and
+     *        repaints, drawn *instead of* the plain rectangle
+     *        `setSelectionBounds()` would otherwise draw - see
+     *        `docs/sound-mind-design.md`'s "Lasso" and
+     *        `SelectionController::displayBoundary()`'s own docs.
+     *
+     * Drawn closed (a straight line back to its own first node, even
+     * though the underlying `Path` never stores that closing segment
+     * itself) - the same implicit closure
+     * `sound_mind::core::containsPoint()` already treats every boundary
+     * as having.
+     *
+     * @param boundary The curve to display - either a `SelectionController`'s
+     *        own in-progress Lasso drag preview or its committed
+     *        boundary (see `SelectionController::displayBoundary()`'s own
+     *        docs for which); `std::nullopt` for a Rectangle selection, no
+     *        selection at all, or an in-progress Lasso drag too short to
+     *        have a meaningful curve yet - `setSelectionBounds()`'s own
+     *        rectangle (if any) draws instead.
+     */
+    void setSelectionBoundary(std::optional<sound_mind::core::Path> boundary);
+
+    /**
      * @brief Sets (or clears) the MindWave being live-previewed, and
      *        repaints - a semi-transparent (50% opacity) grayscale
      *        rendering of `wave`'s own `[0, 1]` field
@@ -659,6 +682,7 @@ private:
     std::optional<std::size_t> previewSelectedNodeIndex_;
     std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;
     std::optional<sound_mind::core::TimeFrequencyRect> selectionBounds_;
+    std::optional<sound_mind::core::Path> selectionBoundary_;
 
     /// @brief The MindWave currently being previewed, if any - kept only
     ///        so setProject() can tell whether there's actually a preview

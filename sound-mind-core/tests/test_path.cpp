@@ -7,6 +7,7 @@
 #include "sound_mind/core/path.h"
 
 using sound_mind::codec::StreamCodecConfig;
+using sound_mind::core::containsPoint;
 using sound_mind::core::fitPathToPoints;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
@@ -312,4 +313,97 @@ TEST_CASE("fitPathToPoints produces a fresh, transparent Gradient", "[core][path
     const Path path = fitPathToPoints(points, 1000.0, 0.01);
     REQUIRE(path.gradient().stops().size() == 2);
     REQUIRE(path.gradient().stops().front().leftOpacity == 0.0f);
+}
+
+namespace {
+
+/// @brief A plain axis-aligned square, corner nodes only - the simplest
+/// possible closed region containsPoint() can be tested against.
+Path makeSquarePath() {
+    Path path;
+    path.addNode(cornerNodeAt(0.0, 0.0));
+    path.addNode(cornerNodeAt(10.0, 0.0));
+    path.addNode(cornerNodeAt(10.0, 10.0));
+    path.addNode(cornerNodeAt(0.0, 10.0));
+    return path;
+}
+
+/// @brief An L-shaped (concave) hexagon - the smallest shape that can
+/// distinguish a real point-in-polygon test from a naive bounding-box
+/// check, since its own bounding box includes area the shape itself
+/// doesn't cover.
+Path makeLShapedPath() {
+    Path path;
+    path.addNode(cornerNodeAt(0.0, 0.0));
+    path.addNode(cornerNodeAt(10.0, 0.0));
+    path.addNode(cornerNodeAt(10.0, 5.0));
+    path.addNode(cornerNodeAt(5.0, 5.0));
+    path.addNode(cornerNodeAt(5.0, 10.0));
+    path.addNode(cornerNodeAt(0.0, 10.0));
+    return path;
+}
+
+}  // namespace
+
+TEST_CASE("containsPoint is true for a point well inside a simple closed path", "[core][path]") {
+    REQUIRE(containsPoint(makeSquarePath(), TimeFrequencyPoint{5.0, 5.0}));
+}
+
+TEST_CASE("containsPoint is false for a point well outside a simple closed path", "[core][path]") {
+    REQUIRE_FALSE(containsPoint(makeSquarePath(), TimeFrequencyPoint{50.0, 50.0}));
+}
+
+TEST_CASE("containsPoint relies on the implicit closing edge from the last node back to the first",
+          "[core][path]") {
+    // Without treating the path as closed, a naive open-polyline test
+    // would see no edge at all between the last node (0, 10) and the
+    // first (0, 0) - this point sits just inside where that closing edge
+    // must be for the square to be sealed.
+    REQUIRE(containsPoint(makeSquarePath(), TimeFrequencyPoint{0.5, 5.0}));
+}
+
+TEST_CASE("containsPoint is false inside a concave shape's own bounding box but outside its actual area",
+          "[core][path]") {
+    const Path lShape = makeLShapedPath();
+    // (8, 8) sits inside the L-shape's own 10x10 bounding box, but in the
+    // notch actually cut out of it - a bounding-box-only test would
+    // wrongly call this "inside".
+    REQUIRE_FALSE(containsPoint(lShape, TimeFrequencyPoint{8.0, 8.0}));
+    // (2, 8) sits in the L-shape's own upper-left arm - genuinely inside.
+    REQUIRE(containsPoint(lShape, TimeFrequencyPoint{2.0, 8.0}));
+}
+
+TEST_CASE("containsPoint follows a Smooth node's own curved segment, not a straight line between anchors",
+          "[core][path]") {
+    // A Smooth node's handles bow the curve well past the straight line
+    // between its neighbors - pulled far enough in frequency that a point
+    // straddling that gap is inside the curved path but would be outside
+    // the straight-line-only approximation.
+    Path path;
+    path.addNode(cornerNodeAt(0.0, 0.0));
+    PathNode bulge;
+    bulge.anchor = TimeFrequencyPoint{5.0, 20.0};
+    bulge.type = PathNodeType::Smooth;
+    bulge.handleIn = TimeFrequencyPoint{2.0, 20.0};
+    bulge.handleOut = TimeFrequencyPoint{8.0, 20.0};
+    path.addNode(bulge);
+    path.addNode(cornerNodeAt(10.0, 0.0));
+
+    REQUIRE(containsPoint(path, TimeFrequencyPoint{5.0, 15.0}));
+    REQUIRE(containsPoint(path, TimeFrequencyPoint{5.0, 1.0}));   // Still inside the closed shape, near its base.
+    REQUIRE_FALSE(containsPoint(path, TimeFrequencyPoint{5.0, 25.0}));  // Above the curve's own bulge - outside.
+}
+
+TEST_CASE("containsPoint is always false for a path with fewer than 3 nodes", "[core][path]") {
+    Path empty;
+    REQUIRE_FALSE(containsPoint(empty, TimeFrequencyPoint{0.0, 0.0}));
+
+    Path onePoint;
+    onePoint.addNode(cornerNodeAt(0.0, 0.0));
+    REQUIRE_FALSE(containsPoint(onePoint, TimeFrequencyPoint{0.0, 0.0}));
+
+    Path twoPoints;
+    twoPoints.addNode(cornerNodeAt(0.0, 0.0));
+    twoPoints.addNode(cornerNodeAt(10.0, 10.0));
+    REQUIRE_FALSE(containsPoint(twoPoints, TimeFrequencyPoint{5.0, 5.0}));
 }

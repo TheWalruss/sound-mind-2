@@ -73,6 +73,14 @@ TimeFrequencyPoint denormalize(const NormalizedPoint& point, double frequencyToT
     return TimeFrequencyPoint{point.timeSeconds, point.normalizedFrequency * frequencyToTimeScale};
 }
 
+/// @brief How many straight sub-segments each edge (curved or straight)
+/// is tessellated into before containsPoint()'s own ray-casting test runs
+/// - fixed and generous rather than adaptive, since a hit-test only needs
+/// a close-enough polygon, not a perceptually-tuned one (see
+/// containsPoint()'s own docs for why this doesn't need a
+/// frequencyToTimeScale the way fitPathToPoints()/sampleStrokeDense() do).
+constexpr int kContainsPointSubdivisionsPerEdge = 32;
+
 }  // namespace
 
 std::size_t Path::addNode(PathNode node) {
@@ -267,6 +275,57 @@ Path fitPathToPoints(const std::vector<TimeFrequencyPoint>& rawPoints, double fr
     }
 
     return path;
+}
+
+bool containsPoint(const Path& path, TimeFrequencyPoint point) noexcept {
+    const std::vector<PathNode>& nodes = path.nodes();
+    const std::size_t nodeCount = nodes.size();
+    if (nodeCount < 3) {
+        return false;  // Can't enclose any area - see this function's own docs.
+    }
+
+    // Tessellate every edge - including the implicit closing edge from
+    // the last node back to the first, always a straight line regardless
+    // of node type - into a dense, straight-segment-only polygon.
+    std::vector<TimeFrequencyPoint> polygon;
+    polygon.reserve(nodeCount * kContainsPointSubdivisionsPerEdge);
+    for (std::size_t i = 0; i < nodeCount; ++i) {
+        const PathNode& start = nodes[i];
+        const PathNode& end = nodes[(i + 1) % nodeCount];
+        const bool closingEdge = (i + 1 == nodeCount);
+
+        const TimeFrequencyPoint p0 = start.anchor;
+        const TimeFrequencyPoint p1 = closingEdge ? start.anchor : start.handleOut.value_or(start.anchor);
+        const TimeFrequencyPoint p2 = closingEdge ? end.anchor : end.handleIn.value_or(end.anchor);
+        const TimeFrequencyPoint p3 = end.anchor;
+
+        for (int step = 0; step < kContainsPointSubdivisionsPerEdge; ++step) {
+            const double t = static_cast<double>(step) / static_cast<double>(kContainsPointSubdivisionsPerEdge);
+            polygon.push_back(evaluateCubicBezier(p0, p1, p2, p3, t));
+        }
+    }
+
+    // Even-odd ray-casting (the standard PNPOLY algorithm): count how many
+    // polygon edges a ray from `point`, extending toward +infinity along
+    // the time axis at a fixed frequency, crosses. `frequencyHz` plays the
+    // role of the test axis here rather than `timeSeconds` - either would
+    // work equally well; this is simply the one chosen.
+    bool inside = false;
+    for (std::size_t i = 0, j = polygon.size() - 1; i < polygon.size(); j = i++) {
+        const TimeFrequencyPoint& pi = polygon[i];
+        const TimeFrequencyPoint& pj = polygon[j];
+        const bool straddles = (pi.frequencyHz > point.frequencyHz) != (pj.frequencyHz > point.frequencyHz);
+        if (!straddles) {
+            continue;
+        }
+        const double crossingTime =
+            pi.timeSeconds +
+            (point.frequencyHz - pi.frequencyHz) / (pj.frequencyHz - pi.frequencyHz) * (pj.timeSeconds - pi.timeSeconds);
+        if (point.timeSeconds < crossingTime) {
+            inside = !inside;
+        }
+    }
+    return inside;
 }
 
 }  // namespace sound_mind::core

@@ -12,6 +12,7 @@
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/studio/grid_config.h"
+#include "sound_mind/studio/selection_controller.h"
 
 namespace sound_mind::studio {
 
@@ -113,6 +114,13 @@ public:
     ///        caller, not by this class.
     /// @param point Where the drag starts.
     void beginSelectionDrag(sound_mind::core::LayerId layer, sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief Sets which shape the *next* Select drag produces - forwards
+    ///        to `SelectionController::setSelectionShape()`. The actual
+    ///        work behind the Selection Configuration Panel's own
+    ///        Selection Type dropdown.
+    /// @param shape The shape to draw next.
+    void setSelectionShape(SelectionShape shape);
 
     /// @brief Places the next Path tool node - forwards to
     ///        `PathController::placeNode()`.

@@ -12,7 +12,11 @@ using sound_mind::core::captureClip;
 using sound_mind::core::Clip;
 using sound_mind::core::frameIndexToTime;
 using sound_mind::core::LayerId;
+using sound_mind::core::Path;
 using sound_mind::core::PasteOperation;
+using sound_mind::core::PathNode;
+using sound_mind::core::PathNodeType;
+using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 
 namespace {
@@ -154,6 +158,60 @@ TEST_CASE("applyPasteOperation does nothing for a degenerate (zero-sized) conten
     applyPasteOperation(op, content);  // must not crash.
 
     REQUIRE(content.leftMagnitudeDb.empty());
+}
+
+TEST_CASE("applyPasteOperation with a boundary only writes clip cells actually inside it, leaving the rest of "
+          "the placement's own destination content untouched",
+          "[core][paste_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    content.leftMagnitudeDb[pixelIndex(content, 63, 13)] = -42.0f;  // in the placement, but outside the boundary.
+
+    Clip clip;
+    clip.frameCount = 4;
+    clip.binCount = 4;
+    clip.leftMagnitudeDb.assign(16, -99.0f);
+    clip.rightMagnitudeDb.assign(16, -99.0f);
+    clip.sharedPhaseRadians.assign(16, 0.0f);
+
+    TimeFrequencyRect placement;
+    placement.startTimeSeconds = frameIndexToTime(60.0, config);
+    placement.endTimeSeconds = frameIndexToTime(63.0, config);
+    placement.lowFrequencyHz = binIndexToFrequency(10.0f, config);
+    placement.highFrequencyHz = binIndexToFrequency(13.0f, config);
+
+    // A rectangle covering only the placement's own left half (frames
+    // 60-61), with a generous margin clear of any cell's own exact grid
+    // point on either edge.
+    Path boundary;
+    PathNode a;
+    a.anchor = TimeFrequencyPoint{frameIndexToTime(59.5, config), binIndexToFrequency(9.5f, config)};
+    a.type = PathNodeType::Corner;
+    PathNode b;
+    b.anchor = TimeFrequencyPoint{frameIndexToTime(61.5, config), binIndexToFrequency(9.5f, config)};
+    b.type = PathNodeType::Corner;
+    PathNode c;
+    c.anchor = TimeFrequencyPoint{frameIndexToTime(61.5, config), binIndexToFrequency(13.5f, config)};
+    c.type = PathNodeType::Corner;
+    PathNode d;
+    d.anchor = TimeFrequencyPoint{frameIndexToTime(59.5, config), binIndexToFrequency(13.5f, config)};
+    d.type = PathNodeType::Corner;
+    boundary.addNode(a);
+    boundary.addNode(b);
+    boundary.addNode(c);
+    boundary.addNode(d);
+
+    const PasteOperation op(1, LayerId{1}, placement, clip, std::nullopt, boundary);
+    applyPasteOperation(op, content);
+
+    // Inside the boundary (left half): overwritten by the clip.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 60, 10)] == -99.0f);
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 61, 13)] == -99.0f);
+    // Inside the placement's own bounding box, but outside the boundary
+    // (right half): left untouched, even though it would have been
+    // overwritten by a plain, boundary-less paste.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 63, 13)] == -42.0f);
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 62, 10)] == 0.0f);  // still blank, not clip's -99.
 }
 
 TEST_CASE("captureClip followed by applyPasteOperation at the same bounds reproduces the original content",

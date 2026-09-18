@@ -39,4 +39,16 @@ private slots:
     void captureMindGrainIsANoOpWithNoCommittedSelection();
     void captureMindGrainDoesNotTouchTheClipboardOrSourceLayerContent();
     void captureMindGrainEmitsMindGrainCapturedWithTheNewId();
+
+    // Lasso (v0.Y.35.1 Installment A).
+    void freshControllerDefaultsToRectangleShape();
+    void lassoDragCommitsABoundaryAndItsOwnBoundingBox();
+    void lassoDragShowsALiveBoundaryOnceEnoughPointsExist();
+    void lassoDragWithFewerThanThreePointsClearsAnyExistingSelection();
+    void cancelSelectionDragDuringALassoDragRevertsToThePriorCommittedSelection();
+    void setSelectionShapeCancelsAnInProgressDrag();
+    void rectangleSelectionHasNoDisplayBoundary();
+    void fillWithALassoSelectionCarriesItsBoundary();
+    void fillWithARectangleSelectionCarriesNoBoundary();
+    void copySelectionThenPasteIntoCarriesTheLassoBoundaryForward();
 };

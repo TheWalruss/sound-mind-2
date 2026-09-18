@@ -84,6 +84,32 @@ constexpr void blendTowardStop(float& left, float& right, const GradientStop& st
 }
 
 /**
+ * @brief Evaluates a cubic Bézier curve at parameter `t` in `[0, 1]`.
+ *
+ * Exposed here (rather than staying private to whichever `.cpp` first
+ * needed it) specifically so `path.cpp`'s own `containsPoint()` - the
+ * point-in-closed-path test behind a Lasso selection's membership,
+ * `v0.Y.35.1` Installment A - can tessellate a `Path`'s own curved
+ * (`Smooth`) segments into straight sub-segments using the exact same
+ * formula `sampleStrokeDense()` already uses to turn a Path into brush
+ * stamp positions, rather than a second, independently-written copy of
+ * this one small formula.
+ *
+ * @param p0 The segment's own start anchor.
+ * @param p1 The start anchor's own outgoing handle (or `p0` itself, for a
+ *        `Corner` node with no handle - the curve degenerates to a
+ *        straight line in that case, not an error).
+ * @param p2 The end anchor's own incoming handle (or `p3` itself, same
+ *        reasoning as `p1`).
+ * @param p3 The segment's own end anchor.
+ * @param t Where along the curve to evaluate, `0` (`p0`) to `1` (`p3`).
+ * @return The interpolated point.
+ */
+[[nodiscard]] TimeFrequencyPoint evaluateCubicBezier(const TimeFrequencyPoint& p0, const TimeFrequencyPoint& p1,
+                                                       const TimeFrequencyPoint& p2, const TimeFrequencyPoint& p3,
+                                                       double t) noexcept;
+
+/**
  * @brief One rectangle's own clamped frame/bin range within a
  *        `StreamImage` of the given `frameCount`/`binCount` - see
  *        `rangeFor()`'s own docs. A range with `frameHigh < frameLow` (or

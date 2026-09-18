@@ -44,19 +44,6 @@ double distance(const NormalizedPoint& a, const NormalizedPoint& b) {
     return std::sqrt(dt * dt + df * df);
 }
 
-/// @brief Evaluates a cubic Bézier curve at parameter `t` in `[0, 1]`.
-TimeFrequencyPoint evaluateCubicBezier(const TimeFrequencyPoint& p0, const TimeFrequencyPoint& p1,
-                                        const TimeFrequencyPoint& p2, const TimeFrequencyPoint& p3, double t) {
-    const double u = 1.0 - t;
-    const double w0 = u * u * u;
-    const double w1 = 3.0 * u * u * t;
-    const double w2 = 3.0 * u * t * t;
-    const double w3 = t * t * t;
-    return TimeFrequencyPoint{w0 * p0.timeSeconds + w1 * p1.timeSeconds + w2 * p2.timeSeconds + w3 * p3.timeSeconds,
-                               w0 * p0.frequencyHz + w1 * p1.frequencyHz + w2 * p2.frequencyHz +
-                                   w3 * p3.frequencyHz};
-}
-
 /// @brief One stroke sample: a real position, plus its path-parameter `t`
 /// (start=0, end=1) for evaluating the path's own Gradient at that point.
 /// Approximated as (segment index + local fraction) / segment count -
@@ -1036,6 +1023,19 @@ void applyOrderChaosPaintOperation(const PaintOperation& operation, const OrderC
 }
 
 }  // namespace
+
+TimeFrequencyPoint evaluateCubicBezier(const TimeFrequencyPoint& p0, const TimeFrequencyPoint& p1,
+                                        const TimeFrequencyPoint& p2, const TimeFrequencyPoint& p3,
+                                        double t) noexcept {
+    const double u = 1.0 - t;
+    const double w0 = u * u * u;
+    const double w1 = 3.0 * u * u * t;
+    const double w2 = 3.0 * u * t * t;
+    const double w3 = t * t * t;
+    return TimeFrequencyPoint{w0 * p0.timeSeconds + w1 * p1.timeSeconds + w2 * p2.timeSeconds + w3 * p3.timeSeconds,
+                               w0 * p0.frequencyHz + w1 * p1.frequencyHz + w2 * p2.frequencyHz +
+                                   w3 * p3.frequencyHz};
+}
 
 float frequencyToBinIndex(float frequencyHz, const sound_mind::codec::StreamCodecConfig& config) noexcept {
     const float maxFrequencyHz = std::min(config.maxFrequencyHz, static_cast<float>(config.sampleRateHz) / 2.0f);

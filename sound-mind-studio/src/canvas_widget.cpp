@@ -120,6 +120,11 @@ void CanvasWidget::setPickSelectionBounds(std::optional<sound_mind::core::TimeFr
     update();
 }
 
+void CanvasWidget::setSelectionBoundary(std::optional<sound_mind::core::Path> boundary) {
+    selectionBoundary_ = std::move(boundary);
+    update();
+}
+
 void CanvasWidget::setSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds) {
     selectionBounds_ = bounds;
     update();
@@ -374,11 +379,26 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         painter.drawRect(widgetRectFor(*pickSelectionBounds_));
     }
 
-    // The current rectangular selection (Select) - see
-    // setSelectionBounds()'s own docs. Independent of toolMode(), the
+    // The current selection (Select) - see setSelectionBounds()'s/
+    // setSelectionBoundary()'s own docs. Independent of toolMode(), the
     // same "a selection stays visible/usable after switching tools"
-    // reasoning that method's own docs describe.
-    if (project_ != nullptr && selectionBounds_.has_value()) {
+    // reasoning setSelectionBounds()'s own docs describe. A Lasso
+    // selection draws its own actual curve (setSelectionBoundary()) in
+    // place of the plain rectangle a Rectangle selection draws - the two
+    // are mutually exclusive (setSelectionBoundary() is only ever set
+    // alongside a Lasso-shaped setSelectionBounds()), so there's never a
+    // need to draw both.
+    if (project_ != nullptr && selectionBoundary_.has_value()) {
+        // closeSubpath() draws the same implicit straight closing edge
+        // (last node back to first) sound_mind::core::containsPoint()
+        // itself treats the boundary as having - toPainterPath() alone
+        // only ever draws an *open* curve (every other caller needs it
+        // that way, for an in-progress or already-painted brush stroke).
+        QPainterPath boundaryPath = toPainterPath(*selectionBoundary_);
+        boundaryPath.closeSubpath();
+        painter.setPen(QPen(Qt::green, 2));
+        painter.drawPath(boundaryPath);
+    } else if (project_ != nullptr && selectionBounds_.has_value()) {
         painter.setPen(QPen(Qt::green, 2));
         painter.drawRect(widgetRectFor(*selectionBounds_));
     }

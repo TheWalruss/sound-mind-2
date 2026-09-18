@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <QObject>
 
@@ -19,9 +20,20 @@ namespace sound_mind::studio {
 class PaintController;
 
 /**
- * @brief Owns the current rectangular selection and turns Fill into a new,
- *        non-destructive `FillOperation` - see `docs/sound-mind-design.md`'s
- *        "Selection" ("Rectangle") and "Fill".
+ * @brief Which shape a `SelectionController` draws next - see
+ *        `docs/sound-mind-design.md`'s "Selection" for both, and
+ *        `SelectionController::setSelectionShape()`'s own docs for how
+ *        this is chosen.
+ */
+enum class SelectionShape {
+    Rectangle,  ///< A rubber-band rectangle - every selection before Lasso existed.
+    Lasso,      ///< A freehand-drawn closed curve, fit the same way a paint stroke's own Path is.
+};
+
+/**
+ * @brief Owns the current selection (Rectangle or Lasso) and turns Fill
+ *        into a new, non-destructive `FillOperation` - see
+ *        `docs/sound-mind-design.md`'s "Selection" and "Fill".
  *
  * A selection is deliberately *not* itself a logged `Operation` - it's
  * ephemeral, per-session UI state (the same shape `PickController`'s own
@@ -37,12 +49,25 @@ class PaintController;
  * than keeping a second one, the same reason (and the same shared
  * `rebuildLayerContent()` call) `PickController` already established.
  *
- * **Deliberately Rectangle-only, for now**: Lasso and Wand (and boolean
- * combination between multiple selections) are real, designed features
- * (`docs/sound-mind-design.md`'s own "Selection" section) not built yet -
- * a plain `TimeFrequencyRect` is all a Rectangle-only selection needs to
- * represent, so that's what this class uses rather than a more general
- * (and, for now, unneeded) region/mask representation.
+ * **Rectangle and Lasso (`v0.Y.35.1` Installment A)**: `beginSelectionDrag()`/
+ * `continueSelectionDrag()`/`endSelectionDrag()`/`cancelSelectionDrag()` are
+ * one uniform API for both shapes - which one a given drag actually
+ * produces is decided internally, by `setSelectionShape()`'s own current
+ * value, the same "one begin/continue/end trio, config decides the actual
+ * behavior" shape `PaintController`'s own tool-type dispatch already
+ * established (a `MindGrainConfiguration` branch inside `beginStroke()`,
+ * not a separate `beginMindGrainStroke()`). A committed selection's own
+ * bounding box (`committedBounds_`, reported by `bounds()`/`displayBounds()`)
+ * always exists regardless of shape - a plain `TimeFrequencyRect`, same as
+ * before Lasso existed; a Lasso selection *additionally* carries its own
+ * closed curve (`committedBoundary_`, reported by `displayBoundary()`),
+ * `std::nullopt` for a Rectangle selection. `Fill`/`Copy`/`Cut`/`Paste`
+ * all narrow to that curve when present - see `fill()`'s own docs and
+ * `sound_mind::core::FillOperation`/`PasteOperation`'s own `boundary()`
+ * docs. **Wand and boolean combination between selections** remain real,
+ * designed features (`docs/sound-mind-design.md`'s own "Selection"
+ * section) not built yet - deferred to a later installment of this same
+ * milestone.
  *
  * **Cut/Copy/Paste, and cross-layer independence**: `copySelection()`/
  * `cutSelection()` capture the committed selection's own pixels off
@@ -59,6 +84,14 @@ class PaintController;
  * channels - reusing `FillOperation` rather than inventing a dedicated
  * "delete" `Operation` subtype, the same way `PickController`'s own delete
  * reuses an empty-effect `PaintOperation`.
+ *
+ * **A known gap, deliberately out of this installment's scope**: Mind
+ * Shot/Mind Grain capture (`captureMindShot()`/`captureMindGrain()`) still
+ * always captures/references the selection's own full bounding box,
+ * regardless of a Lasso boundary - `docs/sound-mind-design.md`'s "Mind
+ * Shots"/"Mind Grains" predate Lasso and don't describe a non-rectangular
+ * capture; extending them the same way Fill/Copy/Cut/Paste were is future
+ * work, not resolved here.
  */
 class SelectionController : public QObject {
     Q_OBJECT
@@ -92,6 +125,26 @@ public:
                           const TimingGridConfig& timingGridConfig);
 
     /**
+     * @brief Sets which shape the *next* `beginSelectionDrag()` produces -
+     *        the actual work behind the Selection Configuration Panel's
+     *        own Selection Type dropdown.
+     *
+     * Cancels an in-progress drag first (via `cancelSelectionDrag()`) if
+     * one is active - switching shape mid-drag would otherwise leave a
+     * drag started under one shape's own bookkeeping half-finished under
+     * the other's; the previously committed selection (if any) is
+     * unaffected either way.
+     *
+     * @param shape The shape to draw next.
+     */
+    void setSelectionShape(SelectionShape shape);
+
+    /// @brief The shape the *next* beginSelectionDrag() will produce.
+    /// @return The current value set via setSelectionShape() -
+    ///         `SelectionShape::Rectangle` for a fresh controller.
+    [[nodiscard]] SelectionShape selectionShape() const noexcept { return currentShape_; }
+
+    /**
      * @brief Sets which project selection/fill targets.
      *
      * Clears the current selection, any in-progress drag, and the
@@ -106,22 +159,26 @@ public:
     void setProject(sound_mind::core::Project* project);
 
     /**
-     * @brief Starts a new rectangular selection drag on `layer`, anchored
-     *        at `point`. Replaces (visually, until committed - see
-     *        endSelection()'s own docs) whatever selection already
-     *        existed.
+     * @brief Starts a new selection drag on `layer`, anchored at `point` -
+     *        a rectangle's own first corner, or a Lasso's own first raw
+     *        point, per setSelectionShape()'s own current value. Replaces
+     *        (visually, until committed - see endSelectionDrag()'s own
+     *        docs) whatever selection already existed.
      * @param layer Which layer this selection will scope operations on.
-     * @param point The drag's own anchor corner, already converted to
+     * @param point The drag's own anchor/first point, already converted to
      *        time/frequency space.
      */
     void beginSelectionDrag(sound_mind::core::LayerId layer, sound_mind::core::TimeFrequencyPoint point);
 
     /**
      * @brief Continues an in-progress selection drag, live-updating the
-     *        rectangle between the original anchor and `point`. A no-op
+     *        rectangle between the original anchor and `point` (Rectangle),
+     *        or appending `point` to the freehand curve being fit
+     *        (Lasso - the same fitPathToPoints()-per-sample refit
+     *        `PaintController::continueStroke()` already does). A no-op
      *        if no drag is in progress.
      *
-     * Emits boundsChanged() so the caller can redraw the live rectangle.
+     * Emits boundsChanged() so the caller can redraw the live shape.
      *
      * @param point The cursor's current position, in time/frequency
      *        space.
@@ -129,13 +186,14 @@ public:
     void continueSelectionDrag(sound_mind::core::TimeFrequencyPoint point);
 
     /**
-     * @brief Ends an in-progress selection drag, committing its own
-     *        rectangle as the current selection - unless the drag never
-     *        really moved (a plain click, not a drag), in which case this
-     *        clears the selection instead (the same "click empty space to
-     *        deselect" convention `docs/sound-mind-design.md`'s "Pick"
-     *        already established, applied here to "drew nothing" rather
-     *        than "clicked nothing").
+     * @brief Ends an in-progress selection drag, committing its own shape
+     *        as the current selection - unless the drag never really
+     *        moved, or (Lasso only) never gathered enough points to
+     *        enclose any area, in which case this clears the selection
+     *        instead (the same "click empty space to deselect" convention
+     *        `docs/sound-mind-design.md`'s "Pick" already established,
+     *        applied here to "drew nothing meaningful" rather than
+     *        "clicked nothing").
      *
      * A no-op if no drag is in progress. Emits boundsChanged(), and
      * selectionChanged() if the committed selection actually changed.
@@ -160,13 +218,31 @@ public:
     [[nodiscard]] bool hasSelection() const noexcept { return committedBounds_.has_value(); }
 
     /**
-     * @brief What to actually draw as the selection overlay right now -
-     *        the in-progress drag's own live rectangle while one is
-     *        active, otherwise the committed selection.
-     * @return The bounds to display, or `std::nullopt` if there's
-     *         neither a drag in progress nor a committed selection.
+     * @brief What to actually draw as the selection overlay's own bounding
+     *        box right now - the in-progress drag's own live rectangle (or
+     *        the live Lasso curve's own bounding box) while a drag is
+     *        active, otherwise the committed selection's. Always present
+     *        for a Lasso selection too - see this class's own docs on why
+     *        a bounding box is tracked regardless of shape.
+     * @return The bounds to display, or `std::nullopt` if there's neither
+     *         a drag in progress nor a committed selection, or (Lasso
+     *         only) the drag hasn't gathered enough points yet to have a
+     *         meaningful bounding box.
      */
     [[nodiscard]] std::optional<sound_mind::core::TimeFrequencyRect> displayBounds() const;
+
+    /**
+     * @brief The Lasso curve to actually draw as the selection overlay
+     *        right now, if the current shape is Lasso - the in-progress
+     *        drag's own live-fit curve while one is active, otherwise the
+     *        committed selection's own boundary. A caller draws this
+     *        curve *instead of* a plain rectangle outline whenever it's
+     *        present (`CanvasWidget`'s own convention).
+     * @return The curve to display, or `std::nullopt` for a Rectangle
+     *         selection, no selection at all, or a Lasso drag that hasn't
+     *         gathered enough points yet to have a meaningful curve.
+     */
+    [[nodiscard]] std::optional<sound_mind::core::Path> displayBoundary() const;
 
     /**
      * @brief Fills the current committed selection with `gradient` - the
@@ -296,9 +372,10 @@ public:
     std::optional<sound_mind::core::MindGrainId> captureMindGrain(const std::string& name);
 
 signals:
-    /// @brief Emitted whenever displayBounds() would return something
-    ///        different - a drag updating live, a selection committed,
-    ///        a drag cancelled back to the prior selection, or a clear.
+    /// @brief Emitted whenever displayBounds()/displayBoundary() would
+    ///        return something different - a drag updating live, a
+    ///        selection committed, a drag cancelled back to the prior
+    ///        selection, or a clear.
     void boundsChanged();
 
     /// @brief Emitted whenever the *committed* selection changes (a new
@@ -326,16 +403,41 @@ private:
     PaintController* paintController_;
     sound_mind::core::Project* project_ = nullptr;
 
+    /// @brief Which shape beginSelectionDrag() produces next - see
+    /// setSelectionShape()'s own docs.
+    SelectionShape currentShape_ = SelectionShape::Rectangle;
+
     std::optional<sound_mind::core::TimeFrequencyRect> committedBounds_;
+    /// @brief The committed selection's own Lasso curve, if it is one -
+    /// `std::nullopt` for a Rectangle selection. Always kept consistent
+    /// with committedBounds_ (which is always that curve's own bounding
+    /// box, when present) - see this class's own docs.
+    std::optional<sound_mind::core::Path> committedBoundary_;
     sound_mind::core::LayerId selectionLayer_ = 0;
 
     std::optional<sound_mind::core::Clip> clipboard_;
     std::optional<sound_mind::core::TimeFrequencyRect> clipboardBounds_;
+    /// @brief committedBoundary_'s own value at the moment copySelection()/
+    /// cutSelection() last ran - carried alongside clipboard_/
+    /// clipboardBounds_ so pasteInto() can narrow the paste the same way
+    /// the original selection was shaped.
+    std::optional<sound_mind::core::Path> clipboardBoundary_;
 
     bool dragActive_ = false;
     bool dragMoved_ = false;
     sound_mind::core::TimeFrequencyPoint dragAnchor_;
     sound_mind::core::TimeFrequencyRect dragPreviewBounds_;
+
+    /// @brief A Lasso drag's own raw, unfitted sample points, gathered by
+    /// continueSelectionDrag() exactly the way PaintController's own
+    /// strokePoints_ are - only meaningful while dragActive_ and
+    /// currentShape_ == SelectionShape::Lasso.
+    std::vector<sound_mind::core::TimeFrequencyPoint> lassoRawPoints_;
+    /// @brief The live, curve-fit preview of lassoRawPoints_ - refit on
+    /// every continueSelectionDrag() call, the same "cheap enough to refit
+    /// every sample" precedent PaintController::continueStroke() already
+    /// established. Empty (no nodes) until at least 2 raw points exist.
+    sound_mind::core::Path lassoPreviewPath_;
 
     /// @brief Snap to Grid's own current state - see setGridSnapping()'s
     /// own docs.
