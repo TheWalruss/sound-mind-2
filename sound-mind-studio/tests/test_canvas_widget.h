@@ -37,11 +37,13 @@ private slots:
     void setPickSelectionBoundsIsHiddenWhileALivePreviewIsShowing();
     void setPickSelectionBoundsWithNoValueDrawsNothing();
     void mousePressInSelectModeEmitsSelectStrokeStartedWithAConvertedPoint();
+    void mousePressInSelectModeEmitsSelectStrokeStartedWithTheModifiersHeld();
     void mouseMoveAfterPressInSelectModeEmitsSelectStrokeContinued();
     void mouseReleaseInSelectModeEmitsSelectStrokeEndedAndEndsTheGesture();
     void changingToolModeAwayFromSelectCancelsAnyActiveGesture();
     void setSelectionBoundsDrawsAHighlight();
     void setSelectionBoundsWithNoValueDrawsNothing();
+    void setSelectionHasMaskShapeStillDrawsTheRectangleDashed();
     void mousePressInPathModeEmitsPathNodePlacedWithAConvertedPoint();
     void mouseMoveAfterPressInPathModeDoesNotEmitPathNodePlacedAgain();
     void mouseReleaseInPathModeDoesNotEmitPathNodePlacedAgain();

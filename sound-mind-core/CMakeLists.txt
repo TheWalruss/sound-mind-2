@@ -20,6 +20,8 @@ add_library(sound-mind-core
     src/operation.cpp
     src/gradient.cpp
     src/path.cpp
+    src/selection_region.cpp
+    src/wand_selection.cpp
     src/tool_configuration.cpp
     src/filter_configuration.cpp
     src/tone_curve.cpp

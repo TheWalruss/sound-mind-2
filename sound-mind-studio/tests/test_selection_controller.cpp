@@ -35,6 +35,7 @@ using sound_mind::core::timeToFrameIndex;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::studio::FrequencyGridConfig;
 using sound_mind::studio::PaintController;
+using sound_mind::studio::SelectionCombineMode;
 using sound_mind::studio::SelectionController;
 using sound_mind::studio::SelectionShape;
 using sound_mind::studio::TimingGridConfig;
@@ -892,4 +893,189 @@ void SelectionControllerTest::copySelectionThenPasteIntoCarriesTheLassoBoundaryF
     QVERIFY(pasteOp->boundary().has_value());
     // The re-highlighted selection after paste carries the same shape too.
     QVERIFY(controller.displayBoundary().has_value());
+}
+
+void SelectionControllerTest::freshControllerHasDefaultWandSettingsAndReplaceCombineMode() {
+    PaintController paintController;
+    const SelectionController controller(&paintController);
+    QCOMPARE(controller.wandTolerance(), 10.0);
+    QVERIFY(!controller.wandHarmonicsAware());
+    QVERIFY(controller.selectionCombineMode() == SelectionCombineMode::Replace);
+}
+
+void SelectionControllerTest::wandClickCommitsAMaskShapedSelectionAtTheClickedBlob() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    // A distinctive 3x3 blob, well outside the layer's own blank (0dB)
+    // background.
+    for (int bin = 10; bin <= 12; ++bin) {
+        for (int frame = 10; frame <= 12; ++frame) {
+            setPixel(project, layerId, frame, bin, -20.0f);
+        }
+    }
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.setSelectionShape(SelectionShape::Wand);
+    controller.setWandTolerance(5.0);
+
+    controller.beginSelectionDrag(layerId, TimeFrequencyPoint{frameIndexToTime(11, config),
+                                                                binIndexToFrequency(11.0f, config)});
+    controller.endSelectionDrag();
+
+    QVERIFY(controller.hasSelection());
+    QVERIFY(controller.hasMaskShapedSelection());
+    QVERIFY(!controller.displayBoundary().has_value());  // No single curve for a mask - see the class's own docs.
+}
+
+void SelectionControllerTest::wandIgnoresSubsequentDragMovement() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    setPixel(project, layerId, 11, 11, -20.0f);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.setSelectionShape(SelectionShape::Wand);
+
+    controller.beginSelectionDrag(layerId, TimeFrequencyPoint{frameIndexToTime(11, config),
+                                                                binIndexToFrequency(11.0f, config)});
+    const auto boundsAtPress = controller.displayBounds();
+    // A large, unrelated move before release - must not change anything.
+    controller.continueSelectionDrag(TimeFrequencyPoint{frameIndexToTime(80, config), binIndexToFrequency(40.0f, config)});
+    controller.endSelectionDrag();
+
+    QVERIFY(boundsAtPress.has_value());
+    QVERIFY(controller.hasSelection());
+    const auto committed = *controller.displayBounds();
+    QCOMPARE(committed.startTimeSeconds, boundsAtPress->startTimeSeconds);
+    QCOMPARE(committed.lowFrequencyHz, boundsAtPress->lowFrequencyHz);
+}
+
+void SelectionControllerTest::wandClickOnAnUnmatchedIsolatedCellStillSelectsJustThatCell() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    setPixel(project, layerId, 11, 11, -20.0f);  // A single distinctive cell, no similar neighbors.
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.setSelectionShape(SelectionShape::Wand);
+    controller.setWandTolerance(1.0);
+
+    controller.beginSelectionDrag(layerId, TimeFrequencyPoint{frameIndexToTime(11, config),
+                                                                binIndexToFrequency(11.0f, config)});
+    controller.endSelectionDrag();
+
+    // Still a real (if tiny) selection - the anchor cell always matches
+    // itself, regardless of how dissimilar its neighbors are.
+    QVERIFY(controller.hasSelection());
+}
+
+void SelectionControllerTest::hasMaskShapedSelectionIsTrueOnlyForWandOrCombinedSelections() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+    QVERIFY(!controller.hasMaskShapedSelection());
+
+    controller.setSelectionShape(SelectionShape::Lasso);
+    dragLasso(controller, layerId, config, {{20, 5}, {30, 5}, {25, 15}});
+    QVERIFY(!controller.hasMaskShapedSelection());
+}
+
+void SelectionControllerTest::addCombinesANewRectangleIntoTheExistingSelection() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 10, 15, 10, 15);
+
+    controller.setSelectionCombineMode(SelectionCombineMode::Add);
+    selectRect(controller, layerId, config, 30, 35, 30, 35);
+
+    QVERIFY(controller.hasSelection());
+    QVERIFY(controller.hasMaskShapedSelection());
+    // Both original regions' own cells are still selected - verified via
+    // an actual Fill, since the mask itself isn't directly exposed.
+    controller.fill(makeUniformGradient(-1.0f, 1.0f));
+    QCOMPARE(readPixel(project, layerId, 12, 12), -1.0f);
+    QCOMPARE(readPixel(project, layerId, 32, 32), -1.0f);
+    // Between the two, untouched.
+    QCOMPARE(readPixel(project, layerId, 22, 22), 0.0f);
+}
+
+void SelectionControllerTest::subtractCarvesTheNewRectangleOutOfTheExistingSelection() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 10, 20, 10, 20);
+
+    controller.setSelectionCombineMode(SelectionCombineMode::Subtract);
+    selectRect(controller, layerId, config, 15, 25, 15, 25);  // overlaps the right/bottom half.
+
+    controller.fill(makeUniformGradient(-1.0f, 1.0f));
+    // Still inside the original, outside the subtracted region.
+    QCOMPARE(readPixel(project, layerId, 11, 11), -1.0f);
+    // Inside the overlap - carved out, untouched.
+    QCOMPARE(readPixel(project, layerId, 17, 17), 0.0f);
+}
+
+void SelectionControllerTest::intersectKeepsOnlyTheOverlapBetweenOldAndNewSelections() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 10, 20, 10, 20);
+
+    controller.setSelectionCombineMode(SelectionCombineMode::Intersect);
+    selectRect(controller, layerId, config, 15, 25, 15, 25);
+
+    controller.fill(makeUniformGradient(-1.0f, 1.0f));
+    // Only the overlap.
+    QCOMPARE(readPixel(project, layerId, 17, 17), -1.0f);
+    // In the original but outside the overlap - not selected.
+    QCOMPARE(readPixel(project, layerId, 11, 11), 0.0f);
+}
+
+void SelectionControllerTest::aWhiffedCombineGestureLeavesTheExistingSelectionUntouched() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 10, 20, 10, 20);
+    QVERIFY(controller.hasSelection());
+
+    controller.setSelectionCombineMode(SelectionCombineMode::Add);
+    // A plain click (no real drag) - "drew nothing".
+    controller.beginSelectionDrag(layerId, TimeFrequencyPoint{frameIndexToTime(50, config), binIndexToFrequency(50.0f, config)});
+    controller.endSelectionDrag();
+
+    // The original selection survives untouched, rather than being cleared
+    // the way a Replace-mode "drew nothing" would.
+    QVERIFY(controller.hasSelection());
+    controller.fill(makeUniformGradient(-1.0f, 1.0f));
+    QCOMPARE(readPixel(project, layerId, 12, 12), -1.0f);
 }

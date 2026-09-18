@@ -13,6 +13,7 @@
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
+#include "sound_mind/core/selection_region.h"
 #include "sound_mind/studio/grid_config.h"
 
 namespace sound_mind::studio {
@@ -21,18 +22,34 @@ class PaintController;
 
 /**
  * @brief Which shape a `SelectionController` draws next - see
- *        `docs/sound-mind-design.md`'s "Selection" for both, and
+ *        `docs/sound-mind-design.md`'s "Selection" for all three, and
  *        `SelectionController::setSelectionShape()`'s own docs for how
  *        this is chosen.
  */
 enum class SelectionShape {
     Rectangle,  ///< A rubber-band rectangle - every selection before Lasso existed.
     Lasso,      ///< A freehand-drawn closed curve, fit the same way a paint stroke's own Path is.
+    Wand,       ///< A flood fill by amplitude similarity from a single clicked point (`v0.Y.35.1` Installment B).
 };
 
 /**
- * @brief Owns the current selection (Rectangle or Lasso) and turns Fill
- *        into a new, non-destructive `FillOperation` - see
+ * @brief How a newly-drawn selection combines with whatever selection was
+ *        already committed - see `docs/sound-mind-design.md`'s "boolean
+ *        combination" and `SelectionController::setSelectionCombineMode()`'s
+ *        own docs for how this is chosen.
+ */
+enum class SelectionCombineMode {
+    Replace,    ///< The new selection replaces the old outright - every selection's own behavior before this existed.
+    Add,        ///< The new selection is unioned into the old.
+    Subtract,   ///< The new selection is carved out of the old.
+    Intersect,  ///< Only what both the old and new selections cover survives.
+};
+
+/**
+ * @brief Owns the current selection (Rectangle, Lasso, or Wand - see
+ *        `SelectionShape`), and how it combines with what was already
+ *        selected (see `SelectionCombineMode`) - and turns Fill into a
+ *        new, non-destructive `FillOperation` - see
  *        `docs/sound-mind-design.md`'s "Selection" and "Fill".
  *
  * A selection is deliberately *not* itself a logged `Operation` - it's
@@ -49,25 +66,44 @@ enum class SelectionShape {
  * than keeping a second one, the same reason (and the same shared
  * `rebuildLayerContent()` call) `PickController` already established.
  *
- * **Rectangle and Lasso (`v0.Y.35.1` Installment A)**: `beginSelectionDrag()`/
- * `continueSelectionDrag()`/`endSelectionDrag()`/`cancelSelectionDrag()` are
- * one uniform API for both shapes - which one a given drag actually
- * produces is decided internally, by `setSelectionShape()`'s own current
- * value, the same "one begin/continue/end trio, config decides the actual
- * behavior" shape `PaintController`'s own tool-type dispatch already
- * established (a `MindGrainConfiguration` branch inside `beginStroke()`,
- * not a separate `beginMindGrainStroke()`). A committed selection's own
- * bounding box (`committedBounds_`, reported by `bounds()`/`displayBounds()`)
- * always exists regardless of shape - a plain `TimeFrequencyRect`, same as
- * before Lasso existed; a Lasso selection *additionally* carries its own
- * closed curve (`committedBoundary_`, reported by `displayBoundary()`),
- * `std::nullopt` for a Rectangle selection. `Fill`/`Copy`/`Cut`/`Paste`
- * all narrow to that curve when present - see `fill()`'s own docs and
+ * **Rectangle, Lasso, and Wand (`v0.Y.35.1` Installments A/B)**:
+ * `beginSelectionDrag()`/`continueSelectionDrag()`/`endSelectionDrag()`/
+ * `cancelSelectionDrag()` are one uniform API for all three shapes - which
+ * one a given drag actually produces is decided internally, by
+ * `setSelectionShape()`'s own current value, the same "one begin/continue/
+ * end trio, config decides the actual behavior" shape `PaintController`'s
+ * own tool-type dispatch already established (a `MindGrainConfiguration`
+ * branch inside `beginStroke()`, not a separate `beginMindGrainStroke()`).
+ * A committed selection's own bounding box (`committedBounds_`, reported
+ * by `bounds()`/`displayBounds()`) always exists regardless of shape - a
+ * plain `TimeFrequencyRect`, same as before Lasso existed; a non-
+ * rectangular selection *additionally* carries its own precise shape
+ * (`committedBoundary_`, a `sound_mind::core::SelectionRegion` - `Path`-
+ * kind for Lasso, `Mask`-kind for Wand or any boolean-combined result),
+ * `std::nullopt` for a plain Rectangle. `Fill`/`Copy`/`Cut`/`Paste` all
+ * narrow to that shape when present - see `fill()`'s own docs and
  * `sound_mind::core::FillOperation`/`PasteOperation`'s own `boundary()`
- * docs. **Wand and boolean combination between selections** remain real,
- * designed features (`docs/sound-mind-design.md`'s own "Selection"
- * section) not built yet - deferred to a later installment of this same
- * milestone.
+ * docs.
+ *
+ * **Wand is a single-click gesture, not a drag** - its own flood fill
+ * (`sound_mind::core::selectByAmplitudeSimilarity()`) runs once, at
+ * `beginSelectionDrag()`'s own anchor point; `continueSelectionDrag()`
+ * ignores any subsequent movement entirely before the gesture ends (the
+ * classic "click, don't drag" wand convention - a jittery release
+ * shouldn't move where the flood fill started from). `setWandTolerance()`/
+ * `setWandHarmonicsAware()` set the two parameters it reads.
+ *
+ * **Boolean combination (`setSelectionCombineMode()`)**: `Add`/`Subtract`/
+ * `Intersect` combine a newly-drawn selection (of *any* shape - Rectangle,
+ * Lasso, or Wand) with whatever was already committed, producing a new
+ * `Mask`-kind `committedBoundary_` (a combined result generally isn't
+ * expressible as a single closed curve, even when both operands started
+ * out simple - see `sound_mind::core::SelectionRegion::combine()`'s own
+ * docs). A combining gesture that produces nothing (a plain click, or a
+ * Lasso/Wand gesture that resolves to no area) leaves the existing
+ * selection untouched, rather than clearing it the way a `Replace`-mode
+ * "drew nothing" does - a combine attempt that "whiffs" shouldn't destroy
+ * what it was trying to modify.
  *
  * **Cut/Copy/Paste, and cross-layer independence**: `copySelection()`/
  * `cutSelection()` capture the committed selection's own pixels off
@@ -85,13 +121,13 @@ enum class SelectionShape {
  * "delete" `Operation` subtype, the same way `PickController`'s own delete
  * reuses an empty-effect `PaintOperation`.
  *
- * **A known gap, deliberately out of this installment's scope**: Mind
- * Shot/Mind Grain capture (`captureMindShot()`/`captureMindGrain()`) still
- * always captures/references the selection's own full bounding box,
- * regardless of a Lasso boundary - `docs/sound-mind-design.md`'s "Mind
- * Shots"/"Mind Grains" predate Lasso and don't describe a non-rectangular
- * capture; extending them the same way Fill/Copy/Cut/Paste were is future
- * work, not resolved here.
+ * **A known gap, deliberately out of scope**: Mind Shot/Mind Grain capture
+ * (`captureMindShot()`/`captureMindGrain()`) still always captures/
+ * references the selection's own full bounding box, regardless of a non-
+ * rectangular boundary - `docs/sound-mind-design.md`'s "Mind Shots"/"Mind
+ * Grains" predate Lasso/Wand and don't describe a non-rectangular capture;
+ * extending them the same way Fill/Copy/Cut/Paste were is future work, not
+ * resolved here.
  */
 class SelectionController : public QObject {
     Q_OBJECT
@@ -143,6 +179,64 @@ public:
     /// @return The current value set via setSelectionShape() -
     ///         `SelectionShape::Rectangle` for a fresh controller.
     [[nodiscard]] SelectionShape selectionShape() const noexcept { return currentShape_; }
+
+    /**
+     * @brief Sets how the *next* `endSelectionDrag()` combines its own
+     *        newly-drawn selection with whatever was already committed -
+     *        the actual work behind holding Shift (`Add`)/Alt (`Subtract`)/
+     *        Shift+Alt (`Intersect`) while starting a new selection
+     *        gesture, resolved by the caller (`MainWindow`, from the
+     *        canvas's own mouse-press modifiers) before calling
+     *        `beginSelectionDrag()`.
+     * @param mode The combine mode to use for the next completed drag.
+     */
+    void setSelectionCombineMode(SelectionCombineMode mode) noexcept { currentCombineMode_ = mode; }
+
+    /// @brief The combine mode the *next* endSelectionDrag() will use.
+    /// @return The current value set via setSelectionCombineMode() -
+    ///         `SelectionCombineMode::Replace` for a fresh controller.
+    [[nodiscard]] SelectionCombineMode selectionCombineMode() const noexcept { return currentCombineMode_; }
+
+    /**
+     * @brief Sets Wand's own tolerance - the actual work behind the
+     *        Selection Configuration Panel's own Tolerance spin box.
+     * @param tolerancePercent See
+     *        `sound_mind::core::selectByAmplitudeSimilarity()`'s own
+     *        `tolerancePercent` docs.
+     */
+    void setWandTolerance(double tolerancePercent) noexcept { wandTolerancePercent_ = tolerancePercent; }
+
+    /// @brief Wand's own current tolerance.
+    /// @return The value set via setWandTolerance() - `10.0` (a modest,
+    ///         generally-useful default) for a fresh controller.
+    [[nodiscard]] double wandTolerance() const noexcept { return wandTolerancePercent_; }
+
+    /**
+     * @brief Sets whether Wand extends its own selection along the
+     *        anchor's harmonic rows - the actual work behind the Selection
+     *        Configuration Panel's own Harmonics-aware checkbox.
+     * @param harmonicsAware See
+     *        `sound_mind::core::selectByAmplitudeSimilarity()`'s own
+     *        `harmonicsAware` docs.
+     */
+    void setWandHarmonicsAware(bool harmonicsAware) noexcept { wandHarmonicsAware_ = harmonicsAware; }
+
+    /// @brief Whether Wand currently extends along harmonic rows.
+    /// @return The value set via setWandHarmonicsAware() - `false` for a
+    ///         fresh controller.
+    [[nodiscard]] bool wandHarmonicsAware() const noexcept { return wandHarmonicsAware_; }
+
+    /// @brief Whether the selection currently on display (the live Wand
+    ///        preview while one is active, otherwise the committed
+    ///        selection - the same "live-or-committed" split
+    ///        displayBounds() itself follows) is Mask-shaped (Wand, or any
+    ///        boolean-combined result) - `true` means displayBoundary()
+    ///        can't return a curve for it (there may not be a single one),
+    ///        so a caller (`CanvasWidget`, in particular) should indicate
+    ///        the selection some other way (a dashed bounding box, in
+    ///        `CanvasWidget`'s own case) rather than drawing nothing at all.
+    /// @return `true` if the currently-displayed selection is Mask-kind.
+    [[nodiscard]] bool hasMaskShapedSelection() const noexcept;
 
     /**
      * @brief Sets which project selection/fill targets.
@@ -233,14 +327,17 @@ public:
 
     /**
      * @brief The Lasso curve to actually draw as the selection overlay
-     *        right now, if the current shape is Lasso - the in-progress
-     *        drag's own live-fit curve while one is active, otherwise the
-     *        committed selection's own boundary. A caller draws this
-     *        curve *instead of* a plain rectangle outline whenever it's
-     *        present (`CanvasWidget`'s own convention).
+     *        right now, if the current selection is Lasso-*shaped* - the
+     *        in-progress drag's own live-fit curve while one is active,
+     *        otherwise the committed selection's own boundary (only when
+     *        it's `Path`-kind). A caller draws this curve *instead of* a
+     *        plain rectangle outline whenever it's present (`CanvasWidget`'s
+     *        own convention).
      * @return The curve to display, or `std::nullopt` for a Rectangle
-     *         selection, no selection at all, or a Lasso drag that hasn't
-     *         gathered enough points yet to have a meaningful curve.
+     *         selection, a Mask-shaped one (Wand or boolean-combined -
+     *         see `hasMaskShapedSelection()`), no selection at all, or a
+     *         Lasso drag that hasn't gathered enough points yet to have a
+     *         meaningful curve.
      */
     [[nodiscard]] std::optional<sound_mind::core::Path> displayBoundary() const;
 
@@ -400,19 +497,42 @@ signals:
     void mindGrainCaptured(sound_mind::core::MindGrainId id);
 
 private:
+    /**
+     * @brief Combines `newBounds`/`newBoundary` (a just-finished drag's own
+     *        result) into the already-committed selection per
+     *        `currentCombineMode_`, replacing `committedBounds_`/
+     *        `committedBoundary_` with the combined result - the shared
+     *        tail end of `endSelectionDrag()`'s own Add/Subtract/Intersect
+     *        handling. A no-op (existing selection left exactly as it was)
+     *        if `selectionLayer_` has no real content to rasterize
+     *        against.
+     * @param newBounds The new selection's own bounding box.
+     * @param newBoundary The new selection's own precise shape, or
+     *        `std::nullopt` for a plain rectangle over `newBounds`.
+     */
+    void combineIntoCommittedSelection(const sound_mind::core::TimeFrequencyRect& newBounds,
+                                        const std::optional<sound_mind::core::SelectionRegion>& newBoundary);
+
     PaintController* paintController_;
     sound_mind::core::Project* project_ = nullptr;
 
     /// @brief Which shape beginSelectionDrag() produces next - see
     /// setSelectionShape()'s own docs.
     SelectionShape currentShape_ = SelectionShape::Rectangle;
+    /// @brief How the next endSelectionDrag() combines its own result with
+    /// what's already committed - see setSelectionCombineMode()'s own docs.
+    SelectionCombineMode currentCombineMode_ = SelectionCombineMode::Replace;
+    /// @brief Wand's own tolerance/harmonics-aware settings - see
+    /// setWandTolerance()'s/setWandHarmonicsAware()'s own docs.
+    double wandTolerancePercent_ = 10.0;
+    bool wandHarmonicsAware_ = false;
 
     std::optional<sound_mind::core::TimeFrequencyRect> committedBounds_;
-    /// @brief The committed selection's own Lasso curve, if it is one -
-    /// `std::nullopt` for a Rectangle selection. Always kept consistent
-    /// with committedBounds_ (which is always that curve's own bounding
+    /// @brief The committed selection's own precise shape, if it's not a
+    /// plain Rectangle - `std::nullopt` for one. Always kept consistent
+    /// with committedBounds_ (which is always this shape's own bounding
     /// box, when present) - see this class's own docs.
-    std::optional<sound_mind::core::Path> committedBoundary_;
+    std::optional<sound_mind::core::SelectionRegion> committedBoundary_;
     sound_mind::core::LayerId selectionLayer_ = 0;
 
     std::optional<sound_mind::core::Clip> clipboard_;
@@ -421,7 +541,7 @@ private:
     /// cutSelection() last ran - carried alongside clipboard_/
     /// clipboardBounds_ so pasteInto() can narrow the paste the same way
     /// the original selection was shaped.
-    std::optional<sound_mind::core::Path> clipboardBoundary_;
+    std::optional<sound_mind::core::SelectionRegion> clipboardBoundary_;
 
     bool dragActive_ = false;
     bool dragMoved_ = false;
@@ -438,6 +558,16 @@ private:
     /// every sample" precedent PaintController::continueStroke() already
     /// established. Empty (no nodes) until at least 2 raw points exist.
     sound_mind::core::Path lassoPreviewPath_;
+
+    /// @brief A Wand click's own flood-fill result, computed once at
+    /// beginSelectionDrag() (see this class's own docs on why Wand ignores
+    /// any subsequent drag movement) and held here until endSelectionDrag()
+    /// commits it - `std::nullopt` if the anchor missed the layer's own
+    /// content entirely. pendingWandBounds_ is that same result's own
+    /// bounding box, computed alongside it (once), so displayBounds()/
+    /// endSelectionDrag() never need to re-derive it from the mask later.
+    std::optional<sound_mind::core::SelectionRegion> pendingWandRegion_;
+    std::optional<sound_mind::core::TimeFrequencyRect> pendingWandBounds_;
 
     /// @brief Snap to Grid's own current state - see setGridSnapping()'s
     /// own docs.

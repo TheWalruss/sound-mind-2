@@ -272,8 +272,8 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
                 const CommonOperationFields fields = readCommonOperationFields(entry);
                 TimeFrequencyRect bounds = entry.at("bounds").get<TimeFrequencyRect>();
                 Gradient gradient = entry.at("gradient").get<Gradient>();
-                std::optional<Path> boundary =
-                    entry.contains("boundary") ? std::optional(entry.at("boundary").get<Path>()) : std::nullopt;
+                std::optional<SelectionRegion> boundary =
+                    entry.contains("boundary") ? std::optional(entry.at("boundary").get<SelectionRegion>()) : std::nullopt;
                 log.operations_.push_back(std::make_unique<FillOperation>(
                     fields.id, fields.targetLayer, bounds, std::move(gradient), fields.supersedes,
                     std::move(boundary)));
@@ -281,8 +281,8 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
                 const CommonOperationFields fields = readCommonOperationFields(entry);
                 TimeFrequencyRect placement = entry.at("placement").get<TimeFrequencyRect>();
                 Clip clip = entry.at("clip").get<Clip>();
-                std::optional<Path> boundary =
-                    entry.contains("boundary") ? std::optional(entry.at("boundary").get<Path>()) : std::nullopt;
+                std::optional<SelectionRegion> boundary =
+                    entry.contains("boundary") ? std::optional(entry.at("boundary").get<SelectionRegion>()) : std::nullopt;
                 log.operations_.push_back(std::make_unique<PasteOperation>(
                     fields.id, fields.targetLayer, placement, std::move(clip), fields.supersedes,
                     std::move(boundary)));

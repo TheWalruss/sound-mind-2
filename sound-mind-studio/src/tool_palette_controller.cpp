@@ -70,6 +70,7 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
     connect(selectionController_, &SelectionController::boundsChanged, this, [this]() {
         canvas_->setSelectionBounds(selectionController_->displayBounds());
         canvas_->setSelectionBoundary(selectionController_->displayBoundary());
+        canvas_->setSelectionHasMaskShape(selectionController_->hasMaskShapedSelection());
     });
     connect(selectionController_, &SelectionController::contentChanged, this, [this](sound_mind::core::LayerId layer) {
         canvas_->update();
@@ -174,6 +175,18 @@ void ToolPaletteController::clearPickSelection() { pickController_->clearSelecti
 void ToolPaletteController::cancelSelectionDrag() { selectionController_->cancelSelectionDrag(); }
 
 void ToolPaletteController::setSelectionShape(SelectionShape shape) { selectionController_->setSelectionShape(shape); }
+
+void ToolPaletteController::setSelectionCombineMode(SelectionCombineMode mode) {
+    selectionController_->setSelectionCombineMode(mode);
+}
+
+void ToolPaletteController::setWandTolerance(double tolerancePercent) {
+    selectionController_->setWandTolerance(tolerancePercent);
+}
+
+void ToolPaletteController::setWandHarmonicsAware(bool harmonicsAware) {
+    selectionController_->setWandHarmonicsAware(harmonicsAware);
+}
 
 void ToolPaletteController::cancelPathPlacement() { pathController_->cancelPath(); }
 

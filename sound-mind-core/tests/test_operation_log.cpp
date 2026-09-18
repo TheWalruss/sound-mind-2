@@ -22,6 +22,7 @@ using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
 using sound_mind::core::ProceduralConfiguration;
+using sound_mind::core::SelectionRegion;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 
@@ -330,7 +331,7 @@ TEST_CASE("An OperationLog with a Lasso-shaped FillOperation round-trips its own
     OperationLog log;
     const OperationId fillId = log.reserveId();
     log.append(std::make_unique<FillOperation>(fillId, LayerId{1}, TimeFrequencyRect{}, Gradient{}, std::nullopt,
-                                                makeTestPath(0.0, 1.0)));
+                                                SelectionRegion(makeTestPath(0.0, 1.0))));
 
     const nlohmann::json json = log;
     const OperationLog roundTripped = json.get<OperationLog>();
@@ -340,7 +341,7 @@ TEST_CASE("An OperationLog with a Lasso-shaped FillOperation round-trips its own
     const auto* restoredFill = dynamic_cast<const FillOperation*>(active[0]);
     REQUIRE(restoredFill != nullptr);
     REQUIRE(restoredFill->boundary().has_value());
-    REQUIRE(restoredFill->boundary()->nodes().size() == 2);
+    REQUIRE(restoredFill->boundary()->path().nodes().size() == 2);
 }
 
 TEST_CASE("An OperationLog with a plain Rectangle-shaped FillOperation round-trips with no boundary at all",
@@ -368,7 +369,7 @@ TEST_CASE("An OperationLog with a PasteOperation round-trips with a Lasso-shaped
     clip.sharedPhaseRadians = {0.0f};
     const OperationId pasteId = log.reserveId();
     log.append(std::make_unique<PasteOperation>(pasteId, LayerId{1}, TimeFrequencyRect{}, clip, std::nullopt,
-                                                 makeTestPath(0.0, 1.0)));
+                                                 SelectionRegion(makeTestPath(0.0, 1.0))));
 
     const nlohmann::json json = log;
     const OperationLog roundTripped = json.get<OperationLog>();
@@ -377,7 +378,7 @@ TEST_CASE("An OperationLog with a PasteOperation round-trips with a Lasso-shaped
         dynamic_cast<const PasteOperation*>(roundTripped.activeOperationsTargeting(LayerId{1})[0]);
     REQUIRE(restoredPaste != nullptr);
     REQUIRE(restoredPaste->boundary().has_value());
-    REQUIRE(restoredPaste->boundary()->nodes().size() == 2);
+    REQUIRE(restoredPaste->boundary()->path().nodes().size() == 2);
 }
 
 TEST_CASE("An OperationLog with a PasteOperation round-trips through JSON, targeting a different layer than "

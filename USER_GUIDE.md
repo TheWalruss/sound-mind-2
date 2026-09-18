@@ -132,7 +132,10 @@ the canvas no longer fits.
 built out further) anywhere else an action could affect time and
 frequency independently: **Alt** restricts to the **frequency axis**
 (vertical), **Shift** restricts to the **time axis** (horizontal), and
-**Ctrl** is for **proportional** control - both axes together.
+**Ctrl** is for **proportional** control - both axes together. (Starting a
+*new* Select-mode selection is the one exception - Shift/Alt there mean
+Add/Subtract instead; see [Selection and Fill](#selection-and-fill)'s own
+"Combining selections".)
 
 Zoom, in the **View → Zoom** menu (the four most common of these are also
 toolbar buttons):
@@ -664,25 +667,48 @@ handle from its own mirrored pair - see
 
 Click the **Select** toolbar button (next to Paint/Pick) to switch the
 canvas into select mode; click it again (or Paint/Pick) to leave it.
-While it's on, drag on the canvas to select a region - shown as a green
-outline. A selection stays active (and visible) even after switching to
-a different tool - it isn't tied to Select mode itself, only to having
-drawn one.
+While it's on, drag (or, for Wand, click) on the canvas to select a
+region - shown as a green outline, dashed for a Wand or combined
+selection (see below). A selection stays active (and visible) even after
+switching to a different tool - it isn't tied to Select mode itself, only
+to having drawn one.
 
 The **Selection Configuration** toolbar button opens a dockable panel
-(off by default, alongside the others) with one control:
+(off by default, alongside the others):
 
 - **Selection Type** - **Rectangle** (the default) drags out an
-  axis-aligned box, corner to corner. **Lasso** instead traces a
-  freehand, irregularly-shaped region as you drag - rendered live as a
-  smooth curve while you draw it, the same way a paint stroke's own
-  preview is. Fill/Copy/Cut/Paste (below) all confine themselves exactly
-  to a Lasso's own shape, not just its bounding box - copying an
-  irregular region and pasting it elsewhere leaves whatever was already
-  on the destination, outside that shape, untouched. A Lasso drag that
-  never gathers enough points to enclose any real area (a short click, or
-  a straight two-point line) clears the selection instead, the same as a
-  Rectangle drag that never really moved.
+  axis-aligned box, corner to corner. **Lasso** traces a freehand,
+  irregularly-shaped region as you drag - rendered live as a smooth curve
+  while you draw it, the same way a paint stroke's own preview is. A
+  Lasso drag that never gathers enough points to enclose any real area (a
+  short click, or a straight two-point line) clears the selection
+  instead, the same as a Rectangle drag that never really moved.
+- **Wand** selects every connected region of similar loudness starting
+  from a single click - no drag needed (dragging before releasing is
+  ignored; only the click position matters). Two controls appear only
+  while Wand is selected:
+  - **Tolerance** - how different a neighboring pixel's own loudness may
+    be and still join the selection, from `0%` (only pixels at *exactly*
+    the clicked point's own loudness) to `100%` (everything reachable,
+    regardless of loudness).
+  - **Harmonics-aware** - when checked, also selects along the clicked
+    point's own overtone rows (2x, 3x, ... its frequency), the same way a
+    note's harmonics naturally stack above its fundamental - useful for
+    selecting a whole note at once rather than just its loudest partial.
+
+Fill/Copy/Cut/Paste (below) all confine themselves exactly to a Lasso or
+Wand selection's own shape, not just its bounding box - copying an
+irregular region and pasting it elsewhere leaves whatever was already on
+the destination, outside that shape, untouched.
+
+**Combining selections**: hold **Shift** while starting a new selection
+(Rectangle, Lasso, or Wand) to **add** it to the selection you already
+have, **Alt** to **subtract** it, or **Shift+Alt** together to keep only
+where the two **overlap**. Works across shapes - Wand-select a note, then
+Shift-drag a Rectangle around its harmonic to add that too, or Alt-drag
+to carve a piece back out. A combining drag/click that ends up selecting
+nothing leaves your existing selection exactly as it was, rather than
+clearing it.
 
 - **Fill** it - **Edit → Fill Selection...** opens a color picker; the
   picked color fills the selection at full strength, confined exactly to
@@ -708,8 +734,8 @@ The **Selection Configuration** toolbar button opens a dockable panel
   [Painting](#painting)'s Tool Configuration panel and select it from the
   drop-down there to paint with it - it stamps back exactly as captured,
   wherever you paint, on any layer. Always captures the selection's own
-  full bounding box, even for a Lasso selection - not yet confined to its
-  actual shape.
+  full bounding box, even for a Lasso/Wand/combined selection - not yet
+  confined to its actual shape.
 - **Capture as Mind Grain** it - **Edit → Capture as Mind Grain** stores a
   *reference* to the selection's own layer and region, named "Mind Grain 1",
   "Mind Grain 2", and so on - unlike Capture as Mind Shot, no pixels are
@@ -726,10 +752,9 @@ The **Selection Configuration** toolbar button opens a dockable panel
 Filling and pasting are both undoable (Ctrl+Z), the same as painting a
 stroke; so is Cut's own silencing of the source region.
 
-Only Rectangle and Lasso selections exist today - see
-[What's Not Here Yet](#whats-not-here-yet) for what's still planned
-(Wand, boolean combination between selections, Rectangle's own rotate
-handle, and Warp).
+Rectangle, Lasso, and Wand selections all exist today, and can be
+combined with each other - see [What's Not Here Yet](#whats-not-here-yet)
+for what's still planned (Rectangle's own rotate handle, and Warp).
 
 ## Path Tool
 
@@ -949,12 +974,16 @@ what's designed for it:
 Selection (see [Selection and Fill](#selection-and-fill) above) exists,
 but only a fraction of what's designed for it:
 
-- **Rectangle** and **Lasso** (freehand) selection exist; **Wand**
-  (flood-fill by amplitude similarity) isn't built yet, there's no way yet
-  to combine multiple selections (add/subtract/intersect), and Rectangle
-  has no rotate handle yet. Mind Shot/Mind Grain capture from a Lasso
-  selection still captures/references its full bounding box, not confined
-  to its actual shape.
+- **Rectangle**, **Lasso** (freehand), and **Wand** (flood-fill by
+  amplitude similarity, optionally harmonics-aware) selection all exist,
+  and can be combined (add/subtract/intersect); Rectangle has no rotate
+  handle yet, and there's no Warp (bending a selection along a hand-drawn
+  curve). A Wand or combined selection shows as a dashed bounding box
+  rather than its own exact outline (a Lasso selection still gets a real
+  curve) - the underlying Fill/Copy/Cut/Paste still respect its precise
+  shape regardless. Mind Shot/Mind Grain capture from a Lasso/Wand/
+  combined selection still captures/references its full bounding box, not
+  confined to its actual shape.
 - **Paste** always lands back at the exact position it was copied/cut
   from - there's no click-to-place gesture yet to paste somewhere else on
   the same layer (pasting onto a *different* layer is supported today;

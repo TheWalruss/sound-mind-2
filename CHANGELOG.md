@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.35.2] - 2026-09-18
+
+Deferred Selection, Installment B: **Wand** (flood-fill by amplitude similarity, optionally harmonics-aware) and **boolean combination** (Add/Subtract/Intersect between selections) - `docs/sound-mind-design.md`'s "Selection". Second installment of the `v0.Y.35.1` milestone; Rectangle's own rotate handle and Warp remain the final installment.
+
+### Added
+
+- **Wand**, a new Selection Type: click a point to flood-fill-select every connected cell within **Tolerance** (a new dial, `0`-`100%`) of its own amplitude. **Harmonics-aware** (a new checkbox) extends the selection along the clicked point's own overtone rows too, unioning each harmonic's own similarly-flood-filled blob into the final selection.
+- **Boolean combination**: hold **Shift** while starting a new selection (Rectangle, Lasso, or Wand) to **add** it to the existing selection, **Alt** to **subtract** it, or **Shift+Alt** to keep only their **intersection** - works across shapes, so a Wand-selected note plus a hand-drawn Rectangle addition (or subtraction) is one combined selection. Fill/Copy/Cut/Paste all confine themselves to the combined shape, same as a Lasso selection already does.
+- A Wand or boolean-combined selection now shows as a **dashed** bounding box on the canvas (a Lasso selection still shows its own exact curve) - its own precise shape isn't always expressible as a single outline, but Fill/Copy/Cut/Paste still respect it exactly regardless of what the overlay shows.
+
+Full regression: sound-mind-core 515/515 (up from 492), sound-mind-studio all 34 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #100.
+
 ## [0.0.35.1] - 2026-09-17
 
 Deferred Selection, Installment A: **Lasso** (freehand polygon selection) - `docs/sound-mind-design.md`'s "Selection". First installment of the `v0.Y.35.1` milestone; Wand, boolean combination, Rectangle's own rotate handle, and Warp remain later installments.

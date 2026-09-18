@@ -16,6 +16,7 @@ using sound_mind::core::Path;
 using sound_mind::core::PasteOperation;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
+using sound_mind::core::SelectionRegion;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 
@@ -201,7 +202,7 @@ TEST_CASE("applyPasteOperation with a boundary only writes clip cells actually i
     boundary.addNode(c);
     boundary.addNode(d);
 
-    const PasteOperation op(1, LayerId{1}, placement, clip, std::nullopt, boundary);
+    const PasteOperation op(1, LayerId{1}, placement, clip, std::nullopt, SelectionRegion(boundary));
     applyPasteOperation(op, content);
 
     // Inside the boundary (left half): overwritten by the clip.

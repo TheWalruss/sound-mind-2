@@ -130,6 +130,11 @@ void CanvasWidget::setSelectionBounds(std::optional<sound_mind::core::TimeFreque
     update();
 }
 
+void CanvasWidget::setSelectionHasMaskShape(bool hasMaskShape) {
+    selectionHasMaskShape_ = hasMaskShape;
+    update();
+}
+
 void CanvasWidget::setMindWavePreview(std::optional<sound_mind::core::MindWave> wave) {
     mindWavePreview_ = std::move(wave);
     if (!mindWavePreview_.has_value() || project_ == nullptr) {
@@ -399,7 +404,12 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         painter.setPen(QPen(Qt::green, 2));
         painter.drawPath(boundaryPath);
     } else if (project_ != nullptr && selectionBounds_.has_value()) {
-        painter.setPen(QPen(Qt::green, 2));
+        // A Mask-shaped selection (Wand, or any boolean-combined result -
+        // see setSelectionHasMaskShape()'s own docs) has no single curve to
+        // draw - a dashed pen distinguishes "the real shape is somewhere
+        // inside this box, not exactly this box" from a real Rectangle
+        // selection's own solid outline.
+        painter.setPen(QPen(Qt::green, 2, selectionHasMaskShape_ ? Qt::DashLine : Qt::SolidLine));
         painter.drawRect(widgetRectFor(*selectionBounds_));
     }
 
@@ -626,7 +636,7 @@ void CanvasWidget::mousePressEvent(QMouseEvent* event) {
         emit pickStrokeStarted(*point);
     } else if (toolMode_ == ToolMode::Select) {
         selectStrokeActive_ = true;
-        emit selectStrokeStarted(*point);
+        emit selectStrokeStarted(*point, event->modifiers());
     } else {
         // Path mode: no "active" bookkeeping - see pathNodePlaced()'s own
         // docs for why a single press is the whole gesture.

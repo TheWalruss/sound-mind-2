@@ -2,8 +2,11 @@
 
 #include <optional>
 
+#include <QCheckBox>
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QSignalSpy>
+#include <QWidget>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/selection_configuration_panel.h"
@@ -31,4 +34,60 @@ void SelectionConfigurationPanelTest::changingTheSelectionTypeComboEmitsSelectio
     QVERIFY(received.has_value());
     QCOMPARE(*received, SelectionShape::Lasso);
     QCOMPARE(panel.selectionShape(), SelectionShape::Lasso);
+}
+
+void SelectionConfigurationPanelTest::freshPanelHasTheWandGroupHiddenAndDefaultWandSettings() {
+    const SelectionConfigurationPanel panel;
+    auto* wandGroup = panel.findChild<QWidget*>(QStringLiteral("wandGroup"));
+    QVERIFY(wandGroup != nullptr);
+    QVERIFY(wandGroup->isHidden());
+    QCOMPARE(panel.wandTolerance(), 10.0);
+    QVERIFY(!panel.wandHarmonicsAware());
+}
+
+void SelectionConfigurationPanelTest::switchingToWandShowsTheWandGroupAndSwitchingAwayHidesItAgain() {
+    SelectionConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("selectionTypeCombo"));
+    auto* wandGroup = panel.findChild<QWidget*>(QStringLiteral("wandGroup"));
+    QVERIFY(combo != nullptr);
+    QVERIFY(wandGroup != nullptr);
+
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Wand")));
+    QVERIFY(!wandGroup->isHidden());
+
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Rectangle")));
+    QVERIFY(wandGroup->isHidden());
+}
+
+void SelectionConfigurationPanelTest::changingToleranceEmitsWandToleranceChangedAndUpdatesWandTolerance() {
+    SelectionConfigurationPanel panel;
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("wandToleranceSpinBox"));
+    QVERIFY(spinBox != nullptr);
+
+    std::optional<double> received;
+    connect(&panel, &SelectionConfigurationPanel::wandToleranceChanged, [&](double tolerancePercent) {
+        received = tolerancePercent;
+    });
+
+    spinBox->setValue(42.0);
+
+    QVERIFY(received.has_value());
+    QCOMPARE(*received, 42.0);
+    QCOMPARE(panel.wandTolerance(), 42.0);
+}
+
+void SelectionConfigurationPanelTest::togglingHarmonicsAwareEmitsWandHarmonicsAwareChangedAndUpdatesWandHarmonicsAware() {
+    SelectionConfigurationPanel panel;
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("wandHarmonicsAwareCheckBox"));
+    QVERIFY(checkBox != nullptr);
+
+    std::optional<bool> received;
+    connect(&panel, &SelectionConfigurationPanel::wandHarmonicsAwareChanged,
+            [&](bool harmonicsAware) { received = harmonicsAware; });
+
+    checkBox->setChecked(true);
+
+    QVERIFY(received.has_value());
+    QVERIFY(*received);
+    QVERIFY(panel.wandHarmonicsAware());
 }

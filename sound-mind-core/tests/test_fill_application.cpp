@@ -16,6 +16,7 @@ using sound_mind::core::LayerId;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
+using sound_mind::core::SelectionRegion;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 
@@ -188,7 +189,8 @@ TEST_CASE("applyFillOperation with a boundary only writes cells actually inside 
     boundary.addNode(c);
     boundary.addNode(d);
 
-    const FillOperation op(1, LayerId{1}, bounds, makeUniformGradient(-10.0f, 1.0f), std::nullopt, boundary);
+    const FillOperation op(1, LayerId{1}, bounds, makeUniformGradient(-10.0f, 1.0f), std::nullopt,
+                           SelectionRegion(boundary));
     applyFillOperation(op, content);
 
     // Inside the boundary (left half): filled.

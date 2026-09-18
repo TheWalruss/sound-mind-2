@@ -5,7 +5,7 @@
 
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/operation.h"
-#include "sound_mind/core/path.h"
+#include "sound_mind/core/selection_region.h"
 
 namespace sound_mind::core {
 
@@ -23,15 +23,18 @@ namespace sound_mind::core {
  * within `bounds()`, confined exactly to the selection - "a solid fill",
  * not "a very fat brush".
  *
- * **Lasso-shaped fills** (`v0.Y.35.1` Installment A): `bounds()` alone
- * is always this fill's own bounding box - the same rectangle it would
- * be for a Rectangle-shaped selection - regardless of `boundary()`.
- * Every other bounding-box-consuming caller (`PickController`'s own hit-
- * testing, "Show bounding boxes", the layer-reordering guardrails) keeps
- * working completely unchanged whether or not `boundary()` is present.
+ * **Non-rectangular fills** (Lasso, `v0.Y.35.1` Installment A; Wand and
+ * boolean-combined selections, Installment B): `bounds()` alone is always
+ * this fill's own bounding box - the same rectangle it would be for a
+ * Rectangle-shaped selection - regardless of `boundary()`. Every other
+ * bounding-box-consuming caller (`PickController`'s own hit-testing,
+ * "Show bounding boxes", the layer-reordering guardrails) keeps working
+ * completely unchanged whether or not `boundary()` is present.
  * `boundary()`, when present, additionally *narrows* which cells within
  * that bounding box `applyFillOperation()` actually touches - see its
- * own docs.
+ * own docs, and `SelectionRegion`'s own docs for why a Lasso and a Wand/
+ * combined selection need two different representations under the same
+ * field.
  */
 class FillOperation : public LayerContentOperation {
 public:
@@ -48,15 +51,15 @@ public:
      *        an owned snapshot, same reasoning as `bounds`.
      * @param supersedes The prior operation this one replaces, if any -
      *        see Operation::supersedes()'s own docs.
-     * @param boundary A Lasso selection's own closed curve, narrowing
-     *        which cells within `bounds` this fill actually touches - see
-     *        `boundary()`'s own docs. `std::nullopt` (the default) for a
-     *        plain Rectangle-shaped fill, unchanged from every fill this
-     *        class supported before `v0.Y.35.1`.
+     * @param boundary A non-rectangular selection's own precise shape,
+     *        narrowing which cells within `bounds` this fill actually
+     *        touches - see `boundary()`'s own docs. `std::nullopt` (the
+     *        default) for a plain Rectangle-shaped fill, unchanged from
+     *        every fill this class supported before `v0.Y.35.1`.
      */
     FillOperation(OperationId id, LayerId targetLayer, TimeFrequencyRect bounds, Gradient gradient,
                   std::optional<OperationId> supersedes = std::nullopt,
-                  std::optional<Path> boundary = std::nullopt) noexcept
+                  std::optional<SelectionRegion> boundary = std::nullopt) noexcept
         : LayerContentOperation(id, targetLayer, supersedes),
           bounds_(bounds),
           gradient_(std::move(gradient)),
@@ -65,7 +68,7 @@ public:
     /// @brief This operation's own time/frequency footprint - exactly the
     ///        selection it was filled through, since a fill never affects
     ///        anything outside it. Always the *bounding box*, even for a
-    ///        Lasso-shaped fill - see boundary()'s own docs and this
+    ///        non-rectangular fill - see boundary()'s own docs and this
     ///        class's own docs on why.
     /// @return This operation's own bounds.
     [[nodiscard]] TimeFrequencyRect bounds() const override { return bounds_; }
@@ -75,22 +78,22 @@ public:
     [[nodiscard]] const Gradient& gradient() const noexcept { return gradient_; }
 
     /**
-     * @brief A Lasso selection's own closed curve, if this fill was made
-     *        through one - narrows `applyFillOperation()`'s own edit to
-     *        cells `sound_mind::core::containsPoint()` actually places
+     * @brief A non-rectangular selection's own precise shape, if this fill
+     *        was made through one - narrows `applyFillOperation()`'s own
+     *        edit to cells `boundary()->containsCell()` actually places
      *        inside it, rather than every cell in `bounds()`'s own
      *        rectangle.
-     * @return The boundary curve, or `std::nullopt` for a plain
-     *         Rectangle-shaped fill (every cell in `bounds()` is
-     *         touched, exactly as before this field existed).
+     * @return The boundary, or `std::nullopt` for a plain Rectangle-shaped
+     *         fill (every cell in `bounds()` is touched, exactly as
+     *         before this field existed).
      */
-    [[nodiscard]] const std::optional<Path>& boundary() const noexcept { return boundary_; }
+    [[nodiscard]] const std::optional<SelectionRegion>& boundary() const noexcept { return boundary_; }
 
     /// @copydoc Operation::translatedCopy()
     [[nodiscard]] std::unique_ptr<Operation> translatedCopy(
         OperationId newId, double deltaTimeSeconds, double deltaFrequencyBins,
         const sound_mind::codec::StreamCodecConfig& config) const override {
-        std::optional<Path> translatedBoundary;
+        std::optional<SelectionRegion> translatedBoundary;
         if (boundary_) {
             translatedBoundary = boundary_->translated(deltaTimeSeconds, deltaFrequencyBins, config);
         }
@@ -102,7 +105,7 @@ public:
 private:
     TimeFrequencyRect bounds_;
     Gradient gradient_;
-    std::optional<Path> boundary_;
+    std::optional<SelectionRegion> boundary_;
 };
 
 }  // namespace sound_mind::core

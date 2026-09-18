@@ -251,6 +251,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     addDockWidget(Qt::RightDockWidgetArea, selectionConfigurationPanel_);
     connect(selectionConfigurationPanel_, &SelectionConfigurationPanel::selectionShapeChanged, this,
             [this](SelectionShape shape) { toolPaletteController_->setSelectionShape(shape); });
+    connect(selectionConfigurationPanel_, &SelectionConfigurationPanel::wandToleranceChanged, this,
+            [this](double tolerancePercent) { toolPaletteController_->setWandTolerance(tolerancePercent); });
+    connect(selectionConfigurationPanel_, &SelectionConfigurationPanel::wandHarmonicsAwareChanged, this,
+            [this](bool harmonicsAware) { toolPaletteController_->setWandHarmonicsAware(harmonicsAware); });
     // Mind Grain ordering-rule guardrail (v0.Y.33.1 Installment B) - a type
     // switch, a different Mind Grain picked, or any other edit could change
     // whether the active layer is currently paintable with it. layerController_/
@@ -284,11 +288,26 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             toolPaletteController_->beginPick(*layerId, point);
         }
     });
-    connect(canvas_, &CanvasWidget::selectStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
-        if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
-            toolPaletteController_->beginSelectionDrag(*layerId, point);
-        }
-    });
+    connect(canvas_, &CanvasWidget::selectStrokeStarted, this,
+            [this](sound_mind::core::TimeFrequencyPoint point, Qt::KeyboardModifiers modifiers) {
+                if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
+                    // Shift = Add, Alt = Subtract, Shift+Alt = Intersect -
+                    // the universal boolean-combination convention,
+                    // confirmed with the user: no real conflict with this
+                    // project's own Alt/Shift/Ctrl axis-restriction
+                    // mnemonic (Canvas Navigation's own docs), which is
+                    // scoped to *resizing something that already exists*,
+                    // not drawing a brand-new selection from scratch.
+                    const bool shift = modifiers.testFlag(Qt::ShiftModifier);
+                    const bool alt = modifiers.testFlag(Qt::AltModifier);
+                    const SelectionCombineMode combineMode = (shift && alt)   ? SelectionCombineMode::Intersect
+                                                              : shift         ? SelectionCombineMode::Add
+                                                              : alt           ? SelectionCombineMode::Subtract
+                                                                              : SelectionCombineMode::Replace;
+                    toolPaletteController_->setSelectionCombineMode(combineMode);
+                    toolPaletteController_->beginSelectionDrag(*layerId, point);
+                }
+            });
     connect(canvas_, &CanvasWidget::pathNodePlaced, this, [this](sound_mind::core::TimeFrequencyPoint point) {
         if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->placePathNode(*layerId, point);

@@ -4,6 +4,8 @@ add_executable(sound-mind-core-tests
     test_operation.cpp
     test_gradient.cpp
     test_path.cpp
+    test_selection_region.cpp
+    test_wand_selection.cpp
     test_tool_configuration.cpp
     test_filter_configuration.cpp
     test_tone_curve.cpp

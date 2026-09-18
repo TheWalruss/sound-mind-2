@@ -264,6 +264,19 @@ public:
     void setSelectionBoundary(std::optional<sound_mind::core::Path> boundary);
 
     /**
+     * @brief Sets whether the current selection is Mask-shaped (a Wand
+     *        selection, or any boolean-combined result - `v0.Y.35.1`
+     *        Installment B) and repaints - draws `setSelectionBounds()`'s
+     *        own rectangle dashed instead of solid when `true`, since a
+     *        mask generally has no single curve `setSelectionBoundary()`
+     *        could draw instead (see
+     *        `SelectionController::hasMaskShapedSelection()`'s own docs) -
+     *        a plain bounding-box indicator rather than nothing at all.
+     * @param hasMaskShape Whether to draw the dashed indicator.
+     */
+    void setSelectionHasMaskShape(bool hasMaskShape);
+
+    /**
      * @brief Sets (or clears) the MindWave being live-previewed, and
      *        repaints - a semi-transparent (50% opacity) grayscale
      *        rendering of `wave`'s own `[0, 1]` field
@@ -459,7 +472,11 @@ signals:
     /// @brief A selection drag started (`Select` tool mode, left button
     ///        pressed) - the drag's own anchor corner.
     /// @param point The press position, converted to time/frequency space.
-    void selectStrokeStarted(sound_mind::core::TimeFrequencyPoint point);
+    /// @param modifiers The keyboard modifiers held at press time - Shift/
+    ///        Alt/Shift+Alt choose Add/Subtract/Intersect combination
+    ///        instead of the default Replace (`v0.Y.35.1` Installment B);
+    ///        resolved by the caller (`MainWindow`), not by this class.
+    void selectStrokeStarted(sound_mind::core::TimeFrequencyPoint point, Qt::KeyboardModifiers modifiers);
 
     /// @brief The in-progress selection drag continued (`Select` tool
     ///        mode, left button held and moved).
@@ -683,6 +700,7 @@ private:
     std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;
     std::optional<sound_mind::core::TimeFrequencyRect> selectionBounds_;
     std::optional<sound_mind::core::Path> selectionBoundary_;
+    bool selectionHasMaskShape_ = false;
 
     /// @brief The MindWave currently being previewed, if any - kept only
     ///        so setProject() can tell whether there's actually a preview

@@ -122,6 +122,29 @@ public:
     /// @param shape The shape to draw next.
     void setSelectionShape(SelectionShape shape);
 
+    /// @brief Sets how the *next* Select drag combines with the existing
+    ///        selection - forwards to
+    ///        `SelectionController::setSelectionCombineMode()`. The actual
+    ///        work behind holding Shift/Alt while starting a new selection
+    ///        gesture, resolved by the caller from the canvas's own mouse-
+    ///        press modifiers.
+    /// @param mode The combine mode to use for the next completed drag.
+    void setSelectionCombineMode(SelectionCombineMode mode);
+
+    /// @brief Sets Wand's own tolerance - forwards to
+    ///        `SelectionController::setWandTolerance()`. The actual work
+    ///        behind the Selection Configuration Panel's own Tolerance
+    ///        spin box.
+    /// @param tolerancePercent The new tolerance.
+    void setWandTolerance(double tolerancePercent);
+
+    /// @brief Sets whether Wand extends along harmonic rows - forwards to
+    ///        `SelectionController::setWandHarmonicsAware()`. The actual
+    ///        work behind the Selection Configuration Panel's own
+    ///        Harmonics-aware checkbox.
+    /// @param harmonicsAware The new value.
+    void setWandHarmonicsAware(bool harmonicsAware);
+
     /// @brief Places the next Path tool node - forwards to
     ///        `PathController::placeNode()`.
     /// @param layer Which layer the path is being placed onto - resolved

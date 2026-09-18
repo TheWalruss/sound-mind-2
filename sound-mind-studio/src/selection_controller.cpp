@@ -5,8 +5,10 @@
 
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/operation_log.h"
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paste_application.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/core/wand_selection.h"
 #include "sound_mind/studio/paint_controller.h"
 
 namespace sound_mind::studio {
@@ -23,6 +25,35 @@ sound_mind::core::TimeFrequencyRect rectFromCorners(sound_mind::core::TimeFreque
     rect.lowFrequencyHz = std::min(a.frequencyHz, b.frequencyHz);
     rect.highFrequencyHz = std::max(a.frequencyHz, b.frequencyHz);
     return rect;
+}
+
+/// @brief `range`'s own bounding TimeFrequencyRect, converting its
+/// absolute frame/bin corners back to real time/frequency via
+/// frameIndexToTime()/binIndexToFrequency() - the inverse of rangeFor(),
+/// needed wherever a Wand/combined selection's own mask range has to
+/// become a plain bounding box (committedBounds_ is always one,
+/// regardless of shape - see the class's own docs).
+sound_mind::core::TimeFrequencyRect boundsOfRange(sound_mind::core::FrameBinRange range,
+                                                    const sound_mind::codec::StreamCodecConfig& config) {
+    sound_mind::core::TimeFrequencyRect rect;
+    rect.startTimeSeconds = sound_mind::core::frameIndexToTime(range.frameLow, config);
+    rect.endTimeSeconds = sound_mind::core::frameIndexToTime(range.frameHigh, config);
+    rect.lowFrequencyHz = sound_mind::core::binIndexToFrequency(static_cast<float>(range.binLow), config);
+    rect.highFrequencyHz = sound_mind::core::binIndexToFrequency(static_cast<float>(range.binHigh), config);
+    return rect;
+}
+
+/// @brief The smallest FrameBinRange enclosing both `a` and `b` - Add's own
+/// result footprint needs to cover everything either operand selects,
+/// unlike Subtract/Intersect (which never exceed the first operand's own
+/// range - see SelectionRegion::combine()'s own docs).
+sound_mind::core::FrameBinRange unionRange(sound_mind::core::FrameBinRange a, sound_mind::core::FrameBinRange b) {
+    sound_mind::core::FrameBinRange result;
+    result.frameLow = std::min(a.frameLow, b.frameLow);
+    result.frameHigh = std::max(a.frameHigh, b.frameHigh);
+    result.binLow = std::min(a.binLow, b.binLow);
+    result.binHigh = std::max(a.binHigh, b.binHigh);
+    return result;
 }
 
 }  // namespace
@@ -43,6 +74,8 @@ void SelectionController::setProject(sound_mind::core::Project* project) {
     dragMoved_ = false;
     lassoRawPoints_.clear();
     lassoPreviewPath_ = sound_mind::core::Path{};
+    pendingWandRegion_.reset();
+    pendingWandBounds_.reset();
     const bool hadSelection = committedBounds_.has_value();
     committedBounds_.reset();
     committedBoundary_.reset();
@@ -68,6 +101,27 @@ void SelectionController::beginSelectionDrag(sound_mind::core::LayerId layer, so
         lassoRawPoints_.clear();
         lassoRawPoints_.push_back(point);
         lassoPreviewPath_ = sound_mind::core::Path{};
+    } else if (currentShape_ == SelectionShape::Wand) {
+        // A single-click gesture - the whole flood fill runs right here,
+        // at the anchor, rather than waiting for endSelectionDrag() - see
+        // this class's own docs on why continueSelectionDrag() then
+        // ignores any further movement entirely.
+        pendingWandRegion_.reset();
+        pendingWandBounds_.reset();
+        if (project_ != nullptr) {
+            paintController_->rebuildLayerContent(layer);
+            if (const sound_mind::core::Layer* layerPtr = project_->layerById(layer);
+                layerPtr != nullptr && layerPtr->content().has_value()) {
+                sound_mind::core::SelectionRegion region = sound_mind::core::selectByAmplitudeSimilarity(
+                    *layerPtr->content(), point, wandTolerancePercent_, wandHarmonicsAware_);
+                if (!region.maskCells().empty()) {
+                    const sound_mind::core::FrameBinRange range{region.maskFrameLow(), region.maskFrameHigh(),
+                                                                  region.maskBinLow(), region.maskBinHigh()};
+                    pendingWandBounds_ = boundsOfRange(range, layerPtr->content()->config);
+                    pendingWandRegion_ = std::move(region);
+                }
+            }
+        }
     } else {
         dragAnchor_ = point;
         dragPreviewBounds_ = rectFromCorners(point, point);
@@ -78,6 +132,9 @@ void SelectionController::beginSelectionDrag(sound_mind::core::LayerId layer, so
 void SelectionController::continueSelectionDrag(sound_mind::core::TimeFrequencyPoint point) {
     if (!dragActive_) {
         return;
+    }
+    if (currentShape_ == SelectionShape::Wand) {
+        return;  // Ignored entirely - see beginSelectionDrag()'s own docs.
     }
     if (gridSnappingEnabled_ && project_ != nullptr) {
         point = snapToGrid(point, frequencyGridConfig_, timingGridConfig_, project_->settings());
@@ -105,11 +162,23 @@ void SelectionController::endSelectionDrag() {
     }
     dragActive_ = false;
 
-    if (currentShape_ == SelectionShape::Lasso) {
+    // Resolve the just-finished drag's own result, uniformly across all
+    // three shapes, into a plain (bounds, boundary) pair - std::nullopt
+    // bounds means "drew nothing meaningful" (the same convention every
+    // shape already used before Wand/combine existed).
+    std::optional<sound_mind::core::TimeFrequencyRect> newBounds;
+    std::optional<sound_mind::core::SelectionRegion> newBoundary;
+
+    if (currentShape_ == SelectionShape::Wand) {
+        newBounds = pendingWandBounds_;
+        newBoundary = std::move(pendingWandRegion_);
+        pendingWandRegion_.reset();
+        pendingWandBounds_.reset();
+    } else if (currentShape_ == SelectionShape::Lasso) {
         // Refit once more from the final point set (continueSelectionDrag()
         // may never have run at all for a plain click) - fewer than 3
         // resulting nodes can't enclose any area, so that's treated the
-        // same as "drew nothing", below.
+        // same as "drew nothing".
         sound_mind::core::Path fitted;
         if (dragMoved_ && lassoRawPoints_.size() >= 3 && project_ != nullptr) {
             fitted = sound_mind::core::fitPathToPoints(
@@ -118,8 +187,22 @@ void SelectionController::endSelectionDrag() {
         }
         lassoRawPoints_.clear();
         lassoPreviewPath_ = sound_mind::core::Path{};
+        if (fitted.nodes().size() >= 3) {
+            newBounds = fitted.bounds();
+            newBoundary = sound_mind::core::SelectionRegion(std::move(fitted));
+        }
+    } else if (dragMoved_) {
+        newBounds = dragPreviewBounds_;
+        // newBoundary stays std::nullopt - a plain rectangle.
+    }
 
-        if (fitted.nodes().size() < 3) {
+    if (!newBounds.has_value()) {
+        // A combining gesture (Add/Subtract/Intersect) that produced
+        // nothing leaves the existing selection untouched entirely - a
+        // "whiffed" combine shouldn't destroy what it was trying to
+        // modify. Only Replace mode's own "drew nothing" clears, matching
+        // every shape's own pre-existing "click empty space" convention.
+        if (currentCombineMode_ == SelectionCombineMode::Replace) {
             const bool hadSelection = committedBounds_.has_value();
             committedBounds_.reset();
             committedBoundary_.reset();
@@ -127,33 +210,48 @@ void SelectionController::endSelectionDrag() {
             if (hadSelection) {
                 emit selectionChanged();
             }
-            return;
-        }
-
-        committedBounds_ = fitted.bounds();
-        committedBoundary_ = std::move(fitted);
-        emit boundsChanged();
-        emit selectionChanged();
-        return;
-    }
-
-    if (!dragMoved_) {
-        // A plain click, not a drag - deselect, matching Pick's own
-        // "clicking empty space clears the selection" convention.
-        const bool hadSelection = committedBounds_.has_value();
-        committedBounds_.reset();
-        committedBoundary_.reset();
-        emit boundsChanged();
-        if (hadSelection) {
-            emit selectionChanged();
         }
         return;
     }
 
-    committedBounds_ = dragPreviewBounds_;
-    committedBoundary_.reset();
+    if (currentCombineMode_ == SelectionCombineMode::Replace || !committedBounds_.has_value()) {
+        committedBounds_ = newBounds;
+        committedBoundary_ = std::move(newBoundary);
+    } else {
+        combineIntoCommittedSelection(*newBounds, newBoundary);
+    }
     emit boundsChanged();
     emit selectionChanged();
+}
+
+void SelectionController::combineIntoCommittedSelection(
+    const sound_mind::core::TimeFrequencyRect& newBounds,
+    const std::optional<sound_mind::core::SelectionRegion>& newBoundary) {
+    if (project_ == nullptr) {
+        return;
+    }
+    paintController_->rebuildLayerContent(selectionLayer_);
+    const sound_mind::core::Layer* layer = project_->layerById(selectionLayer_);
+    if (layer == nullptr || !layer->content().has_value()) {
+        return;
+    }
+    const auto& content = *layer->content();
+
+    const sound_mind::core::FrameBinRange oldRange = rangeFor(*committedBounds_, content.config, content.frameCount);
+    const sound_mind::core::FrameBinRange newRange = rangeFor(newBounds, content.config, content.frameCount);
+    const sound_mind::core::SelectionRegion::BooleanOp op =
+        (currentCombineMode_ == SelectionCombineMode::Add)   ? sound_mind::core::SelectionRegion::BooleanOp::Add
+        : (currentCombineMode_ == SelectionCombineMode::Subtract) ? sound_mind::core::SelectionRegion::BooleanOp::Subtract
+                                                                    : sound_mind::core::SelectionRegion::BooleanOp::Intersect;
+    // Add's own result has to cover everything either operand selects;
+    // Subtract/Intersect never exceed the *existing* selection's own
+    // extent - see SelectionRegion::combine()'s own docs.
+    const sound_mind::core::FrameBinRange resultRange =
+        (op == sound_mind::core::SelectionRegion::BooleanOp::Add) ? unionRange(oldRange, newRange) : oldRange;
+
+    committedBoundary_ = sound_mind::core::SelectionRegion::combine(committedBoundary_, oldRange, newBoundary, newRange,
+                                                                      resultRange, op, content.config);
+    committedBounds_ = boundsOfRange(resultRange, content.config);
 }
 
 void SelectionController::cancelSelectionDrag() {
@@ -164,6 +262,8 @@ void SelectionController::cancelSelectionDrag() {
     dragMoved_ = false;
     lassoRawPoints_.clear();
     lassoPreviewPath_ = sound_mind::core::Path{};
+    pendingWandRegion_.reset();
+    pendingWandBounds_.reset();
     emit boundsChanged();  // reverts the display back to the committed selection (or none).
 }
 
@@ -183,6 +283,9 @@ std::optional<sound_mind::core::TimeFrequencyRect> SelectionController::displayB
             return lassoPreviewPath_.nodes().empty() ? std::nullopt
                                                        : std::optional(lassoPreviewPath_.bounds());
         }
+        if (currentShape_ == SelectionShape::Wand) {
+            return pendingWandBounds_;
+        }
         return dragPreviewBounds_;
     }
     return committedBounds_;
@@ -195,7 +298,20 @@ std::optional<sound_mind::core::Path> SelectionController::displayBoundary() con
         }
         return std::nullopt;
     }
-    return committedBoundary_;
+    if (committedBoundary_ && committedBoundary_->kind() == sound_mind::core::SelectionRegionKind::Path) {
+        return committedBoundary_->path();
+    }
+    return std::nullopt;
+}
+
+bool SelectionController::hasMaskShapedSelection() const noexcept {
+    if (dragActive_ && currentShape_ == SelectionShape::Wand) {
+        // A live Wand preview is always Mask-shaped too - without this,
+        // the dashed-vs-solid indicator would flicker briefly solid during
+        // the (short, but real) window between press and release.
+        return pendingWandRegion_.has_value();
+    }
+    return committedBoundary_.has_value() && committedBoundary_->kind() == sound_mind::core::SelectionRegionKind::Mask;
 }
 
 void SelectionController::fill(const sound_mind::core::Gradient& gradient) {

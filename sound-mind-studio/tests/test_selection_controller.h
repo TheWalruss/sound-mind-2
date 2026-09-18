@@ -51,4 +51,15 @@ private slots:
     void fillWithALassoSelectionCarriesItsBoundary();
     void fillWithARectangleSelectionCarriesNoBoundary();
     void copySelectionThenPasteIntoCarriesTheLassoBoundaryForward();
+
+    // Wand and boolean combination (v0.Y.35.1 Installment B).
+    void freshControllerHasDefaultWandSettingsAndReplaceCombineMode();
+    void wandClickCommitsAMaskShapedSelectionAtTheClickedBlob();
+    void wandIgnoresSubsequentDragMovement();
+    void wandClickOnAnUnmatchedIsolatedCellStillSelectsJustThatCell();
+    void hasMaskShapedSelectionIsTrueOnlyForWandOrCombinedSelections();
+    void addCombinesANewRectangleIntoTheExistingSelection();
+    void subtractCarvesTheNewRectangleOutOfTheExistingSelection();
+    void intersectKeepsOnlyTheOverlapBetweenOldAndNewSelections();
+    void aWhiffedCombineGestureLeavesTheExistingSelectionUntouched();
 };

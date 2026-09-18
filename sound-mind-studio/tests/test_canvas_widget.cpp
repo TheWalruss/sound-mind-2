@@ -747,6 +747,23 @@ void CanvasWidgetTest::mousePressInSelectModeEmitsSelectStrokeStartedWithAConver
     QVERIFY(qAbs(received->frequencyHz - expectedFrequency) < 1.0);
 }
 
+void CanvasWidgetTest::mousePressInSelectModeEmitsSelectStrokeStartedWithTheModifiersHeld() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Select);
+
+    std::optional<Qt::KeyboardModifiers> received;
+    QObject::connect(&widget, &CanvasWidget::selectStrokeStarted,
+                      [&](TimeFrequencyPoint, Qt::KeyboardModifiers modifiers) { received = modifiers; });
+
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::ShiftModifier, QPoint(30, 10));
+
+    QVERIFY(received.has_value());
+    QVERIFY(received->testFlag(Qt::ShiftModifier));
+}
+
 void CanvasWidgetTest::mouseMoveAfterPressInSelectModeEmitsSelectStrokeContinued() {
     const Project project = Project::createNew(mouseConversionTestSettings());
     CanvasWidget widget;
@@ -825,6 +842,30 @@ void CanvasWidgetTest::setSelectionBoundsWithNoValueDrawsNothing() {
 
     const QImage rendered = widget.grab().toImage();
     QVERIFY(rendered.pixelColor(20, 10) != QColor(0, 255, 0));
+}
+
+void CanvasWidgetTest::setSelectionHasMaskShapeStillDrawsTheRectangleDashed() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    sound_mind::core::TimeFrequencyRect bounds;
+    bounds.startTimeSeconds = sound_mind::core::frameIndexToTime(20.0, config);
+    bounds.endTimeSeconds = sound_mind::core::frameIndexToTime(80.0, config);
+    bounds.lowFrequencyHz = sound_mind::core::binIndexToFrequency(10.0f, config);
+    bounds.highFrequencyHz = sound_mind::core::binIndexToFrequency(40.0f, config);
+    widget.setSelectionBounds(bounds);
+    widget.setSelectionHasMaskShape(true);
+
+    // A dashed QPen always starts solid at the path's own beginning
+    // (drawRect()'s own top-left corner) - still green there, unlike a
+    // solid outline only in that the rest of each edge alternates on/off.
+    const QImage rendered = widget.grab().toImage();
+    QCOMPARE(rendered.pixelColor(20, 10), QColor(0, 255, 0));
 }
 
 void CanvasWidgetTest::mousePressInPathModeEmitsPathNodePlacedWithAConvertedPoint() {
