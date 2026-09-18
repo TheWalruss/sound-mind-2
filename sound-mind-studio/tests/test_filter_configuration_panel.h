@@ -64,4 +64,10 @@ private slots:
     void changingDisplaceDistanceAndAngleUpdateConfigAndEmit();
     void changingChannelCycleAngleUpdatesConfigAndEmits();
     void setFilterConfigurationSyncsDisplaceAndChannelCycleWithoutEmitting();
+
+    // --- v0.Y.36.1 Installment D: Space ---
+    void freshPanelHasSpectralReverbGroupHidden();
+    void selectingSpectralReverbShowsOnlyItsOwnGroup();
+    void changingEverySpectralReverbControlUpdatesConfigAndEmits();
+    void setFilterConfigurationSyncsSpectralReverbWithoutEmitting();
 };

@@ -101,6 +101,14 @@ enum class FilterType {
     ///        phase into each other (normalized to a shared `[0, 1]`
     ///        domain first), per `channelCycleAngleDegrees()`.
     ChannelCycle,
+    /// @brief A spectral reverb - each frequency bin's own time series is
+    ///        convolved with an exponentially-decaying impulse response
+    ///        (in linear amplitude), after per-bin absorption and
+    ///        cross-frequency diffusion (both in dB), then mixed with the
+    ///        dry signal. Phase untouched. Per `reverbPreDelayFrames()`/
+    ///        `reverbDecayFrames()`/`reverbRoomSize()`/
+    ///        `reverbDiffusion()`/`reverbAbsorption()`/`reverbMix()`.
+    SpectralReverb,
 };
 
 // clang-format off
@@ -124,6 +132,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
     {FilterType::Convolve, "convolve"},
     {FilterType::Displace, "displace"},
     {FilterType::ChannelCycle, "channelCycle"},
+    {FilterType::SpectralReverb, "spectralReverb"},
 })
 // clang-format on
 
@@ -152,12 +161,13 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
  * neither is a single number, so there's nothing for a MindWave's own
  * `[0, 1]` output to become the *value* of. **The eight `v0.Y.36.1`
  * Installment A "Noise & distortion" parameters, Installment B's own
- * `channelBalance`/`convolveKernel`-family fields, and Installment C's own
- * `displace`/`channelCycle` fields below, all have no MindWave binding
- * either, deliberately** - matching how the original six filter types
- * shipped unbound in `v0.Y.28.1` and only gained binding in a later,
- * dedicated milestone (`v0.Y.31.1` Installment D); binding these is left
- * the same way, a known future-work item, not attempted here.
+ * `channelBalance`/`convolveKernel`-family fields, Installment C's own
+ * `displace`/`channelCycle` fields, and Installment D's own `reverb*`
+ * fields below, all have no MindWave binding either, deliberately** -
+ * matching how the original six filter types shipped unbound in
+ * `v0.Y.28.1` and only gained binding in a later, dedicated milestone
+ * (`v0.Y.31.1` Installment D); binding these is left the same way, a
+ * known future-work item, not attempted here.
  */
 class FilterConfiguration {
 public:
@@ -673,6 +683,85 @@ public:
     /// @param degrees The new angle, in degrees.
     void setChannelCycleAngleDegrees(float degrees) noexcept { channelCycleAngleDegrees_ = degrees; }
 
+    /**
+     * @brief `SpectralReverb`'s own pre-delay, in frames, before the
+     *        impulse response's own decay begins - confirmed with the
+     *        user against the legacy Python Studio's own `reverb_filter()`.
+     * @return The current pre-delay; meaningless unless `type()` is
+     *         `SpectralReverb`. Not clamped here.
+     */
+    [[nodiscard]] int reverbPreDelayFrames() const noexcept { return reverbPreDelayFrames_; }
+
+    /// @brief Sets `SpectralReverb`'s own pre-delay.
+    /// @param frames The new pre-delay, in frames; intended to be non-negative.
+    void setReverbPreDelayFrames(int frames) noexcept { reverbPreDelayFrames_ = frames; }
+
+    /**
+     * @brief `SpectralReverb`'s own decay length, in frames - the
+     *        impulse response's own RT60 (`-60`dB point) before scaling by
+     *        `reverbRoomSize()`.
+     * @return The current decay; meaningless unless `type()` is
+     *         `SpectralReverb`. Not clamped here.
+     */
+    [[nodiscard]] int reverbDecayFrames() const noexcept { return reverbDecayFrames_; }
+
+    /// @brief Sets `SpectralReverb`'s own decay length.
+    /// @param frames The new decay, in frames; intended to be positive.
+    void setReverbDecayFrames(int frames) noexcept { reverbDecayFrames_ = frames; }
+
+    /**
+     * @brief `SpectralReverb`'s own room size, in `[0, 1]` - scales
+     *        `reverbDecayFrames()` down (a smaller room decays faster);
+     *        `1.0` uses the full configured decay length.
+     * @return The current room size; meaningless unless `type()` is
+     *         `SpectralReverb`. Not clamped here.
+     */
+    [[nodiscard]] float reverbRoomSize() const noexcept { return reverbRoomSize_; }
+
+    /// @brief Sets `SpectralReverb`'s own room size.
+    /// @param roomSize The new room size, intended within `[0, 1]`.
+    void setReverbRoomSize(float roomSize) noexcept { reverbRoomSize_ = roomSize; }
+
+    /**
+     * @brief `SpectralReverb`'s own cross-frequency diffusion, in `[0, 1]` -
+     *        a Gaussian blur along the frequency axis before the impulse
+     *        response is applied; `0` is a true no-op (no blur at all).
+     * @return The current diffusion; meaningless unless `type()` is
+     *         `SpectralReverb`. Not clamped here.
+     */
+    [[nodiscard]] float reverbDiffusion() const noexcept { return reverbDiffusion_; }
+
+    /// @brief Sets `SpectralReverb`'s own diffusion.
+    /// @param diffusion The new diffusion, intended within `[0, 1]`.
+    void setReverbDiffusion(float diffusion) noexcept { reverbDiffusion_ = diffusion; }
+
+    /**
+     * @brief `SpectralReverb`'s own high-frequency absorption, in `[0, 1]` -
+     *        `0` leaves every frequency equally loud going into the
+     *        reverb tail; `1` damps the highest encoded frequency the most
+     *        (real rooms absorb high frequencies fastest), ramping
+     *        linearly down to no damping at the lowest encoded frequency.
+     * @return The current absorption; meaningless unless `type()` is
+     *         `SpectralReverb`. Not clamped here.
+     */
+    [[nodiscard]] float reverbAbsorption() const noexcept { return reverbAbsorption_; }
+
+    /// @brief Sets `SpectralReverb`'s own absorption.
+    /// @param absorption The new absorption, intended within `[0, 1]`.
+    void setReverbAbsorption(float absorption) noexcept { reverbAbsorption_ = absorption; }
+
+    /**
+     * @brief `SpectralReverb`'s own dry/wet mix, in `[0, 1]` - `0` is a
+     *        true no-op (identity); `1` is the fully reverberated result.
+     * @return The current amount; meaningless unless `type()` is
+     *         `SpectralReverb`. Not clamped here.
+     */
+    [[nodiscard]] float reverbMix() const noexcept { return reverbMix_; }
+
+    /// @brief Sets `SpectralReverb`'s own dry/wet mix.
+    /// @param mix The new mix, intended within `[0, 1]`.
+    void setReverbMix(float mix) noexcept { reverbMix_ = mix; }
+
     friend void to_json(nlohmann::json& json, const FilterConfiguration& config);
     friend void from_json(const nlohmann::json& json, FilterConfiguration& config);
 
@@ -709,6 +798,12 @@ private:
     float displaceDistance_ = 10.0f;
     float displaceAngleDegrees_ = 0.0f;
     float channelCycleAngleDegrees_ = 0.0f;
+    int reverbPreDelayFrames_ = 2;
+    int reverbDecayFrames_ = 40;
+    float reverbRoomSize_ = 0.6f;
+    float reverbDiffusion_ = 0.5f;
+    float reverbAbsorption_ = 0.4f;
+    float reverbMix_ = 0.4f;
 };
 
 /// @brief Serializes a filter configuration to its JSON representation.

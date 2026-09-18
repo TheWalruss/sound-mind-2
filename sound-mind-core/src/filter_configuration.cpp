@@ -50,7 +50,13 @@ void to_json(nlohmann::json& json, const FilterConfiguration& config) {
                            {"convolveAmount", config.convolveAmount_},
                            {"displaceDistance", config.displaceDistance_},
                            {"displaceAngleDegrees", config.displaceAngleDegrees_},
-                           {"channelCycleAngleDegrees", config.channelCycleAngleDegrees_}};
+                           {"channelCycleAngleDegrees", config.channelCycleAngleDegrees_},
+                           {"reverbPreDelayFrames", config.reverbPreDelayFrames_},
+                           {"reverbDecayFrames", config.reverbDecayFrames_},
+                           {"reverbRoomSize", config.reverbRoomSize_},
+                           {"reverbDiffusion", config.reverbDiffusion_},
+                           {"reverbAbsorption", config.reverbAbsorption_},
+                           {"reverbMix", config.reverbMix_}};
     writeOptionalMindWaveId(json, "blurSigmaMindWaveId", config.blurSigmaMindWave_);
     writeOptionalMindWaveId(json, "medianSizeMindWaveId", config.medianSizeMindWave_);
     writeOptionalMindWaveId(json, "directionalBlurLengthMindWaveId", config.directionalBlurLengthMindWave_);
@@ -99,6 +105,13 @@ void from_json(const nlohmann::json& json, FilterConfiguration& config) {
     config.displaceDistance_ = json.value("displaceDistance", config.displaceDistance_);
     config.displaceAngleDegrees_ = json.value("displaceAngleDegrees", config.displaceAngleDegrees_);
     config.channelCycleAngleDegrees_ = json.value("channelCycleAngleDegrees", config.channelCycleAngleDegrees_);
+    // Lenient, same reasoning - didn't exist before v0.Y.36.1 Installment D.
+    config.reverbPreDelayFrames_ = json.value("reverbPreDelayFrames", config.reverbPreDelayFrames_);
+    config.reverbDecayFrames_ = json.value("reverbDecayFrames", config.reverbDecayFrames_);
+    config.reverbRoomSize_ = json.value("reverbRoomSize", config.reverbRoomSize_);
+    config.reverbDiffusion_ = json.value("reverbDiffusion", config.reverbDiffusion_);
+    config.reverbAbsorption_ = json.value("reverbAbsorption", config.reverbAbsorption_);
+    config.reverbMix_ = json.value("reverbMix", config.reverbMix_);
 }
 
 }  // namespace sound_mind::core

@@ -456,3 +456,83 @@ TEST_CASE("A FilterConfiguration loads from JSON missing every Displace/ChannelC
     REQUIRE(restored.displaceAngleDegrees() == 0.0f);
     REQUIRE(restored.channelCycleAngleDegrees() == 0.0f);
 }
+
+// --- v0.Y.36.1 Installment D: Space -------------------------------------
+
+TEST_CASE("A fresh FilterConfiguration has sensible SpectralReverb defaults", "[core][filter_configuration]") {
+    const FilterConfiguration config;
+    REQUIRE(config.reverbPreDelayFrames() == 2);
+    REQUIRE(config.reverbDecayFrames() == 40);
+    REQUIRE(config.reverbRoomSize() == 0.6f);
+    REQUIRE(config.reverbDiffusion() == 0.5f);
+    REQUIRE(config.reverbAbsorption() == 0.4f);
+    REQUIRE(config.reverbMix() == 0.4f);
+}
+
+TEST_CASE("SpectralReverb FilterType can be set", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+    REQUIRE(config.type() == FilterType::SpectralReverb);
+}
+
+TEST_CASE("A FilterConfiguration's SpectralReverb parameters can be changed", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setReverbPreDelayFrames(5);
+    config.setReverbDecayFrames(80);
+    config.setReverbRoomSize(0.9f);
+    config.setReverbDiffusion(0.2f);
+    config.setReverbAbsorption(0.7f);
+    config.setReverbMix(0.8f);
+
+    REQUIRE(config.reverbPreDelayFrames() == 5);
+    REQUIRE(config.reverbDecayFrames() == 80);
+    REQUIRE(config.reverbRoomSize() == 0.9f);
+    REQUIRE(config.reverbDiffusion() == 0.2f);
+    REQUIRE(config.reverbAbsorption() == 0.7f);
+    REQUIRE(config.reverbMix() == 0.8f);
+}
+
+TEST_CASE("A FilterConfiguration's SpectralReverb parameters round-trip through JSON",
+          "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+    config.setReverbPreDelayFrames(5);
+    config.setReverbDecayFrames(80);
+    config.setReverbRoomSize(0.9f);
+    config.setReverbDiffusion(0.2f);
+    config.setReverbAbsorption(0.7f);
+    config.setReverbMix(0.8f);
+
+    const nlohmann::json json = config;
+    const FilterConfiguration roundTripped = json.get<FilterConfiguration>();
+
+    REQUIRE(roundTripped.type() == FilterType::SpectralReverb);
+    REQUIRE(roundTripped.reverbPreDelayFrames() == 5);
+    REQUIRE(roundTripped.reverbDecayFrames() == 80);
+    REQUIRE(roundTripped.reverbRoomSize() == 0.9f);
+    REQUIRE(roundTripped.reverbDiffusion() == 0.2f);
+    REQUIRE(roundTripped.reverbAbsorption() == 0.7f);
+    REQUIRE(roundTripped.reverbMix() == 0.8f);
+}
+
+TEST_CASE("A FilterConfiguration loads from JSON missing every SpectralReverb key "
+          "(a configuration saved before v0.Y.36.1 Installment D) using sensible defaults",
+          "[core][filter_configuration]") {
+    const nlohmann::json json{{"type", "uniformBlur"},
+                               {"blurSigma", 2.0f},
+                               {"medianSize", 3},
+                               {"directionalBlurLength", 10},
+                               {"directionalBlurAngleDegrees", 0.0f},
+                               {"sharpenAmount", 1.0f},
+                               {"toneCurvePoints", std::vector<std::array<float, 2>>{{0.0f, 0.0f}, {1.0f, 1.0f}}},
+                               {"frequencyGradient", FilterConfiguration{}.frequencyGradient()}};
+
+    const FilterConfiguration restored = json.get<FilterConfiguration>();
+
+    REQUIRE(restored.reverbPreDelayFrames() == 2);
+    REQUIRE(restored.reverbDecayFrames() == 40);
+    REQUIRE(restored.reverbRoomSize() == 0.6f);
+    REQUIRE(restored.reverbDiffusion() == 0.5f);
+    REQUIRE(restored.reverbAbsorption() == 0.4f);
+    REQUIRE(restored.reverbMix() == 0.4f);
+}

@@ -1027,6 +1027,137 @@ StreamImage applyChannelCycle(const StreamImage& composite, float angleDegrees) 
     return result;
 }
 
+// ---------------------------------------------------------------------------
+// v0.Y.36.1 Installment D: Space.
+// ---------------------------------------------------------------------------
+
+/// @brief Builds `SpectralReverb`'s own exponentially-decaying impulse
+/// response, normalized so its own coefficients sum to `~1` (an
+/// energy-neutral tail, matching legacy's own `reverb_filter()` exactly).
+/// `decayFrames` is scaled by `roomSize` first (a smaller room decays
+/// faster) - `ln(1000) ~= 6.9078` is exactly `-60`dB in nepers, so
+/// `ir[delay + decay - 1]` lands exactly at the RT60 (`-60`dB) point,
+/// matching legacy's own RT60 definition.
+std::vector<float> buildReverbImpulseResponse(int preDelayFrames, int decayFrames, float roomSize) {
+    const int delay = std::max(0, preDelayFrames);
+    const int decay = std::max(1, static_cast<int>(std::lround(decayFrames * std::clamp(roomSize, 0.0f, 1.0f))));
+    std::vector<float> ir(static_cast<std::size_t>(delay + decay), 0.0f);
+    constexpr float kRt60Nepers = 6.907755278982137f;
+    float sum = 0.0f;
+    for (int k = 0; k < decay; ++k) {
+        const float value = std::exp(-kRt60Nepers * static_cast<float>(k) / static_cast<float>(decay));
+        ir[static_cast<std::size_t>(delay + k)] = value;
+        sum += value;
+    }
+    if (sum > 1e-9f) {
+        for (float& value : ir) {
+            value /= sum;
+        }
+    }
+    return ir;
+}
+
+/// @brief `SpectralReverb`'s own per-bin absorption curve, in dB - higher
+/// encoded frequencies are damped more (matching legacy's own physical
+/// intent: real rooms absorb high frequencies fastest), adapted for this
+/// codebase's own bin convention (bin `0` = lowest encoded frequency,
+/// opposite of legacy's own row-0-is-highest image layout). `0`
+/// absorption leaves every bin at `0`dB (no attenuation at all).
+std::vector<float> buildReverbAbsorptionCurveDb(std::uint32_t binCount, float absorption) {
+    constexpr float kMaxAbsorptionDb = 24.0f;
+    const float a = std::clamp(absorption, 0.0f, 1.0f);
+    std::vector<float> curve(binCount, 0.0f);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        const float t = (binCount > 1) ? static_cast<float>(bin) / static_cast<float>(binCount - 1) : 0.0f;
+        curve[bin] = -a * kMaxAbsorptionDb * t;
+    }
+    return curve;
+}
+
+/// @brief A 1D Gaussian blur along the frequency axis (bins) only, one
+/// column at a time - `SpectralReverb`'s own diffusion stage, directly in
+/// dB space (matching `UniformBlur`'s own established precedent of
+/// blurring dB values directly, not linear amplitude). Clamp-to-edge,
+/// matching every other spatial filter in this file (not legacy's own
+/// `reflect` mode). A no-op at `sigma <= 0`.
+std::vector<float> blurAlongFrequencyAxis(const std::vector<float>& grid, std::uint32_t binCount,
+                                           std::uint32_t frameCount, float sigma) {
+    if (sigma <= 0.0f) {
+        return grid;
+    }
+    const auto kernel = gaussianKernel1D(sigma);
+    const int radius = static_cast<int>(kernel.size() / 2);
+    const int rows = static_cast<int>(binCount);
+    const int cols = static_cast<int>(frameCount);
+    std::vector<float> result(grid.size());
+    for (int col = 0; col < cols; ++col) {
+        for (int row = 0; row < rows; ++row) {
+            float sum = 0.0f;
+            for (int k = -radius; k <= radius; ++k) {
+                const int sourceRow = clampIndex(row + k, rows);
+                sum += grid[static_cast<std::size_t>(sourceRow) * static_cast<std::size_t>(cols) +
+                            static_cast<std::size_t>(col)] *
+                       kernel[static_cast<std::size_t>(k + radius)];
+            }
+            result[static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) + static_cast<std::size_t>(col)] =
+                sum;
+        }
+    }
+    return result;
+}
+
+/// @brief `SpectralReverb`'s own implementation - see `applyFilter()`'s
+/// docs. Absorption and diffusion both operate directly in dB space,
+/// matching every other spatial filter in this file; the impulse-response
+/// convolution itself is done in *linear* amplitude (`dbToLinearAmplitude()`/
+/// `linearAmplitudeToDb()`, the same conversion `ChannelBalance` already
+/// uses) - summing multiple delayed, decaying copies of a signal (the
+/// literal definition of a reverb tail) is a physical superposition, which
+/// is only meaningful in linear amplitude, not dB (dB values can't be
+/// meaningfully summed directly, the same reasoning `ChannelBalance`'s own
+/// docs already give). The wet/dry mix is a plain dB-space crossfade,
+/// matching `Convolve`'s own established dry/wet blend shape. A vacated
+/// position before the start of the recording contributes silence to the
+/// convolution sum (there is nothing "before the start" to echo), not a
+/// clamped edge value - the standard causal-convolution boundary
+/// condition, distinct from every spatial filter's own clamp-to-edge
+/// convention (which models a picture's own surrounding pixels, not a
+/// recording's own timeline).
+std::vector<float> applyReverb(const std::vector<float>& grid, std::uint32_t binCount, std::uint32_t frameCount,
+                                int preDelayFrames, int decayFrames, float roomSize, float diffusion,
+                                float absorption, float mix) {
+    const auto absorptionCurveDb = buildReverbAbsorptionCurveDb(binCount, absorption);
+    std::vector<float> absorbed(grid.size());
+    for (std::uint32_t row = 0; row < binCount; ++row) {
+        for (std::uint32_t col = 0; col < frameCount; ++col) {
+            const std::size_t cell = static_cast<std::size_t>(row) * frameCount + col;
+            absorbed[cell] = grid[cell] + absorptionCurveDb[row];
+        }
+    }
+    const auto diffused = blurAlongFrequencyAxis(absorbed, binCount, frameCount, diffusion * 3.0f);
+    const auto ir = buildReverbImpulseResponse(preDelayFrames, decayFrames, roomSize);
+
+    std::vector<float> result(grid.size());
+    const float wet = std::clamp(mix, 0.0f, 1.0f);
+    for (std::uint32_t row = 0; row < binCount; ++row) {
+        const std::size_t rowStart = static_cast<std::size_t>(row) * frameCount;
+        for (std::uint32_t col = 0; col < frameCount; ++col) {
+            float wetLinearSum = 0.0f;
+            for (std::size_t k = 0; k < ir.size(); ++k) {
+                if (static_cast<std::size_t>(col) < k) {
+                    break;  // Source column would be before frame 0 - silence.
+                }
+                const std::size_t sourceCol = col - k;
+                wetLinearSum += dbToLinearAmplitude(diffused[rowStart + sourceCol]) * ir[k];
+            }
+            const std::size_t cell = rowStart + col;
+            const float wetDb = linearAmplitudeToDb(wetLinearSum);
+            result[cell] = grid[cell] + wet * (wetDb - grid[cell]);
+        }
+    }
+    return result;
+}
+
 }  // namespace
 
 StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration& config,
@@ -1173,6 +1304,13 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
                 });
         case FilterType::ChannelCycle:
             return applyChannelCycle(composite, config.channelCycleAngleDegrees());
+        case FilterType::SpectralReverb:
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                    return applyReverb(grid, bins, frames, config.reverbPreDelayFrames(), config.reverbDecayFrames(),
+                                        config.reverbRoomSize(), config.reverbDiffusion(), config.reverbAbsorption(),
+                                        config.reverbMix());
+                });
     }
     return composite;
 }

@@ -77,12 +77,12 @@ QHBoxLayout* makeBoundFieldRow(QWidget* spinBox, QWidget* combo) {
 
 /// @brief Every `FilterType`, in `docs/sound-mind-design.md`'s own family
 /// order (Blur & focus, then Noise & distortion, then Geometric, then
-/// Tonal, then Spectral shaping), and each family's own listed sub-order -
-/// the first six shipped in `v0.Y.28.1`, the eight Noise & distortion
-/// types in `v0.Y.36.1` Installment A, ChannelBalance/Invert/Convolve in
-/// that same milestone's own Installment B, and Displace/ChannelCycle in
-/// Installment C.
-constexpr std::array<std::pair<FilterType, const char*>, 19> kSelectableFilterTypes{{
+/// Tonal, then Spectral shaping, then Space), and each family's own listed
+/// sub-order - the first six shipped in `v0.Y.28.1`; the rest across
+/// `v0.Y.36.1`'s own four installments (Noise & distortion, then
+/// ChannelBalance/Invert/Convolve, then Displace/ChannelCycle, then
+/// SpectralReverb, closing out the milestone).
+constexpr std::array<std::pair<FilterType, const char*>, 20> kSelectableFilterTypes{{
     {FilterType::UniformBlur, "Uniform Blur"},
     {FilterType::EdgePreservingBlur, "Edge-Preserving Blur"},
     {FilterType::DirectionalBlur, "Directional Blur"},
@@ -102,6 +102,7 @@ constexpr std::array<std::pair<FilterType, const char*>, 19> kSelectableFilterTy
     {FilterType::Invert, "Invert"},
     {FilterType::FrequencyAxisGradient, "Frequency-Axis Gradient"},
     {FilterType::Convolve, "Convolve"},
+    {FilterType::SpectralReverb, "Spectral Reverb"},
 }};
 
 /// @brief A `[-96, 0]` dB spin box, matching `silenceGradient()`'s own
@@ -719,6 +720,70 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     rebuildConvolveKernelGrid(config_.convolveKernelSize());
     root->addWidget(convolveGroup_);
 
+    spectralReverbGroup_ = new QGroupBox(tr("Spectral Reverb"), container);
+    spectralReverbGroup_->setObjectName(QStringLiteral("spectralReverbGroup"));
+    auto* reverbForm = new QFormLayout(spectralReverbGroup_);
+    reverbPreDelaySpinBox_ = new QSpinBox(spectralReverbGroup_);
+    reverbPreDelaySpinBox_->setObjectName(QStringLiteral("reverbPreDelaySpinBox"));
+    reverbPreDelaySpinBox_->setRange(0, 200);
+    connect(reverbPreDelaySpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+        config_.setReverbPreDelayFrames(value);
+        emitConfigChanged();
+    });
+    reverbForm->addRow(tr("Pre-Delay (frames):"), reverbPreDelaySpinBox_);
+    reverbDecaySpinBox_ = new QSpinBox(spectralReverbGroup_);
+    reverbDecaySpinBox_->setObjectName(QStringLiteral("reverbDecaySpinBox"));
+    reverbDecaySpinBox_->setRange(1, 1000);
+    reverbDecaySpinBox_->setToolTip(tr("The impulse response's own RT60 (-60dB point), before Room Size scales it."));
+    connect(reverbDecaySpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+        config_.setReverbDecayFrames(value);
+        emitConfigChanged();
+    });
+    reverbForm->addRow(tr("Decay (frames):"), reverbDecaySpinBox_);
+    reverbRoomSizeSpinBox_ = new QDoubleSpinBox(spectralReverbGroup_);
+    reverbRoomSizeSpinBox_->setObjectName(QStringLiteral("reverbRoomSizeSpinBox"));
+    reverbRoomSizeSpinBox_->setRange(0.0, 1.0);
+    reverbRoomSizeSpinBox_->setSingleStep(0.05);
+    reverbRoomSizeSpinBox_->setDecimals(2);
+    reverbRoomSizeSpinBox_->setToolTip(tr("Scales Decay down - a smaller room decays faster."));
+    connect(reverbRoomSizeSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setReverbRoomSize(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    reverbForm->addRow(tr("Room Size:"), reverbRoomSizeSpinBox_);
+    reverbDiffusionSpinBox_ = new QDoubleSpinBox(spectralReverbGroup_);
+    reverbDiffusionSpinBox_->setObjectName(QStringLiteral("reverbDiffusionSpinBox"));
+    reverbDiffusionSpinBox_->setRange(0.0, 1.0);
+    reverbDiffusionSpinBox_->setSingleStep(0.05);
+    reverbDiffusionSpinBox_->setDecimals(2);
+    connect(reverbDiffusionSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setReverbDiffusion(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    reverbForm->addRow(tr("Diffusion:"), reverbDiffusionSpinBox_);
+    reverbAbsorptionSpinBox_ = new QDoubleSpinBox(spectralReverbGroup_);
+    reverbAbsorptionSpinBox_->setObjectName(QStringLiteral("reverbAbsorptionSpinBox"));
+    reverbAbsorptionSpinBox_->setRange(0.0, 1.0);
+    reverbAbsorptionSpinBox_->setSingleStep(0.05);
+    reverbAbsorptionSpinBox_->setDecimals(2);
+    reverbAbsorptionSpinBox_->setToolTip(tr("Damps higher encoded frequencies more, the way a real room would."));
+    connect(reverbAbsorptionSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setReverbAbsorption(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    reverbForm->addRow(tr("Absorption:"), reverbAbsorptionSpinBox_);
+    reverbMixSpinBox_ = new QDoubleSpinBox(spectralReverbGroup_);
+    reverbMixSpinBox_->setObjectName(QStringLiteral("reverbMixSpinBox"));
+    reverbMixSpinBox_->setRange(0.0, 1.0);
+    reverbMixSpinBox_->setSingleStep(0.05);
+    reverbMixSpinBox_->setDecimals(2);
+    connect(reverbMixSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        config_.setReverbMix(static_cast<float>(value));
+        emitConfigChanged();
+    });
+    reverbForm->addRow(tr("Mix:"), reverbMixSpinBox_);
+    root->addWidget(spectralReverbGroup_);
+
     equalizerCutGroup_ = new QGroupBox(tr("Cut"), container);
     equalizerCutGroup_->setObjectName(QStringLiteral("equalizerCutGroup"));
     auto* cutLayout = new QVBoxLayout(equalizerCutGroup_);
@@ -810,6 +875,7 @@ void FilterConfigurationPanel::updateVisibleGroup() {
     spectralWavefoldGroup_->setVisible(!isEqualizerMode_ && type == FilterType::SpectralWavefold);
     displaceGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Displace);
     channelCycleGroup_->setVisible(!isEqualizerMode_ && type == FilterType::ChannelCycle);
+    spectralReverbGroup_->setVisible(!isEqualizerMode_ && type == FilterType::SpectralReverb);
     toneCurveGroup_->setVisible(!isEqualizerMode_ && type == FilterType::ToneCurve);
     channelBalanceGroup_->setVisible(!isEqualizerMode_ && type == FilterType::ChannelBalance);
     invertGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Invert);
@@ -858,6 +924,12 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     const QSignalBlocker displaceDistanceBlocker(displaceDistanceSpinBox_);
     const QSignalBlocker displaceAngleBlocker(displaceAngleSpinBox_);
     const QSignalBlocker channelCycleAngleBlocker(channelCycleAngleSpinBox_);
+    const QSignalBlocker reverbPreDelayBlocker(reverbPreDelaySpinBox_);
+    const QSignalBlocker reverbDecayBlocker(reverbDecaySpinBox_);
+    const QSignalBlocker reverbRoomSizeBlocker(reverbRoomSizeSpinBox_);
+    const QSignalBlocker reverbDiffusionBlocker(reverbDiffusionSpinBox_);
+    const QSignalBlocker reverbAbsorptionBlocker(reverbAbsorptionSpinBox_);
+    const QSignalBlocker reverbMixBlocker(reverbMixSpinBox_);
     const QSignalBlocker channelBalanceBlocker(channelBalanceSpinBox_);
     const QSignalBlocker convolveKernelSizeBlocker(convolveKernelSizeSpinBox_);
     const QSignalBlocker convolveNormalizeBlocker(convolveNormalizeCheckBox_);
@@ -913,6 +985,12 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     displaceDistanceSpinBox_->setValue(config_.displaceDistance());
     displaceAngleSpinBox_->setValue(config_.displaceAngleDegrees());
     channelCycleAngleSpinBox_->setValue(config_.channelCycleAngleDegrees());
+    reverbPreDelaySpinBox_->setValue(config_.reverbPreDelayFrames());
+    reverbDecaySpinBox_->setValue(config_.reverbDecayFrames());
+    reverbRoomSizeSpinBox_->setValue(config_.reverbRoomSize());
+    reverbDiffusionSpinBox_->setValue(config_.reverbDiffusion());
+    reverbAbsorptionSpinBox_->setValue(config_.reverbAbsorption());
+    reverbMixSpinBox_->setValue(config_.reverbMix());
     channelBalanceSpinBox_->setValue(config_.channelBalance());
     convolveKernelSizeSpinBox_->setValue(config_.convolveKernelSize());
     convolveNormalizeCheckBox_->setChecked(config_.convolveNormalize());

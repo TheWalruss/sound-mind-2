@@ -1511,3 +1511,112 @@ TEST_CASE("applyFilter's ChannelCycle is a no-op at angle 360, matching angle 0"
     CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-20.0f).margin(0.01));
     CHECK(filtered.rightMagnitudeDb[0] == Catch::Approx(-40.0f).margin(0.01));
 }
+
+// ---------------------------------------------------------------------------
+// SpectralReverb - v0.Y.36.1 Installment D.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("applyFilter's SpectralReverb is a no-op at mix 0, regardless of every other parameter",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+    config.setReverbMix(0.0f);
+    config.setReverbAbsorption(1.0f);
+    config.setReverbDiffusion(1.0f);
+    config.setReverbDecayFrames(100);
+    std::vector<float> profile = {-10.0f, -20.0f, -30.0f, -40.0f};
+    const auto composite = makeSingleRowComposite(profile);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    for (std::size_t i = 0; i < profile.size(); ++i) {
+        CHECK(filtered.leftMagnitudeDb[i] == Catch::Approx(profile[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's SpectralReverb applies its own exact per-bin absorption curve",
+          "[core][filter_application]") {
+    // decayFrames=1/roomSize=1 gives a trivial single-tap (identity)
+    // impulse response, and diffusion=0 skips the frequency-axis blur, so
+    // the only remaining effect is the absorption curve itself, applied as
+    // a plain per-bin dB attenuation and round-tripped through linear
+    // amplitude exactly (up to floating-point rounding).
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+    config.setReverbMix(1.0f);
+    config.setReverbAbsorption(1.0f);
+    config.setReverbDiffusion(0.0f);
+    config.setReverbPreDelayFrames(0);
+    config.setReverbDecayFrames(1);
+    config.setReverbRoomSize(1.0f);
+    StreamImage composite;
+    composite.config.binCount = 3;
+    composite.frameCount = 1;
+    composite.leftMagnitudeDb = {-20.0f, -20.0f, -20.0f};  // bin 0 (lowest) to bin 2 (highest).
+    composite.rightMagnitudeDb = {-20.0f, -20.0f, -20.0f};
+    composite.sharedPhaseRadians = {0.5f};
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // bin 0 (lowest frequency): no absorption. bin 1 (midpoint): -12dB
+    // (half of the 24dB max). bin 2 (highest): the full -24dB.
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(-20.0f).margin(0.05));
+    CHECK(filtered.leftMagnitudeDb[1] == Catch::Approx(-32.0f).margin(0.05));
+    CHECK(filtered.leftMagnitudeDb[2] == Catch::Approx(-44.0f).margin(0.05));
+}
+
+TEST_CASE("applyFilter's SpectralReverb produces silence during its own pre-delay",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+    config.setReverbMix(1.0f);
+    config.setReverbAbsorption(0.0f);
+    config.setReverbDiffusion(0.0f);
+    config.setReverbPreDelayFrames(1);
+    config.setReverbDecayFrames(2);
+    config.setReverbRoomSize(1.0f);
+    std::vector<float> impulse = {0.0f, -96.0f, -96.0f, -96.0f};
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // Frame 0's own reverb output has nothing to echo yet during the
+    // pre-delay - near-silent (the codebase's own silence floor).
+    CHECK(filtered.leftMagnitudeDb[0] < -100.0f);
+}
+
+TEST_CASE("applyFilter's SpectralReverb decays an impulse following its own pre-delay",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+    config.setReverbMix(1.0f);
+    config.setReverbAbsorption(0.0f);
+    config.setReverbDiffusion(0.0f);
+    config.setReverbPreDelayFrames(1);
+    config.setReverbDecayFrames(2);
+    config.setReverbRoomSize(1.0f);
+    std::vector<float> impulse = {0.0f, -96.0f, -96.0f};
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // Hand-derived: ir (unnormalized) = [0, 1.0, exp(-6.9078/2)=0.03165],
+    // normalized by their own sum (1.03165): ir[1]=0.96932, ir[2]=0.03068.
+    // Frame 1 reads back the impulse at its own full ir[1] weight; frame 2
+    // reads it back at the much smaller ir[2] weight - a real, audible
+    // decay from one frame to the next.
+    CHECK(filtered.leftMagnitudeDb[1] == Catch::Approx(20.0f * std::log10(0.96932f)).margin(0.1));
+    CHECK(filtered.leftMagnitudeDb[2] == Catch::Approx(20.0f * std::log10(0.03068f)).margin(0.1));
+    CHECK(filtered.leftMagnitudeDb[2] < filtered.leftMagnitudeDb[1]);  // decaying, not growing.
+}
+
+TEST_CASE("applyFilter's SpectralReverb leaves phase untouched", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    for (const float phase : filtered.sharedPhaseRadians) {
+        CHECK(phase == 0.5f);
+    }
+}

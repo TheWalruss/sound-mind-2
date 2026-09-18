@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.36.4] - 2026-09-18
+
+Deferred Filters, Installment D: **Spectral Reverb**, closing out the Space filter family and the entire `v0.Y.36.1` (Deferred Filters) milestone - `docs/sound-mind-design.md`'s "Filter Layer".
+
+### Added
+
+- **Spectral Reverb**, a new Filter Layer type: extends a sound through time the way a physical space would. **Pre-Delay** and **Decay** (both in frames) shape the reverb tail's own timing, **Room Size** scales the decay down (a smaller room decays faster), **Diffusion** smears the tail across frequencies, **Absorption** damps higher frequencies faster (as a real room would), and **Mix** blends the result with the dry signal.
+
+Full regression: sound-mind-core 617/617 (up from 607), sound-mind-studio all 35 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #105. This closes out the `v0.Y.36.1` Deferred Filters milestone in full.
+
 ## [0.0.36.3] - 2026-09-18
 
 Deferred Filters, Installment C: **Displace** and **Channel Cycle**, closing out the Geometric filter family - `docs/sound-mind-design.md`'s "Filter Layer". Third installment of the `v0.Y.36.1` milestone; Space remains the final installment.

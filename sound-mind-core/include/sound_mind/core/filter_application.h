@@ -225,6 +225,38 @@ struct FilterParameterMindWaves {
  *     that genuinely mixes multiple channels together rather than
  *     processing each independently.
  *
+ * - **`SpectralReverb`** (`v0.Y.36.1` Installment D, "Space"): confirmed
+ *   with the user directly against the legacy Python Studio's own
+ *   `reverb_filter()`, closing out the `v0.Y.36.1` milestone. Absorption
+ *   and diffusion both operate directly in dB space (matching every
+ *   other spatial filter above); the impulse-response convolution itself
+ *   is done in *linear* amplitude - summing multiple delayed, decaying
+ *   copies of a signal (a reverb tail) is a physical superposition,
+ *   meaningful only in linear amplitude, the same reasoning
+ *   `ChannelBalance` already establishes. Order of operations:
+ *   1. **Absorption** (`reverbAbsorption()`): a per-bin dB attenuation,
+ *      `0` at the lowest encoded frequency ramping linearly to
+ *      `-24 * absorption` dB at the highest - real rooms absorb high
+ *      frequencies fastest.
+ *   2. **Diffusion** (`reverbDiffusion()`): a Gaussian blur along the
+ *      frequency axis only (`blurAlongFrequencyAxis()`), `sigma =
+ *      diffusion * 3.0`, clamp-to-edge.
+ *   3. **Convolution**: each bin's own time series (the diffused result,
+ *      converted to linear amplitude) is causally convolved with an
+ *      exponentially-decaying impulse response (`buildReverbImpulseResponse()`)
+ *      - `reverbPreDelayFrames()` frames of silence, then decay toward
+ *      `-60`dB (RT60) over `reverbDecayFrames() * reverbRoomSize()`
+ *      frames (a smaller room decays faster), normalized to sum to `~1`.
+ *      A source position before frame `0` contributes silence, not a
+ *      clamped edge value - the standard causal-convolution boundary
+ *      condition (there is nothing "before the start" of a recording to
+ *      echo), distinct from every spatial filter's own clamp-to-edge
+ *      convention above.
+ *   4. **Mix** (`reverbMix()`): a plain dB-space dry/wet crossfade,
+ *      matching `Convolve`'s own established blend shape - `0` is a true
+ *      no-op regardless of every other parameter.
+ *   Phase is left untouched, matching every filter type built so far.
+ *
  * As of `v0.Y.31.1` (MindWaves v1) Installment D, any of the four
  * kernel-shape parameters (`blurSigma`/`medianSize`/
  * `directionalBlurLength`/`directionalBlurAngleDegrees`) named in

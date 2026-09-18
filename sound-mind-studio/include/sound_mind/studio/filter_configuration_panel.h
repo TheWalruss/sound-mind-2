@@ -41,16 +41,18 @@ class ToneCurveEditor;
  * **A `FilterType` selector, listing only the types with a real algorithm
  * behind them** - `docs/sound-mind-roadmap.md`'s `v0.Y.28.1` (Filter
  * Layers) milestone's own multi-installment scope built the first six;
- * `v0.Y.36.1` (Deferred Filters) added the rest across three installments,
+ * `v0.Y.36.1` (Deferred Filters) added the rest across four installments,
  * in `docs/sound-mind-design.md`'s own family order (Blur & focus, then
- * Noise & distortion, then Geometric, then Tonal, then Spectral shaping) -
- * so this selector now lists nineteen. Selecting a type shows only that
- * type's own parameter group; every other group stays hidden
- * (`QWidget::setVisible(false)`), the same "meaningless unless `type()`
- * matches" contract `FilterConfiguration`'s own per-field docs already
- * state. **None of the thirteen `v0.Y.36.1` types (Installments A-C) offer
- * a MindWave-binding combo** - matching `FilterConfiguration`'s own docs
- * on why binding those thirteen is deferred, not built here. **`SpeckleAdd`'s own Density/Intensity
+ * Noise & distortion, then Geometric, then Tonal, then Spectral shaping,
+ * then Space) - so this selector now lists twenty, closing out the
+ * milestone. Selecting a type shows only that type's own parameter group;
+ * every other group stays hidden (`QWidget::setVisible(false)`), the same
+ * "meaningless unless `type()` matches" contract `FilterConfiguration`'s
+ * own per-field docs already state. **None of the nineteen `v0.Y.36.1`
+ * types offer a MindWave-binding combo** - matching `FilterConfiguration`'s
+ * own docs on why binding those nineteen is deferred, not built here.
+ *
+ * **`SpeckleAdd`'s own Density/Intensity
  * controls and `DynamicSpeckle`'s own are separate widgets that both
  * read/write the same underlying `speckleDensity()`/`speckleIntensity()`
  * fields** - the two types share those fields, but each gets its own
@@ -69,6 +71,11 @@ class ToneCurveEditor;
  * each get a plain spin-box group - `Displace`'s own Distance/Angle mirror
  * `DirectionalBlur`'s own Length/Angle exactly (same convention, same
  * layout shape); `ChannelCycle` is a single Angle spin box.
+ *
+ * **`SpectralReverb`** (`v0.Y.36.1` Installment D, "Space", closing out
+ * the milestone) gets a plain six-spin-box group - Pre-Delay/Decay (both
+ * in frames, matching every other frame-based Filter parameter's own
+ * raw-unit convention), Room Size, Diffusion, Absorption, and Mix.
  *
  * **A basic, two-endpoint-stop gradient editor for `FrequencyAxisGradient`,
  * not a rich visual one** - `Gradient` always has at least its two
@@ -382,6 +389,17 @@ private:
     QComboBox* convolveLoadKernelCombo_ = nullptr;
     /// @brief See setAvailableConvolutionKernels()'s own docs.
     std::vector<sound_mind::core::NamedConvolutionKernel> availableConvolutionKernels_;
+
+    // --- v0.Y.36.1 Installment D: Space - none of these six bind to a
+    // MindWave either, see this class's own docs.
+
+    QGroupBox* spectralReverbGroup_ = nullptr;
+    QSpinBox* reverbPreDelaySpinBox_ = nullptr;
+    QSpinBox* reverbDecaySpinBox_ = nullptr;
+    QDoubleSpinBox* reverbRoomSizeSpinBox_ = nullptr;
+    QDoubleSpinBox* reverbDiffusionSpinBox_ = nullptr;
+    QDoubleSpinBox* reverbAbsorptionSpinBox_ = nullptr;
+    QDoubleSpinBox* reverbMixSpinBox_ = nullptr;
 
     QGroupBox* equalizerCutGroup_ = nullptr;
     QDoubleSpinBox* startLeftCutSpinBox_ = nullptr;

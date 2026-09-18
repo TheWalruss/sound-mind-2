@@ -889,3 +889,81 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsDisplaceAndChannel
     // ChannelCycle's own group is now the visible one.
     QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("channelCycleGroup"))->isHidden());
 }
+
+// --- v0.Y.36.1 Installment D: Space -------------------------------------
+
+void FilterConfigurationPanelTest::freshPanelHasSpectralReverbGroupHidden() {
+    const FilterConfigurationPanel panel;
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("spectralReverbGroup"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::selectingSpectralReverbShowsOnlyItsOwnGroup() {
+    FilterConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
+    QVERIFY(combo != nullptr);
+
+    const int index = combo->findData(QVariant::fromValue(static_cast<int>(FilterType::SpectralReverb)));
+    QVERIFY(index >= 0);
+    combo->setCurrentIndex(index);
+
+    QCOMPARE(panel.filterConfiguration().type(), FilterType::SpectralReverb);
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("spectralReverbGroup"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("convolveGroup"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::changingEverySpectralReverbControlUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* preDelaySpinBox = panel.findChild<QSpinBox*>(QStringLiteral("reverbPreDelaySpinBox"));
+    auto* decaySpinBox = panel.findChild<QSpinBox*>(QStringLiteral("reverbDecaySpinBox"));
+    auto* roomSizeSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbRoomSizeSpinBox"));
+    auto* diffusionSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbDiffusionSpinBox"));
+    auto* absorptionSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbAbsorptionSpinBox"));
+    auto* mixSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbMixSpinBox"));
+    QVERIFY(preDelaySpinBox != nullptr);
+    QVERIFY(decaySpinBox != nullptr);
+    QVERIFY(roomSizeSpinBox != nullptr);
+    QVERIFY(diffusionSpinBox != nullptr);
+    QVERIFY(absorptionSpinBox != nullptr);
+    QVERIFY(mixSpinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    preDelaySpinBox->setValue(5);
+    decaySpinBox->setValue(80);
+    roomSizeSpinBox->setValue(0.9);
+    diffusionSpinBox->setValue(0.2);
+    absorptionSpinBox->setValue(0.7);
+    mixSpinBox->setValue(0.8);
+
+    QCOMPARE(spy.count(), 6);
+    QCOMPARE(panel.filterConfiguration().reverbPreDelayFrames(), 5);
+    QCOMPARE(panel.filterConfiguration().reverbDecayFrames(), 80);
+    QCOMPARE(panel.filterConfiguration().reverbRoomSize(), 0.9f);
+    QCOMPARE(panel.filterConfiguration().reverbDiffusion(), 0.2f);
+    QCOMPARE(panel.filterConfiguration().reverbAbsorption(), 0.7f);
+    QCOMPARE(panel.filterConfiguration().reverbMix(), 0.8f);
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsSpectralReverbWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+    config.setReverbPreDelayFrames(5);
+    config.setReverbDecayFrames(80);
+    config.setReverbRoomSize(0.9f);
+    config.setReverbDiffusion(0.2f);
+    config.setReverbAbsorption(0.7f);
+    config.setReverbMix(0.8f);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("reverbPreDelaySpinBox"))->value(), 5);
+    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("reverbDecaySpinBox"))->value(), 80);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbRoomSizeSpinBox"))->value(), 0.9);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbDiffusionSpinBox"))->value(), 0.2);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbAbsorptionSpinBox"))->value(), 0.7);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbMixSpinBox"))->value(), 0.8);
+    // SpectralReverb's own group is now the visible one.
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("spectralReverbGroup"))->isHidden());
+}

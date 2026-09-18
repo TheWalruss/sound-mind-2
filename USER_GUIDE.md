@@ -449,11 +449,25 @@ group's own controls while it was hidden.
   blending smoothly). This is a wild, glitchy creative effect - the result
   won't sound or look like a "corrected" version of the original, and
   that's the point.
+- **Spectral Reverb** extends a sound through time the way a physical
+  space would:
+  - **Pre-Delay** and **Decay** (both in frames) shape the reverb tail's
+    own timing - Pre-Delay is a gap before the tail begins, Decay is how
+    long the tail itself takes to fade out.
+  - **Room Size** scales Decay down - a smaller room decays faster than
+    the full configured length.
+  - **Diffusion** smears the tail across nearby frequencies, for a
+    smoother, less metallic-sounding reverb.
+  - **Absorption** damps higher frequencies faster than lower ones, the
+    way a real room's own walls and air would.
+  - **Mix** blends the reverberated result back in with the original -
+    `0` is no effect at all, `1` is fully wet.
 
-Every one of the nineteen designed-so-far filter types now has a real,
-working algorithm - Speckle Add through Channel Cycle don't yet have a
-MindWave-binding combo the way Sigma/Size/Length/Angle/Amount above do
-(a later pass, not yet scheduled).
+Every one of the twenty designed filter types now has a real, working
+algorithm, completing this milestone - Speckle Add through Spectral
+Reverb don't yet have a MindWave-binding combo the way
+Sigma/Size/Length/Angle/Amount above do (a later pass, not yet
+scheduled).
 
 A Filter layer with nothing beneath it (or with everything beneath it
 hidden) has nothing to filter, so it has no effect. An ordinary Filter
@@ -1022,10 +1036,8 @@ Studio yet. MindWave-driven modulation (see [MindWaves](#mindwaves)
 above) has made a real start - layer opacity binding works - but it's
 far from its own full scope either; see the note further down. Filter
 layers (see
-[Filter Layers](#filter-layers) above) are further along than most -
-nineteen designed filter types work now, the Equalizer layer included -
-but the milestone as a whole isn't finished; see the note further down
-for exactly what's still missing (Space).
+[Filter Layers](#filter-layers) above) have finished their own milestone -
+all twenty designed filter types work now, the Equalizer layer included.
 `docs/sound-mind-roadmap.md` tracks what's actually being built next, in
 order; this guide will grow alongside it.
 
@@ -1111,10 +1123,9 @@ designed for it:
 - **Playback decodes the composite once, at Play** - it doesn't yet keep
   re-decoding live as you make further edits during playback.
 
-[Filter Layers](#filter-layers) (see above) have nineteen designed filter
-types working now (the original six, all eight Noise & distortion types,
-Channel Balance/Invert/Convolve, and Displace/Channel Cycle), but still
-only a slice of what's designed for the milestone as a whole:
+[Filter Layers](#filter-layers) (see above) have finished their own
+milestone - all twenty designed filter types work now - but a couple of
+loose ends remain:
 
 - **No draggable visual gradient editor for Frequency-Axis Gradient
   (including the Equalizer's own Cut editor), and no interior stops** -
@@ -1123,14 +1134,11 @@ only a slice of what's designed for the milestone as a whole:
   editor now.)
 - **MindWave-bound filter parameters exist now** (see
   [MindWaves](#mindwaves) above) for the five scalar controls listed
-  above - Sigma, Size, Length, Angle, and Amount. Frequency-Axis
-  Gradient/Equalizer, Tone Curve, all eight Noise & distortion types, and
-  Channel Balance/Convolve/Displace/Channel Cycle have no bindable scalar
-  of their own yet, so they're untouched by this.
-- **Space (spectral reverberation)** isn't built yet - the final
-  installment of the same milestone Noise & distortion, Channel
-  Balance/Invert/Convolve, and Displace/Channel Cycle already finished the
-  first three pieces of.
+  above - Sigma, Size, Length, Angle, and Amount. Every filter type added
+  since (all fourteen from this milestone: Noise & distortion, Channel
+  Balance/Invert/Convolve, Displace/Channel Cycle, and Spectral Reverb)
+  has no bindable scalar of its own yet, so they're untouched by this - a
+  later pass, not yet scheduled.
 - **Convolve's own saved kernels have no rename or delete UI yet** - once
   saved, a kernel stays in the project's own library permanently (there's
   no way to remove or rename one from within the Studio itself).
