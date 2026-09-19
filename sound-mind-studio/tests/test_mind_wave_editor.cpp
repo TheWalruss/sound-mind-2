@@ -308,3 +308,51 @@ void MindWaveEditorTest::loadingAStepGridMindWaveSyncsTheCountAndEachStepsOwnVal
     QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox3"))->value(), 0.6);
     QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("stepGridGroup"))->isHidden());
 }
+
+void MindWaveEditorTest::switchingToContinuousShowsOnlyItsOwnGroupWithTheDefaultKnobPositions() {
+    MindWaveEditor editor;
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+
+    combo->setCurrentIndex(combo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::Continuous))));
+
+    QCOMPARE(editor.mindWave().type(), GeneratorType::Continuous);
+    QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("continuousGroup"))->isHidden());
+    QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("periodicGroup"))->isHidden());
+    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->value(), 0.0);
+    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousSkewSpinBox"))->value(), 0.5);
+    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousCharacterSpinBox"))->value(), 0.0);
+}
+
+void MindWaveEditorTest::changingShapeSkewOrCharacterUpdatesAndEmits() {
+    MindWaveEditor editor;
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+    combo->setCurrentIndex(combo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::Continuous))));
+    std::optional<MindWave> received;
+    connect(&editor, &MindWaveEditor::mindWaveChanged, [&](const MindWave& wave) { received = wave; });
+
+    editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->setValue(0.7);
+    QVERIFY(received.has_value());
+    QCOMPARE(received->continuousShape(), 0.7);
+
+    editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousSkewSpinBox"))->setValue(0.2);
+    QCOMPARE(received->continuousSkew(), 0.2);
+
+    editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousCharacterSpinBox"))->setValue(0.9);
+    QCOMPARE(received->continuousCharacter(), 0.9);
+}
+
+void MindWaveEditorTest::loadingAContinuousMindWaveSyncsAllThreeKnobs() {
+    MindWaveEditor editor;
+    MindWave wave;
+    wave.setType(GeneratorType::Continuous);
+    wave.setContinuousShape(0.4);
+    wave.setContinuousSkew(0.1);
+    wave.setContinuousCharacter(0.8);
+
+    editor.setMindWave(wave);
+
+    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->value(), 0.4);
+    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousSkewSpinBox"))->value(), 0.1);
+    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousCharacterSpinBox"))->value(), 0.8);
+    QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("continuousGroup"))->isHidden());
+}

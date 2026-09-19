@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.39.4] - 2026-09-19
+
+MindWaves v2, Installment D: **Continuous Controls**. Closes out the `v0.Y.39.1` (MindWaves v2) milestone in full.
+
+### Added
+
+- **A new "Continuous" MindWave generator type**, exposing three plain dials - **Shape** (sweeps a clean sine cycle toward fractal noise), **Skew** (biases the cycle earlier or later), and **Character** (layers fine turbulence on top, independent of Shape). An explicit, best-effort placeholder for the design doc's own "friendlier front door onto MindWave Functions" concept - a real interaction-design pass for MindWaves generally is still future work, and this generator's own exact formula may change once that happens.
+- All three dials are saved with the project, so reopening a Continuous MindWave shows them exactly where you left them.
+
+Full regression: sound-mind-core 728/728 (up from 720), sound-mind-studio all 35 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #111.
+
 ## [0.0.39.3] - 2026-09-19
 
 MindWaves v2, Installment C: the **step-grid generator**. Third installment of the `v0.Y.39.1` milestone; Continuous Controls remains the final installment.

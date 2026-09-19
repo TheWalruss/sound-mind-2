@@ -29,7 +29,17 @@ using MindWaveId = std::uint64_t;
  * values on a grid of steps - see `stepGridValues()`'s own docs; a distinct
  * concept from `SteppedNoise`'s own quantized-noise-*staircase*, despite the
  * similar name - `StepGrid`'s own values are directly authored, never
- * derived from noise).
+ * derived from noise). Installment D adds `Continuous` (`docs/sound-mind-
+ * design.md`'s "Continuous Controls" - `continuousShape()`/
+ * `continuousSkew()`/`continuousCharacter()`'s own docs) - a genuinely new
+ * generator, not just a front door onto the others: its own `evaluate()`
+ * case blends a clean periodic curve with fractal noise and layers fine
+ * turbulence on top, all via three dedicated continuous dials rather than
+ * picking among existing discrete generator types/waveforms. Explicitly a
+ * best-effort placeholder (confirmed with the user) - `docs/sound-mind-
+ * design.md`'s own Deferred Decision #7 disclaims a real interaction-design
+ * pass for MindWaves generally, and this generator's own exact formula is
+ * subject to revision once that pass happens.
  */
 enum class GeneratorType {
     Periodic,
@@ -39,6 +49,7 @@ enum class GeneratorType {
     Fractal,
     Drawn,
     StepGrid,
+    Continuous,
 };
 
 // clang-format off
@@ -50,6 +61,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(GeneratorType, {
     {GeneratorType::Fractal, "fractal"},
     {GeneratorType::Drawn, "drawn"},
     {GeneratorType::StepGrid, "stepGrid"},
+    {GeneratorType::Continuous, "continuous"},
 })
 // clang-format on
 
@@ -677,6 +689,90 @@ public:
     void setStepGridValues(std::vector<double> values) { stepGridValues_ = std::move(values); }
 
     /**
+     * @brief How far `GeneratorType::Continuous` sweeps from a clean sine
+     *        cycle toward fractal noise - see `docs/sound-mind-design.md`'s
+     *        "Continuous Controls" ("shape, sweeping from a clean curve to
+     *        something noisier"). `v0.Y.39.1` Installment D.
+     *
+     * A **best-effort placeholder** (confirmed with the user): rather than
+     * picking among `MindWave`'s own discrete generator types/waveforms
+     * (which have no interpolation between them), `evaluate()` computes
+     * both a clean sine value and a fractal-noise value at the same point
+     * and linearly blends between them by this fraction - a genuinely new
+     * evaluation path, not a front door that merely selects existing
+     * settings. `docs/sound-mind-design.md`'s own Deferred Decision #7
+     * disclaims a real interaction-design pass for MindWaves generally;
+     * this generator's own exact formula is subject to revision once that
+     * pass happens.
+     *
+     * Reuses `period()`/`seed()`/`noiseScale()`/`noiseOctaves()`/
+     * `noisePersistence()` for the sine cycle's own length and the noise
+     * component's own shape - the same shared-field philosophy every other
+     * generator type already follows - rather than declaring duplicate
+     * fields with identical meaning.
+     *
+     * @return The current shape fraction; meaningless unless `type()` is
+     *         `GeneratorType::Continuous`. Not clamped or validated here,
+     *         but intended to lie in `[0, 1]` (`0` pure sine, `1` pure
+     *         fractal noise).
+     */
+    [[nodiscard]] double continuousShape() const noexcept { return continuousShape_; }
+
+    /// @brief Sets the Continuous generator's own shape fraction - see
+    ///        `continuousShape()`'s own docs.
+    /// @param shape The new shape fraction.
+    void setContinuousShape(double shape) noexcept { continuousShape_ = shape; }
+
+    /**
+     * @brief How far `GeneratorType::Continuous`'s own sine component
+     *        biases earlier or later in its cycle - see `docs/sound-mind-
+     *        design.md`'s "Continuous Controls" ("skew, biasing the shape
+     *        earlier or later"). `v0.Y.39.1` Installment D.
+     *
+     * Unlike `continuousShape()`, this maps onto a genuinely continuous
+     * quantity with no discreteness to work around: `0.5` (the default)
+     * applies no bias; `evaluate()` remaps the full `[0, 1]` range to a
+     * `[-pi, pi]` phase offset, added on top of `phaseRadians()`'s own
+     * shared phase field (a second, dedicated bias specific to this
+     * generator, not a duplicate of that shared one).
+     *
+     * @return The current skew; meaningless unless `type()` is
+     *         `GeneratorType::Continuous`. Not clamped or validated here,
+     *         but intended to lie in `[0, 1]`.
+     */
+    [[nodiscard]] double continuousSkew() const noexcept { return continuousSkew_; }
+
+    /// @brief Sets the Continuous generator's own skew - see
+    ///        `continuousSkew()`'s own docs.
+    /// @param skew The new skew.
+    void setContinuousSkew(double skew) noexcept { continuousSkew_ = skew; }
+
+    /**
+     * @brief How much fine turbulence `GeneratorType::Continuous` layers
+     *        on top of its own shape/skew result - see `docs/sound-mind-
+     *        design.md`'s "Continuous Controls" ("character, adding
+     *        harmonics or turbulence"). `v0.Y.39.1` Installment D.
+     *
+     * Independent of `continuousShape()`'s own clean-vs-noisy blend: a
+     * separate, finer-grained noise sample (at a tenth of `noiseScale()`'s
+     * own lattice size) is added on top, scaled by this fraction - so
+     * turbulence can be dialled in even at `continuousShape() == 0` (a
+     * "clean" sine cycle with rough, gritty character added), not only
+     * where the shape blend has already introduced noise.
+     *
+     * @return The current character fraction; meaningless unless `type()`
+     *         is `GeneratorType::Continuous`. Not clamped or validated
+     *         here, but intended to lie in `[0, 1]` (`0` no added
+     *         turbulence).
+     */
+    [[nodiscard]] double continuousCharacter() const noexcept { return continuousCharacter_; }
+
+    /// @brief Sets the Continuous generator's own character fraction - see
+    ///        `continuousCharacter()`'s own docs.
+    /// @param character The new character fraction.
+    void setContinuousCharacter(double character) noexcept { continuousCharacter_ = character; }
+
+    /**
      * @brief This MindWave's own field value at `point`, after superposing
      *        `superpositionStack()` (if any) on top of its own generator.
      *
@@ -727,6 +823,12 @@ public:
      * steps and returns whichever step `axisPosition` currently falls in,
      * verbatim - see `stepGridValues()`'s own docs.
      *
+     * `GeneratorType::Continuous` (`v0.Y.39.1` Installment D) blends a clean
+     * sine cycle with fractal noise by `continuousShape()`'s own fraction,
+     * biases phase by `continuousSkew()`, and adds fine turbulence scaled
+     * by `continuousCharacter()` - see `continuousShape()`'s own docs for
+     * the full formula.
+     *
      * @param point The canvas position to evaluate.
      * @param config Interprets `point`'s own Hz against `config`'s own
      *        frequency range/bin count, needed whenever a bin index is
@@ -764,6 +866,9 @@ private:
     double warpStrength_ = 1.0;
     Path drawnPath_;
     std::vector<double> stepGridValues_ = {0.25, 0.5, 0.75, 1.0};
+    double continuousShape_ = 0.0;
+    double continuousSkew_ = 0.5;
+    double continuousCharacter_ = 0.0;
 };
 
 /**

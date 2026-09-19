@@ -29,4 +29,9 @@ private slots:
     void changingStepGridCountResizesTheValueRows();
     void changingAStepGridValueEmitsWithTheUpdatedValues();
     void loadingAStepGridMindWaveSyncsTheCountAndEachStepsOwnValue();
+
+    // MindWaves v2 Installment D: Continuous generator (v0.Y.39.1).
+    void switchingToContinuousShowsOnlyItsOwnGroupWithTheDefaultKnobPositions();
+    void changingShapeSkewOrCharacterUpdatesAndEmits();
+    void loadingAContinuousMindWaveSyncsAllThreeKnobs();
 };

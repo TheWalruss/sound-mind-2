@@ -54,7 +54,9 @@ namespace sound_mind::studio {
  * C adds `GeneratorType::StepGrid`'s own group - a bare-bones step-count
  * spin box plus one spin box per step (see `rebuildStepGridValueRows()`'s
  * own docs), the confirmed "no rich visual grid editor" scope for this
- * milestone.
+ * milestone; Installment D adds `GeneratorType::Continuous`'s own group -
+ * three plain spin boxes (Shape/Skew/Character), the same "no dials, just
+ * fields to type numbers into" bare-bones treatment.
  */
 class MindWaveEditor : public QWidget {
     Q_OBJECT
@@ -176,6 +178,16 @@ private:
     QSpinBox* stepGridCountSpinBox_ = nullptr;
     QVBoxLayout* stepGridValuesLayout_ = nullptr;
     std::vector<QDoubleSpinBox*> stepGridValueSpinBoxes_;
+
+    /// @brief `GeneratorType::Continuous`'s own group - `v0.Y.39.1`
+    ///        Installment D. Three plain spin boxes (Shape/Skew/Character),
+    ///        matching this editor's own "no dials or drawing tools, just
+    ///        fields to type numbers into" convention rather than
+    ///        introducing a new slider widget for this one group.
+    QGroupBox* continuousGroup_ = nullptr;
+    QDoubleSpinBox* continuousShapeSpinBox_ = nullptr;
+    QDoubleSpinBox* continuousSkewSpinBox_ = nullptr;
+    QDoubleSpinBox* continuousCharacterSpinBox_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

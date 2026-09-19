@@ -319,11 +319,11 @@ shape instead of staying fixed.
   the actual composite, and switches off automatically when you open or
   create a different project.
 - Selecting a MindWave shows its own editor: a **Generator Type** (Periodic,
-  Envelope, Stepped/Noise, Spatial, Fractal, Drawn, or Step Grid) and that
-  type's own plain numeric parameters - a period, a phase, a seed, and so
-  on. This is a bare-bones, functional editor, not a polished one yet -
-  there are no dials or drawing tools here, just fields to type numbers
-  into.
+  Envelope, Stepped/Noise, Spatial, Fractal, Drawn, Step Grid, or
+  Continuous) and that type's own plain numeric parameters - a period, a
+  phase, a seed, and so on. This is a bare-bones, functional editor, not a
+  polished one yet - there are no dials or drawing tools here, just fields
+  to type numbers into.
 - **Drawn** shapes come from a curve you draw yourself, rather than a
   formula: draw an ordinary stroke anywhere on the canvas, switch to Pick
   and select it, then choose **Edit → Use Picked Path as MindWave Shape**
@@ -343,6 +343,15 @@ shape instead of staying fixed.
   **Period** control every other generator type has, one equal-length
   segment per step. There's no visual grid to click on yet - just the
   numbered list of value boxes.
+- **Continuous** offers three plain dials instead of picking a generator
+  type by hand: **Shape** sweeps from a clean sine cycle (`0`) toward
+  fractal noise (`1`); **Skew** biases the cycle earlier or later (`0.5`
+  is no bias); **Character** layers fine turbulence on top, independent of
+  Shape - it does something even at Shape `0`. This is a best-effort,
+  provisional take on a friendlier way into MindWaves, not a finished
+  design - it may change in a future update. All three dials are saved
+  with your project, so reopening one shows them exactly where you left
+  them.
 - **Superposition** lets one MindWave combine several others together
   (multiply, add, min, max, or average) - the **+ Add Member**/**- Remove
   Member** buttons and the small list beside them manage that MindWave's
@@ -1240,10 +1249,12 @@ what's designed for them:
   MindWaves panel; Reduce (collapsing a field to a plain control signal)
   has no standalone UI of its own yet - Vibrato/Tremolo above are its only
   current use.
-- **The Drawn and Step Grid generators exist now**; no Continuous Controls
-  interface yet - the MindWaves panel's own editor is still plain numeric
-  fields (or, for Step Grid, a plain list of value boxes) rather than the
-  planned shape/skew/character dials.
+- **Every generator type the design doc names now exists**, including
+  Drawn, Step Grid, and Continuous (see above) - the MindWaves panel's own
+  editor is still plain numeric fields (or, for Step Grid, a plain list of
+  value boxes; or, for Continuous, three dials) rather than a fully
+  polished interface, and Continuous's own exact formula is an explicitly
+  provisional first attempt, not a finished design.
 
 The [Path Tool](#path-tool) (see above) only places new paths today; once
 a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,

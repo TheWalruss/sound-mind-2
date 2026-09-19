@@ -864,6 +864,125 @@ TEST_CASE("A MindWave loads from JSON missing stepGridValues (saved before v0.Y.
     REQUIRE(restored.stepGridValues() == std::vector<double>{0.25, 0.5, 0.75, 1.0});
 }
 
+// --- v0.Y.39.1 Installment D: Continuous Controls generator ------------
+
+TEST_CASE("A fresh Continuous MindWave has the default neutral knob positions", "[core][mind_wave]") {
+    const MindWave wave;
+    REQUIRE(wave.continuousShape() == Catch::Approx(0.0));
+    REQUIRE(wave.continuousSkew() == Catch::Approx(0.5));
+    REQUIRE(wave.continuousCharacter() == Catch::Approx(0.0));
+}
+
+TEST_CASE("Continuous at shape=0/skew=0.5/character=0 matches a clean, unbiased sine cycle", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Continuous);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(4.0);
+    // Every knob at its default - see the fresh-defaults test above.
+
+    // t=0 -> phase=0 -> sin(0)=0 -> (0+1)/2 = 0.5, a safely mid-range value
+    // (not at the [0, 1] clamp boundary) for every sub-test below that
+    // layers a perturbation on top of this same base point.
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, testConfig()) == Catch::Approx(0.5f));
+}
+
+TEST_CASE("Continuous's own skew biases the sine component's own phase", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Continuous);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(4.0);
+    const auto config = testConfig();
+
+    // skew=0.75 -> bias=(0.75-0.5)*2*pi = pi/2 -> phase=0+pi/2 -> sin(pi/2)=1 -> (1+1)/2=1.0.
+    wave.setContinuousSkew(0.75);
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, config) == Catch::Approx(1.0f));
+}
+
+TEST_CASE("Continuous's own shape sweeps away from the clean sine value toward fractal noise", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Continuous);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(4.0);
+    wave.setContinuousShape(1.0);
+
+    // Full shape - purely the fractal-noise component now, not the clean
+    // sine value (0.5) shape=0 would give at this same point (see above) -
+    // a deterministic hash-based noise function coincidentally landing on
+    // exactly 0.5 is vanishingly unlikely.
+    const float value = wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, testConfig());
+    REQUIRE(std::abs(value - 0.5f) > 0.01f);
+}
+
+TEST_CASE("Continuous's own shape linearly interpolates between its clean and noisy components", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Continuous);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(4.0);
+    wave.setNoiseOctaves(1);  // A single octave - fractalBrownianMotion1D degenerates to
+                              // one valueNoise1D call, exactly in [-1, 1], so (fbm+1)/2 stays
+                              // exactly in [0, 1] with no final-clamp distortion at either
+                              // endpoint to interfere with this test's own linear-interpolation
+                              // check below.
+    const auto config = testConfig();
+    const TimeFrequencyPoint point{0.0, 1000.0};
+
+    wave.setContinuousShape(0.0);
+    const float clean = wave.evaluate(point, config);
+    wave.setContinuousShape(1.0);
+    const float noisy = wave.evaluate(point, config);
+    wave.setContinuousShape(0.5);
+    const float half = wave.evaluate(point, config);
+
+    REQUIRE(half == Catch::Approx((clean + noisy) / 2.0f).margin(0.001f));
+}
+
+TEST_CASE("Continuous's own character adds turbulence even at shape=0", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Continuous);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(4.0);
+    wave.setContinuousCharacter(1.0);
+
+    // Character adds a fine noise perturbation independent of shape - even
+    // at shape=0 (a "clean" 0.5 base - see the earlier defaults test),
+    // full character should visibly differ from that clean, unperturbed
+    // value.
+    const float value = wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, testConfig());
+    REQUIRE(std::abs(value - 0.5f) > 0.01f);
+}
+
+TEST_CASE("A Continuous MindWave round-trips its own three knobs through JSON", "[core][mind_wave]") {
+    MindWave original;
+    original.setType(GeneratorType::Continuous);
+    original.setContinuousShape(0.3);
+    original.setContinuousSkew(0.6);
+    original.setContinuousCharacter(0.9);
+
+    const nlohmann::json json = original;
+    const MindWave restored = json.get<MindWave>();
+
+    REQUIRE(restored.type() == GeneratorType::Continuous);
+    REQUIRE(restored.continuousShape() == Catch::Approx(0.3));
+    REQUIRE(restored.continuousSkew() == Catch::Approx(0.6));
+    REQUIRE(restored.continuousCharacter() == Catch::Approx(0.9));
+}
+
+TEST_CASE("A MindWave loads from JSON missing the three Continuous knobs (saved before v0.Y.39.1 Installment D) "
+          "with their own default neutral positions",
+          "[core][mind_wave]") {
+    MindWave config;
+    nlohmann::json json = config;
+    json.erase("continuousShape");
+    json.erase("continuousSkew");
+    json.erase("continuousCharacter");
+
+    const MindWave restored = json.get<MindWave>();
+
+    REQUIRE(restored.continuousShape() == Catch::Approx(0.0));
+    REQUIRE(restored.continuousSkew() == Catch::Approx(0.5));
+    REQUIRE(restored.continuousCharacter() == Catch::Approx(0.0));
+}
+
 // --- Installment C1: NamedMindWave -----------------------------------
 
 TEST_CASE("A NamedMindWave round-trips through JSON unchanged", "[core][mind_wave]") {

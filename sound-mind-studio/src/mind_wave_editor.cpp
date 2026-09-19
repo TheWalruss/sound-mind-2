@@ -25,7 +25,7 @@ using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::SpatialPattern;
 using sound_mind::core::SteppedNoiseShape;
 
-constexpr std::array<std::pair<GeneratorType, const char*>, 7> kGeneratorTypes{{
+constexpr std::array<std::pair<GeneratorType, const char*>, 8> kGeneratorTypes{{
     {GeneratorType::Periodic, "Periodic"},
     {GeneratorType::Envelope, "Envelope"},
     {GeneratorType::SteppedNoise, "Stepped/Noise"},
@@ -33,6 +33,7 @@ constexpr std::array<std::pair<GeneratorType, const char*>, 7> kGeneratorTypes{{
     {GeneratorType::Fractal, "Fractal"},
     {GeneratorType::Drawn, "Drawn"},
     {GeneratorType::StepGrid, "Step Grid"},
+    {GeneratorType::Continuous, "Continuous"},
 }};
 
 constexpr std::array<std::pair<MindWaveAxis, const char*>, 2> kAxes{{
@@ -352,6 +353,48 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     stepGridLayout->addLayout(stepGridValuesLayout_);
     root->addWidget(stepGridGroup_);
 
+    continuousGroup_ = new QGroupBox(tr("Continuous"), this);
+    continuousGroup_->setObjectName(QStringLiteral("continuousGroup"));
+    auto* continuousForm = new QFormLayout(continuousGroup_);
+
+    continuousShapeSpinBox_ = new QDoubleSpinBox(continuousGroup_);
+    continuousShapeSpinBox_->setObjectName(QStringLiteral("continuousShapeSpinBox"));
+    continuousShapeSpinBox_->setRange(0.0, 1.0);
+    continuousShapeSpinBox_->setSingleStep(0.05);
+    continuousShapeSpinBox_->setDecimals(2);
+    continuousShapeSpinBox_->setToolTip(tr("Sweeps from a clean sine cycle (0) toward fractal noise (1)."));
+    connect(continuousShapeSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        wave_.setContinuousShape(value);
+        emitChanged();
+    });
+    continuousForm->addRow(tr("Shape:"), continuousShapeSpinBox_);
+
+    continuousSkewSpinBox_ = new QDoubleSpinBox(continuousGroup_);
+    continuousSkewSpinBox_->setObjectName(QStringLiteral("continuousSkewSpinBox"));
+    continuousSkewSpinBox_->setRange(0.0, 1.0);
+    continuousSkewSpinBox_->setSingleStep(0.05);
+    continuousSkewSpinBox_->setDecimals(2);
+    continuousSkewSpinBox_->setToolTip(tr("Biases the sine component earlier or later in its cycle - 0.5 is no bias."));
+    connect(continuousSkewSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        wave_.setContinuousSkew(value);
+        emitChanged();
+    });
+    continuousForm->addRow(tr("Skew:"), continuousSkewSpinBox_);
+
+    continuousCharacterSpinBox_ = new QDoubleSpinBox(continuousGroup_);
+    continuousCharacterSpinBox_->setObjectName(QStringLiteral("continuousCharacterSpinBox"));
+    continuousCharacterSpinBox_->setRange(0.0, 1.0);
+    continuousCharacterSpinBox_->setSingleStep(0.05);
+    continuousCharacterSpinBox_->setDecimals(2);
+    continuousCharacterSpinBox_->setToolTip(tr("Layers fine turbulence on top, independent of Shape."));
+    connect(continuousCharacterSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        wave_.setContinuousCharacter(value);
+        emitChanged();
+    });
+    continuousForm->addRow(tr("Character:"), continuousCharacterSpinBox_);
+
+    root->addWidget(continuousGroup_);
+
     root->addStretch();
 
     // Seeded from wave_'s own default stepGridValues() (present regardless
@@ -368,6 +411,21 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     for (std::size_t i = 0; i < stepGridValueSpinBoxes_.size() && i < wave_.stepGridValues().size(); ++i) {
         const QSignalBlocker blocker(stepGridValueSpinBoxes_[i]);
         stepGridValueSpinBoxes_[i]->setValue(wave_.stepGridValues()[i]);
+    }
+
+    // Seeded from wave_'s own defaults directly, the same reasoning as the
+    // step-grid rows just above - QDoubleSpinBox's own built-in default
+    // (0.0) happens to already match continuousShape()'s/
+    // continuousCharacter()'s own defaults, but not continuousSkew()'s own
+    // (0.5, a genuine neutral-bias position, not 0), so this can't be
+    // skipped for just one of the three.
+    {
+        const QSignalBlocker shapeBlocker(continuousShapeSpinBox_);
+        continuousShapeSpinBox_->setValue(wave_.continuousShape());
+        const QSignalBlocker skewBlocker(continuousSkewSpinBox_);
+        continuousSkewSpinBox_->setValue(wave_.continuousSkew());
+        const QSignalBlocker characterBlocker(continuousCharacterSpinBox_);
+        continuousCharacterSpinBox_->setValue(wave_.continuousCharacter());
     }
 
     updateVisibleGroup();
@@ -388,6 +446,7 @@ void MindWaveEditor::updateVisibleGroup() {
     fractalGroup_->setVisible(type == GeneratorType::Fractal);
     drawnGroup_->setVisible(type == GeneratorType::Drawn);
     stepGridGroup_->setVisible(type == GeneratorType::StepGrid);
+    continuousGroup_->setVisible(type == GeneratorType::Continuous);
 }
 
 void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
@@ -419,6 +478,9 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     const QSignalBlocker domainWarpStrengthBlocker(domainWarpStrengthSpinBox_);
     const QSignalBlocker fractalRoughnessBlocker(fractalRoughnessSpinBox_);
     const QSignalBlocker fractalIterationsBlocker(fractalIterationsSpinBox_);
+    const QSignalBlocker continuousShapeBlocker(continuousShapeSpinBox_);
+    const QSignalBlocker continuousSkewBlocker(continuousSkewSpinBox_);
+    const QSignalBlocker continuousCharacterBlocker(continuousCharacterSpinBox_);
 
     selectComboValue(generatorTypeCombo_, wave_.type());
     selectComboValue(axisCombo_, wave_.axis());
@@ -443,6 +505,9 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     domainWarpStrengthSpinBox_->setValue(wave_.domainWarpStrength());
     fractalRoughnessSpinBox_->setValue(wave_.fractalRoughness());
     fractalIterationsSpinBox_->setValue(wave_.fractalIterations());
+    continuousShapeSpinBox_->setValue(wave_.continuousShape());
+    continuousSkewSpinBox_->setValue(wave_.continuousSkew());
+    continuousCharacterSpinBox_->setValue(wave_.continuousCharacter());
 
     const int nodeCount = static_cast<int>(wave_.drawnPath().nodes().size());
     drawnStatusLabel_->setText(

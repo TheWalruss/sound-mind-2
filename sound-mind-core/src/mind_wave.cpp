@@ -16,6 +16,13 @@ namespace {
 /// below zero), not a musically meaningful minimum cycle length.
 constexpr double kMinimumPeriod = 1e-6;
 
+/// @brief How strongly `GeneratorType::Continuous`'s own `continuousCharacter()`
+/// perturbs its result, at full character - a best-effort constant (see
+/// `MindWave::continuousCharacter()`'s own docs), chosen so the added
+/// turbulence is visible without overwhelming `continuousShape()`'s own
+/// clean-vs-noisy blend underneath it.
+constexpr double kContinuousCharacterAmplitude = 0.3;
+
 // --- Hand-rolled deterministic value noise ---------------------------
 //
 // Confirmed with the user (v0.Y.31.1 Installment B): a small, seedable,
@@ -474,6 +481,20 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
             result = stepGridValues_[static_cast<std::size_t>(index)];
             break;
         }
+        case GeneratorType::Continuous: {
+            const double skewBias = (continuousSkew_ - 0.5) * 2.0 * std::numbers::pi_v<double>;
+            const double phase = 2.0 * std::numbers::pi_v<double> * (axisPosition / safePeriod) + phaseRadians_ + skewBias;
+            const double clean = (std::sin(phase) + 1.0) / 2.0;
+            const double safeNoiseScale = std::max(kMinimumPeriod, noiseScale_);
+            const double noisy = (fractalBrownianMotion1D(axisPosition / safeNoiseScale, seed_,
+                                                            std::max(1, noiseOctaves_), noisePersistence_) +
+                                   1.0) /
+                                  2.0;
+            const double shaped = clean + continuousShape_ * (noisy - clean);
+            const double turbulence = valueNoise1D(axisPosition / std::max(kMinimumPeriod, safeNoiseScale * 0.1), seed_);
+            result = shaped + continuousCharacter_ * kContinuousCharacterAmplitude * turbulence;
+            break;
+        }
     }
 
     for (const MindWave& member : superpositionStack_) {
@@ -556,6 +577,9 @@ void to_json(nlohmann::json& json, const MindWave& mindWave) {
         mindWave.hasWarpSource() ? nlohmann::json::array({mindWave.warpSource()}) : nlohmann::json::array();
     json["drawnPath"] = mindWave.drawnPath();
     json["stepGridValues"] = mindWave.stepGridValues();
+    json["continuousShape"] = mindWave.continuousShape();
+    json["continuousSkew"] = mindWave.continuousSkew();
+    json["continuousCharacter"] = mindWave.continuousCharacter();
 }
 
 void from_json(const nlohmann::json& json, MindWave& mindWave) {
@@ -612,6 +636,13 @@ void from_json(const nlohmann::json& json, MindWave& mindWave) {
     // is never actually load-bearing for pre-Installment-C data - it just
     // keeps the field itself never empty/uninitialized).
     mindWave.setStepGridValues(json.value("stepGridValues", std::vector<double>{0.25, 0.5, 0.75, 1.0}));
+
+    // The three Continuous knobs were added in v0.Y.39.1 Installment D,
+    // after MindWave had already shipped - loaded leniently, falling back
+    // to the same neutral defaults a fresh MindWave already has.
+    mindWave.setContinuousShape(json.value("continuousShape", 0.0));
+    mindWave.setContinuousSkew(json.value("continuousSkew", 0.5));
+    mindWave.setContinuousCharacter(json.value("continuousCharacter", 0.0));
 }
 
 void to_json(nlohmann::json& json, const NamedMindWave& namedMindWave) {
