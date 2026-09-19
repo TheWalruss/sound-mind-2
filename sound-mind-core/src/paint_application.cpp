@@ -11,6 +11,7 @@
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/paste_application.h"
 #include "sound_mind/core/paste_operation.h"
+#include "sound_mind/core/sequence_application.h"
 
 namespace sound_mind::core {
 
@@ -1239,6 +1240,8 @@ sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::St
             applyFillOperation(*fill, result);
         } else if (const auto* paste = dynamic_cast<const PasteOperation*>(operation)) {
             applyPasteOperation(*paste, result);
+        } else if (const auto* sequence = dynamic_cast<const SequenceOperation*>(operation)) {
+            applySequenceOperation(*sequence, frequencyToTimeScale, result, resolveLayerContent, resolveMindWave);
         }
     }
     return result;

@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
@@ -10,12 +11,14 @@
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/paste_operation.h"
+#include "sound_mind/core/sequence_operation.h"
 
 using sound_mind::core::BlendMode;
 using sound_mind::core::Clip;
 using sound_mind::core::FillOperation;
 using sound_mind::core::Gradient;
 using sound_mind::core::LayerId;
+using sound_mind::core::NoteEvent;
 using sound_mind::core::OperationId;
 using sound_mind::core::OperationLog;
 using sound_mind::core::PaintOperation;
@@ -25,6 +28,7 @@ using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::SelectionRegion;
+using sound_mind::core::SequenceOperation;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 
@@ -308,6 +312,50 @@ TEST_CASE("An OperationLog with real PaintOperations round-trips through JSON", 
     // reserveId() must not collide with what was already logged.
     const OperationId fresh = const_cast<OperationLog&>(roundTripped).reserveId();
     REQUIRE(fresh != original);
+}
+
+TEST_CASE("An OperationLog with a SequenceOperation round-trips through JSON, notes and config included",
+          "[core][operation_log]") {
+    OperationLog log;
+    const OperationId id = log.reserveId();
+    auto config = std::make_unique<ProceduralConfiguration>();
+    config->setName("Sequence Tool");
+    const std::vector<NoteEvent> notes{NoteEvent{0.0, 0.5, 300.0}, NoteEvent{0.5, 0.5, 500.0}};
+    log.append(std::make_unique<SequenceOperation>(id, LayerId{1}, notes, std::move(config)));
+
+    const nlohmann::json json = log;
+    const OperationLog roundTripped = json.get<OperationLog>();
+
+    REQUIRE(roundTripped.size() == 1);
+    const auto active = roundTripped.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 1);
+    const auto* sequence = dynamic_cast<const SequenceOperation*>(active.front());
+    REQUIRE(sequence != nullptr);
+    REQUIRE(sequence->notes().size() == std::size_t{2});
+    REQUIRE(sequence->notes()[1].frequencyHz == Catch::Approx(500.0));
+    REQUIRE(sequence->config().name() == "Sequence Tool");
+}
+
+TEST_CASE("An OperationLog with a SequenceOperation superseded by a re-voiced one excludes the original from "
+          "activeOperationsTargeting after round-tripping through JSON",
+          "[core][operation_log]") {
+    OperationLog log;
+    const OperationId original = log.reserveId();
+    log.append(std::make_unique<SequenceOperation>(original, LayerId{1}, std::vector<NoteEvent>{NoteEvent{0.0, 0.5, 300.0}},
+                                                     std::make_unique<ProceduralConfiguration>()));
+    const OperationId revoiced = log.reserveId();
+    log.append(std::make_unique<SequenceOperation>(revoiced, LayerId{1},
+                                                     std::vector<NoteEvent>{NoteEvent{0.0, 0.5, 900.0}},
+                                                     std::make_unique<ProceduralConfiguration>(), original));
+
+    const nlohmann::json json = log;
+    const OperationLog roundTripped = json.get<OperationLog>();
+
+    const auto active = roundTripped.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 1);
+    const auto* sequence = dynamic_cast<const SequenceOperation*>(active.front());
+    REQUIRE(sequence != nullptr);
+    REQUIRE(sequence->notes()[0].frequencyHz == Catch::Approx(900.0));
 }
 
 TEST_CASE("An OperationLog with a mix of PaintOperations and FillOperations round-trips through JSON",

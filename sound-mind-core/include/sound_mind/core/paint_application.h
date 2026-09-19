@@ -451,10 +451,13 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
  *        function matches its own runtime type (`applyPaintOperation()`
  *        for a `PaintOperation`, `applyFillOperation()` for a
  *        `FillOperation` - see `fill_application.h` -, `applyPasteOperation()`
- *        for a `PasteOperation` - see `paste_application.h`); any other/
- *        future `Operation` subtype is skipped rather than erroring, the
- *        same forward-tolerant handling every other `dynamic_cast`-based
- *        dispatch in this codebase already uses.
+ *        for a `PasteOperation` - see `paste_application.h` -,
+ *        `applySequenceOperation()` for a `SequenceOperation` - see
+ *        `sequence_application.h`); any other/future `Operation` subtype
+ *        (`WarpOperation` among them - not yet wired into this dispatch at
+ *        all, a known pre-existing gap unrelated to this one) is skipped
+ *        rather than erroring, the same forward-tolerant handling every
+ *        other `dynamic_cast`-based dispatch in this codebase already uses.
  * @param frequencyToTimeScale Passed through to applyPaintOperation() for
  *        each `PaintOperation` replayed - see its own docs. `FillOperation`
  *        and `PasteOperation` have no equivalent need for it (see their own

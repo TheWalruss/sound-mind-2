@@ -11,6 +11,7 @@
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paste_operation.h"
+#include "sound_mind/core/sequence_operation.h"
 
 using sound_mind::codec::StreamCodecConfig;
 using sound_mind::codec::StreamImage;
@@ -38,7 +39,9 @@ using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
+using sound_mind::core::NoteEvent;
 using sound_mind::core::rebuildPaintedContent;
+using sound_mind::core::SequenceOperation;
 using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
@@ -125,6 +128,23 @@ std::unique_ptr<ProceduralConfiguration> makeCircleTool(double size, float fallo
     config->setTipShape(BrushTipShape::Circle);
     config->setFalloff(falloff);
     config->setSize(size);
+    return config;
+}
+
+/// @brief A `makeCircleTool()` whose own `defaultGradient()` is fully
+/// opaque and uniform - unlike `makeCircleTool()`'s own callers (which
+/// always supply a real gradient via the *Path* instead), `applySequenceOperation()`
+/// paints every note through `config().defaultGradient()` directly, so a
+/// `SequenceOperation` test needs a config with a real one already set.
+std::unique_ptr<ProceduralConfiguration> makeOpaqueSequenceTool(double size, float intensity) {
+    auto config = makeCircleTool(size, 0.0f);
+    auto stop = config->defaultGradient().stops().front();
+    stop.leftIntensity = intensity;
+    stop.rightIntensity = intensity;
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    config->defaultGradient().setStopValues(0, stop);
+    config->defaultGradient().setStopValues(1, stop);
     return config;
 }
 
@@ -1244,6 +1264,62 @@ TEST_CASE("rebuildPaintedContent applies every PaintOperation in order, on top o
     // base itself is untouched - rebuildPaintedContent works on its own copy.
     for (const float value : base.leftMagnitudeDb) {
         REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("rebuildPaintedContent applies a SequenceOperation's own notes", "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    const StreamImage base = makeBlankContent(config, 100);
+    const std::vector<NoteEvent> notes{NoteEvent{0.3, 0.0, 1000.0}};
+    const SequenceOperation sequence(1, LayerId{1}, notes, makeOpaqueSequenceTool(0.02, -10.0f));
+
+    const std::vector<const Operation*> operations = {&sequence};
+    const StreamImage rebuilt = rebuildPaintedContent(base, operations, 2000.0);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int bin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, centerFrame, bin)] == -10.0f);
+}
+
+TEST_CASE("A re-voiced SequenceOperation (a fresh instance with different notes, as a 'supersedes' edit would "
+          "produce) needs no repainting - rebuildPaintedContent reflects the new notes directly",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    const StreamImage base = makeBlankContent(config, 100);
+    const int originalBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(300.0f, config))));
+    const int revoicedBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(900.0f, config))));
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+
+    // The "original" sequence, as if just stamped by the Chord Generator.
+    const std::vector<NoteEvent> originalNotes{NoteEvent{0.3, 0.0, 300.0}};
+    const SequenceOperation original(1, LayerId{1}, originalNotes, makeOpaqueSequenceTool(0.02, -10.0f));
+    {
+        const std::vector<const Operation*> operations = {&original};
+        const StreamImage rebuilt = rebuildPaintedContent(base, operations, 2000.0);
+        REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, centerFrame, originalBin)] == -10.0f);
+    }
+
+    // "Re-voicing" it: a fresh SequenceOperation with a different pitch,
+    // superseding the original - exactly what a Studio-level "re-voice"
+    // action would append to the OperationLog (OperationLog::
+    // activeOperationsTargeting() already excludes a superseded operation
+    // from its own result - see test_operation_log.cpp's own coverage of
+    // that, type-agnostic and unchanged by this milestone), so only the
+    // revoiced version would ever actually reach rebuildPaintedContent()
+    // in practice. This test skips straight to that already-filtered
+    // input, since re-voicing itself needs no new Core mechanism beyond
+    // "construct a new SequenceOperation with different notes()."
+    const std::vector<NoteEvent> revoicedNotes{NoteEvent{0.3, 0.0, 900.0}};
+    const SequenceOperation revoiced(2, LayerId{1}, revoicedNotes, makeOpaqueSequenceTool(0.02, -10.0f),
+                                      OperationId{1});
+    {
+        const std::vector<const Operation*> operations = {&revoiced};
+        const StreamImage rebuilt = rebuildPaintedContent(base, operations, 2000.0);
+        REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, centerFrame, revoicedBin)] == -10.0f);
+        // The original pitch is not painted at all - this is a fresh
+        // rebuild from base, not an incremental edit on top of the old
+        // stamp, so there's no stale content left over to clean up either.
+        REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, centerFrame, originalBin)] == 0.0f);
     }
 }
 

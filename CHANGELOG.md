@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.40.1] - 2026-09-19
+
+The first installment of the new "Chords/Arpeggiator/Sequencer" milestone - the core editable-sequence architecture. **Pure Core plumbing, not reachable yet** - there's no way to actually create a sequence from the Studio until the Chord Generator (a later installment) exists; no user-visible or audible change exists in this build.
+
+### Added
+
+- **`NoteEvent`** (pitch + timing) and **`SequenceOperation`**, a new kind of logged operation that stays editable after the fact: it stores its own notes and instrument, not baked pixels, so re-voicing or re-timing a sequence (once a later installment exposes that as a real gesture) will never need repainting from scratch. Every note renders through whichever tool the sequence is set to play through - a plain brush, a Sound Mind Instrument, a Mind Shot, or a Mind Grain - reusing the exact same rendering every one of those already has.
+- Resolved the long-open "which text notation" question in the design doc's favor of a small notation native to Sound Mind's own units (a note name or a raw Hz value, plus a duration) rather than ABC notation, which has no way to express an arbitrary frequency - the notation itself isn't built yet, only the direction is settled.
+
+Full regression: sound-mind-core 745/745 (up from 728). Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #112.
+
 ## [0.0.39.4] - 2026-09-19
 
 MindWaves v2, Installment D: **Continuous Controls**. Closes out the `v0.Y.39.1` (MindWaves v2) milestone in full.

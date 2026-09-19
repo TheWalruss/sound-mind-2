@@ -8,6 +8,7 @@
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/paste_operation.h"
+#include "sound_mind/core/sequence_operation.h"
 #include "sound_mind/core/warp_operation.h"
 
 namespace sound_mind::core {
@@ -178,6 +179,7 @@ constexpr const char* kPaintOperationKind = "paint";
 constexpr const char* kFillOperationKind = "fill";
 constexpr const char* kPasteOperationKind = "paste";
 constexpr const char* kWarpOperationKind = "warp";
+constexpr const char* kSequenceOperationKind = "sequence";
 
 /// @brief Writes `operation`'s own `id`/`supersedes`/`targetLayer` fields
 /// into `entry` - the three keys every concrete `LayerContentOperation`
@@ -216,12 +218,12 @@ CommonOperationFields readCommonOperationFields(const nlohmann::json& entry) {
 void to_json(nlohmann::json& json, const OperationLog& log) {
     nlohmann::json operations = nlohmann::json::array();
     for (const auto& operation : log.operations_) {
-        // A plain if/else-if dispatch, not a visitor - four concrete
+        // A plain if/else-if dispatch, not a visitor - five concrete
         // subtypes (PaintOperation, FillOperation, PasteOperation,
-        // WarpOperation) is still few enough that a real dispatch
-        // mechanism would be speculative machinery for a problem this
-        // doesn't have yet; revisit if a fifth subtype makes the chain
-        // unwieldy.
+        // WarpOperation, SequenceOperation) is still few enough that a
+        // real dispatch mechanism would be speculative machinery for a
+        // problem this doesn't have yet; revisit if a sixth subtype makes
+        // the chain unwieldy.
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation.get())) {
             nlohmann::json entry;
             entry["kind"] = kPaintOperationKind;
@@ -258,6 +260,13 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
             entry["curve"] = warp->curve();
             entry["axis"] = warp->axis();
             entry["mode"] = warp->mode();
+            operations.push_back(std::move(entry));
+        } else if (const auto* sequence = dynamic_cast<const SequenceOperation*>(operation.get())) {
+            nlohmann::json entry;
+            entry["kind"] = kSequenceOperationKind;
+            writeCommonOperationFields(entry, *sequence);
+            entry["notes"] = sequence->notes();
+            entry["config"] = sequence->config();
             operations.push_back(std::move(entry));
         }
     }
@@ -312,6 +321,12 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
                 WarpMode mode = entry.at("mode").get<WarpMode>();
                 log.operations_.push_back(std::make_unique<WarpOperation>(
                     fields.id, fields.targetLayer, bounds, std::move(curve), axis, mode, fields.supersedes));
+            } else if (kind == kSequenceOperationKind) {
+                const CommonOperationFields fields = readCommonOperationFields(entry);
+                std::vector<NoteEvent> notes = entry.at("notes").get<std::vector<NoteEvent>>();
+                std::unique_ptr<ToolConfiguration> config = toolConfigurationFromJson(entry.at("config"));
+                log.operations_.push_back(std::make_unique<SequenceOperation>(
+                    fields.id, fields.targetLayer, std::move(notes), std::move(config), fields.supersedes));
             } else {
                 throw std::invalid_argument("OperationLog: unrecognized operation kind \"" + kind + "\"");
             }
