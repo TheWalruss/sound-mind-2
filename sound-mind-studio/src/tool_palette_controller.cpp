@@ -166,6 +166,10 @@ void ToolPaletteController::setChordParams(const sound_mind::core::ChordGenerato
     chordGeneratorController_->setParams(params);
 }
 
+void ToolPaletteController::setChordNotation(const std::string& notation, double referenceHz, double bpm) {
+    chordGeneratorController_->setNotation(notation, referenceHz, bpm);
+}
+
 void ToolPaletteController::stampChord(sound_mind::core::LayerId layer, double timeSeconds) {
     chordGeneratorController_->stampAt(layer, timeSeconds);
 }

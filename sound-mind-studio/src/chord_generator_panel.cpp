@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <stdexcept>
 #include <utility>
 
 #include <QComboBox>
@@ -9,6 +10,7 @@
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStringList>
@@ -17,6 +19,7 @@
 #include <QWidget>
 
 #include "sound_mind/core/music_theory.h"
+#include "sound_mind/core/sequence_notation.h"
 
 namespace sound_mind::studio {
 
@@ -96,9 +99,24 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
     auto* container = new QWidget(this);
     auto* root = new QVBoxLayout(container);
 
+    auto* inputModeForm = new QFormLayout();
+    inputModeCombo_ = new QComboBox(container);
+    inputModeCombo_->setObjectName(QStringLiteral("chordInputModeCombo"));
+    inputModeCombo_->addItem(tr("Chord Builder"));
+    inputModeCombo_->addItem(tr("Custom Notation"));
+    connect(inputModeCombo_, &QComboBox::currentIndexChanged, this, [this](int) { updateInputModeVisibility(); });
+    inputModeForm->addRow(tr("Input Mode:"), inputModeCombo_);
+    root->addLayout(inputModeForm);
+
+    // --- Chord Builder group (Root/Octave/Category/Chord/Mode/rhythm) -----
+    chordBuilderGroup_ = new QWidget(container);
+    chordBuilderGroup_->setObjectName(QStringLiteral("chordBuilderGroup"));
+    auto* chordBuilderLayout = new QVBoxLayout(chordBuilderGroup_);
+    chordBuilderLayout->setContentsMargins(0, 0, 0, 0);
+
     auto* topForm = new QFormLayout();
 
-    rootCombo_ = new QComboBox(container);
+    rootCombo_ = new QComboBox(chordBuilderGroup_);
     rootCombo_->setObjectName(QStringLiteral("chordRootCombo"));
     for (int i = 0; i < static_cast<int>(kRootNames.size()); ++i) {
         rootCombo_->addItem(tr(kRootNames[static_cast<std::size_t>(i)]), i);
@@ -113,7 +131,7 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
     connect(octaveSpinBox_, &QSpinBox::valueChanged, this, [this](int) { emitParamsChanged(); });
     topForm->addRow(tr("Octave:"), octaveSpinBox_);
 
-    categoryCombo_ = new QComboBox(container);
+    categoryCombo_ = new QComboBox(chordBuilderGroup_);
     categoryCombo_->setObjectName(QStringLiteral("chordCategoryCombo"));
     for (const auto& [category, name] : kCategories) {
         categoryCombo_->addItem(tr(name), QVariant::fromValue(static_cast<int>(category)));
@@ -125,7 +143,7 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
     });
     topForm->addRow(tr("Category:"), categoryCombo_);
 
-    chordCombo_ = new QComboBox(container);
+    chordCombo_ = new QComboBox(chordBuilderGroup_);
     chordCombo_->setObjectName(QStringLiteral("chordNameCombo"));
     connect(chordCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         if (index >= 0) {
@@ -135,15 +153,15 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
     });
     topForm->addRow(tr("Chord:"), chordCombo_);
 
-    root->addLayout(topForm);
+    chordBuilderLayout->addLayout(topForm);
 
-    notesPreviewLabel_ = new QLabel(container);
+    notesPreviewLabel_ = new QLabel(chordBuilderGroup_);
     notesPreviewLabel_->setObjectName(QStringLiteral("chordNotesPreviewLabel"));
     notesPreviewLabel_->setWordWrap(true);
-    root->addWidget(notesPreviewLabel_);
+    chordBuilderLayout->addWidget(notesPreviewLabel_);
 
     auto* modeForm = new QFormLayout();
-    modeCombo_ = new QComboBox(container);
+    modeCombo_ = new QComboBox(chordBuilderGroup_);
     modeCombo_->setObjectName(QStringLiteral("chordModeCombo"));
     modeCombo_->addItem(tr("Block Chord"), QVariant::fromValue(static_cast<int>(ChordPlaybackMode::Block)));
     modeCombo_->addItem(tr("Arpeggio"), QVariant::fromValue(static_cast<int>(ChordPlaybackMode::Arpeggio)));
@@ -153,10 +171,10 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
         emitParamsChanged();
     });
     modeForm->addRow(tr("Mode:"), modeCombo_);
-    root->addLayout(modeForm);
+    chordBuilderLayout->addLayout(modeForm);
 
     // --- Block mode's own group -------------------------------------------
-    blockGroup_ = new QWidget(container);
+    blockGroup_ = new QWidget(chordBuilderGroup_);
     blockGroup_->setObjectName(QStringLiteral("chordBlockGroup"));
     auto* blockForm = new QFormLayout(blockGroup_);
     blockForm->setContentsMargins(0, 0, 0, 0);
@@ -172,10 +190,10 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
         emitParamsChanged();
     });
     blockForm->addRow(tr("Duration:"), blockDurationSpinBox_);
-    root->addWidget(blockGroup_);
+    chordBuilderLayout->addWidget(blockGroup_);
 
     // --- Arpeggio mode's own group ------------------------------------------
-    arpeggioGroup_ = new QWidget(container);
+    arpeggioGroup_ = new QWidget(chordBuilderGroup_);
     arpeggioGroup_->setObjectName(QStringLiteral("chordArpeggioGroup"));
     auto* arpeggioForm = new QFormLayout(arpeggioGroup_);
     arpeggioForm->setContentsMargins(0, 0, 0, 0);
@@ -253,14 +271,54 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
     });
     arpeggioForm->addRow(tr("Repeats:"), repeatsSpinBox_);
 
-    root->addWidget(arpeggioGroup_);
+    chordBuilderLayout->addWidget(arpeggioGroup_);
+    root->addWidget(chordBuilderGroup_);
+
+    // --- Custom Notation group ---------------------------------------------
+    notationGroup_ = new QWidget(container);
+    notationGroup_->setObjectName(QStringLiteral("chordNotationGroup"));
+    auto* notationLayout = new QVBoxLayout(notationGroup_);
+    notationLayout->setContentsMargins(0, 0, 0, 0);
+
+    notationTextEdit_ = new QPlainTextEdit(notationGroup_);
+    notationTextEdit_->setObjectName(QStringLiteral("chordNotationTextEdit"));
+    notationTextEdit_->setPlaceholderText(tr("e.g. A4:0.5 z0.25 C5:0.5+E5:0.5"));
+    connect(notationTextEdit_, &QPlainTextEdit::textChanged, this, [this]() { emitNotationChanged(); });
+    notationLayout->addWidget(notationTextEdit_);
+
+    notationErrorLabel_ = new QLabel(notationGroup_);
+    notationErrorLabel_->setObjectName(QStringLiteral("chordNotationErrorLabel"));
+    notationErrorLabel_->setWordWrap(true);
+    notationErrorLabel_->setStyleSheet(QStringLiteral("color: red;"));
+    notationLayout->addWidget(notationErrorLabel_);
+
+    auto* notationForm = new QFormLayout();
+    notationBpmSpinBox_ = new QDoubleSpinBox(notationGroup_);
+    notationBpmSpinBox_->setObjectName(QStringLiteral("chordNotationBpmSpinBox"));
+    notationBpmSpinBox_->setRange(1.0, 999.0);
+    notationBpmSpinBox_->setValue(120.0);
+    connect(notationBpmSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double) { emitNotationChanged(); });
+    notationForm->addRow(tr("BPM:"), notationBpmSpinBox_);
+
+    notationReferenceHzSpinBox_ = new QDoubleSpinBox(notationGroup_);
+    notationReferenceHzSpinBox_->setObjectName(QStringLiteral("chordNotationReferenceHzSpinBox"));
+    notationReferenceHzSpinBox_->setRange(1.0, 20000.0);
+    notationReferenceHzSpinBox_->setValue(440.0);
+    notationReferenceHzSpinBox_->setSuffix(tr(" Hz"));
+    connect(notationReferenceHzSpinBox_, &QDoubleSpinBox::valueChanged, this,
+            [this](double) { emitNotationChanged(); });
+    notationForm->addRow(tr("Reference:"), notationReferenceHzSpinBox_);
+
+    notationLayout->addLayout(notationForm);
+    root->addWidget(notationGroup_);
+
     root->addStretch();
 
     setWidget(container);
 
     rebuildChordCombo();
     updateGroupVisibility();
-    emitParamsChanged();
+    updateInputModeVisibility();
 }
 
 void ChordGeneratorPanel::rebuildChordCombo() {
@@ -301,6 +359,32 @@ void ChordGeneratorPanel::emitParamsChanged() {
     notesPreviewLabel_->setText(noteNames.isEmpty() ? tr("(no notes)") : noteNames.join(QStringLiteral("  ")));
 
     emit paramsChanged(params_);
+}
+
+void ChordGeneratorPanel::emitNotationChanged() {
+    const QString text = notationTextEdit_->toPlainText();
+    const double referenceHz = notationReferenceHzSpinBox_->value();
+    const double bpm = notationBpmSpinBox_->value();
+
+    try {
+        [[maybe_unused]] const auto notes = sound_mind::core::parseSequenceNotation(text.toStdString(), referenceHz, bpm);
+        notationErrorLabel_->clear();
+    } catch (const std::invalid_argument& error) {
+        notationErrorLabel_->setText(QString::fromStdString(error.what()));
+    }
+
+    emit notationChanged(text, referenceHz, bpm);
+}
+
+void ChordGeneratorPanel::updateInputModeVisibility() {
+    const bool chordBuilderMode = inputModeCombo_->currentIndex() == 0;
+    chordBuilderGroup_->setVisible(chordBuilderMode);
+    notationGroup_->setVisible(!chordBuilderMode);
+    if (chordBuilderMode) {
+        emitParamsChanged();
+    } else {
+        emitNotationChanged();
+    }
 }
 
 }  // namespace sound_mind::studio

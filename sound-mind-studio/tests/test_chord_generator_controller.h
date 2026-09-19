@@ -14,4 +14,10 @@ private slots:
     void stampAtAppendsASequenceOperationAndEmitsContentChanged();
     void stampAtClonesThePaintControllersCurrentToolConfiguration();
     void stampAtResolvesNotesAtTheGivenStartTime();
+
+    void setNotationSwitchesTheCurrentSourceAndEmitsPreviewChanged();
+    void previewFrequenciesHzReturnsEmptyForInvalidNotation();
+    void stampAtDoesNothingForInvalidNotation();
+    void stampAtAppendsASequenceOperationFromValidNotation();
+    void settingParamsAfterNotationSwitchesBackToTheChordBuilder();
 };

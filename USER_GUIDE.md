@@ -990,8 +990,12 @@ starts/ends where the old one did) isn't here yet; see
 ## Chord Generator
 
 The **Chord Generator** toolbar button (next to Tool Configuration) opens
-a dockable panel (off by default) that builds a chord or arpeggio and
-stamps it onto the canvas as a sequence of notes:
+a dockable panel (off by default) that builds a chord, arpeggio, or a
+hand-written sequence, and stamps it onto the canvas as a series of notes.
+An **Input Mode** switch at the top chooses between two independent ways
+to build what gets stamped:
+
+### Chord Builder
 
 - **Root/Octave** - which pitch class and octave the chord is built on
   (e.g. root `A`, octave `4`, is A4).
@@ -1006,19 +1010,42 @@ stamps it onto the canvas as a sequence of notes:
   sequence of indices), BPM, rhythmic Subdivision, Note Duration
   (percentage of each step actually held), and Repeats (how many times
   the whole sequence cycles).
-- **Instrument** - a stamped chord always plays through whatever the
-  [Painting](#painting) tool is currently configured as (Procedural,
-  Instrument, Mind Shot, or Mind Grain) - there's no separate instrument
-  picker here; switch the Painting tool's own settings to change what a
-  chord sounds like.
+### Custom Notation
+
+Instead of picking a chord, type a sequence directly using Sound Mind's
+own compact notation - a space-separated list of tokens:
+
+- A **note**: `pitch:duration` - e.g. `A4:0.5` (a note name) or `440:0.5`
+  (a raw Hz value). Duration is in seconds by default, or beats with a
+  `b` suffix (e.g. `1b` is one beat at the BPM below).
+- A **rest**: `z` followed by a duration - e.g. `z0.25` - advances the
+  timeline without playing anything.
+- A **chord**: two or more notes joined with `+` - e.g.
+  `A4:0.5+C#5:0.5+E5:0.5` - every note in the group starts together.
+
+Notes play one after another: each token starts right when the previous
+one's own longest note (or a rest) ends - use `z` to leave a gap. For
+example, `A4:0.5 z0.25 C5:0.5+E5:0.5` plays A4 for half a second, waits a
+quarter second, then plays C5 and E5 together for half a second. Typos are
+flagged immediately below the text box as you type, with **BPM** and
+**Reference** (tuning, in Hz) spin boxes controlling how beats-suffixed
+durations and note names are resolved.
+
+### Instrument and Placing It
+
+Either way, a stamped sequence always plays through whatever the
+[Painting](#painting) tool is currently configured as (Procedural,
+Instrument, Mind Shot, or Mind Grain) - there's no separate instrument
+picker in the Chord Generator itself; switch the Painting tool's own
+settings to change what it sounds like.
 
 To actually place it, click the **Chord** toolbar button (next to Path) to
 arm it, then click anywhere on the canvas - the click only sets *when*
-the chord starts (its own time position); the chord's pitches always come
-from Root/Octave above, regardless of where vertically you click. While
-the panel is configured, its notes preview live on the canvas as
-horizontal lines on the frequency axis - independent of, and in addition
-to, the ordinary Frequency Grid (see
+the sequence starts (its own time position); every note's own pitch
+always comes from the panel above, regardless of where vertically you
+click. While the panel is configured, its notes preview live on the
+canvas as horizontal lines on the frequency axis - independent of, and in
+addition to, the ordinary Frequency Grid (see
 [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid) below) -
 so you can see what you're about to stamp before you click.
 
@@ -1309,9 +1336,9 @@ a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,
   editing after the fact - see [Chord Generator](#chord-generator) above;
   re-timing/re-voicing it with Pick works today, but re-pointing it at a
   different instrument doesn't yet.
-- The Chord Generator's own generalized text notation (writing an
-  arbitrary sequence of notes/frequencies directly, beyond a named chord)
-  isn't here yet either - see [Chord Generator](#chord-generator) above.
+- Driving a sequence live from a connected MIDI controller isn't here -
+  the Chord Generator's own Chord Builder/Custom Notation modes are the
+  only ways to build a sequence today.
 - No pitch quantising while painting - Snap to Grid (see
   [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid) above)
   snaps a *placed* node/move/selection to the nearest grid line, but a

@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.40.3] - 2026-09-20
+
+The third and final installment of the "Chords/Arpeggiator/Sequencer" milestone - the generalized **text notation**. Closes out this milestone in full.
+
+### Added
+
+- **A compact, ABC-inspired sequence notation**: write a series of notes directly, e.g. `A4:0.5 z0.25 C5:0.5+E5:0.5` - a note name or raw Hz value plus a duration (seconds, or beats with a `b` suffix), `z` for a rest, and `+` to join simultaneous notes into a chord.
+- **A new "Custom Notation" mode in the Chord Generator panel** (an Input Mode switch alongside the existing chord picker), with its own BPM/Reference Hz controls and live, inline validation as you type - a typo shows an error message immediately, before you ever try to stamp it.
+- A sequence written this way stamps, previews on the Chord Overlay, and re-voices/re-times with Pick exactly the same way a built chord does - no difference downstream, regardless of which mode built it.
+
+Full regression: sound-mind-core 785/785 (up from 765), sound-mind-studio full suite passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #114.
+
 ## [0.0.40.2] - 2026-09-19
 
 The second installment of the "Chords/Arpeggiator/Sequencer" milestone - the **Chord Generator** panel and the live **Chord Overlay**. The first user-reachable/audible part of this milestone: you can now actually build and stamp a chord or arpeggio from the Studio.

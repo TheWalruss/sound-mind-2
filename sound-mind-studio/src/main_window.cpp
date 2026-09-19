@@ -255,6 +255,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             [this](const sound_mind::core::ChordGeneratorParams& params) {
                 toolPaletteController_->setChordParams(params);
             });
+    // Chords/Arpeggiator/Sequencer, Installment C (v0.0.40.3) - the Custom
+    // Notation half of the same panel; see ChordGeneratorPanel's own docs.
+    connect(chordGeneratorPanel_, &ChordGeneratorPanel::notationChanged, this,
+            [this](const QString& notation, double referenceHz, double bpm) {
+                toolPaletteController_->setChordNotation(notation.toStdString(), referenceHz, bpm);
+            });
 
     // Selection & Fill (v0.Y.25.1), Selection Type (v0.Y.35.1 Installment
     // A) - toolPaletteController_ isn't constructed until just below, but

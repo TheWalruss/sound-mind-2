@@ -1,9 +1,12 @@
 #include "sound_mind/studio/chord_generator_controller.h"
 
 #include <algorithm>
+#include <stdexcept>
+#include <utility>
 
 #include "sound_mind/core/chord_generator.h"
 #include "sound_mind/core/operation_log.h"
+#include "sound_mind/core/sequence_notation.h"
 #include "sound_mind/core/sequence_operation.h"
 #include "sound_mind/studio/paint_controller.h"
 
@@ -15,14 +18,36 @@ ChordGeneratorController::ChordGeneratorController(PaintController* paintControl
 void ChordGeneratorController::setProject(sound_mind::core::Project* project) { project_ = project; }
 
 void ChordGeneratorController::setParams(sound_mind::core::ChordGeneratorParams params) {
+    inputSource_ = InputSource::ChordBuilder;
     params_ = std::move(params);
     emit previewChanged();
 }
 
+void ChordGeneratorController::setNotation(std::string notation, double referenceHz, double bpm) {
+    inputSource_ = InputSource::Notation;
+    notation_ = std::move(notation);
+    notationReferenceHz_ = referenceHz;
+    notationBpm_ = bpm;
+    emit previewChanged();
+}
+
+std::vector<sound_mind::core::NoteEvent> ChordGeneratorController::resolveNotes(double startTimeSeconds) const {
+    if (inputSource_ == InputSource::ChordBuilder) {
+        sound_mind::core::ChordGeneratorParams resolvedParams = params_;
+        resolvedParams.startTimeSeconds = startTimeSeconds;
+        return sound_mind::core::buildChordNotes(resolvedParams);
+    }
+
+    try {
+        return sound_mind::core::parseSequenceNotation(notation_, notationReferenceHz_, notationBpm_,
+                                                         startTimeSeconds);
+    } catch (const std::invalid_argument&) {
+        return {};
+    }
+}
+
 std::vector<double> ChordGeneratorController::previewFrequenciesHz() const {
-    sound_mind::core::ChordGeneratorParams previewParams = params_;
-    previewParams.startTimeSeconds = 0.0;
-    const std::vector<sound_mind::core::NoteEvent> notes = sound_mind::core::buildChordNotes(previewParams);
+    const std::vector<sound_mind::core::NoteEvent> notes = resolveNotes(0.0);
 
     std::vector<double> frequenciesHz;
     frequenciesHz.reserve(notes.size());
@@ -39,9 +64,7 @@ void ChordGeneratorController::stampAt(sound_mind::core::LayerId targetLayer, do
         return;
     }
 
-    sound_mind::core::ChordGeneratorParams stampParams = params_;
-    stampParams.startTimeSeconds = timeSeconds;
-    std::vector<sound_mind::core::NoteEvent> notes = sound_mind::core::buildChordNotes(stampParams);
+    std::vector<sound_mind::core::NoteEvent> notes = resolveNotes(timeSeconds);
     if (notes.empty()) {
         return;
     }

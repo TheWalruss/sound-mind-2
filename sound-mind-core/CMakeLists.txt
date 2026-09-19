@@ -40,6 +40,7 @@ add_library(sound-mind-core
     src/blend_mode_application.cpp
     src/music_theory.cpp
     src/chord_generator.cpp
+    src/sequence_notation.cpp
     src/layer.cpp
     src/project_settings.cpp
     src/operation_log.cpp

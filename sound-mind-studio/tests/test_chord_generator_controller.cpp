@@ -185,3 +185,72 @@ void ChordGeneratorControllerTest::stampAtResolvesNotesAtTheGivenStartTime() {
         QCOMPARE(note.startTimeSeconds, 3.0);
     }
 }
+
+void ChordGeneratorControllerTest::setNotationSwitchesTheCurrentSourceAndEmitsPreviewChanged() {
+    PaintController paintController;
+    ChordGeneratorController controller(&paintController);
+    QSignalSpy spy(&controller, &ChordGeneratorController::previewChanged);
+
+    controller.setNotation("A4:0.5 C5:0.5", 440.0, 120.0);
+
+    QCOMPARE(spy.count(), 1);
+    const auto frequenciesHz = controller.previewFrequenciesHz();
+    QCOMPARE(frequenciesHz.size(), std::size_t{2});
+}
+
+void ChordGeneratorControllerTest::previewFrequenciesHzReturnsEmptyForInvalidNotation() {
+    PaintController paintController;
+    ChordGeneratorController controller(&paintController);
+
+    controller.setNotation("not valid notation :::", 440.0, 120.0);
+
+    QVERIFY(controller.previewFrequenciesHz().empty());
+}
+
+void ChordGeneratorControllerTest::stampAtDoesNothingForInvalidNotation() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    ChordGeneratorController controller(&paintController);
+    controller.setProject(&project);
+    controller.setNotation("garbage", 440.0, 120.0);
+    QSignalSpy spy(&controller, &ChordGeneratorController::contentChanged);
+
+    controller.stampAt(layerId, 0.0);
+
+    QCOMPARE(spy.count(), 0);
+    QCOMPARE(project.operationLog().activeOperationsTargeting(layerId).size(), std::size_t{0});
+}
+
+void ChordGeneratorControllerTest::stampAtAppendsASequenceOperationFromValidNotation() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    ChordGeneratorController controller(&paintController);
+    controller.setProject(&project);
+    controller.setNotation("A4:0.5 z0.25 C5:0.5", 440.0, 120.0);
+
+    controller.stampAt(layerId, 2.0);
+
+    const auto operations = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(operations.size(), std::size_t{1});
+    const auto* sequence = dynamic_cast<const SequenceOperation*>(operations.front());
+    QVERIFY(sequence != nullptr);
+    QCOMPARE(sequence->notes().size(), std::size_t{2});
+    QCOMPARE(sequence->notes()[0].startTimeSeconds, 2.0);
+    QCOMPARE(sequence->notes()[1].startTimeSeconds, 2.75);
+}
+
+void ChordGeneratorControllerTest::settingParamsAfterNotationSwitchesBackToTheChordBuilder() {
+    PaintController paintController;
+    ChordGeneratorController controller(&paintController);
+    controller.setNotation("A4:0.5 C5:0.5", 440.0, 120.0);
+    QCOMPARE(controller.previewFrequenciesHz().size(), std::size_t{2});
+
+    ChordGeneratorParams params;
+    controller.setParams(params);  // Triads/Major default - 3 distinct notes.
+
+    QCOMPARE(controller.previewFrequenciesHz().size(), std::size_t{3});
+}

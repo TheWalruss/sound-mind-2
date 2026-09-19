@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include <QObject>
@@ -41,6 +42,24 @@ class PaintController;
  * already makes it pickable and movable for free (see
  * `docs/sound-mind-architecture.md`'s Decision on this installment); this
  * class only ever builds *new* chords from scratch.
+ *
+ * **As of `v0.0.40.3` (Chords/Arpeggiator/Sequencer, Installment C):** a
+ * second, independent source of what to stamp - `setNotation()`, resolving
+ * Sound Mind's own text notation (`sequence_notation.h`) instead of a
+ * built chord. Only one source is ever "current" at a time (whichever of
+ * `setParams()`/`setNotation()` was called most recently) -
+ * `previewFrequenciesHz()`/`stampAt()` both dispatch on it internally, so
+ * neither `CanvasWidget` nor `MainWindow` needs to know or care which kind
+ * of input produced the notes currently being previewed/stamped, matching
+ * the design doc's own "the same underlying notation... generated the same
+ * way a chord is" framing. Invalid notation text is handled gracefully,
+ * not thrown across the Qt signal/slot boundary: `previewFrequenciesHz()`
+ * returns empty and `stampAt()` does nothing, the same "nothing happens by
+ * accident" fallback `buildChordNotes()`'s own out-of-range-index handling
+ * already establishes - `ChordGeneratorPanel`'s own live inline validation
+ * (a direct call to `parseSequenceNotation()`, independent of this class)
+ * is what actually surfaces a parse error to the user, before they ever
+ * try to stamp.
  */
 class ChordGeneratorController : public QObject {
     Q_OBJECT
@@ -82,31 +101,51 @@ public:
     void setParams(sound_mind::core::ChordGeneratorParams params);
 
     /**
-     * @brief The current parameters' own note pitches, for the Chord
-     *        Overlay - `docs/sound-mind-design.md`'s "Chord Overlay".
+     * @brief Sets the notation text new sequences are parsed from, and
+     *        emits previewChanged() - `ChordGeneratorPanel`'s own Custom
+     *        Notation controls call this on edit, the same live-update role
+     *        setParams() plays for the Chord Builder controls. Switches
+     *        this controller's own current source to notation - a later
+     *        `previewFrequenciesHz()`/`stampAt()` call parses `notation`
+     *        fresh via `parseSequenceNotation()`, not a snapshot taken here.
+     * @param notation The notation text - see `parseSequenceNotation()`'s
+     *        own docs for the grammar; invalid text is accepted here
+     *        without error (see this class's own docs on why).
+     * @param referenceHz The tuning reference for note names in `notation` -
+     *        see `parseSequenceNotation()`'s own docs.
+     * @param bpm The tempo beats-suffixed durations in `notation` resolve
+     *        against - see `parseSequenceNotation()`'s own docs.
+     */
+    void setNotation(std::string notation, double referenceHz, double bpm);
+
+    /**
+     * @brief The current source's own note pitches, for the Chord Overlay -
+     *        `docs/sound-mind-design.md`'s "Chord Overlay".
      *
-     * Built via `buildChordNotes()` at `startTimeSeconds = 0.0` (the actual
-     * start time is meaningless for a pitch-only preview - see
-     * `setChordPreview()`'s own docs on why the overlay only ever draws
-     * frequency, not time, positions), then deduplicated - an arpeggio
-     * revisiting the same note on a later repeat only draws one line for
-     * it, not an overlapping stack.
+     * Resolved at `startTimeSeconds = 0.0` (the actual start time is
+     * meaningless for a pitch-only preview - see `setChordPreview()`'s own
+     * docs on why the overlay only ever draws frequency, not time,
+     * positions), then deduplicated - an arpeggio (or a notation sequence)
+     * revisiting the same note more than once only draws one line for it,
+     * not an overlapping stack.
      *
-     * @return Every distinct note pitch the current params() would stamp,
-     *         in Hz, ascending.
+     * @return Every distinct note pitch the current source would stamp, in
+     *         Hz, ascending - empty if the current source is invalid
+     *         notation text (see this class's own docs).
      */
     [[nodiscard]] std::vector<double> previewFrequenciesHz() const;
 
     /**
-     * @brief Resolves params() at a real start time and appends the result
-     *        as a new `SequenceOperation` to the project's own
+     * @brief Resolves the current source at a real start time and appends
+     *        the result as a new `SequenceOperation` to the project's own
      *        `OperationLog`, then rebuilds `targetLayer`'s own painted
-     *        content - a no-op if no project is set, or if params().chordIndex
-     *        is out of range for params().category (see `buildChordNotes()`'s
-     *        own docs).
+     *        content - a no-op if no project is set, if the current source
+     *        is a Chord Builder chord with an out-of-range `chordIndex`
+     *        (see `buildChordNotes()`'s own docs), or if it's invalid
+     *        notation text (see this class's own docs).
      *
      * @param targetLayer Which layer to stamp into.
-     * @param timeSeconds When the chord starts, in seconds - ordinarily
+     * @param timeSeconds When the sequence starts, in seconds - ordinarily
      *        wherever the user clicked on the canvas's own time axis (see
      *        `CanvasWidget::chordStampRequested()`'s own docs on why only
      *        the time axis, not frequency, comes from the click).
@@ -124,9 +163,25 @@ signals:
     void contentChanged(sound_mind::core::LayerId layer);
 
 private:
+    /// @brief Which of setParams()/setNotation() was called most recently -
+    ///        see this class's own docs on why only one source is ever
+    ///        current at a time.
+    enum class InputSource { ChordBuilder, Notation };
+
+    /// @brief The current source's own notes at `startTimeSeconds` - the
+    ///        shared resolution logic both previewFrequenciesHz() and
+    ///        stampAt() build on, dispatching on inputSource_. Invalid
+    ///        notation text is caught here and resolved to an empty
+    ///        result, never thrown out of this method.
+    [[nodiscard]] std::vector<sound_mind::core::NoteEvent> resolveNotes(double startTimeSeconds) const;
+
     PaintController* paintController_;
     sound_mind::core::Project* project_ = nullptr;
+    InputSource inputSource_ = InputSource::ChordBuilder;
     sound_mind::core::ChordGeneratorParams params_;
+    std::string notation_;
+    double notationReferenceHz_ = 440.0;
+    double notationBpm_ = 120.0;
 };
 
 }  // namespace sound_mind::studio

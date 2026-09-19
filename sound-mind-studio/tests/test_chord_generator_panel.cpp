@@ -2,7 +2,9 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QWidget>
@@ -126,4 +128,84 @@ void ChordGeneratorPanelTest::subdivisionComboSetsStepBeats() {
     subdivisionCombo->setCurrentIndex(2);  // "1/4"
 
     QCOMPARE(panel.params().stepBeats, 1.0);
+}
+
+void ChordGeneratorPanelTest::freshPanelDefaultsToChordBuilderInputMode() {
+    ChordGeneratorPanel panel;
+    panel.show();
+
+    auto* chordBuilderGroup = panel.findChild<QWidget*>(QStringLiteral("chordBuilderGroup"));
+    auto* notationGroup = panel.findChild<QWidget*>(QStringLiteral("chordNotationGroup"));
+
+    QVERIFY(chordBuilderGroup->isVisible());
+    QVERIFY(!notationGroup->isVisible());
+}
+
+void ChordGeneratorPanelTest::switchingToCustomNotationHidesChordBuilderAndShowsNotationGroup() {
+    ChordGeneratorPanel panel;
+    panel.show();
+    auto* inputModeCombo = panel.findChild<QComboBox*>(QStringLiteral("chordInputModeCombo"));
+    auto* chordBuilderGroup = panel.findChild<QWidget*>(QStringLiteral("chordBuilderGroup"));
+    auto* notationGroup = panel.findChild<QWidget*>(QStringLiteral("chordNotationGroup"));
+
+    inputModeCombo->setCurrentIndex(1);  // Custom Notation
+
+    QVERIFY(!chordBuilderGroup->isVisible());
+    QVERIFY(notationGroup->isVisible());
+}
+
+void ChordGeneratorPanelTest::editingNotationTextEmitsNotationChangedWithCurrentBpmAndReferenceHz() {
+    ChordGeneratorPanel panel;
+    auto* inputModeCombo = panel.findChild<QComboBox*>(QStringLiteral("chordInputModeCombo"));
+    auto* notationTextEdit = panel.findChild<QPlainTextEdit*>(QStringLiteral("chordNotationTextEdit"));
+    auto* bpmSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("chordNotationBpmSpinBox"));
+    auto* referenceHzSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("chordNotationReferenceHzSpinBox"));
+    inputModeCombo->setCurrentIndex(1);  // Custom Notation
+    bpmSpinBox->setValue(100.0);
+    referenceHzSpinBox->setValue(432.0);
+    QSignalSpy spy(&panel, &ChordGeneratorPanel::notationChanged);
+
+    notationTextEdit->setPlainText(QStringLiteral("A4:0.5"));
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toString(), QStringLiteral("A4:0.5"));
+    QCOMPARE(spy.at(0).at(1).toDouble(), 432.0);
+    QCOMPARE(spy.at(0).at(2).toDouble(), 100.0);
+}
+
+void ChordGeneratorPanelTest::invalidNotationTextShowsAnErrorMessage() {
+    ChordGeneratorPanel panel;
+    auto* inputModeCombo = panel.findChild<QComboBox*>(QStringLiteral("chordInputModeCombo"));
+    auto* notationTextEdit = panel.findChild<QPlainTextEdit*>(QStringLiteral("chordNotationTextEdit"));
+    auto* errorLabel = panel.findChild<QLabel*>(QStringLiteral("chordNotationErrorLabel"));
+    inputModeCombo->setCurrentIndex(1);  // Custom Notation
+
+    notationTextEdit->setPlainText(QStringLiteral("not valid :::"));
+
+    QVERIFY(!errorLabel->text().isEmpty());
+}
+
+void ChordGeneratorPanelTest::validNotationTextClearsTheErrorMessage() {
+    ChordGeneratorPanel panel;
+    auto* inputModeCombo = panel.findChild<QComboBox*>(QStringLiteral("chordInputModeCombo"));
+    auto* notationTextEdit = panel.findChild<QPlainTextEdit*>(QStringLiteral("chordNotationTextEdit"));
+    auto* errorLabel = panel.findChild<QLabel*>(QStringLiteral("chordNotationErrorLabel"));
+    inputModeCombo->setCurrentIndex(1);  // Custom Notation
+    notationTextEdit->setPlainText(QStringLiteral("not valid :::"));
+    QVERIFY(!errorLabel->text().isEmpty());
+
+    notationTextEdit->setPlainText(QStringLiteral("A4:0.5"));
+
+    QVERIFY(errorLabel->text().isEmpty());
+}
+
+void ChordGeneratorPanelTest::switchingBackToChordBuilderEmitsParamsChangedAgain() {
+    ChordGeneratorPanel panel;
+    auto* inputModeCombo = panel.findChild<QComboBox*>(QStringLiteral("chordInputModeCombo"));
+    inputModeCombo->setCurrentIndex(1);  // Custom Notation
+    QSignalSpy spy(&panel, &ChordGeneratorPanel::paramsChanged);
+
+    inputModeCombo->setCurrentIndex(0);  // Chord Builder
+
+    QCOMPARE(spy.count(), 1);
 }

@@ -14,4 +14,11 @@ private slots:
     void randomOrderOnlyShowsTheRandomSeedSpinBox();
     void editingCustomSequenceParsesCommaSeparatedIndices();
     void subdivisionComboSetsStepBeats();
+
+    void freshPanelDefaultsToChordBuilderInputMode();
+    void switchingToCustomNotationHidesChordBuilderAndShowsNotationGroup();
+    void editingNotationTextEmitsNotationChangedWithCurrentBpmAndReferenceHz();
+    void invalidNotationTextShowsAnErrorMessage();
+    void validNotationTextClearsTheErrorMessage();
+    void switchingBackToChordBuilderEmitsParamsChangedAgain();
 };

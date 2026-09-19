@@ -357,6 +357,16 @@ public:
      */
     void setChordParams(const sound_mind::core::ChordGeneratorParams& params);
 
+    /// @brief Sets the Chord Generator's own current notation text - forwards
+    ///        to `ChordGeneratorController::setNotation()`; keeps the Chord
+    ///        Overlay in sync the same way setChordParams() does.
+    /// @param notation `ChordGeneratorPanel`'s own current notation text -
+    ///        see `sound_mind::core::parseSequenceNotation()`'s own docs on
+    ///        the grammar; may be invalid.
+    /// @param referenceHz The tuning reference to resolve note names against.
+    /// @param bpm The tempo to resolve beats-suffixed durations against.
+    void setChordNotation(const std::string& notation, double referenceHz, double bpm);
+
     /// @brief Stamps the Chord Generator's own current chord/arpeggio -
     ///        forwards to `ChordGeneratorController::stampAt()`.
     /// @param layer Which layer to stamp into - resolved by the caller

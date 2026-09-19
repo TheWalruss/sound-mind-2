@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDockWidget>
+#include <QString>
 
 #include "sound_mind/core/chord_generator.h"
 
@@ -8,6 +9,7 @@ class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
+class QPlainTextEdit;
 class QSpinBox;
 class QWidget;
 
@@ -45,6 +47,24 @@ namespace sound_mind::studio {
  * other dock panel: every edit emits paramsChanged() with the panel's own
  * current, complete `ChordGeneratorParams` (`startTimeSeconds` always `0.0`
  * here - only a real canvas click ever resolves a real one).
+ *
+ * **As of `v0.0.40.3` (Chords/Arpeggiator/Sequencer, Installment C):** an
+ * "Input Mode" combo (`inputModeCombo_`) switches this panel between the
+ * Chord Builder controls above and a second, independent **Custom
+ * Notation** mode - a plain text box (`notationTextEdit_`) for Sound
+ * Mind's own compact sequence notation (`sequence_notation.h`), plus its
+ * own BPM/Reference Hz spin boxes (self-contained, the same way
+ * `ChordGeneratorParams::bpm`/`referenceHz` already default independently
+ * of any live project setting, rather than reading `ProjectSettings`
+ * directly). Only one mode's own group is ever visible at a time, the same
+ * per-mode dynamic visibility `updateGroupVisibility()`'s own docs already
+ * describe for Block/Arpeggio. Emits notationChanged() instead of
+ * paramsChanged() while in this mode - **validated locally, live, as you
+ * type**: a direct call to `sound_mind::core::parseSequenceNotation()`
+ * (independent of `ChordGeneratorController`, which handles an invalid
+ * string gracefully on its own - see its own docs) drives
+ * `notationErrorLabel_`, so a typo is visible immediately rather than only
+ * once you try to stamp.
  */
 class ChordGeneratorPanel : public QDockWidget {
     Q_OBJECT
@@ -61,9 +81,18 @@ public:
     [[nodiscard]] const sound_mind::core::ChordGeneratorParams& params() const noexcept { return params_; }
 
 signals:
-    /// @brief Emitted whenever any control changes.
+    /// @brief Emitted whenever a Chord Builder control changes, while
+    ///        Input Mode is Chord Builder.
     /// @param params The panel's own new, complete parameters.
     void paramsChanged(const sound_mind::core::ChordGeneratorParams& params);
+
+    /// @brief Emitted whenever a Custom Notation control changes, while
+    ///        Input Mode is Custom Notation - see this class's own docs.
+    /// @param notation The current notation text - may be invalid; see
+    ///        `sound_mind::core::parseSequenceNotation()`'s own docs.
+    /// @param referenceHz The current Reference Hz spin box value.
+    /// @param bpm The current BPM spin box value.
+    void notationChanged(const QString& notation, double referenceHz, double bpm);
 
 private:
     /// @brief Repopulates chordCombo_ with chordsInCategory(params_.category)'s
@@ -85,6 +114,23 @@ private:
     ///        refreshes notesPreviewLabel_, and emits paramsChanged().
     void emitParamsChanged();
 
+    /// @brief Re-validates notationTextEdit_'s own current text (a direct
+    ///        `parseSequenceNotation()` call, updating notationErrorLabel_'s
+    ///        own text/visibility) and emits notationChanged() regardless
+    ///        of whether it's currently valid - see this class's own docs.
+    void emitNotationChanged();
+
+    /// @brief Shows chordBuilderGroup_/hides notationGroup_, or vice versa,
+    ///        for inputModeCombo_'s own current selection, and emits
+    ///        whichever of paramsChanged()/notationChanged() applies to the
+    ///        newly active mode - so a mode switch alone (before touching
+    ///        any other control) still tells `ChordGeneratorController`
+    ///        which source is now current.
+    void updateInputModeVisibility();
+
+    QComboBox* inputModeCombo_ = nullptr;
+    QWidget* chordBuilderGroup_ = nullptr;
+
     QComboBox* rootCombo_ = nullptr;
     QSpinBox* octaveSpinBox_ = nullptr;
     QComboBox* categoryCombo_ = nullptr;
@@ -104,6 +150,12 @@ private:
     QSpinBox* noteDurationPercentSpinBox_ = nullptr;
     QSpinBox* repeatsSpinBox_ = nullptr;
     QSpinBox* randomSeedSpinBox_ = nullptr;
+
+    QWidget* notationGroup_ = nullptr;
+    QPlainTextEdit* notationTextEdit_ = nullptr;
+    QDoubleSpinBox* notationBpmSpinBox_ = nullptr;
+    QDoubleSpinBox* notationReferenceHzSpinBox_ = nullptr;
+    QLabel* notationErrorLabel_ = nullptr;
 
     sound_mind::core::ChordGeneratorParams params_;
 };
