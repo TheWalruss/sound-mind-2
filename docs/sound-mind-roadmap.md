@@ -601,21 +601,7 @@ A live-updating preview of the *currently capturing* loop, rendered incrementall
 
 **No Y bump expected** - a rendering-only addition; the project file format, and what's actually captured/played back, are unchanged.
 
-### v0.Y.42.1 - Refactor & Clean Up
-
-A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, Sound Mind Instruments, Mind Shots & Mind Grains, Chords/Arpeggiator/Sequencer, Loop Mode Live Preview) added, same purpose and scope as `v0.Y.5.1`'s entry. This is the largest phase in the whole roadmap - a strong candidate for the biggest structural payoff of any of these cleanup milestones, particularly around the MindWave binding machinery (used by opacity, filter parameters, and instrument notes alike by this point). Composer Mode is Phase 4.5's own, not this phase's - see `v0.Y.47.1`'s entry there for its own operation-to-track bookkeeping cleanup.
-
-**Demo:** the full regression suite still passes, unchanged in behavior.
-
-**No Y bump expected.**
-
----
-
-## Phase 4.5 - Workflow & Device Refinements
-
-Inserted after the fact (following `v0.Y.42.1`), the same reasoning `Phase 2.5`'s own intro and `Phase 3.5`'s own intro already establish for a `.5` phase - added 2026-09-17, from a fresh design-doc pass (`docs/sound-mind-design.md`'s "Additional design principles (2026-09-17)") that surfaced a batch of workflow/device/UI gaps against systems already built (device pickers scattered one-per-panel since `v0.Y.18.1`, the Layers Panel's own scope frozen at `v0.Y.15.1`'s deliberately minimal first pass, and a real open question about how painting's own geometry should behave, `docs/sound-mind-design.md`'s new "Principal modes"). None of this phase's own content depends on anything Phase 4's remaining milestones (Mind Shots & Mind Grains onward) build - it's sequenced here, at the phase boundary, matching every other `.5` phase's own placement, rather than interrupting Phase 4's own in-progress feature work partway through.
-
-### v0.Y.43.1 - Workflow & Device Polish
+### v0.Y.42.1 - Workflow & Device Polish
 
 A lumped milestone, per the same "bundle smaller UI changes into one point release" precedent `v0.Y.16.1` (Visual Identity) already established - several independent, individually small quality-of-life items from the 2026-09-17 design pass, rather than a Z-slot each:
 
@@ -628,6 +614,22 @@ A lumped milestone, per the same "bundle smaller UI changes into one point relea
 **Demo:** open the new Configure Devices panel and switch the active output device from one place; check Repeat with Scope set to Delta, paint a stroke, and hear it immediately without pressing Play; import an MP3 directly; open the Quickstart from the Help menu; toggle Hardware Acceleration off and confirm the same visible/audible result, just slower.
 
 **No Y bump expected** - workflow/device/UI additions; no project file format change anticipated by any of the five items above.
+
+**Moved here from its own original Phase 4.5 slot** (confirmed with the user, 2026-09-19) - none of its five items actually depend on Phase 4.5's own remaining milestones (Layers Panel Redesign/Principal Modes/Composer Mode) or vice versa, so there was no ordering reason to hold it for that later, bolted-on phase. Sequencing it here, directly after Loop Mode Live Preview, means Phase 4's own closing cleanup below sweeps it up along with everything else Phase 4 added, rather than needing a separate cleanup pass of its own in Phase 4.5.
+
+### v0.Y.43.1 - Refactor & Clean Up
+
+A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, Sound Mind Instruments, Mind Shots & Mind Grains, Chords/Arpeggiator/Sequencer, Loop Mode Live Preview, Workflow & Device Polish) added, same purpose and scope as `v0.Y.5.1`'s entry. This is the largest phase in the whole roadmap - a strong candidate for the biggest structural payoff of any of these cleanup milestones, particularly around the MindWave binding machinery (used by opacity, filter parameters, and instrument notes alike by this point). Composer Mode is Phase 4.5's own, not this phase's - see `v0.Y.47.1`'s entry there for its own operation-to-track bookkeeping cleanup.
+
+**Demo:** the full regression suite still passes, unchanged in behavior.
+
+**No Y bump expected.**
+
+---
+
+## Phase 4.5 - Workflow & Device Refinements
+
+Inserted after the fact (following `v0.Y.43.1`), the same reasoning `Phase 2.5`'s own intro and `Phase 3.5`'s own intro already establish for a `.5` phase - added 2026-09-17, from a fresh design-doc pass (`docs/sound-mind-design.md`'s "Additional design principles (2026-09-17)") that surfaced a batch of workflow/device/UI gaps against systems already built: the Layers Panel's own scope frozen at `v0.Y.15.1`'s deliberately minimal first pass, and a real open question about how painting's own geometry should behave, `docs/sound-mind-design.md`'s new "Principal modes" (a third gap from that same pass - device pickers scattered one-per-panel since `v0.Y.18.1` - was instead pulled forward into Phase 4 proper as `v0.Y.42.1`, confirmed with the user, 2026-09-19, since nothing about it actually depended on this phase's own remaining scope). None of this phase's own content depends on anything Phase 4's remaining milestones (Mind Shots & Mind Grains onward) build - it's sequenced here, at the phase boundary, matching every other `.5` phase's own placement, rather than interrupting Phase 4's own in-progress feature work partway through.
 
 ### v0.Y.44.1 - Layers Panel Redesign
 
@@ -659,7 +661,7 @@ Moved here, to the end of Phase 4.5, rather than staying among Phase 4's own Exp
 
 ### v0.Y.47.1 - Refactor & Clean Up
 
-A dedicated pass over everything Phase 4.5 (Workflow & Device Polish, Layers Panel Redesign, Principal Modes, Composer Mode) added, same purpose and scope as `v0.Y.5.1`'s entry. Composer Mode's own operation-to-track bookkeeping is this pass's own likely biggest structural payoff, the same role it would have played in Phase 4's own cleanup had it stayed there.
+A dedicated pass over everything Phase 4.5 (Layers Panel Redesign, Principal Modes, Composer Mode) added, same purpose and scope as `v0.Y.5.1`'s entry - Workflow & Device Polish moved to Phase 4 proper (`v0.Y.42.1`), so `v0.Y.43.1`'s own cleanup already swept it up. Composer Mode's own operation-to-track bookkeeping is this pass's own likely biggest structural payoff, the same role it would have played in Phase 4's own cleanup had it stayed there.
 
 **Demo:** the full regression suite still passes, unchanged in behavior.
 
