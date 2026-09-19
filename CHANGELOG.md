@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.39.3] - 2026-09-19
+
+MindWaves v2, Installment C: the **step-grid generator**. Third installment of the `v0.Y.39.1` milestone; Continuous Controls remains the final installment.
+
+### Added
+
+- **A new "Step Grid" MindWave generator type**, cycling through a hand-typed list of discrete values - a step count spin box plus one plain spin box per step, mirroring the Instrument tool's own harmonic-strengths list. Loops via the same **Period** control every other generator type already has. Defaults to a simple four-step rising staircase.
+
+Full regression: sound-mind-core 720/720 (up from 714), sound-mind-studio all 35 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #110.
+
 ## [0.0.39.2] - 2026-09-19
 
 MindWaves v2, Installment B: the **drawn-shape generator**. Second installment of the `v0.Y.39.1` milestone; the step-grid generator and Continuous Controls remain later installments.

@@ -799,6 +799,71 @@ TEST_CASE("A MindWave loads from JSON missing drawnPath (saved before v0.Y.39.1 
     REQUIRE(restored.drawnPath().nodes().empty());
 }
 
+// --- v0.Y.39.1 Installment C: Step-grid generator ----------------------
+
+TEST_CASE("A fresh StepGrid MindWave has the default four-step rising staircase", "[core][mind_wave]") {
+    const MindWave wave;
+    REQUIRE(wave.stepGridValues() == std::vector<double>{0.25, 0.5, 0.75, 1.0});
+}
+
+TEST_CASE("A StepGrid MindWave returns each step's own value verbatim across one period", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::StepGrid);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(4.0);
+    wave.setStepGridValues({0.1, 0.4, 0.6, 0.9});
+    const auto config = testConfig();
+
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, config) == Catch::Approx(0.1f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{1.0, 1000.0}, config) == Catch::Approx(0.4f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{2.0, 1000.0}, config) == Catch::Approx(0.6f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{3.0, 1000.0}, config) == Catch::Approx(0.9f));
+    // One full period wraps back to the first step.
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{4.0, 1000.0}, config) == Catch::Approx(0.1f));
+}
+
+TEST_CASE("A StepGrid MindWave's own phase offset shifts which step is currently active", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::StepGrid);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(4.0);
+    wave.setStepGridValues({0.1, 0.4, 0.6, 0.9});
+    wave.setPhaseRadians(std::numbers::pi_v<double>);  // Half a cycle - shifts two steps ahead of four.
+
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, testConfig()) == Catch::Approx(0.6f));
+}
+
+TEST_CASE("An empty StepGrid evaluates to neutral 0.5 rather than indexing an empty vector", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::StepGrid);
+    wave.setStepGridValues({});
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, testConfig()) == Catch::Approx(0.5f));
+}
+
+TEST_CASE("A StepGrid MindWave round-trips its own values through JSON", "[core][mind_wave]") {
+    MindWave original;
+    original.setType(GeneratorType::StepGrid);
+    original.setStepGridValues({0.2, 0.4, 0.8});
+
+    const nlohmann::json json = original;
+    const MindWave restored = json.get<MindWave>();
+
+    REQUIRE(restored.type() == GeneratorType::StepGrid);
+    REQUIRE(restored.stepGridValues() == std::vector<double>{0.2, 0.4, 0.8});
+}
+
+TEST_CASE("A MindWave loads from JSON missing stepGridValues (saved before v0.Y.39.1 Installment C) with the "
+          "standard default staircase",
+          "[core][mind_wave]") {
+    MindWave config;
+    nlohmann::json json = config;
+    json.erase("stepGridValues");
+
+    const MindWave restored = json.get<MindWave>();
+
+    REQUIRE(restored.stepGridValues() == std::vector<double>{0.25, 0.5, 0.75, 1.0});
+}
+
 // --- Installment C1: NamedMindWave -----------------------------------
 
 TEST_CASE("A NamedMindWave round-trips through JSON unchanged", "[core][mind_wave]") {

@@ -25,7 +25,11 @@ using MindWaveId = std::uint64_t;
  * `Spatial` deliberately ignores `MindWaveAxis` (see that enum's own docs) -
  * it varies across both canvas axes at once. `v0.Y.39.1` Installment B adds
  * `Drawn` (a hand-drawn `Path`, sampled as a waveform - see `drawnPath()`'s
- * own docs).
+ * own docs). Installment C adds `StepGrid` (explicit, hand-authored discrete
+ * values on a grid of steps - see `stepGridValues()`'s own docs; a distinct
+ * concept from `SteppedNoise`'s own quantized-noise-*staircase*, despite the
+ * similar name - `StepGrid`'s own values are directly authored, never
+ * derived from noise).
  */
 enum class GeneratorType {
     Periodic,
@@ -34,6 +38,7 @@ enum class GeneratorType {
     Spatial,
     Fractal,
     Drawn,
+    StepGrid,
 };
 
 // clang-format off
@@ -44,6 +49,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(GeneratorType, {
     {GeneratorType::Spatial, "spatial"},
     {GeneratorType::Fractal, "fractal"},
     {GeneratorType::Drawn, "drawn"},
+    {GeneratorType::StepGrid, "stepGrid"},
 })
 // clang-format on
 
@@ -242,6 +248,12 @@ NLOHMANN_JSON_SERIALIZE_ENUM(SuperpositionBlendMode, {
  * itself), so `evaluate()` resolves the ambiguity with a **first-crossing
  * rule**: walking the curve from its own start (`t=0`) toward its end
  * (`t=1`), the first point where it crosses the queried position wins.
+ *
+ * **`v0.Y.39.1` Installment C adds `GeneratorType::StepGrid`**
+ * (`stepGridValues()`) - a bare-bones, hand-authored discrete step
+ * sequence rather than a formula-driven shape, looped via `period()` the
+ * same way every other generator type already is (one period divided
+ * evenly into `stepGridValues().size()` steps).
  */
 class MindWave {
 public:
@@ -632,6 +644,39 @@ public:
     void setDrawnPath(Path path) { drawnPath_ = std::move(path); }
 
     /**
+     * @brief The explicit, hand-authored discrete values a
+     *        `GeneratorType::StepGrid` `MindWave` cycles through - see
+     *        `docs/sound-mind-design.md`'s "MindWave Functions" ("Step
+     *        grids ... discrete values on a grid of steps ... for
+     *        rhythmic, mechanical modulation that a smooth curve or
+     *        formula is clumsy at"). `v0.Y.39.1` Installment C.
+     *
+     * A distinct concept from `SteppedNoiseShape::Stepped`'s own
+     * `stepCount()`-driven quantized *staircase* (a formula, deriving its
+     * levels from `stepCount()` alone) - a `StepGrid`'s own values are
+     * directly authored, one per step, with no formula behind them at all.
+     * The step *count* is simply this vector's own size - no separate
+     * count field, avoiding a "two things that must stay in sync"
+     * representation the way `harmonicStrengths()`
+     * (`InstrumentConfiguration`) already avoids one for the same reason.
+     *
+     * @return The current per-step values, in order; each intended to lie
+     *         in `[0, 1]`, though not clamped or validated here. Defaults
+     *         to a plain four-step rising staircase (`{0.25, 0.5, 0.75,
+     *         1.0}`) - visibly doing something the moment it's bound or
+     *         previewed, the same "nothing happens by accident" default
+     *         philosophy `MindWave`'s own constructor docs already
+     *         establish, rather than an empty (and therefore silently
+     *         neutral) list.
+     */
+    [[nodiscard]] const std::vector<double>& stepGridValues() const noexcept { return stepGridValues_; }
+
+    /// @brief Sets the step grid's own values wholesale - see
+    ///        `stepGridValues()`'s own docs.
+    /// @param values The new per-step values, in order.
+    void setStepGridValues(std::vector<double> values) { stepGridValues_ = std::move(values); }
+
+    /**
      * @brief This MindWave's own field value at `point`, after superposing
      *        `superpositionStack()` (if any) on top of its own generator.
      *
@@ -677,6 +722,11 @@ public:
      * span along the queried axis is degenerate (zero width), evaluates to
      * a neutral `0.5` rather than erroring.
      *
+     * `GeneratorType::StepGrid` (`v0.Y.39.1` Installment C) divides one
+     * `period()`-length cycle into `stepGridValues().size()` equal-width
+     * steps and returns whichever step `axisPosition` currently falls in,
+     * verbatim - see `stepGridValues()`'s own docs.
+     *
      * @param point The canvas position to evaluate.
      * @param config Interprets `point`'s own Hz against `config`'s own
      *        frequency range/bin count, needed whenever a bin index is
@@ -713,6 +763,7 @@ private:
     std::vector<MindWave> warpSourceStack_;
     double warpStrength_ = 1.0;
     Path drawnPath_;
+    std::vector<double> stepGridValues_ = {0.25, 0.5, 0.75, 1.0};
 };
 
 /**

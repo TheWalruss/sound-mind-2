@@ -23,4 +23,10 @@ private slots:
     void switchingToDrawnShowsOnlyItsOwnGroup();
     void aFreshlyLoadedDrawnMindWaveWithNoPathShowsTheUncapturedStatus();
     void aLoadedDrawnMindWaveWithACapturedPathShowsTheNodeCountAndIsPreserved();
+
+    // MindWaves v2 Installment C: StepGrid generator (v0.Y.39.1).
+    void switchingToStepGridShowsOnlyItsOwnGroupWithTheDefaultFourSteps();
+    void changingStepGridCountResizesTheValueRows();
+    void changingAStepGridValueEmitsWithTheUpdatedValues();
+    void loadingAStepGridMindWaveSyncsTheCountAndEachStepsOwnValue();
 };

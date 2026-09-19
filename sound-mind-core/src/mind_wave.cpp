@@ -462,6 +462,18 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
             result = static_cast<double>(
                 evaluateDrawnPath(drawnPath_, axis_, axisPosition, safePeriod, phaseRadians_, config));
             break;
+        case GeneratorType::StepGrid: {
+            if (stepGridValues_.empty()) {
+                result = 0.5;  // Nothing to index - see stepGridValues()'s own docs.
+                break;
+            }
+            double p = (axisPosition / safePeriod) + phaseRadians_ / (2.0 * std::numbers::pi_v<double>);
+            p -= std::floor(p);
+            const int safeStepCount = static_cast<int>(stepGridValues_.size());
+            const int index = std::clamp(static_cast<int>(p * safeStepCount), 0, safeStepCount - 1);
+            result = stepGridValues_[static_cast<std::size_t>(index)];
+            break;
+        }
     }
 
     for (const MindWave& member : superpositionStack_) {
@@ -543,6 +555,7 @@ void to_json(nlohmann::json& json, const MindWave& mindWave) {
     json["warpSourceStack"] =
         mindWave.hasWarpSource() ? nlohmann::json::array({mindWave.warpSource()}) : nlohmann::json::array();
     json["drawnPath"] = mindWave.drawnPath();
+    json["stepGridValues"] = mindWave.stepGridValues();
 }
 
 void from_json(const nlohmann::json& json, MindWave& mindWave) {
@@ -589,6 +602,16 @@ void from_json(const nlohmann::json& json, MindWave& mindWave) {
     // already shipped - loaded leniently, falling back to an empty path
     // (the same "nothing captured yet" state a fresh MindWave already has).
     mindWave.setDrawnPath(json.value("drawnPath", Path{}));
+
+    // stepGridValues was added in v0.Y.39.1 Installment C, after MindWave
+    // had already shipped - loaded leniently, falling back to the same
+    // default four-step staircase a fresh MindWave already has (matching
+    // the "reproduces its own prior behavior exactly" convention every
+    // other lenient field here follows: a project saved before StepGrid
+    // existed could never have been of that type anyway, so this default
+    // is never actually load-bearing for pre-Installment-C data - it just
+    // keeps the field itself never empty/uninitialized).
+    mindWave.setStepGridValues(json.value("stepGridValues", std::vector<double>{0.25, 0.5, 0.75, 1.0}));
 }
 
 void to_json(nlohmann::json& json, const NamedMindWave& namedMindWave) {

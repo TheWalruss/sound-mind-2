@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <vector>
+
 #include <QWidget>
 
 #include "sound_mind/core/mind_wave.h"
@@ -9,6 +12,7 @@ class QDoubleSpinBox;
 class QGroupBox;
 class QLabel;
 class QSpinBox;
+class QVBoxLayout;
 
 namespace sound_mind::studio {
 
@@ -44,6 +48,13 @@ namespace sound_mind::studio {
  * (once for the top-level `MindWave`, once for whichever stack member is
  * currently selected) rather than teaching this widget to recurse into
  * `superpositionStack()` itself.
+ *
+ * `v0.Y.39.1` Installment B adds a `GeneratorType::Drawn` group with no
+ * editable controls of its own (see `drawnGroup_`'s own docs); Installment
+ * C adds `GeneratorType::StepGrid`'s own group - a bare-bones step-count
+ * spin box plus one spin box per step (see `rebuildStepGridValueRows()`'s
+ * own docs), the confirmed "no rich visual grid editor" scope for this
+ * milestone.
  */
 class MindWaveEditor : public QWidget {
     Q_OBJECT
@@ -93,6 +104,24 @@ private:
     ///        `GeneratorType::Spatial` - see this class's own docs.
     void updateVisibleGroup();
 
+    /// @brief Rebuilds `stepGridValueSpinBoxes_` to match `count` rows -
+    ///        called whenever `stepGridCountSpinBox_` changes, or a loaded
+    ///        `GeneratorType::StepGrid` MindWave has a different step count
+    ///        than this editor currently shows. Preserves each already-
+    ///        displayed row's own current value where a row at that index
+    ///        already existed; a newly-added row starts at `0.5` - the same
+    ///        "shrink/grow in place, preserve survivors" shape
+    ///        `ToolConfigurationPanel::rebuildHarmonicStrengthRows()`
+    ///        already establishes for `InstrumentConfiguration`'s own
+    ///        harmonic series.
+    /// @param count The new number of step rows to show.
+    void rebuildStepGridValueRows(std::size_t count);
+
+    /// @brief Reads every one of `stepGridValueSpinBoxes_`'s own current
+    ///        values, in order.
+    /// @return The step values currently displayed.
+    [[nodiscard]] std::vector<double> currentStepGridValues() const;
+
     sound_mind::core::MindWave wave_;
 
     QComboBox* generatorTypeCombo_ = nullptr;
@@ -136,6 +165,17 @@ private:
     ///        purely a read-only status display (`drawnStatusLabel_`).
     QGroupBox* drawnGroup_ = nullptr;
     QLabel* drawnStatusLabel_ = nullptr;
+
+    /// @brief `GeneratorType::StepGrid`'s own group - `v0.Y.39.1`
+    ///        Installment C. A bare-bones step-count spin box plus one
+    ///        spin box per step, mirroring `ToolConfigurationPanel`'s own
+    ///        harmonic-strengths list exactly (see
+    ///        `rebuildStepGridValueRows()`'s own docs) - no rich visual
+    ///        grid editor, per the milestone's own confirmed scope.
+    QGroupBox* stepGridGroup_ = nullptr;
+    QSpinBox* stepGridCountSpinBox_ = nullptr;
+    QVBoxLayout* stepGridValuesLayout_ = nullptr;
+    std::vector<QDoubleSpinBox*> stepGridValueSpinBoxes_;
 };
 
 }  // namespace sound_mind::studio

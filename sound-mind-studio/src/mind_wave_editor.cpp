@@ -25,13 +25,14 @@ using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::SpatialPattern;
 using sound_mind::core::SteppedNoiseShape;
 
-constexpr std::array<std::pair<GeneratorType, const char*>, 6> kGeneratorTypes{{
+constexpr std::array<std::pair<GeneratorType, const char*>, 7> kGeneratorTypes{{
     {GeneratorType::Periodic, "Periodic"},
     {GeneratorType::Envelope, "Envelope"},
     {GeneratorType::SteppedNoise, "Stepped/Noise"},
     {GeneratorType::Spatial, "Spatial"},
     {GeneratorType::Fractal, "Fractal"},
     {GeneratorType::Drawn, "Drawn"},
+    {GeneratorType::StepGrid, "Step Grid"},
 }};
 
 constexpr std::array<std::pair<MindWaveAxis, const char*>, 2> kAxes{{
@@ -330,7 +331,44 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     drawnLayout->addWidget(drawnStatusLabel_);
     root->addWidget(drawnGroup_);
 
+    stepGridGroup_ = new QGroupBox(tr("Step Grid"), this);
+    stepGridGroup_->setObjectName(QStringLiteral("stepGridGroup"));
+    auto* stepGridLayout = new QVBoxLayout(stepGridGroup_);
+
+    auto* stepGridForm = new QFormLayout();
+    stepGridCountSpinBox_ = new QSpinBox(stepGridGroup_);
+    stepGridCountSpinBox_->setObjectName(QStringLiteral("stepGridCountSpinBox"));
+    stepGridCountSpinBox_->setRange(1, 32);
+    connect(stepGridCountSpinBox_, &QSpinBox::valueChanged, this, [this](int count) {
+        rebuildStepGridValueRows(static_cast<std::size_t>(count));
+        wave_.setStepGridValues(currentStepGridValues());
+        emitChanged();
+    });
+    stepGridForm->addRow(tr("Steps:"), stepGridCountSpinBox_);
+    stepGridLayout->addLayout(stepGridForm);
+
+    stepGridLayout->addWidget(new QLabel(tr("Step Values:"), stepGridGroup_));
+    stepGridValuesLayout_ = new QVBoxLayout();
+    stepGridLayout->addLayout(stepGridValuesLayout_);
+    root->addWidget(stepGridGroup_);
+
     root->addStretch();
+
+    // Seeded from wave_'s own default stepGridValues() (present regardless
+    // of its own default type) - the same "build the Instrument group's
+    // rows from config_'s own defaults even while Procedural is selected"
+    // reasoning ToolConfigurationPanel's own constructor already uses, so
+    // switching to StepGrid for the first time shows a real, already-
+    // populated sequence rather than an empty one.
+    rebuildStepGridValueRows(wave_.stepGridValues().size());
+    {
+        const QSignalBlocker blocker(stepGridCountSpinBox_);
+        stepGridCountSpinBox_->setValue(static_cast<int>(stepGridValueSpinBoxes_.size()));
+    }
+    for (std::size_t i = 0; i < stepGridValueSpinBoxes_.size() && i < wave_.stepGridValues().size(); ++i) {
+        const QSignalBlocker blocker(stepGridValueSpinBoxes_[i]);
+        stepGridValueSpinBoxes_[i]->setValue(wave_.stepGridValues()[i]);
+    }
 
     updateVisibleGroup();
 }
@@ -349,6 +387,7 @@ void MindWaveEditor::updateVisibleGroup() {
     spatialGroup_->setVisible(type == GeneratorType::Spatial);
     fractalGroup_->setVisible(type == GeneratorType::Fractal);
     drawnGroup_->setVisible(type == GeneratorType::Drawn);
+    stepGridGroup_->setVisible(type == GeneratorType::StepGrid);
 }
 
 void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
@@ -414,7 +453,56 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
             : tr("No shape captured yet. Draw a stroke, switch to Pick and select it, then use Edit -> Use Picked "
                  "Path as MindWave Shape."));
 
+    rebuildStepGridValueRows(wave_.stepGridValues().size());
+    {
+        const QSignalBlocker blocker(stepGridCountSpinBox_);
+        stepGridCountSpinBox_->setValue(static_cast<int>(stepGridValueSpinBoxes_.size()));
+    }
+    for (std::size_t i = 0; i < stepGridValueSpinBoxes_.size(); ++i) {
+        const QSignalBlocker blocker(stepGridValueSpinBoxes_[i]);
+        stepGridValueSpinBoxes_[i]->setValue(wave_.stepGridValues()[i]);
+    }
+
     updateVisibleGroup();
+}
+
+void MindWaveEditor::rebuildStepGridValueRows(std::size_t count) {
+    // Same immediate-delete, no deleteLater() reasoning
+    // ToolConfigurationPanel::rebuildHarmonicStrengthRows()'s own docs
+    // give - shrinking is only ever triggered by stepGridCountSpinBox_'s
+    // own change or a fresh setMindWave() sync, never by one of these very
+    // spin boxes' own signal still on the call stack.
+    while (stepGridValueSpinBoxes_.size() > count) {
+        QDoubleSpinBox* spinBox = stepGridValueSpinBoxes_.back();
+        stepGridValueSpinBoxes_.pop_back();
+        stepGridValuesLayout_->removeWidget(spinBox);
+        delete spinBox;
+    }
+    while (stepGridValueSpinBoxes_.size() < count) {
+        const int stepNumber = static_cast<int>(stepGridValueSpinBoxes_.size()) + 1;
+        auto* spinBox = new QDoubleSpinBox(stepGridGroup_);
+        spinBox->setObjectName(QStringLiteral("stepGridValueSpinBox%1").arg(stepNumber));
+        spinBox->setRange(0.0, 1.0);
+        spinBox->setSingleStep(0.05);
+        spinBox->setDecimals(3);
+        spinBox->setValue(0.5);
+        spinBox->setPrefix(tr("Step %1: ").arg(stepNumber));
+        connect(spinBox, &QDoubleSpinBox::valueChanged, this, [this](double) {
+            wave_.setStepGridValues(currentStepGridValues());
+            emitChanged();
+        });
+        stepGridValuesLayout_->addWidget(spinBox);
+        stepGridValueSpinBoxes_.push_back(spinBox);
+    }
+}
+
+std::vector<double> MindWaveEditor::currentStepGridValues() const {
+    std::vector<double> values;
+    values.reserve(stepGridValueSpinBoxes_.size());
+    for (const QDoubleSpinBox* spinBox : stepGridValueSpinBoxes_) {
+        values.push_back(spinBox->value());
+    }
+    return values;
 }
 
 }  // namespace sound_mind::studio

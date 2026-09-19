@@ -552,7 +552,7 @@ Extends `v0.Y.31.1` (MindWaves v1) Installment D's own MindWave-binding mechanis
 
 Field operators (Warp, Reduce), drawn-shape and step-grid generator types, and the continuous shape/skew/character controls.
 
-**Scoped in a dedicated planning pass per installment** (confirmed with the user, 2026-09-19), the same pattern every prior multi-installment milestone followed: **Installment A - Warp + Reduce field operators, plus Reduce wired into Sound Mind Instruments as vibrato/tremolo** (`v0.0.39.1` - see `docs/sound-mind-architecture.md`'s Decision #108) and **Installment B - drawn-shape generator** (`v0.0.39.2` - Decision #109) are done. **Installment C - step-grid generator** (a bare-bones step-count + per-step spin box list) and **Installment D - Continuous Controls** (a best-effort placeholder shape/skew/character mapping, explicitly flagged as subject to revision once `docs/sound-mind-design.md`'s own promised interaction-design pass for MindWaves happens) remain scheduled, later installments of this same milestone.
+**Scoped in a dedicated planning pass per installment** (confirmed with the user, 2026-09-19), the same pattern every prior multi-installment milestone followed: **Installment A - Warp + Reduce field operators, plus Reduce wired into Sound Mind Instruments as vibrato/tremolo** (`v0.0.39.1` - see `docs/sound-mind-architecture.md`'s Decision #108), **Installment B - drawn-shape generator** (`v0.0.39.2` - Decision #109), and **Installment C - step-grid generator** (`v0.0.39.3` - Decision #110) are done. **Installment D - Continuous Controls** (a best-effort placeholder shape/skew/character mapping, explicitly flagged as subject to revision once `docs/sound-mind-design.md`'s own promised interaction-design pass for MindWaves happens) remains scheduled, the final installment of this same milestone.
 
 As shipped (Installment A):
 
@@ -568,7 +568,13 @@ As shipped (Installment B):
 - **Output normalizes against the path's own recorded bounding box** (confirmed with the user over the project's global frequency/time range) - "what you drew is what you get": the lowest point drawn maps to field value `0`, the highest to `1`, independent of canvas geometry.
 - **MindWaveEditor's own Drawn group has no editable controls of its own** - just a read-only status label (node count, or capture instructions if nothing's been captured yet), since authoring happens externally via the Pick-and-apply workflow above, not through numeric fields in this editor.
 
-**Demo:** a MindWave built from a hand-drawn Path, reduced to a plain time-varying control signal. *(The Reduce half of this demo already exists, from Installment A; the drawn-shape half now exists too, as of this installment - draw a curve, Pick it, Edit -> Use Picked Path as MindWave Shape, then bind that MindWave to an Instrument's vibrato/tremolo per Installment A's own wiring to hear it.)*
+As shipped (Installment C):
+
+- **Step-grid generator**: a new `GeneratorType::StepGrid`, cycling through `stepGridValues()` - explicit, hand-authored discrete values, one per step, with no formula behind them at all (a deliberately distinct concept from the already-shipped `SteppedNoiseShape::Stepped`'s own quantized *noise* staircase, despite the similar name). Looped via `period()` the same way every other generator type already is - one period divided evenly into `stepGridValues().size()` equal-width steps.
+- **Bare-bones UI, per the milestone's own confirmed scope**: a step-count spin box plus one plain spin box per step (each `[0, 1]`), mirroring `ToolConfigurationPanel`'s own harmonic-strengths list for `InstrumentConfiguration` exactly - no rich visual grid editor.
+- **Defaults to a visibly-doing-something four-step rising staircase** (`{0.25, 0.5, 0.75, 1.0}`), not an empty (and therefore silently neutral) list - the same "nothing happens by accident" default philosophy `MindWave`'s own constructor already establishes for every other generator type.
+
+**Demo:** a MindWave built from a hand-drawn Path, reduced to a plain time-varying control signal. *(The Reduce half of this demo already exists, from Installment A; the drawn-shape half now exists too, as of Installment B - draw a curve, Pick it, Edit -> Use Picked Path as MindWave Shape, then bind that MindWave to an Instrument's vibrato/tremolo per Installment A's own wiring to hear it. Installment C's own demo: a step-grid MindWave bound to the same vibrato/tremolo wiring for crisp, mechanical rhythmic modulation instead of a smooth curve.)*
 
 ### v0.Y.40.1 - Chords/Arpeggiator/Sequencer
 

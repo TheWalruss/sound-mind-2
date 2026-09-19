@@ -252,3 +252,59 @@ void MindWaveEditorTest::aLoadedDrawnMindWaveWithACapturedPathShowsTheNodeCountA
     // establishes for the superposition stack/blend mode.
     QCOMPARE(editor.mindWave().drawnPath().nodes().size(), std::size_t{2});
 }
+
+void MindWaveEditorTest::switchingToStepGridShowsOnlyItsOwnGroupWithTheDefaultFourSteps() {
+    MindWaveEditor editor;
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+
+    combo->setCurrentIndex(combo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::StepGrid))));
+
+    QCOMPARE(editor.mindWave().type(), GeneratorType::StepGrid);
+    QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("stepGridGroup"))->isHidden());
+    QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("periodicGroup"))->isHidden());
+    QCOMPARE(editor.findChild<QSpinBox*>(QStringLiteral("stepGridCountSpinBox"))->value(), 4);
+    QVERIFY(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox4")) != nullptr);
+}
+
+void MindWaveEditorTest::changingStepGridCountResizesTheValueRows() {
+    MindWaveEditor editor;
+    auto* generatorCombo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+    generatorCombo->setCurrentIndex(generatorCombo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::StepGrid))));
+    auto* countSpinBox = editor.findChild<QSpinBox*>(QStringLiteral("stepGridCountSpinBox"));
+
+    countSpinBox->setValue(2);
+    QVERIFY(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox3")) == nullptr);
+    QCOMPARE(editor.mindWave().stepGridValues().size(), std::size_t{2});
+
+    countSpinBox->setValue(5);
+    QVERIFY(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox5")) != nullptr);
+    QCOMPARE(editor.mindWave().stepGridValues().size(), std::size_t{5});
+}
+
+void MindWaveEditorTest::changingAStepGridValueEmitsWithTheUpdatedValues() {
+    MindWaveEditor editor;
+    auto* generatorCombo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+    generatorCombo->setCurrentIndex(generatorCombo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::StepGrid))));
+    std::optional<MindWave> received;
+    connect(&editor, &MindWaveEditor::mindWaveChanged, [&](const MindWave& wave) { received = wave; });
+
+    editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox2"))->setValue(0.1);
+
+    QVERIFY(received.has_value());
+    QCOMPARE(received->stepGridValues()[1], 0.1);
+}
+
+void MindWaveEditorTest::loadingAStepGridMindWaveSyncsTheCountAndEachStepsOwnValue() {
+    MindWaveEditor editor;
+    MindWave wave;
+    wave.setType(GeneratorType::StepGrid);
+    wave.setStepGridValues({0.2, 0.4, 0.6});
+
+    editor.setMindWave(wave);
+
+    QCOMPARE(editor.findChild<QSpinBox*>(QStringLiteral("stepGridCountSpinBox"))->value(), 3);
+    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox1"))->value(), 0.2);
+    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox2"))->value(), 0.4);
+    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox3"))->value(), 0.6);
+    QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("stepGridGroup"))->isHidden());
+}
