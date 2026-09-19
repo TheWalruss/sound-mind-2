@@ -26,6 +26,24 @@ void writeCommonToolConfigurationFields(nlohmann::json& json, const ToolConfigur
 /// @brief The inverse of writeCommonToolConfigurationFields() - reads
 /// `json`'s own base-class fields back into `config`. Shared here rather
 /// than repeated per `toolConfigurationFromJson()` branch.
+/// @brief Writes `mindWaveId` under `key`, only if present - the same
+/// "only write if present" convention `filter_configuration.cpp`'s own
+/// identical helper already establishes, duplicated here rather than
+/// shared across modules for the same reason `MindWaveId` itself is
+/// duplicated (see this header's own docs on that alias).
+void writeOptionalMindWaveId(nlohmann::json& json, const char* key, std::optional<MindWaveId> mindWaveId) {
+    if (mindWaveId.has_value()) {
+        json[key] = *mindWaveId;
+    }
+}
+
+/// @brief The inverse of writeOptionalMindWaveId() - `std::nullopt` if
+/// `key` is absent (a configuration saved before `v0.Y.39.1` was never
+/// bound anyway).
+std::optional<MindWaveId> readOptionalMindWaveId(const nlohmann::json& json, const char* key) {
+    return json.contains(key) ? std::optional(json.at(key).get<MindWaveId>()) : std::nullopt;
+}
+
 void readCommonToolConfigurationFields(const nlohmann::json& json, ToolConfiguration& config) {
     config.setName(json.at("name").get<std::string>());
     config.setFalloff(json.at("falloff").get<float>());
@@ -54,6 +72,10 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config) {
         writeCommonToolConfigurationFields(json, config);
         json["harmonicStrengths"] = instrument->harmonicStrengths();
         json["inharmonicity"] = instrument->inharmonicity();
+        writeOptionalMindWaveId(json, "vibratoMindWaveId", instrument->vibratoMindWave());
+        json["vibratoDepthSemitones"] = instrument->vibratoDepthSemitones();
+        writeOptionalMindWaveId(json, "tremoloMindWaveId", instrument->tremoloMindWave());
+        json["tremoloDepth"] = instrument->tremoloDepth();
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(&config)) {
         writeCommonToolConfigurationFields(json, config);
         if (const auto sourceId = mindShot->sourceMindShotId(); sourceId.has_value()) {
@@ -105,6 +127,14 @@ std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::jso
         auto instrument = std::make_unique<InstrumentConfiguration>();
         instrument->setHarmonicStrengths(json.at("harmonicStrengths").get<std::vector<double>>());
         instrument->setInharmonicity(json.at("inharmonicity").get<double>());
+        // Vibrato/tremolo were added in v0.Y.39.1, after InstrumentConfiguration
+        // had already shipped and been saved in real project files - loaded
+        // leniently (json.value(...)/readOptionalMindWaveId()) so older saved
+        // projects with none of these fields still load cleanly, unbound.
+        instrument->setVibratoMindWave(readOptionalMindWaveId(json, "vibratoMindWaveId"));
+        instrument->setVibratoDepthSemitones(json.value("vibratoDepthSemitones", 0.5));
+        instrument->setTremoloMindWave(readOptionalMindWaveId(json, "tremoloMindWaveId"));
+        instrument->setTremoloDepth(json.value("tremoloDepth", 0.3));
         config = std::move(instrument);
     } else if (type == ToolType::MindShot) {
         auto mindShot = std::make_unique<MindShotConfiguration>();

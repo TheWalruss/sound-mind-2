@@ -15,6 +15,7 @@
 #include "sound_mind/studio/mind_wave_controller.h"
 #include "sound_mind/studio/mind_wave_editor.h"
 #include "sound_mind/studio/mind_waves_panel.h"
+#include "sound_mind/studio/tool_configuration_panel.h"
 
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
@@ -28,6 +29,7 @@ using sound_mind::studio::LayersPanel;
 using sound_mind::studio::MindWaveController;
 using sound_mind::studio::MindWaveEditor;
 using sound_mind::studio::MindWavesPanel;
+using sound_mind::studio::ToolConfigurationPanel;
 
 namespace {
 
@@ -48,8 +50,10 @@ struct Fixture {
     MindWavesPanel mindWavesPanel;
     LayersPanel layersPanel;
     FilterConfigurationPanel filterConfigurationPanel;
+    ToolConfigurationPanel toolConfigurationPanel;
     CanvasWidget canvas;
-    MindWaveController controller{&mindWavesPanel, &layersPanel, &filterConfigurationPanel, &canvas};
+    MindWaveController controller{&mindWavesPanel, &layersPanel, &filterConfigurationPanel, &toolConfigurationPanel,
+                                   &canvas};
 };
 
 }  // namespace

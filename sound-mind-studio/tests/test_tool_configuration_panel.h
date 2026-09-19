@@ -32,6 +32,14 @@ private slots:
     void changingInharmonicityEmitsToolConfigurationChanged();
     void loadingAnInstrumentConfigurationSyncsToolTypeAndHarmonicControls();
 
+    // MindWaves v2 Installment A: Instrument vibrato/tremolo (v0.Y.39.1).
+    void setAvailableMindWavesPopulatesBothVibratoAndTremoloCombos();
+    void changingVibratoDepthEmitsToolConfigurationChanged();
+    void changingTheVibratoComboEmitsToolConfigurationChangedWithTheNewBinding();
+    void selectingNoneOnTheTremoloComboUnbindsAndEmits();
+    void loadingAnInstrumentConfigurationSyncsVibratoAndTremoloControls();
+    void switchingAwayFromAndBackToInstrumentPreservesVibratoAndTremoloBindings();
+
     // Mind Shots (v0.Y.33.1 Installment A).
     void switchingToolTypeToMindShotShowsItsOwnGroupAndHidesProcedural();
     void setProjectPopulatesTheMindShotCombo();

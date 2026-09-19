@@ -312,6 +312,29 @@ void applyProceduralPaintOperation(const PaintOperation& operation, const Proced
     }
 }
 
+/// @brief How many samples `reduceMindWaveToSignal()` produces for a
+/// vibrato/tremolo modulator - dense enough that linear interpolation
+/// between adjacent samples (see `sampleAtProgress()`) is indistinguishable
+/// from the underlying MindWave's own continuous shape for any waveform
+/// this codebase generates.
+constexpr std::uint32_t kModulatorSampleCount = 256;
+
+/// @brief Reads `signal` (a periodic, one-cycle-long modulator from
+/// `reduceMindWaveToSignal()`) at continuous `progress` (0..1, wrapping past
+/// 1 the same way `progress`'s own source - a stroke's `pathT` - repeats
+/// for a new note), linearly interpolating between the two nearest samples.
+float sampleAtProgress(const std::vector<float>& signal, float progress) {
+    if (signal.empty()) {
+        return 0.5f;  // Neutral (see reduceMindWaveToSignal()'s own [0, 1] range) - never hit while empty-guarded by callers.
+    }
+    float wrapped = progress - std::floor(progress);
+    const float scaled = wrapped * static_cast<float>(signal.size());
+    const std::size_t indexLow = static_cast<std::size_t>(std::floor(scaled)) % signal.size();
+    const std::size_t indexHigh = (indexLow + 1) % signal.size();
+    const float fraction = scaled - std::floor(scaled);
+    return signal[indexLow] + (signal[indexHigh] - signal[indexLow]) * fraction;
+}
+
 /// @brief `InstrumentConfiguration`'s own stamp: one bin-exact spike per
 /// harmonic above each sample's own frequency (see
 /// `InstrumentConfiguration::inharmonicity()`'s own docs for the stretched-
@@ -321,9 +344,27 @@ void applyProceduralPaintOperation(const PaintOperation& operation, const Proced
 /// axis alone) and scaled by that harmonic's own strength - no frequency-
 /// axis blending, since a harmonic partial is a single exact frequency, not
 /// a 2D geometric blob.
+///
+/// **`v0.Y.39.1` Installment A adds vibrato/tremolo**: `toolConfig`'s own
+/// `vibratoMindWave()`/`tremoloMindWave()` ids (this specific operation's
+/// own snapshot, not some externally-supplied "current" binding - see
+/// `MindWaveResolver`'s own docs for why that distinction matters for a
+/// replayed operation history) are resolved via `resolveMindWave`, then
+/// each bound MindWave is collapsed once per stroke into a 1D signal via
+/// `reduceMindWaveToSignal(..., wave.period(), ReduceMode::Integrate)`, then
+/// sampled per stamp at that stamp's own `sample.pathT` (`sampleAtProgress()`)
+/// - a stroke-relative progress fraction, not a genuine per-note retrigger
+/// (see `InstrumentConfiguration`'s own class docs for why this sidesteps
+/// the separate, still-unbuilt "operation-relative MindWave binding"
+/// architecture). Vibrato bends `harmonicHz` before the bin/maxFrequency
+/// checks below (so a bent-sharp harmonic can legitimately fall outside the
+/// encoded range and be skipped, the same as any other harmonic); tremolo
+/// scales `strength` before the falloff weight is computed, exactly like a
+/// harmonic's own static strength would.
 void applyInstrumentPaintOperation(const PaintOperation& operation, const InstrumentConfiguration& toolConfig,
                                     const std::vector<StrokeSample>& samples,
-                                    sound_mind::codec::StreamImage& content) {
+                                    sound_mind::codec::StreamImage& content,
+                                    const MindWaveResolver& resolveMindWave) {
     const double frameRadius =
         timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
     if (frameRadius <= 0.0) {
@@ -343,6 +384,24 @@ void applyInstrumentPaintOperation(const PaintOperation& operation, const Instru
     const float maxFrequencyHz =
         std::min(content.config.maxFrequencyHz, static_cast<float>(content.config.sampleRateHz) / 2.0f);
 
+    const MindWave* vibratoWave = (resolveMindWave && toolConfig.vibratoMindWave().has_value())
+                                       ? resolveMindWave(*toolConfig.vibratoMindWave())
+                                       : nullptr;
+    const MindWave* tremoloWave = (resolveMindWave && toolConfig.tremoloMindWave().has_value())
+                                       ? resolveMindWave(*toolConfig.tremoloMindWave())
+                                       : nullptr;
+
+    // Computed once per stroke, not per stamp/harmonic - see this
+    // function's own docs on the pathT-sampled Reduce mechanism.
+    const std::vector<float> vibratoSignal =
+        vibratoWave ? reduceMindWaveToSignal(*vibratoWave, content.config, kModulatorSampleCount,
+                                              vibratoWave->period(), ReduceMode::Integrate)
+                    : std::vector<float>{};
+    const std::vector<float> tremoloSignal =
+        tremoloWave ? reduceMindWaveToSignal(*tremoloWave, content.config, kModulatorSampleCount,
+                                              tremoloWave->period(), ReduceMode::Integrate)
+                    : std::vector<float>{};
+
     for (const StrokeSample& sample : samples) {
         const GradientStop target = operation.path().gradient().evaluate(sample.pathT);
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
@@ -350,14 +409,27 @@ void applyInstrumentPaintOperation(const PaintOperation& operation, const Instru
         const auto frameHigh =
             std::min(static_cast<int>(content.frameCount) - 1, static_cast<int>(std::ceil(frameCenter + frameRadius)));
 
+        // Vibrato bends pitch symmetrically around the unmodulated harmonic
+        // series; tremolo dips strength toward silence - see this
+        // function's own docs for both formulas. Neutral (1.0) while the
+        // corresponding MindWave doesn't resolve to a binding.
+        const double pitchBendFactor =
+            vibratoWave ? std::pow(2.0, toolConfig.vibratoDepthSemitones() / 12.0 *
+                                             (2.0 * sampleAtProgress(vibratoSignal, sample.pathT) - 1.0))
+                        : 1.0;
+        const double tremoloMultiplier =
+            tremoloWave ? 1.0 - toolConfig.tremoloDepth() * (1.0 - sampleAtProgress(tremoloSignal, sample.pathT))
+                        : 1.0;
+
         const double fundamentalHz = sample.point.frequencyHz;
         for (std::size_t harmonicIndex = 0; harmonicIndex < strengths.size(); ++harmonicIndex) {
-            const double strength = strengths[harmonicIndex];
+            const double strength = strengths[harmonicIndex] * tremoloMultiplier;
             if (strength <= 0.0) {
                 continue;
             }
             const double n = static_cast<double>(harmonicIndex + 1);
-            const double harmonicHz = n * fundamentalHz * std::sqrt(1.0 + toolConfig.inharmonicity() * n * n);
+            const double harmonicHz =
+                n * fundamentalHz * std::sqrt(1.0 + toolConfig.inharmonicity() * n * n) * pitchBendFactor;
             if (harmonicHz > static_cast<double>(maxFrequencyHz)) {
                 continue;
             }
@@ -1114,7 +1186,8 @@ FrameBinRange rangeFor(const TimeFrequencyRect& bounds, const sound_mind::codec:
 }
 
 void applyPaintOperation(const PaintOperation& operation, double frequencyToTimeScale,
-                          sound_mind::codec::StreamImage& content, const LayerContentResolver& resolveLayerContent) {
+                          sound_mind::codec::StreamImage& content, const LayerContentResolver& resolveLayerContent,
+                          const MindWaveResolver& resolveMindWave) {
     if (frequencyToTimeScale <= 0.0 || content.frameCount == 0 || content.config.binCount == 0) {
         return;
     }
@@ -1134,7 +1207,7 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
     if (const auto* procedural = dynamic_cast<const ProceduralConfiguration*>(&toolConfig)) {
         applyProceduralPaintOperation(operation, *procedural, samples, frequencyToTimeScale, content);
     } else if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(&toolConfig)) {
-        applyInstrumentPaintOperation(operation, *instrument, samples, content);
+        applyInstrumentPaintOperation(operation, *instrument, samples, content, resolveMindWave);
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(&toolConfig)) {
         applyMindShotPaintOperation(*mindShot, samples, content);
     } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(&toolConfig)) {
@@ -1156,11 +1229,12 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
 sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::StreamImage& base,
                                                        const std::vector<const Operation*>& operations,
                                                        double frequencyToTimeScale,
-                                                       const LayerContentResolver& resolveLayerContent) {
+                                                       const LayerContentResolver& resolveLayerContent,
+                                                       const MindWaveResolver& resolveMindWave) {
     sound_mind::codec::StreamImage result = base;
     for (const Operation* operation : operations) {
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation)) {
-            applyPaintOperation(*paint, frequencyToTimeScale, result, resolveLayerContent);
+            applyPaintOperation(*paint, frequencyToTimeScale, result, resolveLayerContent, resolveMindWave);
         } else if (const auto* fill = dynamic_cast<const FillOperation*>(operation)) {
             applyFillOperation(*fill, result);
         } else if (const auto* paste = dynamic_cast<const PasteOperation*>(operation)) {

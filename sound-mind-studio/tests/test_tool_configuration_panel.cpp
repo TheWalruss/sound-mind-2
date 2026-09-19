@@ -33,6 +33,7 @@ using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::MindShotId;
+using sound_mind::core::MindWaveId;
 using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
@@ -384,6 +385,104 @@ void ToolConfigurationPanelTest::loadingAnInstrumentConfigurationSyncsToolTypeAn
     QVERIFY(secondHarmonicSpinBox != nullptr);
     QCOMPARE(secondHarmonicSpinBox->value(), 0.7);
     QVERIFY(!instrumentGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::setAvailableMindWavesPopulatesBothVibratoAndTremoloCombos() {
+    ToolConfigurationPanel panel;
+
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")},
+                                  {MindWaveId{6}, QStringLiteral("Fast Pulse")}});
+
+    for (const auto& comboName : {QStringLiteral("vibratoMindWaveCombo"), QStringLiteral("tremoloMindWaveCombo")}) {
+        auto* combo = panel.findChild<QComboBox*>(comboName);
+        QVERIFY(combo != nullptr);
+        QCOMPARE(combo->count(), 3);  // None + two MindWaves.
+        QCOMPARE(combo->itemText(1), QStringLiteral("Slow Pulse"));
+        QCOMPARE(combo->itemText(2), QStringLiteral("Fast Pulse"));
+    }
+}
+
+void ToolConfigurationPanelTest::changingVibratoDepthEmitsToolConfigurationChanged() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    auto* vibratoDepthSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("vibratoDepthSpinBox"));
+    QVERIFY(vibratoDepthSpinBox != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    vibratoDepthSpinBox->setValue(2.5);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).vibratoDepthSemitones(), 2.5);
+}
+
+void ToolConfigurationPanelTest::changingTheVibratoComboEmitsToolConfigurationChangedWithTheNewBinding() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    panel.findChild<QComboBox*>(QStringLiteral("vibratoMindWaveCombo"))->setCurrentIndex(1);  // "Slow Pulse".
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).vibratoMindWave(),
+              std::optional<MindWaveId>(MindWaveId{5}));
+    // Tremolo is untouched.
+    QVERIFY(!dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).tremoloMindWave().has_value());
+}
+
+void ToolConfigurationPanelTest::selectingNoneOnTheTremoloComboUnbindsAndEmits() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("tremoloMindWaveCombo"));
+    combo->setCurrentIndex(1);  // Bind first.
+    QVERIFY(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).tremoloMindWave().has_value());
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    combo->setCurrentIndex(0);  // "None".
+
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(!dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).tremoloMindWave().has_value());
+}
+
+void ToolConfigurationPanelTest::loadingAnInstrumentConfigurationSyncsVibratoAndTremoloControls() {
+    ToolConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    InstrumentConfiguration config;
+    config.setVibratoMindWave(MindWaveId{5});
+    config.setVibratoDepthSemitones(1.5);
+    config.setTremoloDepth(0.4);
+
+    panel.setToolConfiguration(config);
+
+    auto* vibratoCombo = panel.findChild<QComboBox*>(QStringLiteral("vibratoMindWaveCombo"));
+    auto* vibratoDepthSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("vibratoDepthSpinBox"));
+    auto* tremoloCombo = panel.findChild<QComboBox*>(QStringLiteral("tremoloMindWaveCombo"));
+    auto* tremoloDepthSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("tremoloDepthSpinBox"));
+
+    QCOMPARE(vibratoCombo->currentText(), QStringLiteral("Slow Pulse"));
+    QCOMPARE(vibratoDepthSpinBox->value(), 1.5);
+    QCOMPARE(tremoloCombo->currentText(), QStringLiteral("None"));
+    QCOMPARE(tremoloDepthSpinBox->value(), 0.4);
+}
+
+void ToolConfigurationPanelTest::switchingAwayFromAndBackToInstrumentPreservesVibratoAndTremoloBindings() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    panel.findChild<QComboBox*>(QStringLiteral("vibratoMindWaveCombo"))->setCurrentIndex(1);
+    panel.findChild<QDoubleSpinBox*>(QStringLiteral("vibratoDepthSpinBox"))->setValue(3.0);
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Procedural")));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+
+    const auto& instrument = dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(instrument.vibratoMindWave(), std::optional<MindWaveId>(MindWaveId{5}));
+    QCOMPARE(instrument.vibratoDepthSemitones(), 3.0);
 }
 
 // --- Mind Shots (v0.Y.33.1 Installment A) -----------------------------------

@@ -189,10 +189,20 @@ void PaintController::rebuildLayerContentAndCascade(sound_mind::core::LayerId la
         return (layer != nullptr && layer->content().has_value()) ? &*layer->content() : nullptr;
     };
 
+    // Resolves an InstrumentConfiguration's own vibrato/tremolo MindWaveId
+    // for a replayed PaintOperation (see paint_application.h's own
+    // MindWaveResolver docs) - reading straight from the live Project, the
+    // same "resolved fresh, not a snapshot" contract every other MindWave
+    // binding in this codebase already keeps.
+    const auto resolveMindWave = [project](sound_mind::core::MindWaveId id) -> const sound_mind::core::MindWave* {
+        const sound_mind::core::NamedMindWave* named = project->mindWaveById(id);
+        return named != nullptr ? &named->wave : nullptr;
+    };
+
     const auto activeOperations = project_->operationLog().activeOperationsTargeting(layer);
     sound_mind::codec::StreamImage rebuilt = sound_mind::core::rebuildPaintedContent(
         baseContent_.at(layer), activeOperations, sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
-        resolveLayerContent);
+        resolveLayerContent, resolveMindWave);
     target->setContent(std::move(rebuilt));
 
     emit contentChanged(layer);

@@ -8,6 +8,7 @@
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/mind_waves_panel.h"
+#include "sound_mind/studio/tool_configuration_panel.h"
 
 namespace sound_mind::studio {
 
@@ -45,12 +46,14 @@ QString nextDefaultName(const std::vector<NamedMindWave>& entries) {
 }  // namespace
 
 MindWaveController::MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel,
-                                        FilterConfigurationPanel* filterConfigurationPanel, CanvasWidget* canvas,
+                                        FilterConfigurationPanel* filterConfigurationPanel,
+                                        ToolConfigurationPanel* toolConfigurationPanel, CanvasWidget* canvas,
                                         QObject* parent)
     : QObject(parent),
       mindWavesPanel_(mindWavesPanel),
       layersPanel_(layersPanel),
       filterConfigurationPanel_(filterConfigurationPanel),
+      toolConfigurationPanel_(toolConfigurationPanel),
       canvas_(canvas) {
     connect(mindWavesPanel_, &MindWavesPanel::previewToggled, this, &MindWaveController::updateMindWavePreview);
     connect(mindWavesPanel_, &MindWavesPanel::selectionChanged, this, &MindWaveController::updateMindWavePreview);
@@ -101,6 +104,7 @@ void MindWaveController::refreshMindWavesPanel() {
     mindWavesPanel_->setMindWaves(rows);
     layersPanel_->setAvailableMindWaves(availableForBinding);
     filterConfigurationPanel_->setAvailableMindWaves(availableForBinding);
+    toolConfigurationPanel_->setAvailableMindWaves(availableForBinding);
 }
 
 void MindWaveController::addMindWave() {

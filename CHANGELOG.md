@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.39.1] - 2026-09-19
+
+MindWaves v2, Installment A: **Warp** and **Reduce** field operators, plus Reduce wired into Sound Mind Instruments as **vibrato**/**tremolo**. First installment of the `v0.Y.39.1` milestone; the drawn-shape generator, step-grid generator, and Continuous Controls remain later installments.
+
+### Added
+
+- **Warp**, a new MindWave field operator: one MindWave's own field distorts the coordinate another MindWave is sampled at, via a new "Enable Warp" checkbox, strength spin box, and nested source editor in the MindWaves panel.
+- **Reduce**, collapsing a MindWave's own 2D field into a plain 1D signal by slicing or integrating across frequency - not yet exposed as its own standalone UI gesture; its first (and so far only) consumer is the Instruments wiring below.
+- **Vibrato and tremolo for Sound Mind Instruments**: two new depth spin boxes in the Tool Configuration Panel's Instrument group, each paired with a MindWave bind combo. A bound wave modulates pitch (vibrato) or amplitude (tremolo) across the course of a stroke, sampled at each stamp's own position along it.
+
+Full regression: sound-mind-core 706/706 (up from 687), sound-mind-studio all 35 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #108.
+
 ## [0.0.38.1] - 2026-09-19
 
 Filter Parameter Binding Completion - extends `v0.Y.31.1`'s own MindWave-binding mechanism to every remaining `v0.Y.36.1` (Deferred Filters) parameter that fits it. Closes out the `v0.Y.38.1` milestone in full.

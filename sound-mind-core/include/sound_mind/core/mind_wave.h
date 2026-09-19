@@ -540,6 +540,53 @@ public:
     void setSuperpositionBlendMode(SuperpositionBlendMode mode) noexcept { superpositionBlendMode_ = mode; }
 
     /**
+     * @brief Whether this MindWave's own sampling coordinate is displaced
+     *        by another MindWave before its own generator runs - see
+     *        `docs/sound-mind-design.md`'s "Field Operators" ("Warp - one
+     *        field distorts the coordinates another field is sampled at").
+     *        `v0.Y.39.1` Installment A.
+     *
+     * A single optional source, not a stack (unlike `superpositionStack()`) -
+     * the design doc names Warp as a two-field relationship, not an
+     * N-way fold. Represented internally as a 0-or-1-length
+     * `std::vector<MindWave>` (the same "container of itself" trick
+     * `superpositionStack_` already establishes and this codebase's own
+     * build already proves compiles - `std::optional<MindWave>` as a
+     * direct member has no equivalent incomplete-type guarantee from the
+     * standard) rather than exposing that representation directly.
+     *
+     * @return `true` if `warpSource()` is meaningful.
+     */
+    [[nodiscard]] bool hasWarpSource() const noexcept { return !warpSourceStack_.empty(); }
+
+    /// @brief The MindWave that distorts this one's own sampling
+    ///        coordinate - see `hasWarpSource()`'s own docs. Only
+    ///        meaningful when `hasWarpSource()` is `true`.
+    /// @return The current warp source.
+    [[nodiscard]] const MindWave& warpSource() const noexcept { return warpSourceStack_.front(); }
+
+    /// @brief Sets (and enables) the warp source.
+    /// @param source The new warp source.
+    void setWarpSource(MindWave source) { warpSourceStack_ = {std::move(source)}; }
+
+    /// @brief Disables warping - `hasWarpSource()` becomes `false`.
+    void clearWarpSource() noexcept { warpSourceStack_.clear(); }
+
+    /**
+     * @brief How far `warpSource()`'s own field displaces this MindWave's
+     *        own sampling coordinate, in the current `axis()`'s own unit
+     *        (seconds for `Time`, bins for `Frequency`) - see
+     *        `evaluate()`'s own docs for the exact formula. Meaningless
+     *        while `hasWarpSource()` is `false`.
+     * @return The current warp strength.
+     */
+    [[nodiscard]] double warpStrength() const noexcept { return warpStrength_; }
+
+    /// @brief Sets the warp displacement's own strength.
+    /// @param strength The new strength.
+    void setWarpStrength(double strength) noexcept { warpStrength_ = strength; }
+
+    /**
      * @brief This MindWave's own field value at `point`, after superposing
      *        `superpositionStack()` (if any) on top of its own generator.
      *
@@ -554,6 +601,22 @@ public:
      * `frequencyToBinIndex()` before dividing by it. `GeneratorType::Spatial`
      * uses both of `point`'s own components directly (time seconds and
      * frequency bins) regardless of `axis()`.
+     *
+     * As of `v0.Y.39.1` Installment A, `warpSource()` (if `hasWarpSource()`)
+     * is evaluated first, at this same `point` - its own `[0, 1]` result is
+     * remapped to `[-1, 1]` and scaled by `warpStrength()`, then added to
+     * `point`'s own time-seconds *and* bin-index components alike (the same
+     * single delta applied to both, a deliberate simplification over
+     * `DomainWarpedNoise`'s own two independently-seeded deltas - there is
+     * only one warp source here, not two) before anything else in this
+     * method reads `point`. This is the general form
+     * `SpatialPattern::DomainWarpedNoise` already establishes for one
+     * fixed, built-in noise field, now available between any two MindWaves
+     * (`docs/sound-mind-design.md`'s own framing). Warping and superposing
+     * are independent: `superpositionStack()` members are still evaluated
+     * at the original, unwarped `point` - warp only distorts what *this*
+     * MindWave's own generator samples from, not what its superposition
+     * partners do.
      *
      * The result is always clamped to `[0, 1]` before returning, regardless
      * of which generator shape or superposition blend produced it -
@@ -593,6 +656,8 @@ private:
     int fractalIterations_ = 8;
     std::vector<MindWave> superpositionStack_;
     SuperpositionBlendMode superpositionBlendMode_ = SuperpositionBlendMode::Multiply;
+    std::vector<MindWave> warpSourceStack_;
+    double warpStrength_ = 1.0;
 };
 
 /**
@@ -619,6 +684,67 @@ private:
 [[nodiscard]] std::vector<float> evaluateMindWaveField(const MindWave& wave,
                                                         const sound_mind::codec::StreamCodecConfig& config,
                                                         std::uint32_t canvasWidth);
+
+/**
+ * @brief How `reduceMindWaveToSignal()` collapses every bin at one time
+ *        sample into that sample's own single value - see its own docs.
+ */
+enum class ReduceMode {
+    /// @brief Reads `wave`'s own value at one representative bin (the
+    ///        middle of `StreamCodecConfig::binCount`) - a single
+    ///        cross-section, not an aggregate.
+    Slice,
+    /// @brief Averages `wave`'s own value across every bin.
+    Integrate,
+};
+
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(ReduceMode, {
+    {ReduceMode::Slice, "slice"},
+    {ReduceMode::Integrate, "integrate"},
+})
+// clang-format on
+
+/**
+ * @brief Collapses `wave`'s own 2D field into an ordinary 1D signal by
+ *        slicing or integrating across the frequency axis at each of
+ *        `sampleCount` evenly-spaced moments across `[0, timeSpanSeconds)` -
+ *        `docs/sound-mind-design.md`'s "Field Operators" ("Reduce ...
+ *        collapses a 2D field into an ordinary 1D signal, by slicing or
+ *        integrating along one axis (typically frequency)"). `v0.Y.39.1`
+ *        Installment A.
+ *
+ * **Only ever collapses frequency, never time** - a deliberate scope
+ * choice, not an oversight: frequency has a well-defined, bounded range to
+ * integrate across (`[0, binCount)`), matching the design doc's own
+ * "typically frequency" framing; time has no equivalent bound (there is no
+ * canonical "how much time" to integrate a time-collapsing Reduce across),
+ * so it has no well-defined meaning here and isn't attempted.
+ *
+ * The returned signal has no inherent real-world timescale of its own -
+ * `timeSpanSeconds` only spaces the `sampleCount` evaluation points, it
+ * doesn't tie the result to any canvas position. A caller that wants the
+ * signal to represent one full cycle of `wave`'s own shape, indexed by a
+ * `[0, 1]` progress fraction (e.g. `InstrumentConfiguration`'s own vibrato/
+ * tremolo binding, sampled by a stroke's own `pathT` - see
+ * `applyInstrumentPaintOperation()`'s own docs), should pass `wave.period()`
+ * as `timeSpanSeconds`.
+ *
+ * @param wave The MindWave to reduce.
+ * @param config Interprets each bin as a real frequency, the same config
+ *        every other per-cell domain conversion in Core already uses.
+ * @param sampleCount How many signal samples to produce; floored at `1`.
+ * @param timeSpanSeconds The real time span the `sampleCount` samples are
+ *        evenly spaced across, starting at `0`.
+ * @param mode Whether each sample slices one bin or integrates across all
+ *        of them - see `ReduceMode`'s own docs.
+ * @return A signal of exactly `std::max(1u, sampleCount)` values, each in
+ *         `[0, 1]`.
+ */
+[[nodiscard]] std::vector<float> reduceMindWaveToSignal(const MindWave& wave,
+                                                         const sound_mind::codec::StreamCodecConfig& config,
+                                                         std::uint32_t sampleCount, double timeSpanSeconds,
+                                                         ReduceMode mode);
 
 /// @brief Serializes a MindWave to its JSON representation.
 void to_json(nlohmann::json& json, const MindWave& mindWave);

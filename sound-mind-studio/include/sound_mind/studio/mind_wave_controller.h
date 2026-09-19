@@ -12,6 +12,7 @@ class CanvasWidget;
 class FilterConfigurationPanel;
 class LayersPanel;
 class MindWavesPanel;
+class ToolConfigurationPanel;
 
 /**
  * @brief Owns the current project's MindWave library - add/remove/rename/
@@ -23,13 +24,17 @@ class MindWavesPanel;
  *        already received.
  *
  * Constructed with non-owning pointers to `mindWavesPanel`, `layersPanel`,
- * and `filterConfigurationPanel` - all three stay `MainWindow`-owned (dock
+ * `filterConfigurationPanel`, and (as of `v0.Y.39.1` Installment A)
+ * `toolConfigurationPanel` - all four stay `MainWindow`-owned (dock
  * widgets, like they already are for `LayerController`) - and pushes the
- * current library into all three after any mutation: `mindWavesPanel` gets
- * the full library (name, generator type, parameters); `layersPanel` and
- * `filterConfigurationPanel` each get only id/name pairs, for their own
- * respective binding combos (`LayersPanel::setAvailableMindWaves()`,
- * `FilterConfigurationPanel::setAvailableMindWaves()`).
+ * current library into all four after any mutation: `mindWavesPanel` gets
+ * the full library (name, generator type, parameters); `layersPanel`,
+ * `filterConfigurationPanel`, and `toolConfigurationPanel` each get only
+ * id/name pairs, for their own respective binding combos
+ * (`LayersPanel::setAvailableMindWaves()`,
+ * `FilterConfigurationPanel::setAvailableMindWaves()`,
+ * `ToolConfigurationPanel::setAvailableMindWaves()` - the last for
+ * `InstrumentConfiguration`'s own vibrato/tremolo bindings).
  *
  * **Deliberately does not own `Layer::opacityMindWave()`'s or
  * `FilterConfiguration`'s own parameter-binding mutation** - binding a
@@ -60,13 +65,17 @@ public:
      * @param filterConfigurationPanel Non-owning; kept in sync with the
      *        library's own id/name pairs, the same as `layersPanel`. Must
      *        outlive this controller.
+     * @param toolConfigurationPanel Non-owning; kept in sync with the
+     *        library's own id/name pairs, the same as `layersPanel`/
+     *        `filterConfigurationPanel`. Must outlive this controller.
      * @param canvas Non-owning; receives the live Preview overlay (see the
      *        class's own docs). Must outlive this controller.
      * @param parent The owning object, per Qt's normal parent-ownership
      *        convention; may be `nullptr`.
      */
     MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel,
-                        FilterConfigurationPanel* filterConfigurationPanel, CanvasWidget* canvas,
+                        FilterConfigurationPanel* filterConfigurationPanel,
+                        ToolConfigurationPanel* toolConfigurationPanel, CanvasWidget* canvas,
                         QObject* parent = nullptr);
 
     /// @brief Sets which project this controller looks up/mutates
@@ -164,6 +173,7 @@ private:
     MindWavesPanel* mindWavesPanel_;
     LayersPanel* layersPanel_;
     FilterConfigurationPanel* filterConfigurationPanel_;
+    ToolConfigurationPanel* toolConfigurationPanel_;
     CanvasWidget* canvas_;
     sound_mind::core::Project* project_ = nullptr;
 };

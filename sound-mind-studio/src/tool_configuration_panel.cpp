@@ -1,6 +1,7 @@
 #include "sound_mind/studio/tool_configuration_panel.h"
 
 #include <array>
+#include <optional>
 #include <utility>
 
 #include <QCheckBox>
@@ -8,6 +9,7 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
@@ -35,6 +37,7 @@ using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::MindShotId;
+using sound_mind::core::MindWaveId;
 using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::SmudgeConfiguration;
@@ -123,6 +126,27 @@ constexpr std::array<std::pair<ToolType, const char*>, 8> kToolTypes{{
 /// enforces (see its own docs).
 constexpr int kMaxHarmonics = 16;
 
+/// @brief A `None`-plus-library MindWave-binding combo - the same role
+/// `filter_configuration_panel.cpp`'s own `makeMindWaveCombo()` plays,
+/// duplicated here rather than shared across the two panels (neither
+/// exposes a header any UI code outside its own translation unit would
+/// reach into).
+QComboBox* makeMindWaveCombo(QWidget* parent, const QString& objectName) {
+    auto* combo = new QComboBox(parent);
+    combo->setObjectName(objectName);
+    combo->setToolTip(QObject::tr("Bind this parameter to a MindWave"));
+    return combo;
+}
+
+/// @brief Wraps `spinBox` and `combo` side by side - see
+/// `filter_configuration_panel.cpp`'s own identical `makeBoundFieldRow()`.
+QHBoxLayout* makeBoundFieldRow(QWidget* spinBox, QWidget* combo) {
+    auto* row = new QHBoxLayout();
+    row->addWidget(spinBox);
+    row->addWidget(combo);
+    return row;
+}
+
 }  // namespace
 
 ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
@@ -208,6 +232,59 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
         }
     });
     instrumentForm->addRow(tr("Inharmonicity:"), inharmonicitySpinBox_);
+
+    // v0.Y.39.1 Installment A: vibrato (pitch)/tremolo (amplitude), each a
+    // depth spin box plus a MindWave bind combo - see
+    // InstrumentConfiguration::vibratoMindWave()'s own docs for the
+    // pathT-sampled Reduce mechanism actually driving these.
+    vibratoDepthSpinBox_ = new QDoubleSpinBox(instrumentGroup_);
+    vibratoDepthSpinBox_->setObjectName(QStringLiteral("vibratoDepthSpinBox"));
+    vibratoDepthSpinBox_->setRange(0.0, 24.0);
+    vibratoDepthSpinBox_->setSingleStep(0.1);
+    vibratoDepthSpinBox_->setSuffix(tr(" st"));
+    vibratoDepthSpinBox_->setToolTip(
+        tr("How far vibrato bends each harmonic's own pitch, in semitones - meaningless while no MindWave is bound "
+           "below."));
+    connect(vibratoDepthSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
+            instrument->setVibratoDepthSemitones(value);
+            emitConfigChanged();
+        }
+    });
+    vibratoMindWaveCombo_ = makeMindWaveCombo(instrumentGroup_, QStringLiteral("vibratoMindWaveCombo"));
+    connect(vibratoMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = vibratoMindWaveCombo_->itemData(index).toULongLong();
+        if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
+            instrument->setVibratoMindWave(rawId == 0 ? std::nullopt : std::optional<MindWaveId>(rawId));
+            emitConfigChanged();
+        }
+    });
+    instrumentForm->addRow(tr("Vibrato:"), makeBoundFieldRow(vibratoDepthSpinBox_, vibratoMindWaveCombo_));
+
+    tremoloDepthSpinBox_ = new QDoubleSpinBox(instrumentGroup_);
+    tremoloDepthSpinBox_->setObjectName(QStringLiteral("tremoloDepthSpinBox"));
+    tremoloDepthSpinBox_->setRange(0.0, 1.0);
+    tremoloDepthSpinBox_->setSingleStep(0.01);
+    tremoloDepthSpinBox_->setDecimals(2);
+    tremoloDepthSpinBox_->setToolTip(
+        tr("How far tremolo dips each harmonic's own strength toward silence - meaningless while no MindWave is "
+           "bound below."));
+    connect(tremoloDepthSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
+            instrument->setTremoloDepth(value);
+            emitConfigChanged();
+        }
+    });
+    tremoloMindWaveCombo_ = makeMindWaveCombo(instrumentGroup_, QStringLiteral("tremoloMindWaveCombo"));
+    connect(tremoloMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = tremoloMindWaveCombo_->itemData(index).toULongLong();
+        if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
+            instrument->setTremoloMindWave(rawId == 0 ? std::nullopt : std::optional<MindWaveId>(rawId));
+            emitConfigChanged();
+        }
+    });
+    instrumentForm->addRow(tr("Tremolo:"), makeBoundFieldRow(tremoloDepthSpinBox_, tremoloMindWaveCombo_));
+
     instrumentLayout->addLayout(instrumentForm);
 
     instrumentLayout->addWidget(new QLabel(tr("Harmonic Strengths (fundamental first):"), instrumentGroup_));
@@ -405,6 +482,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
             harmonicStrengthSpinBoxes_[i]->setValue(defaults.harmonicStrengths()[i]);
         }
     }
+    rebuildMindWaveCombos();
     updateVisibleToolTypeGroup();
 
     auto* scrollArea = new QScrollArea(this);
@@ -427,6 +505,14 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
         auto instrument = std::make_unique<InstrumentConfiguration>();
         instrument->setHarmonicStrengths(currentHarmonicStrengths());
         instrument->setInharmonicity(inharmonicitySpinBox_->value());
+        instrument->setVibratoDepthSemitones(vibratoDepthSpinBox_->value());
+        if (const auto rawId = vibratoMindWaveCombo_->currentData().toULongLong(); rawId != 0) {
+            instrument->setVibratoMindWave(static_cast<MindWaveId>(rawId));
+        }
+        instrument->setTremoloDepth(tremoloDepthSpinBox_->value());
+        if (const auto rawId = tremoloMindWaveCombo_->currentData().toULongLong(); rawId != 0) {
+            instrument->setTremoloMindWave(static_cast<MindWaveId>(rawId));
+        }
         replacement = std::move(instrument);
     } else if (type == ToolType::MindShot) {
         auto mindShot = std::make_unique<MindShotConfiguration>();
@@ -613,6 +699,15 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
             const QSignalBlocker blocker(inharmonicitySpinBox_);
             inharmonicitySpinBox_->setValue(instrument->inharmonicity());
         }
+        {
+            const QSignalBlocker blocker(vibratoDepthSpinBox_);
+            vibratoDepthSpinBox_->setValue(instrument->vibratoDepthSemitones());
+        }
+        {
+            const QSignalBlocker blocker(tremoloDepthSpinBox_);
+            tremoloDepthSpinBox_->setValue(instrument->tremoloDepth());
+        }
+        rebuildMindWaveCombos();
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(config_.get())) {
         const QSignalBlocker blocker(mindShotCombo_);
         int index = -1;
@@ -801,6 +896,31 @@ void ToolConfigurationPanel::handleMindGrainComboChanged(int index) {
         }
     }
     updateMindGrainValidity();
+}
+
+void ToolConfigurationPanel::setAvailableMindWaves(
+    const std::vector<std::pair<sound_mind::core::MindWaveId, QString>>& mindWaves) {
+    availableMindWaves_ = mindWaves;
+    rebuildMindWaveCombos();
+}
+
+void ToolConfigurationPanel::rebuildMindWaveCombos() {
+    const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(config_.get());
+    const auto populate = [this](QComboBox* combo, std::optional<MindWaveId> boundId) {
+        const QSignalBlocker blocker(combo);
+        combo->clear();
+        combo->addItem(tr("None"), QVariant::fromValue(qulonglong{0}));
+        int selectedIndex = 0;
+        for (const auto& [mindWaveId, name] : availableMindWaves_) {
+            combo->addItem(name, QVariant::fromValue(static_cast<qulonglong>(mindWaveId)));
+            if (boundId.has_value() && *boundId == mindWaveId) {
+                selectedIndex = combo->count() - 1;
+            }
+        }
+        combo->setCurrentIndex(selectedIndex);
+    };
+    populate(vibratoMindWaveCombo_, instrument != nullptr ? instrument->vibratoMindWave() : std::nullopt);
+    populate(tremoloMindWaveCombo_, instrument != nullptr ? instrument->tremoloMindWave() : std::nullopt);
 }
 
 void ToolConfigurationPanel::setActiveLayer(sound_mind::core::LayerId layer) {

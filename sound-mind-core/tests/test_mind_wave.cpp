@@ -17,6 +17,8 @@ using sound_mind::core::GeneratorType;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveAxis;
 using sound_mind::core::PeriodicWaveform;
+using sound_mind::core::ReduceMode;
+using sound_mind::core::reduceMindWaveToSignal;
 using sound_mind::core::SpatialPattern;
 using sound_mind::core::SteppedNoiseShape;
 using sound_mind::core::SuperpositionBlendMode;
@@ -472,6 +474,173 @@ TEST_CASE("A MindWave with every new generator field and a superposition stack r
     REQUIRE(restored.superpositionStack()[0].seed() == 123);
     REQUIRE(restored.superpositionStack()[0].fractalRoughness() == Catch::Approx(0.4));
     REQUIRE(restored.superpositionStack()[0].fractalIterations() == 5);
+}
+
+// --- v0.Y.39.1 Installment A: Warp/Reduce field operators -------------
+
+TEST_CASE("A MindWave with no warp source evaluates unchanged", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Sawtooth);
+    wave.setPeriod(4.0);
+    REQUIRE_FALSE(wave.hasWarpSource());
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{1.0, 1000.0}, testConfig()) == Catch::Approx(0.25f));
+}
+
+TEST_CASE("Warp displaces the sampling coordinate by its own source's evaluated value, scaled by warpStrength",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Sawtooth);
+    wave.setPeriod(4.0);
+
+    MindWave source;
+    source.setPeriodicWaveform(PeriodicWaveform::Square);
+    source.setPeriod(1'000'000.0);  // Always at its own ceiling (1.0) for any small t.
+    wave.setWarpSource(source);
+    wave.setWarpStrength(1.0);
+
+    // displacement = 1.0 * (1*2-1) = 1.0; effective time = 1.0+1.0 = 2.0; p = 2.0/4.0 = 0.5.
+    REQUIRE(wave.hasWarpSource());
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{1.0, 1000.0}, testConfig()) == Catch::Approx(0.5f));
+}
+
+TEST_CASE("Warp's own strength scales the displacement linearly", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Sawtooth);
+    wave.setPeriod(4.0);
+
+    MindWave source;
+    source.setPeriodicWaveform(PeriodicWaveform::Square);
+    source.setPeriod(1'000'000.0);
+    wave.setWarpSource(source);
+    wave.setWarpStrength(0.5);
+
+    // displacement = 0.5 * (1*2-1) = 0.5; effective time = 1.5; p = 1.5/4 = 0.375.
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{1.0, 1000.0}, testConfig()) == Catch::Approx(0.375f));
+}
+
+TEST_CASE("clearWarpSource() removes a previously-set warp source", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Sawtooth);
+    wave.setPeriod(4.0);
+    MindWave source;
+    source.setPeriodicWaveform(PeriodicWaveform::Square);
+    wave.setWarpSource(source);
+    REQUIRE(wave.hasWarpSource());
+
+    wave.clearWarpSource();
+
+    REQUIRE_FALSE(wave.hasWarpSource());
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{1.0, 1000.0}, testConfig()) == Catch::Approx(0.25f));
+}
+
+TEST_CASE("Warp also displaces the frequency axis, in bins", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setAxis(MindWaveAxis::Frequency);
+    wave.setPeriodicWaveform(PeriodicWaveform::Sawtooth);
+    wave.setPeriod(4.0);  // 4 bins per cycle.
+
+    MindWave source;
+    source.setPeriodicWaveform(PeriodicWaveform::Square);
+    source.setPeriod(1'000'000.0);
+    wave.setWarpSource(source);
+    wave.setWarpStrength(1.0);  // +1 bin displacement.
+
+    const auto config = testConfig();
+    const float bin1Hz = binIndexToFrequency(1.0f, config);
+    // Unwarped: bin=1, p=1/4=0.25. Warped: bin=1+1=2, p=2/4=0.5.
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, bin1Hz}, config) == Catch::Approx(0.5f).margin(0.01));
+}
+
+TEST_CASE("A MindWave with a warp source round-trips through JSON", "[core][mind_wave]") {
+    MindWave source;
+    source.setPeriodicWaveform(PeriodicWaveform::Square);
+    source.setPeriod(2.0);
+
+    MindWave original;
+    original.setWarpSource(source);
+    original.setWarpStrength(0.75);
+
+    const nlohmann::json json = original;
+    const MindWave restored = json.get<MindWave>();
+
+    REQUIRE(restored.hasWarpSource());
+    REQUIRE(restored.warpSource().periodicWaveform() == PeriodicWaveform::Square);
+    REQUIRE(restored.warpSource().period() == Catch::Approx(2.0));
+    REQUIRE(restored.warpStrength() == Catch::Approx(0.75));
+}
+
+TEST_CASE("A MindWave loads from JSON missing warpSourceStack/warpStrength (saved before v0.Y.39.1) unwarped",
+          "[core][mind_wave]") {
+    MindWave config;
+    nlohmann::json json = config;
+    json.erase("warpSourceStack");
+    json.erase("warpStrength");
+
+    const MindWave restored = json.get<MindWave>();
+
+    REQUIRE_FALSE(restored.hasWarpSource());
+    REQUIRE(restored.warpStrength() == Catch::Approx(1.0));
+}
+
+TEST_CASE("reduceMindWaveToSignal's Integrate mode averages evaluate() across every bin at each time sample",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Spatial);
+    wave.setSpatialPattern(SpatialPattern::Checkerboard);
+    wave.setPeriod(3.0);
+    const auto config = testConfig();
+
+    const auto signal = reduceMindWaveToSignal(wave, config, 4, 2.0, ReduceMode::Integrate);
+
+    REQUIRE(signal.size() == 4);
+    for (std::size_t i = 0; i < signal.size(); ++i) {
+        const double timeSeconds = (static_cast<double>(i) / 4.0) * 2.0;
+        float sum = 0.0f;
+        for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+            sum += wave.evaluate(TimeFrequencyPoint{timeSeconds, binIndexToFrequency(static_cast<float>(bin), config)},
+                                  config);
+        }
+        const float expected = sum / static_cast<float>(config.binCount);
+        REQUIRE(signal[i] == Catch::Approx(expected).margin(0.0001));
+    }
+}
+
+TEST_CASE("reduceMindWaveToSignal's Slice mode reads a single representative bin at each time sample",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Spatial);
+    wave.setSpatialPattern(SpatialPattern::Checkerboard);
+    wave.setPeriod(3.0);
+    const auto config = testConfig();
+
+    const auto signal = reduceMindWaveToSignal(wave, config, 4, 2.0, ReduceMode::Slice);
+
+    const float midHz = binIndexToFrequency(static_cast<float>(config.binCount) / 2.0f, config);
+    REQUIRE(signal.size() == 4);
+    for (std::size_t i = 0; i < signal.size(); ++i) {
+        const double timeSeconds = (static_cast<double>(i) / 4.0) * 2.0;
+        const float expected = wave.evaluate(TimeFrequencyPoint{timeSeconds, midHz}, config);
+        REQUIRE(signal[i] == Catch::Approx(expected).margin(0.0001));
+    }
+}
+
+TEST_CASE("reduceMindWaveToSignal produces exactly sampleCount values, floored at 1", "[core][mind_wave]") {
+    const MindWave wave;
+    const auto config = testConfig();
+    REQUIRE(reduceMindWaveToSignal(wave, config, 7, 1.0, ReduceMode::Integrate).size() == 7);
+    REQUIRE(reduceMindWaveToSignal(wave, config, 0, 1.0, ReduceMode::Slice).size() == 1);
+}
+
+TEST_CASE("reduceMindWaveToSignal's own values all fall within [0, 1]", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::SteppedNoise);
+    wave.setSteppedNoiseShape(SteppedNoiseShape::FractalNoise);
+    const auto config = testConfig();
+
+    for (const float value : reduceMindWaveToSignal(wave, config, 20, 5.0, ReduceMode::Integrate)) {
+        REQUIRE(value >= 0.0f);
+        REQUIRE(value <= 1.0f);
+    }
 }
 
 // --- Installment C1: NamedMindWave -----------------------------------

@@ -16,6 +16,7 @@ using sound_mind::core::HealConfiguration;
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindShotConfiguration;
+using sound_mind::core::MindWaveId;
 using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::SmudgeConfiguration;
@@ -192,6 +193,26 @@ TEST_CASE("A fresh InstrumentConfiguration is Instrument with a plausible defaul
     REQUIRE(config.type() == ToolType::Instrument);
     REQUIRE(config.harmonicStrengths() == std::vector<double>{1.0, 0.5, 0.25, 0.125});
     REQUIRE(config.inharmonicity() == 0.0);
+    REQUIRE(config.vibratoMindWave() == std::nullopt);
+    REQUIRE(config.vibratoDepthSemitones() == 0.5);
+    REQUIRE(config.tremoloMindWave() == std::nullopt);
+    REQUIRE(config.tremoloDepth() == 0.3);
+}
+
+TEST_CASE("An InstrumentConfiguration's vibrato binding and depth can be changed", "[core][tool_configuration]") {
+    InstrumentConfiguration config;
+    config.setVibratoMindWave(MindWaveId{7});
+    config.setVibratoDepthSemitones(1.5);
+    REQUIRE(config.vibratoMindWave() == MindWaveId{7});
+    REQUIRE(config.vibratoDepthSemitones() == 1.5);
+}
+
+TEST_CASE("An InstrumentConfiguration's tremolo binding and depth can be changed", "[core][tool_configuration]") {
+    InstrumentConfiguration config;
+    config.setTremoloMindWave(MindWaveId{9});
+    config.setTremoloDepth(0.6);
+    REQUIRE(config.tremoloMindWave() == MindWaveId{9});
+    REQUIRE(config.tremoloDepth() == 0.6);
 }
 
 TEST_CASE("An InstrumentConfiguration's harmonic strengths can be changed", "[core][tool_configuration]") {
@@ -211,6 +232,10 @@ TEST_CASE("An InstrumentConfiguration's clone() is an independent, equal copy", 
     config.setName("Bell");
     config.setHarmonicStrengths({1.0, 0.9, 0.3});
     config.setInharmonicity(0.015);
+    config.setVibratoMindWave(MindWaveId{3});
+    config.setVibratoDepthSemitones(1.2);
+    config.setTremoloMindWave(MindWaveId{4});
+    config.setTremoloDepth(0.4);
 
     const std::unique_ptr<ToolConfiguration> clone = config.clone();
     REQUIRE(clone->type() == ToolType::Instrument);
@@ -218,6 +243,10 @@ TEST_CASE("An InstrumentConfiguration's clone() is an independent, equal copy", 
     const auto& clonedInstrument = dynamic_cast<const InstrumentConfiguration&>(*clone);
     REQUIRE(clonedInstrument.harmonicStrengths() == std::vector<double>{1.0, 0.9, 0.3});
     REQUIRE(clonedInstrument.inharmonicity() == 0.015);
+    REQUIRE(clonedInstrument.vibratoMindWave() == MindWaveId{3});
+    REQUIRE(clonedInstrument.vibratoDepthSemitones() == 1.2);
+    REQUIRE(clonedInstrument.tremoloMindWave() == MindWaveId{4});
+    REQUIRE(clonedInstrument.tremoloDepth() == 0.4);
 
     config.setInharmonicity(0.5);
     REQUIRE(clonedInstrument.inharmonicity() == 0.015);
@@ -230,6 +259,10 @@ TEST_CASE("An InstrumentConfiguration round-trips through JSON", "[core][tool_co
     config.setInharmonicity(0.015);
     config.setFalloff(0.4f);
     config.setSize(0.75);
+    config.setVibratoMindWave(MindWaveId{11});
+    config.setVibratoDepthSemitones(2.0);
+    config.setTremoloMindWave(MindWaveId{12});
+    config.setTremoloDepth(0.7);
 
     const nlohmann::json json = config;
     const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
@@ -241,6 +274,28 @@ TEST_CASE("An InstrumentConfiguration round-trips through JSON", "[core][tool_co
     REQUIRE(instrument.inharmonicity() == 0.015);
     REQUIRE(roundTripped->falloff() == 0.4f);
     REQUIRE(roundTripped->size() == 0.75);
+    REQUIRE(instrument.vibratoMindWave() == MindWaveId{11});
+    REQUIRE(instrument.vibratoDepthSemitones() == 2.0);
+    REQUIRE(instrument.tremoloMindWave() == MindWaveId{12});
+    REQUIRE(instrument.tremoloDepth() == 0.7);
+}
+
+TEST_CASE("An InstrumentConfiguration loads from JSON missing vibrato/tremolo fields (saved before v0.Y.39.1) unbound",
+          "[core][tool_configuration]") {
+    InstrumentConfiguration config;
+    nlohmann::json json = config;
+    json.erase("vibratoMindWaveId");
+    json.erase("vibratoDepthSemitones");
+    json.erase("tremoloMindWaveId");
+    json.erase("tremoloDepth");
+
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    const auto& instrument = dynamic_cast<const InstrumentConfiguration&>(*roundTripped);
+    REQUIRE(instrument.vibratoMindWave() == std::nullopt);
+    REQUIRE(instrument.vibratoDepthSemitones() == 0.5);
+    REQUIRE(instrument.tremoloMindWave() == std::nullopt);
+    REQUIRE(instrument.tremoloDepth() == 0.3);
 }
 
 TEST_CASE("A fresh MindShotConfiguration is MindShot with no Mind Shot selected", "[core][tool_configuration]") {

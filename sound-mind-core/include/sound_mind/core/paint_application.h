@@ -7,10 +7,52 @@
 
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/gradient.h"
+#include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/paint_operation.h"
 
 namespace sound_mind::core {
+
+/**
+ * @brief Resolves a `MindWaveId` against a `Project`'s own MindWave
+ *        library - `applyPaintOperation()`'s own `InstrumentConfiguration`
+ *        vibrato/tremolo binding entry point (`v0.Y.39.1` Installment A).
+ *
+ * Deliberately a per-id resolver, not a single pre-resolved pair of
+ * pointers (unlike `FilterParameterMindWaves`, which `compositeProject()`
+ * resolves once against a Filter layer's own single, current
+ * `FilterConfiguration`) - `rebuildPaintedContent()` replays a whole
+ * *history* of `PaintOperation`s on one layer, each carrying its own
+ * `InstrumentConfiguration` snapshot from whenever it was painted, so two
+ * different strokes on the same layer can legitimately be bound to two
+ * different MindWaves (or none). `applyPaintOperation()` re-resolves each
+ * operation's own `vibratoMindWave()`/`tremoloMindWave()` id, every replay,
+ * against whatever this resolver returns right now - the same "live
+ * reference, not a snapshot" contract every other MindWave binding in this
+ * codebase already keeps (see `InstrumentConfiguration`'s own class docs).
+ *
+ * Paint rebuild has no `Project` access of its own (unlike `compositor.cpp`,
+ * which calls `compositeProject()` with one already in hand) -
+ * `PaintController` supplies this resolver, reading straight from its own
+ * live `Project`, mirroring `resolveFilterParameterMindWaves()`'s exact
+ * per-id building block but living in Studio instead of Core.
+ *
+ * A default-constructed (empty) `MindWaveResolver` is a valid, meaningful
+ * value - "no way to resolve a MindWaveId," which `applyPaintOperation()`
+ * treats as "every binding resolves to `nullptr`" (no vibrato/tremolo at
+ * all), the same "nothing to offer" convention `LayerContentResolver`'s own
+ * empty default already establishes - callers with no Project to resolve
+ * against (most of the test suite) simply omit this parameter.
+ *
+ * @param mindWaveId The id to resolve.
+ * @return A pointer to that id's own current `MindWave`, or `nullptr` if it
+ *         no longer resolves (its `NamedMindWave` was removed from the
+ *         project) - the same graceful-dangling-id contract
+ *         `resolveOpacityMindWave()`'s own docs establish. The pointer is
+ *         only valid for the duration of the call it was returned from -
+ *         never cached past that.
+ */
+using MindWaveResolver = std::function<const MindWave*(MindWaveId)>;
 
 /**
  * @brief Resolves a layer's own *current* rendered content, by id - what
@@ -379,10 +421,18 @@ struct FrameBinRange {
  *        which makes any `MindGrainConfiguration` stroke a no-op - the
  *        correct behavior for every call site with no Mind Grain support
  *        to offer (nearly all of the existing test suite).
+ * @param resolveMindWave Resolves `operation.config()`'s own
+ *        `vibratoMindWave()`/`tremoloMindWave()` ids, if it's an
+ *        `InstrumentConfiguration` - see `MindWaveResolver`'s own docs.
+ *        Every other tool type ignores it entirely. Defaults to an empty
+ *        resolver, meaning "no vibrato/tremolo at all" - the correct
+ *        behavior for every call site with no Project to resolve against
+ *        (nearly all of the existing test suite).
  */
 void applyPaintOperation(const PaintOperation& operation, double frequencyToTimeScale,
                           sound_mind::codec::StreamImage& content,
-                          const LayerContentResolver& resolveLayerContent = {});
+                          const LayerContentResolver& resolveLayerContent = {},
+                          const MindWaveResolver& resolveMindWave = {});
 
 /**
  * @brief Rebuilds a layer's own painted content from scratch: a copy of
@@ -424,12 +474,17 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
  *        cascade logic of its own, and doesn't need any: reading "whatever
  *        the resolver says right now" is already correct regardless of
  *        what prompted the call).
+ * @param resolveMindWave Passed through to applyPaintOperation() for each
+ *        `PaintOperation` replayed - see its own docs. Defaults to an empty
+ *        resolver, meaning every `InstrumentConfiguration` stroke replayed
+ *        plays without vibrato/tremolo unless the caller supplies one.
  * @return A fresh `StreamImage`: `base`, with every operation in
  *         `operations` applied on top, in order.
  */
 [[nodiscard]] sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::StreamImage& base,
                                                                      const std::vector<const Operation*>& operations,
                                                                      double frequencyToTimeScale,
-                                                                     const LayerContentResolver& resolveLayerContent = {});
+                                                                     const LayerContentResolver& resolveLayerContent = {},
+                                                                     const MindWaveResolver& resolveMindWave = {});
 
 }  // namespace sound_mind::core

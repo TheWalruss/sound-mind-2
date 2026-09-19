@@ -1,10 +1,12 @@
 #pragma once
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include <QColor>
 #include <QDockWidget>
+#include <QString>
 
 #include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/tool_configuration.h"
@@ -177,6 +179,24 @@ public:
      * to check.
      */
     void refreshMindGrains();
+
+    /**
+     * @brief Repopulates `vibratoMindWaveCombo_`/`tremoloMindWaveCombo_` from
+     *        the project's own current MindWave library - `v0.Y.39.1`
+     *        Installment A's own `InstrumentConfiguration` vibrato/tremolo
+     *        binding entry point, mirroring
+     *        `FilterConfigurationPanel::setAvailableMindWaves()`'s exact
+     *        role and shape (an id/name pair per library entry; this panel
+     *        knows nothing about `Project`/`NamedMindWave` beyond that).
+     *
+     * Preserves each combo's own current selection, by id, if it's still
+     * present among `mindWaves` - the same rule `rebuildMindWaveCombos()`'s
+     * own docs establish; otherwise falls back to "None".
+     *
+     * @param mindWaves The project's current MindWave library, as id/name
+     *        pairs.
+     */
+    void setAvailableMindWaves(const std::vector<std::pair<sound_mind::core::MindWaveId, QString>>& mindWaves);
 
     /**
      * @brief Sets which layer a freehand stroke started right now would
@@ -383,6 +403,14 @@ private:
     /// @return The harmonic strengths currently displayed.
     [[nodiscard]] std::vector<double> currentHarmonicStrengths() const;
 
+    /// @brief Rebuilds `vibratoMindWaveCombo_`/`tremoloMindWaveCombo_`'s own
+    ///        items from `availableMindWaves_` - see
+    ///        `setAvailableMindWaves()`'s own docs. Called from there, and
+    ///        from `setToolConfiguration()` so a freshly-loaded
+    ///        `InstrumentConfiguration`'s own bindings are reflected
+    ///        immediately even if the library itself hasn't changed.
+    void rebuildMindWaveCombos();
+
     std::unique_ptr<sound_mind::core::ToolConfiguration> config_;
 
     QComboBox* toolTypeCombo_ = nullptr;
@@ -401,6 +429,17 @@ private:
     QVBoxLayout* harmonicStrengthsLayout_ = nullptr;
     std::vector<QDoubleSpinBox*> harmonicStrengthSpinBoxes_;
     QDoubleSpinBox* inharmonicitySpinBox_ = nullptr;
+
+    /// @brief Vibrato/tremolo binding controls - `v0.Y.39.1` Installment A.
+    ///        See `setAvailableMindWaves()`'s own docs.
+    QComboBox* vibratoMindWaveCombo_ = nullptr;
+    QDoubleSpinBox* vibratoDepthSpinBox_ = nullptr;
+    QComboBox* tremoloMindWaveCombo_ = nullptr;
+    QDoubleSpinBox* tremoloDepthSpinBox_ = nullptr;
+
+    /// @brief The project's current MindWave library, as id/name pairs -
+    ///        see `setAvailableMindWaves()`'s own docs.
+    std::vector<std::pair<sound_mind::core::MindWaveId, QString>> availableMindWaves_;
 
     /// @brief `MindShotConfiguration`'s own controls, shown only while
     ///        `config_->type() == ToolType::MindShot` - see

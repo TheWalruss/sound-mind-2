@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <vector>
 
 #include <catch2/catch_approx.hpp>
@@ -26,10 +27,14 @@ using sound_mind::core::LayerContentResolver;
 using sound_mind::core::LayerId;
 using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindShotConfiguration;
+using sound_mind::core::MindWave;
+using sound_mind::core::MindWaveId;
+using sound_mind::core::MindWaveResolver;
 using sound_mind::core::Operation;
 using sound_mind::core::OperationId;
 using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::PaintOperation;
+using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
@@ -131,6 +136,29 @@ std::unique_ptr<InstrumentConfiguration> makeInstrumentTool(std::vector<double> 
     config->setSize(size);
     config->setFalloff(falloff);
     return config;
+}
+
+/// @brief A MindWave that reads as 1.0 (ceiling) for any small `t` - the
+/// same `alwaysCeilingWave()` precedent `test_filter_application.cpp` uses,
+/// duplicated here for a vibrato/tremolo modulator (see
+/// `reduceMindWaveToSignal()`'s own docs: this evaluates identically at
+/// every bin, so Integrate mode's own per-bin average reproduces the same
+/// value `evaluate()` alone would).
+MindWave alwaysCeilingWave() {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Square);
+    wave.setPeriod(1'000'000.0);
+    return wave;
+}
+
+/// @brief The baseline (0.0) counterpart to alwaysCeilingWave() - see its
+/// own docs.
+MindWave alwaysBaselineWave() {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Square);
+    wave.setPeriod(1'000'000.0);
+    wave.setPhaseRadians(std::numbers::pi_v<double>);
+    return wave;
 }
 
 /// @brief A single-node Path (a tap, not a drag) at (timeSeconds,
@@ -550,6 +578,123 @@ TEST_CASE("applyPaintOperation with an InstrumentConfiguration stretches higher 
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, stretchedBin)] == -10.0f);
     if (unstretchedBin != stretchedBin) {
         REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, unstretchedBin)] == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation's Instrument vibrato, bound to a MindWave always at ceiling, bends every harmonic "
+          "sharp by the full depth",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    // A single-tap stroke's own lone sample has pathT == 0.0 - the
+    // modulator is sampled at the very start of its own one-cycle signal,
+    // still reading "ceiling" (see alwaysCeilingWave()'s own docs).
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto toolConfig = makeInstrumentTool({1.0}, 0.0, 0.05, 0.0f);
+    toolConfig->setVibratoDepthSemitones(12.0);  // A full octave up, at the ceiling.
+    toolConfig->setVibratoMindWave(MindWaveId{1});
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+
+    const auto vibrato = alwaysCeilingWave();
+    const MindWaveResolver resolve = [&vibrato](MindWaveId) -> const MindWave* { return &vibrato; };
+    applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int fundamentalBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    // A full octave up from 1000 Hz is 2000 Hz.
+    const int bentBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(2000.0f, config))));
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, bentBin)] == -10.0f);
+    if (fundamentalBin != bentBin) {
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation's Instrument tremolo, bound to a MindWave always at baseline, silences every harmonic",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto toolConfig = makeInstrumentTool({1.0}, 0.0, 0.05, 0.0f);
+    toolConfig->setTremoloDepth(1.0);  // Full depth - baseline dips strength all the way to 0.
+    toolConfig->setTremoloMindWave(MindWaveId{2});
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+
+    const auto tremolo = alwaysBaselineWave();
+    const MindWaveResolver resolve = [&tremolo](MindWaveId) -> const MindWave* { return &tremolo; };
+    applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation's Instrument tremolo, bound to a MindWave always at ceiling, leaves strength "
+          "unchanged",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto toolConfig = makeInstrumentTool({1.0}, 0.0, 0.05, 0.0f);
+    toolConfig->setTremoloDepth(1.0);
+    toolConfig->setTremoloMindWave(MindWaveId{3});
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+
+    const auto tremolo = alwaysCeilingWave();
+    const MindWaveResolver resolve = [&tremolo](MindWaveId) -> const MindWave* { return &tremolo; };
+    applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int fundamentalBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == -10.0f);
+}
+
+TEST_CASE("applyPaintOperation's Instrument tremolo does nothing when the resolver can't resolve the bound id",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto toolConfig = makeInstrumentTool({1.0}, 0.0, 0.05, 0.0f);
+    toolConfig->setTremoloDepth(1.0);
+    toolConfig->setTremoloMindWave(MindWaveId{4});  // A stale id - its NamedMindWave was removed from the project.
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+
+    const MindWaveResolver resolve = [](MindWaveId) -> const MindWave* { return nullptr; };
+    applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int fundamentalBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == -10.0f);
+}
+
+TEST_CASE("rebuildPaintedContent threads its own MindWaveResolver through to each replayed PaintOperation, "
+          "re-resolving that operation's own bound id",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    const StreamImage base = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto toolConfig = makeInstrumentTool({1.0}, 0.0, 0.05, 0.0f);
+    toolConfig->setTremoloDepth(1.0);
+    toolConfig->setTremoloMindWave(MindWaveId{5});
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+    const std::vector<const Operation*> operations{&op};
+
+    const auto tremolo = alwaysBaselineWave();
+    const MindWaveResolver resolve = [&tremolo](MindWaveId id) -> const MindWave* {
+        return id == MindWaveId{5} ? &tremolo : nullptr;
+    };
+    const StreamImage result = rebuildPaintedContent(base, operations, 2000.0, LayerContentResolver{}, resolve);
+
+    for (const float value : result.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
     }
 }
 

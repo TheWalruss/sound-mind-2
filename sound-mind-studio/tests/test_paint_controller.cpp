@@ -2,20 +2,25 @@
 
 #include <algorithm>
 #include <memory>
+#include <numbers>
 
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/mind_grain.h"
+#include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/paint_controller.h"
 
+using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
 using sound_mind::core::MindGrainConfiguration;
+using sound_mind::core::MindWave;
+using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
@@ -74,6 +79,35 @@ std::unique_ptr<sound_mind::core::ProceduralConfiguration> makeOpaqueTool(double
     config->defaultGradient().setStopValues(0, stop);
     config->defaultGradient().setStopValues(1, stop);
     return config;
+}
+
+/// @brief A single-harmonic InstrumentConfiguration with a fully opaque
+/// gradient - the Instrument counterpart to makeOpaqueTool() above, for
+/// vibrato/tremolo resolver tests that need a real, checkable paint result.
+std::unique_ptr<InstrumentConfiguration> makeOpaqueInstrumentTool(double size = 0.05, float falloff = 0.0f,
+                                                                    float intensity = -10.0f) {
+    auto config = std::make_unique<InstrumentConfiguration>();
+    config->setHarmonicStrengths({1.0});
+    config->setSize(size);
+    config->setFalloff(falloff);
+    auto stop = config->defaultGradient().stops().front();
+    stop.leftIntensity = intensity;
+    stop.rightIntensity = intensity;
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    config->defaultGradient().setStopValues(0, stop);
+    config->defaultGradient().setStopValues(1, stop);
+    return config;
+}
+
+/// @brief A MindWave that reads as 0.0 (baseline) for any small `t` - see
+/// `test_filter_application.cpp`'s own `alwaysBaselineWave()` precedent.
+MindWave alwaysBaselineWave() {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Square);
+    wave.setPeriod(1'000'000.0);
+    wave.setPhaseRadians(std::numbers::pi_v<double>);
+    return wave;
 }
 
 }  // namespace
@@ -446,4 +480,65 @@ void PaintControllerTest::cascadeVisitsEachDependentLayerOnlyOncePerRebuild() {
     QVERIFY(std::find(seen.begin(), seen.end(), a) != seen.end());
     QVERIFY(std::find(seen.begin(), seen.end(), b) != seen.end());
     QVERIFY(std::find(seen.begin(), seen.end(), c) != seen.end());
+}
+
+void PaintControllerTest::endStrokeWithAnInstrumentToolBoundToATremoloMindWaveResolvesItAgainstTheProject() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto tremoloId = project.addMindWave("Tremolo", alwaysBaselineWave());
+
+    PaintController controller;
+    controller.setProject(&project);
+    auto config = makeOpaqueInstrumentTool();
+    config->setTremoloDepth(1.0);  // Full depth - baseline dips strength all the way to 0.
+    config->setTremoloMindWave(tremoloId);
+    controller.setToolConfiguration(std::move(config));
+
+    controller.beginStroke(layerId, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    // The controller resolved tremoloId against the live Project's own
+    // MindWave library (rather than leaving the stroke unmodulated because
+    // no resolver was ever wired up) - the baseline wave silences the
+    // stroke completely.
+    const auto& content = *project.layerById(layerId)->content();
+    const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                         [](float value) { return value != 0.0f; });
+    QVERIFY(!anyPainted);
+}
+
+void PaintControllerTest::rebuildLayerContentRereadsTheTremoloMindWaveLibraryEachTime() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto tremoloId = project.addMindWave("Tremolo", alwaysBaselineWave());
+
+    PaintController controller;
+    controller.setProject(&project);
+    auto config = makeOpaqueInstrumentTool();
+    config->setTremoloDepth(1.0);
+    config->setTremoloMindWave(tremoloId);
+    controller.setToolConfiguration(std::move(config));
+
+    controller.beginStroke(layerId, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    // Still silent - the bound wave is still at baseline.
+    {
+        const auto& content = *project.layerById(layerId)->content();
+        const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                             [](float value) { return value != 0.0f; });
+        QVERIFY(!anyPainted);
+    }
+
+    // Edit the *same* library entry directly (as if the user had just
+    // reshaped it in the MindWaves panel) - no new stroke is drawn, just a
+    // fresh rebuild of the existing one, per the "live reference, not a
+    // snapshot" contract MindWaveResolver's own docs establish.
+    project.mindWaveById(tremoloId)->wave.setPhaseRadians(0.0);  // Baseline -> ceiling.
+    controller.rebuildLayerContent(layerId);
+
+    const auto& content = *project.layerById(layerId)->content();
+    const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                         [](float value) { return value != 0.0f; });
+    QVERIFY(anyPainted);
 }

@@ -194,8 +194,22 @@ double foldSuperposition(SuperpositionBlendMode mode, double running, double mem
 
 float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::StreamCodecConfig& config) const {
     const double safePeriod = std::max(kMinimumPeriod, period_);
-    const double binIndex = static_cast<double>(frequencyToBinIndex(static_cast<float>(point.frequencyHz), config));
-    const double axisPosition = (axis_ == MindWaveAxis::Time) ? point.timeSeconds : binIndex;
+    const double rawBinIndex = static_cast<double>(frequencyToBinIndex(static_cast<float>(point.frequencyHz), config));
+
+    // Warp (v0.Y.39.1 Installment A) - see evaluate()'s own docs. Evaluated
+    // at the original, unwarped point (no recursion back into this same
+    // displacement), then the same single delta is added to both axes'
+    // own natural units before anything below reads them.
+    double effectiveTimeSeconds = point.timeSeconds;
+    double effectiveBinIndex = rawBinIndex;
+    if (hasWarpSource()) {
+        const double warpField = static_cast<double>(warpSource().evaluate(point, config));
+        const double delta = warpStrength_ * (warpField * 2.0 - 1.0);
+        effectiveTimeSeconds += delta;
+        effectiveBinIndex += delta;
+    }
+
+    const double axisPosition = (axis_ == MindWaveAxis::Time) ? effectiveTimeSeconds : effectiveBinIndex;
 
     double result = 0.5;  // Overwritten by every real branch below.
 
@@ -295,8 +309,8 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
             const double safeCellSize = std::max(kMinimumPeriod, noiseScale_);
             switch (spatialPattern_) {
                 case SpatialPattern::Ripples: {
-                    const double deltaX = point.timeSeconds - spatialCenterX_;
-                    const double deltaY = binIndex - spatialCenterY_;
+                    const double deltaX = effectiveTimeSeconds - spatialCenterX_;
+                    const double deltaY = effectiveBinIndex - spatialCenterY_;
                     const double distance = std::sqrt(deltaX * deltaX + deltaY * deltaY);
                     result = (std::sin(2.0 * std::numbers::pi_v<double> * (distance / safePeriod) + phaseRadians_) +
                               1.0) /
@@ -304,14 +318,14 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
                     break;
                 }
                 case SpatialPattern::Checkerboard: {
-                    const auto cellX = static_cast<long long>(std::floor(point.timeSeconds / safePeriod));
-                    const auto cellY = static_cast<long long>(std::floor(binIndex / safePeriod));
+                    const auto cellX = static_cast<long long>(std::floor(effectiveTimeSeconds / safePeriod));
+                    const auto cellY = static_cast<long long>(std::floor(effectiveBinIndex / safePeriod));
                     result = ((cellX + cellY) % 2 == 0) ? 1.0 : 0.0;
                     break;
                 }
                 case SpatialPattern::Cellular: {
                     const double distance =
-                        worleyF1Distance(point.timeSeconds / safeCellSize, binIndex / safeCellSize, seed_);
+                        worleyF1Distance(effectiveTimeSeconds / safeCellSize, effectiveBinIndex / safeCellSize, seed_);
                     // Brighter near a feature point, fading out toward the
                     // cell boundary - normalized so a typical F1 distance
                     // (up to ~0.7 cell-widths) maps into [0, 1].
@@ -320,12 +334,13 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
                 }
                 case SpatialPattern::DomainWarpedNoise: {
                     const double warpX =
-                        point.timeSeconds +
-                        domainWarpStrength_ * valueNoise2D(point.timeSeconds / safeCellSize,
-                                                            binIndex / safeCellSize, seed_);
+                        effectiveTimeSeconds +
+                        domainWarpStrength_ * valueNoise2D(effectiveTimeSeconds / safeCellSize,
+                                                            effectiveBinIndex / safeCellSize, seed_);
                     const double warpY =
-                        binIndex + domainWarpStrength_ * valueNoise2D(point.timeSeconds / safeCellSize,
-                                                                       binIndex / safeCellSize, seed_ + 1);
+                        effectiveBinIndex + domainWarpStrength_ * valueNoise2D(effectiveTimeSeconds / safeCellSize,
+                                                                                effectiveBinIndex / safeCellSize,
+                                                                                seed_ + 1);
                     result = (fractalBrownianMotion2D(warpX / safeCellSize, warpY / safeCellSize, seed_ + 2,
                                                        noiseOctaves_, noisePersistence_) +
                               1.0) /
@@ -364,6 +379,33 @@ std::vector<float> evaluateMindWaveField(const MindWave& wave, const sound_mind:
     return field;
 }
 
+std::vector<float> reduceMindWaveToSignal(const MindWave& wave, const sound_mind::codec::StreamCodecConfig& config,
+                                           std::uint32_t sampleCount, double timeSpanSeconds, ReduceMode mode) {
+    const std::uint32_t sampleCountSafe = std::max(std::uint32_t{1}, sampleCount);
+    std::vector<float> signal(sampleCountSafe);
+
+    for (std::uint32_t sample = 0; sample < sampleCountSafe; ++sample) {
+        const double timeSeconds = timeSpanSeconds * static_cast<double>(sample) / static_cast<double>(sampleCountSafe);
+
+        double result = 0.0;
+        if (mode == ReduceMode::Slice) {
+            const float frequencyHz = binIndexToFrequency(static_cast<float>(config.binCount / 2), config);
+            result = static_cast<double>(wave.evaluate(TimeFrequencyPoint{timeSeconds, frequencyHz}, config));
+        } else {
+            double sum = 0.0;
+            for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+                const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), config);
+                sum += static_cast<double>(wave.evaluate(TimeFrequencyPoint{timeSeconds, frequencyHz}, config));
+            }
+            result = (config.binCount > 0) ? (sum / static_cast<double>(config.binCount)) : 0.0;
+        }
+
+        signal[sample] = static_cast<float>(std::clamp(result, 0.0, 1.0));
+    }
+
+    return signal;
+}
+
 void to_json(nlohmann::json& json, const MindWave& mindWave) {
     json = nlohmann::json{{"type", mindWave.type()},
                           {"periodicWaveform", mindWave.periodicWaveform()},
@@ -388,7 +430,13 @@ void to_json(nlohmann::json& json, const MindWave& mindWave) {
                           {"fractalRoughness", mindWave.fractalRoughness()},
                           {"fractalIterations", mindWave.fractalIterations()},
                           {"superpositionStack", mindWave.superpositionStack()},
-                          {"superpositionBlendMode", mindWave.superpositionBlendMode()}};
+                          {"superpositionBlendMode", mindWave.superpositionBlendMode()},
+                          {"warpStrength", mindWave.warpStrength()}};
+    // Mirrors superpositionStack's own representation: a JSON array of size
+    // 0 or 1, not a nullable single value - consistent with warpSourceStack_
+    // reusing the same vector-of-0-or-1 pattern internally (see hasWarpSource()'s docs).
+    json["warpSourceStack"] =
+        mindWave.hasWarpSource() ? nlohmann::json::array({mindWave.warpSource()}) : nlohmann::json::array();
 }
 
 void from_json(const nlohmann::json& json, MindWave& mindWave) {
@@ -416,6 +464,20 @@ void from_json(const nlohmann::json& json, MindWave& mindWave) {
     mindWave.setFractalIterations(json.at("fractalIterations").get<int>());
     mindWave.setSuperpositionStack(json.at("superpositionStack").get<std::vector<MindWave>>());
     mindWave.setSuperpositionBlendMode(json.at("superpositionBlendMode").get<SuperpositionBlendMode>());
+
+    // Warp (warpSourceStack/warpStrength) was added in v0.Y.39.1, after
+    // MindWave had already shipped and been saved in real project files -
+    // loaded leniently (json.value(...)/manual has_key check) rather than
+    // json.at(...) so older saved projects with neither field still load
+    // cleanly, falling back to "unwarped".
+    mindWave.setWarpStrength(json.value("warpStrength", 1.0));
+    const auto warpSourceStack =
+        json.value("warpSourceStack", nlohmann::json::array()).get<std::vector<MindWave>>();
+    if (!warpSourceStack.empty()) {
+        mindWave.setWarpSource(warpSourceStack.front());
+    } else {
+        mindWave.clearWarpSource();
+    }
 }
 
 void to_json(nlohmann::json& json, const NamedMindWave& namedMindWave) {

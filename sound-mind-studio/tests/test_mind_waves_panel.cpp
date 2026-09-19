@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QLabel>
@@ -193,6 +194,113 @@ void MindWavesPanelTest::changingBlendModeEmits() {
     QCOMPARE(emitCount, 1);
     QVERIFY(receivedWave.has_value());
     QCOMPARE(receivedWave->superpositionBlendMode(), SuperpositionBlendMode::Add);
+}
+
+void MindWavesPanelTest::enablingWarpEmitsAndSetsHasWarpSourceOnTheComposite() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))->isEnabled());
+    int emitCount = 0;
+    std::optional<MindWave> receivedWave;
+    connect(&panel, &MindWavesPanel::mindWaveChanged,
+            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
+
+    QTest::mouseClick(panel.findChild<QCheckBox*>(QStringLiteral("warpEnabledCheckBox")), Qt::LeftButton);
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(receivedWave.has_value());
+    QVERIFY(receivedWave->hasWarpSource());
+    QVERIFY(panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))->isEnabled());
+}
+
+void MindWavesPanelTest::disablingWarpClearsTheWarpSourceAndEmits() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("warpEnabledCheckBox"));
+    QTest::mouseClick(checkBox, Qt::LeftButton);  // Enable first.
+    int emitCount = 0;
+    std::optional<MindWave> receivedWave;
+    connect(&panel, &MindWavesPanel::mindWaveChanged,
+            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
+
+    QTest::mouseClick(checkBox, Qt::LeftButton);  // Disable.
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(receivedWave.has_value());
+    QVERIFY(!receivedWave->hasWarpSource());
+    QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))->isEnabled());
+}
+
+void MindWavesPanelTest::editingTheWarpSourceEditorUpdatesItAndEmits() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    QTest::mouseClick(panel.findChild<QCheckBox*>(QStringLiteral("warpEnabledCheckBox")), Qt::LeftButton);
+    int emitCount = 0;
+    std::optional<MindWave> receivedWave;
+    connect(&panel, &MindWavesPanel::mindWaveChanged,
+            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
+
+    panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))
+        ->findChild<QDoubleSpinBox*>(QStringLiteral("periodSpinBox"))
+        ->setValue(7.0);
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(receivedWave.has_value());
+    QVERIFY(receivedWave->hasWarpSource());
+    QCOMPARE(receivedWave->warpSource().period(), 7.0);
+}
+
+void MindWavesPanelTest::changingWarpStrengthEmitsWhileWarpIsEnabled() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    QTest::mouseClick(panel.findChild<QCheckBox*>(QStringLiteral("warpEnabledCheckBox")), Qt::LeftButton);
+    int emitCount = 0;
+    std::optional<MindWave> receivedWave;
+    connect(&panel, &MindWavesPanel::mindWaveChanged,
+            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
+
+    panel.findChild<QDoubleSpinBox*>(QStringLiteral("warpStrengthSpinBox"))->setValue(2.5);
+
+    QCOMPARE(emitCount, 1);
+    QVERIFY(receivedWave.has_value());
+    QCOMPARE(receivedWave->warpStrength(), 2.5);
+}
+
+void MindWavesPanelTest::selectingARowWithNoWarpSourceLeavesTheWarpControlsDisabled() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+
+    panel.selectMindWave(2);
+
+    QVERIFY(!panel.findChild<QCheckBox*>(QStringLiteral("warpEnabledCheckBox"))->isChecked());
+    QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))->isEnabled());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("warpStrengthSpinBox"))->isEnabled());
+}
+
+void MindWavesPanelTest::selectingARowWithAnExistingWarpSourcePopulatesTheCheckboxStrengthAndEditor() {
+    MindWave source;
+    source.setPeriod(3.0);
+    MindWave warped;
+    warped.setWarpSource(source);
+    warped.setWarpStrength(1.5);
+    MindWavesPanel::RowData row;
+    row.id = 9;
+    row.name = QStringLiteral("Warped");
+    row.wave = warped;
+
+    MindWavesPanel panel;
+    panel.setMindWaves({row});
+
+    panel.selectMindWave(9);
+
+    QVERIFY(panel.findChild<QCheckBox*>(QStringLiteral("warpEnabledCheckBox"))->isChecked());
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("warpStrengthSpinBox"))->value(), 1.5);
+    QVERIFY(panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))->isEnabled());
+    QCOMPARE(panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))->mindWave().period(), 3.0);
 }
 
 void MindWavesPanelTest::selectMindWaveSelectsAnExistingRowAndNoOpsForUnknownId() {

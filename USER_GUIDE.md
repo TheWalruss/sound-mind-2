@@ -327,6 +327,13 @@ shape instead of staying fixed.
   (multiply, add, min, max, or average) - the **+ Add Member**/**- Remove
   Member** buttons and the small list beside them manage that MindWave's
   own combined members, each editable the same way as a top-level one.
+- **Warp** lets one MindWave distort the position another is sampled at,
+  giving a wavier, less mechanically regular result than either shape
+  alone - check **Enable Warp** to reveal a **Strength** spin box and a
+  small nested editor for the warp source (its own generator type and
+  parameters, edited the same way as a top-level MindWave). Higher
+  strength values push the distortion further; unchecking Enable Warp
+  removes it entirely.
 - Back in the **Layers** panel, each row's opacity-MindWave combo lets you
   bind that layer's opacity to any MindWave in the library, or set it back
   to **None** for a plain, fixed opacity. A binding multiplies the layer's
@@ -557,6 +564,15 @@ settings:
   overtones do (a piano string, for instance). `0` (the default) is
   perfectly harmonic; small positive values (try `0.01`-`0.05`) give
   higher harmonics an audibly metallic, bell-like stretch.
+- **Vibrato**/**Tremolo** (Instrument only) - each a depth spin box paired
+  with a MindWave bind combo. Binding a MindWave makes it modulate pitch
+  (Vibrato, in semitones) or strength (Tremolo, as a fraction toward
+  silence) across the course of a stroke, following that MindWave's own
+  shape - a longer stroke shows more of the shape, a short one only a
+  sliver of it. Set back to **None** for no modulation at all, regardless
+  of the depth value. This tracks the stroke's own position along itself,
+  not real elapsed time, so the same MindWave shape always plays out fully
+  over any one stroke, however long or short it is.
 - **Mind Shot** (Mind Shot only) - a drop-down of every Mind Shot you've
   captured so far (see [Selection and Fill](#selection-and-fill)'s own
   "Capture as Mind Shot"), empty until you capture your first one.
@@ -1085,11 +1101,12 @@ order; this guide will grow alongside it.
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:
 
-- Only **Procedural**, **Instrument** (harmonic series + inharmonicity
-  only - no noise component, body resonance, or ADSR envelope yet), **Mind
-  Shot** (capture-and-restamp), **Mind Grain** (a live reference, updating
-  immediately everywhere it's used the moment its own source is
-  repainted), **Heal** (temporal blur), **Soften** (radial blur), **Smudge**
+- Only **Procedural**, **Instrument** (harmonic series, inharmonicity, and
+  MindWave-driven vibrato/tremolo - no noise component, body resonance, or
+  ADSR envelope yet), **Mind Shot** (capture-and-restamp), **Mind Grain**
+  (a live reference, updating immediately everywhere it's used the moment
+  its own source is repainted), **Heal** (temporal blur), **Soften**
+  (radial blur), **Smudge**
   (a simple per-stamp directional smear, not a real stateful "brush load"
   carried across the whole stroke the way a classic paint program's own
   Smudge tool works), and **Order/Chaos** (concrete permutation/reordering
@@ -1186,19 +1203,23 @@ loose ends remain:
 [MindWaves](#mindwaves) (see above) exist now, but only a narrow slice of
 what's designed for them:
 
-- **Layer opacity and the five filter-parameter scalars** can bind to a
-  MindWave now; **brush parameters** can't yet (see the bullet above). A
-  layer's **Blend Mode** can't bind to a MindWave either - it's a single,
-  fixed choice per layer, not spatially varying.
-- **No canvas-space vs. operation-relative choice** - every binding today
-  is implicitly canvas-space (the field is a fixed mask laid over the
-  whole piece); the "retriggers fresh per note" alternative is planned for
-  a later Sound Mind Instruments installment (harmonic series +
-  inharmonicity only exist so far - see [Painting](#painting) above).
-- **No Field Operators** - Warp (one field distorting where another
-  samples from) and Reduce (collapsing a field to a plain control signal)
-  aren't built. Superposition (combining several MindWaves together) is
-  the one field operator that does exist.
+- **Layer opacity, every filter-parameter scalar, and Sound Mind
+  Instruments' own Vibrato/Tremolo** can bind to a MindWave now (see
+  [Painting](#painting) above for Vibrato/Tremolo); no other brush
+  parameter can yet. A layer's **Blend Mode** can't bind to a MindWave
+  either - it's a single, fixed choice per layer, not spatially varying.
+- **Vibrato/Tremolo track a stroke's own position along itself, not a
+  genuine per-note clock** - every other binding in this codebase is
+  canvas-space (a fixed mask laid over the whole piece); Vibrato/Tremolo
+  instead follow the stroke's own progress, so a MindWave's shape always
+  plays out fully over one stroke, however long or short it is. A real
+  "retriggers exactly the same way for every distinct note, regardless of
+  stroke length" alternative is still planned, not yet built.
+- **Warp and Reduce exist now**, alongside Superposition - Warp (one field
+  distorting where another samples from) is directly editable in the
+  MindWaves panel; Reduce (collapsing a field to a plain control signal)
+  has no standalone UI of its own yet - Vibrato/Tremolo above are its only
+  current use.
 - **No drawn-shape or step-grid generator types**, and no Continuous
   Controls interface - the MindWaves panel's own editor is plain numeric
   fields only, per generator type.

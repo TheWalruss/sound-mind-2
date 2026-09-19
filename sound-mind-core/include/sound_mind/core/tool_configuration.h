@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -13,6 +14,16 @@
 #include "sound_mind/core/mind_shot.h"
 
 namespace sound_mind::core {
+
+/// @brief Opaque identifier for a `NamedMindWave` within a Project - a
+/// deliberate, exact duplicate of `mind_wave.h`'s own `MindWaveId` alias
+/// (matching `docs/sound-mind-architecture.md`'s own Decision #59
+/// "duplicated, not shared" precedent, and `filter_configuration.h`'s/
+/// `layer.h`'s own identical duplication for the same reason - Decision
+/// #80): including `mind_wave.h` here would cycle back through `path.h` ->
+/// `operation.h` -> `layer.h` -> this header. A type alias can be
+/// redeclared identically in multiple headers with no ODR concern.
+using MindWaveId = std::uint64_t;
 
 /**
  * @brief Which kind of painting tool a `ToolConfiguration` configures -
@@ -379,6 +390,21 @@ private:
  * own follow-up installment, confirmed with the user alongside this one -
  * see `docs/sound-mind-architecture.md`'s own Decision on this class).
  *
+ * **`v0.Y.39.1` Installment A adds `vibratoMindWave()`/`tremoloMindWave()`**:
+ * Reduce's own new per-note modulation hook for Instruments (see
+ * `reduceMindWaveToSignal()`'s own docs and `applyInstrumentPaintOperation()`'s
+ * own docs for the mechanism) - each bound wave is first collapsed to a 1D
+ * signal via `reduceMindWaveToSignal(..., wave.period(), ReduceMode::
+ * Integrate)`, then sampled once per stamp at that stamp's own `pathT`
+ * (0..1 progress along the *whole stroke*, not a per-note clock - this
+ * sidesteps the separate, still-unbuilt "operation-relative MindWave
+ * binding" architecture entirely, at the cost of a genuinely fresh
+ * per-note retrigger feel, which that future architecture would still add).
+ * Ordinary `std::optional<MindWaveId>` live-reference bindings, the same
+ * pattern every other "bind X to a MindWave" parameter in this codebase
+ * uses (see `FilterConfiguration::blurSigmaMindWave()`'s own docs for the
+ * general mechanism) - not a snapshot.
+ *
  * **No `tipShape()`** - an Instrument's own "shape" in frequency *is* the
  * harmonic series (each harmonic a single bin-exact partial, not a
  * blended-footprint blob); `falloff()`/`size()` (inherited from the base)
@@ -443,9 +469,74 @@ public:
     /// @param inharmonicity The new coefficient.
     void setInharmonicity(double inharmonicity) noexcept { inharmonicity_ = inharmonicity; }
 
+    /**
+     * @brief The MindWave (if any) driving this Instrument's vibrato
+     *        (per-note pitch modulation) - see this class's own docs for
+     *        the pathT-sampled Reduce mechanism.
+     * @return The bound MindWave's id, or `std::nullopt` for no vibrato
+     *         (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> vibratoMindWave() const noexcept { return vibratoMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave drives vibrato - see
+    ///        vibratoMindWave()'s own docs.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setVibratoMindWave(std::optional<MindWaveId> mindWaveId) noexcept { vibratoMindWave_ = mindWaveId; }
+
+    /**
+     * @brief How far `vibratoMindWave()` (when bound) can bend each
+     *        harmonic's own frequency, in semitones - applied as
+     *        `harmonicHz *= pow(2, vibratoDepthSemitones/12 * (modulator*2-1))`,
+     *        so the modulator's own `[0, 1]` range maps to a symmetric
+     *        `+/-vibratoDepthSemitones` bend. Meaningless while
+     *        `vibratoMindWave()` is unbound.
+     * @return The current depth, in semitones; not clamped or validated
+     *         here.
+     */
+    [[nodiscard]] double vibratoDepthSemitones() const noexcept { return vibratoDepthSemitones_; }
+
+    /// @brief Sets the vibrato depth - see vibratoDepthSemitones()'s own
+    ///        docs.
+    /// @param semitones The new depth, in semitones.
+    void setVibratoDepthSemitones(double semitones) noexcept { vibratoDepthSemitones_ = semitones; }
+
+    /**
+     * @brief The MindWave (if any) driving this Instrument's tremolo
+     *        (per-note amplitude modulation) - see this class's own docs
+     *        for the pathT-sampled Reduce mechanism.
+     * @return The bound MindWave's id, or `std::nullopt` for no tremolo
+     *         (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> tremoloMindWave() const noexcept { return tremoloMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave drives tremolo - see
+    ///        tremoloMindWave()'s own docs.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setTremoloMindWave(std::optional<MindWaveId> mindWaveId) noexcept { tremoloMindWave_ = mindWaveId; }
+
+    /**
+     * @brief How far `tremoloMindWave()` (when bound) can dip each
+     *        harmonic's own strength, as a `[0, 1]` fraction - applied as
+     *        `strength *= 1 - tremoloDepth*(1-modulator)`, so the
+     *        modulator's own `1` leaves strength unchanged and `0` dips it
+     *        by the full `tremoloDepth` fraction. Meaningless while
+     *        `tremoloMindWave()` is unbound.
+     * @return The current depth; not clamped or validated here, but
+     *         intended to stay within `[0, 1]`.
+     */
+    [[nodiscard]] double tremoloDepth() const noexcept { return tremoloDepth_; }
+
+    /// @brief Sets the tremolo depth - see tremoloDepth()'s own docs.
+    /// @param depth The new depth, intended to be within `[0, 1]`.
+    void setTremoloDepth(double depth) noexcept { tremoloDepth_ = depth; }
+
 private:
     std::vector<double> harmonicStrengths_ = {1.0, 0.5, 0.25, 0.125};
     double inharmonicity_ = 0.0;
+    std::optional<MindWaveId> vibratoMindWave_;
+    double vibratoDepthSemitones_ = 0.5;
+    std::optional<MindWaveId> tremoloMindWave_;
+    double tremoloDepth_ = 0.3;
 };
 
 /**

@@ -24,4 +24,12 @@ private slots:
     void freshPanelHasPreviewOff();
     void clickingThePreviewButtonEmitsPreviewToggled();
     void setPreviewEnabledChangesTheButtonWithoutEmitting();
+
+    // Warp (v0.Y.39.1 Installment A).
+    void enablingWarpEmitsAndSetsHasWarpSourceOnTheComposite();
+    void disablingWarpClearsTheWarpSourceAndEmits();
+    void editingTheWarpSourceEditorUpdatesItAndEmits();
+    void changingWarpStrengthEmitsWhileWarpIsEnabled();
+    void selectingARowWithNoWarpSourceLeavesTheWarpControlsDisabled();
+    void selectingARowWithAnExistingWarpSourcePopulatesTheCheckboxStrengthAndEditor();
 };

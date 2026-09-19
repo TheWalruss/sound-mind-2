@@ -8,7 +8,9 @@
 
 #include "sound_mind/core/mind_wave.h"
 
+class QCheckBox;
 class QComboBox;
+class QDoubleSpinBox;
 class QListWidget;
 class QListWidgetItem;
 class QPushButton;
@@ -27,20 +29,27 @@ class MindWaveEditor;
  * connects to its own handlers - no `Project`/`NamedMindWave` mutation
  * happens here.
  *
- * **Two `MindWaveEditor`s, not one**: the top one edits whichever library
- * entry is currently selected in the list above it; the bottom one edits
+ * **Three `MindWaveEditor`s, not one**: the top one edits whichever library
+ * entry is currently selected in the list above it; the second edits
  * whichever entry of *that* MindWave's own `superpositionStack()` is
  * currently selected in the smaller list beside it (confirmed with the
  * user: a minimal nested editor, one level deep - a stack member's own
  * further-nested stack, if it somehow has one, isn't reachable through
- * this UI). Every edit anywhere - the top editor, the stack list itself
- * (add/remove), the stack member editor, or the blend mode combo -
+ * this UI); the third (`v0.Y.39.1` Installment A) edits the selected
+ * entry's own `warpSource()`, shown/enabled only while an "Enable Warp"
+ * checkbox is checked - the same one-level-deep nesting limit, for the
+ * same reason, applied to `warpSourceStack_`'s own vector-of-0-or-1
+ * representation (see `MindWave::hasWarpSource()`'s own docs) instead of
+ * an arbitrary-length list. Every edit anywhere - the top editor, the
+ * stack list itself (add/remove), the stack member editor, the blend mode
+ * combo, the Warp checkbox/strength spin box, or the warp source editor -
  * reconstructs this panel's own current, complete `MindWave` (top-level
  * generator parameters from the top editor, `superpositionStack()`/
- * `superpositionBlendMode()` from this panel's own tracked stack state)
- * and emits exactly one mindWaveChanged() with it, the same "emit the
- * whole thing, not a per-field delta" convention `FilterConfigurationPanel`
- * already established.
+ * `superpositionBlendMode()` from this panel's own tracked stack state,
+ * `warpSource()`/`warpStrength()` from this panel's own tracked warp
+ * state) and emits exactly one mindWaveChanged() with it, the same "emit
+ * the whole thing, not a per-field delta" convention
+ * `FilterConfigurationPanel` already established.
  *
  * **Preview**: a checkable toggle previews the currently selected
  * entry's own complete field (top-level generator plus its full
@@ -172,6 +181,14 @@ private:
     ///        refresh both need.
     void loadStackState(const sound_mind::core::MindWave& wave);
 
+    /// @brief Loads `wave`'s own warp source/strength into
+    ///        currentWarpEnabled_/currentWarpSource_/currentWarpStrength_/
+    ///        the checkbox/spin box/warpSourceEditor_ - the Warp
+    ///        counterpart to loadStackState(), called alongside it at
+    ///        every site that needs one (see that method's own docs).
+    ///        `v0.Y.39.1` Installment A.
+    void loadWarpState(const sound_mind::core::MindWave& wave);
+
     QPushButton* addButton_ = nullptr;
     QPushButton* previewButton_ = nullptr;
     QListWidget* list_ = nullptr;
@@ -204,6 +221,23 @@ private:
     /// @brief Which currentStack_ index the bottom editor currently shows,
     /// if any.
     std::optional<int> selectedStackMemberIndex_;
+
+    /// @brief The selected library entry's own `hasWarpSource()` - see
+    /// currentStack_'s own docs for why this lives here, not on
+    /// mindWaveEditor_. `v0.Y.39.1` Installment A.
+    bool currentWarpEnabled_ = false;
+
+    /// @brief The selected library entry's own `warpSource()`, meaningful
+    /// only while currentWarpEnabled_ is `true` - a default-constructed
+    /// `MindWave` otherwise.
+    sound_mind::core::MindWave currentWarpSource_;
+
+    /// @brief The selected library entry's own `warpStrength()`.
+    double currentWarpStrength_ = 1.0;
+
+    QCheckBox* warpEnabledCheckBox_ = nullptr;
+    QDoubleSpinBox* warpStrengthSpinBox_ = nullptr;
+    MindWaveEditor* warpSourceEditor_ = nullptr;
 };
 
 }  // namespace sound_mind::studio
