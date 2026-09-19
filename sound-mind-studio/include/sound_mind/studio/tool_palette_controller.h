@@ -293,9 +293,16 @@ public:
     /// @brief Pastes the clipboard onto `targetLayer` - forwards to
     ///        `SelectionController::pasteInto()`.
     /// @param targetLayer Which layer to paste into.
+    /// @param blendMode How the pasted clip combines with what's already at
+    ///        the target - `v0.Y.37.1` (Deferred Blend Modes), forwarded
+    ///        straight through. `sound_mind::core::BlendMode::Overwrite`
+    ///        (the default) reproduces this method's own pre-`v0.Y.37.1`
+    ///        hard-overwrite behavior exactly.
     /// @return The newly-created `PasteOperation`'s own id, or
     ///         `std::nullopt` if there was nothing on the clipboard.
-    [[nodiscard]] std::optional<sound_mind::core::OperationId> pasteInto(sound_mind::core::LayerId targetLayer);
+    [[nodiscard]] std::optional<sound_mind::core::OperationId> pasteInto(
+        sound_mind::core::LayerId targetLayer,
+        sound_mind::core::BlendMode blendMode = sound_mind::core::BlendMode::Overwrite);
 
     /// @brief Selects a specific operation as Pick's own current
     ///        selection - forwards to `PickController::selectOperation()`.

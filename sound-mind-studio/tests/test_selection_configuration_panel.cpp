@@ -9,9 +9,11 @@
 #include <QWidget>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/studio/selection_configuration_panel.h"
 #include "sound_mind/studio/selection_controller.h"
 
+using sound_mind::core::BlendMode;
 using sound_mind::studio::SelectionConfigurationPanel;
 using sound_mind::studio::SelectionShape;
 
@@ -90,4 +92,19 @@ void SelectionConfigurationPanelTest::togglingHarmonicsAwareEmitsWandHarmonicsAw
     QVERIFY(received.has_value());
     QVERIFY(*received);
     QVERIFY(panel.wandHarmonicsAware());
+}
+
+void SelectionConfigurationPanelTest::freshPanelDefaultsPasteBlendModeToOverwrite() {
+    const SelectionConfigurationPanel panel;
+    QCOMPARE(panel.pasteBlendMode(), BlendMode::Overwrite);
+}
+
+void SelectionConfigurationPanelTest::changingThePasteBlendModeComboUpdatesPasteBlendMode() {
+    SelectionConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("pasteBlendModeCombo"));
+    QVERIFY(combo != nullptr);
+
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Multiply")));
+
+    QCOMPARE(panel.pasteBlendMode(), BlendMode::Multiply);
 }

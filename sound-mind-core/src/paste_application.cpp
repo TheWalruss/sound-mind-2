@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 
+#include "sound_mind/core/blend_mode_application.h"
 #include "sound_mind/core/paint_application.h"
 
 namespace sound_mind::core {
@@ -75,9 +76,14 @@ void applyPasteOperation(const PasteOperation& operation, sound_mind::codec::Str
 
             const std::size_t clipIndex = cellIndex(clipBin, clipFrame, clip.frameCount);
             const std::size_t destIndex = cellIndex(destBin, destFrame, content.frameCount);
-            content.leftMagnitudeDb[destIndex] = clip.leftMagnitudeDb[clipIndex];
-            content.rightMagnitudeDb[destIndex] = clip.rightMagnitudeDb[clipIndex];
-            content.sharedPhaseRadians[destIndex] = clip.sharedPhaseRadians[clipIndex];
+            const BlendedCell base{content.leftMagnitudeDb[destIndex], content.rightMagnitudeDb[destIndex],
+                                    content.sharedPhaseRadians[destIndex]};
+            const BlendedCell overlay{clip.leftMagnitudeDb[clipIndex], clip.rightMagnitudeDb[clipIndex],
+                                       clip.sharedPhaseRadians[clipIndex]};
+            const BlendedCell blended = applyBlendedCell(operation.blendMode(), base, overlay, 1.0f);
+            content.leftMagnitudeDb[destIndex] = blended.leftMagnitudeDb;
+            content.rightMagnitudeDb[destIndex] = blended.rightMagnitudeDb;
+            content.sharedPhaseRadians[destIndex] = blended.phaseRadians;
         }
     }
 }

@@ -13,6 +13,7 @@
 #include <QSpinBox>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -20,6 +21,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
+using sound_mind::core::BlendMode;
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::Clip;
 using sound_mind::core::HealConfiguration;
@@ -874,4 +876,56 @@ void ToolConfigurationPanelTest::switchingFromHealBackToProceduralPreservesTheOr
 
     // The detour through Heal didn't silently overwrite the original choice.
     QCOMPARE(panel.toolConfiguration().stampMode(), StampMode::TimeAxis);
+}
+
+// --- Blend Mode (v0.Y.37.1) -------------------------------------------------
+
+void ToolConfigurationPanelTest::proceduralHidesTheBlendModeCombo() {
+    const ToolConfigurationPanel panel;  // Fresh - already Procedural.
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"))->isHidden());
+}
+
+void ToolConfigurationPanelTest::mindShotShowsTheBlendModeComboDefaultedToOverwrite() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Shot")));
+
+    auto* blendModeCombo = panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"));
+    QVERIFY(!blendModeCombo->isHidden());
+    QCOMPARE(blendModeCombo->currentText(), QStringLiteral("Overwrite"));
+}
+
+void ToolConfigurationPanelTest::mindGrainShowsTheBlendModeComboDefaultedToOverwrite() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Grain")));
+
+    auto* blendModeCombo = panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"));
+    QVERIFY(!blendModeCombo->isHidden());
+    QCOMPARE(blendModeCombo->currentText(), QStringLiteral("Overwrite"));
+}
+
+void ToolConfigurationPanelTest::changingTheBlendModeComboEmitsToolConfigurationChangedWithTheNewMode() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Shot")));
+    auto* blendModeCombo = panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"));
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    blendModeCombo->setCurrentIndex(blendModeCombo->findText(QStringLiteral("Multiply")));
+
+    QCOMPARE(spy.count(), 1);
+    const auto& mindShot = dynamic_cast<const MindShotConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(mindShot.blendMode(), BlendMode::Multiply);
+}
+
+void ToolConfigurationPanelTest::loadingAMindShotConfigurationSyncsTheBlendModeCombo() {
+    ToolConfigurationPanel panel;
+    MindShotConfiguration config;
+    config.setBlendMode(BlendMode::Screen);
+
+    panel.setToolConfiguration(config);
+
+    auto* blendModeCombo = panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"));
+    QCOMPARE(blendModeCombo->currentText(), QStringLiteral("Screen"));
 }

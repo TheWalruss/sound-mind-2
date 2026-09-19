@@ -9,6 +9,7 @@
 
 #include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/filter_configuration.h"
 
 namespace sound_mind::core {
@@ -70,19 +71,20 @@ NLOHMANN_JSON_SERIALIZE_ENUM(LayerType, {
  * See `docs/sound-mind-design.md`'s "Layers" and
  * `docs/sound-mind-architecture.md`'s Core Data Model.
  *
- * @note Deliberately minimal for now: blend mode and the cached raster
- *       result are not yet represented here - each depends on a type
- *       (`BlendMode`, `RasterCache`) that hasn't been designed in code yet.
- *       Adding placeholder members for them now would just mean
- *       redesigning this class again as soon as those types exist. As of
- *       `v0.Y.21.1` (Layer Time Alignment), a narrow slice of "transform"
- *       *is* represented - translationColumns() and rescaleFactor(), the
- *       horizontal-axis-only subset described there - not the legacy
- *       Studio's full affine transform (no vertical translation, scale, or
- *       rotation). As of `v0.Y.31.1` Installment C1, MindWave linkage
- *       *is* also represented - opacityMindWave(), a `std::optional
- *       <MindWaveId>` naming an entry in the owning `Project`'s own
- *       `mindWaves()` library, not an embedded `MindWave` value.
+ * @note Deliberately minimal for now: the cached raster result is not yet
+ *       represented here - it depends on a type (`RasterCache`) that hasn't
+ *       been designed in code yet. Adding a placeholder member for it now
+ *       would just mean redesigning this class again as soon as that type
+ *       exists. As of `v0.Y.21.1` (Layer Time Alignment), a narrow slice of
+ *       "transform" *is* represented - translationColumns() and
+ *       rescaleFactor(), the horizontal-axis-only subset described there -
+ *       not the legacy Studio's full affine transform (no vertical
+ *       translation, scale, or rotation). As of `v0.Y.31.1` Installment C1,
+ *       MindWave linkage *is* also represented - opacityMindWave(), a
+ *       `std::optional<MindWaveId>` naming an entry in the owning
+ *       `Project`'s own `mindWaves()` library, not an embedded `MindWave`
+ *       value. As of `v0.Y.37.1` (Deferred Blend Modes), blendMode() *is*
+ *       also represented - see its own docs.
  */
 class Layer {
 public:
@@ -307,6 +309,26 @@ public:
     /// @param config The new configuration - see filterConfiguration()'s own docs.
     void setFilterConfiguration(FilterConfiguration config) { filterConfiguration_ = std::move(config); }
 
+    /**
+     * @brief How this layer's own contribution combines with what's
+     *        already composited beneath it - `docs/sound-mind-design.md`'s
+     *        "Compositing", `v0.Y.37.1` (Deferred Blend Modes).
+     *
+     * Dispatched through `sound_mind::core::applyBlendedCell()` by
+     * `compositor.cpp`'s own `mixLayerInto()` for every layer.
+     *
+     * @return The current blend mode; `BlendMode::Normal` (this codebase's
+     *         own pre-`v0.Y.37.1` audio-style summing behavior) by default -
+     *         a layer saved before this milestone existed always gets this
+     *         value, reproducing its own prior, only-ever-Normal behavior
+     *         exactly.
+     */
+    [[nodiscard]] BlendMode blendMode() const noexcept { return blendMode_; }
+
+    /// @brief Sets this layer's own blend mode.
+    /// @param mode The new mode - see blendMode()'s own docs.
+    void setBlendMode(BlendMode mode) noexcept { blendMode_ = mode; }
+
     friend void to_json(nlohmann::json& json, const Layer& layer);
     friend void from_json(const nlohmann::json& json, Layer& layer);
 
@@ -322,6 +344,7 @@ private:
     std::optional<sound_mind::codec::StreamImage> content_;
     std::optional<sound_mind::codec::PoolImage> poolContent_;
     FilterConfiguration filterConfiguration_;
+    BlendMode blendMode_ = BlendMode::Normal;
 };
 
 /// @brief Serializes a Layer to its JSON representation.

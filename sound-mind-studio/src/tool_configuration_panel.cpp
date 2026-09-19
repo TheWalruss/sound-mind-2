@@ -26,6 +26,7 @@ namespace sound_mind::studio {
 
 namespace {
 
+using sound_mind::core::BlendMode;
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::FixedStampPlacementConfiguration;
 using sound_mind::core::HealConfiguration;
@@ -91,6 +92,20 @@ constexpr std::array<std::pair<BrushTipShape, const char*>, 11> kTipShapes{{
 /// all any of the three actually needs. `OrderChaos` is the exception - the
 /// first tool type in this milestone with a field of its own
 /// (`orderChaosGroup_`'s own Amount spin box).
+/// @brief Every `BlendMode` paired with its display name, in the same order
+/// `selection_configuration_panel.cpp`'s own `kPasteBlendModes` establishes
+/// (`Overwrite` first, matching its own role as the default) - `v0.Y.37.1`
+/// (Deferred Blend Modes).
+constexpr std::array<std::pair<BlendMode, const char*>, 7> kBlendModes = {{
+    {BlendMode::Overwrite, "Overwrite"},
+    {BlendMode::Normal, "Normal"},
+    {BlendMode::Multiply, "Multiply"},
+    {BlendMode::Screen, "Screen"},
+    {BlendMode::Overlay, "Overlay"},
+    {BlendMode::Difference, "Difference"},
+    {BlendMode::Add, "Add"},
+}};
+
 constexpr std::array<std::pair<ToolType, const char*>, 8> kToolTypes{{
     {ToolType::Procedural, "Procedural"},
     {ToolType::Instrument, "Instrument"},
@@ -339,6 +354,15 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     });
     sharedControlsForm_->addRow(tr("Opacity:"), opacitySpinBox_);
 
+    blendModeCombo_ = new QComboBox(container);
+    blendModeCombo_->setObjectName(QStringLiteral("blendModeCombo"));
+    for (const auto& [mode, name] : kBlendModes) {
+        blendModeCombo_->addItem(tr(name), QVariant::fromValue(static_cast<int>(mode)));
+    }
+    connect(blendModeCombo_, &QComboBox::currentIndexChanged, this,
+            &ToolConfigurationPanel::handleBlendModeComboChanged);
+    sharedControlsForm_->addRow(tr("Blend Mode:"), blendModeCombo_);
+
     root->addLayout(sharedControlsForm_);
     root->addStretch();
 
@@ -416,6 +440,11 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
                 mindShot->setClip(id, named->clip);
             }
         }
+        // Same reasoning as mindShotCombo_'s own carry-over just above -
+        // blendModeCombo_ stays populated even while hidden, so a prior
+        // visit to MindShot/MindGrain's own blend mode choice survives a
+        // detour through another type.
+        mindShot->setBlendMode(static_cast<BlendMode>(blendModeCombo_->currentData().toInt()));
         replacement = std::move(mindShot);
     } else if (type == ToolType::MindGrain) {
         auto mindGrain = std::make_unique<MindGrainConfiguration>();
@@ -426,6 +455,7 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
                 mindGrain->setReference(id, named->sourceLayerId, named->bounds);
             }
         }
+        mindGrain->setBlendMode(static_cast<BlendMode>(blendModeCombo_->currentData().toInt()));
         replacement = std::move(mindGrain);
     } else if (type == ToolType::Heal) {
         replacement = std::make_unique<HealConfiguration>();
@@ -493,6 +523,18 @@ void ToolConfigurationPanel::updateSharedControlVisibility() {
     sharedControlsForm_->setRowVisible(stampIntervalSpinBox_, showStampModeAndInterval);
     sharedControlsForm_->setRowVisible(colorButton_, showColor);
     sharedControlsForm_->setRowVisible(opacitySpinBox_, showFalloffSizeAndOpacity);
+    sharedControlsForm_->setRowVisible(blendModeCombo_, isMindShotOrGrain);
+}
+
+void ToolConfigurationPanel::handleBlendModeComboChanged(int index) {
+    const auto mode = static_cast<BlendMode>(blendModeCombo_->itemData(index).toInt());
+    if (auto* mindShot = dynamic_cast<MindShotConfiguration*>(config_.get())) {
+        mindShot->setBlendMode(mode);
+        emitConfigChanged();
+    } else if (auto* mindGrain = dynamic_cast<MindGrainConfiguration*>(config_.get())) {
+        mindGrain->setBlendMode(mode);
+        emitConfigChanged();
+    }
 }
 
 void ToolConfigurationPanel::rebuildHarmonicStrengthRows(std::size_t count) {
@@ -578,6 +620,10 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
             index = mindShotCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(*sourceId)));
         }
         mindShotCombo_->setCurrentIndex(index >= 0 ? index : 0);
+        const QSignalBlocker blendModeBlocker(blendModeCombo_);
+        const int blendModeIndex =
+            blendModeCombo_->findData(QVariant::fromValue(static_cast<int>(mindShot->blendMode())));
+        blendModeCombo_->setCurrentIndex(blendModeIndex >= 0 ? blendModeIndex : 0);
     } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(config_.get())) {
         const QSignalBlocker blocker(mindGrainCombo_);
         int index = -1;
@@ -585,6 +631,10 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
             index = mindGrainCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(*sourceId)));
         }
         mindGrainCombo_->setCurrentIndex(index >= 0 ? index : 0);
+        const QSignalBlocker blendModeBlocker(blendModeCombo_);
+        const int blendModeIndex =
+            blendModeCombo_->findData(QVariant::fromValue(static_cast<int>(mindGrain->blendMode())));
+        blendModeCombo_->setCurrentIndex(blendModeIndex >= 0 ? blendModeIndex : 0);
     } else if (const auto* orderChaos = dynamic_cast<const OrderChaosConfiguration*>(config_.get())) {
         const QSignalBlocker blocker(amountSpinBox_);
         amountSpinBox_->setValue(orderChaos->amount());

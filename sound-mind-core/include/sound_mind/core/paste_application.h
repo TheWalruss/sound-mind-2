@@ -24,25 +24,30 @@ namespace sound_mind::core {
 [[nodiscard]] Clip captureClip(const sound_mind::codec::StreamImage& source, const TimeFrequencyRect& bounds);
 
 /**
- * @brief Applies a `PasteOperation`'s own clip directly onto a
- *        `StreamImage`'s amplitude/phase planes, in place.
+ * @brief Applies a `PasteOperation`'s own clip onto a `StreamImage`'s
+ *        amplitude/phase planes, in place, per the operation's own
+ *        `blendMode()`.
  *
- * Unlike `applyPaintOperation()`/`applyFillOperation()`, this is a direct
- * overwrite, not a gradient-blended edit: every destination cell within
- * `operation.bounds()` is replaced outright by the clip's own corresponding
- * source cell - a paste reproduces exactly what was copied, not a color
- * mixed toward it. The clip is positioned so its own top-left (lowest time,
- * lowest frequency bin) lands at `operation.bounds()`'s own low corner; any
- * part of the clip that would fall outside `content`'s own frame/bin range
- * is skipped entirely, leaving whatever was already there untouched - a
- * genuinely different out-of-range handling than `applyFillOperation()`'s
- * own, which instead *clamps* its edit to the nearest valid frame/bin
- * (extending the fill to the edge, not dropping the overhanging part).
- * Each is the natural behavior for what it's doing: a fill has no source
- * pixels to lose by clamping its own footprint, while a paste's own clip
- * has real, specific pixel data per cell that clamping would have to
- * invent or drop anyway - dropping the whole overhanging cell is the more
- * honest choice.
+ * Unlike `applyPaintOperation()`/`applyFillOperation()`, this is never a
+ * gradient-blended edit: every destination cell within `operation.bounds()`
+ * is combined with the clip's own corresponding source cell via
+ * `applyBlendedCell()`, at full strength (`opacity = 1.0` - Paste has no
+ * separate opacity control of its own, only a blend mode choice). The
+ * default `BlendMode::Overwrite` reproduces this function's own pre-
+ * `v0.Y.37.1` behavior exactly: every destination cell replaced outright by
+ * the clip's own corresponding source cell, a paste reproducing exactly
+ * what was copied, not a color mixed toward it. The clip is positioned so
+ * its own top-left (lowest time, lowest frequency bin) lands at
+ * `operation.bounds()`'s own low corner; any part of the clip that would
+ * fall outside `content`'s own frame/bin range is skipped entirely, leaving
+ * whatever was already there untouched - a genuinely different out-of-range
+ * handling than `applyFillOperation()`'s own, which instead *clamps* its
+ * edit to the nearest valid frame/bin (extending the fill to the edge, not
+ * dropping the overhanging part). Each is the natural behavior for what
+ * it's doing: a fill has no source pixels to lose by clamping its own
+ * footprint, while a paste's own clip has real, specific pixel data per
+ * cell that clamping would have to invent or drop anyway - dropping the
+ * whole overhanging cell is the more honest choice.
  *
  * A Lasso-shaped paste (`operation.boundary()` present, `v0.Y.35.1`
  * Installment A) additionally skips any clip cell that falls outside the

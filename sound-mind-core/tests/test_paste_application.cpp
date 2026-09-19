@@ -1,12 +1,14 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paste_application.h"
 
 using sound_mind::codec::StreamCodecConfig;
 using sound_mind::codec::StreamImage;
 using sound_mind::core::applyPasteOperation;
+using sound_mind::core::BlendMode;
 using sound_mind::core::binIndexToFrequency;
 using sound_mind::core::captureClip;
 using sound_mind::core::Clip;
@@ -213,6 +215,35 @@ TEST_CASE("applyPasteOperation with a boundary only writes clip cells actually i
     // overwritten by a plain, boundary-less paste.
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 63, 13)] == -42.0f);
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 62, 10)] == 0.0f);  // still blank, not clip's -99.
+}
+
+TEST_CASE("applyPasteOperation dispatches through the operation's own non-Overwrite blend mode",
+          "[core][paste_application][blend_mode]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    // dbToUnit(-48) = 0.5 for both destination and clip - Multiply -> 0.25
+    // -> -72dB (see applyBlendedCell's own hand-verified Multiply test).
+    content.leftMagnitudeDb[pixelIndex(content, 60, 10)] = -48.0f;
+    content.rightMagnitudeDb[pixelIndex(content, 60, 10)] = -48.0f;
+
+    Clip clip;
+    clip.frameCount = 1;
+    clip.binCount = 1;
+    clip.leftMagnitudeDb = {-48.0f};
+    clip.rightMagnitudeDb = {-48.0f};
+    clip.sharedPhaseRadians = {0.0f};
+
+    TimeFrequencyRect placement;
+    placement.startTimeSeconds = frameIndexToTime(60.0, config);
+    placement.endTimeSeconds = frameIndexToTime(60.0, config);
+    placement.lowFrequencyHz = binIndexToFrequency(10.0f, config);
+    placement.highFrequencyHz = binIndexToFrequency(10.0f, config);
+    const PasteOperation op(1, LayerId{1}, placement, clip, std::nullopt, std::nullopt, BlendMode::Multiply);
+
+    applyPasteOperation(op, content);
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 60, 10)] == Catch::Approx(-72.0f).margin(0.05));
+    REQUIRE(content.rightMagnitudeDb[pixelIndex(content, 60, 10)] == Catch::Approx(-72.0f).margin(0.05));
 }
 
 TEST_CASE("captureClip followed by applyPasteOperation at the same bounds reproduces the original content",

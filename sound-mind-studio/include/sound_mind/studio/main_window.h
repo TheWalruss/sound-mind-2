@@ -616,6 +616,20 @@ public slots:
     void setLayerRescale(sound_mind::core::LayerId id, double rescaleFactor);
 
     /**
+     * @brief Sets the blend mode of the layer with the given id - the
+     *        actual work behind `LayersPanel`'s per-row Blend Mode combo
+     *        (`v0.Y.37.1`, Deferred Blend Modes).
+     *
+     * Marks hasUnsavedChanges() and refreshes both the canvas and the
+     * Layers Panel, the same as setLayerOpacity() - delegates entirely to
+     * `LayerController::setLayerBlendMode()`.
+     *
+     * @param id The layer to change.
+     * @param mode The new blend mode.
+     */
+    void setLayerBlendMode(sound_mind::core::LayerId id, sound_mind::core::BlendMode mode);
+
+    /**
      * @brief Prompts for a new name and applies it - the actual work
      *        behind `LayersPanel`'s double-click-to-rename, split into an
      *        interactive slot (this one) and renameLayerTo() (the
@@ -1080,6 +1094,9 @@ public slots:
      * source layer - per `SelectionController::pasteInto()`'s own docs, a
      * copy from one layer can be pasted onto a completely different one.
      * A no-op if there's nothing on the clipboard, or no project is open.
+     * Blends onto the target per `SelectionConfigurationPanel::
+     * pasteBlendMode()`'s own current value, read fresh at the moment of
+     * this call - `v0.Y.37.1` (Deferred Blend Modes).
      *
      * On success, switches to Pick mode and selects the newly pasted
      * region there (`PickController::selectOperation()`) - immediately

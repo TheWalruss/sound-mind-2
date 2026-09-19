@@ -173,6 +173,7 @@ private slots:
     void fillSelectionWithIsANoOpWithNoSelection();
     void settingANewProjectResetsSelectModeToOff();
     void copyThenPasteOnTheSameLayerReproducesTheSelection();
+    void pasteUsesTheSelectionConfigurationPanelsOwnBlendMode();
     void cutClearsTheSourceRegionButPasteStillReproducesIt();
     void pasteCanTargetADifferentLayerThanItWasCopiedFrom();
     void pasteIsANoOpWithNoClipboard();

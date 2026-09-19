@@ -73,4 +73,11 @@ private slots:
     void smudgeHidesColorAndStampControls();
     void orderChaosHidesColorAndStampControls();
     void switchingFromHealBackToProceduralPreservesTheOriginalStampMode();
+
+    // Blend Mode (v0.Y.37.1).
+    void proceduralHidesTheBlendModeCombo();
+    void mindShotShowsTheBlendModeComboDefaultedToOverwrite();
+    void mindGrainShowsTheBlendModeComboDefaultedToOverwrite();
+    void changingTheBlendModeComboEmitsToolConfigurationChangedWithTheNewMode();
+    void loadingAMindShotConfigurationSyncsTheBlendModeCombo();
 };

@@ -14,4 +14,8 @@ private slots:
     void switchingToWandShowsTheWandGroupAndSwitchingAwayHidesItAgain();
     void changingToleranceEmitsWandToleranceChangedAndUpdatesWandTolerance();
     void togglingHarmonicsAwareEmitsWandHarmonicsAwareChangedAndUpdatesWandHarmonicsAware();
+
+    // Paste Blend Mode (v0.Y.37.1).
+    void freshPanelDefaultsPasteBlendModeToOverwrite();
+    void changingThePasteBlendModeComboUpdatesPasteBlendMode();
 };

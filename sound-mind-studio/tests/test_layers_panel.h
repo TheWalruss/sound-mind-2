@@ -42,4 +42,9 @@ private slots:
     void setDisallowedLayersMarksTheGivenRowsWithARedX();
     void setDisallowedLayersLeavesOtherRowsUnmarked();
     void setDisallowedLayersWithAnEmptyListClearsEveryMark();
+
+    // Blend Mode (v0.Y.37.1).
+    void backgroundLayerHasNoBlendModeCombo();
+    void aRowsBlendModeComboDefaultsToNormalAndPreselectsItsOwnValue();
+    void changingARowsBlendModeComboEmitsBlendModeChanged();
 };

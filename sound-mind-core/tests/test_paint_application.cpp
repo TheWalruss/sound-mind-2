@@ -5,6 +5,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/paint_application.h"
@@ -14,6 +15,7 @@ using sound_mind::codec::StreamCodecConfig;
 using sound_mind::codec::StreamImage;
 using sound_mind::core::applyPaintOperation;
 using sound_mind::core::binIndexToFrequency;
+using sound_mind::core::BlendMode;
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::Clip;
 using sound_mind::core::frameIndexToTime;
@@ -639,6 +641,37 @@ TEST_CASE("applyPaintOperation with a MindShotConfiguration silently clips a sta
 
     const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, 0, centerBin)] == -5.0f);
+}
+
+TEST_CASE("applyPaintOperation with a MindShotConfiguration's own non-Overwrite blend mode combines the stamp "
+          "with what's already there instead of replacing it",
+          "[core][paint_application][blend_mode]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    // dbToUnit(-48) = 0.5 for both destination and clip - Multiply -> 0.25
+    // -> -72dB (see applyBlendedCell's own hand-verified Multiply test).
+    content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] = -48.0f;
+    content.rightMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] = -48.0f;
+
+    Clip clip;
+    clip.frameCount = 1;
+    clip.binCount = 1;
+    clip.leftMagnitudeDb = {-48.0f};
+    clip.rightMagnitudeDb = {-48.0f};
+    clip.sharedPhaseRadians = {0.0f};
+    auto tool = makeMindShotTool(clip);
+    tool->setBlendMode(BlendMode::Multiply);
+
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
+    applyPaintOperation(op, 2000.0, content);
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] ==
+            Catch::Approx(-72.0f).margin(0.05));
+    REQUIRE(content.rightMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] ==
+            Catch::Approx(-72.0f).margin(0.05));
 }
 
 TEST_CASE("applyPaintOperation with a MindGrainConfiguration blits a clip resolved live from resolveLayerContent",

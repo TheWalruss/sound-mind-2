@@ -261,6 +261,44 @@ void LayerControllerTest::settingTheSameValueAgainDoesNotPushAnUndoEntry() {
     QVERIFY(!fixture.undoStack.canUndo());
 }
 
+void LayerControllerTest::setLayerBlendModeChangesBlendModeAndTheRowDataReflectsIt() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    // Not the Background layer - same reasoning as
+    // setLayerOpacityMindWaveChangesBindingAndTheRowDataReflectsIt().
+    const LayerId layerId = project.addLayer(Layer{});
+
+    fixture.controller.setLayerBlendMode(layerId, sound_mind::core::BlendMode::Multiply);
+    QTest::qWait(0);  // Same reasoning as the opacityMindWave test's own qWait(0).
+
+    QCOMPARE(project.layerById(layerId)->blendMode(), sound_mind::core::BlendMode::Multiply);
+    // Rows display top-of-stack first: Equalizer (untouched), then this
+    // new layer, then Background (no combo at all).
+    const auto combos = fixture.layersPanel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo"));
+    QCOMPARE(combos.size(), 2);
+    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("Normal"));    // Equalizer - untouched.
+    QCOMPARE(combos.at(1)->currentText(), QStringLiteral("Multiply"));  // This test's own layer.
+}
+
+void LayerControllerTest::setLayerBlendModeIsUndoableAndRedoable() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    fixture.controller.setProject(&project);
+    QCOMPARE(project.layers().front().blendMode(), sound_mind::core::BlendMode::Normal);
+
+    fixture.controller.setLayerBlendMode(backgroundId, sound_mind::core::BlendMode::Multiply);
+    QCOMPARE(project.layers().front().blendMode(), sound_mind::core::BlendMode::Multiply);
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QCOMPARE(project.layers().front().blendMode(), sound_mind::core::BlendMode::Normal);
+
+    fixture.undoStack.redo();
+    QCOMPARE(project.layers().front().blendMode(), sound_mind::core::BlendMode::Multiply);
+}
+
 void LayerControllerTest::renameLayerToRenamesAndRejectsEmptyName() {
     Fixture fixture;
     Project project = Project::createNew(testSettings());

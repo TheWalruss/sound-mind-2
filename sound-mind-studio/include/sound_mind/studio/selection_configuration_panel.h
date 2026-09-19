@@ -2,6 +2,7 @@
 
 #include <QDockWidget>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/studio/selection_controller.h"
 
 class QCheckBox;
@@ -57,6 +58,25 @@ public:
     /// @return `true` if checked.
     [[nodiscard]] bool wandHarmonicsAware() const;
 
+    /**
+     * @brief Which blend mode `Edit -> Paste` should use - `v0.Y.37.1`
+     *        (Deferred Blend Modes). Paste has no other tool configuration
+     *        panel of its own, so this lives here rather than in
+     *        `ToolConfigurationPanel`.
+     *
+     * Read on demand at the moment of a Paste (`MainWindow`'s own `Edit ->
+     * Paste` handler), not pushed live to a controller the way
+     * `selectionShapeChanged()`/`wandToleranceChanged()`/
+     * `wandHarmonicsAwareChanged()` are - a blend mode only matters at the
+     * instant a paste actually happens, unlike Selection Type/Wand's own
+     * parameters, which affect an in-progress selection as it's drawn.
+     *
+     * @return The Paste Blend Mode dropdown's own current value;
+     *         `sound_mind::core::BlendMode::Overwrite` by default,
+     *         matching `PasteOperation`'s own pre-`v0.Y.37.1` behavior.
+     */
+    [[nodiscard]] sound_mind::core::BlendMode pasteBlendMode() const;
+
 signals:
     /// @brief Emitted whenever the Selection Type dropdown changes - a
     ///        listener (`MainWindow`, in particular) forwards this
@@ -84,6 +104,7 @@ private:
     QWidget* wandGroup_ = nullptr;
     QDoubleSpinBox* wandToleranceSpinBox_ = nullptr;
     QCheckBox* wandHarmonicsAwareCheckBox_ = nullptr;
+    QComboBox* pasteBlendModeCombo_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

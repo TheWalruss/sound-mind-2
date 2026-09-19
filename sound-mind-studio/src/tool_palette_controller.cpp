@@ -254,8 +254,9 @@ std::optional<sound_mind::core::MindGrainId> ToolPaletteController::captureMindG
     return selectionController_->captureMindGrain(name);
 }
 
-std::optional<sound_mind::core::OperationId> ToolPaletteController::pasteInto(sound_mind::core::LayerId targetLayer) {
-    return selectionController_->pasteInto(targetLayer);
+std::optional<sound_mind::core::OperationId> ToolPaletteController::pasteInto(sound_mind::core::LayerId targetLayer,
+                                                                                sound_mind::core::BlendMode blendMode) {
+    return selectionController_->pasteInto(targetLayer, blendMode);
 }
 
 void ToolPaletteController::selectOperation(sound_mind::core::LayerId layer, sound_mind::core::OperationId operationId) {

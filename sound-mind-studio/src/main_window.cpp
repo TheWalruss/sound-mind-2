@@ -189,6 +189,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layersPanel_, &LayersPanel::translationChanged, this, &MainWindow::setLayerTranslation);
     connect(layersPanel_, &LayersPanel::rescaleChanged, this, &MainWindow::setLayerRescale);
     connect(layersPanel_, &LayersPanel::opacityMindWaveChanged, this, &MainWindow::setLayerOpacityMindWave);
+    connect(layersPanel_, &LayersPanel::blendModeChanged, this, &MainWindow::setLayerBlendMode);
     connect(layersPanel_, &LayersPanel::renameRequested, this, &MainWindow::renameLayer);
     connect(layersPanel_, &LayersPanel::deleteRequested, this, &MainWindow::deleteLayer);
     connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
@@ -1378,6 +1379,10 @@ void MainWindow::setLayerRescale(sound_mind::core::LayerId id, double rescaleFac
     layerController_->setLayerRescale(id, rescaleFactor);
 }
 
+void MainWindow::setLayerBlendMode(sound_mind::core::LayerId id, sound_mind::core::BlendMode mode) {
+    layerController_->setLayerBlendMode(id, mode);
+}
+
 void MainWindow::renameLayer(sound_mind::core::LayerId id) {
     sound_mind::core::Layer* layer = layerController_->layerById(id);
     if (layer == nullptr) {
@@ -1650,7 +1655,8 @@ void MainWindow::paste() {
     // whichever layer the clipboard was originally copied from - per
     // SelectionController::pasteInto()'s own docs.
     if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
-        if (const auto pastedId = toolPaletteController_->pasteInto(*layerId); pastedId.has_value()) {
+        const auto blendMode = selectionConfigurationPanel_->pasteBlendMode();
+        if (const auto pastedId = toolPaletteController_->pasteInto(*layerId, blendMode); pastedId.has_value()) {
             // Immediately Pickable - move/modify/delete/restack all work
             // right away, with no separate switch-to-Pick-and-click-it
             // step needed to find it again.

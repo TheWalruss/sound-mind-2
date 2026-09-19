@@ -46,9 +46,10 @@ class UndoStack;
  * `MainWindow` holds the current project's `LoopEngine` (and only it needs
  * to, for Loop Mode's own reasons).
  *
- * **Five property setters are undoable** - `toggleLayerVisibility()`,
+ * **Six property setters are undoable** - `toggleLayerVisibility()`,
  * `setLayerOpacity()`, `setLayerOpacityMindWave()`, `setLayerTranslation()`,
- * `setLayerRescale()` each push a matching `UndoCommand` onto the shared
+ * `setLayerRescale()`, `setLayerBlendMode()` each push a matching
+ * `UndoCommand` onto the shared
  * `UndoStack` after applying the change, so `MainWindow`'s Edit > Undo/Redo
  * covers them - see `UndoStack`'s own class docs for why this is a
  * separate mechanism from `sound_mind::core::OperationLog`. The other
@@ -175,6 +176,17 @@ public:
     /// @param rescaleFactor The new ratio.
     void setLayerRescale(sound_mind::core::LayerId id, double rescaleFactor);
 
+    /// @brief Sets the blend mode of the layer with the given id - see
+    ///        `sound_mind::core::Layer::blendMode()`'s own docs.
+    ///        `v0.Y.37.1` (Deferred Blend Modes). Repaints the canvas (the
+    ///        blend mode changes what the composite actually looks like),
+    ///        then refreshes the Layers Panel. Does nothing if no layer
+    ///        with this id exists. **Undoable** - see
+    ///        toggleLayerVisibility()'s own docs on no-op calls.
+    /// @param id The layer to change.
+    /// @param mode The new blend mode.
+    void setLayerBlendMode(sound_mind::core::LayerId id, sound_mind::core::BlendMode mode);
+
     /// @brief Renames the layer with the given id, without prompting -
     ///        the non-prompting core behind `MainWindow::renameLayer()`'s
     ///        own `QInputDialog`. Refreshes the Layers Panel on success.
@@ -275,6 +287,11 @@ private:
     ///        setLayerRescale() and its own pushed UndoCommand's
     ///        undo()/redo() callbacks - see the class's own docs.
     void applyRescale(sound_mind::core::LayerId id, double rescaleFactor);
+
+    /// @brief The actual blend mode mutation + side effects, shared by
+    ///        setLayerBlendMode() and its own pushed UndoCommand's
+    ///        undo()/redo() callbacks - see the class's own docs.
+    void applyBlendMode(sound_mind::core::LayerId id, sound_mind::core::BlendMode mode);
 
     CanvasWidget* canvas_;
     PlaybackController* playbackController_;

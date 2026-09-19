@@ -13,6 +13,7 @@
 
 #include "sound_mind/studio/layers_panel.h"
 
+using sound_mind::core::BlendMode;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
 using sound_mind::core::MindWaveId;
@@ -532,4 +533,52 @@ void LayersPanelTest::setDisallowedLayersWithAnEmptyListClearsEveryMark() {
     QTest::qWait(0);
 
     QVERIFY(panel.findChildren<QLabel*>(QStringLiteral("mindGrainDisallowedLabel")).empty());
+}
+
+void LayersPanelTest::backgroundLayerHasNoBlendModeCombo() {
+    // Same reasoning as backgroundLayerHasNoOpacityOrTransformControls() -
+    // the Background layer is always the floor of the stack, blended
+    // against nothing beneath it, so a blend mode choice is meaningless
+    // for it.
+    LayersPanel::RowData background;
+    background.id = 1;
+    background.name = QStringLiteral("Background");
+    background.type = LayerType::Background;
+
+    LayersPanel panel;
+    panel.setLayers({background});
+
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo")) == nullptr);
+}
+
+void LayersPanelTest::aRowsBlendModeComboDefaultsToNormalAndPreselectsItsOwnValue() {
+    LayersPanel panel;
+    auto rows = twoNormalLayers();
+    rows[1].blendMode = BlendMode::Multiply;  // "Top" (id 2).
+    panel.setLayers(rows);
+
+    const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo"));
+    QCOMPARE(combos.size(), 2);
+    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("Multiply"));  // "Top".
+    QCOMPARE(combos.at(1)->currentText(), QStringLiteral("Normal"));    // "Bottom" - default.
+}
+
+void LayersPanelTest::changingARowsBlendModeComboEmitsBlendModeChanged() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    int emitCount = 0;
+    std::optional<LayerId> receivedId;
+    std::optional<BlendMode> receivedMode;
+    connect(&panel, &LayersPanel::blendModeChanged, [&](LayerId id, BlendMode mode) {
+        ++emitCount;
+        receivedId = id;
+        receivedMode = mode;
+    });
+
+    const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo"));
+    combos.at(1)->setCurrentIndex(combos.at(1)->findText(QStringLiteral("Screen")));  // "Bottom" (id 1).
+
+    QCOMPARE(emitCount, 1);
+    QCOMPARE(receivedId, std::optional<LayerId>(static_cast<LayerId>(1)));
+    QCOMPARE(receivedMode, std::optional<BlendMode>(BlendMode::Screen));
 }

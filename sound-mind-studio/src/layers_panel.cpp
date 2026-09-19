@@ -2,6 +2,9 @@
 
 #include <algorithm>
 
+#include <array>
+#include <utility>
+
 #include <QApplication>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -20,9 +23,26 @@ namespace sound_mind::studio {
 
 namespace {
 
+using sound_mind::core::BlendMode;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
 using sound_mind::core::MindWaveId;
+
+/// @brief Every `BlendMode` paired with its display name, in the same order
+/// `selection_configuration_panel.cpp`'s own `kPasteBlendModes` and
+/// `tool_configuration_panel.cpp`'s own `kBlendModes` establish - `Overwrite`
+/// first here too, even though a layer's own default is `Normal` (second),
+/// for the same "list every option the same way everywhere it appears"
+/// consistency those two other combos already follow.
+constexpr std::array<std::pair<BlendMode, const char*>, 7> kBlendModes = {{
+    {BlendMode::Overwrite, "Overwrite"},
+    {BlendMode::Normal, "Normal"},
+    {BlendMode::Multiply, "Multiply"},
+    {BlendMode::Screen, "Screen"},
+    {BlendMode::Overlay, "Overlay"},
+    {BlendMode::Difference, "Difference"},
+    {BlendMode::Add, "Add"},
+}};
 
 /// @brief Whether `type` is one of the fixed-position layer types - no
 /// drag handle, no delete button (see the class docs). A thin alias for
@@ -277,6 +297,24 @@ public:
             connect(rescaleSpinBox, &QDoubleSpinBox::valueChanged, this,
                     [this](double value) { emit rescaleChanged(id_, value); });
             layout->addWidget(rescaleSpinBox);
+
+            // Blend Mode (v0.Y.37.1) - a minimal stand-in ahead of the
+            // Layers Panel Redesign's own polished control, see the class
+            // docs on LayersPanel.
+            auto* blendModeCombo = new QComboBox();
+            blendModeCombo->setObjectName(QStringLiteral("blendModeCombo"));
+            blendModeCombo->setFixedWidth(80);
+            blendModeCombo->setToolTip(tr("How this layer combines with what's beneath it"));
+            for (const auto& [mode, name] : kBlendModes) {
+                blendModeCombo->addItem(tr(name), QVariant::fromValue(static_cast<int>(mode)));
+            }
+            const int blendModeIndex =
+                blendModeCombo->findData(QVariant::fromValue(static_cast<int>(data.blendMode)));
+            blendModeCombo->setCurrentIndex(blendModeIndex >= 0 ? blendModeIndex : 0);
+            connect(blendModeCombo, &QComboBox::currentIndexChanged, this, [this, blendModeCombo](int index) {
+                emit blendModeChanged(id_, static_cast<BlendMode>(blendModeCombo->itemData(index).toInt()));
+            });
+            layout->addWidget(blendModeCombo);
         }
 
         if (!locked) {
@@ -297,6 +335,7 @@ signals:
     void translationChanged(sound_mind::core::LayerId id, std::int64_t translationColumns);
     void rescaleChanged(sound_mind::core::LayerId id, double rescaleFactor);
     void opacityMindWaveChanged(sound_mind::core::LayerId id, std::optional<MindWaveId> mindWaveId);
+    void blendModeChanged(sound_mind::core::LayerId id, BlendMode mode);
     void renameRequested(sound_mind::core::LayerId id);
     void deleteRequested(sound_mind::core::LayerId id);
     void selected(sound_mind::core::LayerId id);
@@ -437,6 +476,7 @@ void LayersPanel::rebuildRows() {
         connect(row, &LayerRowWidget::translationChanged, this, &LayersPanel::translationChanged);
         connect(row, &LayerRowWidget::rescaleChanged, this, &LayersPanel::rescaleChanged);
         connect(row, &LayerRowWidget::opacityMindWaveChanged, this, &LayersPanel::opacityMindWaveChanged);
+        connect(row, &LayerRowWidget::blendModeChanged, this, &LayersPanel::blendModeChanged);
         connect(row, &LayerRowWidget::renameRequested, this, &LayersPanel::renameRequested);
         connect(row, &LayerRowWidget::deleteRequested, this, &LayersPanel::deleteRequested);
         connect(row, &LayerRowWidget::selected, this, &LayersPanel::selectLayer);

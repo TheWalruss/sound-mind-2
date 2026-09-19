@@ -537,7 +537,8 @@ std::optional<sound_mind::core::MindGrainId> SelectionController::captureMindGra
     return id;
 }
 
-std::optional<sound_mind::core::OperationId> SelectionController::pasteInto(sound_mind::core::LayerId targetLayer) {
+std::optional<sound_mind::core::OperationId> SelectionController::pasteInto(sound_mind::core::LayerId targetLayer,
+                                                                              sound_mind::core::BlendMode blendMode) {
     if (!clipboard_.has_value() || !clipboardBounds_.has_value() || project_ == nullptr) {
         return std::nullopt;
     }
@@ -547,8 +548,8 @@ std::optional<sound_mind::core::OperationId> SelectionController::pasteInto(soun
 
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
-    log.append(std::make_unique<sound_mind::core::PasteOperation>(id, targetLayer, *clipboardBounds_, *clipboard_,
-                                                                     std::nullopt, clipboardBoundary_));
+    log.append(std::make_unique<sound_mind::core::PasteOperation>(
+        id, targetLayer, *clipboardBounds_, *clipboard_, std::nullopt, clipboardBoundary_, blendMode));
     paintController_->notifyOperationCommitted();
     paintController_->rebuildLayerContent(targetLayer);
     emit contentChanged(targetLayer);

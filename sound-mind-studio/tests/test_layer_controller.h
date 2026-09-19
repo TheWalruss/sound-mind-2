@@ -27,4 +27,8 @@ private slots:
     void applyFilterConfigurationAppliesOnlyToAFilterLayer();
     void reorderLayersRefreshesEitherWay();
     void paintTargetLayerIdFallsBackToTheBottommostLayer();
+
+    // Blend Mode (v0.Y.37.1).
+    void setLayerBlendModeChangesBlendModeAndTheRowDataReflectsIt();
+    void setLayerBlendModeIsUndoableAndRedoable();
 };

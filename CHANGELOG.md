@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.37.1] - 2026-09-19
+
+Deferred Blend Modes - `docs/sound-mind-design.md`'s own explicit "none is designed yet." Closes out the `v0.Y.37.1` milestone in full.
+
+### Added
+
+- **Seven blend modes**, selectable wherever content combines with what's already there - a layer's own contribution to the composite, a Paste, and a Mind Shot/Mind Grain stamp: **Normal** (this codebase's own existing audio-style mixing, now named and selectable), **Overwrite** (the existing hard, unconditional replacement, likewise now named), **Multiply**, **Screen**, **Overlay**, **Difference**, and **Add** (the "classic five" image-editor modes, newly built). Every existing project keeps its own prior behavior exactly - layers default to Normal, Paste/Mind Shot/Mind Grain default to Overwrite.
+- **A Blend Mode drop-down on each layer row in the Layers Panel** (next to the opacity/transform controls) - switch a layer between any of the seven at any time.
+- **A "Paste Blend Mode" drop-down in the Selection Configuration panel** - controls how `Edit → Paste` combines its clip with the destination.
+- **A Blend Mode drop-down in the Tool Configuration Panel**, shown only while a Mind Shot or Mind Grain tool is selected - controls how each stamp combines with what's already there.
+
+Full regression: sound-mind-core 651/651 (up from 617), sound-mind-studio all 35 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #106.
+
 ## [0.0.36.4] - 2026-09-18
 
 Deferred Filters, Installment D: **Spectral Reverb**, closing out the Space filter family and the entire `v0.Y.36.1` (Deferred Filters) milestone - `docs/sound-mind-design.md`'s "Filter Layer".

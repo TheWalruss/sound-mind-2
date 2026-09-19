@@ -6,6 +6,7 @@
 #include <random>
 #include <utility>
 
+#include "sound_mind/core/blend_mode_application.h"
 #include "sound_mind/core/fill_application.h"
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/paste_application.h"
@@ -380,14 +381,19 @@ void applyInstrumentPaintOperation(const PaintOperation& operation, const Instru
     }
 }
 
-/// @brief `MindShotConfiguration`'s own stamp: a hard, Normal-only
-/// overwrite of `clip`'s own cells, centered on `(frameCenter, binCenter)`
-/// - the exact same blit `applyPasteOperation()` already uses (see its
-/// own docs), just centered on a stamp position instead of an explicit
-/// placement rectangle. No falloff/gradient blend at all - "paints back
-/// exactly as it was when captured" (`docs/sound-mind-design.md`'s "Mind
-/// Shots") means every cell the clip covers is written verbatim.
-void blitClipCentered(const Clip& clip, double frameCenter, float binCenter, sound_mind::codec::StreamImage& content) {
+/// @brief `MindShotConfiguration`'s/`MindGrainConfiguration`'s own stamp:
+/// `clip`'s own cells combined with whatever's already there via `blendMode`
+/// (`applyBlendedCell()`, at full strength - `opacity = 1.0`, the same
+/// no-separate-opacity-control reasoning `applyPasteOperation()`'s own docs
+/// give), centered on `(frameCenter, binCenter)` - the exact same blit
+/// `applyPasteOperation()` already uses (see its own docs), just centered on
+/// a stamp position instead of an explicit placement rectangle. No
+/// falloff/gradient blend at all - "paints back exactly as it was when
+/// captured" (`docs/sound-mind-design.md`'s "Mind Shots") still holds for
+/// `BlendMode::Overwrite` (the default), which reproduces this function's
+/// own pre-`v0.Y.37.1` verbatim-copy behavior exactly.
+void blitClipCentered(const Clip& clip, double frameCenter, float binCenter, BlendMode blendMode,
+                       sound_mind::codec::StreamImage& content) {
     const int frameOrigin = static_cast<int>(std::round(frameCenter)) - static_cast<int>(clip.frameCount / 2);
     const int binOrigin = static_cast<int>(std::round(binCenter)) - static_cast<int>(clip.binCount / 2);
 
@@ -404,9 +410,14 @@ void blitClipCentered(const Clip& clip, double frameCenter, float binCenter, sou
 
             const std::size_t clipIndex = cellIndex(clipBin, clipFrame, clip.frameCount);
             const std::size_t destIndex = cellIndex(destBin, destFrame, content.frameCount);
-            content.leftMagnitudeDb[destIndex] = clip.leftMagnitudeDb[clipIndex];
-            content.rightMagnitudeDb[destIndex] = clip.rightMagnitudeDb[clipIndex];
-            content.sharedPhaseRadians[destIndex] = clip.sharedPhaseRadians[clipIndex];
+            const BlendedCell base{content.leftMagnitudeDb[destIndex], content.rightMagnitudeDb[destIndex],
+                                    content.sharedPhaseRadians[destIndex]};
+            const BlendedCell overlay{clip.leftMagnitudeDb[clipIndex], clip.rightMagnitudeDb[clipIndex],
+                                       clip.sharedPhaseRadians[clipIndex]};
+            const BlendedCell blended = applyBlendedCell(blendMode, base, overlay, 1.0f);
+            content.leftMagnitudeDb[destIndex] = blended.leftMagnitudeDb;
+            content.rightMagnitudeDb[destIndex] = blended.rightMagnitudeDb;
+            content.sharedPhaseRadians[destIndex] = blended.phaseRadians;
         }
     }
 }
@@ -426,7 +437,7 @@ void applyMindShotPaintOperation(const MindShotConfiguration& toolConfig, const 
     for (const StrokeSample& sample : samples) {
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
-        blitClipCentered(clip, frameCenter, binCenter, content);
+        blitClipCentered(clip, frameCenter, binCenter, toolConfig.blendMode(), content);
     }
 }
 
@@ -458,7 +469,7 @@ void applyMindGrainPaintOperation(const MindGrainConfiguration& toolConfig, cons
     for (const StrokeSample& sample : samples) {
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
-        blitClipCentered(clip, frameCenter, binCenter, content);
+        blitClipCentered(clip, frameCenter, binCenter, toolConfig.blendMode(), content);
     }
 }
 

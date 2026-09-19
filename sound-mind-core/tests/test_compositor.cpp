@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "sound_mind/codec/color_mapping.h"
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/gpu_compute_availability.h"
@@ -16,6 +17,7 @@
 
 using sound_mind::codec::StreamImage;
 using sound_mind::codec::toRgbImage;
+using sound_mind::core::BlendMode;
 using sound_mind::core::compositeProject;
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterType;
@@ -368,6 +370,75 @@ TEST_CASE("compositeProject's single-layer fast path is bypassed when the sole c
     CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.02));
     CHECK(composite->leftMagnitudeDb[1] < -90.0f);
     CHECK(composite->leftMagnitudeDb[2] == Catch::Approx(0.0f).margin(0.02));
+}
+
+TEST_CASE("compositeProject's single-layer fast path is bypassed when the sole contributor's "
+          "blend mode isn't Normal",
+          "[core][compositor][blend_mode]") {
+    Project project = Project::createNew(testSettings());
+    // Same removal as the MindWave-bound fast-path-bypass test above - the
+    // only way to actually reach compositeSingleLayer() at all.
+    const auto equalizerId = project.layers().back().id();
+    REQUIRE(project.removeLayer(equalizerId));
+    project.layers()[0].setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    project.layers()[0].setBlendMode(BlendMode::Multiply);
+
+    const auto composite = compositeProject(project);
+
+    // compositeSingleLayer()'s own "single-layer reduces to itself" shortcut
+    // is a Normal-mode-specific identity (summing one term onto silence) -
+    // for Multiply, blending real content onto a silent base multiplies
+    // everything down to silence instead. If the fast path had been taken
+    // anyway, every cell would read the layer's own raw 0 dB content
+    // unchanged rather than near-silence.
+    REQUIRE(composite.has_value());
+    for (float db : composite->leftMagnitudeDb) {
+        CHECK(db < -90.0f);
+    }
+}
+
+TEST_CASE("compositeProject applies a layer's own Multiply blend mode against what's beneath it",
+          "[core][compositor][blend_mode]") {
+    Project project = Project::createNew(testSettings());
+    // dbToUnit(-48) = 0.5 for both base and overlay - Multiply -> 0.25 ->
+    // -72dB (see applyBlendedCell's own hand-verified Multiply test).
+    project.layers()[0].setContent(
+        makeContent({-48.0f, -48.0f, -48.0f}, {-48.0f, -48.0f, -48.0f}, {0.0f, 0.0f, 0.0f}));
+    Layer second(0, "Second", LayerType::Normal);
+    second.setContent(makeContent({-48.0f, -48.0f, -48.0f}, {-48.0f, -48.0f, -48.0f}, {0.0f, 0.0f, 0.0f}));
+    second.setBlendMode(BlendMode::Multiply);
+    project.addLayer(std::move(second));
+
+    // GPU-preferred (the default) - not forced off here; see the CPU-
+    // fallback counterpart test below for why getting -72dB here (not
+    // Normal's own +6dB-louder linear-sum answer) proves the GPU path
+    // (which only ever implements Normal's own formula) was skipped for
+    // this non-Normal layer.
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-72.0f).margin(0.05));
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(-72.0f).margin(0.05));
+}
+
+TEST_CASE("compositeProject's Multiply blend mode agrees between the GPU-preferred and CPU-forced "
+          "paths, since Multiply always runs on the CPU regardless",
+          "[core][compositor][blend_mode][gpu]") {
+    GpuComputeForcedOffGuard forceCpu;
+
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(
+        makeContent({-48.0f, -48.0f, -48.0f}, {-48.0f, -48.0f, -48.0f}, {0.0f, 0.0f, 0.0f}));
+    Layer second(0, "Second", LayerType::Normal);
+    second.setContent(makeContent({-48.0f, -48.0f, -48.0f}, {-48.0f, -48.0f, -48.0f}, {0.0f, 0.0f, 0.0f}));
+    second.setBlendMode(BlendMode::Multiply);
+    project.addLayer(std::move(second));
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-72.0f).margin(0.05));
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(-72.0f).margin(0.05));
 }
 
 TEST_CASE("compositeProject sums two full-opacity overlapping layers, mixing rather than muting",

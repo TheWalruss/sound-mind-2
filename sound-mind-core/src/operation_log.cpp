@@ -248,6 +248,7 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
             if (paste->boundary()) {
                 entry["boundary"] = *paste->boundary();
             }
+            entry["blendMode"] = paste->blendMode();
             operations.push_back(std::move(entry));
         } else if (const auto* warp = dynamic_cast<const WarpOperation*>(operation.get())) {
             nlohmann::json entry;
@@ -295,9 +296,14 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
                 Clip clip = entry.at("clip").get<Clip>();
                 std::optional<SelectionRegion> boundary =
                     entry.contains("boundary") ? std::optional(entry.at("boundary").get<SelectionRegion>()) : std::nullopt;
+                // Lenient (defaults to Overwrite if absent) - didn't exist
+                // before v0.Y.37.1 (Deferred Blend Modes); a paste saved
+                // before this milestone was implicitly always a hard
+                // overwrite anyway.
+                const BlendMode blendMode = entry.value("blendMode", BlendMode::Overwrite);
                 log.operations_.push_back(std::make_unique<PasteOperation>(
                     fields.id, fields.targetLayer, placement, std::move(clip), fields.supersedes,
-                    std::move(boundary)));
+                    std::move(boundary), blendMode));
             } else if (kind == kWarpOperationKind) {
                 const CommonOperationFields fields = readCommonOperationFields(entry);
                 TimeFrequencyRect bounds = entry.at("bounds").get<TimeFrequencyRect>();

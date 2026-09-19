@@ -12,6 +12,7 @@ void to_json(nlohmann::json& json, const Layer& layer) {
         {"translationColumns", layer.translationColumns_},
         {"rescaleFactor", layer.rescaleFactor_},
         {"filterConfiguration", layer.filterConfiguration_},
+        {"blendMode", layer.blendMode_},
     };
     // Same "only write if present" convention path.cpp's own
     // handleIn/handleOut already establish for an std::optional field.
@@ -50,6 +51,10 @@ void from_json(const nlohmann::json& json, Layer& layer) {
     layer.opacityMindWave_ = json.contains("opacityMindWaveId")
                                   ? std::optional(json.at("opacityMindWaveId").get<MindWaveId>())
                                   : std::nullopt;
+    // Lenient (defaults to Normal if absent), same reasoning as the fields
+    // above - didn't exist before v0.Y.37.1 (Deferred Blend Modes); a layer
+    // saved before this milestone was implicitly always Normal anyway.
+    layer.blendMode_ = json.value("blendMode", BlendMode::Normal);
 }
 
 }  // namespace sound_mind::core

@@ -8,6 +8,7 @@
 
 #include "gpu_compute_access.h"
 #include "sound_mind/codec/color_mapping.h"
+#include "sound_mind/core/blend_mode_application.h"
 #include "sound_mind/core/filter_application.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/paint_application.h"
@@ -284,16 +285,24 @@ void forEachPlacedCell(const Layer& layer, const sound_mind::codec::StreamCodecC
 /// @brief Mixes `layer`'s own placed content into `running`, in place -
 /// compositeProject()'s own general-path building block, called once per
 /// Normal/Background contributor. Reads `running`'s own current dB/phase
-/// back into a complex value, sums `layer`'s own (placed, opacity-scaled)
-/// contribution into it, and writes the result back - see
-/// compositeProject()'s own docs for why this per-layer incremental
-/// approach (rather than one N-way sum) is what lets a Filter layer
-/// transform an in-progress composite mid-stack.
+/// and `layer`'s own (placed) content as a `BlendedCell` pair and dispatches
+/// through `applyBlendedCell()` per `layer.blendMode()`, writing the result
+/// back - see compositeProject()'s own docs for why this per-layer
+/// incremental approach (rather than one N-way sum) is what lets a Filter
+/// layer transform an in-progress composite mid-stack.
+///
+/// As of `v0.Y.37.1` (Deferred Blend Modes), this is the single shared path
+/// for every blend mode, `BlendMode::Normal` included - `applyBlendedCell()`'s
+/// own `Normal` case is mathematically identical to this function's own
+/// pre-`v0.Y.37.1` formula (summing linear amplitude, scaled by opacity as a
+/// linear gain), so unifying the two changes no existing project's own
+/// composited result.
 ///
 /// @param opacityMindWave `layer`'s own bound opacity MindWave (already
 ///        resolved against the project - see `resolveOpacityMindWave()`),
 ///        or `nullptr` if unbound - evaluated inline per cell via
-///        `mindWaveGainAt()` and multiplied alongside `layer.opacity()`,
+///        `mindWaveGainAt()` and multiplied alongside `layer.opacity()` to
+///        form `applyBlendedCell()`'s own per-cell `opacity` argument,
 ///        `v0.Y.31.1` Installment C1's own opacity-binding entry point.
 void mixLayerInto(StreamImage& running, const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
                     std::uint32_t canvasWidth, const MindWave* opacityMindWave) {
@@ -302,24 +311,15 @@ void mixLayerInto(StreamImage& running, const Layer& layer, const sound_mind::co
         layer, config, canvasWidth,
         [&](std::uint32_t bin, std::uint32_t outputColumn, std::size_t sourceCell, std::size_t outputCell) {
             const float gain = layer.opacity() * mindWaveGainAt(opacityMindWave, bin, outputColumn, config);
-            const float layerLeftLinear = dbToLinearAmplitude(content.leftMagnitudeDb[sourceCell]) * gain;
-            const float layerRightLinear = dbToLinearAmplitude(content.rightMagnitudeDb[sourceCell]) * gain;
-            const float layerPhase = content.sharedPhaseRadians[sourceCell];
-            const std::complex<float> layerDirection(std::cos(layerPhase), std::sin(layerPhase));
+            const BlendedCell base{running.leftMagnitudeDb[outputCell], running.rightMagnitudeDb[outputCell],
+                                    running.sharedPhaseRadians[outputCell]};
+            const BlendedCell overlay{content.leftMagnitudeDb[sourceCell], content.rightMagnitudeDb[sourceCell],
+                                       content.sharedPhaseRadians[sourceCell]};
+            const BlendedCell blended = applyBlendedCell(layer.blendMode(), base, overlay, gain);
 
-            const float runningLeftLinear = dbToLinearAmplitude(running.leftMagnitudeDb[outputCell]);
-            const float runningRightLinear = dbToLinearAmplitude(running.rightMagnitudeDb[outputCell]);
-            const float runningPhase = running.sharedPhaseRadians[outputCell];
-            const std::complex<float> runningDirection(std::cos(runningPhase), std::sin(runningPhase));
-
-            const std::complex<float> newLeft = runningLeftLinear * runningDirection + layerLeftLinear * layerDirection;
-            const std::complex<float> newRight =
-                runningRightLinear * runningDirection + layerRightLinear * layerDirection;
-
-            running.leftMagnitudeDb[outputCell] = linearAmplitudeToDb(std::abs(newLeft));
-            running.rightMagnitudeDb[outputCell] = linearAmplitudeToDb(std::abs(newRight));
-            const std::complex<float> mid = (newLeft + newRight) / 2.0f;
-            running.sharedPhaseRadians[outputCell] = (std::abs(mid) > 0.0f) ? std::arg(mid) : 0.0f;
+            running.leftMagnitudeDb[outputCell] = blended.leftMagnitudeDb;
+            running.rightMagnitudeDb[outputCell] = blended.rightMagnitudeDb;
+            running.sharedPhaseRadians[outputCell] = blended.phaseRadians;
         });
 }
 
@@ -367,6 +367,15 @@ sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
 /// is treated as a transient failure to degrade past, not a fatal error,
 /// also confirmed with the user.
 ///
+/// As of `v0.Y.37.1` (Deferred Blend Modes), the GPU is only ever
+/// attempted for `BlendMode::Normal` - `ComputeDevice::
+/// mixAmplitudePhaseSignal()`'s own HLSL kernel only ever implements
+/// Normal's own linear-amplitude-sum formula (see its own docs); every
+/// other blend mode always takes the CPU path below, matching this
+/// codebase's established "CPU first, GPU deferred" precedent for new
+/// filter/blend math (confirmed with the user as this milestone's own
+/// scope).
+///
 /// @param opacityMindWave `layer`'s own bound opacity MindWave, or
 ///        `nullptr` if unbound - forwarded to `mixLayerInto()`'s own
 ///        per-cell evaluation on the CPU path, or built into a full
@@ -378,22 +387,24 @@ sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
 ///        evaluation GPU-aware from the start).
 void mixLayerIntoGpuOrCpu(StreamImage& running, const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
                            std::uint32_t canvasWidth, float silenceFloorDb, const MindWave* opacityMindWave) {
-    if (auto* device = detail::gpuComputeDeviceOrNull()) {
-        try {
-            sound_mind::gpu::AmplitudePhaseSignal runningSignal;
-            runningSignal.leftMagnitudeDb = running.leftMagnitudeDb;
-            runningSignal.rightMagnitudeDb = running.rightMagnitudeDb;
-            runningSignal.phaseRadians = running.sharedPhaseRadians;
-            const auto layerSignal = placeLayerForGpuMix(layer, config, canvasWidth, silenceFloorDb);
-            const auto mindWaveField = buildMindWaveField(opacityMindWave, config, canvasWidth);
-            const auto mixed =
-                device->mixAmplitudePhaseSignal(runningSignal, layerSignal, layer.opacity(), mindWaveField);
-            running.leftMagnitudeDb = mixed.leftMagnitudeDb;
-            running.rightMagnitudeDb = mixed.rightMagnitudeDb;
-            running.sharedPhaseRadians = mixed.phaseRadians;
-            return;
-        } catch (const std::exception&) {
-            // Fall through to the CPU path below.
+    if (layer.blendMode() == BlendMode::Normal) {
+        if (auto* device = detail::gpuComputeDeviceOrNull()) {
+            try {
+                sound_mind::gpu::AmplitudePhaseSignal runningSignal;
+                runningSignal.leftMagnitudeDb = running.leftMagnitudeDb;
+                runningSignal.rightMagnitudeDb = running.rightMagnitudeDb;
+                runningSignal.phaseRadians = running.sharedPhaseRadians;
+                const auto layerSignal = placeLayerForGpuMix(layer, config, canvasWidth, silenceFloorDb);
+                const auto mindWaveField = buildMindWaveField(opacityMindWave, config, canvasWidth);
+                const auto mixed =
+                    device->mixAmplitudePhaseSignal(runningSignal, layerSignal, layer.opacity(), mindWaveField);
+                running.leftMagnitudeDb = mixed.leftMagnitudeDb;
+                running.rightMagnitudeDb = mixed.rightMagnitudeDb;
+                running.sharedPhaseRadians = mixed.phaseRadians;
+                return;
+            } catch (const std::exception&) {
+                // Fall through to the CPU path below.
+            }
         }
     }
     mixLayerInto(running, layer, config, canvasWidth, opacityMindWave);
@@ -519,14 +530,23 @@ std::optional<StreamImage> compositeProject(const Project& project) {
     const float silenceFloorDb = linearAmplitudeToDb(0.0f);
 
     if (!anyFilterLayer && normalContributors.size() == 1 &&
-        !resolveOpacityMindWave(*normalContributors.front(), project)) {
+        !resolveOpacityMindWave(*normalContributors.front(), project) &&
+        normalContributors.front()->blendMode() == BlendMode::Normal) {
         // Fast path - see compositeSingleLayer()'s own docs for why this
         // is worth a dedicated path, and what it's specifically reachable
         // for. Excluded once the sole contributor's own opacity is
         // MindWave-bound (`v0.Y.31.1` Installment C1) - the fast path's
         // whole premise is a single *scalar* gain shift, computed once,
         // not per cell; a bound layer needs the general path's own
-        // per-cell evaluation instead.
+        // per-cell evaluation instead. Excluded, as of `v0.Y.37.1`
+        // (Deferred Blend Modes), for any blend mode other than `Normal`
+        // too - compositeSingleLayer()'s own "single-layer reduces to
+        // itself" shortcut is a `Normal`-specific algebraic identity
+        // (summing one term onto silence); every other mode's own actual
+        // identity behavior against a silent base is different (e.g.
+        // `Multiply` against silence is silence, not the layer's own raw
+        // content) and needs the general path's own real
+        // `applyBlendedCell()` call instead.
         return compositeSingleLayer(*normalContributors.front(), config, canvasWidth, silenceFloorDb);
     }
 

@@ -511,6 +511,12 @@ public:
      * selectionChanged().
      *
      * @param targetLayer Which layer to paste onto.
+     * @param blendMode How the pasted clip combines with what's already at
+     *        the target - `v0.Y.37.1` (Deferred Blend Modes), forwarded
+     *        straight to the new `PasteOperation`'s own constructor.
+     *        `sound_mind::core::BlendMode::Overwrite` (the default)
+     *        reproduces this method's own pre-`v0.Y.37.1` hard-overwrite
+     *        behavior exactly.
      * @return The newly appended `PasteOperation`'s own id - so a caller
      *         (`MainWindow`, in particular - see its own paste()) can
      *         hand it straight to `PickController::selectOperation()`,
@@ -518,7 +524,9 @@ public:
      *         separate click to find it again. `std::nullopt` if this
      *         was a no-op (no clipboard).
      */
-    std::optional<sound_mind::core::OperationId> pasteInto(sound_mind::core::LayerId targetLayer);
+    std::optional<sound_mind::core::OperationId> pasteInto(
+        sound_mind::core::LayerId targetLayer,
+        sound_mind::core::BlendMode blendMode = sound_mind::core::BlendMode::Overwrite);
 
     /**
      * @brief Captures the current committed selection's own pixels off

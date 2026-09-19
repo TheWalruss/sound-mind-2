@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/selection_region.h"
 
@@ -102,14 +103,20 @@ public:
      *        `boundary()`'s own docs. `std::nullopt` (the default) for a
      *        plain Rectangle-shaped paste, unchanged from every paste this
      *        class supported before `v0.Y.35.1`.
+     * @param blendMode How `clip` combines with what's already at the
+     *        target - see `blendMode()`'s own docs. `BlendMode::Overwrite`
+     *        (the default) reproduces this class's own pre-`v0.Y.37.1`
+     *        hard-overwrite behavior exactly.
      */
     PasteOperation(OperationId id, LayerId targetLayer, TimeFrequencyRect placement, Clip clip,
                     std::optional<OperationId> supersedes = std::nullopt,
-                    std::optional<SelectionRegion> boundary = std::nullopt) noexcept
+                    std::optional<SelectionRegion> boundary = std::nullopt,
+                    BlendMode blendMode = BlendMode::Overwrite) noexcept
         : LayerContentOperation(id, targetLayer, supersedes),
           placement_(placement),
           clip_(std::move(clip)),
-          boundary_(std::move(boundary)) {}
+          boundary_(std::move(boundary)),
+          blendMode_(blendMode) {}
 
     /// @brief This operation's own time/frequency footprint - exactly
     ///        where the clip was placed. Always the *bounding box*, even
@@ -134,6 +141,22 @@ public:
      */
     [[nodiscard]] const std::optional<SelectionRegion>& boundary() const noexcept { return boundary_; }
 
+    /**
+     * @brief How this paste's own `clip` combines with whatever's already
+     *        at the target cells - `docs/sound-mind-design.md`'s "Cut /
+     *        Copy / Paste", `v0.Y.37.1` (Deferred Blend Modes).
+     *
+     * Dispatched through `sound_mind::core::applyBlendedCell()` by
+     * `applyPasteOperation()`.
+     *
+     * @return The current blend mode; `BlendMode::Overwrite` (this class's
+     *         own pre-`v0.Y.37.1` hard-overwrite behavior) by default - a
+     *         paste saved before this milestone existed always gets this
+     *         value, reproducing its own prior, only-ever-overwrite
+     *         behavior exactly.
+     */
+    [[nodiscard]] BlendMode blendMode() const noexcept { return blendMode_; }
+
     /// @copydoc Operation::translatedCopy()
     [[nodiscard]] std::unique_ptr<Operation> translatedCopy(
         OperationId newId, double deltaTimeSeconds, double deltaFrequencyBins,
@@ -144,13 +167,14 @@ public:
         }
         return std::make_unique<PasteOperation>(
             newId, targetLayer_, translated(placement_, deltaTimeSeconds, deltaFrequencyBins, config), clip_, id(),
-            std::move(translatedBoundary));
+            std::move(translatedBoundary), blendMode_);
     }
 
 private:
     TimeFrequencyRect placement_;
     Clip clip_;
     std::optional<SelectionRegion> boundary_;
+    BlendMode blendMode_ = BlendMode::Overwrite;
 };
 
 }  // namespace sound_mind::core

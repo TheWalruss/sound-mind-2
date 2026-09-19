@@ -228,8 +228,9 @@ Layer**, adds a Filter layer instead - see
 - A **type tag**, for any layer type other than the ordinary kind you get
   from importing.
 - An **opacity slider**, an **opacity-MindWave combo** (see
-  [MindWaves](#mindwaves) below), and **translation**/**rescale** spin
-  boxes (see [Layer Timing](#layer-timing) below) - except on the
+  [MindWaves](#mindwaves) below), **translation**/**rescale** spin
+  boxes (see [Layer Timing](#layer-timing) below), and a **Blend Mode**
+  combo (see [Compositing](#compositing) below) - except on the
   **Background** layer's row, which has none of these: it's always fully
   opaque and always first in time, so none of them apply to it.
 - A **delete** button (×), for any layer except the locked one(s).
@@ -237,13 +238,22 @@ Layer**, adds a Filter layer instead - see
 ### Compositing
 
 Every visible layer with content contributes to what the canvas shows
-and Playback plays - mixed together, not one covering another. Two
-layers at full opacity both come through in full, exactly like two
-instruments or voices sounding at once; a layer's own **Opacity** slider
-acts as its own volume in that mix, from silent (`0%`) to full strength
-(`100%`), rather than making it "more see-through" the way opacity works
-in an image editor. Turning a layer's opacity down never affects any
-other layer - each one mixes in independently.
+and Playback plays. **Blend Mode** (a drop-down on each layer's own row,
+except Background) chooses how: **Normal** mixes layers together rather
+than one covering another - two layers at full opacity both come through
+in full, exactly like two instruments or voices sounding at once; a
+layer's own **Opacity** slider acts as its own volume in that mix, from
+silent (`0%`) to full strength (`100%`), rather than making it "more
+see-through" the way opacity works in an image editor. **Overwrite** is a
+hard, unconditional replacement - whatever's beneath a layer set to this
+mode is fully replaced, opacity ignored entirely. **Multiply**,
+**Screen**, **Overlay**, **Difference**, and **Add** are the familiar
+image-editor blend modes, each combining a layer with what's beneath it
+by the same formula an image editor would, rather than summing real
+acoustic energy the way Normal does. Turning a layer's opacity down, or
+changing its blend mode, never affects any other layer - each one mixes
+in independently. Every layer defaults to Normal, matching how
+compositing has always worked.
 
 ### Important: what's actually shown and played right now
 
@@ -515,8 +525,9 @@ settings:
   Shot/Mind Grain, an Amount slider for Order/Chaos - Heal/Soften/Smudge add
   no controls of their own at all, see their own entries below). The panel
   also hides whichever of the shared controls below (Falloff, Brush Size,
-  Stamp Mode, Stamp Interval, Color, Opacity) the selected type doesn't
-  actually use - see each control's own entry for which types hide it.
+  Stamp Mode, Stamp Interval, Color, Opacity, Blend Mode) the selected type
+  doesn't actually use - see each control's own entry for which types hide
+  it.
   Switching still keeps every shared value as it was underneath, even a
   currently-hidden one - only the type-specific controls reset to the
   newly-picked type's own defaults.
@@ -539,12 +550,14 @@ settings:
 - **Mind Shot** (Mind Shot only) - a drop-down of every Mind Shot you've
   captured so far (see [Selection and Fill](#selection-and-fill)'s own
   "Capture as Mind Shot"), empty until you capture your first one.
-  Painting with it stamps the captured content back exactly as it was
-  captured - a hard overwrite at its own original size, not blended or
-  scaled by Falloff/Size the way Procedural/Instrument are. The panel hides
-  Falloff, Brush Size, Color, and Opacity for Mind Shot, since none of them
-  have any effect on it - only Stamp Mode/Interval (which control the
-  stamp's own placement, not its content) still apply.
+  Painting with it stamps the captured content back at its own original
+  size, not scaled by Falloff/Size the way Procedural/Instrument are -
+  combined with what's already there per its own **Blend Mode** control
+  (Overwrite by default, reproducing the original "stamps back exactly
+  as it was captured" behavior). The panel hides Falloff, Brush Size,
+  Color, and Opacity for Mind Shot, since none of them have any effect
+  on it - only Stamp Mode/Interval (which control the stamp's own
+  placement, not its content) still apply.
 - **Mind Grain** (Mind Grain only) - a drop-down of every Mind Grain you've
   captured so far (see [Selection and Fill](#selection-and-fill)'s own
   "Capture as Mind Grain"), empty until you capture your first one. The
@@ -553,7 +566,8 @@ settings:
   reads that layer's *current* content, and repainting the source layer
   updates every Mind Grain stroke that reads from it immediately, wherever
   it's painted, not just the next time that stroke's own layer happens to
-  be redrawn for some other reason.
+  be redrawn for some other reason. Combines with what's already there per
+  its own **Blend Mode** control, same as Mind Shot above.
 
   **A Mind Grain can only paint onto a layer above its own source** - the
   panel won't even let you attempt it on the wrong layer: the Mind Grain
@@ -663,6 +677,14 @@ settings:
   regardless of what it is. The panel's own default (100%) paints at
   full strength right away, no setup required. Hidden for Mind Shot/Mind
   Grain, which don't use it.
+- **Blend Mode** - how a Mind Shot/Mind Grain stamp combines with what's
+  already there: **Overwrite** (the default) replaces it entirely, same
+  as before this control existed; **Normal**, **Multiply**, **Screen**,
+  **Overlay**, **Difference**, and **Add** blend it in instead - see
+  [Compositing](#compositing) above for what each one does. Shown *only*
+  for Mind Shot/Mind Grain - every other tool type paints via its own
+  Opacity/Falloff gradient blend instead, which has no blend mode choice
+  of its own.
 
 Two checkboxes at the top of the panel, both off by default:
 
@@ -674,7 +696,7 @@ Two checkboxes at the top of the panel, both off by default:
 
 **Undo** (Ctrl+Z) and **Redo** (Ctrl+Y), in the **Edit** menu, apply to
 paint strokes and to a layer's own opacity, opacity-MindWave binding,
-visibility, translation, and rescale (see
+visibility, translation, rescale, and blend mode (see
 [Working with Layers](#working-with-layers)) - both kinds share the same
 single history, undoing/redoing whichever one actually happened most
 recently, in either order.
@@ -782,6 +804,13 @@ The **Selection Configuration** toolbar button opens a dockable panel
     point's own overtone rows (2x, 3x, ... its frequency), the same way a
     note's harmonics naturally stack above its fundamental - useful for
     selecting a whole note at once rather than just its loudest partial.
+- **Paste Blend Mode** - how **Edit → Paste** (below) combines its clip
+  with the destination: **Overwrite** (the default) replaces it entirely,
+  same as before this control existed; **Normal**, **Multiply**,
+  **Screen**, **Overlay**, **Difference**, and **Add** blend it in
+  instead - see [Compositing](#compositing) above for what each one does.
+  Read fresh at the moment you paste, so changing it doesn't affect a
+  paste you already made.
 
 Fill/Copy/Cut/Paste (below) all confine themselves exactly to a Lasso or
 Wand selection's own shape, not just its bounding box - copying an
@@ -839,9 +868,11 @@ gap is left silent.
   the same position it was captured from, onto whichever layer is
   currently active in the Layers panel - which doesn't have to be the
   layer it was copied or cut from. Select a different layer's row first
-  to paste onto it instead. Switches straight to [Pick](#pick) and
-  selects the newly pasted result there - move, modify, delete, or
-  restack it right away, with no separate click needed to find it again.
+  to paste onto it instead. Combines with the destination per the
+  Selection Configuration panel's own **Paste Blend Mode** (above).
+  Switches straight to [Pick](#pick) and selects the newly pasted result
+  there - move, modify, delete, or restack it right away, with no
+  separate click needed to find it again.
 - **Capture as Mind Shot** it - **Edit → Capture as Mind Shot** stores the
   selection's own pixels permanently, named "Mind Shot 1", "Mind Shot 2",
   and so on - unlike Copy, this doesn't touch the clipboard, and the
@@ -1057,10 +1088,7 @@ what's designed for it:
   **permanently deferred, until further notice**, not merely not yet
   scheduled. Instrument strokes
   also don't yet bind to a MindWave, and Loop Mode doesn't yet retrigger
-  per note. A Mind Shot/Mind
-  Grain stamp always overwrites verbatim - blend-mode selection (so it
-  could blend rather than overwrite) is planned alongside
-  layer/Paste blend modes. There's also no UI yet to reposition an
+  per note. There's also no UI yet to reposition an
   already-captured Mind Grain's own referenced region, and a Mind Grain
   only ever samples its own source *layer*'s own raw content - not the
   full composite (every layer up through it, blended together) as it
@@ -1147,7 +1175,9 @@ loose ends remain:
 what's designed for them:
 
 - **Layer opacity and the five filter-parameter scalars** can bind to a
-  MindWave now; **brush parameters** can't yet (see the bullet above).
+  MindWave now; **brush parameters** can't yet (see the bullet above). A
+  layer's **Blend Mode** can't bind to a MindWave either - it's a single,
+  fixed choice per layer, not spatially varying.
 - **No canvas-space vs. operation-relative choice** - every binding today
   is implicitly canvas-space (the field is a fixed mask laid over the
   whole piece); the "retriggers fresh per note" alternative is planned for

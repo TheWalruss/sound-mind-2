@@ -7,6 +7,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -465,13 +466,13 @@ private:
  * of later changes to its source" already promises.
  *
  * **No `tipShape()`/meaningful `falloff()`/`size()` use** - a Mind Shot
- * stamps as a hard, Normal-only overwrite of its own captured content at
- * its own native size, centered on each stamp position (see
- * `applyPaintOperation()`'s own docs) - the same direct-overwrite
- * semantics `PasteOperation` already uses, not Procedural/Instrument's
- * gradient/falloff blend. Blend-mode selection for this stamp is
- * confirmed deferred to `docs/sound-mind-roadmap.md`'s `v0.Y.37.1`,
- * alongside layer compositing and Paste.
+ * stamps its own captured content at its own native size, centered on each
+ * stamp position (see `applyPaintOperation()`'s own docs), combined with
+ * whatever's already there via `blendMode()` - the same
+ * `applyBlendedCell()` dispatch `PasteOperation` already uses, not
+ * Procedural/Instrument's gradient/falloff blend. `BlendMode::Overwrite`
+ * (the default) reproduces this class's own pre-`v0.Y.37.1` hard-overwrite
+ * behavior exactly.
  */
 class MindShotConfiguration : public ToolConfiguration {
 public:
@@ -518,9 +519,29 @@ public:
     ///         `0` (nothing to paint) until `setClip()` is called.
     [[nodiscard]] const Clip& clip() const noexcept { return clip_; }
 
+    /**
+     * @brief How this configuration's own stamp combines with whatever's
+     *        already there - `v0.Y.37.1` (Deferred Blend Modes).
+     *
+     * Dispatched through `sound_mind::core::applyBlendedCell()` by
+     * `blitClipCentered()`.
+     *
+     * @return The current blend mode; `BlendMode::Overwrite` (this class's
+     *         own pre-`v0.Y.37.1` hard-overwrite behavior) by default - a
+     *         configuration saved before this milestone existed always
+     *         gets this value, reproducing its own prior, only-ever-
+     *         overwrite behavior exactly.
+     */
+    [[nodiscard]] BlendMode blendMode() const noexcept { return blendMode_; }
+
+    /// @brief Sets this configuration's own blend mode.
+    /// @param mode The new mode - see blendMode()'s own docs.
+    void setBlendMode(BlendMode mode) noexcept { blendMode_ = mode; }
+
 private:
     std::optional<MindShotId> sourceMindShotId_;
     Clip clip_;
+    BlendMode blendMode_ = BlendMode::Overwrite;
 };
 
 /**
@@ -550,9 +571,10 @@ private:
  * be constructed with an empty `Clip`.
  *
  * **No `tipShape()`/meaningful `falloff()`/`size()` use, same as
- * `MindShotConfiguration`** - a hard, Normal-only overwrite of whatever
- * region `sourceLayerId()`'s own current content has at `bounds()`,
- * centered on each stamp position, not scaled or blended.
+ * `MindShotConfiguration`** - whatever region `sourceLayerId()`'s own
+ * current content has at `bounds()`, centered on each stamp position, not
+ * scaled, but combined with whatever's already there via `blendMode()`,
+ * same as `MindShotConfiguration`'s own `v0.Y.37.1` update.
  */
 class MindGrainConfiguration : public ToolConfiguration {
 public:
@@ -606,10 +628,17 @@ public:
     ///         zero-area rect) until `setReference()` is called.
     [[nodiscard]] const TimeFrequencyRect& bounds() const noexcept { return bounds_; }
 
+    /// @copydoc MindShotConfiguration::blendMode()
+    [[nodiscard]] BlendMode blendMode() const noexcept { return blendMode_; }
+
+    /// @copydoc MindShotConfiguration::setBlendMode()
+    void setBlendMode(BlendMode mode) noexcept { blendMode_ = mode; }
+
 private:
     std::optional<MindGrainId> sourceMindGrainId_;
     LayerId sourceLayerId_ = 0;
     TimeFrequencyRect bounds_;
+    BlendMode blendMode_ = BlendMode::Overwrite;
 };
 
 /**

@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QDockWidget>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/tool_configuration.h"
 
 class QCheckBox;
@@ -302,11 +303,15 @@ private:
      *
      * - **`MindShotConfiguration`/`MindGrainConfiguration`**: hides
      *   Falloff/Brush Size/Color/Opacity - both stamp a captured/live
-     *   `Clip` verbatim (`blitClipCentered()`), never reading `size()`/
-     *   `falloff()`, and never touching the stroke's own gradient at all
-     *   (no blend of any kind, so neither intensity nor opacity matters).
-     *   Stamp Mode/Interval stay visible - still a real, meaningful
-     *   placement choice for a repeated stamp.
+     *   `Clip` (`blitClipCentered()`), never reading `size()`/`falloff()`,
+     *   and never touching the stroke's own gradient at all (opacity/
+     *   intensity meaningless - see each class's own docs). Stamp Mode/
+     *   Interval stay visible - still a real, meaningful placement choice
+     *   for a repeated stamp. As of `v0.Y.37.1` (Deferred Blend Modes),
+     *   `blendModeCombo_` is shown *only* for these two - the exact inverse
+     *   of Falloff/Size/Color/Opacity's own visibility here - since it's
+     *   the one control these two types uniquely have that no other type
+     *   does.
      * - **`FixedStampPlacementConfiguration`'s own four subtypes** (`Heal`/
      *   `Soften`/`Smudge`/`OrderChaos`): hides Color (never consulted - see
      *   each one's own docs on why only the stroke's own gradient
@@ -324,6 +329,16 @@ private:
      * alongside it - the same "config_'s type just changed" trigger.
      */
     void updateSharedControlVisibility();
+
+    /// @brief `blendModeCombo_`'s own `currentIndexChanged` handler: if
+    ///        `config_` is currently a `MindShotConfiguration` or
+    ///        `MindGrainConfiguration`, sets its blend mode and emits
+    ///        toolConfigurationChanged() - `v0.Y.37.1` (Deferred Blend
+    ///        Modes). A no-op for every other type (the combo is hidden
+    ///        for them anyway - see `updateSharedControlVisibility()`'s
+    ///        own docs).
+    /// @param index The combo's own newly-selected row.
+    void handleBlendModeComboChanged(int index);
 
     /// @brief `mindShotCombo_`'s own `currentIndexChanged` handler: if
     ///        `config_` is currently a `MindShotConfiguration`, sets its
@@ -431,6 +446,18 @@ private:
     QDoubleSpinBox* stampIntervalSpinBox_ = nullptr;
     QPushButton* colorButton_ = nullptr;
     QDoubleSpinBox* opacitySpinBox_ = nullptr;
+
+    /// @brief Mind Shot's/Mind Grain's own blend mode - `v0.Y.37.1`
+    ///        (Deferred Blend Modes). Lives in `sharedControlsForm_`
+    ///        alongside Falloff/Size/Color/Opacity (shown only for those
+    ///        two types, the exact inverse of those four) rather than
+    ///        duplicated once per type-specific group, even though it's
+    ///        stored as two separately-declared fields
+    ///        (`MindShotConfiguration::blendMode()`/
+    ///        `MindGrainConfiguration::blendMode()`, not a shared
+    ///        `ToolConfiguration` base member) - see
+    ///        `updateSharedControlVisibility()`'s own docs.
+    QComboBox* blendModeCombo_ = nullptr;
     QCheckBox* showBoundingBoxesCheckBox_ = nullptr;
     QCheckBox* showPathGeometryCheckBox_ = nullptr;
 };

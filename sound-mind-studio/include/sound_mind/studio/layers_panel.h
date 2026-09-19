@@ -8,6 +8,7 @@
 #include <QDockWidget>
 #include <QString>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_wave.h"
 
@@ -24,15 +25,20 @@ namespace sound_mind::studio {
  * per-row visibility toggle, name, opacity, add/delete - the "add" half
  * is a "+ Add Layer" button above the list, added once painting existed
  * to give a new layer content; see `MainWindow::addEmptyLayer()`'s own
- * docs), scoped down to
- * what `sound_mind::core::Layer` actually supports today: no blend-mode
- * combo, and no settings/gear button - neither concept exists in the
+ * docs), scoped down to what `sound_mind::core::Layer` actually supports
+ * today: no settings/gear button - that concept doesn't exist in the
  * engine yet. As of `v0.Y.21.1` (Layer Time Alignment), two transform
  * controls *do* exist - translation and rescale, both horizontal-axis-only
  * (see `sound_mind::core::Layer`'s own docs for the narrower-than-legacy
  * scope). As of `v0.Y.31.1` (MindWaves v1) Installment C2, a MindWave-link
  * combo *does* exist too, next to each row's own opacity slider - see
- * setAvailableMindWaves()'s own docs.
+ * setAvailableMindWaves()'s own docs. As of `v0.Y.37.1` (Deferred Blend
+ * Modes), a plain Blend Mode combo *does* also exist, next to the opacity/
+ * transform controls - a minimal, functional stand-in confirmed with the
+ * user ahead of the already-planned Layers Panel Redesign milestone
+ * (`v0.Y.43.1`), which replaces this with its own polished accordion-row
+ * control as one of that milestone's five named additions; this one isn't
+ * meant to survive that redesign unchanged.
  *
  * Purely presentational, the same division of responsibility as
  * `LandingPage`: every row action is a signal `MainWindow` connects to
@@ -98,6 +104,9 @@ public:
 
         /// @brief Mirrors `sound_mind::core::Layer::opacityMindWave()`.
         std::optional<sound_mind::core::MindWaveId> opacityMindWaveId;
+
+        /// @brief Mirrors `sound_mind::core::Layer::blendMode()`.
+        sound_mind::core::BlendMode blendMode = sound_mind::core::BlendMode::Normal;
     };
 
     /// @brief Builds the panel with an initially-empty layer list.
@@ -201,6 +210,14 @@ signals:
     /// @param mindWaveId The newly selected MindWave, or `std::nullopt`
     ///        for "None" (a plain scalar opacity again).
     void opacityMindWaveChanged(sound_mind::core::LayerId id, std::optional<sound_mind::core::MindWaveId> mindWaveId);
+
+    /// @brief A row's Blend Mode combo changed - see
+    /// `sound_mind::core::Layer::blendMode()`'s own docs. Never emitted for
+    /// a Background row - see the class's own docs on why that combo
+    /// doesn't exist at all there.
+    /// @param id The layer that changed.
+    /// @param mode The newly selected blend mode.
+    void blendModeChanged(sound_mind::core::LayerId id, sound_mind::core::BlendMode mode);
 
     /// @brief A row's name was double-clicked.
     void renameRequested(sound_mind::core::LayerId id);

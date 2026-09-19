@@ -6,8 +6,10 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/tool_configuration.h"
 
+using sound_mind::core::BlendMode;
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::Clip;
 using sound_mind::core::HealConfiguration;
@@ -247,6 +249,13 @@ TEST_CASE("A fresh MindShotConfiguration is MindShot with no Mind Shot selected"
     REQUIRE(config.sourceMindShotId() == std::nullopt);
     REQUIRE(config.clip().frameCount == 0);
     REQUIRE(config.clip().binCount == 0);
+    REQUIRE(config.blendMode() == BlendMode::Overwrite);
+}
+
+TEST_CASE("MindShotConfiguration's blend mode can be changed", "[core][tool_configuration][blend_mode]") {
+    MindShotConfiguration config;
+    config.setBlendMode(BlendMode::Multiply);
+    REQUIRE(config.blendMode() == BlendMode::Multiply);
 }
 
 TEST_CASE("MindShotConfiguration::setClip() sets the source id and the clip", "[core][tool_configuration]") {
@@ -281,6 +290,7 @@ TEST_CASE("A MindShotConfiguration round-trips through JSON, source id included"
     config.setName("Piano Hit Brush");
     config.setClip(sound_mind::core::MindShotId{3}, makeTestClip());
     config.setFalloff(0.6f);
+    config.setBlendMode(BlendMode::Screen);
 
     const nlohmann::json json = config;
     const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
@@ -293,6 +303,20 @@ TEST_CASE("A MindShotConfiguration round-trips through JSON, source id included"
     REQUIRE(mindShot.clip().binCount == 2);
     REQUIRE(mindShot.clip().leftMagnitudeDb == std::vector<float>{-1.0f, -2.0f, -3.0f, -4.0f});
     REQUIRE(roundTripped->falloff() == 0.6f);
+    REQUIRE(mindShot.blendMode() == BlendMode::Screen);
+}
+
+TEST_CASE("A MindShotConfiguration loads from JSON missing blendMode (saved before v0.Y.37.1) as Overwrite",
+          "[core][tool_configuration][blend_mode]") {
+    MindShotConfiguration config;
+    config.setClip(sound_mind::core::MindShotId{3}, makeTestClip());
+    nlohmann::json json = config;
+    json.erase("blendMode");
+
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    const auto& mindShot = dynamic_cast<const MindShotConfiguration&>(*roundTripped);
+    REQUIRE(mindShot.blendMode() == BlendMode::Overwrite);
 }
 
 TEST_CASE("A MindShotConfiguration round-trips through JSON with no source id", "[core][tool_configuration]") {
@@ -313,6 +337,13 @@ TEST_CASE("A fresh MindGrainConfiguration is MindGrain with no Mind Grain select
     REQUIRE(config.type() == ToolType::MindGrain);
     REQUIRE(config.sourceMindGrainId() == std::nullopt);
     REQUIRE(config.sourceLayerId() == 0);
+    REQUIRE(config.blendMode() == BlendMode::Overwrite);
+}
+
+TEST_CASE("MindGrainConfiguration's blend mode can be changed", "[core][tool_configuration][blend_mode]") {
+    MindGrainConfiguration config;
+    config.setBlendMode(BlendMode::Difference);
+    REQUIRE(config.blendMode() == BlendMode::Difference);
 }
 
 TEST_CASE("MindGrainConfiguration::setReference() sets the source id, layer, and bounds",
@@ -354,6 +385,7 @@ TEST_CASE("A MindGrainConfiguration round-trips through JSON, source id included
     config.setReference(sound_mind::core::MindGrainId{3}, sound_mind::core::LayerId{4},
                          sound_mind::core::TimeFrequencyRect{0.5, 1.5, 200.0, 800.0});
     config.setFalloff(0.6f);
+    config.setBlendMode(BlendMode::Add);
 
     const nlohmann::json json = config;
     const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
@@ -366,6 +398,20 @@ TEST_CASE("A MindGrainConfiguration round-trips through JSON, source id included
     REQUIRE(mindGrain.bounds().startTimeSeconds == 0.5);
     REQUIRE(mindGrain.bounds().highFrequencyHz == 800.0);
     REQUIRE(roundTripped->falloff() == 0.6f);
+    REQUIRE(mindGrain.blendMode() == BlendMode::Add);
+}
+
+TEST_CASE("A MindGrainConfiguration loads from JSON missing blendMode (saved before v0.Y.37.1) as Overwrite",
+          "[core][tool_configuration][blend_mode]") {
+    MindGrainConfiguration config;
+    config.setReference(std::nullopt, sound_mind::core::LayerId{4}, sound_mind::core::TimeFrequencyRect{});
+    nlohmann::json json = config;
+    json.erase("blendMode");
+
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    const auto& mindGrain = dynamic_cast<const MindGrainConfiguration&>(*roundTripped);
+    REQUIRE(mindGrain.blendMode() == BlendMode::Overwrite);
 }
 
 TEST_CASE("A MindGrainConfiguration round-trips through JSON with no source id", "[core][tool_configuration]") {

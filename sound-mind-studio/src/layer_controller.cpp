@@ -85,6 +85,7 @@ void LayerController::refreshLayersPanel() {
             // refresh - every mutation refreshes the panel, so this fired
             // immediately after every single bind/unbind.
             row.opacityMindWaveId = layer.opacityMindWave();
+            row.blendMode = layer.blendMode();
             rows.push_back(row);
         }
     }
@@ -213,6 +214,30 @@ void LayerController::setLayerRescale(sound_mind::core::LayerId id, double resca
     if (oldRescaleFactor != rescaleFactor) {
         undoStack_->push({/*undo=*/[this, id, oldRescaleFactor]() { applyRescale(id, oldRescaleFactor); },
                            /*redo=*/[this, id, rescaleFactor]() { applyRescale(id, rescaleFactor); }});
+    }
+}
+
+void LayerController::applyBlendMode(sound_mind::core::LayerId id, sound_mind::core::BlendMode mode) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    layer->setBlendMode(mode);
+    emit layersChanged();
+    canvas_->update();
+    refreshLayersPanel();
+}
+
+void LayerController::setLayerBlendMode(sound_mind::core::LayerId id, sound_mind::core::BlendMode mode) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    const sound_mind::core::BlendMode oldMode = layer->blendMode();
+    applyBlendMode(id, mode);
+    if (oldMode != mode) {
+        undoStack_->push({/*undo=*/[this, id, oldMode]() { applyBlendMode(id, oldMode); },
+                           /*redo=*/[this, id, mode]() { applyBlendMode(id, mode); }});
     }
 }
 

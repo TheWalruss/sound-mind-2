@@ -39,8 +39,10 @@
 #include "sound_mind/studio/main_window.h"
 #include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/record_panel.h"
+#include "sound_mind/studio/selection_configuration_panel.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
+using sound_mind::core::BlendMode;
 using sound_mind::core::FillOperation;
 using sound_mind::core::PaintOperation;
 using sound_mind::core::PasteOperation;
@@ -54,6 +56,7 @@ using sound_mind::studio::LoopPanel;
 using sound_mind::studio::MainWindow;
 using sound_mind::studio::PlaybackPanel;
 using sound_mind::studio::RecordPanel;
+using sound_mind::studio::SelectionConfigurationPanel;
 using sound_mind::studio::ToolConfigurationPanel;
 
 namespace {
@@ -3022,6 +3025,40 @@ void MainWindowTest::copyThenPasteOnTheSameLayerReproducesTheSelection() {
 
     QVERIFY(anyLoudLeftChannelPixel(*topmostNonEqualizerLayer(*window.project()).content()));
     QCOMPARE(window.project()->operationLog().size(), std::size_t{3});  // fill, fill, paste - copy logs nothing.
+}
+
+void MainWindowTest::pasteUsesTheSelectionConfigurationPanelsOwnBlendMode() {
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "sound-mind-test-paste-blend-mode.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+    window.copySelection();
+
+    auto* panel = window.findChild<SelectionConfigurationPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* combo = panel->findChild<QComboBox*>(QStringLiteral("pasteBlendModeCombo"));
+    QVERIFY(combo != nullptr);
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Multiply")));
+
+    window.paste();
+
+    const auto layerId = topmostNonEqualizerLayer(*window.project()).id();
+    const auto active = window.project()->operationLog().activeOperationsTargeting(layerId);
+    const auto* pasteOp =
+        dynamic_cast<const PasteOperation*>(*std::find_if(active.begin(), active.end(), [](const auto* op) {
+            return dynamic_cast<const PasteOperation*>(op) != nullptr;
+        }));
+    QVERIFY(pasteOp != nullptr);
+    QCOMPARE(pasteOp->blendMode(), BlendMode::Multiply);
 }
 
 void MainWindowTest::cutClearsTheSourceRegionButPasteStillReproducesIt() {

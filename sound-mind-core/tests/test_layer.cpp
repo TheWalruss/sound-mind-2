@@ -3,11 +3,13 @@
 
 #include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/layer.h"
 
 using sound_mind::codec::PoolImage;
 using sound_mind::codec::StreamImage;
+using sound_mind::core::BlendMode;
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterType;
 using sound_mind::core::Layer;
@@ -84,6 +86,17 @@ TEST_CASE("A Layer's horizontal rescale can be changed", "[core][layer]") {
     REQUIRE(layer.rescaleFactor() == 2.5);
 }
 
+TEST_CASE("A Layer defaults to Normal blend mode", "[core][layer]") {
+    const Layer layer(1, "Untitled", LayerType::Normal);
+    REQUIRE(layer.blendMode() == BlendMode::Normal);
+}
+
+TEST_CASE("A Layer's blend mode can be changed", "[core][layer]") {
+    Layer layer(1, "Untitled", LayerType::Normal);
+    layer.setBlendMode(BlendMode::Multiply);
+    REQUIRE(layer.blendMode() == BlendMode::Multiply);
+}
+
 TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     Layer original(42, "Vocals", LayerType::Background);
     original.setOpacity(0.75f);
@@ -93,6 +106,7 @@ TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     original.setRescaleFactor(1.5);
     original.filterConfiguration().setType(FilterType::Sharpen);
     original.filterConfiguration().setSharpenAmount(2.0f);
+    original.setBlendMode(BlendMode::Screen);
 
     const nlohmann::json json = original;
     const Layer restored = json.get<Layer>();
@@ -107,6 +121,18 @@ TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     REQUIRE(restored.rescaleFactor() == original.rescaleFactor());
     REQUIRE(restored.filterConfiguration().type() == FilterType::Sharpen);
     REQUIRE(restored.filterConfiguration().sharpenAmount() == 2.0f);
+    REQUIRE(restored.blendMode() == BlendMode::Screen);
+}
+
+TEST_CASE("A Layer loads from JSON missing blendMode (a layer saved before v0.Y.37.1) as Normal",
+          "[core][layer]") {
+    const nlohmann::json json{
+        {"id", 1}, {"name", "Untitled"}, {"type", "normal"}, {"opacity", 1.0f}, {"visible", true},
+    };
+
+    const Layer restored = json.get<Layer>();
+
+    REQUIRE(restored.blendMode() == BlendMode::Normal);
 }
 
 TEST_CASE("A Layer loads from JSON missing opacityMindWaveId (a layer saved before "

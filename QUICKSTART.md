@@ -44,5 +44,8 @@ data - keep them together.
 - Add more layers (more imports, or a recording via the **Record** panel).
 - Nudge a layer's timing with the Layers panel's translation/rescale
   controls once you have more than one.
+- Try a different **Blend Mode** on a layer's own row (Layers panel) once
+  you have more than one - Multiply, Screen, and the rest combine layers
+  differently than the default Normal mix.
 - Read [`USER_GUIDE.md`](USER_GUIDE.md) for Loop Mode, Pooling, exporting
   audio/video, and every panel's full set of controls.

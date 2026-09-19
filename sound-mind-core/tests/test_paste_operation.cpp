@@ -2,10 +2,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paste_operation.h"
 
 using sound_mind::codec::StreamCodecConfig;
+using sound_mind::core::BlendMode;
 using sound_mind::core::Clip;
 using sound_mind::core::LayerId;
 using sound_mind::core::OperationId;
@@ -173,6 +175,31 @@ TEST_CASE("PasteOperation::translatedCopy() shifts a Lasso boundary the same way
 
     // The original's own boundary is untouched.
     REQUIRE(original.boundary()->path().nodes()[0].anchor.timeSeconds == 0.2);
+}
+
+TEST_CASE("PasteOperation defaults to Overwrite blend mode", "[core][paste_operation][blend_mode]") {
+    const PasteOperation op(1, LayerId{1}, makeTestBounds(), makeTestClip());
+    REQUIRE(op.blendMode() == BlendMode::Overwrite);
+}
+
+TEST_CASE("PasteOperation can be constructed with a non-default blend mode",
+          "[core][paste_operation][blend_mode]") {
+    const PasteOperation op(1, LayerId{1}, makeTestBounds(), makeTestClip(), std::nullopt, std::nullopt,
+                             BlendMode::Multiply);
+    REQUIRE(op.blendMode() == BlendMode::Multiply);
+}
+
+TEST_CASE("PasteOperation::translatedCopy() carries the blend mode forward unchanged",
+          "[core][paste_operation][blend_mode]") {
+    const PasteOperation original(5, LayerId{2}, makeTestBounds(), makeTestClip(), std::nullopt, std::nullopt,
+                                   BlendMode::Screen);
+    const StreamCodecConfig codecConfig = makeTestConfig();
+
+    const auto copy = original.translatedCopy(OperationId{9}, 0.1, 5.0, codecConfig);
+
+    const auto* pasteCopy = dynamic_cast<const PasteOperation*>(copy.get());
+    REQUIRE(pasteCopy != nullptr);
+    REQUIRE(pasteCopy->blendMode() == BlendMode::Screen);
 }
 
 TEST_CASE("A Clip round-trips through JSON", "[core][paste_operation]") {

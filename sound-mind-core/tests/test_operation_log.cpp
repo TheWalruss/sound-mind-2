@@ -5,11 +5,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/paste_operation.h"
 
+using sound_mind::core::BlendMode;
 using sound_mind::core::Clip;
 using sound_mind::core::FillOperation;
 using sound_mind::core::Gradient;
@@ -412,6 +414,61 @@ TEST_CASE("An OperationLog with a PasteOperation round-trips through JSON, targe
     const auto* restoredPaste = dynamic_cast<const PasteOperation*>(layerTwoOps[0]);
     REQUIRE(restoredPaste != nullptr);
     REQUIRE(restoredPaste->clip().leftMagnitudeDb == clip.leftMagnitudeDb);
+}
+
+TEST_CASE("An OperationLog with a PasteOperation round-trips its own non-default blend mode",
+          "[core][operation_log][blend_mode]") {
+    OperationLog log;
+    Clip clip;
+    clip.frameCount = 1;
+    clip.binCount = 1;
+    clip.leftMagnitudeDb = {-1.0f};
+    clip.rightMagnitudeDb = {-1.0f};
+    clip.sharedPhaseRadians = {0.0f};
+    const OperationId pasteId = log.reserveId();
+    log.append(std::make_unique<PasteOperation>(pasteId, LayerId{1}, TimeFrequencyRect{}, clip, std::nullopt,
+                                                 std::nullopt, BlendMode::Multiply));
+
+    const nlohmann::json json = log;
+    const OperationLog roundTripped = json.get<OperationLog>();
+
+    const auto* restoredPaste =
+        dynamic_cast<const PasteOperation*>(roundTripped.activeOperationsTargeting(LayerId{1})[0]);
+    REQUIRE(restoredPaste != nullptr);
+    REQUIRE(restoredPaste->blendMode() == BlendMode::Multiply);
+}
+
+TEST_CASE("An OperationLog loads a PasteOperation from JSON missing blendMode "
+          "(saved before v0.Y.37.1) as Overwrite",
+          "[core][operation_log][blend_mode]") {
+    const nlohmann::json malformed = nlohmann::json{
+        {"operations",
+         nlohmann::json::array({nlohmann::json{
+             {"kind", "paste"},
+             {"id", 1},
+             {"targetLayer", 1},
+             {"placement",
+              nlohmann::json{{"startTimeSeconds", 0.0},
+                              {"endTimeSeconds", 1.0},
+                              {"lowFrequencyHz", 100.0},
+                              {"highFrequencyHz", 200.0}}},
+             {"clip",
+              nlohmann::json{{"frameCount", 1},
+                             {"binCount", 1},
+                             {"leftMagnitudeDb", {-1.0f}},
+                             {"rightMagnitudeDb", {-1.0f}},
+                             {"sharedPhaseRadians", {0.0f}}}},
+         }})},
+        {"activeCount", 1},
+        {"nextId", 2},
+        {"stackOrder", nlohmann::json::array({1})},
+    };
+
+    const OperationLog restored = malformed.get<OperationLog>();
+
+    const auto* restoredPaste = dynamic_cast<const PasteOperation*>(restored.activeOperationsTargeting(LayerId{1})[0]);
+    REQUIRE(restoredPaste != nullptr);
+    REQUIRE(restoredPaste->blendMode() == BlendMode::Overwrite);
 }
 
 TEST_CASE("An OperationLog fails to load JSON with an unrecognized operation kind", "[core][operation_log]") {

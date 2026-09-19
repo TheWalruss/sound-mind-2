@@ -24,6 +24,20 @@ constexpr std::array<std::pair<SelectionShape, const char*>, 3> kSelectionShapes
     {SelectionShape::Wand, "Wand"},
 }};
 
+/// @brief The Paste Blend Mode dropdown's own entries, in display order -
+/// every `sound_mind::core::BlendMode` value, `v0.Y.37.1` (Deferred Blend
+/// Modes). `Overwrite` listed first, matching its own role as the default
+/// (old-project-compatible) choice.
+constexpr std::array<std::pair<sound_mind::core::BlendMode, const char*>, 7> kPasteBlendModes = {{
+    {sound_mind::core::BlendMode::Overwrite, "Overwrite"},
+    {sound_mind::core::BlendMode::Normal, "Normal"},
+    {sound_mind::core::BlendMode::Multiply, "Multiply"},
+    {sound_mind::core::BlendMode::Screen, "Screen"},
+    {sound_mind::core::BlendMode::Overlay, "Overlay"},
+    {sound_mind::core::BlendMode::Difference, "Difference"},
+    {sound_mind::core::BlendMode::Add, "Add"},
+}};
+
 }  // namespace
 
 SelectionConfigurationPanel::SelectionConfigurationPanel(QWidget* parent)
@@ -67,6 +81,16 @@ SelectionConfigurationPanel::SelectionConfigurationPanel(QWidget* parent)
 
     root->addWidget(wandGroup_);
 
+    // --- Paste Blend Mode --------------------------------------------------
+    auto* pasteForm = new QFormLayout();
+    pasteBlendModeCombo_ = new QComboBox(container);
+    pasteBlendModeCombo_->setObjectName(QStringLiteral("pasteBlendModeCombo"));
+    for (const auto& [mode, name] : kPasteBlendModes) {
+        pasteBlendModeCombo_->addItem(tr(name), QVariant::fromValue(static_cast<int>(mode)));
+    }
+    pasteForm->addRow(tr("Paste Blend Mode:"), pasteBlendModeCombo_);
+    root->addLayout(pasteForm);
+
     setWidget(container);
     updateWandGroupVisibility();
 }
@@ -78,6 +102,10 @@ SelectionShape SelectionConfigurationPanel::selectionShape() const {
 double SelectionConfigurationPanel::wandTolerance() const { return wandToleranceSpinBox_->value(); }
 
 bool SelectionConfigurationPanel::wandHarmonicsAware() const { return wandHarmonicsAwareCheckBox_->isChecked(); }
+
+sound_mind::core::BlendMode SelectionConfigurationPanel::pasteBlendMode() const {
+    return static_cast<sound_mind::core::BlendMode>(pasteBlendModeCombo_->currentData().toInt());
+}
 
 void SelectionConfigurationPanel::updateWandGroupVisibility() {
     wandGroup_->setVisible(selectionShape() == SelectionShape::Wand);
