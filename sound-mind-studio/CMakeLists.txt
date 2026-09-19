@@ -29,6 +29,8 @@ add_library(sound-mind-studio-lib
     src/audio_snippet_picker_dialog.cpp
     src/axis_labels.cpp
     src/canvas_widget.cpp
+    src/chord_generator_controller.cpp
+    src/chord_generator_panel.cpp
     src/color_conversion.cpp
     src/create_project_wizard.cpp
     src/filter_configuration_panel.cpp
@@ -64,6 +66,8 @@ add_library(sound-mind-studio-lib
     src/undo_stack.cpp
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/canvas_widget.h
+    include/sound_mind/studio/chord_generator_controller.h
+    include/sound_mind/studio/chord_generator_panel.h
     include/sound_mind/studio/color_conversion.h
     include/sound_mind/studio/create_project_wizard.h
     include/sound_mind/studio/filter_configuration_panel.h

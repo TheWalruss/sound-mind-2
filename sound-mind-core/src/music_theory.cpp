@@ -35,4 +35,11 @@ std::string noteNameForFrequency(double frequencyHz, double referenceHz) noexcep
     return std::string(kNoteNames[static_cast<std::size_t>(nameIndex)]) + std::to_string(octave);
 }
 
+double frequencyForMidiNote(int midiNote, double referenceHz) noexcept {
+    if (referenceHz <= 0.0) {
+        return 0.0;
+    }
+    return referenceHz * std::pow(2.0, (static_cast<double>(midiNote) - 69.0) / 12.0);
+}
+
 }  // namespace sound_mind::core

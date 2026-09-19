@@ -243,6 +243,19 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     toolConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, toolConfigurationPanel_);
 
+    // Chords/Arpeggiator/Sequencer, Installment B (v0.0.40.2) - see
+    // ChordGeneratorPanel's own docs. toolPaletteController_ isn't
+    // constructed until just below, but this lambda only ever runs later,
+    // on a real control edit - safe by the time it fires, the same
+    // reasoning selectionConfigurationPanel_'s own lambdas below rely on.
+    chordGeneratorPanel_ = new ChordGeneratorPanel(this);
+    chordGeneratorPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, chordGeneratorPanel_);
+    connect(chordGeneratorPanel_, &ChordGeneratorPanel::paramsChanged, this,
+            [this](const sound_mind::core::ChordGeneratorParams& params) {
+                toolPaletteController_->setChordParams(params);
+            });
+
     // Selection & Fill (v0.Y.25.1), Selection Type (v0.Y.35.1 Installment
     // A) - toolPaletteController_ isn't constructed until just below, but
     // this lambda only ever runs later, on a real dropdown change - safe
@@ -280,6 +293,15 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // later in this same constructor, but these lambdas only run later
     // still, on a real gesture - safe by the time any of them fire.
     toolPaletteController_ = new ToolPaletteController(canvas_, toolConfigurationPanel_, &undoStack_, this);
+    // chordGeneratorPanel_'s own constructor already emitted paramsChanged()
+    // once, before the connection above existed - this explicit initial
+    // sync is the same "the panel's own constructed-with defaults are
+    // already real, applied here" precedent ToolPaletteController's own
+    // constructor follows for toolConfigurationPanel_ (see its own docs),
+    // just done here instead since chordGeneratorPanel_ isn't passed into
+    // ToolPaletteController's constructor at all (see that class's own docs
+    // on why).
+    toolPaletteController_->setChordParams(chordGeneratorPanel_->params());
     connect(canvas_, &CanvasWidget::paintStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
         if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->beginPaintStroke(*layerId, point);
@@ -325,6 +347,16 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(canvas_, &CanvasWidget::pathNodePlaced, this, [this](sound_mind::core::TimeFrequencyPoint point) {
         if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->placePathNode(*layerId, point);
+        }
+    });
+    // Chords/Arpeggiator/Sequencer, Installment B (v0.0.40.2) - only
+    // point.timeSeconds is used (see CanvasWidget::chordStampRequested()'s
+    // own docs on why point.frequencyHz is deliberately ignored: a chord's
+    // own pitches already come entirely from the Chord Generator panel's
+    // Root/Octave controls).
+    connect(canvas_, &CanvasWidget::chordStampRequested, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
+            toolPaletteController_->stampChord(*layerId, point.timeSeconds);
         }
     });
     // Merges all four tool controllers' own contentChanged() into one
@@ -680,6 +712,15 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     pathAction_->setCheckable(true);
     connect(pathAction_, &QAction::toggled, this, &MainWindow::setPathModeEnabled);
 
+    // Chords/Arpeggiator/Sequencer, Installment B (v0.0.40.2): the same
+    // kind of plain checkable toggle as Paint/Pick/Select/Path above, for
+    // CanvasWidget::ToolMode::ChordStamp - arms the Chord Generator's own
+    // "click to place" gesture (see ChordGeneratorPanel's own docs on why
+    // there's no separate "Stamp" button).
+    chordAction_ = transportToolBar->addAction(tr("Chord"));
+    chordAction_->setCheckable(true);
+    connect(chordAction_, &QAction::toggled, this, &MainWindow::setChordModeEnabled);
+
     // The Path tool's own "standing default" node type (see
     // PathController::setDefaultNodeType()'s own docs) - deliberately
     // independent of tool-mode exclusivity (not reset by
@@ -709,6 +750,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // Off by default, the same as Playback/Record/Loop above - see
     // toolConfigurationPanel_'s own docs.
     transportToolBar->addAction(toolConfigurationPanel_->toggleViewAction());
+    // Off by default, same reasoning - see chordGeneratorPanel_'s own docs.
+    transportToolBar->addAction(chordGeneratorPanel_->toggleViewAction());
     transportToolBar->addAction(selectionConfigurationPanel_->toggleViewAction());
     // Off by default, same reasoning - see gridPanel_'s own docs.
     transportToolBar->addAction(gridPanel_->toggleViewAction());
@@ -944,6 +987,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     pickAction_->setChecked(false);
     selectAction_->setChecked(false);
     pathAction_->setChecked(false);
+    chordAction_->setChecked(false);
     canvas_->setToolMode(CanvasWidget::ToolMode::None);
     canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     canvas_->setPickSelectionBounds(std::nullopt);
@@ -1497,6 +1541,14 @@ void MainWindow::setPathModeEnabled(bool enabled) {
     setExclusiveToolMode(pathAction_, enabled, CanvasWidget::ToolMode::Path);
 }
 
+void MainWindow::setChordModeEnabled(bool enabled) {
+    // No cancel call, unlike setPaintModeEnabled()/setPickModeEnabled()/
+    // setSelectModeEnabled()/setPathModeEnabled() above - ChordStamp mode's
+    // own single-press gesture has no in-progress state to cancel in the
+    // first place (see CanvasWidget::ToolMode::ChordStamp's own docs).
+    setExclusiveToolMode(chordAction_, enabled, CanvasWidget::ToolMode::ChordStamp);
+}
+
 void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWidget::ToolMode mode) {
     canvas_->setToolMode(enabled ? mode : CanvasWidget::ToolMode::None);
 
@@ -1508,6 +1560,7 @@ void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWi
     const QSignalBlocker pickBlocker(pickAction_);
     const QSignalBlocker selectBlocker(selectAction_);
     const QSignalBlocker pathBlocker(pathAction_);
+    const QSignalBlocker chordBlocker(chordAction_);
     activated->setChecked(enabled);
     if (enabled) {
         if (activated != paintAction_) {
@@ -1521,6 +1574,9 @@ void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWi
         }
         if (activated != pathAction_) {
             pathAction_->setChecked(false);
+        }
+        if (activated != chordAction_) {
+            chordAction_->setChecked(false);
         }
     }
 }

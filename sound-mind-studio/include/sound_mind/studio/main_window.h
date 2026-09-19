@@ -15,6 +15,7 @@
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/chord_generator_panel.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/grid_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
@@ -884,6 +885,24 @@ public slots:
     void setPathModeEnabled(bool enabled);
 
     /**
+     * @brief Toggles between Chord Stamp and plain (`ToolMode::None`)
+     *        canvas interaction - the actual work behind the toolbar's
+     *        Chord toggle.
+     *
+     * Unlike setPaintModeEnabled()/setPickModeEnabled()/
+     * setSelectModeEnabled()/setPathModeEnabled() above, turning it off
+     * cancels nothing - `ChordStamp` mode's own single-press gesture has no
+     * in-progress state to begin with (see
+     * `CanvasWidget::ToolMode::ChordStamp`'s own docs); turning it on has
+     * no effect if no project is open. See setPaintModeEnabled()'s own
+     * docs for the shared exclusivity with Paint/Pick/Select/Path.
+     *
+     * @param enabled `true` to accept Chord Stamp input on the canvas;
+     *        `false` to return to plain, non-interactive display.
+     */
+    void setChordModeEnabled(bool enabled);
+
+    /**
      * @brief Undoes the most recent undoable edit, if any - the actual
      *        work behind the Edit menu's Undo action.
      *
@@ -1680,8 +1699,8 @@ private:
      * directly (e.g. by a test), not just via a real click.
      *
      * @param activated Which action to leave checked when `enabled` is
-     *        `true` - `paintAction_`, `pickAction_`, `selectAction_`, or
-     *        `pathAction_`.
+     *        `true` - `paintAction_`, `pickAction_`, `selectAction_`,
+     *        `pathAction_`, or `chordAction_`.
      * @param enabled Whether `activated`'s own tool mode should become
      *        active.
      * @param mode The tool mode `activated` corresponds to.
@@ -1889,6 +1908,13 @@ private:
     /// setProject()-resets-it reason as paintAction_.
     QAction* pathAction_ = nullptr;
 
+    /// @brief The toolbar's Chord Stamp tool toggle - checked while the
+    /// canvas accepts Chord Stamp input (`CanvasWidget::ToolMode::ChordStamp`).
+    /// Kept mutually exclusive with paintAction_/pickAction_/selectAction_/
+    /// pathAction_ by setExclusiveToolMode(); kept as a member for the same
+    /// setProject()-resets-it reason as paintAction_.
+    QAction* chordAction_ = nullptr;
+
     /// @brief The toolbar's "Smooth Nodes" checkable toggle - the Path
     /// tool's own standing default node type (see
     /// `PathController::setDefaultNodeType()`'s own docs), independent of
@@ -1901,6 +1927,12 @@ private:
     /// by default, matching Playback/Record/Loop's own "off until shown"
     /// convention (not Layers', which is shown automatically once).
     ToolConfigurationPanel* toolConfigurationPanel_ = nullptr;
+
+    /// @brief The dockable panel exposing the Chord Generator's own
+    /// parameters - see its own class docs. Hidden by default, the same
+    /// "off until shown" convention toolConfigurationPanel_ already
+    /// follows. `v0.0.40.2` (Chords/Arpeggiator/Sequencer, Installment B).
+    ChordGeneratorPanel* chordGeneratorPanel_ = nullptr;
 
     /// @brief The dockable panel exposing Select mode's own Selection Type
     /// (Rectangle/Lasso) - see its own class docs. Hidden by default, the

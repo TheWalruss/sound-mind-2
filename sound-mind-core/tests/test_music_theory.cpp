@@ -1,9 +1,11 @@
 #include <cmath>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "sound_mind/core/music_theory.h"
 
+using sound_mind::core::frequencyForMidiNote;
 using sound_mind::core::noteNameForFrequency;
 
 TEST_CASE("noteNameForFrequency names A4 exactly at the tuning reference itself", "[core][music_theory]") {
@@ -44,4 +46,29 @@ TEST_CASE("noteNameForFrequency returns empty for a non-positive frequency or re
     REQUIRE(noteNameForFrequency(-100.0, 440.0).empty());
     REQUIRE(noteNameForFrequency(440.0, 0.0).empty());
     REQUIRE(noteNameForFrequency(440.0, -440.0).empty());
+}
+
+TEST_CASE("frequencyForMidiNote returns the reference itself at MIDI note 69 (A4)", "[core][music_theory]") {
+    REQUIRE(frequencyForMidiNote(69, 440.0) == Catch::Approx(440.0));
+    REQUIRE(frequencyForMidiNote(69, 432.0) == Catch::Approx(432.0));
+}
+
+TEST_CASE("frequencyForMidiNote is the exact inverse of noteNameForFrequency's own semitone math",
+          "[core][music_theory]") {
+    REQUIRE(frequencyForMidiNote(60, 440.0) == Catch::Approx(261.6255653));
+    REQUIRE(frequencyForMidiNote(81, 440.0) == Catch::Approx(880.0));
+    REQUIRE(frequencyForMidiNote(57, 440.0) == Catch::Approx(220.0));
+    REQUIRE(frequencyForMidiNote(70, 440.0) == Catch::Approx(466.1637615));
+}
+
+TEST_CASE("frequencyForMidiNote respects a retuned reference", "[core][music_theory]") {
+    REQUIRE(frequencyForMidiNote(69, 432.0) == Catch::Approx(432.0));
+    REQUIRE(frequencyForMidiNote(76, 432.0) == Catch::Approx(432.0 * std::pow(2.0, 7.0 / 12.0)));
+}
+
+TEST_CASE("frequencyForMidiNote round-trips through noteNameForFrequency's own note-name convention",
+          "[core][music_theory]") {
+    // C4 is MIDI note 60 by the same 69=A4 convention noteNameForFrequency documents.
+    REQUIRE(noteNameForFrequency(frequencyForMidiNote(60, 440.0), 440.0) == "C4");
+    REQUIRE(noteNameForFrequency(frequencyForMidiNote(69, 440.0), 440.0) == "A4");
 }

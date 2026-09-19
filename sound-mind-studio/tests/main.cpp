@@ -16,6 +16,8 @@
 #include "test_audio_snippet_picker_dialog.h"
 #include "test_axis_labels.h"
 #include "test_canvas_widget.h"
+#include "test_chord_generator_controller.h"
+#include "test_chord_generator_panel.h"
 #include "test_create_project_wizard.h"
 #include "test_filter_configuration_panel.h"
 #include "test_grid_config.h"
@@ -67,6 +69,12 @@ int main(int argc, char** argv) {
 
     CanvasWidgetTest canvasWidgetTest;
     status |= QTest::qExec(&canvasWidgetTest, argc, argv);
+
+    ChordGeneratorControllerTest chordGeneratorControllerTest;
+    status |= QTest::qExec(&chordGeneratorControllerTest, argc, argv);
+
+    ChordGeneratorPanelTest chordGeneratorPanelTest;
+    status |= QTest::qExec(&chordGeneratorPanelTest, argc, argv);
 
     LandingPageTest landingPageTest;
     status |= QTest::qExec(&landingPageTest, argc, argv);

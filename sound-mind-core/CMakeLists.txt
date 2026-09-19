@@ -39,6 +39,7 @@ add_library(sound-mind-core
     src/convolution_kernel.cpp
     src/blend_mode_application.cpp
     src/music_theory.cpp
+    src/chord_generator.cpp
     src/layer.cpp
     src/project_settings.cpp
     src/operation_log.cpp

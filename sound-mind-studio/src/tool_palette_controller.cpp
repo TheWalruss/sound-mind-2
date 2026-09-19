@@ -6,6 +6,7 @@
 
 #include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/chord_generator_controller.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/path_controller.h"
 #include "sound_mind/studio/pick_controller.h"
@@ -136,6 +137,20 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
             &CanvasWidget::setShowBoundingBoxes);
     connect(toolConfigurationPanel_, &ToolConfigurationPanel::showPathGeometryChanged, canvas_,
             &CanvasWidget::setShowPathGeometry);
+
+    // Chords/Arpeggiator/Sequencer, Installment B (v0.0.40.2) - shares
+    // paintController_'s own tool configuration (see
+    // ChordGeneratorController's own docs on why there's no second,
+    // parallel instrument picker), so it's constructed after
+    // paintController_ and holds a pointer to it.
+    chordGeneratorController_ = new ChordGeneratorController(paintController_, this);
+    connect(chordGeneratorController_, &ChordGeneratorController::previewChanged, this,
+            [this]() { canvas_->setChordPreview(chordGeneratorController_->previewFrequenciesHz()); });
+    connect(chordGeneratorController_, &ChordGeneratorController::contentChanged, this,
+            [this](sound_mind::core::LayerId layer) {
+                canvas_->update();
+                emit contentChanged(layer);
+            });
 }
 
 void ToolPaletteController::setProject(sound_mind::core::Project* project) {
@@ -143,7 +158,16 @@ void ToolPaletteController::setProject(sound_mind::core::Project* project) {
     pickController_->setProject(project);
     selectionController_->setProject(project);
     pathController_->setProject(project);
+    chordGeneratorController_->setProject(project);
     toolConfigurationPanel_->setProject(project);
+}
+
+void ToolPaletteController::setChordParams(const sound_mind::core::ChordGeneratorParams& params) {
+    chordGeneratorController_->setParams(params);
+}
+
+void ToolPaletteController::stampChord(sound_mind::core::LayerId layer, double timeSeconds) {
+    chordGeneratorController_->stampAt(layer, timeSeconds);
 }
 
 void ToolPaletteController::setGridSnapping(bool enabled, const FrequencyGridConfig& frequencyGridConfig,

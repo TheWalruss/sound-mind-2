@@ -5,6 +5,7 @@
 
 #include <QObject>
 
+#include "sound_mind/core/chord_generator.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -17,6 +18,7 @@
 namespace sound_mind::studio {
 
 class CanvasWidget;
+class ChordGeneratorController;
 class PaintController;
 class PathController;
 class PickController;
@@ -31,16 +33,33 @@ class UndoStack;
  *        (`v0.Y.29.1`, Installment C), the same "own presentation" treatment
  *        `PlaybackController` (`v0.Y.23.1`) already received.
  *
+ * **As of `v0.0.40.2` (Chords/Arpeggiator/Sequencer, Installment B):** also
+ * owns a fifth, `ChordGeneratorController` - constructed the same way
+ * `pickController_`/`selectionController_`/`pathController_` are (sharing
+ * `paintController_`'s own tool configuration - see
+ * `ChordGeneratorController`'s own docs), with its own `previewChanged()`
+ * wired straight to `canvas_->setChordPreview()` and its own
+ * `contentChanged()` merged into this class's own, the same "internal
+ * wiring, one merged signal out" treatment every other sub-controller
+ * already gets. Unlike the other four, it has no toolbar `QAction`/tool
+ * mode of its own to cancel on deactivation (`ChordStamp` mode's own single-
+ * press gesture has no in-progress state to begin with - see
+ * `CanvasWidget::ToolMode::ChordStamp`'s own docs) and isn't driven by
+ * `ToolConfigurationPanel` at all, only by the separate `ChordGeneratorPanel`
+ * (via `setChordParams()`, called directly by `MainWindow` - this class
+ * doesn't hold a pointer to that panel the way it does `toolConfigurationPanel_`,
+ * since nothing else here needs to reach into it).
+ *
  * Constructed with non-owning pointers to `canvas` and
  * `toolConfigurationPanel` - both stay owned by `MainWindow` (a
  * `CanvasWidget` is the window's own central widget; a
  * `ToolConfigurationPanel` is a dock widget only `QMainWindow::
  * addDockWidget()` can place) - and wires every signal *between* them and
- * its own four sub-controllers internally: `canvas_`'s own "continued"/
+ * its own sub-controllers internally: `canvas_`'s own "continued"/
  * "ended" gesture signals straight to whichever controller is doing the
  * work, and each controller's own `pathChanged()`/`selectionChanged()`/
- * `boundsChanged()` straight back to `canvas_`'s preview/selection-overlay
- * setters or `toolConfigurationPanel_`'s own state.
+ * `boundsChanged()`/`previewChanged()` straight back to `canvas_`'s preview/
+ * selection-overlay setters or `toolConfigurationPanel_`'s own state.
  *
  * **Deliberately does not own the four toolbar `QAction`s, or decide tool-
  * mode exclusivity** - `MainWindow`'s own `setExclusiveToolMode()` still
@@ -324,6 +343,28 @@ public:
     ///        `PathNodeType::Corner`.
     void setPathPlacesSmoothNodes(bool smooth);
 
+    /**
+     * @brief Sets the Chord Generator's own current parameters - forwards
+     *        to `ChordGeneratorController::setParams()`.
+     *
+     * Also keeps the Chord Overlay (`CanvasWidget::setChordPreview()`) in
+     * sync, wired internally the same way pathChanged()/selectionChanged()
+     * are for the other three tool controllers (see this class's own
+     * docs) - callers only ever need to call this one method, not a
+     * second one to refresh the overlay themselves.
+     *
+     * @param params `ChordGeneratorPanel`'s own new, complete parameters.
+     */
+    void setChordParams(const sound_mind::core::ChordGeneratorParams& params);
+
+    /// @brief Stamps the Chord Generator's own current chord/arpeggio -
+    ///        forwards to `ChordGeneratorController::stampAt()`.
+    /// @param layer Which layer to stamp into - resolved by the caller
+    ///        (`MainWindow`), not by this class.
+    /// @param timeSeconds When the chord starts, in seconds - wherever the
+    ///        user clicked on the canvas's own time axis.
+    void stampChord(sound_mind::core::LayerId layer, double timeSeconds);
+
 signals:
     /// @brief Emitted whenever any of the four tool controllers changes a
     ///        layer's own rendered content, as a result of painting,
@@ -344,6 +385,7 @@ private:
     PickController* pickController_ = nullptr;
     SelectionController* selectionController_ = nullptr;
     PathController* pathController_ = nullptr;
+    ChordGeneratorController* chordGeneratorController_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

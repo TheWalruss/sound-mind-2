@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 
 #include <QImage>
 #include <QPainterPath>
@@ -68,6 +69,7 @@ public:
         Pick,  ///< Mouse press selects a paint object; a drag moves it.
         Select,  ///< Mouse drag draws a rectangular selection.
         Path,  ///< Each mouse press places one more Path node.
+        ChordStamp,  ///< Each mouse press stamps the Chord Generator's own current chord/arpeggio.
     };
 
     /// @brief Whether the canvas's own on-screen size tracks its
@@ -119,15 +121,19 @@ public:
      * paintStrokeEnded() instead, `Pick` makes the same gesture emit
      * pickStrokeStarted()/pickStrokeContinued()/pickStrokeEnded() instead,
      * `Select` makes it emit selectStrokeStarted()/selectStrokeContinued()/
-     * selectStrokeEnded() instead, and `Path` makes each individual left-
+     * selectStrokeEnded() instead, `Path` makes each individual left-
      * button press (no drag/release counterpart - see pathNodePlaced()'s
-     * own docs) emit pathNodePlaced() instead. Exactly one mode is active
-     * at a time. Switching away from `Paint`/`Pick`/`Select` cancels
-     * whatever gesture was mid-flight in it (a real mouse-up may never
-     * arrive - e.g. the toolbar button was clicked instead); `Path` has no
-     * such in-widget state to cancel (see pathNodePlaced()'s own docs) -
-     * its own in-progress node sequence lives in `PathController` instead,
-     * cancelled from there.
+     * own docs) emit pathNodePlaced() instead, and `ChordStamp` makes each
+     * individual left-button press (the same single-press-is-the-whole-
+     * gesture shape as `Path`, not a drag) emit chordStampRequested()
+     * instead. Exactly one mode is active at a time. Switching away from
+     * `Paint`/`Pick`/`Select` cancels whatever gesture was mid-flight in it
+     * (a real mouse-up may never arrive - e.g. the toolbar button was
+     * clicked instead); `Path`/`ChordStamp` have no such in-widget state to
+     * cancel (see pathNodePlaced()'s own docs) - `Path`'s own in-progress
+     * node sequence lives in `PathController` instead, cancelled from
+     * there, and `ChordStamp`'s own single-press gesture has no
+     * in-progress state at all to begin with.
      *
      * @param mode The new tool mode.
      */
@@ -314,6 +320,30 @@ public:
      *        clears the preview.
      */
     void setMindWavePreview(std::optional<sound_mind::core::MindWave> wave);
+
+    /**
+     * @brief Sets (or clears) the Chord Overlay - the Chord Generator's own
+     *        currently-configured chord/arpeggio's note pitches, drawn live
+     *        on the frequency axis, and repaints - see
+     *        `docs/sound-mind-design.md`'s "Chord Overlay" ("its notes are
+     *        drawn live on the frequency axis... so the notes are visible
+     *        on the canvas before or while they're stamped").
+     *
+     * Drawn as horizontal reference lines, the same visual language
+     * `drawGrid()`'s own Frequency Grid lines use (see
+     * `setFrequencyGridConfig()`'s own docs) but in a distinct color and
+     * kept **independent of it** - a deliberately separate overlay, not a
+     * temporary addition to `FrequencyGridConfig`'s own state, per the
+     * design doc's own "independent of, and in addition to, the general
+     * frequency grid" wording: toggling or reconfiguring the user's actual
+     * Frequency Grid never affects this, and vice versa.
+     *
+     * @param frequenciesHz Each note pitch to draw a line at, in Hz -
+     *        ordinarily `ChordGeneratorController::previewNotes()`'s own
+     *        distinct `frequencyHz` values; an empty list draws nothing,
+     *        clearing any previous overlay.
+     */
+    void setChordPreview(std::vector<double> frequenciesHz);
 
     /**
      * @brief Sets what the frequency (vertical) axis's own labels show,
@@ -539,6 +569,29 @@ signals:
     void pathNodePlaced(sound_mind::core::TimeFrequencyPoint point);
 
     /**
+     * @brief A chord/arpeggio stamp was requested (`ChordStamp` tool mode,
+     *        left button pressed) - the same single-press-is-the-whole-
+     *        gesture shape as pathNodePlaced()'s own docs describe, for the
+     *        same reason (no drag/release counterpart).
+     *
+     * `point`'s own `frequencyHz` is deliberately **not** used by
+     * `ChordGeneratorController::stampAt()` - only `timeSeconds` is: a
+     * chord's own pitches are already fully determined by the Chord
+     * Generator panel's own Root/Octave controls (see
+     * `docs/sound-mind-architecture.md`'s Decision on this installment),
+     * so a click only ever places *when* a chord starts, never *where* on
+     * the frequency axis. Still carries the full point (matching every
+     * other tool mode's own signal shape) rather than a bare `double`, so
+     * callers don't need a second, differently-shaped conversion path just
+     * for this one tool mode.
+     *
+     * @param point The press position, converted to time/frequency space -
+     *        see this method's own docs on which half of it actually gets
+     *        used.
+     */
+    void chordStampRequested(sound_mind::core::TimeFrequencyPoint point);
+
+    /**
      * @brief The mouse moved over the canvas - independent of toolMode(),
      *        unlike paintStrokeContinued() (which only fires while
      *        actively painting). For a status-bar-style "where's the
@@ -722,6 +775,16 @@ private:
     ///        paintEvent().
     void drawGrid(QPainter& painter) const;
 
+    /// @brief Draws the Chord Overlay's own active lines (see
+    ///        setChordPreview()'s own docs) - a horizontal line per
+    ///        `chordPreviewFrequenciesHz_` entry, spanning the full canvas
+    ///        width, in a distinct color/style from `drawGrid()`'s own
+    ///        Frequency Grid lines. A no-op if `chordPreviewFrequenciesHz_`
+    ///        is empty, or if no project is set.
+    /// @param painter The painter to draw with - already set up by
+    ///        paintEvent().
+    void drawChordPreview(QPainter& painter) const;
+
     const sound_mind::core::Project* project_ = nullptr;
     std::optional<double> playheadFraction_;
     ToolMode toolMode_ = ToolMode::None;
@@ -754,6 +817,10 @@ private:
     HorizontalAxisLabelMode horizontalAxisLabelMode_ = HorizontalAxisLabelMode::Off;
     FrequencyGridConfig frequencyGridConfig_;
     TimingGridConfig timingGridConfig_;
+
+    /// @brief The Chord Overlay's own current note pitches, in Hz - see
+    ///        setChordPreview()'s own docs; empty draws nothing.
+    std::vector<double> chordPreviewFrequenciesHz_;
     ZoomMode zoomMode_ = ZoomMode::FitToWindow;
     /// @brief `Manual` mode's own stored pixels-per-column scale - `1.0`
     ///        is "Actual Size" (one screen pixel per column). Unused

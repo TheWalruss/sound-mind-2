@@ -32,4 +32,26 @@ namespace sound_mind::core {
  */
 [[nodiscard]] std::string noteNameForFrequency(double frequencyHz, double referenceHz) noexcept;
 
+/**
+ * @brief The frequency of a given MIDI note number, in 12-TET against a
+ *        given tuning reference - the exact inverse of
+ *        `noteNameForFrequency()`'s own semitone math (see its own docs for
+ *        the shared `69` = A4 convention).
+ *
+ * Used by the Chord Generator (`chord_generator.h`) to resolve a chord's
+ * own root note + octave, and each interval above it, to real Hz values -
+ * the same "resolve to a plain Hz value before it ever reaches
+ * `NoteEvent`" boundary `sequence_operation.h`'s own docs describe.
+ *
+ * @param midiNote The MIDI note number to resolve - `69` is A4, following
+ *        the same convention `noteNameForFrequency()` uses; any integer is
+ *        accepted, not clamped to MIDI's own nominal `[0, 127]` range,
+ *        since a chord's own intervals can legitimately push a high root
+ *        note's own notes past it.
+ * @param referenceHz The tuning reference for A4, in Hz; must be positive.
+ * @return `referenceHz * 2^((midiNote - 69) / 12)` - `0.0` if `referenceHz`
+ *         isn't positive.
+ */
+[[nodiscard]] double frequencyForMidiNote(int midiNote, double referenceHz) noexcept;
+
 }  // namespace sound_mind::core

@@ -23,6 +23,7 @@ add_executable(sound-mind-core-tests
     test_sequence_operation.cpp
     test_sequence_application.cpp
     test_music_theory.cpp
+    test_chord_generator.cpp
     test_operation_log.cpp
     test_paint_application.cpp
     test_fill_application.cpp

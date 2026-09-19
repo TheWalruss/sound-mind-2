@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.40.2] - 2026-09-19
+
+The second installment of the "Chords/Arpeggiator/Sequencer" milestone - the **Chord Generator** panel and the live **Chord Overlay**. The first user-reachable/audible part of this milestone: you can now actually build and stamp a chord or arpeggio from the Studio.
+
+### Added
+
+- **A new "Chord Generator" dock panel**: pick a root note, an octave, a chord category (Triads/6th/7th/9th/Extended-Added), and a specific chord within it, then choose Block (every note together) or Arpeggio (spread out over time, with an order preset, tempo/subdivision, note length, and repeat count) - a live text preview shows the resolved note names as you configure it. Plays through whatever the Tool Configuration Panel's current tool is - a plain brush, a Sound Mind Instrument, a Mind Shot, or a Mind Grain.
+- **A new "Chord" toolbar toggle**: arms click-to-place for the currently configured chord/arpeggio, the same way Paint/Pick/Select/Path already work - a click sets only *when* the chord starts; its pitches always come from the panel.
+- **The Chord Overlay**: the currently configured chord/arpeggio's own note pitches, drawn live as horizontal lines on the frequency axis, so you can see (and adjust) what you're about to stamp before you click.
+- Once stamped, a chord/arpeggio can be re-voiced (dragged up/down) or re-timed (dragged left/right) with Pick, exactly like any other painted stroke - no repainting involved, per this milestone's own core promise from Installment A.
+
+Full regression: sound-mind-core 765/765 (up from 745), sound-mind-studio full suite passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #113.
+
 ## [0.0.40.1] - 2026-09-19
 
 The first installment of the new "Chords/Arpeggiator/Sequencer" milestone - the core editable-sequence architecture. **Pure Core plumbing, not reachable yet** - there's no way to actually create a sequence from the Studio until the Chord Generator (a later installment) exists; no user-visible or audible change exists in this build.

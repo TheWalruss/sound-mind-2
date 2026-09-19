@@ -20,15 +20,16 @@ in-app behavior is correct and this guide is due an update.
 9. [Pick](#pick)
 10. [Selection and Fill](#selection-and-fill)
 11. [Path Tool](#path-tool)
-12. [Axis Labels](#axis-labels)
-13. [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid)
-14. [Playback](#playback)
-15. [Recording](#recording)
-16. [Loop Mode](#loop-mode)
-17. [Pooling a Layer](#pooling-a-layer)
-18. [Exporting](#exporting)
-19. [Saving and Project Files](#saving-and-project-files)
-20. [What's Not Here Yet](#whats-not-here-yet)
+12. [Chord Generator](#chord-generator)
+13. [Axis Labels](#axis-labels)
+14. [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid)
+15. [Playback](#playback)
+16. [Recording](#recording)
+17. [Loop Mode](#loop-mode)
+18. [Pooling a Layer](#pooling-a-layer)
+19. [Exporting](#exporting)
+20. [Saving and Project Files](#saving-and-project-files)
+21. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -986,6 +987,47 @@ Inserting a node (other than at either end, by placing a new path that
 starts/ends where the old one did) isn't here yet; see
 [What's Not Here Yet](#whats-not-here-yet).
 
+## Chord Generator
+
+The **Chord Generator** toolbar button (next to Tool Configuration) opens
+a dockable panel (off by default) that builds a chord or arpeggio and
+stamps it onto the canvas as a sequence of notes:
+
+- **Root/Octave** - which pitch class and octave the chord is built on
+  (e.g. root `A`, octave `4`, is A4).
+- **Category/Chord** - one of five chord families (Triads, 6th, 7th, 9th,
+  Extended/Added), and a specific chord within it (e.g. Minor, Dominant
+  7th). A live text label shows the resolved note names as you adjust
+  these.
+- **Mode** - **Block Chord** plays every note together, for a chosen
+  Duration; **Arpeggio** spreads the same notes out over time instead,
+  with its own Order (Ascending, Descending, Up-Down, Down-Up,
+  Alternating, Outside-In, Inside-Out, Random, or a hand-typed Custom
+  sequence of indices), BPM, rhythmic Subdivision, Note Duration
+  (percentage of each step actually held), and Repeats (how many times
+  the whole sequence cycles).
+- **Instrument** - a stamped chord always plays through whatever the
+  [Painting](#painting) tool is currently configured as (Procedural,
+  Instrument, Mind Shot, or Mind Grain) - there's no separate instrument
+  picker here; switch the Painting tool's own settings to change what a
+  chord sounds like.
+
+To actually place it, click the **Chord** toolbar button (next to Path) to
+arm it, then click anywhere on the canvas - the click only sets *when*
+the chord starts (its own time position); the chord's pitches always come
+from Root/Octave above, regardless of where vertically you click. While
+the panel is configured, its notes preview live on the canvas as
+horizontal lines on the frequency axis - independent of, and in addition
+to, the ordinary Frequency Grid (see
+[Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid) below) -
+so you can see what you're about to stamp before you click.
+
+A stamped chord is a real, editable paint object afterward - select it
+with [Pick](#pick) and drag it: left/right re-times it, up/down uniformly
+re-voices every note in it, both without repainting anything. Reopening a
+stamped chord's own instrument for editing isn't here yet; see
+[What's Not Here Yet](#whats-not-here-yet).
+
 ## Axis Labels
 
 The **Grid** toolbar button opens a dockable panel (off by default) with
@@ -1263,9 +1305,13 @@ a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,
 - Inserting or removing a node from an already-placed path (other than
   deleting the single selected node) still isn't here - see the Pick
   section above.
-- No **Chord Overlay** - a selected chord/arpeggio in a (not-yet-built)
-  Chord Generator drawn live on the frequency axis, independent of the
-  general Frequency Grid.
+- No way yet to reopen a stamped chord/arpeggio's own instrument for
+  editing after the fact - see [Chord Generator](#chord-generator) above;
+  re-timing/re-voicing it with Pick works today, but re-pointing it at a
+  different instrument doesn't yet.
+- The Chord Generator's own generalized text notation (writing an
+  arbitrary sequence of notes/frequencies directly, beyond a named chord)
+  isn't here yet either - see [Chord Generator](#chord-generator) above.
 - No pitch quantising while painting - Snap to Grid (see
   [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid) above)
   snaps a *placed* node/move/selection to the nearest grid line, but a
