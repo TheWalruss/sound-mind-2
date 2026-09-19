@@ -13,6 +13,8 @@ private slots:
     void removeMindWaveNoOpsForUnknownId();
     void renameMindWaveToRenamesAndRejectsEmptyNameOrUnknownId();
     void updateMindWaveWritesBackTheGivenWave();
+    void setDrawnPathSwitchesTypeToDrawnAndCapturesThePathPreservingOtherFields();
+    void setDrawnPathWithNoProjectOrUnknownIdIsANoOp();
     void refreshMindWavesPanelPushesTheLibraryIntoBothPanels();
     void togglingPreviewOnWithASelectionShowsAnOverlayOnTheCanvas();
     void togglingPreviewOffClearsTheOverlay();

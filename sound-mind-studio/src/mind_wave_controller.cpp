@@ -153,4 +153,18 @@ void MindWaveController::updateMindWave(MindWaveId id, const MindWave& wave) {
     refreshMindWavesPanel();
 }
 
+void MindWaveController::setDrawnPath(MindWaveId id, const sound_mind::core::Path& path) {
+    if (project_ == nullptr) {
+        return;
+    }
+    NamedMindWave* entry = project_->mindWaveById(id);
+    if (entry == nullptr) {
+        return;
+    }
+    entry->wave.setType(sound_mind::core::GeneratorType::Drawn);
+    entry->wave.setDrawnPath(path);
+    emit mindWavesChanged();
+    refreshMindWavesPanel();
+}
+
 }  // namespace sound_mind::studio

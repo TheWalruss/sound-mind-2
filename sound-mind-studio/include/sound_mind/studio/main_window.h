@@ -1069,6 +1069,25 @@ public slots:
     void warpSelection();
 
     /**
+     * @brief Captures the currently Picked object's own `Path` as the
+     *        MindWaves panel's own currently-selected library entry's drawn
+     *        shape - `docs/sound-mind-design.md`'s "MindWave Functions"
+     *        ("Drawn shapes"), `v0.Y.39.1` Installment B.
+     *
+     * Mirrors `warpSelection()`'s own exact capture workflow (draw an
+     * ordinary paint stroke, Pick it, apply it) - no dedicated curve-
+     * drawing mode of its own. A no-op unless *both* something is Picked
+     * (`ToolPaletteController::selectedPath()`) and a library entry is
+     * currently selected in `mindWavesPanel_`
+     * (`MindWavesPanel::selectedMindWaveId()`) - unlike `warpSelection()`,
+     * there's no separate "committed selection" concept to also require,
+     * since this applies to a MindWaves library entry, not canvas content.
+     * Switches that entry's own generator type to `Drawn` as part of the
+     * same action - see `MindWaveController::setDrawnPath()`'s own docs.
+     */
+    void usePickedPathAsMindWaveShape();
+
+    /**
      * @brief Copies the current selection's own pixels onto the clipboard -
      *        the actual work behind the Edit menu's Copy action. Delegates
      *        to `SelectionController::copySelection()`; a no-op if there's

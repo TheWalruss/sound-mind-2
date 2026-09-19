@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "sound_mind/codec/stream_codec.h"
@@ -22,7 +23,9 @@ using MindWaveId = std::uint64_t;
  * `v0.Y.31.1` Installment B fills out the full v1 catalogue named there:
  * periodic, envelope, stepped/noise, spatial, and a first fractal field.
  * `Spatial` deliberately ignores `MindWaveAxis` (see that enum's own docs) -
- * it varies across both canvas axes at once.
+ * it varies across both canvas axes at once. `v0.Y.39.1` Installment B adds
+ * `Drawn` (a hand-drawn `Path`, sampled as a waveform - see `drawnPath()`'s
+ * own docs).
  */
 enum class GeneratorType {
     Periodic,
@@ -30,6 +33,7 @@ enum class GeneratorType {
     SteppedNoise,
     Spatial,
     Fractal,
+    Drawn,
 };
 
 // clang-format off
@@ -39,6 +43,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(GeneratorType, {
     {GeneratorType::SteppedNoise, "steppedNoise"},
     {GeneratorType::Spatial, "spatial"},
     {GeneratorType::Fractal, "fractal"},
+    {GeneratorType::Drawn, "drawn"},
 })
 // clang-format on
 
@@ -222,6 +227,21 @@ NLOHMANN_JSON_SERIALIZE_ENUM(SuperpositionBlendMode, {
  * self-contained 1D-field primitive suited to this narrower need, per
  * `docs/sound-mind-roadmap.md`'s own note on why this milestone can't lean
  * on that later one.
+ *
+ * **`v0.Y.39.1` Installment B adds `GeneratorType::Drawn`** (`drawnPath()`)
+ * - a hand-drawn `Path`, sampled as a waveform along whichever axis this
+ * MindWave is bound to and looped via `period()`, the same shared field
+ * every other generator type already reuses for its own cycle length
+ * (confirmed with the user over locking the loop to the path's own
+ * recorded duration). The curve's own *other* coordinate at each sample is
+ * normalized into `[0, 1]` against the path's own recorded bounding box
+ * (`Path::bounds()`, confirmed with the user over the project's global
+ * frequency/time range) - "what you drew is what you get," independent of
+ * canvas geometry. A drawn curve isn't guaranteed single-valued as a
+ * function of the queried axis (a hand-drawn stroke can loop back on
+ * itself), so `evaluate()` resolves the ambiguity with a **first-crossing
+ * rule**: walking the curve from its own start (`t=0`) toward its end
+ * (`t=1`), the first point where it crosses the queried position wins.
  */
 class MindWave {
 public:
@@ -587,6 +607,31 @@ public:
     void setWarpStrength(double strength) noexcept { warpStrength_ = strength; }
 
     /**
+     * @brief The hand-drawn curve a `GeneratorType::Drawn` MindWave samples
+     *        as a waveform - see `docs/sound-mind-design.md`'s "MindWave
+     *        Functions" ("Drawn shapes ... sampled as a waveform rather
+     *        than stamped as paint, and looped across whichever axis it's
+     *        bound to"). `v0.Y.39.1` Installment B.
+     *
+     * Captured via `PickController::selectedPath()` in the Studio (draw an
+     * ordinary paint stroke, Pick it, then apply it here - no dedicated
+     * curve-drawing mode of its own, mirroring `docs/sound-mind-design.md`'s
+     * "Selection" ("Warp")'s own identical workflow). Only `evaluate()`'s
+     * own geometry - anchors and Bézier handles - is read; this path's own
+     * `gradient()` is never consulted, since a MindWave has no notion of
+     * color/opacity along its length.
+     *
+     * @return The current drawn curve; empty (no nodes, `MindWave`'s own
+     *         default) until explicitly captured. Meaningless unless
+     *         `type()` is `GeneratorType::Drawn`.
+     */
+    [[nodiscard]] const Path& drawnPath() const noexcept { return drawnPath_; }
+
+    /// @brief Sets the drawn curve - see `drawnPath()`'s own docs.
+    /// @param path The new curve.
+    void setDrawnPath(Path path) { drawnPath_ = std::move(path); }
+
+    /**
      * @brief This MindWave's own field value at `point`, after superposing
      *        `superpositionStack()` (if any) on top of its own generator.
      *
@@ -623,6 +668,15 @@ public:
      * defensive only, since e.g. `SuperpositionBlendMode::Add` can
      * otherwise exceed `1.0`.
      *
+     * `GeneratorType::Drawn` (`v0.Y.39.1` Installment B) reads `point` the
+     * same way every other generator does (`axisPosition`, already
+     * warped/looped by `period()`/`phaseRadians_` above) but samples
+     * `drawnPath()` instead of a formula - see `drawnPath()`'s own docs for
+     * the normalization/first-crossing mechanism. A `drawnPath()` with
+     * fewer than two nodes (nothing captured yet), or whose own recorded
+     * span along the queried axis is degenerate (zero width), evaluates to
+     * a neutral `0.5` rather than erroring.
+     *
      * @param point The canvas position to evaluate.
      * @param config Interprets `point`'s own Hz against `config`'s own
      *        frequency range/bin count, needed whenever a bin index is
@@ -658,6 +712,7 @@ private:
     SuperpositionBlendMode superpositionBlendMode_ = SuperpositionBlendMode::Multiply;
     std::vector<MindWave> warpSourceStack_;
     double warpStrength_ = 1.0;
+    Path drawnPath_;
 };
 
 /**

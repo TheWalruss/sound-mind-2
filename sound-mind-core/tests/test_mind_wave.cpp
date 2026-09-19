@@ -8,6 +8,7 @@
 
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/paint_application.h"
+#include "sound_mind/core/path.h"
 
 using sound_mind::codec::StreamCodecConfig;
 using sound_mind::core::binIndexToFrequency;
@@ -16,6 +17,9 @@ using sound_mind::core::frequencyToBinIndex;
 using sound_mind::core::GeneratorType;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveAxis;
+using sound_mind::core::Path;
+using sound_mind::core::PathNode;
+using sound_mind::core::PathNodeType;
 using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::ReduceMode;
 using sound_mind::core::reduceMindWaveToSignal;
@@ -25,6 +29,25 @@ using sound_mind::core::SuperpositionBlendMode;
 using sound_mind::core::TimeFrequencyPoint;
 
 namespace {
+
+/// @brief A straight-edged (`PathNodeType::Corner`, no handles) Path
+/// through `points`, in order - geometrically a straight-line polyline
+/// (see `evaluateCubicBezier()`'s own formula: collapsed handles still
+/// trace a perfectly straight line between two Corner anchors, just via a
+/// smoothstep-eased, not linear-in-`t`, parametrization - the relationship
+/// *between* the two coordinates along one edge stays exactly linear
+/// either way, which is all these tests' own hand-derived expectations
+/// depend on).
+Path cornerPath(std::vector<TimeFrequencyPoint> points) {
+    Path path;
+    for (const auto& point : points) {
+        PathNode node;
+        node.anchor = point;
+        node.type = PathNodeType::Corner;
+        path.addNode(node);
+    }
+    return path;
+}
 
 StreamCodecConfig testConfig() {
     StreamCodecConfig config;
@@ -641,6 +664,139 @@ TEST_CASE("reduceMindWaveToSignal's own values all fall within [0, 1]", "[core][
         REQUIRE(value >= 0.0f);
         REQUIRE(value <= 1.0f);
     }
+}
+
+// --- v0.Y.39.1 Installment B: Drawn-shape generator --------------------
+
+TEST_CASE("A Drawn MindWave with no captured path (fewer than two nodes) evaluates to neutral 0.5",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Drawn);
+    REQUIRE(wave.drawnPath().nodes().empty());
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, testConfig()) == Catch::Approx(0.5f));
+
+    wave.setDrawnPath(cornerPath({TimeFrequencyPoint{0.0, 100.0}}));  // A single node still can't sample anything.
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, testConfig()) == Catch::Approx(0.5f));
+}
+
+TEST_CASE("A Drawn MindWave samples its own straight two-node path via first-crossing, normalized against its own "
+          "bounding box",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Drawn);
+    wave.setAxis(MindWaveAxis::Time);
+    // Drawn from (t=0, 100 Hz) to (t=2, 300 Hz) - a 2-second recorded span.
+    wave.setDrawnPath(cornerPath({TimeFrequencyPoint{0.0, 100.0}, TimeFrequencyPoint{2.0, 300.0}}));
+    wave.setPeriod(2.0);  // Loop length matches the recorded span exactly.
+    const auto config = testConfig();
+
+    // t=0 -> the path's own start -> its own lowest frequency -> normalized 0.0.
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, config) == Catch::Approx(0.0f).margin(0.001));
+    // t=1 -> halfway along the drawn span -> halfway between 100 Hz and 300 Hz -> normalized 0.5.
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{1.0, 1000.0}, config) == Catch::Approx(0.5f).margin(0.001));
+    // t=2 -> exactly one full loop -> wraps back to the start -> normalized 0.0 again.
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{2.0, 1000.0}, config) == Catch::Approx(0.0f).margin(0.001));
+}
+
+TEST_CASE("A Drawn MindWave's own period() independently stretches/compresses its loop length, decoupled from the "
+          "path's own recorded duration",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Drawn);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setDrawnPath(cornerPath({TimeFrequencyPoint{0.0, 100.0}, TimeFrequencyPoint{2.0, 300.0}}));
+    wave.setPeriod(4.0);  // Twice the recorded 2-second span.
+    const auto config = testConfig();
+
+    // t=2 is now only halfway through the (now 4-second) loop, landing at the
+    // same halfway point along the drawn shape that t=1 reached with period=2.
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{2.0, 1000.0}, config) == Catch::Approx(0.5f).margin(0.001));
+}
+
+TEST_CASE("A Drawn MindWave's first-crossing rule picks the earliest crossing along a non-single-valued curve",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Drawn);
+    wave.setAxis(MindWaveAxis::Time);
+    // Time doubles back on itself (0 -> 2 -> 1): querying domain (time) 0.5
+    // crosses twice - once early (segment 0, freq rising 0->100) and once
+    // late (segment 1, freq rising 100->300). The recorded span (first node
+    // to last node) is t=0 to t=1, matched here by period=1.
+    wave.setDrawnPath(cornerPath({TimeFrequencyPoint{0.0, 0.0}, TimeFrequencyPoint{2.0, 100.0},
+                                   TimeFrequencyPoint{1.0, 300.0}}));
+    wave.setPeriod(1.0);
+    const auto config = testConfig();
+
+    // First crossing (segment 0, at local fraction 0.25 of its own 0->2
+    // domain span): freq = 0 + 0.25*(100-0) = 25. Bounding box freq range
+    // is [0, 300] (node0's 0, node2's 300) -> normalized 25/300.
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, config) == Catch::Approx(25.0f / 300.0f).margin(0.005));
+}
+
+TEST_CASE("A Drawn MindWave on the Frequency axis samples via bin-domain, normalized against the path's own time "
+          "range",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Drawn);
+    wave.setAxis(MindWaveAxis::Frequency);
+    const auto config = testConfig();
+    const float lowHz = binIndexToFrequency(0.0f, config);
+    const float highHz = binIndexToFrequency(10.0f, config);
+    // Drawn from (10s, lowest bin) to (20s, bin 10).
+    wave.setDrawnPath(cornerPath({TimeFrequencyPoint{10.0, lowHz}, TimeFrequencyPoint{20.0, highHz}}));
+    wave.setPeriod(10.0);  // Matches the recorded 10-bin domain span exactly.
+
+    // The exact recorded start (bin 0) is unambiguous: p=0 maps directly to
+    // the first node, normalized to 0.0. An exact query at the *other*
+    // recorded end (bin 10) isn't - it lands exactly on period()'s own
+    // wraparound boundary and loops back to the start instead (the same
+    // "t == one full period wraps to 0" behavior the Time-axis looping test
+    // above already exercises) - so this checks monotonic increase toward
+    // the interior instead of a second exact endpoint. The frequency axis's
+    // own log-to-bin conversion also means an interior "halfway in bins"
+    // query does *not* land halfway along the curve's own parametrization
+    // the way the Time-axis test above can (bins are a nonlinear function
+    // of the Hz values the path itself linearly interpolates), so this
+    // avoids hand-deriving any interior numeric value at all.
+    const float atStart = wave.evaluate(TimeFrequencyPoint{0.0, static_cast<double>(lowHz)}, config);
+    const float nearStart = wave.evaluate(TimeFrequencyPoint{0.0, static_cast<double>(binIndexToFrequency(1.0f, config))}, config);
+    const float nearEnd = wave.evaluate(TimeFrequencyPoint{0.0, static_cast<double>(binIndexToFrequency(9.0f, config))}, config);
+    REQUIRE(atStart == Catch::Approx(0.0f).margin(0.01));
+    REQUIRE(nearStart < nearEnd);
+    REQUIRE(nearEnd < 1.0f);
+}
+
+TEST_CASE("A Drawn MindWave with a zero-width recorded domain span evaluates to neutral 0.5", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Drawn);
+    wave.setAxis(MindWaveAxis::Time);
+    // Both nodes at the same time - no time-axis span to loop across at all.
+    wave.setDrawnPath(cornerPath({TimeFrequencyPoint{1.0, 100.0}, TimeFrequencyPoint{1.0, 300.0}}));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, testConfig()) == Catch::Approx(0.5f));
+}
+
+TEST_CASE("A Drawn MindWave round-trips its own path through JSON", "[core][mind_wave]") {
+    MindWave original;
+    original.setType(GeneratorType::Drawn);
+    original.setDrawnPath(cornerPath({TimeFrequencyPoint{0.0, 100.0}, TimeFrequencyPoint{2.0, 300.0}}));
+
+    const nlohmann::json json = original;
+    const MindWave restored = json.get<MindWave>();
+
+    REQUIRE(restored.type() == GeneratorType::Drawn);
+    REQUIRE(restored.drawnPath().nodes().size() == std::size_t{2});
+    REQUIRE(restored.drawnPath().nodes()[1].anchor.frequencyHz == Catch::Approx(300.0));
+}
+
+TEST_CASE("A MindWave loads from JSON missing drawnPath (saved before v0.Y.39.1 Installment B) with an empty path",
+          "[core][mind_wave]") {
+    MindWave config;
+    nlohmann::json json = config;
+    json.erase("drawnPath");
+
+    const MindWave restored = json.get<MindWave>();
+
+    REQUIRE(restored.drawnPath().nodes().empty());
 }
 
 // --- Installment C1: NamedMindWave -----------------------------------

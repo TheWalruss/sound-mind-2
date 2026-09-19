@@ -128,6 +128,14 @@ private:
     QGroupBox* fractalGroup_ = nullptr;
     QDoubleSpinBox* fractalRoughnessSpinBox_ = nullptr;
     QSpinBox* fractalIterationsSpinBox_ = nullptr;
+
+    /// @brief `GeneratorType::Drawn`'s own group - `v0.Y.39.1` Installment
+    ///        B. No editable controls of its own: `drawnPath()` is captured
+    ///        externally (`MindWavesPanel`'s own "Use Picked Path" action,
+    ///        via `MindWaveController`), not authored here - this group is
+    ///        purely a read-only status display (`drawnStatusLabel_`).
+    QGroupBox* drawnGroup_ = nullptr;
+    QLabel* drawnStatusLabel_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

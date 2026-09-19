@@ -190,6 +190,107 @@ double foldSuperposition(SuperpositionBlendMode mode, double running, double mem
     return running;  // Unreachable - defensive only.
 }
 
+/// @brief How many straight sub-segments each edge of a `GeneratorType::Drawn`
+/// path is tessellated into before `evaluateDrawnPath()`'s own crossing
+/// search runs - the same fixed, generous count `containsPoint()`'s own
+/// `kContainsPointSubdivisionsPerEdge` (`path.cpp`) already establishes for
+/// an equivalent "close enough polygon, not perceptually tuned" tessellation.
+constexpr int kDrawnPathSubdivisionsPerEdge = 32;
+
+/// @brief Tessellates `path` into a dense, straight-segment-only open
+/// polyline - the `evaluateDrawnPath()` counterpart to `containsPoint()`'s
+/// own closed-polygon tessellation (`path.cpp`), duplicated here rather
+/// than shared since a drawn shape's own curve is explicitly *not*
+/// implicitly closed the way a Lasso boundary is (see `drawnPath()`'s own
+/// docs) - the two tessellations differ in exactly that one respect
+/// (no wraparound closing edge here).
+std::vector<TimeFrequencyPoint> tessellateOpenPath(const Path& path) {
+    const std::vector<PathNode>& nodes = path.nodes();
+    std::vector<TimeFrequencyPoint> polyline;
+    if (nodes.size() < 2) {
+        return polyline;
+    }
+    polyline.reserve((nodes.size() - 1) * static_cast<std::size_t>(kDrawnPathSubdivisionsPerEdge) + 1);
+    for (std::size_t i = 0; i + 1 < nodes.size(); ++i) {
+        const PathNode& start = nodes[i];
+        const PathNode& end = nodes[i + 1];
+        const TimeFrequencyPoint p0 = start.anchor;
+        const TimeFrequencyPoint p1 = start.handleOut.value_or(start.anchor);
+        const TimeFrequencyPoint p2 = end.handleIn.value_or(end.anchor);
+        const TimeFrequencyPoint p3 = end.anchor;
+        for (int step = 0; step < kDrawnPathSubdivisionsPerEdge; ++step) {
+            const double t = static_cast<double>(step) / static_cast<double>(kDrawnPathSubdivisionsPerEdge);
+            polyline.push_back(evaluateCubicBezier(p0, p1, p2, p3, t));
+        }
+    }
+    polyline.push_back(nodes.back().anchor);
+    return polyline;
+}
+
+/// @brief `point`'s own coordinate along `axis` - the "domain" a
+/// `GeneratorType::Drawn` path is queried against, in the same unit
+/// `evaluate()`'s own `axisPosition` already uses (bins, not Hz, for
+/// `MindWaveAxis::Frequency` - see its own docs).
+double drawnPathDomainOf(const TimeFrequencyPoint& point, MindWaveAxis axis,
+                          const sound_mind::codec::StreamCodecConfig& config) {
+    return axis == MindWaveAxis::Time
+               ? point.timeSeconds
+               : static_cast<double>(frequencyToBinIndex(static_cast<float>(point.frequencyHz), config));
+}
+
+/// @brief `point`'s own coordinate along whichever axis `axis` is *not* -
+/// the raw (not yet normalized) output value `evaluateDrawnPath()` reads at
+/// a crossing.
+double drawnPathOutputOf(const TimeFrequencyPoint& point, MindWaveAxis axis) {
+    return axis == MindWaveAxis::Time ? point.frequencyHz : point.timeSeconds;
+}
+
+/// @brief `GeneratorType::Drawn`'s own evaluation - see `MindWave::
+/// drawnPath()`'s own docs for the full mechanism (looping via `period()`/
+/// `phaseRadians`, first-crossing rule, bounding-box output normalization).
+float evaluateDrawnPath(const Path& path, MindWaveAxis axis, double axisPosition, double safePeriod,
+                         double phaseRadians, const sound_mind::codec::StreamCodecConfig& config) {
+    if (path.nodes().size() < 2) {
+        return 0.5f;  // Nothing captured yet - see drawnPath()'s own docs.
+    }
+
+    const std::vector<TimeFrequencyPoint> polyline = tessellateOpenPath(path);
+    const double domainStart = drawnPathDomainOf(polyline.front(), axis, config);
+    const double domainEnd = drawnPathDomainOf(polyline.back(), axis, config);
+    if (domainStart == domainEnd) {
+        return 0.5f;  // Degenerate (zero-width) recorded span along this axis.
+    }
+
+    double p = (axisPosition / safePeriod) + phaseRadians / (2.0 * std::numbers::pi_v<double>);
+    p -= std::floor(p);
+    const double queryDomain = domainStart + p * (domainEnd - domainStart);
+
+    const TimeFrequencyRect bounds = path.bounds();
+    const double outputLow = (axis == MindWaveAxis::Time) ? bounds.lowFrequencyHz : bounds.startTimeSeconds;
+    const double outputHigh = (axis == MindWaveAxis::Time) ? bounds.highFrequencyHz : bounds.endTimeSeconds;
+    const double outputRange = outputHigh - outputLow;
+    if (outputRange == 0.0) {
+        return 0.5f;
+    }
+
+    for (std::size_t i = 0; i + 1 < polyline.size(); ++i) {
+        const double d0 = drawnPathDomainOf(polyline[i], axis, config);
+        const double d1 = drawnPathDomainOf(polyline[i + 1], axis, config);
+        if (d0 == d1) {
+            continue;  // No domain movement across this sub-segment - can't bracket a crossing.
+        }
+        if ((queryDomain - d0) * (queryDomain - d1) > 0.0) {
+            continue;  // queryDomain lies strictly outside [d0, d1] (in either order).
+        }
+        const double fraction = (queryDomain - d0) / (d1 - d0);
+        const double o0 = drawnPathOutputOf(polyline[i], axis);
+        const double o1 = drawnPathOutputOf(polyline[i + 1], axis);
+        const double output = o0 + fraction * (o1 - o0);
+        return static_cast<float>(std::clamp((output - outputLow) / outputRange, 0.0, 1.0));
+    }
+    return 0.5f;  // No crossing found - defensive only, shouldn't normally happen.
+}
+
 }  // namespace
 
 float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::StreamCodecConfig& config) const {
@@ -357,6 +458,10 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
             result = midpointDisplacement(t, 0.0, 1.0, 0.5, 0.5, safeIterations, 0, 0, fractalRoughness_, seed_);
             break;
         }
+        case GeneratorType::Drawn:
+            result = static_cast<double>(
+                evaluateDrawnPath(drawnPath_, axis_, axisPosition, safePeriod, phaseRadians_, config));
+            break;
     }
 
     for (const MindWave& member : superpositionStack_) {
@@ -437,6 +542,7 @@ void to_json(nlohmann::json& json, const MindWave& mindWave) {
     // reusing the same vector-of-0-or-1 pattern internally (see hasWarpSource()'s docs).
     json["warpSourceStack"] =
         mindWave.hasWarpSource() ? nlohmann::json::array({mindWave.warpSource()}) : nlohmann::json::array();
+    json["drawnPath"] = mindWave.drawnPath();
 }
 
 void from_json(const nlohmann::json& json, MindWave& mindWave) {
@@ -478,6 +584,11 @@ void from_json(const nlohmann::json& json, MindWave& mindWave) {
     } else {
         mindWave.clearWarpSource();
     }
+
+    // drawnPath was added in v0.Y.39.1 Installment B, after MindWave had
+    // already shipped - loaded leniently, falling back to an empty path
+    // (the same "nothing captured yet" state a fresh MindWave already has).
+    mindWave.setDrawnPath(json.value("drawnPath", Path{}));
 }
 
 void to_json(nlohmann::json& json, const NamedMindWave& namedMindWave) {

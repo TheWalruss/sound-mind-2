@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.39.2] - 2026-09-19
+
+MindWaves v2, Installment B: the **drawn-shape generator**. Second installment of the `v0.Y.39.1` milestone; the step-grid generator and Continuous Controls remain later installments.
+
+### Added
+
+- **A new "Drawn" MindWave generator type**, sampling a hand-drawn curve as a waveform. Captured the same way Warp Selection already works: draw an ordinary paint stroke, switch to Pick and select it, then **Edit → Use Picked Path as MindWave Shape** applies it to whichever MindWave is currently selected in the MindWaves panel - no dedicated curve-drawing mode needed.
+- The drawn shape loops via the MindWave's own existing **Period** control, independently of how long the original stroke took to draw, and normalizes against its own recorded range - the lowest point drawn always maps to the bottom of the field, the highest to the top.
+
+Full regression: sound-mind-core 714/714 (up from 706), sound-mind-studio all 35 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #109.
+
 ## [0.0.39.1] - 2026-09-19
 
 MindWaves v2, Installment A: **Warp** and **Reduce** field operators, plus Reduce wired into Sound Mind Instruments as **vibrato**/**tremolo**. First installment of the `v0.Y.39.1` milestone; the drawn-shape generator, step-grid generator, and Continuous Controls remain later installments.

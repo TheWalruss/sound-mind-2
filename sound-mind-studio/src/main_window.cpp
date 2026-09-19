@@ -571,6 +571,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* warpSelectionAction = editMenu->addAction(tr("&Warp Selection..."));
     connect(warpSelectionAction, &QAction::triggered, this, &MainWindow::warpSelection);
 
+    // MindWaves v2, Installment B (v0.Y.39.1) - the same "no shortcut,
+    // no-op with nothing suitable Picked" treatment as Warp Selection's own
+    // action right above, mirroring its exact capture workflow (draw an
+    // ordinary paint stroke, Pick it, apply it) but for a MindWaves panel
+    // selection instead of a committed canvas selection.
+    QAction* usePickedPathAsMindWaveShapeAction = editMenu->addAction(tr("Use Picked Path as MindWave &Shape"));
+    connect(usePickedPathAsMindWaveShapeAction, &QAction::triggered, this, &MainWindow::usePickedPathAsMindWaveShape);
+
     editMenu->addSeparator();
 
     // Paths & Grids (v0.Y.26.1): ends/discards the Path tool's own in-
@@ -1644,6 +1652,18 @@ void MainWindow::warpSelection() {
     if (dialog.exec() == QDialog::Accepted) {
         toolPaletteController_->warpSelection(*curve, dialog.selectedAxis(), dialog.selectedMode());
     }
+}
+
+void MainWindow::usePickedPathAsMindWaveShape() {
+    const auto curve = toolPaletteController_->selectedPath();
+    if (!curve.has_value()) {
+        return;
+    }
+    const auto mindWaveId = mindWavesPanel_->selectedMindWaveId();
+    if (!mindWaveId.has_value()) {
+        return;
+    }
+    mindWaveController_->setDrawnPath(*mindWaveId, *curve);
 }
 
 void MainWindow::copySelection() { toolPaletteController_->copySelection(); }

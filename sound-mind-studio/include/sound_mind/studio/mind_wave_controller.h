@@ -130,6 +130,29 @@ public:
     /// @param wave Its own new, complete MindWave.
     void updateMindWave(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave);
 
+    /**
+     * @brief Captures `path` as the given library entry's own drawn shape -
+     *        `MainWindow`'s own "Edit -> Use Picked Path as MindWave Shape"
+     *        action (`v0.Y.39.1` Installment B), mirroring `docs/sound-
+     *        mind-design.md`'s "Selection" ("Warp")'s own identical
+     *        capture workflow (draw an ordinary paint stroke, Pick it,
+     *        apply it) - see `sound_mind::core::MindWave::drawnPath()`'s
+     *        own docs.
+     *
+     * Switches the entry's own `type()` to `GeneratorType::Drawn` as part
+     * of the same action, the same way applying Warp doesn't require the
+     * target selection to already be some special pre-existing kind -
+     * every other field (`period()`, `phaseRadians()`, the superposition
+     * stack, warp) is left exactly as it was, so a MindWave already tuned
+     * in other respects keeps that tuning after gaining a drawn shape.
+     *
+     * @param id The library entry to capture into. A no-op if no project is
+     *        set or no MindWave with this id exists.
+     * @param path The picked curve to capture - typically
+     *        `ToolPaletteController::selectedPath()`'s own result.
+     */
+    void setDrawnPath(sound_mind::core::MindWaveId id, const sound_mind::core::Path& path);
+
 signals:
     /// @brief Emitted whenever a mutation above actually took effect -
     ///        `MainWindow`'s own cue to mark `hasUnsavedChanges()`.

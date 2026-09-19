@@ -146,6 +146,45 @@ void MindWaveControllerTest::updateMindWaveWritesBackTheGivenWave() {
     QCOMPARE(project.mindWaves().front().wave.period(), 5.0);
 }
 
+void MindWaveControllerTest::setDrawnPathSwitchesTypeToDrawnAndCapturesThePathPreservingOtherFields() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    fixture.controller.addMindWave();
+    const MindWaveId id = project.mindWaves().front().id;
+    project.mindWaveById(id)->wave.setPeriod(7.0);  // Some pre-existing tuning to confirm survives.
+
+    sound_mind::core::Path path;
+    sound_mind::core::PathNode node;
+    node.anchor = sound_mind::core::TimeFrequencyPoint{0.0, 100.0};
+    path.addNode(node);
+    node.anchor = sound_mind::core::TimeFrequencyPoint{1.0, 200.0};
+    path.addNode(node);
+    QSignalSpy spy(&fixture.controller, &MindWaveController::mindWavesChanged);
+
+    fixture.controller.setDrawnPath(id, path);
+
+    QCOMPARE(spy.count(), 1);
+    const auto& wave = project.mindWaveById(id)->wave;
+    QCOMPARE(wave.type(), sound_mind::core::GeneratorType::Drawn);
+    QCOMPARE(wave.drawnPath().nodes().size(), std::size_t{2});
+    QCOMPARE(wave.period(), 7.0);
+}
+
+void MindWaveControllerTest::setDrawnPathWithNoProjectOrUnknownIdIsANoOp() {
+    Fixture fixture;
+    const sound_mind::core::Path path;
+    fixture.controller.setDrawnPath(1, path);  // No project set - must not crash.
+
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    QSignalSpy spy(&fixture.controller, &MindWaveController::mindWavesChanged);
+
+    fixture.controller.setDrawnPath(999, path);  // No MindWave with this id.
+
+    QCOMPARE(spy.count(), 0);
+}
+
 void MindWaveControllerTest::refreshMindWavesPanelPushesTheLibraryIntoBothPanels() {
     Fixture fixture;
     Project project = Project::createNew(testSettings());

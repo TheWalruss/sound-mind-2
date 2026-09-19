@@ -18,4 +18,9 @@ private slots:
     void changingFractalFieldsUpdateAndEmit();
     void setMindWaveSyncsEveryControlWithoutEmitting();
     void setMindWavePreservesSuperpositionStackAndBlendMode();
+
+    // MindWaves v2 Installment B: Drawn generator (v0.Y.39.1).
+    void switchingToDrawnShowsOnlyItsOwnGroup();
+    void aFreshlyLoadedDrawnMindWaveWithNoPathShowsTheUncapturedStatus();
+    void aLoadedDrawnMindWaveWithACapturedPathShowsTheNodeCountAndIsPreserved();
 };

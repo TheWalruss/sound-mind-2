@@ -5,16 +5,21 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QGroupBox>
+#include <QLabel>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/path.h"
 #include "sound_mind/studio/mind_wave_editor.h"
 
 using sound_mind::core::EnvelopeShape;
 using sound_mind::core::GeneratorType;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveAxis;
+using sound_mind::core::Path;
+using sound_mind::core::PathNode;
+using sound_mind::core::PathNodeType;
 using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::SpatialPattern;
 using sound_mind::core::SteppedNoiseShape;
@@ -35,6 +40,7 @@ void MindWaveEditorTest::freshEditorShowsOnlyThePeriodicGroup() {
     QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("steppedNoiseGroup"))->isHidden());
     QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("spatialGroup"))->isHidden());
     QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("fractalGroup"))->isHidden());
+    QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("drawnGroup"))->isHidden());
 }
 
 void MindWaveEditorTest::changingGeneratorTypeShowsOnlyThatTypesOwnGroupAndEmits() {
@@ -196,4 +202,53 @@ void MindWaveEditorTest::setMindWavePreservesSuperpositionStackAndBlendMode() {
     // avoid needing to re-merge them itself after every top-level edit.
     QCOMPARE(editor.mindWave().superpositionStack().size(), std::size_t{1});
     QCOMPARE(editor.mindWave().superpositionBlendMode(), sound_mind::core::SuperpositionBlendMode::Max);
+}
+
+void MindWaveEditorTest::switchingToDrawnShowsOnlyItsOwnGroup() {
+    MindWaveEditor editor;
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+
+    combo->setCurrentIndex(combo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::Drawn))));
+
+    QCOMPARE(editor.mindWave().type(), GeneratorType::Drawn);
+    QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("drawnGroup"))->isHidden());
+    QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("periodicGroup"))->isHidden());
+}
+
+void MindWaveEditorTest::aFreshlyLoadedDrawnMindWaveWithNoPathShowsTheUncapturedStatus() {
+    MindWaveEditor editor;
+    MindWave wave;
+    wave.setType(GeneratorType::Drawn);
+
+    editor.setMindWave(wave);
+
+    auto* label = editor.findChild<QLabel*>(QStringLiteral("drawnStatusLabel"));
+    QVERIFY(label != nullptr);
+    QVERIFY(label->text().contains(QStringLiteral("No shape captured")));
+}
+
+void MindWaveEditorTest::aLoadedDrawnMindWaveWithACapturedPathShowsTheNodeCountAndIsPreserved() {
+    MindWaveEditor editor;
+    Path path;
+    PathNode nodeA;
+    nodeA.anchor = sound_mind::core::TimeFrequencyPoint{0.0, 100.0};
+    nodeA.type = PathNodeType::Corner;
+    path.addNode(nodeA);
+    PathNode nodeB;
+    nodeB.anchor = sound_mind::core::TimeFrequencyPoint{2.0, 300.0};
+    nodeB.type = PathNodeType::Corner;
+    path.addNode(nodeB);
+    MindWave wave;
+    wave.setType(GeneratorType::Drawn);
+    wave.setDrawnPath(path);
+
+    editor.setMindWave(wave);
+
+    auto* label = editor.findChild<QLabel*>(QStringLiteral("drawnStatusLabel"));
+    QVERIFY(label->text().contains(QStringLiteral("2")));
+    // No controls edit drawnPath() here - mindWave() should still round-trip
+    // it unchanged, the same "preserved but not editable here" contract
+    // setMindWavePreservesSuperpositionStackAndBlendMode() already
+    // establishes for the superposition stack/blend mode.
+    QCOMPARE(editor.mindWave().drawnPath().nodes().size(), std::size_t{2});
 }

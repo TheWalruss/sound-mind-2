@@ -25,12 +25,13 @@ using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::SpatialPattern;
 using sound_mind::core::SteppedNoiseShape;
 
-constexpr std::array<std::pair<GeneratorType, const char*>, 5> kGeneratorTypes{{
+constexpr std::array<std::pair<GeneratorType, const char*>, 6> kGeneratorTypes{{
     {GeneratorType::Periodic, "Periodic"},
     {GeneratorType::Envelope, "Envelope"},
     {GeneratorType::SteppedNoise, "Stepped/Noise"},
     {GeneratorType::Spatial, "Spatial"},
     {GeneratorType::Fractal, "Fractal"},
+    {GeneratorType::Drawn, "Drawn"},
 }};
 
 constexpr std::array<std::pair<MindWaveAxis, const char*>, 2> kAxes{{
@@ -320,6 +321,15 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     fractalForm->addRow(tr("Iterations:"), fractalIterationsSpinBox_);
     root->addWidget(fractalGroup_);
 
+    drawnGroup_ = new QGroupBox(tr("Drawn"), this);
+    drawnGroup_->setObjectName(QStringLiteral("drawnGroup"));
+    auto* drawnLayout = new QVBoxLayout(drawnGroup_);
+    drawnStatusLabel_ = new QLabel(drawnGroup_);
+    drawnStatusLabel_->setObjectName(QStringLiteral("drawnStatusLabel"));
+    drawnStatusLabel_->setWordWrap(true);
+    drawnLayout->addWidget(drawnStatusLabel_);
+    root->addWidget(drawnGroup_);
+
     root->addStretch();
 
     updateVisibleGroup();
@@ -338,6 +348,7 @@ void MindWaveEditor::updateVisibleGroup() {
     steppedNoiseGroup_->setVisible(type == GeneratorType::SteppedNoise);
     spatialGroup_->setVisible(type == GeneratorType::Spatial);
     fractalGroup_->setVisible(type == GeneratorType::Fractal);
+    drawnGroup_->setVisible(type == GeneratorType::Drawn);
 }
 
 void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
@@ -393,6 +404,15 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     domainWarpStrengthSpinBox_->setValue(wave_.domainWarpStrength());
     fractalRoughnessSpinBox_->setValue(wave_.fractalRoughness());
     fractalIterationsSpinBox_->setValue(wave_.fractalIterations());
+
+    const int nodeCount = static_cast<int>(wave_.drawnPath().nodes().size());
+    drawnStatusLabel_->setText(
+        nodeCount >= 2
+            ? tr("%1-node shape captured. Draw a new stroke, Pick it, and use Edit -> Use Picked Path as MindWave "
+                 "Shape to replace it.")
+                  .arg(nodeCount)
+            : tr("No shape captured yet. Draw a stroke, switch to Pick and select it, then use Edit -> Use Picked "
+                 "Path as MindWave Shape."));
 
     updateVisibleGroup();
 }
