@@ -536,3 +536,136 @@ TEST_CASE("A FilterConfiguration loads from JSON missing every SpectralReverb ke
     REQUIRE(restored.reverbAbsorption() == 0.4f);
     REQUIRE(restored.reverbMix() == 0.4f);
 }
+
+// --- v0.Y.38.1: Filter Parameter Binding Completion ---------------------
+
+TEST_CASE("A fresh FilterConfiguration's fifteen newly-bindable parameters are all unbound",
+          "[core][filter_configuration][mind_wave_binding]") {
+    const FilterConfiguration config;
+    REQUIRE_FALSE(config.speckleDensityMindWave().has_value());
+    REQUIRE_FALSE(config.speckleIntensityMindWave().has_value());
+    REQUIRE_FALSE(config.speckleThresholdMindWave().has_value());
+    REQUIRE_FALSE(config.noiseFloorMindWave().has_value());
+    REQUIRE_FALSE(config.reductionMindWave().has_value());
+    REQUIRE_FALSE(config.crushAmountMindWave().has_value());
+    REQUIRE_FALSE(config.grainAmountMindWave().has_value());
+    REQUIRE_FALSE(config.feedbackAmountMindWave().has_value());
+    REQUIRE_FALSE(config.foldGainMindWave().has_value());
+    REQUIRE_FALSE(config.channelBalanceMindWave().has_value());
+    REQUIRE_FALSE(config.convolveAmountMindWave().has_value());
+    REQUIRE_FALSE(config.displaceDistanceMindWave().has_value());
+    REQUIRE_FALSE(config.displaceAngleMindWave().has_value());
+    REQUIRE_FALSE(config.channelCycleAngleMindWave().has_value());
+    REQUIRE_FALSE(config.reverbMixMindWave().has_value());
+}
+
+TEST_CASE("Each of a FilterConfiguration's fifteen newly-bindable parameters can be bound to "
+          "(and unbound from) a MindWave",
+          "[core][filter_configuration][mind_wave_binding]") {
+    FilterConfiguration config;
+
+    config.setSpeckleDensityMindWave(MindWaveId{1});
+    config.setSpeckleIntensityMindWave(MindWaveId{2});
+    config.setSpeckleThresholdMindWave(MindWaveId{3});
+    config.setNoiseFloorMindWave(MindWaveId{4});
+    config.setReductionMindWave(MindWaveId{5});
+    config.setCrushAmountMindWave(MindWaveId{6});
+    config.setGrainAmountMindWave(MindWaveId{7});
+    config.setFeedbackAmountMindWave(MindWaveId{8});
+    config.setFoldGainMindWave(MindWaveId{9});
+    config.setChannelBalanceMindWave(MindWaveId{10});
+    config.setConvolveAmountMindWave(MindWaveId{11});
+    config.setDisplaceDistanceMindWave(MindWaveId{12});
+    config.setDisplaceAngleMindWave(MindWaveId{13});
+    config.setChannelCycleAngleMindWave(MindWaveId{14});
+    config.setReverbMixMindWave(MindWaveId{15});
+
+    REQUIRE(config.speckleDensityMindWave() == MindWaveId{1});
+    REQUIRE(config.speckleIntensityMindWave() == MindWaveId{2});
+    REQUIRE(config.speckleThresholdMindWave() == MindWaveId{3});
+    REQUIRE(config.noiseFloorMindWave() == MindWaveId{4});
+    REQUIRE(config.reductionMindWave() == MindWaveId{5});
+    REQUIRE(config.crushAmountMindWave() == MindWaveId{6});
+    REQUIRE(config.grainAmountMindWave() == MindWaveId{7});
+    REQUIRE(config.feedbackAmountMindWave() == MindWaveId{8});
+    REQUIRE(config.foldGainMindWave() == MindWaveId{9});
+    REQUIRE(config.channelBalanceMindWave() == MindWaveId{10});
+    REQUIRE(config.convolveAmountMindWave() == MindWaveId{11});
+    REQUIRE(config.displaceDistanceMindWave() == MindWaveId{12});
+    REQUIRE(config.displaceAngleMindWave() == MindWaveId{13});
+    REQUIRE(config.channelCycleAngleMindWave() == MindWaveId{14});
+    REQUIRE(config.reverbMixMindWave() == MindWaveId{15});
+
+    config.setSpeckleDensityMindWave(std::nullopt);
+    REQUIRE_FALSE(config.speckleDensityMindWave().has_value());
+}
+
+TEST_CASE("A FilterConfiguration's fifteen newly-bindable parameter bindings round-trip through JSON",
+          "[core][filter_configuration][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setSpeckleDensityMindWave(MindWaveId{1});
+    config.setSpeckleIntensityMindWave(MindWaveId{2});
+    config.setSpeckleThresholdMindWave(MindWaveId{3});
+    config.setNoiseFloorMindWave(MindWaveId{4});
+    config.setReductionMindWave(MindWaveId{5});
+    config.setCrushAmountMindWave(MindWaveId{6});
+    config.setGrainAmountMindWave(MindWaveId{7});
+    config.setFeedbackAmountMindWave(MindWaveId{8});
+    config.setFoldGainMindWave(MindWaveId{9});
+    config.setChannelBalanceMindWave(MindWaveId{10});
+    config.setConvolveAmountMindWave(MindWaveId{11});
+    config.setDisplaceDistanceMindWave(MindWaveId{12});
+    config.setDisplaceAngleMindWave(MindWaveId{13});
+    config.setChannelCycleAngleMindWave(MindWaveId{14});
+    config.setReverbMixMindWave(MindWaveId{15});
+
+    const nlohmann::json json = config;
+    const FilterConfiguration roundTripped = json.get<FilterConfiguration>();
+
+    REQUIRE(roundTripped.speckleDensityMindWave() == MindWaveId{1});
+    REQUIRE(roundTripped.speckleIntensityMindWave() == MindWaveId{2});
+    REQUIRE(roundTripped.speckleThresholdMindWave() == MindWaveId{3});
+    REQUIRE(roundTripped.noiseFloorMindWave() == MindWaveId{4});
+    REQUIRE(roundTripped.reductionMindWave() == MindWaveId{5});
+    REQUIRE(roundTripped.crushAmountMindWave() == MindWaveId{6});
+    REQUIRE(roundTripped.grainAmountMindWave() == MindWaveId{7});
+    REQUIRE(roundTripped.feedbackAmountMindWave() == MindWaveId{8});
+    REQUIRE(roundTripped.foldGainMindWave() == MindWaveId{9});
+    REQUIRE(roundTripped.channelBalanceMindWave() == MindWaveId{10});
+    REQUIRE(roundTripped.convolveAmountMindWave() == MindWaveId{11});
+    REQUIRE(roundTripped.displaceDistanceMindWave() == MindWaveId{12});
+    REQUIRE(roundTripped.displaceAngleMindWave() == MindWaveId{13});
+    REQUIRE(roundTripped.channelCycleAngleMindWave() == MindWaveId{14});
+    REQUIRE(roundTripped.reverbMixMindWave() == MindWaveId{15});
+}
+
+TEST_CASE("A FilterConfiguration loads from JSON missing the fifteen new MindWave binding keys "
+          "(a configuration saved before v0.Y.38.1) as fully unbound",
+          "[core][filter_configuration][mind_wave_binding]") {
+    const nlohmann::json json{{"type", "uniformBlur"},
+                               {"blurSigma", 2.0f},
+                               {"medianSize", 3},
+                               {"directionalBlurLength", 10},
+                               {"directionalBlurAngleDegrees", 0.0f},
+                               {"sharpenAmount", 1.0f},
+                               {"toneCurvePoints", std::vector<std::array<float, 2>>{{0.0f, 0.0f}, {1.0f, 1.0f}}},
+                               {"frequencyGradient", FilterConfiguration{}.frequencyGradient()}};
+
+    const FilterConfiguration restored = json.get<FilterConfiguration>();
+
+    REQUIRE_FALSE(restored.speckleDensityMindWave().has_value());
+    REQUIRE_FALSE(restored.speckleIntensityMindWave().has_value());
+    REQUIRE_FALSE(restored.speckleThresholdMindWave().has_value());
+    REQUIRE_FALSE(restored.noiseFloorMindWave().has_value());
+    REQUIRE_FALSE(restored.reductionMindWave().has_value());
+    REQUIRE_FALSE(restored.crushAmountMindWave().has_value());
+    REQUIRE_FALSE(restored.grainAmountMindWave().has_value());
+    REQUIRE_FALSE(restored.feedbackAmountMindWave().has_value());
+    REQUIRE_FALSE(restored.foldGainMindWave().has_value());
+    REQUIRE_FALSE(restored.channelBalanceMindWave().has_value());
+    REQUIRE_FALSE(restored.convolveAmountMindWave().has_value());
+    REQUIRE_FALSE(restored.displaceDistanceMindWave().has_value());
+    REQUIRE_FALSE(restored.displaceAngleMindWave().has_value());
+    REQUIRE_FALSE(restored.channelCycleAngleMindWave().has_value());
+    REQUIRE_FALSE(restored.reverbMixMindWave().has_value());
+}

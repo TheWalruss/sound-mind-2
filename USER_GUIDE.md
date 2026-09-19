@@ -474,10 +474,20 @@ group's own controls while it was hidden.
     `0` is no effect at all, `1` is fully wet.
 
 Every one of the twenty designed filter types now has a real, working
-algorithm, completing this milestone - Speckle Add through Spectral
-Reverb don't yet have a MindWave-binding combo the way
-Sigma/Size/Length/Angle/Amount above do (a later pass, not yet
-scheduled).
+algorithm, completing this milestone. Every one of them except Invert (no
+parameters of its own) also has at least one MindWave-binding combo, the
+same "None" or any MindWave `setAvailableMindWaves()` currently lists you
+already know from Sigma/Size/Length/Angle/Amount above - Speckle Add's and
+Dynamic Speckle's Density and Intensity, Speckle Remove's Threshold,
+Denoise's Noise Floor and Reduction, Bit-Depth Crush's Amount, Granular
+Noise's Grain Amount, Feedback Distortion's Amount, Spectral Wavefold's
+Fold Gain, Channel Balance's Balance, Convolve's Amount, Displace's
+Distance and Angle, Channel Cycle's Angle, and Spectral Reverb's Mix.
+Three parameters have no binding combo, deliberately - Convolve's Kernel
+Size, Granular Noise's Grain Size, and Spectral Reverb's Pre-Delay/Decay/
+Room Size/Diffusion/Absorption - each shapes a fixed-size grid or a
+computation spanning many cells at once, not a single value one cell owns
+on its own.
 
 A Filter layer with nothing beneath it (or with everything beneath it
 hidden) has nothing to filter, so it has no effect. An ordinary Filter
@@ -1161,12 +1171,14 @@ loose ends remain:
   Curve, unlike Frequency-Axis Gradient, does have a real draggable point
   editor now.)
 - **MindWave-bound filter parameters exist now** (see
-  [MindWaves](#mindwaves) above) for the five scalar controls listed
-  above - Sigma, Size, Length, Angle, and Amount. Every filter type added
-  since (all fourteen from this milestone: Noise & distortion, Channel
-  Balance/Invert/Convolve, Displace/Channel Cycle, and Spectral Reverb)
-  has no bindable scalar of its own yet, so they're untouched by this - a
-  later pass, not yet scheduled.
+  [MindWaves](#mindwaves) above) for nearly every scalar control across
+  every filter type - see [Filter Layers](#filter-layers)'s own list
+  above. Three remain permanently unbindable: Convolve's Kernel Size,
+  Granular Noise's Grain Size, and Spectral Reverb's Pre-Delay/Decay/Room
+  Size/Diffusion/Absorption - each shapes a fixed-size grid or a
+  computation spanning many cells at once, not a value one cell owns on
+  its own, so there's no meaningful "this cell's own value" for a
+  MindWave to drive.
 - **Convolve's own saved kernels have no rename or delete UI yet** - once
   saved, a kernel stays in the project's own library permanently (there's
   no way to remove or rename one from within the Studio itself).

@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.38.1] - 2026-09-19
+
+Filter Parameter Binding Completion - extends `v0.Y.31.1`'s own MindWave-binding mechanism to every remaining `v0.Y.36.1` (Deferred Filters) parameter that fits it. Closes out the `v0.Y.38.1` milestone in full.
+
+### Added
+
+- **MindWave binding for fifteen more filter parameters**, each with its own bind combo in the Filter Configuration Panel: Speckle Add/Dynamic Speckle's Density and Intensity, Speckle Remove's Threshold, Denoise's Noise Floor and Reduction, Bit-Depth Crush's Amount, Granular Noise's Grain Amount, Feedback Distortion's Amount, Spectral Wavefold's Fold Gain, Channel Balance's Balance, Convolve's Amount, Displace's Distance and Angle, Channel Cycle's Angle, and Spectral Reverb's Mix. Every project saved before this milestone loads with all fifteen unbound, unchanged from before.
+- **Three parameters remain deliberately unbindable** - Convolve's kernel size, Granular Noise's grain (block) size, and Spectral Reverb's Pre-Delay/Decay/Room Size/Diffusion/Absorption - each shapes a fixed-size structure or a computation spanning many cells at once, not an independent per-cell value.
+
+Full regression: sound-mind-core 687/687 (up from 651), sound-mind-studio all 35 QTest classes passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #107.
+
 ## [0.0.37.1] - 2026-09-19
 
 Deferred Blend Modes - `docs/sound-mind-design.md`'s own explicit "none is designed yet." Closes out the `v0.Y.37.1` milestone in full.

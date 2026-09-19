@@ -48,9 +48,12 @@ class ToneCurveEditor;
  * milestone. Selecting a type shows only that type's own parameter group;
  * every other group stays hidden (`QWidget::setVisible(false)`), the same
  * "meaningless unless `type()` matches" contract `FilterConfiguration`'s
- * own per-field docs already state. **None of the nineteen `v0.Y.36.1`
- * types offer a MindWave-binding combo** - matching `FilterConfiguration`'s
- * own docs on why binding those nineteen is deferred, not built here.
+ * own per-field docs already state. As of `v0.Y.38.1` (Filter Parameter
+ * Binding Completion), every one of the nineteen `v0.Y.36.1` types except
+ * `Invert` (which has no parameters of its own) offers at least one
+ * MindWave-binding combo - see each group's own docs below for exactly
+ * which parameters, and `FilterConfiguration`'s own docs for the three
+ * that remain deliberately unbound.
  *
  * **`SpeckleAdd`'s own Density/Intensity
  * controls and `DynamicSpeckle`'s own are separate widgets that both
@@ -65,17 +68,23 @@ class ToneCurveEditor;
  * switching the `FilterType` combo between the two would show a stale
  * value on whichever group wasn't visible while the other's own field was
  * last edited (caught by a test written for exactly this scenario, not by
- * inspection).
+ * inspection). As of `v0.Y.38.1`, each group also gets its own
+ * `speckleDensityMindWave()`/`speckleIntensityMindWave()` binding combo -
+ * the same duplicated-widget/shared-field/cross-sync treatment extends to
+ * these two combos as well, for the same reason.
  *
  * **`Displace`/`ChannelCycle`** (`v0.Y.36.1` Installment C, "Geometric")
  * each get a plain spin-box group - `Displace`'s own Distance/Angle mirror
  * `DirectionalBlur`'s own Length/Angle exactly (same convention, same
- * layout shape); `ChannelCycle` is a single Angle spin box.
+ * layout shape); `ChannelCycle` is a single Angle spin box. As of
+ * `v0.Y.38.1`, all three get their own MindWave-binding combo too.
  *
  * **`SpectralReverb`** (`v0.Y.36.1` Installment D, "Space", closing out
  * the milestone) gets a plain six-spin-box group - Pre-Delay/Decay (both
  * in frames, matching every other frame-based Filter parameter's own
- * raw-unit convention), Room Size, Diffusion, Absorption, and Mix.
+ * raw-unit convention), Room Size, Diffusion, Absorption, and Mix. As of
+ * `v0.Y.38.1`, only Mix gets a MindWave-binding combo - the other five
+ * remain deliberately unbound (see `FilterConfiguration`'s own docs).
  *
  * **A basic, two-endpoint-stop gradient editor for `FrequencyAxisGradient`,
  * not a rich visual one** - `Gradient` always has at least its two
@@ -100,18 +109,21 @@ class ToneCurveEditor;
  * any MindWave `setAvailableMindWaves()` currently lists. `ToneCurve`'s
  * own curve and `FrequencyAxisGradient`'s own gradient have no such combo,
  * matching `FilterConfiguration`'s own docs on why: neither is a single
- * number.
+ * number. As of `v0.Y.38.1`, every other numeric parameter across every
+ * `v0.Y.36.1` filter type gets the same combo too, with three deliberate
+ * exceptions (`FilterConfiguration`'s own docs) - `setAvailableMindWaves()`
+ * populates all of them together, not just the original five.
  *
  * **`ChannelBalance`/`Invert`/`Convolve`** (`v0.Y.36.1` Installment B) round
  * out Tonal/Spectral shaping, in `docs/sound-mind-design.md`'s own listed
  * sub-order within each family (`ToneCurve` then `ChannelBalance` then
  * `Invert` for Tonal; `FrequencyAxisGradient` then `Convolve` for Spectral
- * shaping) - the selector now lists seventeen types. Neither binds to a
- * MindWave, the same deferral Installment A's eight already established.
- * `Invert` has no parameters of its own - its own group is just an
- * explanatory label. **`Convolve` is full legacy parity, confirmed with
- * the user**: a configurable odd kernel size (a fresh, identity kernel of
- * the new size replaces the old one on a size change - editing is
+ * shaping) - the selector now lists seventeen types. `ChannelBalance`'s
+ * own balance and `Convolve`'s own dry/wet amount bind to a MindWave as of
+ * `v0.Y.38.1`; `Invert` has no parameters of its own - its own group is
+ * just an explanatory label. **`Convolve` is full legacy parity, confirmed
+ * with the user**: a configurable odd kernel size (a fresh, identity kernel
+ * of the new size replaces the old one on a size change - editing is
  * per-size, not preserved across a resize), a size-by-size grid of plain
  * spin boxes rebuilt from scratch on every size change
  * (`rebuildConvolveKernelGrid()`), eight classic built-in presets, a
@@ -263,7 +275,10 @@ private:
 
     /// @brief Rebuilds every MindWave-binding combo's own item list from
     ///        `availableMindWaves_`, preserving each combo's own current
-    ///        selection if the bound id is still present.
+    ///        selection if the bound id is still present - as of
+    ///        `v0.Y.38.1`, all twenty-two combos (the original five, plus
+    ///        seventeen more backing the fifteen parameters that milestone
+    ///        added), not just the original five.
     void rebuildMindWaveCombos();
 
     /**
@@ -324,56 +339,75 @@ private:
     /// @brief See setAvailableMindWaves()'s own docs.
     std::vector<std::pair<sound_mind::core::MindWaveId, QString>> availableMindWaves_;
 
-    // --- v0.Y.36.1 Installment A: Noise & distortion - none of these
-    // eight bind to a MindWave, see this class's own docs.
+    // --- v0.Y.36.1 Installment A: Noise & distortion - each of the eight
+    // gained MindWave-binding combos in v0.Y.38.1, see this class's own
+    // docs (SpeckleAdd/DynamicSpeckle each get their own pair of combos,
+    // both bound to the same shared fields, cross-synced like their own
+    // spin boxes already are; grainSize has no combo of its own).
 
     QGroupBox* speckleAddGroup_ = nullptr;
     QDoubleSpinBox* speckleAddDensitySpinBox_ = nullptr;
+    QComboBox* speckleAddDensityMindWaveCombo_ = nullptr;
     QDoubleSpinBox* speckleAddIntensitySpinBox_ = nullptr;
+    QComboBox* speckleAddIntensityMindWaveCombo_ = nullptr;
 
     QGroupBox* speckleRemoveGroup_ = nullptr;
     QDoubleSpinBox* speckleThresholdSpinBox_ = nullptr;
+    QComboBox* speckleThresholdMindWaveCombo_ = nullptr;
 
     QGroupBox* denoiseGroup_ = nullptr;
     QDoubleSpinBox* noiseFloorSpinBox_ = nullptr;
+    QComboBox* noiseFloorMindWaveCombo_ = nullptr;
     QDoubleSpinBox* reductionSpinBox_ = nullptr;
+    QComboBox* reductionMindWaveCombo_ = nullptr;
 
     QGroupBox* bitDepthCrushGroup_ = nullptr;
     QDoubleSpinBox* crushAmountSpinBox_ = nullptr;
+    QComboBox* crushAmountMindWaveCombo_ = nullptr;
 
     QGroupBox* granularNoiseGroup_ = nullptr;
     QSpinBox* grainSizeSpinBox_ = nullptr;
     QDoubleSpinBox* grainAmountSpinBox_ = nullptr;
+    QComboBox* grainAmountMindWaveCombo_ = nullptr;
 
     QGroupBox* dynamicSpeckleGroup_ = nullptr;
     QDoubleSpinBox* dynamicSpeckleDensitySpinBox_ = nullptr;
+    QComboBox* dynamicSpeckleDensityMindWaveCombo_ = nullptr;
     QDoubleSpinBox* dynamicSpeckleIntensitySpinBox_ = nullptr;
+    QComboBox* dynamicSpeckleIntensityMindWaveCombo_ = nullptr;
 
     QGroupBox* feedbackDistortionGroup_ = nullptr;
     QDoubleSpinBox* feedbackAmountSpinBox_ = nullptr;
+    QComboBox* feedbackAmountMindWaveCombo_ = nullptr;
 
     QGroupBox* spectralWavefoldGroup_ = nullptr;
     QDoubleSpinBox* foldGainSpinBox_ = nullptr;
+    QComboBox* foldGainMindWaveCombo_ = nullptr;
 
-    // --- v0.Y.36.1 Installment C: Geometric - neither binds to a MindWave
-    // either, see this class's own docs.
+    // --- v0.Y.36.1 Installment C: Geometric - all three parameters gained
+    // MindWave-binding combos in v0.Y.38.1.
 
     QGroupBox* displaceGroup_ = nullptr;
     QDoubleSpinBox* displaceDistanceSpinBox_ = nullptr;
+    QComboBox* displaceDistanceMindWaveCombo_ = nullptr;
     QDoubleSpinBox* displaceAngleSpinBox_ = nullptr;
+    QComboBox* displaceAngleMindWaveCombo_ = nullptr;
 
     QGroupBox* channelCycleGroup_ = nullptr;
     QDoubleSpinBox* channelCycleAngleSpinBox_ = nullptr;
+    QComboBox* channelCycleAngleMindWaveCombo_ = nullptr;
 
     QGroupBox* toneCurveGroup_ = nullptr;
     ToneCurveEditor* toneCurveEditor_ = nullptr;
 
     // --- v0.Y.36.1 Installment B: the rest of Tonal/Spectral shaping -
-    // none of these three bind to a MindWave either, see this class's own
-    // docs.
+    // ChannelBalance/Convolve's own amount gained a MindWave-binding combo
+    // in v0.Y.38.1; Invert has no parameters of its own, and Convolve's
+    // own kernel size/normalize flag remain deliberately unbound.
 
     QGroupBox* channelBalanceGroup_ = nullptr;
     QDoubleSpinBox* channelBalanceSpinBox_ = nullptr;
+    QComboBox* channelBalanceMindWaveCombo_ = nullptr;
 
     QGroupBox* invertGroup_ = nullptr;
 
@@ -385,13 +419,15 @@ private:
     std::vector<QDoubleSpinBox*> convolveKernelSpinBoxes_;
     QCheckBox* convolveNormalizeCheckBox_ = nullptr;
     QDoubleSpinBox* convolveAmountSpinBox_ = nullptr;
+    QComboBox* convolveAmountMindWaveCombo_ = nullptr;
     QPushButton* convolveSaveKernelButton_ = nullptr;
     QComboBox* convolveLoadKernelCombo_ = nullptr;
     /// @brief See setAvailableConvolutionKernels()'s own docs.
     std::vector<sound_mind::core::NamedConvolutionKernel> availableConvolutionKernels_;
 
-    // --- v0.Y.36.1 Installment D: Space - none of these six bind to a
-    // MindWave either, see this class's own docs.
+    // --- v0.Y.36.1 Installment D: Space - only Mix gained a MindWave-
+    // binding combo in v0.Y.38.1; the other five remain deliberately
+    // unbound, see this class's own docs.
 
     QGroupBox* spectralReverbGroup_ = nullptr;
     QSpinBox* reverbPreDelaySpinBox_ = nullptr;
@@ -400,6 +436,7 @@ private:
     QDoubleSpinBox* reverbDiffusionSpinBox_ = nullptr;
     QDoubleSpinBox* reverbAbsorptionSpinBox_ = nullptr;
     QDoubleSpinBox* reverbMixSpinBox_ = nullptr;
+    QComboBox* reverbMixMindWaveCombo_ = nullptr;
 
     QGroupBox* equalizerCutGroup_ = nullptr;
     QDoubleSpinBox* startLeftCutSpinBox_ = nullptr;

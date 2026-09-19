@@ -657,6 +657,36 @@ std::vector<float> applySpeckleAdd(const std::vector<float>& grid, std::uint32_t
     return result;
 }
 
+/// @brief `applySpeckleAdd()` above, but with `density`/`intensity`
+/// evaluated fresh per cell via `densityAt(bin, frame)`/`intensityAt(bin,
+/// frame)` - `v0.Y.38.1`'s own bindings for both, shared with
+/// `DynamicSpeckle` (see `applyDynamicSpeckleVarying()`'s own docs for
+/// that filter's own coarser, block-uniform treatment). The hit-decision
+/// itself (the same deterministic hash the unbound case uses) is compared
+/// against *this cell's own* density value, so a bound density genuinely
+/// varies which cells are hit, not just how strongly.
+std::vector<float> applySpeckleAddVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                           std::uint32_t frameCount, std::uint32_t seed,
+                                           const std::function<double(std::uint32_t, std::uint32_t)>& densityAt,
+                                           const std::function<double(std::uint32_t, std::uint32_t)>& intensityAt) {
+    std::vector<float> result = grid;
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * cols + frame;
+            const auto density = static_cast<float>(densityAt(bin, frame));
+            if (density <= 0.0f) {
+                continue;
+            }
+            if (hashToUnitFloat(hashCell(seed, bin, frame)) < density) {
+                const auto intensity = static_cast<float>(intensityAt(bin, frame));
+                result[cell] = grid[cell] + intensity * (kToneCurveMaxDb - grid[cell]);
+            }
+        }
+    }
+    return result;
+}
+
 /// @brief `SpeckleRemove`'s own implementation - see `applyFilter()`'s docs.
 /// Reuses `medianBlur2D()`'s own fixed 3x3 window rather than a bespoke
 /// median routine.
@@ -666,6 +696,26 @@ std::vector<float> applySpeckleRemove(const std::vector<float>& grid, std::uint3
     std::vector<float> result(grid.size());
     for (std::size_t i = 0; i < grid.size(); ++i) {
         result[i] = (std::abs(grid[i] - median[i]) > thresholdDb) ? median[i] : grid[i];
+    }
+    return result;
+}
+
+/// @brief `applySpeckleRemove()` above, but with `thresholdDb` evaluated
+/// fresh per cell via `thresholdAt(bin, frame)` - `v0.Y.38.1`'s own
+/// `speckleThreshold` binding. Varies for free: the fixed-window median
+/// pass still runs exactly once, unaffected by the per-cell threshold.
+std::vector<float> applySpeckleRemoveVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                              std::uint32_t frameCount,
+                                              const std::function<double(std::uint32_t, std::uint32_t)>& thresholdAt) {
+    const auto median = medianBlur2D(grid, binCount, frameCount, 3);
+    std::vector<float> result(grid.size());
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * cols + frame;
+            const auto threshold = static_cast<float>(thresholdAt(bin, frame));
+            result[cell] = (std::abs(grid[cell] - median[cell]) > threshold) ? median[cell] : grid[cell];
+        }
     }
     return result;
 }
@@ -692,6 +742,37 @@ std::vector<float> applyDenoise(const std::vector<float>& grid, float noiseFloor
     return result;
 }
 
+/// @brief `applyDenoise()` above, but with `noiseFloorDb`/`reductionDb`
+/// evaluated fresh per cell via `noiseFloorAt(bin, frame)`/
+/// `reductionAt(bin, frame)` - `v0.Y.38.1`'s own bindings for both. Varies
+/// for free - each cell was already processed independently.
+std::vector<float> applyDenoiseVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                        std::uint32_t frameCount,
+                                        const std::function<double(std::uint32_t, std::uint32_t)>& noiseFloorAt,
+                                        const std::function<double(std::uint32_t, std::uint32_t)>& reductionAt) {
+    constexpr float kKneeWidthDb = 6.0f;
+    std::vector<float> result(grid.size());
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * cols + frame;
+            const float db = grid[cell];
+            const auto noiseFloorDb = static_cast<float>(noiseFloorAt(bin, frame));
+            const auto reductionDb = static_cast<float>(reductionAt(bin, frame));
+            float attenuationFraction;
+            if (db >= noiseFloorDb + kKneeWidthDb) {
+                attenuationFraction = 0.0f;
+            } else if (db <= noiseFloorDb - kKneeWidthDb) {
+                attenuationFraction = 1.0f;
+            } else {
+                attenuationFraction = (noiseFloorDb + kKneeWidthDb - db) / (2.0f * kKneeWidthDb);
+            }
+            result[cell] = db - attenuationFraction * reductionDb;
+        }
+    }
+    return result;
+}
+
 /// @brief `BitDepthCrush`'s own implementation - see `applyFilter()`'s
 /// docs. A true no-op at `crushAmount <= 0`; otherwise quantizes the
 /// `dbToUnit()`-normalized loudness into `lerp(256, 2, crushAmount)`
@@ -707,6 +788,32 @@ std::vector<float> applyBitDepthCrush(const std::vector<float>& grid, float crus
         const float unit = dbToUnit(grid[i]);
         const float quantized = std::clamp(std::floor(unit * levels) / levels, 0.0f, 1.0f);
         result[i] = unitToDb(quantized);
+    }
+    return result;
+}
+
+/// @brief `applyBitDepthCrush()` above, but with `crushAmount` evaluated
+/// fresh per cell via `amountAt(bin, frame)` - `v0.Y.38.1`'s own binding.
+/// Varies for free - the quantization level count is a per-cell scalar
+/// derived directly from the per-cell amount, no shared kernel work.
+std::vector<float> applyBitDepthCrushVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                              std::uint32_t frameCount,
+                                              const std::function<double(std::uint32_t, std::uint32_t)>& amountAt) {
+    std::vector<float> result(grid.size());
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * cols + frame;
+            const float amount = std::clamp(static_cast<float>(amountAt(bin, frame)), 0.0f, 1.0f);
+            if (amount <= 0.0f) {
+                result[cell] = grid[cell];
+                continue;
+            }
+            const float levels = std::max(2.0f, 256.0f - amount * 254.0f);
+            const float unit = dbToUnit(grid[cell]);
+            const float quantized = std::clamp(std::floor(unit * levels) / levels, 0.0f, 1.0f);
+            result[cell] = unitToDb(quantized);
+        }
     }
     return result;
 }
@@ -727,6 +834,42 @@ std::vector<float> applyGranularNoise(const std::vector<float>& grid, std::uint3
     const int cols = static_cast<int>(frameCount);
     for (int blockRow = 0; blockRow < rows; blockRow += blockSize) {
         for (int blockCol = 0; blockCol < cols; blockCol += blockSize) {
+            const float unit = hashToUnitFloat(hashCell(seed, static_cast<std::uint32_t>(blockRow),
+                                                          static_cast<std::uint32_t>(blockCol)));
+            const float offset = (unit * 2.0f - 1.0f) * amountDb;
+            const int rowEnd = std::min(rows, blockRow + blockSize);
+            const int colEnd = std::min(cols, blockCol + blockSize);
+            for (int row = blockRow; row < rowEnd; ++row) {
+                for (int col = blockCol; col < colEnd; ++col) {
+                    result[static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) +
+                           static_cast<std::size_t>(col)] += offset;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+/// @brief `applyGranularNoise()` above, but with `amountDb` evaluated once
+/// per block (at that block's own top-left cell) via `amountAt(bin,
+/// frame)` - `v0.Y.38.1`'s own `grainAmount` binding. Block-uniform, not
+/// per-cell, matching `grainSize()`'s own block-partition granularity
+/// (which has no binding of its own - see `FilterConfiguration`'s own
+/// docs on why a block *size* can't vary per cell the way an amount can).
+std::vector<float> applyGranularNoiseVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                              std::uint32_t frameCount, std::uint32_t seed, int size,
+                                              const std::function<double(std::uint32_t, std::uint32_t)>& amountAt) {
+    const int blockSize = std::max(1, size);
+    std::vector<float> result = grid;
+    const int rows = static_cast<int>(binCount);
+    const int cols = static_cast<int>(frameCount);
+    for (int blockRow = 0; blockRow < rows; blockRow += blockSize) {
+        for (int blockCol = 0; blockCol < cols; blockCol += blockSize) {
+            const auto amountDb =
+                static_cast<float>(amountAt(static_cast<std::uint32_t>(blockRow), static_cast<std::uint32_t>(blockCol)));
+            if (amountDb <= 0.0f) {
+                continue;
+            }
             const float unit = hashToUnitFloat(hashCell(seed, static_cast<std::uint32_t>(blockRow),
                                                           static_cast<std::uint32_t>(blockCol)));
             const float offset = (unit * 2.0f - 1.0f) * amountDb;
@@ -780,6 +923,49 @@ std::vector<float> applyDynamicSpeckle(const std::vector<float>& grid, std::uint
     return result;
 }
 
+/// @brief `applyDynamicSpeckle()` above, but with `density`/`intensity`
+/// evaluated once per its own 2x2 block (at that block's own top-left
+/// cell) via `densityAt(bin, frame)`/`intensityAt(bin, frame)` -
+/// `v0.Y.38.1`'s own bindings, shared with `SpeckleAdd` (see
+/// `applySpeckleAddVarying()`'s own docs for that filter's own finer,
+/// per-cell treatment). Block-uniform here, not per-cell, matching this
+/// filter's own existing 2x2-block granularity - both the live hit-decision
+/// and the blend intensity for every cell in a hit block share the one
+/// block-position evaluation, the same way its own `noiseSeed()`-free
+/// randomness already treats a whole block as one unit.
+std::vector<float> applyDynamicSpeckleVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                               std::uint32_t frameCount,
+                                               const std::function<double(std::uint32_t, std::uint32_t)>& densityAt,
+                                               const std::function<double(std::uint32_t, std::uint32_t)>& intensityAt) {
+    constexpr int kBlockSize = 2;
+    std::vector<float> result = grid;
+    thread_local std::mt19937 rng{std::random_device{}()};
+    std::uniform_real_distribution<float> uniform(0.0f, 1.0f);
+    const int rows = static_cast<int>(binCount);
+    const int cols = static_cast<int>(frameCount);
+    for (int blockRow = 0; blockRow < rows; blockRow += kBlockSize) {
+        for (int blockCol = 0; blockCol < cols; blockCol += kBlockSize) {
+            const auto density =
+                static_cast<float>(densityAt(static_cast<std::uint32_t>(blockRow), static_cast<std::uint32_t>(blockCol)));
+            if (uniform(rng) >= density) {
+                continue;
+            }
+            const auto intensity = static_cast<float>(
+                intensityAt(static_cast<std::uint32_t>(blockRow), static_cast<std::uint32_t>(blockCol)));
+            const int rowEnd = std::min(rows, blockRow + kBlockSize);
+            const int colEnd = std::min(cols, blockCol + kBlockSize);
+            for (int row = blockRow; row < rowEnd; ++row) {
+                for (int col = blockCol; col < colEnd; ++col) {
+                    const std::size_t cell =
+                        static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) + static_cast<std::size_t>(col);
+                    result[cell] = grid[cell] + intensity * (kToneCurveMaxDb - grid[cell]);
+                }
+            }
+        }
+    }
+    return result;
+}
+
 /// @brief `FeedbackDistortion`'s own implementation - see `applyFilter()`'s
 /// docs. A one-pole recursive filter along the time axis (frames),
 /// independently per bin - `amount` is clamped to `[0, 0.99]` internally
@@ -800,6 +986,32 @@ std::vector<float> applyFeedbackDistortion(const std::vector<float>& grid, std::
         float previous = grid[rowStart];
         for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
             const std::size_t cell = rowStart + frame;
+            previous = (1.0f - amount) * grid[cell] + amount * previous;
+            result[cell] = previous;
+        }
+    }
+    return result;
+}
+
+/// @brief `applyFeedbackDistortion()` above, but with `feedbackAmount`
+/// evaluated fresh per cell via `amountAt(bin, frame)` - `v0.Y.38.1`'s own
+/// binding. Evaluated inline within the same per-bin recursive loop the
+/// unbound case already runs - the recursion's own coefficient simply
+/// varies by frame position, no restructuring needed.
+std::vector<float> applyFeedbackDistortionVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                                   std::uint32_t frameCount,
+                                                   const std::function<double(std::uint32_t, std::uint32_t)>& amountAt) {
+    if (frameCount == 0) {
+        return grid;
+    }
+    std::vector<float> result(grid.size());
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        const std::size_t rowStart = static_cast<std::size_t>(bin) * cols;
+        float previous = grid[rowStart];
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = rowStart + frame;
+            const float amount = std::clamp(static_cast<float>(amountAt(bin, frame)), 0.0f, 0.99f);
             previous = (1.0f - amount) * grid[cell] + amount * previous;
             result[cell] = previous;
         }
@@ -830,6 +1042,25 @@ std::vector<float> applySpectralWavefold(const std::vector<float>& grid, float f
     return result;
 }
 
+/// @brief `applySpectralWavefold()` above, but with `foldGain` evaluated
+/// fresh per cell via `gainAt(bin, frame)` - `v0.Y.38.1`'s own binding.
+/// Varies for free - each cell was already processed independently.
+std::vector<float> applySpectralWavefoldVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                                 std::uint32_t frameCount,
+                                                 const std::function<double(std::uint32_t, std::uint32_t)>& gainAt) {
+    std::vector<float> result(grid.size());
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * cols + frame;
+            const float gain = std::max(1.0f, static_cast<float>(gainAt(bin, frame)));
+            const float unit = dbToUnit(grid[cell]);
+            result[cell] = unitToDb(triangleFold(unit * gain));
+        }
+    }
+    return result;
+}
+
 // ---------------------------------------------------------------------------
 // v0.Y.36.1 Installment B: the rest of Tonal, plus the rest of Spectral
 // shaping.
@@ -851,6 +1082,27 @@ StreamImage applyChannelBalance(const StreamImage& composite, float balance) {
         result.rightMagnitudeDb[i] = linearAmplitudeToDb(total * b);
     }
     // Phase is left untouched, matching every other filter's own precedent.
+    return result;
+}
+
+/// @brief `applyChannelBalance()` above, but with `balance` evaluated
+/// fresh per cell via `balanceAt(bin, frame)` - `v0.Y.38.1`'s own binding.
+/// Varies for free - each cell was already processed independently.
+StreamImage applyChannelBalanceVarying(const StreamImage& composite, std::uint32_t binCount,
+                                        std::uint32_t frameCount,
+                                        const std::function<double(std::uint32_t, std::uint32_t)>& balanceAt) {
+    StreamImage result = composite;
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * cols + frame;
+            const float b = std::clamp(static_cast<float>(balanceAt(bin, frame)), 0.0f, 1.0f);
+            const float total = dbToLinearAmplitude(composite.leftMagnitudeDb[cell]) +
+                                 dbToLinearAmplitude(composite.rightMagnitudeDb[cell]);
+            result.leftMagnitudeDb[cell] = linearAmplitudeToDb(total * (1.0f - b));
+            result.rightMagnitudeDb[cell] = linearAmplitudeToDb(total * b);
+        }
+    }
     return result;
 }
 
@@ -936,6 +1188,29 @@ std::vector<float> applyConvolve(const std::vector<float>& grid, std::uint32_t b
     return result;
 }
 
+/// @brief `applyConvolve()` above, but with `amount` evaluated fresh per
+/// cell via `amountAt(bin, frame)` - `v0.Y.38.1`'s own `convolveAmount`
+/// binding. Varies for free: `convolve2D()` itself (the fixed kernel -
+/// neither `convolveKernel()` nor `convolveKernelSize()` bind, see
+/// `FilterConfiguration`'s own docs) runs exactly once; only the
+/// already-computed dry/wet blend varies per cell.
+std::vector<float> applyConvolveVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                         std::uint32_t frameCount, const std::vector<float>& kernel, int kernelSize,
+                                         bool normalize,
+                                         const std::function<double(std::uint32_t, std::uint32_t)>& amountAt) {
+    const auto convolved = convolve2D(grid, binCount, frameCount, kernel, kernelSize, normalize);
+    std::vector<float> result(grid.size());
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * cols + frame;
+            const float wet = std::clamp(static_cast<float>(amountAt(bin, frame)), 0.0f, 1.0f);
+            result[cell] = grid[cell] + wet * (convolved[cell] - grid[cell]);
+        }
+    }
+    return result;
+}
+
 // ---------------------------------------------------------------------------
 // v0.Y.36.1 Installment C: Geometric.
 // ---------------------------------------------------------------------------
@@ -985,6 +1260,33 @@ std::vector<float> applyDisplace(const std::vector<float>& grid, std::uint32_t b
     return result;
 }
 
+/// @brief `applyDisplace()` above, but with `distance`/`angleDegrees`
+/// evaluated fresh per cell via `distanceAt(bin, frame)`/`angleAt(bin,
+/// frame)` - `v0.Y.38.1`'s own bindings for both. A pixel-local parameter
+/// pair, per `docs/sound-mind-design.md`'s own explicit "offset
+/// distance"/"offset angle" examples - varies for free, `sampleBilinear()`
+/// was already called once per destination cell.
+std::vector<float> applyDisplaceVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                         std::uint32_t frameCount,
+                                         const std::function<double(std::uint32_t, std::uint32_t)>& distanceAt,
+                                         const std::function<double(std::uint32_t, std::uint32_t)>& angleAt) {
+    std::vector<float> result(grid.size());
+    for (std::uint32_t row = 0; row < binCount; ++row) {
+        for (std::uint32_t col = 0; col < frameCount; ++col) {
+            const auto distance = static_cast<float>(distanceAt(row, col));
+            const auto angleDegrees = static_cast<float>(angleAt(row, col));
+            const float angleRadians = angleDegrees * std::numbers::pi_v<float> / 180.0f;
+            const float dCol = distance * std::cos(angleRadians);
+            const float dRow = distance * std::sin(angleRadians);
+            const float sourceRow = static_cast<float>(row) - dRow;
+            const float sourceCol = static_cast<float>(col) - dCol;
+            result[static_cast<std::size_t>(row) * frameCount + col] =
+                sampleBilinear(grid, binCount, frameCount, sourceRow, sourceCol);
+        }
+    }
+    return result;
+}
+
 /// @brief `ChannelCycle`'s own implementation - see `applyFilter()`'s
 /// docs. The direct 3-channel analog of the legacy Python Studio's own
 /// `color_rotate()`: left loudness, right loudness, and phase are
@@ -1023,6 +1325,49 @@ StreamImage applyChannelCycle(const StreamImage& composite, float angleDegrees) 
         result.leftMagnitudeDb[i] = unitToDb(rotated[0]);
         result.rightMagnitudeDb[i] = unitToDb(rotated[1]);
         result.sharedPhaseRadians[i] = rotated[2] * twoPi;
+    }
+    return result;
+}
+
+/// @brief `applyChannelCycle()` above, but with `angleDegrees` evaluated
+/// fresh per cell via `angleAt(bin, frame)` - `v0.Y.38.1`'s own binding. A
+/// pixel-local parameter, per `docs/sound-mind-design.md`'s own explicit
+/// "hue-rotation angle" example - varies for free, `t`/`step`/`fraction`
+/// simply move inside the same per-cell loop the unbound case already runs.
+StreamImage applyChannelCycleVarying(const StreamImage& composite, std::uint32_t binCount, std::uint32_t frameCount,
+                                      const std::function<double(std::uint32_t, std::uint32_t)>& angleAt) {
+    StreamImage result = composite;
+    const auto cols = static_cast<std::size_t>(frameCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t i = static_cast<std::size_t>(bin) * cols + frame;
+            float wrappedDegrees = std::fmod(static_cast<float>(angleAt(bin, frame)), 360.0f);
+            if (wrappedDegrees < 0.0f) {
+                wrappedDegrees += 360.0f;
+            }
+            const float t = wrappedDegrees / 360.0f * 3.0f;
+            const int step = static_cast<int>(std::floor(t)) % 3;
+            const float fraction = t - std::floor(t);
+
+            const float twoPi = 2.0f * std::numbers::pi_v<float>;
+            float phaseTurns = std::fmod(composite.sharedPhaseRadians[i], twoPi) / twoPi;
+            if (phaseTurns < 0.0f) {
+                phaseTurns += 1.0f;
+            }
+            const std::array<float, 3> channels{dbToUnit(composite.leftMagnitudeDb[i]),
+                                                  dbToUnit(composite.rightMagnitudeDb[i]), phaseTurns};
+            std::array<float, 3> rotated{};
+            for (int destination = 0; destination < 3; ++destination) {
+                const int source0 = ((destination - step) % 3 + 3) % 3;
+                const int source1 = ((destination - step - 1) % 3 + 3) % 3;
+                rotated[static_cast<std::size_t>(destination)] =
+                    (1.0f - fraction) * channels[static_cast<std::size_t>(source0)] +
+                    fraction * channels[static_cast<std::size_t>(source1)];
+            }
+            result.leftMagnitudeDb[i] = unitToDb(rotated[0]);
+            result.rightMagnitudeDb[i] = unitToDb(rotated[1]);
+            result.sharedPhaseRadians[i] = rotated[2] * twoPi;
+        }
     }
     return result;
 }
@@ -1158,6 +1503,48 @@ std::vector<float> applyReverb(const std::vector<float>& grid, std::uint32_t bin
     return result;
 }
 
+/// @brief `applyReverb()` above, but with `mix` evaluated fresh per cell
+/// via `mixAt(bin, frame)` - `v0.Y.38.1`'s own `reverbMix` binding. Varies
+/// for free: the reverb tail itself (absorption/diffusion/impulse-response
+/// convolution - none of which bind, see `FilterConfiguration`'s own docs)
+/// is computed exactly once; only the already-computed dry/wet blend
+/// varies per cell.
+std::vector<float> applyReverbVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                       std::uint32_t frameCount, int preDelayFrames, int decayFrames, float roomSize,
+                                       float diffusion, float absorption,
+                                       const std::function<double(std::uint32_t, std::uint32_t)>& mixAt) {
+    const auto absorptionCurveDb = buildReverbAbsorptionCurveDb(binCount, absorption);
+    std::vector<float> absorbed(grid.size());
+    for (std::uint32_t row = 0; row < binCount; ++row) {
+        for (std::uint32_t col = 0; col < frameCount; ++col) {
+            const std::size_t cell = static_cast<std::size_t>(row) * frameCount + col;
+            absorbed[cell] = grid[cell] + absorptionCurveDb[row];
+        }
+    }
+    const auto diffused = blurAlongFrequencyAxis(absorbed, binCount, frameCount, diffusion * 3.0f);
+    const auto ir = buildReverbImpulseResponse(preDelayFrames, decayFrames, roomSize);
+
+    std::vector<float> result(grid.size());
+    for (std::uint32_t row = 0; row < binCount; ++row) {
+        const std::size_t rowStart = static_cast<std::size_t>(row) * frameCount;
+        for (std::uint32_t col = 0; col < frameCount; ++col) {
+            float wetLinearSum = 0.0f;
+            for (std::size_t k = 0; k < ir.size(); ++k) {
+                if (static_cast<std::size_t>(col) < k) {
+                    break;
+                }
+                const std::size_t sourceCol = col - k;
+                wetLinearSum += dbToLinearAmplitude(diffused[rowStart + sourceCol]) * ir[k];
+            }
+            const std::size_t cell = rowStart + col;
+            const float wetDb = linearAmplitudeToDb(wetLinearSum);
+            const float wet = std::clamp(static_cast<float>(mixAt(row, col)), 0.0f, 1.0f);
+            result[cell] = grid[cell] + wet * (wetDb - grid[cell]);
+        }
+    }
+    return result;
+}
+
 }  // namespace
 
 StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration& config,
@@ -1243,48 +1630,151 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
         case FilterType::ToneCurve:
             return applyToneCurve(composite, config.toneCurvePoints());
         case FilterType::SpeckleAdd:
+            if (mindWaves.speckleDensity != nullptr || mindWaves.speckleIntensity != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applySpeckleAddVarying(
+                            grid, bins, frames, config.noiseSeed(),
+                            [&](std::uint32_t bin, std::uint32_t frame) {
+                                return perCellParameterValue(mindWaves.speckleDensity, 0.0, config.speckleDensity(),
+                                                              bin, frame, streamConfig);
+                            },
+                            [&](std::uint32_t bin, std::uint32_t frame) {
+                                return perCellParameterValue(mindWaves.speckleIntensity, 0.0,
+                                                              config.speckleIntensity(), bin, frame, streamConfig);
+                            });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
                     return applySpeckleAdd(grid, bins, frames, config.noiseSeed(), config.speckleDensity(),
                                             config.speckleIntensity());
                 });
         case FilterType::SpeckleRemove:
+            if (mindWaves.speckleThreshold != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applySpeckleRemoveVarying(grid, bins, frames, [&](std::uint32_t bin, std::uint32_t frame) {
+                            return perCellParameterValue(mindWaves.speckleThreshold, 96.0, config.speckleThresholdDb(),
+                                                          bin, frame, streamConfig);
+                        });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
                     return applySpeckleRemove(grid, bins, frames, config.speckleThresholdDb());
                 });
         case FilterType::Denoise:
+            if (mindWaves.noiseFloor != nullptr || mindWaves.reduction != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applyDenoiseVarying(
+                            grid, bins, frames,
+                            [&](std::uint32_t bin, std::uint32_t frame) {
+                                return perCellParameterValue(mindWaves.noiseFloor, -96.0, config.noiseFloorDb(), bin,
+                                                              frame, streamConfig);
+                            },
+                            [&](std::uint32_t bin, std::uint32_t frame) {
+                                return perCellParameterValue(mindWaves.reduction, 0.0, config.reductionDb(), bin,
+                                                              frame, streamConfig);
+                            });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t, std::uint32_t) {
                     return applyDenoise(grid, config.noiseFloorDb(), config.reductionDb());
                 });
         case FilterType::BitDepthCrush:
+            if (mindWaves.crushAmount != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applyBitDepthCrushVarying(grid, bins, frames, [&](std::uint32_t bin, std::uint32_t frame) {
+                            return perCellParameterValue(mindWaves.crushAmount, 0.0, config.crushAmount(), bin, frame,
+                                                          streamConfig);
+                        });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t, std::uint32_t) {
                     return applyBitDepthCrush(grid, config.crushAmount());
                 });
         case FilterType::GranularNoise:
+            if (mindWaves.grainAmount != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applyGranularNoiseVarying(grid, bins, frames, config.noiseSeed(), config.grainSize(),
+                                                          [&](std::uint32_t bin, std::uint32_t frame) {
+                                                              return perCellParameterValue(mindWaves.grainAmount, 0.0,
+                                                                                            config.grainAmountDb(),
+                                                                                            bin, frame, streamConfig);
+                                                          });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
                     return applyGranularNoise(grid, bins, frames, config.noiseSeed(), config.grainSize(),
                                                config.grainAmountDb());
                 });
         case FilterType::DynamicSpeckle:
+            if (mindWaves.speckleDensity != nullptr || mindWaves.speckleIntensity != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applyDynamicSpeckleVarying(
+                            grid, bins, frames,
+                            [&](std::uint32_t bin, std::uint32_t frame) {
+                                return perCellParameterValue(mindWaves.speckleDensity, 0.0, config.speckleDensity(),
+                                                              bin, frame, streamConfig);
+                            },
+                            [&](std::uint32_t bin, std::uint32_t frame) {
+                                return perCellParameterValue(mindWaves.speckleIntensity, 0.0,
+                                                              config.speckleIntensity(), bin, frame, streamConfig);
+                            });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
                     return applyDynamicSpeckle(grid, bins, frames, config.speckleDensity(), config.speckleIntensity());
                 });
         case FilterType::FeedbackDistortion:
+            if (mindWaves.feedbackAmount != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applyFeedbackDistortionVarying(grid, bins, frames,
+                                                               [&](std::uint32_t bin, std::uint32_t frame) {
+                                                                   return perCellParameterValue(
+                                                                       mindWaves.feedbackAmount, 0.0,
+                                                                       config.feedbackAmount(), bin, frame,
+                                                                       streamConfig);
+                                                               });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
                     return applyFeedbackDistortion(grid, bins, frames, config.feedbackAmount());
                 });
         case FilterType::SpectralWavefold:
+            if (mindWaves.foldGain != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applySpectralWavefoldVarying(grid, bins, frames, [&](std::uint32_t bin, std::uint32_t frame) {
+                            return perCellParameterValue(mindWaves.foldGain, 1.0, config.foldGain(), bin, frame,
+                                                          streamConfig);
+                        });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t, std::uint32_t) {
                     return applySpectralWavefold(grid, config.foldGain());
                 });
         case FilterType::ChannelBalance:
+            if (mindWaves.channelBalance != nullptr) {
+                return applyChannelBalanceVarying(composite, binCount, frameCount,
+                                                   [&](std::uint32_t bin, std::uint32_t frame) {
+                                                       return perCellParameterValue(mindWaves.channelBalance, 0.5,
+                                                                                     config.channelBalance(), bin,
+                                                                                     frame, streamConfig);
+                                                   });
+            }
             return applyChannelBalance(composite, config.channelBalance());
         case FilterType::Invert:
             return applyPerChannelGridFilter(
@@ -1292,19 +1782,67 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
                     return applyInvert(grid);
                 });
         case FilterType::Convolve:
+            if (mindWaves.convolveAmount != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applyConvolveVarying(grid, bins, frames, config.convolveKernel(),
+                                                     config.convolveKernelSize(), config.convolveNormalize(),
+                                                     [&](std::uint32_t bin, std::uint32_t frame) {
+                                                         return perCellParameterValue(mindWaves.convolveAmount, 0.0,
+                                                                                       config.convolveAmount(), bin,
+                                                                                       frame, streamConfig);
+                                                     });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
                     return applyConvolve(grid, bins, frames, config.convolveKernel(), config.convolveKernelSize(),
                                           config.convolveNormalize(), config.convolveAmount());
                 });
         case FilterType::Displace:
+            if (mindWaves.displaceDistance != nullptr || mindWaves.displaceAngle != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applyDisplaceVarying(
+                            grid, bins, frames,
+                            [&](std::uint32_t bin, std::uint32_t frame) {
+                                return perCellParameterValue(mindWaves.displaceDistance, 0.0,
+                                                              config.displaceDistance(), bin, frame, streamConfig);
+                            },
+                            [&](std::uint32_t bin, std::uint32_t frame) {
+                                return perCellParameterValue(mindWaves.displaceAngle, 0.0,
+                                                              config.displaceAngleDegrees(), bin, frame, streamConfig);
+                            });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
                     return applyDisplace(grid, bins, frames, config.displaceDistance(), config.displaceAngleDegrees());
                 });
         case FilterType::ChannelCycle:
+            if (mindWaves.channelCycleAngle != nullptr) {
+                return applyChannelCycleVarying(composite, binCount, frameCount,
+                                                 [&](std::uint32_t bin, std::uint32_t frame) {
+                                                     return perCellParameterValue(mindWaves.channelCycleAngle, 0.0,
+                                                                                   config.channelCycleAngleDegrees(),
+                                                                                   bin, frame, streamConfig);
+                                                 });
+            }
             return applyChannelCycle(composite, config.channelCycleAngleDegrees());
         case FilterType::SpectralReverb:
+            if (mindWaves.reverbMix != nullptr) {
+                return applyPerChannelGridFilter(
+                    composite, [&](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applyReverbVarying(grid, bins, frames, config.reverbPreDelayFrames(),
+                                                   config.reverbDecayFrames(), config.reverbRoomSize(),
+                                                   config.reverbDiffusion(), config.reverbAbsorption(),
+                                                   [&](std::uint32_t bin, std::uint32_t frame) {
+                                                       return perCellParameterValue(mindWaves.reverbMix, 0.0,
+                                                                                     config.reverbMix(), bin, frame,
+                                                                                     streamConfig);
+                                                   });
+                    });
+            }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
                     return applyReverb(grid, bins, frames, config.reverbPreDelayFrames(), config.reverbDecayFrames(),

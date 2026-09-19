@@ -32,6 +32,39 @@ struct FilterParameterMindWaves {
     const MindWave* directionalBlurAngle = nullptr;
     /// @brief Resolved `FilterConfiguration::sharpenAmountMindWave()`.
     const MindWave* sharpenAmount = nullptr;
+
+    // v0.Y.38.1 (Filter Parameter Binding Completion).
+
+    /// @brief Resolved `FilterConfiguration::speckleDensityMindWave()`.
+    const MindWave* speckleDensity = nullptr;
+    /// @brief Resolved `FilterConfiguration::speckleIntensityMindWave()`.
+    const MindWave* speckleIntensity = nullptr;
+    /// @brief Resolved `FilterConfiguration::speckleThresholdMindWave()`.
+    const MindWave* speckleThreshold = nullptr;
+    /// @brief Resolved `FilterConfiguration::noiseFloorMindWave()`.
+    const MindWave* noiseFloor = nullptr;
+    /// @brief Resolved `FilterConfiguration::reductionMindWave()`.
+    const MindWave* reduction = nullptr;
+    /// @brief Resolved `FilterConfiguration::crushAmountMindWave()`.
+    const MindWave* crushAmount = nullptr;
+    /// @brief Resolved `FilterConfiguration::grainAmountMindWave()`.
+    const MindWave* grainAmount = nullptr;
+    /// @brief Resolved `FilterConfiguration::feedbackAmountMindWave()`.
+    const MindWave* feedbackAmount = nullptr;
+    /// @brief Resolved `FilterConfiguration::foldGainMindWave()`.
+    const MindWave* foldGain = nullptr;
+    /// @brief Resolved `FilterConfiguration::channelBalanceMindWave()`.
+    const MindWave* channelBalance = nullptr;
+    /// @brief Resolved `FilterConfiguration::convolveAmountMindWave()`.
+    const MindWave* convolveAmount = nullptr;
+    /// @brief Resolved `FilterConfiguration::displaceDistanceMindWave()`.
+    const MindWave* displaceDistance = nullptr;
+    /// @brief Resolved `FilterConfiguration::displaceAngleMindWave()`.
+    const MindWave* displaceAngle = nullptr;
+    /// @brief Resolved `FilterConfiguration::channelCycleAngleMindWave()`.
+    const MindWave* channelCycleAngle = nullptr;
+    /// @brief Resolved `FilterConfiguration::reverbMixMindWave()`.
+    const MindWave* reverbMix = nullptr;
 };
 
 /**
@@ -113,9 +146,10 @@ struct FilterParameterMindWaves {
  *   `SpectralWavefold`** (`v0.Y.36.1` Installment A, "Noise & distortion"):
  *   all eight operate on `leftMagnitudeDb`/`rightMagnitudeDb`
  *   independently, directly in dB space, phase left untouched - the same
- *   contract every prior filter type keeps. None of the eight bind to a
- *   MindWave yet (see `FilterConfiguration`'s own docs for why that's a
- *   deliberate deferral, not an oversight).
+ *   contract every prior filter type keeps. As of `v0.Y.38.1` (Filter
+ *   Parameter Binding Completion), every one of the eight has at least one
+ *   bindable parameter - see each one's own bullet below, and
+ *   `FilterConfiguration`'s own docs for the full list.
  *   - `SpeckleAdd`: randomly boosts `speckleDensity()`'s own fraction of
  *     cells toward `0`dB by `speckleIntensity()`, deterministically -
  *     which cells get hit is a hash of `noiseSeed()` and the cell's own
@@ -157,9 +191,12 @@ struct FilterParameterMindWaves {
  * - **`ChannelBalance`/`Invert`/`Convolve`** (`v0.Y.36.1` Installment B,
  *   the rest of Tonal plus the rest of Spectral shaping): confirmed with
  *   the user directly against the legacy Python Studio's own
- *   implementations of all three. None of the three bind to a MindWave
- *   yet, the same deliberate deferral Installment A's eight Noise &
- *   distortion types already established.
+ *   implementations of all three. As of `v0.Y.38.1`, `channelBalance()`
+ *   and `convolveAmount()` bind to a MindWave; `Invert` has no parameters
+ *   of its own to bind, and `convolveKernel()`/`convolveKernelSize()`/
+ *   `convolveNormalize()` remain deliberately unbound (a kernel matrix has
+ *   no well-defined per-cell "size" - see `FilterConfiguration`'s own
+ *   docs).
  *   - `ChannelBalance`: the **only** filter type that genuinely mixes the
  *     two channels together rather than processing each independently -
  *     an energy-conserving pan law in *linear* amplitude (dB values can't
@@ -197,9 +234,11 @@ struct FilterParameterMindWaves {
  *
  * - **`Displace`/`ChannelCycle`** (`v0.Y.36.1` Installment C, "Geometric"):
  *   confirmed with the user directly against the legacy Python Studio's
- *   own implementations of both. Neither binds to a MindWave yet, the
- *   same deliberate deferral every other `v0.Y.36.1` installment
- *   established.
+ *   own implementations of both. As of `v0.Y.38.1`, `displaceDistance()`/
+ *   `displaceAngleDegrees()`/`channelCycleAngleDegrees()` all bind to a
+ *   MindWave - each is the exact kind of pixel-local parameter
+ *   `docs/sound-mind-design.md`'s own "Filter parameters" section names
+ *   as its own example (an offset distance/angle, a hue-rotation angle).
  *   - `Displace`: shifts content from a source position offset by
  *     `(displaceDistance() * cos(angle), displaceDistance() * sin(angle))`
  *     - the same `0`°-along-time-axis/`90`°-along-frequency-axis
@@ -254,7 +293,12 @@ struct FilterParameterMindWaves {
  *      convention above.
  *   4. **Mix** (`reverbMix()`): a plain dB-space dry/wet crossfade,
  *      matching `Convolve`'s own established blend shape - `0` is a true
- *      no-op regardless of every other parameter.
+ *      no-op regardless of every other parameter. As of `v0.Y.38.1`, this
+ *      is the only one of `SpectralReverb`'s own six parameters that
+ *      binds to a MindWave - the other five shape a temporal impulse
+ *      response/frequency-axis blur kernel shared across many
+ *      frames/bins, not an independent per-cell value (see
+ *      `FilterConfiguration`'s own docs).
  *   Phase is left untouched, matching every filter type built so far.
  *
  * As of `v0.Y.31.1` (MindWaves v1) Installment D, any of the four
@@ -275,6 +319,16 @@ struct FilterParameterMindWaves {
  * has no true "no effect" angle, so `0`° is a natural default rather than
  * a claimed no-op) where it's dark. `ToneCurve`/`FrequencyAxisGradient`
  * have no bindable parameter at all - neither has a single number to bind.
+ *
+ * As of `v0.Y.38.1` (Filter Parameter Binding Completion), fifteen more
+ * parameters bind the same way - every one of them varies for free (like
+ * `sharpenAmount`, not like the four kernel-shape parameters above), since
+ * each is either genuinely pixel-local or a post-hoc per-cell blend after
+ * an unbound, fixed-shape computation - see `FilterConfiguration`'s own
+ * docs for the complete list and each parameter's own "no effect" baseline,
+ * and `SpeckleAdd`'s/`DynamicSpeckle`'s/`GranularNoise`'s own bullets above
+ * for the block-vs-per-cell granularity their own shared/block-based
+ * parameters use.
  *
  * @param composite The running composite to filter - everything visible
  *        beneath the Filter layer this configuration belongs to, already

@@ -62,6 +62,22 @@ void to_json(nlohmann::json& json, const FilterConfiguration& config) {
     writeOptionalMindWaveId(json, "directionalBlurLengthMindWaveId", config.directionalBlurLengthMindWave_);
     writeOptionalMindWaveId(json, "directionalBlurAngleMindWaveId", config.directionalBlurAngleMindWave_);
     writeOptionalMindWaveId(json, "sharpenAmountMindWaveId", config.sharpenAmountMindWave_);
+    // v0.Y.38.1 (Filter Parameter Binding Completion).
+    writeOptionalMindWaveId(json, "speckleDensityMindWaveId", config.speckleDensityMindWave_);
+    writeOptionalMindWaveId(json, "speckleIntensityMindWaveId", config.speckleIntensityMindWave_);
+    writeOptionalMindWaveId(json, "speckleThresholdMindWaveId", config.speckleThresholdMindWave_);
+    writeOptionalMindWaveId(json, "noiseFloorMindWaveId", config.noiseFloorMindWave_);
+    writeOptionalMindWaveId(json, "reductionMindWaveId", config.reductionMindWave_);
+    writeOptionalMindWaveId(json, "crushAmountMindWaveId", config.crushAmountMindWave_);
+    writeOptionalMindWaveId(json, "grainAmountMindWaveId", config.grainAmountMindWave_);
+    writeOptionalMindWaveId(json, "feedbackAmountMindWaveId", config.feedbackAmountMindWave_);
+    writeOptionalMindWaveId(json, "foldGainMindWaveId", config.foldGainMindWave_);
+    writeOptionalMindWaveId(json, "channelBalanceMindWaveId", config.channelBalanceMindWave_);
+    writeOptionalMindWaveId(json, "convolveAmountMindWaveId", config.convolveAmountMindWave_);
+    writeOptionalMindWaveId(json, "displaceDistanceMindWaveId", config.displaceDistanceMindWave_);
+    writeOptionalMindWaveId(json, "displaceAngleMindWaveId", config.displaceAngleMindWave_);
+    writeOptionalMindWaveId(json, "channelCycleAngleMindWaveId", config.channelCycleAngleMindWave_);
+    writeOptionalMindWaveId(json, "reverbMixMindWaveId", config.reverbMixMindWave_);
 }
 
 void from_json(const nlohmann::json& json, FilterConfiguration& config) {
@@ -112,6 +128,24 @@ void from_json(const nlohmann::json& json, FilterConfiguration& config) {
     config.reverbDiffusion_ = json.value("reverbDiffusion", config.reverbDiffusion_);
     config.reverbAbsorption_ = json.value("reverbAbsorption", config.reverbAbsorption_);
     config.reverbMix_ = json.value("reverbMix", config.reverbMix_);
+    // Lenient (defaults to unbound if absent) - didn't exist before
+    // v0.Y.38.1 (Filter Parameter Binding Completion); a configuration
+    // saved before this milestone was never bound on any of these anyway.
+    config.speckleDensityMindWave_ = readOptionalMindWaveId(json, "speckleDensityMindWaveId");
+    config.speckleIntensityMindWave_ = readOptionalMindWaveId(json, "speckleIntensityMindWaveId");
+    config.speckleThresholdMindWave_ = readOptionalMindWaveId(json, "speckleThresholdMindWaveId");
+    config.noiseFloorMindWave_ = readOptionalMindWaveId(json, "noiseFloorMindWaveId");
+    config.reductionMindWave_ = readOptionalMindWaveId(json, "reductionMindWaveId");
+    config.crushAmountMindWave_ = readOptionalMindWaveId(json, "crushAmountMindWaveId");
+    config.grainAmountMindWave_ = readOptionalMindWaveId(json, "grainAmountMindWaveId");
+    config.feedbackAmountMindWave_ = readOptionalMindWaveId(json, "feedbackAmountMindWaveId");
+    config.foldGainMindWave_ = readOptionalMindWaveId(json, "foldGainMindWaveId");
+    config.channelBalanceMindWave_ = readOptionalMindWaveId(json, "channelBalanceMindWaveId");
+    config.convolveAmountMindWave_ = readOptionalMindWaveId(json, "convolveAmountMindWaveId");
+    config.displaceDistanceMindWave_ = readOptionalMindWaveId(json, "displaceDistanceMindWaveId");
+    config.displaceAngleMindWave_ = readOptionalMindWaveId(json, "displaceAngleMindWaveId");
+    config.channelCycleAngleMindWave_ = readOptionalMindWaveId(json, "channelCycleAngleMindWaveId");
+    config.reverbMixMindWave_ = readOptionalMindWaveId(json, "reverbMixMindWaveId");
 }
 
 }  // namespace sound_mind::core

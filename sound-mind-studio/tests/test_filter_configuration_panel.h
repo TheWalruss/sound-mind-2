@@ -70,4 +70,11 @@ private slots:
     void selectingSpectralReverbShowsOnlyItsOwnGroup();
     void changingEverySpectralReverbControlUpdatesConfigAndEmits();
     void setFilterConfigurationSyncsSpectralReverbWithoutEmitting();
+
+    // --- v0.Y.38.1: Filter Parameter Binding Completion ---
+    void freshNewCombosOfferOnlyNoneUntilSetAvailableMindWavesIsCalled();
+    void setAvailableMindWavesPopulatesEveryNewCombo();
+    void changingANewBindComboEmitsFilterConfigurationChangedWithTheNewBinding();
+    void selectingNoneOnANewComboUnbindsAndEmits();
+    void setFilterConfigurationSyncsAllFifteenNewCombosWithoutEmitting();
 };

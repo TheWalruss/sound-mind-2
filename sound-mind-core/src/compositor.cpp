@@ -120,10 +120,12 @@ constexpr float kMinLinearAmplitude = 1e-7f;
     return named ? &named->wave : nullptr;
 }
 
-/// @brief `config`'s own five bindable filter parameters, each resolved
+/// @brief `config`'s own twenty bindable filter parameters, each resolved
 /// against `project`'s own library - `v0.Y.31.1` Installment D's own
-/// filter-parameter-binding entry point, the `FilterConfiguration`-level
-/// counterpart to `resolveOpacityMindWave()`.
+/// filter-parameter-binding entry point (the first five), extended by
+/// `v0.Y.38.1` (Filter Parameter Binding Completion) to the remaining
+/// fifteen - the `FilterConfiguration`-level counterpart to
+/// `resolveOpacityMindWave()`.
 [[nodiscard]] FilterParameterMindWaves resolveFilterParameterMindWaves(const FilterConfiguration& config,
                                                                         const Project& project) noexcept {
     return FilterParameterMindWaves{
@@ -132,6 +134,21 @@ constexpr float kMinLinearAmplitude = 1e-7f;
         resolveMindWaveId(config.directionalBlurLengthMindWave(), project),
         resolveMindWaveId(config.directionalBlurAngleMindWave(), project),
         resolveMindWaveId(config.sharpenAmountMindWave(), project),
+        resolveMindWaveId(config.speckleDensityMindWave(), project),
+        resolveMindWaveId(config.speckleIntensityMindWave(), project),
+        resolveMindWaveId(config.speckleThresholdMindWave(), project),
+        resolveMindWaveId(config.noiseFloorMindWave(), project),
+        resolveMindWaveId(config.reductionMindWave(), project),
+        resolveMindWaveId(config.crushAmountMindWave(), project),
+        resolveMindWaveId(config.grainAmountMindWave(), project),
+        resolveMindWaveId(config.feedbackAmountMindWave(), project),
+        resolveMindWaveId(config.foldGainMindWave(), project),
+        resolveMindWaveId(config.channelBalanceMindWave(), project),
+        resolveMindWaveId(config.convolveAmountMindWave(), project),
+        resolveMindWaveId(config.displaceDistanceMindWave(), project),
+        resolveMindWaveId(config.displaceAngleMindWave(), project),
+        resolveMindWaveId(config.channelCycleAngleMindWave(), project),
+        resolveMindWaveId(config.reverbMixMindWave(), project),
     };
 }
 

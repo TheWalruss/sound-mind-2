@@ -159,15 +159,27 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
  * own `*MindWave()` accessor and `docs/sound-mind-design.md`'s "Filter
  * parameters". `toneCurvePoints`/`frequencyGradient` have no such binding:
  * neither is a single number, so there's nothing for a MindWave's own
- * `[0, 1]` output to become the *value* of. **The eight `v0.Y.36.1`
- * Installment A "Noise & distortion" parameters, Installment B's own
- * `channelBalance`/`convolveKernel`-family fields, Installment C's own
- * `displace`/`channelCycle` fields, and Installment D's own `reverb*`
- * fields below, all have no MindWave binding either, deliberately** -
- * matching how the original six filter types shipped unbound in
- * `v0.Y.28.1` and only gained binding in a later, dedicated milestone
- * (`v0.Y.31.1` Installment D); binding these is left the same way, a
- * known future-work item, not attempted here.
+ * `[0, 1]` output to become the *value* of.
+ *
+ * As of `v0.Y.38.1` (Filter Parameter Binding Completion), fifteen more
+ * parameters across every filter type `v0.Y.36.1` added can also bind to a
+ * MindWave, each documented on its own `*MindWave()` accessor:
+ * `speckleDensity`/`speckleIntensity` (shared), `speckleThresholdDb`,
+ * `noiseFloorDb`/`reductionDb`, `crushAmount`, `grainAmountDb`,
+ * `feedbackAmount`, `foldGain`, `channelBalance`, `convolveAmount`,
+ * `displaceDistance`/`displaceAngleDegrees`, `channelCycleAngleDegrees`,
+ * and `reverbMix`. **Three parameters remain deliberately unbound** -
+ * `grainSize`, `convolveKernel`/`convolveKernelSize`/`convolveNormalize`,
+ * and `reverbPreDelayFrames`/`reverbDecayFrames`/`reverbRoomSize`/
+ * `reverbDiffusion`/`reverbAbsorption` - each shapes a fixed-size
+ * structure or a computation spanning many cells at once (a kernel
+ * matrix, a block partition, a temporal impulse response/frequency-axis
+ * blur), not an independent per-cell value with a well-defined "this
+ * cell's own value" the way every bindable parameter above has; see
+ * `docs/sound-mind-roadmap.md`'s own `v0.Y.38.1` entry for the full
+ * reasoning. This is a known, permanent limitation of the current
+ * per-cell binding mechanism, not a deferred future-work item the way the
+ * fifteen above were before this milestone.
  */
 class FilterConfiguration {
 public:
@@ -425,6 +437,28 @@ public:
     void setSpeckleDensity(float density) noexcept { speckleDensity_ = density; }
 
     /**
+     * @brief The MindWave (if any) `speckleDensity()` is bound to -
+     *        `v0.Y.38.1` (Filter Parameter Binding Completion), see
+     *        `blurSigmaMindWave()`'s own docs for the general mechanism.
+     *        Falls toward `0` (no speckles at all) where the wave is dark.
+     *        For `SpeckleAdd`, evaluated per cell (whether a given cell is
+     *        "hit" is a hash compared against this cell's own density
+     *        value); for `DynamicSpeckle`, evaluated once per its own 2x2
+     *        block (at the block's own top-left cell), matching that
+     *        filter's own block-uniform granularity - see
+     *        `applyFilter()`'s own docs.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `speckleDensity()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> speckleDensityMindWave() const noexcept { return speckleDensityMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `speckleDensity()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setSpeckleDensityMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        speckleDensityMindWave_ = mindWaveId;
+    }
+
+    /**
      * @brief `SpeckleAdd`/`DynamicSpeckle`'s own shared intensity - how far
      *        a hit cell blends toward full loudness (`0`dB), in `[0, 1]`
      *        (`0` = no change even when hit, `1` = jumps all the way to
@@ -437,6 +471,17 @@ public:
     /// @brief Sets `SpeckleAdd`/`DynamicSpeckle`'s own shared intensity.
     /// @param intensity The new intensity, intended within `[0, 1]`.
     void setSpeckleIntensity(float intensity) noexcept { speckleIntensity_ = intensity; }
+
+    /// @copydoc speckleDensityMindWave()
+    [[nodiscard]] std::optional<MindWaveId> speckleIntensityMindWave() const noexcept {
+        return speckleIntensityMindWave_;
+    }
+
+    /// @brief Sets (or clears) which MindWave `speckleIntensity()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setSpeckleIntensityMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        speckleIntensityMindWave_ = mindWaveId;
+    }
 
     /**
      * @brief `SpeckleRemove`'s own outlier threshold, in dB - a cell more
@@ -453,6 +498,26 @@ public:
     void setSpeckleThresholdDb(float thresholdDb) noexcept { speckleThresholdDb_ = thresholdDb; }
 
     /**
+     * @brief The MindWave (if any) `speckleThresholdDb()` is bound to -
+     *        `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Falls toward `96` dB (larger than any real
+     *        difference within this codebase's own `-96..0` dB range, so
+     *        no cell ever qualifies as an outlier - a true no-op) where
+     *        the wave is dark.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `speckleThresholdDb()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> speckleThresholdMindWave() const noexcept {
+        return speckleThresholdMindWave_;
+    }
+
+    /// @brief Sets (or clears) which MindWave `speckleThresholdDb()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setSpeckleThresholdMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        speckleThresholdMindWave_ = mindWaveId;
+    }
+
+    /**
      * @brief `Denoise`'s own noise-floor threshold, in dB - cells at or
      *        below this loudness (with a soft knee, not a hard cutoff)
      *        are attenuated by up to `reductionDb()`.
@@ -464,6 +529,22 @@ public:
     /// @brief Sets `Denoise`'s own noise-floor threshold.
     /// @param floorDb The new floor, in dB.
     void setNoiseFloorDb(float floorDb) noexcept { noiseFloorDb_ = floorDb; }
+
+    /**
+     * @brief The MindWave (if any) `noiseFloorDb()` is bound to -
+     *        `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Falls toward `-96` dB (the absolute
+     *        silence floor - nothing real content ever falls below it, so
+     *        no attenuation is ever triggered - a true no-op) where the
+     *        wave is dark.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `noiseFloorDb()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> noiseFloorMindWave() const noexcept { return noiseFloorMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `noiseFloorDb()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setNoiseFloorMindWave(std::optional<MindWaveId> mindWaveId) noexcept { noiseFloorMindWave_ = mindWaveId; }
 
     /**
      * @brief `Denoise`'s own maximum attenuation, in dB - applied in full
@@ -479,6 +560,20 @@ public:
     void setReductionDb(float reductionDb) noexcept { reductionDb_ = reductionDb; }
 
     /**
+     * @brief The MindWave (if any) `reductionDb()` is bound to -
+     *        `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Falls toward `0` dB (no attenuation - a
+     *        true no-op) where the wave is dark.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `reductionDb()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> reductionMindWave() const noexcept { return reductionMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `reductionDb()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setReductionMindWave(std::optional<MindWaveId> mindWaveId) noexcept { reductionMindWave_ = mindWaveId; }
+
+    /**
      * @brief `BitDepthCrush`'s own strength, in `[0, 1]` - `0` is a true
      *        no-op (identity, no quantization at all); `1` quantizes down
      *        to a harsh, roughly 2-level loudness range.
@@ -490,6 +585,20 @@ public:
     /// @brief Sets `BitDepthCrush`'s own strength.
     /// @param amount The new amount, intended within `[0, 1]`.
     void setCrushAmount(float amount) noexcept { crushAmount_ = amount; }
+
+    /**
+     * @brief The MindWave (if any) `crushAmount()` is bound to -
+     *        `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Falls toward `0` (no quantization - a
+     *        true no-op) where the wave is dark.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `crushAmount()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> crushAmountMindWave() const noexcept { return crushAmountMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `crushAmount()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setCrushAmountMindWave(std::optional<MindWaveId> mindWaveId) noexcept { crushAmountMindWave_ = mindWaveId; }
 
     /**
      * @brief `GranularNoise`'s own block size, in bins/columns - the
@@ -519,6 +628,25 @@ public:
     void setGrainAmountDb(float amountDb) noexcept { grainAmountDb_ = amountDb; }
 
     /**
+     * @brief The MindWave (if any) `grainAmountDb()` is bound to -
+     *        `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Falls toward `0` dB (no offset - a true
+     *        no-op) where the wave is dark. Evaluated once per block (at
+     *        its own top-left cell), matching `grainSize()`'s own
+     *        block-uniform granularity - `grainSize()` itself has no
+     *        binding of its own (a block size varying per cell has no
+     *        well-defined meaning - see `docs/sound-mind-roadmap.md`'s own
+     *        `v0.Y.38.1` entry).
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `grainAmountDb()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> grainAmountMindWave() const noexcept { return grainAmountMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `grainAmountDb()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setGrainAmountMindWave(std::optional<MindWaveId> mindWaveId) noexcept { grainAmountMindWave_ = mindWaveId; }
+
+    /**
      * @brief `FeedbackDistortion`'s own resonance amount, in `[0, 1)` - a
      *        one-pole recursive filter along the time axis per bin
      *        (`y[frame] = (1 - amount) * x[frame] + amount * y[frame -
@@ -536,6 +664,27 @@ public:
     void setFeedbackAmount(float amount) noexcept { feedbackAmount_ = amount; }
 
     /**
+     * @brief The MindWave (if any) `feedbackAmount()` is bound to -
+     *        `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Falls toward `0` (no feedback - a true
+     *        no-op) where the wave is dark. Evaluated fresh at every
+     *        frame within the same per-bin recursive loop the unbound case
+     *        already runs - the recursion's own coefficient simply varies
+     *        by position along the way, no restructuring needed.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `feedbackAmount()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> feedbackAmountMindWave() const noexcept {
+        return feedbackAmountMindWave_;
+    }
+
+    /// @brief Sets (or clears) which MindWave `feedbackAmount()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setFeedbackAmountMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        feedbackAmountMindWave_ = mindWaveId;
+    }
+
+    /**
      * @brief `SpectralWavefold`'s own pre-fold gain - `1.0` is a true
      *        no-op (identity); higher values push loudness further past
      *        the fold threshold, producing progressively more folds (and
@@ -548,6 +697,22 @@ public:
     /// @brief Sets `SpectralWavefold`'s own pre-fold gain.
     /// @param gain The new gain; intended to be at least `1.0`.
     void setFoldGain(float gain) noexcept { foldGain_ = gain; }
+
+    /**
+     * @brief The MindWave (if any) `foldGain()` is bound to - `v0.Y.38.1`,
+     *        see `blurSigmaMindWave()`'s own docs for the general
+     *        mechanism. Falls toward `1.0` (no folding - a true no-op)
+     *        where the wave is dark, unlike most other bindable amounts
+     *        here (which fall toward `0`) - `foldGain()`'s own no-op value
+     *        is `1.0`, not `0`, matching its own docs.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `foldGain()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> foldGainMindWave() const noexcept { return foldGainMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `foldGain()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setFoldGainMindWave(std::optional<MindWaveId> mindWaveId) noexcept { foldGainMindWave_ = mindWaveId; }
 
     /**
      * @brief `ChannelBalance`'s own balance, in `[0, 1]` - confirmed with
@@ -567,6 +732,26 @@ public:
     /// @brief Sets `ChannelBalance`'s own balance.
     /// @param balance The new balance, intended within `[0, 1]`.
     void setChannelBalance(float balance) noexcept { channelBalance_ = balance; }
+
+    /**
+     * @brief The MindWave (if any) `channelBalance()` is bound to -
+     *        `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Falls toward `0.5` (the parameter's own
+     *        structurally-neutral value - see `channelBalance()`'s own
+     *        docs on why this, unlike a true no-op, still depends on the
+     *        input) where the wave is dark.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `channelBalance()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> channelBalanceMindWave() const noexcept {
+        return channelBalanceMindWave_;
+    }
+
+    /// @brief Sets (or clears) which MindWave `channelBalance()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setChannelBalanceMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        channelBalanceMindWave_ = mindWaveId;
+    }
 
     /**
      * @brief `Convolve`'s own kernel, row-major, exactly
@@ -629,6 +814,30 @@ public:
     void setConvolveAmount(float amount) noexcept { convolveAmount_ = amount; }
 
     /**
+     * @brief The MindWave (if any) `convolveAmount()` is bound to -
+     *        `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Falls toward `0` (fully dry - a true
+     *        no-op) where the wave is dark. Varies for free, the same
+     *        reasoning `sharpenAmountMindWave()`'s own docs give: the
+     *        kernel convolution itself (`convolveKernel()`/
+     *        `convolveKernelSize()`, neither bindable - see
+     *        `docs/sound-mind-roadmap.md`'s own `v0.Y.38.1` entry) runs
+     *        exactly once, unaffected by this parameter; only the
+     *        already-computed dry/wet blend varies per cell.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `convolveAmount()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> convolveAmountMindWave() const noexcept {
+        return convolveAmountMindWave_;
+    }
+
+    /// @brief Sets (or clears) which MindWave `convolveAmount()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setConvolveAmountMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        convolveAmountMindWave_ = mindWaveId;
+    }
+
+    /**
      * @brief `Displace`'s own shift distance, in bins/columns - confirmed
      *        with the user against the legacy Python Studio's own
      *        `offset_filter()`: content is read from a source position
@@ -651,6 +860,27 @@ public:
     void setDisplaceDistance(float distance) noexcept { displaceDistance_ = distance; }
 
     /**
+     * @brief The MindWave (if any) `displaceDistance()` is bound to -
+     *        `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Falls toward `0` (no displacement - a true
+     *        no-op) where the wave is dark. A pixel-local parameter, per
+     *        `docs/sound-mind-design.md`'s own "Filter parameters" section
+     *        (an offset distance is explicitly named as an example) -
+     *        varies for free, no new per-cell kernel work.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `displaceDistance()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> displaceDistanceMindWave() const noexcept {
+        return displaceDistanceMindWave_;
+    }
+
+    /// @brief Sets (or clears) which MindWave `displaceDistance()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setDisplaceDistanceMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        displaceDistanceMindWave_ = mindWaveId;
+    }
+
+    /**
      * @brief `Displace`'s own shift direction, in degrees - see
      *        `displaceDistance()`'s own docs for the exact convention.
      * @return The current angle; meaningless unless `type()` is
@@ -661,6 +891,25 @@ public:
     /// @brief Sets `Displace`'s own shift direction.
     /// @param degrees The new angle, in degrees.
     void setDisplaceAngleDegrees(float degrees) noexcept { displaceAngleDegrees_ = degrees; }
+
+    /**
+     * @brief The MindWave (if any) `displaceAngleDegrees()` is bound to -
+     *        `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism, and `directionalBlurAngleMindWave()`'s own
+     *        docs for why an angle falls toward `0`° (a natural default,
+     *        not a claimed no-op) rather than a true no-op value. A
+     *        pixel-local parameter, per `docs/sound-mind-design.md`'s own
+     *        explicit "offset angle" example - varies for free.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `displaceAngleDegrees()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> displaceAngleMindWave() const noexcept { return displaceAngleMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `displaceAngleDegrees()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setDisplaceAngleMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        displaceAngleMindWave_ = mindWaveId;
+    }
 
     /**
      * @brief `ChannelCycle`'s own rotation angle, in degrees - `0`° (and
@@ -682,6 +931,27 @@ public:
     /// @brief Sets `ChannelCycle`'s own rotation angle.
     /// @param degrees The new angle, in degrees.
     void setChannelCycleAngleDegrees(float degrees) noexcept { channelCycleAngleDegrees_ = degrees; }
+
+    /**
+     * @brief The MindWave (if any) `channelCycleAngleDegrees()` is bound to
+     *        - `v0.Y.38.1`, see `blurSigmaMindWave()`'s own docs for the
+     *        general mechanism. Falls toward `0`° (identity - a true
+     *        no-op) where the wave is dark. A pixel-local parameter, per
+     *        `docs/sound-mind-design.md`'s own explicit "hue-rotation
+     *        angle" example (this is the direct analog for this
+     *        codebase's own three channels) - varies for free.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `channelCycleAngleDegrees()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> channelCycleAngleMindWave() const noexcept {
+        return channelCycleAngleMindWave_;
+    }
+
+    /// @brief Sets (or clears) which MindWave `channelCycleAngleDegrees()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setChannelCycleAngleMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        channelCycleAngleMindWave_ = mindWaveId;
+    }
 
     /**
      * @brief `SpectralReverb`'s own pre-delay, in frames, before the
@@ -762,6 +1032,26 @@ public:
     /// @param mix The new mix, intended within `[0, 1]`.
     void setReverbMix(float mix) noexcept { reverbMix_ = mix; }
 
+    /**
+     * @brief The MindWave (if any) `reverbMix()` is bound to - `v0.Y.38.1`,
+     *        see `blurSigmaMindWave()`'s own docs for the general
+     *        mechanism. Falls toward `0` (fully dry - a true no-op) where
+     *        the wave is dark. Varies for free, the same reasoning
+     *        `convolveAmountMindWave()`'s own docs give: the reverb tail
+     *        itself (`reverbPreDelayFrames()`/`reverbDecayFrames()`/
+     *        `reverbRoomSize()`/`reverbDiffusion()`/`reverbAbsorption()`,
+     *        none bindable - see `docs/sound-mind-roadmap.md`'s own
+     *        `v0.Y.38.1` entry for why) is computed exactly once; only the
+     *        already-computed dry/wet blend varies per cell.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `reverbMix()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> reverbMixMindWave() const noexcept { return reverbMixMindWave_; }
+
+    /// @brief Sets (or clears) which MindWave `reverbMix()` is bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setReverbMixMindWave(std::optional<MindWaveId> mindWaveId) noexcept { reverbMixMindWave_ = mindWaveId; }
+
     friend void to_json(nlohmann::json& json, const FilterConfiguration& config);
     friend void from_json(const nlohmann::json& json, FilterConfiguration& config);
 
@@ -781,29 +1071,44 @@ private:
     Gradient frequencyGradient_;
     std::uint32_t noiseSeed_;
     float speckleDensity_ = 0.05f;
+    std::optional<MindWaveId> speckleDensityMindWave_;
     float speckleIntensity_ = 0.8f;
+    std::optional<MindWaveId> speckleIntensityMindWave_;
     float speckleThresholdDb_ = 12.0f;
+    std::optional<MindWaveId> speckleThresholdMindWave_;
     float noiseFloorDb_ = -60.0f;
+    std::optional<MindWaveId> noiseFloorMindWave_;
     float reductionDb_ = 24.0f;
+    std::optional<MindWaveId> reductionMindWave_;
     float crushAmount_ = 0.5f;
+    std::optional<MindWaveId> crushAmountMindWave_;
     int grainSize_ = 4;
     float grainAmountDb_ = 6.0f;
+    std::optional<MindWaveId> grainAmountMindWave_;
     float feedbackAmount_ = 0.5f;
+    std::optional<MindWaveId> feedbackAmountMindWave_;
     float foldGain_ = 2.0f;
+    std::optional<MindWaveId> foldGainMindWave_;
     float channelBalance_ = 0.5f;
+    std::optional<MindWaveId> channelBalanceMindWave_;
     std::vector<float> convolveKernel_{0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     int convolveKernelSize_ = 3;
     bool convolveNormalize_ = false;
     float convolveAmount_ = 1.0f;
+    std::optional<MindWaveId> convolveAmountMindWave_;
     float displaceDistance_ = 10.0f;
+    std::optional<MindWaveId> displaceDistanceMindWave_;
     float displaceAngleDegrees_ = 0.0f;
+    std::optional<MindWaveId> displaceAngleMindWave_;
     float channelCycleAngleDegrees_ = 0.0f;
+    std::optional<MindWaveId> channelCycleAngleMindWave_;
     int reverbPreDelayFrames_ = 2;
     int reverbDecayFrames_ = 40;
     float reverbRoomSize_ = 0.6f;
     float reverbDiffusion_ = 0.5f;
     float reverbAbsorption_ = 0.4f;
     float reverbMix_ = 0.4f;
+    std::optional<MindWaveId> reverbMixMindWave_;
 };
 
 /// @brief Serializes a filter configuration to its JSON representation.

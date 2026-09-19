@@ -1620,3 +1620,591 @@ TEST_CASE("applyFilter's SpectralReverb leaves phase untouched", "[core][filter_
         CHECK(phase == 0.5f);
     }
 }
+
+// ---------------------------------------------------------------------------
+// v0.Y.38.1: Filter Parameter Binding Completion.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("applyFilter's SpeckleRemove, bound to a MindWave always at ceiling, removes the outlier "
+          "exactly as the fixed threshold would",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleRemove);
+    config.setSpeckleThresholdDb(10.0f);
+    const std::vector<float> spike = {-40.0f, -40.0f, 0.0f, -40.0f, -40.0f};
+    const auto composite = makeSingleRowComposite(spike);
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.speckleThreshold = &ceilingWave});
+
+    CHECK(bound.leftMagnitudeDb == unbound.leftMagnitudeDb);
+    CHECK(bound.leftMagnitudeDb[2] == Catch::Approx(-40.0f));  // the spike was removed.
+}
+
+TEST_CASE("applyFilter's SpeckleRemove, bound to a MindWave always at baseline, leaves the outlier untouched",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleRemove);
+    config.setSpeckleThresholdDb(10.0f);
+    const std::vector<float> spike = {-40.0f, -40.0f, 0.0f, -40.0f, -40.0f};
+    const auto composite = makeSingleRowComposite(spike);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.speckleThreshold = &baselineWave});
+
+    CHECK(bound.leftMagnitudeDb == spike);  // the (now effectively infinite) threshold never triggers.
+}
+
+TEST_CASE("applyFilter's Denoise, bound to a MindWave always at ceiling on noiseFloorDb, matches the "
+          "fixed-floor result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Denoise);
+    config.setNoiseFloorDb(-40.0f);
+    config.setReductionDb(24.0f);
+    const auto composite = makeSingleRowComposite({-90.0f, -40.0f, -10.0f});
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.noiseFloor = &ceilingWave});
+
+    CHECK(bound.leftMagnitudeDb == unbound.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's Denoise, bound to a MindWave always at baseline on noiseFloorDb, applies no "
+          "attenuation at all",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Denoise);
+    config.setNoiseFloorDb(-40.0f);
+    config.setReductionDb(24.0f);
+    const std::vector<float> original = {-90.0f, -40.0f, -10.0f};
+    const auto composite = makeSingleRowComposite(original);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.noiseFloor = &baselineWave});
+
+    // The floor falls to -96dB (silence) - nothing real is ever below it.
+    CHECK(bound.leftMagnitudeDb == original);
+}
+
+TEST_CASE("applyFilter's Denoise, bound to a MindWave always at ceiling on reductionDb, matches the "
+          "fixed-reduction result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Denoise);
+    config.setNoiseFloorDb(-40.0f);
+    config.setReductionDb(24.0f);
+    const auto composite = makeSingleRowComposite({-90.0f, -40.0f, -10.0f});
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.reduction = &ceilingWave});
+
+    CHECK(bound.leftMagnitudeDb == unbound.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's Denoise, bound to a MindWave always at baseline on reductionDb, leaves the "
+          "composite unchanged",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Denoise);
+    config.setNoiseFloorDb(-40.0f);
+    config.setReductionDb(24.0f);
+    const std::vector<float> original = {-90.0f, -40.0f, -10.0f};
+    const auto composite = makeSingleRowComposite(original);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.reduction = &baselineWave});
+
+    CHECK(bound.leftMagnitudeDb == original);
+}
+
+TEST_CASE("applyFilter's BitDepthCrush, bound to a MindWave always at ceiling, matches the fixed-amount result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::BitDepthCrush);
+    config.setCrushAmount(0.8f);
+    const auto composite = makeSingleRowComposite({-50.0f, -30.0f, -10.0f});
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.crushAmount = &ceilingWave});
+
+    CHECK(bound.leftMagnitudeDb == unbound.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's BitDepthCrush, bound to a MindWave always at baseline, leaves the composite unchanged",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::BitDepthCrush);
+    config.setCrushAmount(0.8f);
+    const std::vector<float> original = {-50.0f, -30.0f, -10.0f};
+    const auto composite = makeSingleRowComposite(original);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.crushAmount = &baselineWave});
+
+    for (std::size_t i = 0; i < original.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(original[i]));
+    }
+}
+
+TEST_CASE("applyFilter's FeedbackDistortion, bound to a MindWave always at ceiling, matches the "
+          "fixed-amount result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::FeedbackDistortion);
+    config.setFeedbackAmount(0.5f);
+    const auto composite = makeSingleRowComposite({0.0f, -96.0f, -96.0f, -96.0f});
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.feedbackAmount = &ceilingWave});
+
+    for (std::size_t i = 0; i < unbound.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(unbound.leftMagnitudeDb[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's FeedbackDistortion, bound to a MindWave always at baseline, leaves the "
+          "composite unchanged",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::FeedbackDistortion);
+    config.setFeedbackAmount(0.5f);
+    const std::vector<float> original = {0.0f, -96.0f, -96.0f, -96.0f};
+    const auto composite = makeSingleRowComposite(original);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.feedbackAmount = &baselineWave});
+
+    for (std::size_t i = 0; i < original.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(original[i]).margin(0.001));
+    }
+}
+
+TEST_CASE("applyFilter's SpectralWavefold, bound to a MindWave always at ceiling, matches the "
+          "fixed-gain result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralWavefold);
+    config.setFoldGain(3.0f);
+    const auto composite = makeSingleRowComposite({-10.0f, -20.0f, -30.0f});
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.foldGain = &ceilingWave});
+
+    for (std::size_t i = 0; i < unbound.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(unbound.leftMagnitudeDb[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's SpectralWavefold, bound to a MindWave always at baseline, leaves the "
+          "composite unchanged (foldGain's own no-op is 1.0, not 0)",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralWavefold);
+    config.setFoldGain(3.0f);
+    const std::vector<float> original = {-10.0f, -20.0f, -30.0f};
+    const auto composite = makeSingleRowComposite(original);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.foldGain = &baselineWave});
+
+    for (std::size_t i = 0; i < original.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(original[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's ChannelBalance, bound to a MindWave always at ceiling, matches the "
+          "fixed-balance result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelBalance);
+    config.setChannelBalance(0.0f);
+    const auto composite = makeComposite();
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.channelBalance = &ceilingWave});
+
+    for (std::size_t i = 0; i < unbound.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(unbound.leftMagnitudeDb[i]).margin(0.01));
+        CHECK(bound.rightMagnitudeDb[i] == Catch::Approx(unbound.rightMagnitudeDb[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's ChannelBalance, bound to a MindWave always at baseline, reproduces the "
+          "structurally-neutral 0.5 balance",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelBalance);
+    config.setChannelBalance(0.0f);
+    const auto composite = makeComposite();
+
+    FilterConfiguration neutralConfig;
+    neutralConfig.setType(FilterType::ChannelBalance);
+    neutralConfig.setChannelBalance(0.5f);
+    const auto neutral = applyFilter(composite, neutralConfig, ProjectSettings{});
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.channelBalance = &baselineWave});
+
+    for (std::size_t i = 0; i < neutral.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(neutral.leftMagnitudeDb[i]).margin(0.01));
+        CHECK(bound.rightMagnitudeDb[i] == Catch::Approx(neutral.rightMagnitudeDb[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's Convolve, bound to a MindWave always at ceiling on convolveAmount, matches "
+          "the fixed-amount result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Convolve);
+    config.setConvolveKernel({0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f});  // shift-by-one kernel.
+    config.setConvolveKernelSize(3);
+    config.setConvolveAmount(1.0f);
+    const auto composite = makeSingleRowComposite({0.0f, -20.0f, -40.0f, -96.0f});
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.convolveAmount = &ceilingWave});
+
+    CHECK(bound.leftMagnitudeDb == unbound.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's Convolve, bound to a MindWave always at baseline on convolveAmount, leaves "
+          "the composite fully dry",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Convolve);
+    config.setConvolveKernel({0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f});
+    config.setConvolveKernelSize(3);
+    config.setConvolveAmount(1.0f);
+    const std::vector<float> original = {0.0f, -20.0f, -40.0f, -96.0f};
+    const auto composite = makeSingleRowComposite(original);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.convolveAmount = &baselineWave});
+
+    CHECK(bound.leftMagnitudeDb == original);
+}
+
+TEST_CASE("applyFilter's Displace, bound to a MindWave always at ceiling on displaceDistance, matches "
+          "the fixed-distance result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Displace);
+    config.setDisplaceDistance(2.0f);
+    config.setDisplaceAngleDegrees(0.0f);
+    const auto composite = makeSingleRowComposite({0.0f, -20.0f, -40.0f, -60.0f, -80.0f});
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.displaceDistance = &ceilingWave});
+
+    CHECK(bound.leftMagnitudeDb == unbound.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's Displace, bound to a MindWave always at baseline on displaceDistance, leaves "
+          "the composite unchanged",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Displace);
+    config.setDisplaceDistance(2.0f);
+    config.setDisplaceAngleDegrees(0.0f);
+    const std::vector<float> original = {0.0f, -20.0f, -40.0f, -60.0f, -80.0f};
+    const auto composite = makeSingleRowComposite(original);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{},
+                                    FilterParameterMindWaves{.displaceDistance = &baselineWave});
+
+    CHECK(bound.leftMagnitudeDb == original);
+}
+
+TEST_CASE("applyFilter's Displace, bound to an alternating MindWave, genuinely varies the distance per column",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Displace);
+    config.setDisplaceDistance(1.0f);
+    config.setDisplaceAngleDegrees(0.0f);
+    const std::vector<float> ramp = {0.0f, -10.0f, -20.0f, -30.0f, -40.0f, -50.0f};
+    const auto composite = makeSingleRowComposite(ramp);
+
+    const auto wave = alternatingColumnsWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.displaceDistance = &wave});
+    const auto fullyDisplaced = applyFilter(composite, config, ProjectSettings{});
+
+    // Column 0 sits at the wave's own ceiling half (an even column, matching
+    // alternatingColumnsWave()'s own period) - full distance-1 displacement,
+    // same as the fixed-distance result; column 1 (odd) sits at baseline -
+    // zero displacement, reproducing the original value there instead.
+    CHECK(bound.leftMagnitudeDb[0] == Catch::Approx(fullyDisplaced.leftMagnitudeDb[0]).margin(0.001));
+    CHECK(bound.leftMagnitudeDb[1] == Catch::Approx(ramp[1]).margin(0.001));
+}
+
+TEST_CASE("applyFilter's Displace, bound to a MindWave always at ceiling on displaceAngleDegrees, "
+          "matches the fixed-angle result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Displace);
+    config.setDisplaceDistance(1.0f);
+    config.setDisplaceAngleDegrees(90.0f);
+    StreamImage composite;
+    composite.config.binCount = 3;
+    composite.frameCount = 1;
+    composite.leftMagnitudeDb = {0.0f, -20.0f, -40.0f};
+    composite.rightMagnitudeDb = {0.0f, -20.0f, -40.0f};
+    composite.sharedPhaseRadians.assign(3, 0.0f);
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.displaceAngle = &ceilingWave});
+
+    CHECK(bound.leftMagnitudeDb == unbound.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's ChannelCycle, bound to a MindWave always at ceiling, matches the fixed-angle result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelCycle);
+    config.setChannelCycleAngleDegrees(120.0f);
+    const auto composite = makeComposite();
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{},
+                                    FilterParameterMindWaves{.channelCycleAngle = &ceilingWave});
+
+    for (std::size_t i = 0; i < unbound.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(unbound.leftMagnitudeDb[i]).margin(0.01));
+        CHECK(bound.rightMagnitudeDb[i] == Catch::Approx(unbound.rightMagnitudeDb[i]).margin(0.01));
+        CHECK(bound.sharedPhaseRadians[i] == Catch::Approx(unbound.sharedPhaseRadians[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's ChannelCycle, bound to a MindWave always at baseline, leaves the composite unchanged",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::ChannelCycle);
+    config.setChannelCycleAngleDegrees(120.0f);
+    const auto composite = makeComposite();
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{},
+                                    FilterParameterMindWaves{.channelCycleAngle = &baselineWave});
+
+    for (std::size_t i = 0; i < composite.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(composite.leftMagnitudeDb[i]).margin(0.01));
+        CHECK(bound.rightMagnitudeDb[i] == Catch::Approx(composite.rightMagnitudeDb[i]).margin(0.01));
+        CHECK(bound.sharedPhaseRadians[i] == Catch::Approx(composite.sharedPhaseRadians[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's SpectralReverb, bound to a MindWave always at ceiling on reverbMix, matches "
+          "the fixed-mix result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+    config.setReverbPreDelayFrames(0);
+    config.setReverbDecayFrames(4);
+    config.setReverbMix(0.7f);
+    const auto composite = makeSingleRowComposite({0.0f, -96.0f, -96.0f, -96.0f});
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.reverbMix = &ceilingWave});
+
+    for (std::size_t i = 0; i < unbound.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(unbound.leftMagnitudeDb[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's SpectralReverb, bound to a MindWave always at baseline on reverbMix, leaves "
+          "the composite fully dry",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+    config.setReverbPreDelayFrames(0);
+    config.setReverbDecayFrames(4);
+    config.setReverbMix(0.7f);
+    const std::vector<float> original = {0.0f, -96.0f, -96.0f, -96.0f};
+    const auto composite = makeSingleRowComposite(original);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.reverbMix = &baselineWave});
+
+    for (std::size_t i = 0; i < original.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(original[i]).margin(0.001));
+    }
+}
+
+TEST_CASE("applyFilter's SpectralReverb, bound to an alternating MindWave, genuinely varies the mix per column",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpectralReverb);
+    config.setReverbPreDelayFrames(0);
+    config.setReverbDecayFrames(4);
+    config.setReverbMix(1.0f);
+    const std::vector<float> impulse = {0.0f, -96.0f, -96.0f, -96.0f};
+    const auto composite = makeSingleRowComposite(impulse);
+
+    const auto wave = alternatingColumnsWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.reverbMix = &wave});
+
+    // Frame 0 (ceiling half) gets the fully-wet reverb tail's own dry value
+    // (the impulse itself, unaffected by mix at frame 0); frame 1 (baseline
+    // half) stays fully dry regardless of what the reverb tail computed
+    // there.
+    CHECK(bound.leftMagnitudeDb[1] == Catch::Approx(impulse[1]).margin(0.001));
+}
+
+TEST_CASE("applyFilter's SpeckleAdd, bound to a MindWave always at ceiling on speckleDensity, hits "
+          "roughly its own configured density",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleAdd);
+    config.setNoiseSeed(7u);
+    config.setSpeckleDensity(0.5f);
+    config.setSpeckleIntensity(1.0f);
+    const auto composite = makeUniformGridComposite(20, 20, -40.0f, -40.0f);
+
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.speckleDensity = &ceilingWave});
+
+    const auto hitCount = std::count(bound.leftMagnitudeDb.begin(), bound.leftMagnitudeDb.end(), 0.0f);
+    const auto total = static_cast<std::ptrdiff_t>(bound.leftMagnitudeDb.size());
+    CHECK(hitCount > total * 3 / 10);
+    CHECK(hitCount < total * 7 / 10);
+}
+
+TEST_CASE("applyFilter's SpeckleAdd, bound to a MindWave always at baseline on speckleDensity, hits nothing",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleAdd);
+    config.setNoiseSeed(7u);
+    config.setSpeckleDensity(0.5f);
+    config.setSpeckleIntensity(1.0f);
+    const auto composite = makeUniformGridComposite(20, 20, -40.0f, -40.0f);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.speckleDensity = &baselineWave});
+
+    CHECK(bound.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's SpeckleAdd, bound to a MindWave always at ceiling on speckleIntensity, "
+          "matches the fixed-intensity result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleAdd);
+    config.setNoiseSeed(7u);
+    config.setSpeckleDensity(0.5f);
+    config.setSpeckleIntensity(0.6f);
+    const auto composite = makeUniformGridComposite(20, 20, -40.0f, -40.0f);
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.speckleIntensity = &ceilingWave});
+
+    for (std::size_t i = 0; i < unbound.leftMagnitudeDb.size(); ++i) {
+        CHECK(bound.leftMagnitudeDb[i] == Catch::Approx(unbound.leftMagnitudeDb[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("applyFilter's SpeckleAdd, bound to a MindWave always at baseline on speckleIntensity, "
+          "leaves the composite unchanged even where cells are hit",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::SpeckleAdd);
+    config.setNoiseSeed(7u);
+    config.setSpeckleDensity(1.0f);  // every cell is "hit" - isolates intensity's own effect.
+    config.setSpeckleIntensity(1.0f);
+    const auto composite = makeUniformGridComposite(10, 10, -40.0f, -40.0f);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.speckleIntensity = &baselineWave});
+
+    CHECK(bound.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's DynamicSpeckle, bound to a MindWave always at baseline on speckleDensity, "
+          "hits nothing (evaluated once per its own 2x2 block)",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::DynamicSpeckle);
+    config.setSpeckleDensity(1.0f);
+    config.setSpeckleIntensity(1.0f);
+    const auto composite = makeUniformGridComposite(10, 10, -40.0f, -40.0f);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.speckleDensity = &baselineWave});
+
+    CHECK(bound.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's GranularNoise, bound to a MindWave always at ceiling on grainAmountDb, "
+          "matches the fixed-amount result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::GranularNoise);
+    config.setNoiseSeed(3u);
+    config.setGrainSize(2);
+    config.setGrainAmountDb(6.0f);
+    const auto composite = makeUniformGridComposite(8, 8, -40.0f, -40.0f);
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.grainAmount = &ceilingWave});
+
+    CHECK(bound.leftMagnitudeDb == unbound.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's GranularNoise, bound to a MindWave always at baseline on grainAmountDb, "
+          "leaves the composite unchanged",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::GranularNoise);
+    config.setNoiseSeed(3u);
+    config.setGrainSize(2);
+    config.setGrainAmountDb(6.0f);
+    const auto composite = makeUniformGridComposite(8, 8, -40.0f, -40.0f);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound =
+        applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.grainAmount = &baselineWave});
+
+    CHECK(bound.leftMagnitudeDb == composite.leftMagnitudeDb);
+}

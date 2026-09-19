@@ -967,3 +967,115 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsSpectralReverbWith
     // SpectralReverb's own group is now the visible one.
     QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("spectralReverbGroup"))->isHidden());
 }
+
+// --- v0.Y.38.1: Filter Parameter Binding Completion -------------------
+
+namespace {
+
+/// @brief Every one of the fifteen newly-bindable parameters' own combo
+/// object name, seventeen total - `speckleDensity`/`speckleIntensity` each
+/// get two combos (one in SpeckleAdd's own group, one in DynamicSpeckle's),
+/// both bound to the same underlying field, mirroring how those two
+/// groups' own spin boxes already share fields but not widgets.
+const std::array<QString, 17> kNewBindComboNames{{
+    QStringLiteral("speckleAddDensityMindWaveCombo"),
+    QStringLiteral("speckleAddIntensityMindWaveCombo"),
+    QStringLiteral("dynamicSpeckleDensityMindWaveCombo"),
+    QStringLiteral("dynamicSpeckleIntensityMindWaveCombo"),
+    QStringLiteral("speckleThresholdMindWaveCombo"),
+    QStringLiteral("noiseFloorMindWaveCombo"),
+    QStringLiteral("reductionMindWaveCombo"),
+    QStringLiteral("crushAmountMindWaveCombo"),
+    QStringLiteral("grainAmountMindWaveCombo"),
+    QStringLiteral("feedbackAmountMindWaveCombo"),
+    QStringLiteral("foldGainMindWaveCombo"),
+    QStringLiteral("channelBalanceMindWaveCombo"),
+    QStringLiteral("convolveAmountMindWaveCombo"),
+    QStringLiteral("displaceDistanceMindWaveCombo"),
+    QStringLiteral("displaceAngleMindWaveCombo"),
+    QStringLiteral("channelCycleAngleMindWaveCombo"),
+    QStringLiteral("reverbMixMindWaveCombo"),
+}};
+
+}  // namespace
+
+void FilterConfigurationPanelTest::freshNewCombosOfferOnlyNoneUntilSetAvailableMindWavesIsCalled() {
+    const FilterConfigurationPanel panel;
+    for (const auto& comboName : kNewBindComboNames) {
+        auto* combo = panel.findChild<QComboBox*>(comboName);
+        QVERIFY(combo != nullptr);
+        QCOMPARE(combo->count(), 1);
+        QCOMPARE(combo->currentText(), QStringLiteral("None"));
+    }
+}
+
+void FilterConfigurationPanelTest::setAvailableMindWavesPopulatesEveryNewCombo() {
+    FilterConfigurationPanel panel;
+
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")},
+                                  {MindWaveId{6}, QStringLiteral("Fast Pulse")}});
+
+    for (const auto& comboName : kNewBindComboNames) {
+        auto* combo = panel.findChild<QComboBox*>(comboName);
+        QCOMPARE(combo->count(), 3);  // None + two MindWaves.
+        QCOMPARE(combo->itemText(1), QStringLiteral("Slow Pulse"));
+        QCOMPARE(combo->itemText(2), QStringLiteral("Fast Pulse"));
+    }
+}
+
+void FilterConfigurationPanelTest::changingANewBindComboEmitsFilterConfigurationChangedWithTheNewBinding() {
+    FilterConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.findChild<QComboBox*>(QStringLiteral("reverbMixMindWaveCombo"))->setCurrentIndex(1);  // "Slow Pulse".
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().reverbMixMindWave(), std::optional<MindWaveId>(MindWaveId{5}));
+    // Every other bindable parameter is untouched.
+    QVERIFY(!panel.filterConfiguration().channelBalanceMindWave().has_value());
+}
+
+void FilterConfigurationPanelTest::selectingNoneOnANewComboUnbindsAndEmits() {
+    FilterConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("channelBalanceMindWaveCombo"));
+    combo->setCurrentIndex(1);  // Bind first.
+    QVERIFY(panel.filterConfiguration().channelBalanceMindWave().has_value());
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    combo->setCurrentIndex(0);  // "None".
+
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(!panel.filterConfiguration().channelBalanceMindWave().has_value());
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsAllFifteenNewCombosWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    FilterConfiguration config;
+    config.setSpeckleDensityMindWave(MindWaveId{5});
+    config.setSpeckleIntensityMindWave(MindWaveId{5});
+    config.setSpeckleThresholdMindWave(MindWaveId{5});
+    config.setNoiseFloorMindWave(MindWaveId{5});
+    config.setReductionMindWave(MindWaveId{5});
+    config.setCrushAmountMindWave(MindWaveId{5});
+    config.setGrainAmountMindWave(MindWaveId{5});
+    config.setFeedbackAmountMindWave(MindWaveId{5});
+    config.setFoldGainMindWave(MindWaveId{5});
+    config.setChannelBalanceMindWave(MindWaveId{5});
+    config.setConvolveAmountMindWave(MindWaveId{5});
+    config.setDisplaceDistanceMindWave(MindWaveId{5});
+    config.setDisplaceAngleMindWave(MindWaveId{5});
+    config.setChannelCycleAngleMindWave(MindWaveId{5});
+    config.setReverbMixMindWave(MindWaveId{5});
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    for (const auto& comboName : kNewBindComboNames) {
+        auto* combo = panel.findChild<QComboBox*>(comboName);
+        QCOMPARE(combo->currentText(), QStringLiteral("Slow Pulse"));
+    }
+}

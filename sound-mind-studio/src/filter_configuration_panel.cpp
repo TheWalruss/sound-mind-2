@@ -344,7 +344,20 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         dynamicSpeckleDensitySpinBox_->setValue(value);
         emitConfigChanged();
     });
-    speckleAddForm->addRow(tr("Density:"), speckleAddDensitySpinBox_);
+    speckleAddDensityMindWaveCombo_ =
+        makeMindWaveCombo(speckleAddGroup_, QStringLiteral("speckleAddDensityMindWaveCombo"));
+    connect(speckleAddDensityMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = speckleAddDensityMindWaveCombo_->itemData(index).toULongLong();
+        const auto mindWaveId =
+            rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId));
+        config_.setSpeckleDensityMindWave(mindWaveId);
+        const QSignalBlocker blocker(dynamicSpeckleDensityMindWaveCombo_);
+        const int siblingIndex = dynamicSpeckleDensityMindWaveCombo_->findData(QVariant::fromValue(rawId));
+        dynamicSpeckleDensityMindWaveCombo_->setCurrentIndex(siblingIndex >= 0 ? siblingIndex : 0);
+        emitConfigChanged();
+    });
+    speckleAddForm->addRow(tr("Density:"),
+                            makeBoundFieldRow(speckleAddDensitySpinBox_, speckleAddDensityMindWaveCombo_));
     speckleAddIntensitySpinBox_ = new QDoubleSpinBox(speckleAddGroup_);
     speckleAddIntensitySpinBox_->setObjectName(QStringLiteral("speckleAddIntensitySpinBox"));
     speckleAddIntensitySpinBox_->setRange(0.0, 1.0);
@@ -356,7 +369,20 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         dynamicSpeckleIntensitySpinBox_->setValue(value);
         emitConfigChanged();
     });
-    speckleAddForm->addRow(tr("Intensity:"), speckleAddIntensitySpinBox_);
+    speckleAddIntensityMindWaveCombo_ =
+        makeMindWaveCombo(speckleAddGroup_, QStringLiteral("speckleAddIntensityMindWaveCombo"));
+    connect(speckleAddIntensityMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = speckleAddIntensityMindWaveCombo_->itemData(index).toULongLong();
+        const auto mindWaveId =
+            rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId));
+        config_.setSpeckleIntensityMindWave(mindWaveId);
+        const QSignalBlocker blocker(dynamicSpeckleIntensityMindWaveCombo_);
+        const int siblingIndex = dynamicSpeckleIntensityMindWaveCombo_->findData(QVariant::fromValue(rawId));
+        dynamicSpeckleIntensityMindWaveCombo_->setCurrentIndex(siblingIndex >= 0 ? siblingIndex : 0);
+        emitConfigChanged();
+    });
+    speckleAddForm->addRow(tr("Intensity:"),
+                            makeBoundFieldRow(speckleAddIntensitySpinBox_, speckleAddIntensityMindWaveCombo_));
     speckleAddGroup_->setToolTip(
         tr("Deterministic per Filter layer - the same pattern every recomposite, only changing if you touch these "
            "controls or the content underneath."));
@@ -374,7 +400,16 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setSpeckleThresholdDb(static_cast<float>(value));
         emitConfigChanged();
     });
-    speckleRemoveForm->addRow(tr("Threshold:"), speckleThresholdSpinBox_);
+    speckleThresholdMindWaveCombo_ =
+        makeMindWaveCombo(speckleRemoveGroup_, QStringLiteral("speckleThresholdMindWaveCombo"));
+    connect(speckleThresholdMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = speckleThresholdMindWaveCombo_->itemData(index).toULongLong();
+        config_.setSpeckleThresholdMindWave(rawId == 0 ? std::nullopt
+                                                        : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    speckleRemoveForm->addRow(tr("Threshold:"),
+                               makeBoundFieldRow(speckleThresholdSpinBox_, speckleThresholdMindWaveCombo_));
     root->addWidget(speckleRemoveGroup_);
 
     denoiseGroup_ = new QGroupBox(tr("Denoise"), container);
@@ -389,7 +424,14 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setNoiseFloorDb(static_cast<float>(value));
         emitConfigChanged();
     });
-    denoiseForm->addRow(tr("Noise Floor:"), noiseFloorSpinBox_);
+    noiseFloorMindWaveCombo_ = makeMindWaveCombo(denoiseGroup_, QStringLiteral("noiseFloorMindWaveCombo"));
+    connect(noiseFloorMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = noiseFloorMindWaveCombo_->itemData(index).toULongLong();
+        config_.setNoiseFloorMindWave(rawId == 0 ? std::nullopt
+                                                  : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    denoiseForm->addRow(tr("Noise Floor:"), makeBoundFieldRow(noiseFloorSpinBox_, noiseFloorMindWaveCombo_));
     reductionSpinBox_ = new QDoubleSpinBox(denoiseGroup_);
     reductionSpinBox_->setObjectName(QStringLiteral("reductionSpinBox"));
     reductionSpinBox_->setRange(0.0, 96.0);
@@ -399,7 +441,14 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setReductionDb(static_cast<float>(value));
         emitConfigChanged();
     });
-    denoiseForm->addRow(tr("Reduction:"), reductionSpinBox_);
+    reductionMindWaveCombo_ = makeMindWaveCombo(denoiseGroup_, QStringLiteral("reductionMindWaveCombo"));
+    connect(reductionMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = reductionMindWaveCombo_->itemData(index).toULongLong();
+        config_.setReductionMindWave(rawId == 0 ? std::nullopt
+                                                 : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    denoiseForm->addRow(tr("Reduction:"), makeBoundFieldRow(reductionSpinBox_, reductionMindWaveCombo_));
     root->addWidget(denoiseGroup_);
 
     bitDepthCrushGroup_ = new QGroupBox(tr("Bit-Depth Crush"), container);
@@ -414,7 +463,14 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setCrushAmount(static_cast<float>(value));
         emitConfigChanged();
     });
-    bitDepthCrushForm->addRow(tr("Amount:"), crushAmountSpinBox_);
+    crushAmountMindWaveCombo_ = makeMindWaveCombo(bitDepthCrushGroup_, QStringLiteral("crushAmountMindWaveCombo"));
+    connect(crushAmountMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = crushAmountMindWaveCombo_->itemData(index).toULongLong();
+        config_.setCrushAmountMindWave(rawId == 0 ? std::nullopt
+                                                   : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    bitDepthCrushForm->addRow(tr("Amount:"), makeBoundFieldRow(crushAmountSpinBox_, crushAmountMindWaveCombo_));
     root->addWidget(bitDepthCrushGroup_);
 
     granularNoiseGroup_ = new QGroupBox(tr("Granular Noise"), container);
@@ -438,7 +494,14 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setGrainAmountDb(static_cast<float>(value));
         emitConfigChanged();
     });
-    granularNoiseForm->addRow(tr("Grain Amount:"), grainAmountSpinBox_);
+    grainAmountMindWaveCombo_ = makeMindWaveCombo(granularNoiseGroup_, QStringLiteral("grainAmountMindWaveCombo"));
+    connect(grainAmountMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = grainAmountMindWaveCombo_->itemData(index).toULongLong();
+        config_.setGrainAmountMindWave(rawId == 0 ? std::nullopt
+                                                   : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    granularNoiseForm->addRow(tr("Grain Amount:"), makeBoundFieldRow(grainAmountSpinBox_, grainAmountMindWaveCombo_));
     granularNoiseGroup_->setToolTip(
         tr("Deterministic per Filter layer - the same pattern every recomposite, only changing if you touch these "
            "controls or the content underneath."));
@@ -458,7 +521,20 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         speckleAddDensitySpinBox_->setValue(value);
         emitConfigChanged();
     });
-    dynamicSpeckleForm->addRow(tr("Density:"), dynamicSpeckleDensitySpinBox_);
+    dynamicSpeckleDensityMindWaveCombo_ =
+        makeMindWaveCombo(dynamicSpeckleGroup_, QStringLiteral("dynamicSpeckleDensityMindWaveCombo"));
+    connect(dynamicSpeckleDensityMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = dynamicSpeckleDensityMindWaveCombo_->itemData(index).toULongLong();
+        const auto mindWaveId =
+            rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId));
+        config_.setSpeckleDensityMindWave(mindWaveId);
+        const QSignalBlocker blocker(speckleAddDensityMindWaveCombo_);
+        const int siblingIndex = speckleAddDensityMindWaveCombo_->findData(QVariant::fromValue(rawId));
+        speckleAddDensityMindWaveCombo_->setCurrentIndex(siblingIndex >= 0 ? siblingIndex : 0);
+        emitConfigChanged();
+    });
+    dynamicSpeckleForm->addRow(
+        tr("Density:"), makeBoundFieldRow(dynamicSpeckleDensitySpinBox_, dynamicSpeckleDensityMindWaveCombo_));
     dynamicSpeckleIntensitySpinBox_ = new QDoubleSpinBox(dynamicSpeckleGroup_);
     dynamicSpeckleIntensitySpinBox_->setObjectName(QStringLiteral("dynamicSpeckleIntensitySpinBox"));
     dynamicSpeckleIntensitySpinBox_->setRange(0.0, 1.0);
@@ -470,7 +546,20 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         speckleAddIntensitySpinBox_->setValue(value);
         emitConfigChanged();
     });
-    dynamicSpeckleForm->addRow(tr("Intensity:"), dynamicSpeckleIntensitySpinBox_);
+    dynamicSpeckleIntensityMindWaveCombo_ =
+        makeMindWaveCombo(dynamicSpeckleGroup_, QStringLiteral("dynamicSpeckleIntensityMindWaveCombo"));
+    connect(dynamicSpeckleIntensityMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = dynamicSpeckleIntensityMindWaveCombo_->itemData(index).toULongLong();
+        const auto mindWaveId =
+            rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId));
+        config_.setSpeckleIntensityMindWave(mindWaveId);
+        const QSignalBlocker blocker(speckleAddIntensityMindWaveCombo_);
+        const int siblingIndex = speckleAddIntensityMindWaveCombo_->findData(QVariant::fromValue(rawId));
+        speckleAddIntensityMindWaveCombo_->setCurrentIndex(siblingIndex >= 0 ? siblingIndex : 0);
+        emitConfigChanged();
+    });
+    dynamicSpeckleForm->addRow(
+        tr("Intensity:"), makeBoundFieldRow(dynamicSpeckleIntensitySpinBox_, dynamicSpeckleIntensityMindWaveCombo_));
     dynamicSpeckleGroup_->setToolTip(
         tr("Live - freshly re-randomized on every recomposite (any edit, scroll, or repaint), computed over fixed "
            "2x2 blocks to stay cheap on a large canvas."));
@@ -488,7 +577,16 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setFeedbackAmount(static_cast<float>(value));
         emitConfigChanged();
     });
-    feedbackDistortionForm->addRow(tr("Amount:"), feedbackAmountSpinBox_);
+    feedbackAmountMindWaveCombo_ =
+        makeMindWaveCombo(feedbackDistortionGroup_, QStringLiteral("feedbackAmountMindWaveCombo"));
+    connect(feedbackAmountMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = feedbackAmountMindWaveCombo_->itemData(index).toULongLong();
+        config_.setFeedbackAmountMindWave(rawId == 0 ? std::nullopt
+                                                      : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    feedbackDistortionForm->addRow(tr("Amount:"),
+                                    makeBoundFieldRow(feedbackAmountSpinBox_, feedbackAmountMindWaveCombo_));
     root->addWidget(feedbackDistortionGroup_);
 
     spectralWavefoldGroup_ = new QGroupBox(tr("Spectral Wavefold"), container);
@@ -503,7 +601,14 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setFoldGain(static_cast<float>(value));
         emitConfigChanged();
     });
-    spectralWavefoldForm->addRow(tr("Fold Gain:"), foldGainSpinBox_);
+    foldGainMindWaveCombo_ = makeMindWaveCombo(spectralWavefoldGroup_, QStringLiteral("foldGainMindWaveCombo"));
+    connect(foldGainMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = foldGainMindWaveCombo_->itemData(index).toULongLong();
+        config_.setFoldGainMindWave(rawId == 0 ? std::nullopt
+                                                : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    spectralWavefoldForm->addRow(tr("Fold Gain:"), makeBoundFieldRow(foldGainSpinBox_, foldGainMindWaveCombo_));
     root->addWidget(spectralWavefoldGroup_);
 
     displaceGroup_ = new QGroupBox(tr("Displace"), container);
@@ -517,7 +622,15 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setDisplaceDistance(static_cast<float>(value));
         emitConfigChanged();
     });
-    displaceForm->addRow(tr("Distance:"), displaceDistanceSpinBox_);
+    displaceDistanceMindWaveCombo_ = makeMindWaveCombo(displaceGroup_, QStringLiteral("displaceDistanceMindWaveCombo"));
+    connect(displaceDistanceMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = displaceDistanceMindWaveCombo_->itemData(index).toULongLong();
+        config_.setDisplaceDistanceMindWave(rawId == 0 ? std::nullopt
+                                                        : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    displaceForm->addRow(tr("Distance:"),
+                          makeBoundFieldRow(displaceDistanceSpinBox_, displaceDistanceMindWaveCombo_));
     displaceAngleSpinBox_ = new QDoubleSpinBox(displaceGroup_);
     displaceAngleSpinBox_->setObjectName(QStringLiteral("displaceAngleSpinBox"));
     displaceAngleSpinBox_->setRange(0.0, 360.0);
@@ -530,7 +643,14 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setDisplaceAngleDegrees(static_cast<float>(value));
         emitConfigChanged();
     });
-    displaceForm->addRow(tr("Angle:"), displaceAngleSpinBox_);
+    displaceAngleMindWaveCombo_ = makeMindWaveCombo(displaceGroup_, QStringLiteral("displaceAngleMindWaveCombo"));
+    connect(displaceAngleMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = displaceAngleMindWaveCombo_->itemData(index).toULongLong();
+        config_.setDisplaceAngleMindWave(rawId == 0 ? std::nullopt
+                                                     : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    displaceForm->addRow(tr("Angle:"), makeBoundFieldRow(displaceAngleSpinBox_, displaceAngleMindWaveCombo_));
     root->addWidget(displaceGroup_);
 
     channelCycleGroup_ = new QGroupBox(tr("Channel Cycle"), container);
@@ -549,7 +669,16 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setChannelCycleAngleDegrees(static_cast<float>(value));
         emitConfigChanged();
     });
-    channelCycleForm->addRow(tr("Angle:"), channelCycleAngleSpinBox_);
+    channelCycleAngleMindWaveCombo_ =
+        makeMindWaveCombo(channelCycleGroup_, QStringLiteral("channelCycleAngleMindWaveCombo"));
+    connect(channelCycleAngleMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = channelCycleAngleMindWaveCombo_->itemData(index).toULongLong();
+        config_.setChannelCycleAngleMindWave(rawId == 0 ? std::nullopt
+                                                         : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    channelCycleForm->addRow(tr("Angle:"),
+                              makeBoundFieldRow(channelCycleAngleSpinBox_, channelCycleAngleMindWaveCombo_));
     root->addWidget(channelCycleGroup_);
 
     toneCurveGroup_ = new QGroupBox(tr("Tone Curve"), container);
@@ -584,7 +713,16 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setChannelBalance(static_cast<float>(value));
         emitConfigChanged();
     });
-    channelBalanceForm->addRow(tr("Balance:"), channelBalanceSpinBox_);
+    channelBalanceMindWaveCombo_ =
+        makeMindWaveCombo(channelBalanceGroup_, QStringLiteral("channelBalanceMindWaveCombo"));
+    connect(channelBalanceMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = channelBalanceMindWaveCombo_->itemData(index).toULongLong();
+        config_.setChannelBalanceMindWave(rawId == 0 ? std::nullopt
+                                                      : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    channelBalanceForm->addRow(tr("Balance:"),
+                                makeBoundFieldRow(channelBalanceSpinBox_, channelBalanceMindWaveCombo_));
     root->addWidget(channelBalanceGroup_);
 
     invertGroup_ = new QGroupBox(tr("Invert"), container);
@@ -678,7 +816,15 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setConvolveAmount(static_cast<float>(value));
         emitConfigChanged();
     });
-    convolveBottomForm->addRow(tr("Amount:"), convolveAmountSpinBox_);
+    convolveAmountMindWaveCombo_ = makeMindWaveCombo(convolveGroup_, QStringLiteral("convolveAmountMindWaveCombo"));
+    connect(convolveAmountMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = convolveAmountMindWaveCombo_->itemData(index).toULongLong();
+        config_.setConvolveAmountMindWave(rawId == 0 ? std::nullopt
+                                                      : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    convolveBottomForm->addRow(tr("Amount:"),
+                                makeBoundFieldRow(convolveAmountSpinBox_, convolveAmountMindWaveCombo_));
     convolveLayout->addLayout(convolveBottomForm);
 
     auto* convolveLibraryRow = new QHBoxLayout();
@@ -781,7 +927,14 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         config_.setReverbMix(static_cast<float>(value));
         emitConfigChanged();
     });
-    reverbForm->addRow(tr("Mix:"), reverbMixSpinBox_);
+    reverbMixMindWaveCombo_ = makeMindWaveCombo(spectralReverbGroup_, QStringLiteral("reverbMixMindWaveCombo"));
+    connect(reverbMixMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = reverbMixMindWaveCombo_->itemData(index).toULongLong();
+        config_.setReverbMixMindWave(rawId == 0 ? std::nullopt
+                                                 : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    reverbForm->addRow(tr("Mix:"), makeBoundFieldRow(reverbMixSpinBox_, reverbMixMindWaveCombo_));
     root->addWidget(spectralReverbGroup_);
 
     equalizerCutGroup_ = new QGroupBox(tr("Cut"), container);
@@ -1038,6 +1191,26 @@ void FilterConfigurationPanel::rebuildMindWaveCombos() {
     populate(directionalBlurLengthMindWaveCombo_, config_.directionalBlurLengthMindWave());
     populate(directionalBlurAngleMindWaveCombo_, config_.directionalBlurAngleMindWave());
     populate(sharpenAmountMindWaveCombo_, config_.sharpenAmountMindWave());
+    // v0.Y.38.1 (Filter Parameter Binding Completion) - speckleDensity/
+    // speckleIntensity each populate two combos (SpeckleAdd's own and
+    // DynamicSpeckle's own), both bound to the same shared field.
+    populate(speckleAddDensityMindWaveCombo_, config_.speckleDensityMindWave());
+    populate(dynamicSpeckleDensityMindWaveCombo_, config_.speckleDensityMindWave());
+    populate(speckleAddIntensityMindWaveCombo_, config_.speckleIntensityMindWave());
+    populate(dynamicSpeckleIntensityMindWaveCombo_, config_.speckleIntensityMindWave());
+    populate(speckleThresholdMindWaveCombo_, config_.speckleThresholdMindWave());
+    populate(noiseFloorMindWaveCombo_, config_.noiseFloorMindWave());
+    populate(reductionMindWaveCombo_, config_.reductionMindWave());
+    populate(crushAmountMindWaveCombo_, config_.crushAmountMindWave());
+    populate(grainAmountMindWaveCombo_, config_.grainAmountMindWave());
+    populate(feedbackAmountMindWaveCombo_, config_.feedbackAmountMindWave());
+    populate(foldGainMindWaveCombo_, config_.foldGainMindWave());
+    populate(channelBalanceMindWaveCombo_, config_.channelBalanceMindWave());
+    populate(convolveAmountMindWaveCombo_, config_.convolveAmountMindWave());
+    populate(displaceDistanceMindWaveCombo_, config_.displaceDistanceMindWave());
+    populate(displaceAngleMindWaveCombo_, config_.displaceAngleMindWave());
+    populate(channelCycleAngleMindWaveCombo_, config_.channelCycleAngleMindWave());
+    populate(reverbMixMindWaveCombo_, config_.reverbMixMindWave());
 }
 
 void FilterConfigurationPanel::setAvailableConvolutionKernels(
