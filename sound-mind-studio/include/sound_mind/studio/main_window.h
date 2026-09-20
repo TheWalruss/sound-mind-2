@@ -10,12 +10,14 @@
 #include <QMainWindow>
 #include <QSettings>
 
+#include "sound_mind/core/device_test_tone_player.h"
 #include "sound_mind/core/loop_engine.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/chord_generator_panel.h"
+#include "sound_mind/studio/configure_devices_panel.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/grid_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
@@ -501,6 +503,86 @@ public slots:
      *        default.
      */
     void setRecordInputDevice(const QString& deviceName);
+
+    /**
+     * @brief Re-queries available input/output devices and refreshes
+     *        every device picker in the app (`configureDevicesPanel_`'s
+     *        own, plus `playbackPanel_`'s/`recordPanel_`'s/`loopPanel_`'s)
+     *        - the actual work behind the Configure Devices panel's own
+     *        "Refresh Devices" button (`v0.0.42.1`). Never opens or closes
+     *        a device itself - see `sound_mind::core::
+     *        availableAudioDeviceNames()`'s own docs for how a fresh scan
+     *        already works without one.
+     */
+    void refreshConfiguredDevices();
+
+    /**
+     * @brief Sets the input device `recordEngine_`'s and `loopEngine_`'s
+     *        (if a project is open) *next* start() should each open - the
+     *        actual work behind the Configure Devices panel's own input
+     *        device picker (`v0.0.42.1`). Syncs `recordPanel_`'s/
+     *        `loopPanel_`'s own pickers to match, so every input device
+     *        picker in the app stays consistent regardless of which one a
+     *        user actually changed - see `ConfigureDevicesPanel`'s own
+     *        class docs on why this applies to both engines at once.
+     * @param deviceName The device to prefer, or empty for the system
+     *        default.
+     */
+    void setConfiguredInputDevice(const QString& deviceName);
+
+    /// @brief Sets the output device `playbackController_`'s and
+    /// `loopEngine_`'s (if a project is open) should each switch to - the
+    /// actual work behind the Configure Devices panel's own output device
+    /// picker (`v0.0.42.1`). See setConfiguredInputDevice()'s own docs for
+    /// the same "applies to both, syncs every picker" reasoning.
+    /// @param deviceName The device to prefer, or empty for the system
+    ///        default.
+    void setConfiguredOutputDevice(const QString& deviceName);
+
+    /// @brief Sets `recordEngine_`'s and `loopEngine_`'s (if a project is
+    /// open) own input gain - the actual work behind the Configure Devices
+    /// panel's own input gain slider (`v0.0.42.1`).
+    /// @param percent `[0, ConfigureDevicesPanel::kMaxGainPercent]` (200) -
+    ///        `100` is unity gain.
+    void setConfiguredInputGain(int percent);
+
+    /// @brief Sets `playbackController_`'s own output gain - the actual
+    /// work behind the Configure Devices panel's own output gain slider
+    /// (`v0.0.42.1`). Forwards straight to setPlaybackVolume() (the same
+    /// underlying `PlaybackController::setVolume()`) and keeps
+    /// `playbackPanel_`'s own volume slider in sync, so the two panels'
+    /// own gain controls for the same engine never disagree.
+    /// @param percent `[0, ConfigureDevicesPanel::kMaxGainPercent]` (200).
+    void setConfiguredOutputGain(int percent);
+
+    /**
+     * @brief Starts or stops testing the currently configured input
+     *        device - the actual work behind the Configure Devices
+     *        panel's own input "Test" toggle (`v0.0.42.1`).
+     *
+     * Starting opens `deviceTestRecordEngine_` (never `recordEngine_`
+     * itself - see its own docs) against whatever device
+     * `configureDevicesPanel_`'s own input picker currently names, and
+     * starts `testInputLevelTimer_` polling its `currentInputLevel()` into
+     * the panel's own level meter; stopping does the reverse.
+     *
+     * @param testing `true` to start testing, `false` to stop.
+     */
+    void toggleTestInputDevice(bool testing);
+
+    /**
+     * @brief Starts or stops testing the currently configured output
+     *        device - the actual work behind the Configure Devices
+     *        panel's own output "Test" toggle (`v0.0.42.1`).
+     *
+     * Forwards to `deviceTestTonePlayer_`'s own start()/stop(), against
+     * whatever device `configureDevicesPanel_`'s own output picker
+     * currently names.
+     *
+     * @param testing `true` to start playing the test tone, `false` to
+     *        stop.
+     */
+    void toggleTestOutputDevice(bool testing);
 
     /**
      * @brief Pools the topmost layer with content, then exports both its
@@ -1782,6 +1864,13 @@ private:
     /// happen periodically rather than only once recording stops.
     void drainRecording();
 
+    /// @brief testInputLevelTimer_'s slot: drains deviceTestRecordEngine_'s
+    /// own ring buffer (so it never overflows, same reasoning as
+    /// drainRecording()) and pushes its currentInputLevel() into
+    /// configureDevicesPanel_'s own level meter, while testing an input
+    /// device. `v0.0.42.1`.
+    void pollTestInputLevel();
+
     std::optional<sound_mind::core::Project> project_;
     std::optional<std::filesystem::path> currentPath_;
 
@@ -1938,6 +2027,13 @@ private:
     /// follows. `v0.0.40.2` (Chords/Arpeggiator/Sequencer, Installment B).
     ChordGeneratorPanel* chordGeneratorPanel_ = nullptr;
 
+    /// @brief The dockable panel consolidating input/output device
+    /// selection, gain, and testing into one place - see its own class
+    /// docs. Hidden by default, the same "off until shown" convention
+    /// toolConfigurationPanel_ already follows. `v0.0.42.1` (Workflow &
+    /// Device Polish, Installment A).
+    ConfigureDevicesPanel* configureDevicesPanel_ = nullptr;
+
     /// @brief The dockable panel exposing Select mode's own Selection Type
     /// (Rectangle/Lasso) - see its own class docs. Hidden by default, the
     /// same "off until shown" convention toolConfigurationPanel_ already
@@ -1999,6 +2095,36 @@ private:
     /// is only known once the constructor's own parameter is available.
     sound_mind::core::RecordEngine recordEngine_;
     QTimer* recordDrainTimer_ = nullptr;
+
+    /// @brief A dedicated `RecordEngine` used *only* for the Configure
+    /// Devices panel's own "test an input device" affordance - never the
+    /// same instance `recordEngine_` uses for real recording, so testing a
+    /// device never interferes with (or is interfered by) an in-progress
+    /// real recording/loop session. Started/stopped by
+    /// toggleTestInputDevice(); polled by testInputLevelTimer_ while
+    /// running. `v0.0.42.1` (Workflow & Device Polish, Installment A).
+    sound_mind::core::RecordEngine deviceTestRecordEngine_;
+
+    /// @brief Polls deviceTestRecordEngine_'s own currentInputLevel() into
+    /// configureDevicesPanel_'s own level meter while testing an input
+    /// device - same 100ms cadence as recordDrainTimer_, for the same
+    /// "nothing visual depends on finer granularity than that" reasoning.
+    QTimer* testInputLevelTimer_ = nullptr;
+
+    /// @brief Plays the Configure Devices panel's own "test an output
+    /// device" tone - see its own class docs. `v0.0.42.1`.
+    sound_mind::core::DeviceTestTonePlayer deviceTestTonePlayer_;
+
+    /// @brief The Configure Devices panel's own currently configured input/
+    /// output device names, tracked here (rather than read back from
+    /// `configureDevicesPanel_` itself, which exposes no such getter) so
+    /// toggleTestInputDevice()/toggleTestOutputDevice() know which device to
+    /// actually open for testing - kept up to date by
+    /// setConfiguredInputDevice()/setConfiguredOutputDevice(). Empty means
+    /// the system default, the same convention every device name in this
+    /// class already follows.
+    QString configuredInputDeviceName_;
+    QString configuredOutputDeviceName_;
 };
 
 }  // namespace sound_mind::studio

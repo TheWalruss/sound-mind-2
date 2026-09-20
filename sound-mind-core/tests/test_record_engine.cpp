@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -123,4 +124,57 @@ TEST_CASE("availableInputDeviceNames is callable without crashing", "[record_eng
     // No real device is guaranteed in a CI/test environment - just confirm
     // the call is well-formed.
     CHECK(names == engine.availableInputDeviceNames());
+}
+
+TEST_CASE("A fresh RecordEngine has unity input gain and no input level", "[record_engine]") {
+    const RecordEngine engine(44100, AudioDeviceMode::None);
+    CHECK(engine.inputGain() == 1.0f);
+    CHECK(engine.currentInputLevel() == 0.0f);
+}
+
+TEST_CASE("setInputGain clamps to [0, kMaxGain]", "[record_engine]") {
+    RecordEngine engine(44100, AudioDeviceMode::None);
+
+    engine.setInputGain(-1.0f);
+    CHECK(engine.inputGain() == 0.0f);
+
+    engine.setInputGain(RecordEngine::kMaxGain + 1.0f);
+    CHECK(engine.inputGain() == RecordEngine::kMaxGain);
+
+    engine.setInputGain(1.5f);
+    CHECK(engine.inputGain() == 1.5f);
+}
+
+TEST_CASE("processBlock applies inputGain to captured samples", "[record_engine]") {
+    RecordEngine engine(44100, AudioDeviceMode::None);
+    engine.start();
+    engine.setInputGain(2.0f);
+
+    const std::vector<float> input = makeSineTone(440.0f, 256, 44100);
+    const float* inputChannels[1] = {input.data()};
+    engine.processBlock(inputChannels, 1, static_cast<int>(input.size()));
+    engine.drainAvailable();
+
+    const auto& captured = engine.capturedAudio();
+    REQUIRE(captured.frameCount() == input.size());
+    for (std::size_t i = 0; i < input.size(); ++i) {
+        REQUIRE(captured.left[i] == Catch::Approx(input[i] * 2.0f));
+    }
+
+    engine.stop();
+}
+
+TEST_CASE("processBlock tracks the most recent block's own peak level, post-gain", "[record_engine]") {
+    RecordEngine engine(44100, AudioDeviceMode::None);
+    engine.start();
+    engine.setInputGain(0.5f);
+
+    std::vector<float> input(64, 0.0f);
+    input[10] = 0.8f;
+    const float* inputChannels[1] = {input.data()};
+    engine.processBlock(inputChannels, 1, static_cast<int>(input.size()));
+
+    CHECK(engine.currentInputLevel() == Catch::Approx(0.4f));  // 0.8 * 0.5 gain.
+
+    engine.stop();
 }

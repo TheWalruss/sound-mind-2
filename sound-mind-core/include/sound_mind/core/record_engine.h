@@ -36,8 +36,12 @@ namespace sound_mind::core {
  *
  * **As of `v0.Y.16.1` (Transport Panels):** the deferred device picker
  * lands - availableInputDeviceNames()/setPreferredInputDevice() - for the
- * new Record panel. An input gain control is still deferred; not named in
- * this milestone's own confirmed scope.
+ * new Record panel.
+ *
+ * **As of `v0.0.42.1` (Configure Devices panel):** the deferred input gain
+ * control lands too - setInputGain()/inputGain(), applied in processBlock()
+ * - alongside a live input level meter (currentInputLevel()) for that
+ * panel's own "test an input device" affordance.
  *
  * Architecture: the audio callback thread only ever copies fixed-size
  * blocks into a lock-free ring buffer (`juce::AbstractFifo`, same as
@@ -131,6 +135,45 @@ public:
     [[nodiscard]] const std::string& preferredInputDevice() const noexcept;
 
     /**
+     * @brief Sets the input gain applied in processBlock() - the deferred
+     *        control the class docs' own `v0.Y.16.1` note mentioned, landing
+     *        as of `v0.0.42.1` (Configure Devices panel).
+     *
+     * Allowed above `1.0` - a real gain boost, not just an attenuator down
+     * to silence, matching `PlaybackEngine::setVolume()`'s own precedent.
+     * Clamped to `[0, kMaxGain]`.
+     *
+     * @param gain The new gain - `1.0` is unchanged/unity.
+     */
+    void setInputGain(float gain) noexcept;
+
+    /// @brief The current input gain - see setInputGain().
+    /// @return The current gain, `1.0` meaning unity (the default).
+    [[nodiscard]] float inputGain() const noexcept;
+
+    /// @brief The upper bound setInputGain() clamps to - see
+    /// `PlaybackEngine::kMaxVolume`'s own identical reasoning.
+    static constexpr float kMaxGain = 2.0f;
+
+    /**
+     * @brief The most recently processed block's own peak sample magnitude,
+     *        post-gain - for a live input level meter (Configure Devices
+     *        panel's own "test" affordance for an input device).
+     *
+     * Deliberately the simplest possible real-time-safe metric: the exact
+     * peak of whatever processBlock() last saw, with no decay/smoothing of
+     * its own - a UI timer polling this at a normal refresh rate (30-60Hz)
+     * already reads it often enough to look live without needing internal
+     * decay logic here. `0.0` both before any audio has been processed and
+     * whenever the most recent block was silent.
+     *
+     * @return The current peak level, post-gain; never negative.
+     * @note Real-time-safe (a plain atomic load), safely callable from
+     *       either thread - same as inputGain().
+     */
+    [[nodiscard]] float currentInputLevel() const noexcept;
+
+    /**
      * @brief Moves whatever's currently in the capture ring buffer into
      *        the accumulated recording.
      *
@@ -166,6 +209,9 @@ public:
      * @param numInputChannels Number of channels in `inputChannelData`.
      * @param numSamples Number of samples to process in each channel.
      *
+     * Applies inputGain() to every sample before it reaches the ring buffer
+     * or currentInputLevel() - see both methods' own docs.
+     *
      * @note Real-time-safe: no allocation, no locking, no exceptions.
      */
     void processBlock(const float* const* inputChannelData, int numInputChannels, int numSamples) noexcept;
@@ -194,6 +240,8 @@ private:
 
     sound_mind::codec::AudioBuffer capturedAudio_;
     std::atomic<bool> recording_{false};
+    std::atomic<float> inputGain_{1.0f};
+    std::atomic<float> currentInputLevel_{0.0f};
 };
 
 }  // namespace sound_mind::core

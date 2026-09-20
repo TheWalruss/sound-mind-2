@@ -1,6 +1,7 @@
 #include "sound_mind/core/record_engine.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 #include "sound_mind/core/audio_device_list.h"
@@ -81,6 +82,14 @@ const std::string& RecordEngine::preferredInputDevice() const noexcept {
     return preferredInputDevice_;
 }
 
+void RecordEngine::setInputGain(float gain) noexcept {
+    inputGain_.store(std::clamp(gain, 0.0f, kMaxGain), std::memory_order_relaxed);
+}
+
+float RecordEngine::inputGain() const noexcept { return inputGain_.load(std::memory_order_relaxed); }
+
+float RecordEngine::currentInputLevel() const noexcept { return currentInputLevel_.load(std::memory_order_relaxed); }
+
 void RecordEngine::drainAvailable() {
     const int available = captureFifo_.getNumReady();
     if (available <= 0) {
@@ -110,14 +119,20 @@ void RecordEngine::processBlock(const float* const* inputChannelData, int numInp
         return;
     }
 
+    const float gain = inputGain_.load(std::memory_order_relaxed);
+    float peak = 0.0f;
+
     auto writeScope = captureFifo_.write(numSamples);
     int inputIndex = 0;
     writeScope.forEach([&](int ringIndex) {
-        captureRingLeft_[static_cast<std::size_t>(ringIndex)] = inputChannelData[0][inputIndex];
-        captureRingRight_[static_cast<std::size_t>(ringIndex)] =
-            (numInputChannels > 1) ? inputChannelData[1][inputIndex] : inputChannelData[0][inputIndex];
+        const float left = inputChannelData[0][inputIndex] * gain;
+        const float right = (numInputChannels > 1) ? inputChannelData[1][inputIndex] * gain : left;
+        captureRingLeft_[static_cast<std::size_t>(ringIndex)] = left;
+        captureRingRight_[static_cast<std::size_t>(ringIndex)] = right;
+        peak = std::max({peak, std::abs(left), std::abs(right)});
         ++inputIndex;
     });
+    currentInputLevel_.store(peak, std::memory_order_relaxed);
     // Any input that didn't fit (drainAvailable() falling behind) is
     // simply dropped, not blocked on - an audio callback must never wait.
 }

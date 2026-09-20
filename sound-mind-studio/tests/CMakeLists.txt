@@ -7,6 +7,7 @@ add_executable(sound-mind-studio-tests
     test_canvas_widget.cpp
     test_chord_generator_controller.cpp
     test_chord_generator_panel.cpp
+    test_configure_devices_panel.cpp
     test_create_project_wizard.cpp
     test_filter_configuration_panel.cpp
     test_grid_config.cpp

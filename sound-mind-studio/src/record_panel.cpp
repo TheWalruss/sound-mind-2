@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -71,6 +72,12 @@ void RecordPanel::setRecording(bool recording) {
 
 void RecordPanel::setInputDevices(const QStringList& deviceNames) {
     populateDeviceCombo(inputDeviceCombo_, deviceNames);
+}
+
+void RecordPanel::setSelectedInputDevice(const QString& deviceName) {
+    const QSignalBlocker blocker(inputDeviceCombo_);
+    const int index = inputDeviceCombo_->findData(deviceName);
+    inputDeviceCombo_->setCurrentIndex(index >= 0 ? index : 0);
 }
 
 }  // namespace sound_mind::studio

@@ -124,6 +124,31 @@ void PlaybackPanelTest::setPositionSecondsDoesNotEmitSeekRequested() {
     QCOMPARE(slider->value(), slider->maximum() / 2);
 }
 
+void PlaybackPanelTest::setSelectedOutputDeviceChangesTheComboWithoutEmittingOutputDeviceChanged() {
+    PlaybackPanel panel;
+    panel.setOutputDevices({QStringLiteral("Speakers A"), QStringLiteral("Speakers B")});
+    QSignalSpy spy(&panel, &PlaybackPanel::outputDeviceChanged);
+
+    panel.setSelectedOutputDevice(QStringLiteral("Speakers B"));
+
+    QCOMPARE(spy.count(), 0);
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(combo->currentData().toString(), QStringLiteral("Speakers B"));
+}
+
+void PlaybackPanelTest::setSelectedOutputDeviceFallsBackToSystemDefaultForAnUnknownName() {
+    PlaybackPanel panel;
+    panel.setOutputDevices({QStringLiteral("Speakers A")});
+
+    panel.setSelectedOutputDevice(QStringLiteral("Nonexistent Device"));
+
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(combo->currentIndex(), 0);
+    QCOMPARE(combo->currentData().toString(), QString());
+}
+
 void PlaybackPanelTest::setPositionSecondsUpdatesTheTimeLabel() {
     PlaybackPanel panel;
     panel.setDuration(65.0);  // 1:05.

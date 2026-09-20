@@ -16,9 +16,10 @@ namespace sound_mind::studio {
  *
  * Adapted from the legacy Studio's `RecordPanel`, narrowed to what this
  * codebase's Recording actually has scope for today: a Start/Stop button
- * and an input device picker (with a "(System Default)" first entry) -
- * no input gain control (still separately deferred - see `RecordEngine`'s
- * own docs).
+ * and an input device picker (with a "(System Default)" first entry) - no
+ * input gain control of its own; `RecordEngine` gained one as of
+ * `v0.0.42.1`, but it's surfaced through the new `ConfigureDevicesPanel`
+ * instead of a second, duplicate slider here.
  *
  * Purely presentational, the same division of responsibility as
  * `LayersPanel`/`LoopPanel`: every user action is a signal `MainWindow`
@@ -47,6 +48,19 @@ public:
     /// @param deviceNames Real device names, in the order they should be
     ///        listed after the default entry.
     void setInputDevices(const QStringList& deviceNames);
+
+    /**
+     * @brief Selects `deviceName` in the input device picker, without
+     *        repopulating its list or emitting inputDeviceChanged() -
+     *        `v0.0.42.1` (Configure Devices panel), for `MainWindow` to
+     *        keep this picker in sync when the *same* underlying
+     *        preference is changed from the Configure Devices panel
+     *        instead of this one.
+     * @param deviceName The device to select; falls back to
+     *        "(System Default)" if it isn't currently in the picker's own
+     *        list (e.g. stale until the next setInputDevices() refresh).
+     */
+    void setSelectedInputDevice(const QString& deviceName);
 
 signals:
     /// @brief The Start/Stop button was clicked.

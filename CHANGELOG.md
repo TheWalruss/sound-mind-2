@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.42.1] - 2026-09-20
+
+The first installment of the "Workflow & Device Polish" milestone - a **Configure Devices** panel.
+
+### Added
+
+- **A new "Configure Devices" dock panel**: one place to refresh, choose, gain-adjust, and test both the active input device (shared by Recording and Loop Mode) and the active output device (shared by Playback and Loop Mode) - consolidating what was previously scattered one picker per panel, without removing those per-panel pickers.
+- **Real input gain** for Recording and Loop Mode (previously deferred) - a slider in the new panel.
+- **A live input level meter and a test tone**, for confirming a device actually works before starting a real recording/loop/playback session.
+
+Full regression: sound-mind-codec 39/39, sound-mind-core 801/801 (up from 788), sound-mind-studio full suite passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #116.
+
 ## [0.0.41.1] - 2026-09-20
 
 **Loop Mode Live Preview.** While Loop Mode is capturing the current pass, the canvas now grows continuously as audio comes in, restoring the visual behavior the original Live Mode had before Loop Mode's fixed-length redesign replaced it - previously, the canvas sat silent for the whole pass's duration and only updated once it finished.

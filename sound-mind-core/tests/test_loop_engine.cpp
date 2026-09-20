@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -36,6 +37,42 @@ TEST_CASE("LoopEngine starts with no image, not running, and keepLooping off", "
     CHECK(engine.currentPreviewImage().frameCount == 0);
     CHECK(engine.loopsCaptured() == 0);
     CHECK(engine.loopsBehind() == 0);
+}
+
+TEST_CASE("A fresh LoopEngine has unity input gain and no input level", "[loop_engine]") {
+    const LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
+    CHECK(engine.inputGain() == 1.0f);
+    CHECK(engine.currentInputLevel() == 0.0f);
+}
+
+TEST_CASE("LoopEngine::setInputGain clamps to [0, kMaxGain]", "[loop_engine]") {
+    LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
+
+    engine.setInputGain(-1.0f);
+    CHECK(engine.inputGain() == 0.0f);
+
+    engine.setInputGain(LoopEngine::kMaxGain + 1.0f);
+    CHECK(engine.inputGain() == LoopEngine::kMaxGain);
+
+    engine.setInputGain(1.5f);
+    CHECK(engine.inputGain() == 1.5f);
+}
+
+TEST_CASE("LoopEngine::processBlock applies inputGain to captured audio", "[loop_engine]") {
+    const StreamCodecConfig config;
+    constexpr std::size_t loopLen = 64;
+    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
+    engine.setInputGain(0.5f);
+
+    std::vector<float> input(loopLen, 0.0f);
+    input[5] = 1.0f;
+    const float* inputChannels[1] = {input.data()};
+    std::vector<float> scratchOut(loopLen, 0.0f);
+    float* outputChannels[1] = {scratchOut.data()};
+
+    engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(loopLen));
+
+    CHECK(engine.currentInputLevel() == Catch::Approx(0.5f));
 }
 
 TEST_CASE("A fresh LoopEngine prefers the default input/output devices", "[loop_engine]") {

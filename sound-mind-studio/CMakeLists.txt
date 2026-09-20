@@ -32,6 +32,7 @@ add_library(sound-mind-studio-lib
     src/chord_generator_controller.cpp
     src/chord_generator_panel.cpp
     src/color_conversion.cpp
+    src/configure_devices_panel.cpp
     src/create_project_wizard.cpp
     src/filter_configuration_panel.cpp
     src/grid_config.cpp
@@ -69,6 +70,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/chord_generator_controller.h
     include/sound_mind/studio/chord_generator_panel.h
     include/sound_mind/studio/color_conversion.h
+    include/sound_mind/studio/configure_devices_panel.h
     include/sound_mind/studio/create_project_wizard.h
     include/sound_mind/studio/filter_configuration_panel.h
     include/sound_mind/studio/grid_panel.h

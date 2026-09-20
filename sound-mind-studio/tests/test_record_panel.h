@@ -10,4 +10,5 @@ private slots:
     void setRecordingUpdatesButtonAndDisablesTheDevicePicker();
     void setInputDevicesListsSystemDefaultFirst();
     void changingTheInputDeviceEmitsInputDeviceChanged();
+    void setSelectedInputDeviceChangesTheComboWithoutEmittingInputDeviceChanged();
 };

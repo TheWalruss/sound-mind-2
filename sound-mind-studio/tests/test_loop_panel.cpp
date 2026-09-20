@@ -117,3 +117,29 @@ void LoopPanelTest::changingTheOutputDeviceEmitsOutputDeviceChanged() {
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).toString(), QStringLiteral("Speakers A"));
 }
+
+void LoopPanelTest::setSelectedInputDeviceChangesTheComboWithoutEmittingInputDeviceChanged() {
+    LoopPanel panel;
+    panel.setInputDevices({QStringLiteral("Mic A"), QStringLiteral("Mic B")});
+    QSignalSpy spy(&panel, &LoopPanel::inputDeviceChanged);
+
+    panel.setSelectedInputDevice(QStringLiteral("Mic B"));
+
+    QCOMPARE(spy.count(), 0);
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("inputDeviceCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(combo->currentData().toString(), QStringLiteral("Mic B"));
+}
+
+void LoopPanelTest::setSelectedOutputDeviceChangesTheComboWithoutEmittingOutputDeviceChanged() {
+    LoopPanel panel;
+    panel.setOutputDevices({QStringLiteral("Speakers A"), QStringLiteral("Speakers B")});
+    QSignalSpy spy(&panel, &LoopPanel::outputDeviceChanged);
+
+    panel.setSelectedOutputDevice(QStringLiteral("Speakers B"));
+
+    QCOMPARE(spy.count(), 0);
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(combo->currentData().toString(), QStringLiteral("Speakers B"));
+}

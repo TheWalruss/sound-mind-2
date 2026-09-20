@@ -18,6 +18,7 @@
 #include "test_canvas_widget.h"
 #include "test_chord_generator_controller.h"
 #include "test_chord_generator_panel.h"
+#include "test_configure_devices_panel.h"
 #include "test_create_project_wizard.h"
 #include "test_filter_configuration_panel.h"
 #include "test_grid_config.h"
@@ -75,6 +76,9 @@ int main(int argc, char** argv) {
 
     ChordGeneratorPanelTest chordGeneratorPanelTest;
     status |= QTest::qExec(&chordGeneratorPanelTest, argc, argv);
+
+    ConfigureDevicesPanelTest configureDevicesPanelTest;
+    status |= QTest::qExec(&configureDevicesPanelTest, argc, argv);
 
     LandingPageTest landingPageTest;
     status |= QTest::qExec(&landingPageTest, argc, argv);

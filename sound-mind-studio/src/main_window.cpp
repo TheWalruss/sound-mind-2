@@ -136,7 +136,9 @@ void showBusyStatus(QStatusBar* bar, const QString& message) {
 MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioDeviceMode)
     : QMainWindow(parent),
       audioDeviceMode_(audioDeviceMode),
-      recordEngine_(sound_mind::codec::StreamCodecConfig{}.sampleRateHz, audioDeviceMode) {
+      recordEngine_(sound_mind::codec::StreamCodecConfig{}.sampleRateHz, audioDeviceMode),
+      deviceTestRecordEngine_(sound_mind::codec::StreamCodecConfig{}.sampleRateHz, audioDeviceMode),
+      deviceTestTonePlayer_(audioDeviceMode) {
     setWindowTitle(QStringLiteral("Sound Mind Studio v" SOUND_MIND_VERSION));
     setWindowIcon(studioWindowIcon());
     resize(800, 600);
@@ -261,6 +263,32 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             [this](const QString& notation, double referenceHz, double bpm) {
                 toolPaletteController_->setChordNotation(notation.toStdString(), referenceHz, bpm);
             });
+
+    // Workflow & Device Polish, Installment A (v0.0.42.1) - see
+    // ConfigureDevicesPanel's own class docs.
+    configureDevicesPanel_ = new ConfigureDevicesPanel(this);
+    configureDevicesPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, configureDevicesPanel_);
+    configureDevicesPanel_->setInputDevices(toQStringList(recordEngine_.availableInputDeviceNames()));
+    configureDevicesPanel_->setOutputDevices(toQStringList(playbackController_->availableOutputDeviceNames()));
+    connect(configureDevicesPanel_, &ConfigureDevicesPanel::refreshRequested, this,
+            &MainWindow::refreshConfiguredDevices);
+    connect(configureDevicesPanel_, &ConfigureDevicesPanel::inputDeviceChanged, this,
+            &MainWindow::setConfiguredInputDevice);
+    connect(configureDevicesPanel_, &ConfigureDevicesPanel::outputDeviceChanged, this,
+            &MainWindow::setConfiguredOutputDevice);
+    connect(configureDevicesPanel_, &ConfigureDevicesPanel::inputGainPercentChanged, this,
+            &MainWindow::setConfiguredInputGain);
+    connect(configureDevicesPanel_, &ConfigureDevicesPanel::outputGainPercentChanged, this,
+            &MainWindow::setConfiguredOutputGain);
+    connect(configureDevicesPanel_, &ConfigureDevicesPanel::testInputToggled, this,
+            &MainWindow::toggleTestInputDevice);
+    connect(configureDevicesPanel_, &ConfigureDevicesPanel::testOutputToggled, this,
+            &MainWindow::toggleTestOutputDevice);
+
+    testInputLevelTimer_ = new QTimer(this);
+    testInputLevelTimer_->setInterval(100);  // same cadence as recordDrainTimer_ - see its own docs.
+    connect(testInputLevelTimer_, &QTimer::timeout, this, &MainWindow::pollTestInputLevel);
 
     // Selection & Fill (v0.Y.25.1), Selection Type (v0.Y.35.1 Installment
     // A) - toolPaletteController_ isn't constructed until just below, but
@@ -758,6 +786,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     transportToolBar->addAction(toolConfigurationPanel_->toggleViewAction());
     // Off by default, same reasoning - see chordGeneratorPanel_'s own docs.
     transportToolBar->addAction(chordGeneratorPanel_->toggleViewAction());
+    // Off by default, same reasoning - see configureDevicesPanel_'s own docs.
+    transportToolBar->addAction(configureDevicesPanel_->toggleViewAction());
     transportToolBar->addAction(selectionConfigurationPanel_->toggleViewAction());
     // Off by default, same reasoning - see gridPanel_'s own docs.
     transportToolBar->addAction(gridPanel_->toggleViewAction());
@@ -981,6 +1011,16 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     recordDrainTimer_->stop();
     recordEngine_.stop();
     recordPanel_->setRecording(false);
+    // Also stops any in-progress Configure Devices "test" session - a
+    // project switch is exactly the kind of unrelated event every other
+    // reset here already treats as "start clean", same reasoning as
+    // paintAction_/pickAction_ below.
+    testInputLevelTimer_->stop();
+    deviceTestRecordEngine_.stop();
+    deviceTestTonePlayer_.stop();
+    configureDevicesPanel_->setInputLevel(0.0f);
+    configureDevicesPanel_->setTestingInput(false);
+    configureDevicesPanel_->setTestingOutput(false);
     playbackController_->stop();
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
@@ -2064,8 +2104,86 @@ void MainWindow::setRecordInputDevice(const QString& deviceName) {
     recordEngine_.setPreferredInputDevice(deviceName.toStdString());
 }
 
+void MainWindow::refreshConfiguredDevices() {
+    const QStringList inputDevices = toQStringList(recordEngine_.availableInputDeviceNames());
+    const QStringList outputDevices = toQStringList(playbackController_->availableOutputDeviceNames());
+    configureDevicesPanel_->setInputDevices(inputDevices);
+    configureDevicesPanel_->setOutputDevices(outputDevices);
+    recordPanel_->setInputDevices(inputDevices);
+    playbackPanel_->setOutputDevices(outputDevices);
+    if (loopEngine_) {
+        loopPanel_->setInputDevices(toQStringList(loopEngine_->availableInputDeviceNames()));
+        loopPanel_->setOutputDevices(toQStringList(loopEngine_->availableOutputDeviceNames()));
+    }
+}
+
+void MainWindow::setConfiguredInputDevice(const QString& deviceName) {
+    configuredInputDeviceName_ = deviceName;
+    recordEngine_.setPreferredInputDevice(deviceName.toStdString());
+    if (loopEngine_) {
+        loopEngine_->setPreferredInputDevice(deviceName.toStdString());
+    }
+    recordPanel_->setSelectedInputDevice(deviceName);
+    loopPanel_->setSelectedInputDevice(deviceName);
+}
+
+void MainWindow::setConfiguredOutputDevice(const QString& deviceName) {
+    configuredOutputDeviceName_ = deviceName;
+    setPlaybackOutputDevice(deviceName);
+    if (loopEngine_) {
+        loopEngine_->setPreferredOutputDevice(deviceName.toStdString());
+    }
+    playbackPanel_->setSelectedOutputDevice(deviceName);
+    loopPanel_->setSelectedOutputDevice(deviceName);
+}
+
+void MainWindow::setConfiguredInputGain(int percent) {
+    const float gain = static_cast<float>(percent) / 100.0f;
+    recordEngine_.setInputGain(gain);
+    // Kept consistent with the real configured gain, so "test" actually
+    // reflects what real recording would sound/level like.
+    deviceTestRecordEngine_.setInputGain(gain);
+    if (loopEngine_) {
+        loopEngine_->setInputGain(gain);
+    }
+}
+
+void MainWindow::setConfiguredOutputGain(int percent) {
+    setPlaybackVolume(percent);
+    playbackPanel_->setVolumePercent(percent);
+}
+
+void MainWindow::toggleTestInputDevice(bool testing) {
+    if (testing) {
+        deviceTestRecordEngine_.setPreferredInputDevice(configuredInputDeviceName_.toStdString());
+        deviceTestRecordEngine_.start();
+        testInputLevelTimer_->start();
+    } else {
+        testInputLevelTimer_->stop();
+        deviceTestRecordEngine_.stop();
+        configureDevicesPanel_->setInputLevel(0.0f);
+    }
+}
+
+void MainWindow::toggleTestOutputDevice(bool testing) {
+    if (testing) {
+        deviceTestTonePlayer_.start(configuredOutputDeviceName_.toStdString());
+    } else {
+        deviceTestTonePlayer_.stop();
+    }
+}
+
 void MainWindow::drainRecording() {
     recordEngine_.drainAvailable();
+}
+
+void MainWindow::pollTestInputLevel() {
+    // Keeps deviceTestRecordEngine_'s own ring buffer from overflowing -
+    // the accumulated capturedAudio() itself is never used for testing,
+    // only currentInputLevel() below, but letting the ring fill up would
+    // start dropping samples mid-block, same reasoning as drainRecording().
+    deviceTestRecordEngine_.drainAvailable();
+    configureDevicesPanel_->setInputLevel(deviceTestRecordEngine_.currentInputLevel());
 }
 
 void MainWindow::poolTopmostLayer() {

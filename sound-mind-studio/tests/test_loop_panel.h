@@ -14,4 +14,6 @@ private slots:
     void setInputDevicesListsSystemDefaultFirst();
     void changingTheInputDeviceEmitsInputDeviceChanged();
     void changingTheOutputDeviceEmitsOutputDeviceChanged();
+    void setSelectedInputDeviceChangesTheComboWithoutEmittingInputDeviceChanged();
+    void setSelectedOutputDeviceChangesTheComboWithoutEmittingOutputDeviceChanged();
 };

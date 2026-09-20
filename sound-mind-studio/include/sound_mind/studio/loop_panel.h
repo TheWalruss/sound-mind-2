@@ -69,6 +69,20 @@ public:
     ///        listed after the default entry.
     void setOutputDevices(const QStringList& deviceNames);
 
+    /// @brief Selects `deviceName` in the input device picker, without
+    ///        repopulating its list or emitting inputDeviceChanged() -
+    ///        `v0.0.42.1` (Configure Devices panel) - see `RecordPanel::
+    ///        setSelectedInputDevice()`'s own docs for why this exists.
+    /// @param deviceName The device to select; falls back to
+    ///        "(System Default)" if not currently in the picker's list.
+    void setSelectedInputDevice(const QString& deviceName);
+
+    /// @brief Selects `deviceName` in the output device picker - see
+    ///        setSelectedInputDevice()'s own docs.
+    /// @param deviceName The device to select; falls back to
+    ///        "(System Default)" if not currently in the picker's list.
+    void setSelectedOutputDevice(const QString& deviceName);
+
     /// @brief Sets the "Freeze Loop" checkbox's displayed state without
     ///        emitting keepLoopingChanged() - for `MainWindow` to sync
     ///        display state without a signal feedback loop.

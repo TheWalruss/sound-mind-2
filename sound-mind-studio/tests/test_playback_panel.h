@@ -16,4 +16,6 @@ private slots:
     void movingThePositionSliderEmitsSeekRequested();
     void setPositionSecondsDoesNotEmitSeekRequested();
     void setPositionSecondsUpdatesTheTimeLabel();
+    void setSelectedOutputDeviceChangesTheComboWithoutEmittingOutputDeviceChanged();
+    void setSelectedOutputDeviceFallsBackToSystemDefaultForAnUnknownName();
 };

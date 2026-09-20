@@ -65,6 +65,19 @@ public:
     ///        listed after the default entry.
     void setOutputDevices(const QStringList& deviceNames);
 
+    /**
+     * @brief Selects `deviceName` in the output device picker, without
+     *        repopulating its list or emitting outputDeviceChanged() -
+     *        `v0.0.42.1` (Configure Devices panel), for `MainWindow` to
+     *        keep this picker in sync when the *same* underlying
+     *        preference is changed from the Configure Devices panel
+     *        instead of this one.
+     * @param deviceName The device to select; falls back to
+     *        "(System Default)" if it isn't currently in the picker's own
+     *        list (e.g. stale until the next setOutputDevices() refresh).
+     */
+    void setSelectedOutputDevice(const QString& deviceName);
+
     /// @brief Sets the volume slider's displayed position without emitting
     ///        volumePercentChanged() - for `MainWindow` to sync display
     ///        state without a signal feedback loop.

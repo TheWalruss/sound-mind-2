@@ -1,6 +1,7 @@
 #include "sound_mind/core/loop_engine.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <utility>
 
@@ -123,6 +124,14 @@ const std::string& LoopEngine::preferredOutputDevice() const noexcept {
     return preferredOutputDevice_;
 }
 
+void LoopEngine::setInputGain(float gain) noexcept {
+    inputGain_.store(std::clamp(gain, 0.0f, kMaxGain), std::memory_order_relaxed);
+}
+
+float LoopEngine::inputGain() const noexcept { return inputGain_.load(std::memory_order_relaxed); }
+
+float LoopEngine::currentInputLevel() const noexcept { return currentInputLevel_.load(std::memory_order_relaxed); }
+
 void LoopEngine::setKeepLooping(bool keepLooping) noexcept {
     keepLooping_.store(keepLooping, std::memory_order_relaxed);
 }
@@ -166,14 +175,19 @@ void LoopEngine::processBlock(const float* const* inputChannelData, int numInput
     // simply never recorded - see setKeepLooping()'s docs - so the last
     // successfully processed loop just keeps replaying, untouched, below.
     if (!keepLooping_.load(std::memory_order_relaxed) && numInputChannels > 0 && inputChannelData != nullptr) {
+        const float gain = inputGain_.load(std::memory_order_relaxed);
+        float peak = 0.0f;
         auto writeScope = captureFifo_.write(numSamples);
         int inputIndex = 0;
         writeScope.forEach([&](int ringIndex) {
-            captureRingLeft_[static_cast<std::size_t>(ringIndex)] = inputChannelData[0][inputIndex];
-            captureRingRight_[static_cast<std::size_t>(ringIndex)] =
-                (numInputChannels > 1) ? inputChannelData[1][inputIndex] : inputChannelData[0][inputIndex];
+            const float left = inputChannelData[0][inputIndex] * gain;
+            const float right = (numInputChannels > 1) ? inputChannelData[1][inputIndex] * gain : left;
+            captureRingLeft_[static_cast<std::size_t>(ringIndex)] = left;
+            captureRingRight_[static_cast<std::size_t>(ringIndex)] = right;
+            peak = std::max({peak, std::abs(left), std::abs(right)});
             ++inputIndex;
         });
+        currentInputLevel_.store(peak, std::memory_order_relaxed);
         // Any input samples that didn't fit (the worker thread falling
         // behind) are simply dropped, not blocked on - an audio callback
         // must never wait. A rare, accepted degradation, not a crash.

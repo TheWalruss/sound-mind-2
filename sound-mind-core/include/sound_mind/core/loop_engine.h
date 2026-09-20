@@ -220,6 +220,30 @@ public:
     /// @return The preferred output device name.
     [[nodiscard]] const std::string& preferredOutputDevice() const noexcept;
 
+    /// @brief Sets the input gain applied to newly captured audio in
+    ///        processBlock() - `v0.0.42.1` (Configure Devices panel), the
+    ///        same addition and `[0, kMaxGain]` clamping as
+    ///        `RecordEngine::setInputGain()`. Never affects playback - only
+    ///        what's captured toward the *next* loop.
+    /// @param gain The new gain - `1.0` is unchanged/unity.
+    void setInputGain(float gain) noexcept;
+
+    /// @brief The current input gain - see setInputGain().
+    /// @return The current gain, `1.0` meaning unity (the default).
+    [[nodiscard]] float inputGain() const noexcept;
+
+    /// @brief The upper bound setInputGain() clamps to - see
+    /// `RecordEngine::kMaxGain`'s own identical reasoning.
+    static constexpr float kMaxGain = 2.0f;
+
+    /// @brief The most recently processed block's own peak input sample
+    ///        magnitude, post-gain - see `RecordEngine::currentInputLevel()`'s
+    ///        own docs for the exact "no smoothing" semantics this mirrors.
+    /// @return The current peak level, post-gain; never negative.
+    /// @note Real-time-safe (a plain atomic load), safely callable from
+    ///       either thread - same as inputGain().
+    [[nodiscard]] float currentInputLevel() const noexcept;
+
     /**
      * @brief Whether subsequent loops should replay the last successfully
      *        captured take unchanged instead of recording over it.
@@ -425,6 +449,8 @@ private:
     std::atomic<std::uint64_t> loopsDecoded_{0};
     std::atomic<bool> keepLooping_{false};
     std::atomic<bool> running_{false};
+    std::atomic<float> inputGain_{1.0f};
+    std::atomic<float> currentInputLevel_{0.0f};
 
     mutable std::mutex imageMutex_;
     sound_mind::codec::StreamImage currentImage_;

@@ -26,10 +26,11 @@ in-app behavior is correct and this guide is due an update.
 15. [Playback](#playback)
 16. [Recording](#recording)
 17. [Loop Mode](#loop-mode)
-18. [Pooling a Layer](#pooling-a-layer)
-19. [Exporting](#exporting)
-20. [Saving and Project Files](#saving-and-project-files)
-21. [What's Not Here Yet](#whats-not-here-yet)
+18. [Configure Devices](#configure-devices)
+19. [Pooling a Layer](#pooling-a-layer)
+20. [Exporting](#exporting)
+21. [Saving and Project Files](#saving-and-project-files)
+22. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -1152,6 +1153,28 @@ the next time you start the loop, not immediately.
 While a pass is being captured, the canvas grows continuously as audio
 comes in, rather than waiting silently until the whole pass finishes -
 watch the spectrogram fill in live, in real time.
+
+## Configure Devices
+
+The **Configure Devices** toolbar button opens a dockable panel (off by
+default) that consolidates input and output device selection into one
+place - a faster alternative to the per-panel pickers Playback/Recording/
+Loop Mode each already have, which keep working exactly as before.
+
+- **Refresh Devices** re-scans for newly connected devices.
+- **Input**: pick the active input device - applies to both Recording and
+  Loop Mode at once. A **Gain** slider (0-200%, 100% is unchanged) boosts
+  or cuts the signal before it's captured. Click **Test** to see a live
+  level meter respond as you speak or play into the device, without
+  starting a real recording.
+- **Output**: pick the active output device - applies to both Playback
+  and Loop Mode at once. A **Gain** slider works the same way. Click
+  **Test** to play a brief tone through the device, confirming you hear
+  it from the right place.
+
+Changing a device here updates the matching picker on the Playback/
+Record/Loop panels too, so they never disagree about which device is
+active.
 
 ## Pooling a Layer
 

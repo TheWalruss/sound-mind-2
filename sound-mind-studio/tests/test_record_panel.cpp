@@ -61,3 +61,16 @@ void RecordPanelTest::changingTheInputDeviceEmitsInputDeviceChanged() {
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).toString(), QStringLiteral("Microphone A"));
 }
+
+void RecordPanelTest::setSelectedInputDeviceChangesTheComboWithoutEmittingInputDeviceChanged() {
+    RecordPanel panel;
+    panel.setInputDevices({QStringLiteral("Microphone A"), QStringLiteral("Microphone B")});
+    QSignalSpy spy(&panel, &RecordPanel::inputDeviceChanged);
+
+    panel.setSelectedInputDevice(QStringLiteral("Microphone B"));
+
+    QCOMPARE(spy.count(), 0);
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("inputDeviceCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(combo->currentData().toString(), QStringLiteral("Microphone B"));
+}

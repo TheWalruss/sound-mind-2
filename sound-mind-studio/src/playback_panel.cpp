@@ -122,6 +122,12 @@ void PlaybackPanel::setOutputDevices(const QStringList& deviceNames) {
     populateDeviceCombo(outputDeviceCombo_, deviceNames);
 }
 
+void PlaybackPanel::setSelectedOutputDevice(const QString& deviceName) {
+    const QSignalBlocker blocker(outputDeviceCombo_);
+    const int index = outputDeviceCombo_->findData(deviceName);
+    outputDeviceCombo_->setCurrentIndex(index >= 0 ? index : 0);
+}
+
 void PlaybackPanel::setVolumePercent(int percent) {
     const QSignalBlocker blocker(volumeSlider_);
     volumeSlider_->setValue(std::clamp(percent, 0, kMaxVolumePercent));

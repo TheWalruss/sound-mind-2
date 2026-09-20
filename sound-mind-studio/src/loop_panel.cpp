@@ -110,6 +110,18 @@ void LoopPanel::setOutputDevices(const QStringList& deviceNames) {
     populateDeviceCombo(outputDeviceCombo_, deviceNames);
 }
 
+void LoopPanel::setSelectedInputDevice(const QString& deviceName) {
+    const QSignalBlocker blocker(inputDeviceCombo_);
+    const int index = inputDeviceCombo_->findData(deviceName);
+    inputDeviceCombo_->setCurrentIndex(index >= 0 ? index : 0);
+}
+
+void LoopPanel::setSelectedOutputDevice(const QString& deviceName) {
+    const QSignalBlocker blocker(outputDeviceCombo_);
+    const int index = outputDeviceCombo_->findData(deviceName);
+    outputDeviceCombo_->setCurrentIndex(index >= 0 ? index : 0);
+}
+
 void LoopPanel::setKeepLoopingChecked(bool checked) {
     const QSignalBlocker blocker(keepLoopingCheckBox_);
     keepLoopingCheckBox_->setChecked(checked);
