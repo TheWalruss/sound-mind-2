@@ -203,4 +203,7 @@ private slots:
     // Workflow & Device Polish, Installment D: Documentation links (v0.0.42.4)
     void openUserDocIfBundledOpensItAndReturnsTrueWhenPresent();
     void openUserDocIfBundledReturnsFalseWithoutOpeningAnythingWhenMissing();
+
+    // Workflow & Device Polish, Installment E: Hardware Acceleration toggle (v0.0.42.5)
+    void setHardwareAccelerationEnabledForwardsToCore();
 };

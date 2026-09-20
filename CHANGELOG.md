@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.42.5] - 2026-09-20
+
+The fifth and final installment of "Workflow & Device Polish" - **the Hardware Acceleration toggle**. Closes out this milestone in full.
+
+### Added
+
+- **A "Hardware Acceleration" checkable option on the View menu**: turn GPU compute on/off at will, so its actual effect (speed, correctness, power/heat/battery) can be evaluated on demand. Persists across restarts, and repaints the canvas immediately on toggle so a comparison is instant.
+
+Full regression: sound-mind-codec 46/46, sound-mind-core 804/804 (up from 801), sound-mind-studio full suite passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #120.
+
 ## [0.0.42.4] - 2026-09-20
 
 The fourth installment of "Workflow & Device Polish" - **documentation links**.

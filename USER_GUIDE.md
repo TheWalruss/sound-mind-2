@@ -110,8 +110,10 @@ Once a project is open, the title bar shows the project's name next to
   that way across New/Open Project, within the same run of the Studio.
 - **File menu** - New/Open/Save/Save As, Import Audio/Image, Export
   Audio/Video.
-- **View menu** - Zoom controls; see [Canvas Navigation](#canvas-navigation)
-  below.
+- **View menu** - Zoom controls (see [Canvas Navigation](#canvas-navigation)
+  below) and a **Hardware Acceleration** checkbox: turn GPU compute off to
+  compare speed/results against the CPU path, or if you suspect it's
+  causing a problem. Stays as you left it across restarts.
 - **Help menu** - Quick Start, Readme, User Guide, and Changelog (each
   opens a styled HTML page in your default browser), plus About Sound
   Mind Studio.

@@ -43,6 +43,7 @@
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/compositor.h"
+#include "sound_mind/core/gpu_compute_availability.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/layer_export.h"
@@ -719,6 +720,28 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* zoomToActualSizeAction = zoomMenu->addAction(tr("&Actual Size"));
     zoomToActualSizeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_1));
     connect(zoomToActualSizeAction, &QAction::triggered, this, &MainWindow::zoomToActualSize);
+
+    // Workflow & Device Polish, Installment E: Hardware Acceleration toggle
+    // (v0.0.42.5) - docs/sound-mind-design.md's own "Hardware acceleration
+    // option" ("a menu option to toggle GPU acceleration"). Persisted via
+    // settings_ (the same ini-format store recentProjects_ already uses),
+    // defaulting to enabled - so it's a lasting preference, not a
+    // session-only diagnostic switch, confirmed with the user. Initial
+    // state is applied directly to sound_mind::core's own flag here
+    // (not through setHardwareAccelerationEnabled(), which would also
+    // needlessly re-save the exact same value back to settings_); the
+    // QSignalBlocker keeps that initial setChecked() call from firing
+    // toggled() and duplicating the work.
+    QAction* hardwareAccelerationAction = viewMenu->addAction(tr("&Hardware Acceleration"));
+    hardwareAccelerationAction->setCheckable(true);
+    const bool hardwareAccelerationEnabled =
+        settings_.value(QStringLiteral("hardwareAccelerationEnabled"), true).toBool();
+    sound_mind::core::setHardwareAccelerationEnabled(hardwareAccelerationEnabled);
+    {
+        const QSignalBlocker blocker(hardwareAccelerationAction);
+        hardwareAccelerationAction->setChecked(hardwareAccelerationEnabled);
+    }
+    connect(hardwareAccelerationAction, &QAction::toggled, this, &MainWindow::setHardwareAccelerationEnabled);
 
     // Workflow & Device Polish, Installment D: Documentation links
     // (v0.0.42.4) - each link is reachable from both the Help menu and the
@@ -1970,6 +1993,12 @@ void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
 
 void MainWindow::setPlaybackVolume(int percent) {
     playbackController_->setVolume(percent);
+}
+
+void MainWindow::setHardwareAccelerationEnabled(bool enabled) {
+    settings_.setValue(QStringLiteral("hardwareAccelerationEnabled"), enabled);
+    sound_mind::core::setHardwareAccelerationEnabled(enabled);
+    canvas_->update();
 }
 
 void MainWindow::setPlaybackRepeat(bool enabled) {

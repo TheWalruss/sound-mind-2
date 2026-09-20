@@ -381,6 +381,31 @@ public slots:
     void setPlaybackVolume(int percent);
 
     /**
+     * @brief Sets whether GPU-accelerated compute is enabled - the actual
+     *        work behind the View menu's own Hardware Acceleration
+     *        checkable action (`v0.0.42.5`, Workflow & Device Polish,
+     *        Installment E).
+     *
+     * Persists the choice via `settings_` (the same ini-format store
+     * `recentProjects_` already uses, restored on every later `MainWindow`
+     * construction - not a session-only diagnostic switch, confirmed with
+     * the user), forwards to
+     * `sound_mind::core::setHardwareAccelerationEnabled()` (the real flag
+     * every GPU-accelerated call site in `sound-mind-core` already checks
+     * - `compositeProject()`'s per-layer mixing, `applyFilter()`'s
+     * `UniformBlur` case), and repaints the canvas immediately so flipping
+     * it has an instantly visible (or, for a correctness check, instantly
+     * *invisible* - the whole point) effect to compare, per
+     * `docs/sound-mind-design.md`'s own "does it go faster, are the
+     * results the same" framing.
+     *
+     * @param enabled `true` to allow the GPU path (still falling back to
+     *        CPU if no real device is available); `false` to force every
+     *        GPU-accelerated call site onto its own CPU implementation.
+     */
+    void setHardwareAccelerationEnabled(bool enabled);
+
+    /**
      * @brief Sets whether Repeat Playback is active - the actual work
      *        behind the Playback panel's own Repeat checkbox (`v0.0.42.2`,
      *        Workflow & Device Polish, Installment B).

@@ -28,6 +28,7 @@
 
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/gpu_compute_availability.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/playback_engine.h"
@@ -3774,4 +3775,18 @@ void MainWindowTest::openUserDocIfBundledReturnsFalseWithoutOpeningAnythingWhenM
 
     QVERIFY(!opened);
     QVERIFY(!window.lastOpenedUrl.has_value());
+}
+
+void MainWindowTest::setHardwareAccelerationEnabledForwardsToCore() {
+    TestMainWindow window;
+
+    window.setHardwareAccelerationEnabled(false);
+    QVERIFY(!sound_mind::core::hardwareAccelerationEnabled());
+
+    // Restores the documented default - this process-wide flag is re-
+    // applied fresh (from settings_) by every later TestMainWindow's own
+    // constructor, but leaving it false here would still affect any test
+    // that runs before the next TestMainWindow is constructed.
+    window.setHardwareAccelerationEnabled(true);
+    QVERIFY(sound_mind::core::hardwareAccelerationEnabled());
 }

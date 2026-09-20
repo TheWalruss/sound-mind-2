@@ -8,23 +8,30 @@ namespace sound_mind::core {
 
 namespace {
 
-// Test-only override - see setGpuComputeForcedOffForTesting()'s own
-// docs. A plain bool, not std::atomic<bool>: every GPU-accelerated call
-// site this backs runs on whichever single thread is currently recomputing
-// a Layer's cache or recompositing a Project, and tests set this before
-// calling into applyFilter()/compositeProject(), not concurrently with a
-// GPU dispatch already in flight - matches sound_mind::gpu::ComputeDevice's
-// own documented "not thread-safe" contract.
-bool gpuComputeForcedOff = false;
+// The one real flag behind both hardwareAccelerationEnabled() (the real,
+// persisted user preference) and setGpuComputeForcedOffForTesting() (its
+// own long-standing, inverted-sense test-only name) - see both functions'
+// own docs. A plain bool, not std::atomic<bool>: every GPU-accelerated
+// call site this backs runs on whichever single thread is currently
+// recomputing a Layer's cache or recompositing a Project, and callers set
+// this before calling into applyFilter()/compositeProject(), not
+// concurrently with a GPU dispatch already in flight - matches
+// sound_mind::gpu::ComputeDevice's own documented "not thread-safe"
+// contract.
+bool gpuComputeEnabled = true;
 
 }  // namespace
 
-void setGpuComputeForcedOffForTesting(bool forcedOff) { gpuComputeForcedOff = forcedOff; }
+bool hardwareAccelerationEnabled() { return gpuComputeEnabled; }
+
+void setHardwareAccelerationEnabled(bool enabled) { gpuComputeEnabled = enabled; }
+
+void setGpuComputeForcedOffForTesting(bool forcedOff) { gpuComputeEnabled = !forcedOff; }
 
 namespace detail {
 
 sound_mind::gpu::ComputeDevice* gpuComputeDeviceOrNull() {
-    if (gpuComputeForcedOff) {
+    if (!gpuComputeEnabled) {
         return nullptr;
     }
     // Created at most once per process, on whichever thread first asks for

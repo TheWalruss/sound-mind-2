@@ -677,7 +677,15 @@ As shipped (Installment D, `v0.0.42.4`, see `docs/sound-mind-architecture.md`'s 
 
 **Demo:** open **Help → Quick Start** (or any of the other four) and confirm it opens in your browser; open the Landing Page (close any open project) and confirm the same five links appear there too.
 
-Documentation links now ship in Installment D; the Hardware Acceleration toggle remains scheduled as Installment E.
+As shipped (Installment E, `v0.0.42.5`, see `docs/sound-mind-architecture.md`'s Decision #120):
+
+- **A checkable "Hardware Acceleration" action on the View menu**, persisted via `QSettings` (the same store `recentProjects_` already uses) rather than reset to on every launch - a lasting preference, not a session-only diagnostic switch, confirmed with the user.
+- **`sound_mind::core::hardwareAccelerationEnabled()`/`setHardwareAccelerationEnabled()`** - the real, non-test-specific entry points for the exact same flag `setGpuComputeForcedOffForTesting()` already backed; that older, test-only name is kept, unchanged, as a thin inverted-sense wrapper around the new one, so every existing GPU/CPU-equivalence test keeps working unchanged.
+- **Toggling repaints the canvas immediately** - `compositeProject()` and `applyFilter()`'s `UniformBlur` case are both recomputed from scratch on every paint (no persistent cache to invalidate), so flipping the toggle and seeing a redraw is enough to actually compare the GPU and CPU paths, matching this milestone's own "does it go faster, are the results the same" framing.
+
+**Demo:** open a project with visible layers, toggle **View → Hardware Acceleration** off then on, and confirm the canvas repaints each time with no visible difference in the composited result; quit and relaunch the Studio and confirm the toggle's own state was remembered.
+
+This closes out the "Workflow & Device Polish" milestone (Installments A-E) in full.
 
 **No Y bump** - workflow/device/UI additions; no project file format change.
 
