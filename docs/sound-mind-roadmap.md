@@ -711,9 +711,20 @@ A real visual and functional overhaul of `v0.Y.15.1`'s deliberately minimal firs
 
 **Demo:** open a project with several layers including one with a MindWave-bound opacity and one Filter layer; see each rendered according to its own kind; select a layer and watch its row expand to reveal its full control set, collapsing again once deselected.
 
-**Open question, not yet resolved**: exactly which additional controls belong in the expanded row beyond the five named above (the design note's own "anything else I might have missed") - left to this milestone's own scoping pass, once the five confirmed ones are underway.
+**Settled at implementation time (`v0.0.44.1`)**: the "anything else I might have missed" open question resolved in favor of keeping the pre-existing Time Alignment controls (`translationColumns()`/`rescaleFactor()`, `v0.Y.21.1`) in the expanded row too, alongside the five named controls - dropping already-shipped functionality wasn't what this redesign asked for. See `docs/sound-mind-architecture.md`'s Decision #121 for this and several other real implementation-time decisions (the reorder handle being one of the selection-revealed controls in particular, and layer-name auto-uniqueness being fully automatic/silent).
 
-**No Y bump expected** - presentation/UI only; nothing about `Layer`'s own serialized fields needs to change (a MindWave-opacity link and a `Layer`'s `name()`/`opacity()` already exist).
+**Taken out of its normal roadmap order** (confirmed with the user, 2026-09-20) - implemented directly after "Workflow & Device Polish" (`v0.0.42.5`), ahead of `v0.Y.43.1`'s own "Refactor & Clean Up" pass, since a cleanup pass is more useful once this redesign's own new code already exists to be swept up by it, not before.
+
+As shipped (`v0.0.44.1`, see `docs/sound-mind-architecture.md`'s Decision #121):
+
+- **`Project::uniqueLayerName()`**, called automatically by `addLayer()` for every newly added layer (audio import, "+ Add Layer"/"+ Add Filter Layer" alike) and explicitly by the Studio's own rename flow - appends `" (2)"`, `" (3)"`, ... until free, silently, with no error dialog ever shown for a name collision.
+- **`sound_mind::codec::downsampleAveraged()`** (new, Codec) and **`sound_mind::core::renderLayerThumbnail()`** (new, Core) - area-averaging shrink, not the existing nearest-neighbor `resampleHorizontally()` (correct for a *timeline* rescale, wrong for a thumbnail).
+- **A per-layer thumbnail cache in `LayerController`**, invalidated only for the specific layer a paint/pick/fill/paste/warp/chord-stamp/undo/redo operation actually changed - not regenerated for every layer on every edit.
+- **`LayersPanel`'s own accordion row restructuring**, `MindWaveController` pushing each MindWave's own preview thumbnail into it, and `Project`'s new name-uniqueness enforcement.
+
+**Demo:** drag two identical audio files onto the canvas and confirm the second lands as `"<name> (2)"`, not a silent duplicate name; select and deselect a layer row and watch its full control set appear/disappear; bind a layer's opacity to a MindWave and see its grayscale preview appear as a child row beneath it.
+
+**No Y bump** - presentation/UI plus one new `Project` method; nothing about a project file's own serialized fields changed.
 
 ### v0.Y.45.1 - Principal Modes
 

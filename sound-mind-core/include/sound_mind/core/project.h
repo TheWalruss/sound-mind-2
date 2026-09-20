@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -113,10 +115,41 @@ public:
      * @param layer The layer to add. Its own id is ignored - a fresh,
      *        unique id is assigned to the appended copy instead, since a
      *        caller building a layer to import has no way to know what ids
-     *        are already taken.
+     *        are already taken. Its own name is passed through
+     *        uniqueLayerName() too (`v0.Y.44.1`, Layers Panel Redesign) -
+     *        a caller never needs to check for a name collision itself.
      * @return The id actually assigned to the appended layer.
      */
     LayerId addLayer(Layer layer);
+
+    /**
+     * @brief A name guaranteed not to collide with any current layer's own
+     *        name (except `excludingId`'s, if given) - `docs/sound-mind-
+     *        design.md`'s "Layer panel styling" ("Layer names shall be
+     *        unique - this can be enforced with serial-number suffixes"),
+     *        `v0.Y.44.1` (Layers Panel Redesign).
+     *
+     * Appends `" (2)"`, `" (3)"`, ... (trying each in turn) until a free
+     * name is found; returns `desiredName` unchanged if it's already
+     * unique. `addLayer()` calls this itself for every newly added layer,
+     * so every caller that creates one - `sound-mind-studio`'s "+ Add
+     * Layer"/"+ Add Filter Layer" buttons, audio import, anything else -
+     * gets a unique name automatically, with no extra wiring of its own
+     * needed; `sound-mind-studio`'s own rename flow calls this directly
+     * (with `excludingId` set to the layer being renamed) before actually
+     * applying an edited name.
+     *
+     * @param desiredName The name to make unique.
+     * @param excludingId A layer id whose own current name is ignored by
+     *        the collision check - e.g. renaming a layer to the exact name
+     *        it already has shouldn't get needlessly suffixed.
+     *        `std::nullopt` (the default) excludes nothing, matching
+     *        `addLayer()`'s own use for a layer that doesn't exist in this
+     *        project yet.
+     * @return A name that doesn't collide with any other current layer's.
+     */
+    [[nodiscard]] std::string uniqueLayerName(const std::string& desiredName,
+                                               std::optional<LayerId> excludingId = std::nullopt) const;
 
     /**
      * @brief Removes the layer with the given id, if one exists.

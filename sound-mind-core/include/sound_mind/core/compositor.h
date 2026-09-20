@@ -38,6 +38,34 @@ namespace sound_mind::core {
                                                                       std::uint32_t canvasWidth);
 
 /**
+ * @brief Renders a small thumbnail of a single layer's own raw cached
+ *        content - `docs/sound-mind-design.md`'s "Layer panel styling"
+ *        ("a rescaled representation of their visual contents... diligent[ly]
+ *        [rescaled] to minimize the effects of aliasing"), `v0.Y.44.1`
+ *        (Layers Panel Redesign).
+ *
+ * Unlike renderLayer(), this ignores the layer's own `translationColumns()`/
+ * `rescaleFactor()` entirely - a thumbnail is meant to help recognize a
+ * layer's own visual content at a glance, not show where it sits on the
+ * project's timeline (that's what the canvas itself already shows once
+ * selected). `sound_mind::codec::downsampleAveraged()` does the actual
+ * area-averaging shrink - not `renderLayer()`'s/`compositeProject()`'s own
+ * nearest-neighbor `resampleHorizontally()`, which is correct for
+ * *stretching/compressing a timeline* but would alias badly shrinking a
+ * whole image down to icon size.
+ *
+ * @param layer The layer to render a thumbnail for.
+ * @param width The thumbnail's own width, in pixels.
+ * @param height The thumbnail's own height, in pixels.
+ * @return The rendered thumbnail, exactly `width` x `height`, or
+ *         `std::nullopt` if the layer has no cached content yet
+ *         (`layer.content()` is empty) - the same condition renderLayer()
+ *         itself returns `std::nullopt` for.
+ */
+[[nodiscard]] std::optional<sound_mind::codec::RgbImage> renderLayerThumbnail(const Layer& layer, std::uint32_t width,
+                                                                               std::uint32_t height);
+
+/**
  * @brief Composites every visible, contentful layer in `project` into one
  *        combined `StreamImage`, per `docs/sound-mind-design.md`'s new
  *        "Compositing" subsection and `docs/sound-mind-roadmap.md`'s

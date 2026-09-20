@@ -2,13 +2,28 @@
 
 #include <QMessageBox>
 
+#include "sound_mind/core/compositor.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/playback_controller.h"
+#include "sound_mind/studio/qt_image_conversion.h"
 #include "sound_mind/studio/undo_stack.h"
+
+namespace {
+
+/// @brief The Layers Panel's own thumbnail size, in pixels
+/// (`v0.Y.44.1`, Layers Panel Redesign) - wide enough to read as a
+/// recognizable spectrogram shape at a glance once stretched across a
+/// row's own width (`LayerRowWidget`'s own `QLabel::setScaledContents()`
+/// does that stretch at display time), tall enough to be more than a
+/// sliver at the row header's own fixed height.
+constexpr std::uint32_t kThumbnailWidth = 160;
+constexpr std::uint32_t kThumbnailHeight = 32;
+
+}  // namespace
 
 namespace sound_mind::studio {
 
@@ -64,7 +79,25 @@ std::optional<sound_mind::core::LayerId> LayerController::paintTargetLayerId() c
     return project_->layers().front().id();
 }
 
-void LayerController::refreshLayersPanel() {
+QImage LayerController::thumbnailFor(const sound_mind::core::Layer& layer) {
+    const auto cached = thumbnailCache_.find(layer.id());
+    if (cached != thumbnailCache_.end()) {
+        return cached->second;
+    }
+    const auto rendered = sound_mind::core::renderLayerThumbnail(layer, kThumbnailWidth, kThumbnailHeight);
+    if (!rendered.has_value()) {
+        return QImage();  // No content yet - never cached, see this method's own docs.
+    }
+    const QImage thumbnail = toQImageView(*rendered).copy();
+    thumbnailCache_[layer.id()] = thumbnail;
+    return thumbnail;
+}
+
+void LayerController::refreshLayersPanel(std::optional<sound_mind::core::LayerId> changedContentLayer) {
+    if (changedContentLayer.has_value()) {
+        thumbnailCache_.erase(*changedContentLayer);
+    }
+
     std::vector<LayersPanel::RowData> rows;
     if (project_ != nullptr) {
         rows.reserve(project_->layers().size());
@@ -86,6 +119,7 @@ void LayerController::refreshLayersPanel() {
             // immediately after every single bind/unbind.
             row.opacityMindWaveId = layer.opacityMindWave();
             row.blendMode = layer.blendMode();
+            row.thumbnail = thumbnailFor(layer);
             rows.push_back(row);
         }
     }
@@ -249,7 +283,7 @@ bool LayerController::renameLayerTo(sound_mind::core::LayerId id, const QString&
     if (layer == nullptr) {
         return false;
     }
-    layer->setName(newName.toStdString());
+    layer->setName(project_->uniqueLayerName(newName.toStdString(), id));
     emit layersChanged();
     refreshLayersPanel();
     return true;
@@ -287,6 +321,7 @@ void LayerController::deleteLayer(sound_mind::core::LayerId id) {
     }
 
     if (project_->removeLayer(id)) {
+        thumbnailCache_.erase(id);
         emit layersChanged();
         playbackController_->invalidate();
         canvas_->update();

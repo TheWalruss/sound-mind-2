@@ -226,17 +226,22 @@ Layer** button above the list adds a new, empty (silent) layer and
 selects it immediately - the only way to get a layer to paint onto from
 scratch, rather than from an import. A second button, **+ Add Filter
 Layer**, adds a Filter layer instead - see
-[Filter Layers](#filter-layers) below. Each row has:
+[Filter Layers](#filter-layers) below. Layer names are kept unique
+automatically - adding or renaming a layer to a name that's already
+taken appends `" (2)"`, `" (3)"`, and so on.
+
+Each row's name is shown overlaid on a small preview of that layer's own
+content (a plain background for a layer type with nothing to preview -
+Filter/Background/Equalizer). An unselected row shows only that preview
+and a **visibility toggle** (●/○); **click a row's name to select it**
+(see [Painting](#painting) below - the selected layer is the one a brush
+stroke paints into) to reveal its full set of controls:
 
 - A **drag handle** (⠿) to reorder it, or a **lock icon** (🔒) if it can't
   be reordered or deleted - the **Background** layer (always present,
   bottom of the stack) and the **Equalizer** layer (always present, top
   of the stack - see [Filter Layers](#filter-layers) below) are both
-  locked.
-- A **visibility toggle** (●/○).
-- The layer's **name** - click once to select it (see [Painting](#painting)
-  below - the selected layer is the one a brush stroke paints into), or
-  double-click to rename it.
+  locked, and show their lock icon whether selected or not.
 - A **type tag**, for any layer type other than the ordinary kind you get
   from importing.
 - An **opacity slider**, an **opacity-MindWave combo** (see
@@ -246,6 +251,11 @@ Layer**, adds a Filter layer instead - see
   **Background** layer's row, which has none of these: it's always fully
   opaque and always first in time, so none of them apply to it.
 - A **delete** button (×), for any layer except the locked one(s).
+
+Double-clicking a row's name renames it, whether the row is currently
+selected or not. A layer whose opacity is bound to a MindWave shows a
+smaller, indented row directly beneath it, with that MindWave's own
+grayscale preview.
 
 ### Compositing
 

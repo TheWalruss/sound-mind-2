@@ -1,11 +1,13 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <utility>
 #include <vector>
 
 #include <QDockWidget>
+#include <QImage>
 #include <QString>
 
 #include "sound_mind/core/blend_mode.h"
@@ -73,6 +75,21 @@ namespace sound_mind::studio {
  * `LayerId`s can coincidentally reuse values from the old one - a
  * same-numbered id in the new rows would otherwise be mistaken for the
  * old selection surviving the switch, rather than a fresh coincidence.
+ *
+ * **As of `v0.Y.44.1` (Layers Panel Redesign):** an unselected row shows
+ * only its own visibility eye alongside its name (overlaid on a small
+ * rescaled thumbnail of the layer's own visual content, or a plain
+ * background for a Filter/Background/Equalizer row with nothing to
+ * thumbnail) - per `docs/sound-mind-design.md`'s "Layer panel styling".
+ * Selecting a row (selectLayer()/a click/selectionChanged()) reveals the
+ * rest - drag handle, opacity slider, MindWave combo, the pre-existing
+ * Time Alignment translation/rescale controls, Blend Mode combo, delete -
+ * so selectLayer()/clearSelection() now call rebuildRows() too, not just
+ * move the list's own native highlight, since which controls a row's own
+ * widget contains now depends on whether it's the selected one. A layer
+ * whose opacity is bound to a MindWave (`opacityMindWaveId`) gets a
+ * second, smaller, non-selectable child row directly beneath its own -
+ * see setMindWavePreviewImages()'s own docs.
  */
 class LayersPanel : public QDockWidget {
     Q_OBJECT
@@ -107,6 +124,15 @@ public:
 
         /// @brief Mirrors `sound_mind::core::Layer::blendMode()`.
         sound_mind::core::BlendMode blendMode = sound_mind::core::BlendMode::Normal;
+
+        /// @brief A small, rescaled thumbnail of this layer's own visual
+        /// content (`v0.Y.44.1`, Layers Panel Redesign) - shown as the
+        /// row's own background, with the name overlaid on top in a
+        /// legible, high-contrast style. A null `QImage` (the default) for
+        /// a layer with no content yet (a brand-new empty layer) or none at
+        /// all (Filter/Background/Equalizer) - the row falls back to a
+        /// plain, theme-matching background instead.
+        QImage thumbnail;
     };
 
     /// @brief Builds the panel with an initially-empty layer list.
@@ -156,6 +182,30 @@ public:
      */
     void setAvailableMindWaves(
         const std::vector<std::pair<sound_mind::core::MindWaveId, QString>>& mindWaves);
+
+    /**
+     * @brief Sets each MindWave's own small grayscale preview thumbnail -
+     *        shown as a smaller, tabbed-in child row directly beneath any
+     *        layer whose own opacity is bound to that MindWave
+     *        (`docs/sound-mind-design.md`'s "Layer panel styling"),
+     *        `v0.Y.44.1` (Layers Panel Redesign).
+     *
+     * Immediately rebuilds every row (not deferred to the next setLayers()
+     * call) - the same "changes independently of a layer mutation"
+     * treatment setAvailableMindWaves()/setDisallowedLayers() already get:
+     * a MindWave edited in `MindWavesPanel` should update any bound
+     * layer's own child-row preview right away, without needing an
+     * unrelated layer mutation to trigger a refresh first.
+     *
+     * @param previewImages Each MindWave's own id paired with its rendered
+     *        grayscale preview thumbnail - `MindWaveController`'s own job
+     *        to build (see its own `refreshMindWavesPanel()`). A layer
+     *        bound to an id with no entry here (including a dangling id no
+     *        longer in the project's own library at all - see
+     *        `sound_mind::core::Layer::opacityMindWave()`'s own docs on
+     *        that being a graceful, not-an-error state) shows no child row.
+     */
+    void setMindWavePreviewImages(const std::map<sound_mind::core::MindWaveId, QImage>& previewImages);
 
     /**
      * @brief Marks every layer id in `disallowed` with a small red "✕"
@@ -276,6 +326,9 @@ private:
 
     /// @brief See setAvailableMindWaves()'s own docs.
     std::vector<std::pair<sound_mind::core::MindWaveId, QString>> availableMindWaves_;
+
+    /// @brief See setMindWavePreviewImages()'s own docs.
+    std::map<sound_mind::core::MindWaveId, QImage> mindWavePreviewImages_;
 
     /// @brief See setDisallowedLayers()'s own docs.
     std::vector<sound_mind::core::LayerId> disallowedLayers_;

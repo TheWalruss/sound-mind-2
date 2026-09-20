@@ -47,4 +47,11 @@ private slots:
     void backgroundLayerHasNoBlendModeCombo();
     void aRowsBlendModeComboDefaultsToNormalAndPreselectsItsOwnValue();
     void changingARowsBlendModeComboEmitsBlendModeChanged();
+
+    // Layers Panel Redesign (v0.Y.44.1).
+    void unselectedRowsShowNoOpacityOrTransformOrBlendModeOrDeleteControls();
+    void selectingARowRevealsItsOwnControlsAndDeselectingHidesThemAgain();
+    void aRowsThumbnailIsShownWhenGivenAndAPlainBackgroundWhenNot();
+    void mindWaveChildRowAppearsOnlyWhenBoundAndAPreviewImageExists();
+    void mindWaveChildRowDisappearsWhenTheBindingIsCleared();
 };

@@ -408,7 +408,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(toolPaletteController_, &ToolPaletteController::contentChanged, this,
             [this](sound_mind::core::LayerId layer) {
                 hasUnsavedChanges_ = true;
-                layerController_->refreshLayersPanel();
+                // `layer`'s own thumbnail cache entry is discarded and
+                // freshly re-rendered - every other layer's own cached
+                // thumbnail is reused as-is (see LayerController::
+                // refreshLayersPanel()'s own docs on why this matters:
+                // this fires after nearly every canvas edit).
+                layerController_->refreshLayersPanel(layer);
                 handleContentChangedForRepeat(layer);
             });
 

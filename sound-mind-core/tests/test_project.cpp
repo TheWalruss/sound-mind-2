@@ -737,3 +737,51 @@ TEST_CASE("A layer's cached Pool content round-trips through a project file's po
     std::filesystem::remove(path);
     std::filesystem::remove_all(projectFolder);
 }
+
+TEST_CASE("uniqueLayerName returns a name unchanged when nothing else has it", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});  // Background + Equalizer only.
+
+    REQUIRE(project.uniqueLayerName("New Layer") == "New Layer");
+}
+
+TEST_CASE("uniqueLayerName appends (2) the first time a name collides", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    project.addLayer(Layer(0, "New Layer", LayerType::Normal));
+
+    REQUIRE(project.uniqueLayerName("New Layer") == "New Layer (2)");
+}
+
+TEST_CASE("uniqueLayerName finds the next free suffix when earlier ones are already taken", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    project.addLayer(Layer(0, "New Layer", LayerType::Normal));
+    project.addLayer(Layer(0, "New Layer (2)", LayerType::Normal));
+    project.addLayer(Layer(0, "New Layer (3)", LayerType::Normal));
+
+    REQUIRE(project.uniqueLayerName("New Layer") == "New Layer (4)");
+}
+
+TEST_CASE("uniqueLayerName's excludingId ignores that layer's own current name", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto id = project.addLayer(Layer(0, "My Layer", LayerType::Normal));
+
+    // Renaming a layer to the exact name it already has shouldn't be
+    // suffixed just because it "collides" with itself.
+    REQUIRE(project.uniqueLayerName("My Layer", id) == "My Layer");
+}
+
+TEST_CASE("uniqueLayerName's excludingId still catches a collision with a different layer", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    project.addLayer(Layer(0, "Other Layer", LayerType::Normal));
+    const auto id = project.addLayer(Layer(0, "My Layer", LayerType::Normal));
+
+    REQUIRE(project.uniqueLayerName("Other Layer", id) == "Other Layer (2)");
+}
+
+TEST_CASE("addLayer automatically de-duplicates a colliding name", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto firstId = project.addLayer(Layer(0, "New Layer", LayerType::Normal));
+    const auto secondId = project.addLayer(Layer(0, "New Layer", LayerType::Normal));
+
+    REQUIRE(project.layerById(firstId)->name() == "New Layer");
+    REQUIRE(project.layerById(secondId)->name() == "New Layer (2)");
+}

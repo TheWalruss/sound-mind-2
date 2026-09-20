@@ -2,6 +2,7 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QImage>
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
@@ -122,11 +123,13 @@ void LayersPanelTest::backgroundLayerHasNoOpacityOrTransformControls() {
 void LayersPanelTest::opacitySliderEmitsOpacityChanged() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom" - the opacity slider is one of the
+                                                  // redesign's own "revealed once selected" controls.
     QSignalSpy spy(&panel, &LayersPanel::opacityChanged);
 
     const auto sliders = panel.findChildren<QSlider*>(QStringLiteral("opacitySlider"));
-    QCOMPARE(sliders.size(), 2);
-    sliders.at(1)->setValue(25);  // "Bottom" (id 1).
+    QCOMPARE(sliders.size(), 1);  // only the selected row's own.
+    sliders.at(0)->setValue(25);
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(1));
@@ -136,11 +139,12 @@ void LayersPanelTest::opacitySliderEmitsOpacityChanged() {
 void LayersPanelTest::translationSpinBoxEmitsTranslationChanged() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom".
     QSignalSpy spy(&panel, &LayersPanel::translationChanged);
 
     const auto spinBoxes = panel.findChildren<QSpinBox*>(QStringLiteral("translationSpinBox"));
-    QCOMPARE(spinBoxes.size(), 2);
-    spinBoxes.at(1)->setValue(150);  // "Bottom" (id 1).
+    QCOMPARE(spinBoxes.size(), 1);
+    spinBoxes.at(0)->setValue(150);
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(1));
@@ -150,15 +154,55 @@ void LayersPanelTest::translationSpinBoxEmitsTranslationChanged() {
 void LayersPanelTest::rescaleSpinBoxEmitsRescaleChanged() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom".
     QSignalSpy spy(&panel, &LayersPanel::rescaleChanged);
 
     const auto spinBoxes = panel.findChildren<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox"));
-    QCOMPARE(spinBoxes.size(), 2);
-    spinBoxes.at(1)->setValue(2.0);  // "Bottom" (id 1).
+    QCOMPARE(spinBoxes.size(), 1);
+    spinBoxes.at(0)->setValue(2.0);
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(1));
     QCOMPARE(spy.at(0).at(1).toDouble(), 2.0);
+}
+
+void LayersPanelTest::unselectedRowsShowNoOpacityOrTransformOrBlendModeOrDeleteControls() {
+    // The Layers Panel Redesign's own central premise: an unselected row
+    // shows only its visibility eye alongside its name - everything else
+    // (opacity, MindWave combo, transform controls, blend mode, delete,
+    // drag handle) waits for selection.
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());  // nothing selected.
+
+    QVERIFY(panel.findChild<QSlider*>(QStringLiteral("opacitySlider")) == nullptr);
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("opacityMindWaveCombo")) == nullptr);
+    QVERIFY(panel.findChild<QSpinBox*>(QStringLiteral("translationSpinBox")) == nullptr);
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")) == nullptr);
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo")) == nullptr);
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("deleteButton")) == nullptr);
+    QVERIFY(panel.findChild<QWidget*>(QStringLiteral("dragHandle")) == nullptr);
+    // The visibility eye is the one named exception - always present.
+    QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton")).size(), 2);
+}
+
+void LayersPanelTest::selectingARowRevealsItsOwnControlsAndDeselectingHidesThemAgain() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom".
+    QCOMPARE(panel.findChildren<QSlider*>(QStringLiteral("opacitySlider")).size(), 1);
+    QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo")).size(), 1);
+    QCOMPARE(panel.findChildren<QSpinBox*>(QStringLiteral("translationSpinBox")).size(), 1);
+    QCOMPARE(panel.findChildren<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")).size(), 1);
+    QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo")).size(), 1);
+    QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("deleteButton")).size(), 1);
+    QCOMPARE(panel.findChildren<QWidget*>(QStringLiteral("dragHandle")).size(), 1);
+
+    panel.clearSelection();
+    QTest::qWait(0);  // rebuildRows() rebuilds via deleteLater() - see setLayersReplacesThePreviousRows().
+
+    QVERIFY(panel.findChild<QSlider*>(QStringLiteral("opacitySlider")) == nullptr);
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("deleteButton")) == nullptr);
 }
 
 void LayersPanelTest::doubleClickingNameEmitsRenameRequested() {
@@ -177,11 +221,13 @@ void LayersPanelTest::doubleClickingNameEmitsRenameRequested() {
 void LayersPanelTest::deleteButtonEmitsDeleteRequestedForNormalLayers() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(2));  // "Top" - delete is one of the redesign's own
+                                                  // "revealed once selected" controls.
     QSignalSpy spy(&panel, &LayersPanel::deleteRequested);
 
     const auto buttons = panel.findChildren<QPushButton*>(QStringLiteral("deleteButton"));
-    QCOMPARE(buttons.size(), 2);
-    buttons.at(0)->click();  // "Top" (id 2).
+    QCOMPARE(buttons.size(), 1);
+    buttons.at(0)->click();
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(2));
@@ -194,7 +240,11 @@ void LayersPanelTest::lockedLayersHaveNoDeleteButton() {
 
     LayersPanel panel;
     panel.setLayers({background});
+    QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("deleteButton")).isEmpty());
 
+    // Still none once selected - locked stays locked regardless of the
+    // redesign's own selection-gated controls.
+    panel.selectLayer(static_cast<LayerId>(1));
     QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("deleteButton")).isEmpty());
 }
 
@@ -206,6 +256,12 @@ void LayersPanelTest::lockedLayersHaveALockIconInsteadOfADragHandle() {
     LayersPanel panel;
     panel.setLayers({background});
 
+    QVERIFY(panel.findChild<QLabel*>(QStringLiteral("lockLabel")) != nullptr);
+    QVERIFY(panel.findChild<QWidget*>(QStringLiteral("dragHandle")) == nullptr);
+
+    // Still no drag handle once selected - a locked row's own lock icon
+    // always wins over the redesign's own selection-revealed handle.
+    panel.selectLayer(static_cast<LayerId>(1));
     QVERIFY(panel.findChild<QLabel*>(QStringLiteral("lockLabel")) != nullptr);
     QVERIFY(panel.findChild<QWidget*>(QStringLiteral("dragHandle")) == nullptr);
 }
@@ -388,18 +444,18 @@ void LayersPanelTest::setLayersEmitsSelectionChangedWhenTheSelectedLayerIsGone()
 void LayersPanelTest::freshRowsOfferOnlyNoneUntilSetAvailableMindWavesIsCalled() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));  // the combo is a selection-revealed control.
 
     const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
-    QCOMPARE(combos.size(), 2);
-    for (auto* combo : combos) {
-        QCOMPARE(combo->count(), 1);
-        QCOMPARE(combo->currentText(), QStringLiteral("None"));
-    }
+    QCOMPARE(combos.size(), 1);
+    QCOMPARE(combos.at(0)->count(), 1);
+    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("None"));
 }
 
 void LayersPanelTest::setAvailableMindWavesPopulatesEveryRowsComboImmediately() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));
 
     // Called with no further setLayers() in between - see
     // setAvailableMindWaves()'s own docs on rebuilding rows immediately,
@@ -416,12 +472,10 @@ void LayersPanelTest::setAvailableMindWavesPopulatesEveryRowsComboImmediately() 
     QTest::qWait(0);
 
     const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
-    QCOMPARE(combos.size(), 2);
-    for (auto* combo : combos) {
-        QCOMPARE(combo->count(), 3);  // None + two MindWaves.
-        QCOMPARE(combo->itemText(1), QStringLiteral("Slow Pulse"));
-        QCOMPARE(combo->itemText(2), QStringLiteral("Fast Pulse"));
-    }
+    QCOMPARE(combos.size(), 1);
+    QCOMPARE(combos.at(0)->count(), 3);  // None + two MindWaves.
+    QCOMPARE(combos.at(0)->itemText(1), QStringLiteral("Slow Pulse"));
+    QCOMPARE(combos.at(0)->itemText(2), QStringLiteral("Fast Pulse"));
 }
 
 void LayersPanelTest::aRowsComboPreselectsItsOwnCurrentBinding() {
@@ -431,17 +485,27 @@ void LayersPanelTest::aRowsComboPreselectsItsOwnCurrentBinding() {
     rows[1].opacityMindWaveId = MindWaveId{5};  // "Top" (id 2).
     panel.setLayers(rows);
 
-    const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
-    QCOMPARE(combos.size(), 2);
-    // "Top" is displayed first (index 0) - see setLayersCreatesOneRowPerLayerTopFirst.
-    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("Slow Pulse"));
-    QCOMPARE(combos.at(1)->currentText(), QStringLiteral("None"));
+    panel.selectLayer(static_cast<LayerId>(2));  // "Top" - bound.
+    QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo")).at(0)->currentText(),
+             QStringLiteral("Slow Pulse"));
+
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom" - unbound.
+    // rebuildRows() deletes the previous selection's own row widgets via
+    // deleteLater() (see its own docs) - without waiting a tick, the
+    // "Top" row's own now-stale combo would still be findable alongside
+    // "Bottom"'s new one, at index 0 - see
+    // setLayersReplacesThePreviousRows()'s own comment for the identical
+    // timing issue.
+    QTest::qWait(0);
+    QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo")).at(0)->currentText(),
+             QStringLiteral("None"));
 }
 
 void LayersPanelTest::changingARowsMindWaveComboEmitsOpacityMindWaveChanged() {
     LayersPanel panel;
     panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
     panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(2));  // "Top".
     int emitCount = 0;
     std::optional<LayerId> receivedId;
     std::optional<MindWaveId> receivedMindWaveId;
@@ -452,7 +516,7 @@ void LayersPanelTest::changingARowsMindWaveComboEmitsOpacityMindWaveChanged() {
     });
 
     const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
-    combos.at(0)->setCurrentIndex(1);  // "Slow Pulse" - "Top" (id 2).
+    combos.at(0)->setCurrentIndex(1);  // "Slow Pulse".
 
     QCOMPARE(emitCount, 1);
     QCOMPARE(receivedId, std::optional<LayerId>(static_cast<LayerId>(2)));
@@ -465,6 +529,7 @@ void LayersPanelTest::selectingNoneEmitsOpacityMindWaveChangedWithNullopt() {
     auto rows = twoNormalLayers();
     rows[1].opacityMindWaveId = MindWaveId{5};  // "Top" (id 2), already bound.
     panel.setLayers(rows);
+    panel.selectLayer(static_cast<LayerId>(2));
     int emitCount = 0;
     std::optional<MindWaveId> receivedMindWaveId = MindWaveId{5};
     connect(&panel, &LayersPanel::opacityMindWaveChanged, [&](LayerId, std::optional<MindWaveId> mindWaveId) {
@@ -547,7 +612,9 @@ void LayersPanelTest::backgroundLayerHasNoBlendModeCombo() {
 
     LayersPanel panel;
     panel.setLayers({background});
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo")) == nullptr);
 
+    panel.selectLayer(static_cast<LayerId>(1));
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo")) == nullptr);
 }
 
@@ -557,15 +624,23 @@ void LayersPanelTest::aRowsBlendModeComboDefaultsToNormalAndPreselectsItsOwnValu
     rows[1].blendMode = BlendMode::Multiply;  // "Top" (id 2).
     panel.setLayers(rows);
 
-    const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo"));
-    QCOMPARE(combos.size(), 2);
-    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("Multiply"));  // "Top".
-    QCOMPARE(combos.at(1)->currentText(), QStringLiteral("Normal"));    // "Bottom" - default.
+    panel.selectLayer(static_cast<LayerId>(2));  // "Top".
+    QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo")).at(0)->currentText(),
+             QStringLiteral("Multiply"));
+
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom" - default.
+    // See aRowsComboPreselectsItsOwnCurrentBinding()'s own comment for why
+    // this wait is needed - the "Top" row's own now-stale combo is only
+    // actually gone once the event loop gets a chance to run.
+    QTest::qWait(0);
+    QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo")).at(0)->currentText(),
+             QStringLiteral("Normal"));
 }
 
 void LayersPanelTest::changingARowsBlendModeComboEmitsBlendModeChanged() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom".
     int emitCount = 0;
     std::optional<LayerId> receivedId;
     std::optional<BlendMode> receivedMode;
@@ -576,9 +651,64 @@ void LayersPanelTest::changingARowsBlendModeComboEmitsBlendModeChanged() {
     });
 
     const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo"));
-    combos.at(1)->setCurrentIndex(combos.at(1)->findText(QStringLiteral("Screen")));  // "Bottom" (id 1).
+    combos.at(0)->setCurrentIndex(combos.at(0)->findText(QStringLiteral("Screen")));
 
     QCOMPARE(emitCount, 1);
     QCOMPARE(receivedId, std::optional<LayerId>(static_cast<LayerId>(1)));
     QCOMPARE(receivedMode, std::optional<BlendMode>(BlendMode::Screen));
+}
+
+void LayersPanelTest::aRowsThumbnailIsShownWhenGivenAndAPlainBackgroundWhenNot() {
+    auto rows = twoNormalLayers();
+    rows[1].thumbnail = QImage(4, 4, QImage::Format_RGB888);  // "Top" (id 2) - any non-null image.
+    rows[1].thumbnail.fill(Qt::red);
+    // "Bottom" (id 1) keeps its own default-constructed, null thumbnail.
+
+    LayersPanel panel;
+    panel.setLayers(rows);
+
+    const auto nameAreas = panel.findChildren<QWidget*>(QStringLiteral("nameArea"));
+    QCOMPARE(nameAreas.size(), 2);
+    // "Top" is displayed first (index 0) - see setLayersCreatesOneRowPerLayerTopFirst.
+    QVERIFY(nameAreas.at(0)->findChild<QLabel*>(QStringLiteral("thumbnailLabel")) != nullptr);
+    QVERIFY(nameAreas.at(1)->findChild<QLabel*>(QStringLiteral("thumbnailLabel")) == nullptr);
+}
+
+void LayersPanelTest::mindWaveChildRowAppearsOnlyWhenBoundAndAPreviewImageExists() {
+    auto rows = twoNormalLayers();
+    rows[1].opacityMindWaveId = MindWaveId{5};  // "Top" (id 2) - bound, but no preview image set yet.
+
+    LayersPanel panel;
+    panel.setLayers(rows);
+
+    // Bound, but setMindWavePreviewImages() was never called - no entry for
+    // id 5 anywhere, so no child row yet (see setMindWavePreviewImages()'s
+    // own docs on a missing entry).
+    QVERIFY(panel.findChild<QLabel*>(QStringLiteral("mindWaveNameLabel")) == nullptr);
+
+    QImage preview(4, 4, QImage::Format_RGB888);
+    preview.fill(Qt::gray);
+    panel.setMindWavePreviewImages({{MindWaveId{5}, preview}});
+
+    auto* nameLabel = panel.findChild<QLabel*>(QStringLiteral("mindWaveNameLabel"));
+    QVERIFY(nameLabel != nullptr);
+    QVERIFY(panel.findChild<QLabel*>(QStringLiteral("mindWavePreviewLabel")) != nullptr);
+}
+
+void LayersPanelTest::mindWaveChildRowDisappearsWhenTheBindingIsCleared() {
+    auto rows = twoNormalLayers();
+    rows[1].opacityMindWaveId = MindWaveId{5};  // "Top" (id 2).
+
+    LayersPanel panel;
+    QImage preview(4, 4, QImage::Format_RGB888);
+    preview.fill(Qt::gray);
+    panel.setMindWavePreviewImages({{MindWaveId{5}, preview}});
+    panel.setLayers(rows);
+    QVERIFY(panel.findChild<QLabel*>(QStringLiteral("mindWaveNameLabel")) != nullptr);
+
+    rows[1].opacityMindWaveId = std::nullopt;  // unbound.
+    panel.setLayers(rows);
+    QTest::qWait(0);  // rebuildRows() rebuilds via deleteLater() - see setLayersReplacesThePreviousRows().
+
+    QVERIFY(panel.findChild<QLabel*>(QStringLiteral("mindWaveNameLabel")) == nullptr);
 }

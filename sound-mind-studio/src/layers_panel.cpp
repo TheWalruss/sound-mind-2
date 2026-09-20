@@ -12,10 +12,12 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QMouseEvent>
+#include <QPixmap>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSlider>
 #include <QSpinBox>
+#include <QStackedLayout>
 #include <QVBoxLayout>
 #include <QVariant>
 
@@ -64,6 +66,30 @@ QString typeTagText(LayerType type) {
     }
     return QString();
 }
+
+/// @brief The row header's own fixed height, in pixels - tall enough for a
+/// legible thumbnail strip (`v0.Y.44.1`, Layers Panel Redesign) while
+/// staying compact; up from the pre-redesign row's own flat 32px.
+constexpr int kRowHeaderHeight = 40;
+
+/// @brief The `QListWidgetItem` data role marking a MindWave child row
+/// (see MindWaveChildRowWidget's own docs) - `true` there, unset (so
+/// `.toBool()` reads `false`) for every real layer row. `handleRowsMoved()`
+/// uses this to skip child rows entirely when reconstructing the dragged
+/// order: a child row's own item carries no `Qt::UserRole` layer id at
+/// all, and including it as a bogus `LayerId{0}` would corrupt the
+/// reconstructed order (no real layer has id `0` - `Project::addLayer()`
+/// starts assigning at `1` - so `Project::reorderLayers()`'s own "same set
+/// of ids as currently exist" validation would reject *every* reorder
+/// while a child row is present, not just an actually-invalid one).
+constexpr int kChildRowRole = Qt::UserRole + 1;
+
+/// @brief The plain, theme-matching background color a row without a
+/// thumbnail (Filter/Background/Equalizer, or a brand-new empty layer)
+/// falls back to - `docs/sound-mind-design.md`'s own "plain background
+/// suitable to the overall color theme" - the same secondary-panel color
+/// `theme.cpp`'s own stylesheet already uses for input/list backgrounds.
+constexpr const char* kPlainRowBackground = "#26262e";
 
 /// @brief A small "⠿" handle that forwards mouse events to `list`'s
 /// viewport, so InternalMove drag-reordering can be initiated from it -
@@ -137,23 +163,34 @@ protected:
 };
 
 /// @brief One row's worth of widgets - see the class docs on LayersPanel
-/// for the row layout this builds (lock/drag handle, visibility toggle,
-/// name, type tag, opacity slider, transform controls, delete) - the
-/// opacity/transform controls are omitted entirely for a Background row,
-/// see their own construction site below for why.
+/// for the row layout this builds. As of `v0.Y.44.1` (Layers Panel
+/// Redesign), two visually distinct states: **unselected** shows only the
+/// visibility eye alongside the name (overlaid on a rescaled thumbnail of
+/// the layer's own content, or a plain background for a Filter/Background/
+/// Equalizer row); **selected** additionally reveals the drag handle,
+/// opacity slider, MindWave combo, the pre-existing Time Alignment
+/// translation/rescale controls, Blend Mode combo, and delete button, all
+/// omitted entirely (not just disabled) for the Background row - it's
+/// always the floor of the stack, always fully opaque, with nothing
+/// beneath it to line up against in time, so none of those concepts apply
+/// to it the way they do to every other layer type.
 class LayerRowWidget : public QWidget {
     Q_OBJECT
 
 public:
     LayerRowWidget(const LayersPanel::RowData& data, QListWidget* list,
                    const std::vector<std::pair<MindWaveId, QString>>& availableMindWaves, bool disallowedForMindGrain,
-                   QWidget* parent = nullptr)
+                   bool isSelected, QWidget* parent = nullptr)
         : QWidget(parent), id_(data.id) {
-        auto* layout = new QHBoxLayout(this);
-        layout->setContentsMargins(2, 1, 2, 1);
-        layout->setSpacing(4);
+        auto* outer = new QVBoxLayout(this);
+        outer->setContentsMargins(2, 1, 2, 1);
+        outer->setSpacing(2);
 
         const bool locked = isLocked(data.type);
+
+        // ---- Header line: always present, unselected or not ----
+        auto* header = new QHBoxLayout();
+        header->setSpacing(4);
 
         if (locked) {
             auto* lock = new QLabel(QStringLiteral("\U0001F512"));
@@ -161,11 +198,14 @@ public:
             lock->setFixedWidth(18);
             lock->setAlignment(Qt::AlignCenter);
             lock->setToolTip(tr("Position locked - cannot be reordered or deleted"));
-            layout->addWidget(lock);
-        } else {
+            header->addWidget(lock);
+        } else if (isSelected) {
+            // The drag handle is one of the redesign's own "revealed once
+            // selected" controls (see the class docs) - an unselected,
+            // unlocked row shows nothing at all in this slot.
             auto* handle = new DragHandleLabel(list);
             handle->setObjectName(QStringLiteral("dragHandle"));
-            layout->addWidget(handle);
+            header->addWidget(handle);
         }
 
         // Mind Grain ordering-rule guardrail (v0.Y.33.1 Installment B, see
@@ -174,7 +214,8 @@ public:
         // onto, with a tooltip explaining why. Absent entirely (not merely
         // hidden) when this row isn't disallowed, matching this panel's own
         // "no dead placeholder UI" precedent (the lock icon/drag handle
-        // pair above).
+        // pair above) - purely informational, so shown regardless of
+        // selection, unlike the redesign's own interactive controls.
         if (disallowedForMindGrain) {
             auto* disallowedMark = new QLabel(QStringLiteral("✕"));
             disallowedMark->setObjectName(QStringLiteral("mindGrainDisallowedLabel"));
@@ -184,7 +225,7 @@ public:
             disallowedMark->setToolTip(
                 tr("The currently configured Mind Grain can't paint onto this layer - it must stay above its own "
                    "source layer."));
-            layout->addWidget(disallowedMark);
+            header->addWidget(disallowedMark);
         }
 
         auto* visibilityButton = new QPushButton(data.visible ? QStringLiteral("●") : QStringLiteral("○"));
@@ -205,39 +246,84 @@ public:
                 emit visibilityToggled(id_, checked);
             });
         }
-        layout->addWidget(visibilityButton);
+        header->addWidget(visibilityButton);
 
+        // Name overlaid on the layer's own rescaled thumbnail (or a plain
+        // background when there isn't one) - docs/sound-mind-design.md's
+        // "Layer panel styling". A QStackedLayout with StackAll draws both
+        // children on top of each other at the same rect, rather than
+        // showing only the topmost one (its own default "which page is
+        // current" behavior, meant for wizard-style pages, not an overlay).
+        auto* nameArea = new QWidget();
+        nameArea->setObjectName(QStringLiteral("nameArea"));
+        nameArea->setMinimumHeight(kRowHeaderHeight);
+        auto* nameAreaStack = new QStackedLayout(nameArea);
+        nameAreaStack->setStackingMode(QStackedLayout::StackAll);
+        nameAreaStack->setContentsMargins(0, 0, 0, 0);
+
+        if (!data.thumbnail.isNull()) {
+            auto* thumbnailLabel = new QLabel();
+            thumbnailLabel->setObjectName(QStringLiteral("thumbnailLabel"));
+            thumbnailLabel->setPixmap(QPixmap::fromImage(data.thumbnail));
+            thumbnailLabel->setScaledContents(true);  // stretches to nameArea's own current size every resize.
+            nameAreaStack->addWidget(thumbnailLabel);
+        } else {
+            nameArea->setStyleSheet(QStringLiteral("background-color: %1;").arg(QLatin1String(kPlainRowBackground)));
+        }
+
+        // White, bold, on a semi-transparent dark backing bar - legible
+        // over any thumbnail color underneath (spectrogram content has no
+        // predictable palette to contrast against), not just the plain
+        // fallback background above.
         auto* nameLabel = new ClickableNameLabel(data.name);
         nameLabel->setObjectName(QStringLiteral("nameLabel"));
-        nameLabel->setMinimumWidth(60);
+        nameLabel->setStyleSheet(
+            QStringLiteral("color: #ffffff; font-weight: bold; background-color: rgba(0, 0, 0, 150); padding: 2px;"));
+        nameLabel->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
         connect(nameLabel, &ClickableNameLabel::clicked, this, [this]() { emit selected(id_); });
         connect(nameLabel, &ClickableNameLabel::doubleClicked, this, [this]() { emit renameRequested(id_); });
-        layout->addWidget(nameLabel, 1);
+        nameAreaStack->addWidget(nameLabel);
+
+        header->addWidget(nameArea, 1);
 
         const QString tagText = typeTagText(data.type);
         if (!tagText.isEmpty()) {
             auto* typeTag = new QLabel(tagText);
             typeTag->setObjectName(QStringLiteral("typeTagLabel"));
             typeTag->setStyleSheet(QStringLiteral("color: #7b9fd4; font-size: 9px;"));
-            layout->addWidget(typeTag);
+            header->addWidget(typeTag);
         }
 
-        // Opacity and the Layer Time Alignment transform controls below are
-        // omitted entirely (not just disabled) for the Background layer -
-        // confirmed with the user: it's always the floor of the stack,
-        // always fully opaque, with nothing beneath it to line up against
-        // in time, so neither concept applies to it the way it does to
-        // every other layer type.
-        if (data.type != LayerType::Background) {
+        if (isSelected && !locked) {
+            // Delete is another of the redesign's own "revealed once
+            // selected" controls - see the class docs.
+            auto* deleteButton = new QPushButton(QStringLiteral("×"));
+            deleteButton->setObjectName(QStringLiteral("deleteButton"));
+            deleteButton->setFlat(true);
+            deleteButton->setFixedWidth(22);
+            deleteButton->setStyleSheet(QStringLiteral("color: #c04040;"));
+            deleteButton->setToolTip(tr("Delete layer"));
+            connect(deleteButton, &QPushButton::clicked, this, [this]() { emit deleteRequested(id_); });
+            header->addWidget(deleteButton);
+        }
+
+        outer->addLayout(header);
+
+        // ---- Expanded controls: only once selected, per the redesign -
+        // see the class docs. Omitted entirely for Background, same as
+        // before the redesign (see this constructor's own class docs).
+        if (isSelected && data.type != LayerType::Background) {
+            auto* controlsRowOne = new QHBoxLayout();
+            controlsRowOne->setSpacing(4);
+
             auto* opacitySlider = new QSlider(Qt::Horizontal);
             opacitySlider->setObjectName(QStringLiteral("opacitySlider"));
             opacitySlider->setRange(0, 100);
             opacitySlider->setValue(static_cast<int>(data.opacity * 100.0f));
-            opacitySlider->setFixedWidth(60);
             opacitySlider->setToolTip(tr("Layer opacity"));
             connect(opacitySlider, &QSlider::valueChanged, this,
                     [this](int value) { emit opacityChanged(id_, static_cast<float>(value) / 100.0f); });
-            layout->addWidget(opacitySlider);
+            controlsRowOne->addWidget(opacitySlider, 1);
 
             // MindWave opacity binding (v0.Y.31.1 Installment C2) - "None"
             // (a plain scalar opacity, the default) always first, then
@@ -248,7 +334,6 @@ public:
             // enabled together.
             auto* mindWaveCombo = new QComboBox();
             mindWaveCombo->setObjectName(QStringLiteral("opacityMindWaveCombo"));
-            mindWaveCombo->setFixedWidth(90);
             mindWaveCombo->setToolTip(tr("Bind this layer's opacity to a MindWave"));
             mindWaveCombo->addItem(tr("None"), QVariant::fromValue(qulonglong{0}));
             int selectedIndex = 0;
@@ -264,7 +349,11 @@ public:
                 emit opacityMindWaveChanged(
                     id_, rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
             });
-            layout->addWidget(mindWaveCombo);
+            controlsRowOne->addWidget(mindWaveCombo, 1);
+            outer->addLayout(controlsRowOne);
+
+            auto* controlsRowTwo = new QHBoxLayout();
+            controlsRowTwo->setSpacing(4);
 
             // Time Alignment (v0.Y.21.1): two per-layer horizontal transform
             // controls - see sound_mind::core::Layer::translationColumns()/
@@ -278,12 +367,11 @@ public:
             translationSpinBox->setObjectName(QStringLiteral("translationSpinBox"));
             translationSpinBox->setRange(-1'000'000, 1'000'000);
             translationSpinBox->setValue(static_cast<int>(data.translationColumns));
-            translationSpinBox->setFixedWidth(70);
             translationSpinBox->setToolTip(
                 tr("Shift this layer's content earlier/later in time, in spectrogram columns"));
             connect(translationSpinBox, &QSpinBox::valueChanged, this,
                     [this](int value) { emit translationChanged(id_, static_cast<std::int64_t>(value)); });
-            layout->addWidget(translationSpinBox);
+            controlsRowTwo->addWidget(translationSpinBox, 1);
 
             auto* rescaleSpinBox = new QDoubleSpinBox();
             rescaleSpinBox->setObjectName(QStringLiteral("rescaleSpinBox"));
@@ -292,18 +380,16 @@ public:
             rescaleSpinBox->setDecimals(2);
             rescaleSpinBox->setSuffix(QStringLiteral("x"));
             rescaleSpinBox->setValue(data.rescaleFactor);
-            rescaleSpinBox->setFixedWidth(60);
             rescaleSpinBox->setToolTip(tr("Stretch/compress this layer's own timeline"));
             connect(rescaleSpinBox, &QDoubleSpinBox::valueChanged, this,
                     [this](double value) { emit rescaleChanged(id_, value); });
-            layout->addWidget(rescaleSpinBox);
+            controlsRowTwo->addWidget(rescaleSpinBox, 1);
 
-            // Blend Mode (v0.Y.37.1) - a minimal stand-in ahead of the
-            // Layers Panel Redesign's own polished control, see the class
-            // docs on LayersPanel.
+            // Blend Mode (v0.Y.37.1) - one of the redesign's own named
+            // controls now (see the class docs on LayersPanel), previously
+            // a minimal stand-in ahead of it.
             auto* blendModeCombo = new QComboBox();
             blendModeCombo->setObjectName(QStringLiteral("blendModeCombo"));
-            blendModeCombo->setFixedWidth(80);
             blendModeCombo->setToolTip(tr("How this layer combines with what's beneath it"));
             for (const auto& [mode, name] : kBlendModes) {
                 blendModeCombo->addItem(tr(name), QVariant::fromValue(static_cast<int>(mode)));
@@ -314,18 +400,8 @@ public:
             connect(blendModeCombo, &QComboBox::currentIndexChanged, this, [this, blendModeCombo](int index) {
                 emit blendModeChanged(id_, static_cast<BlendMode>(blendModeCombo->itemData(index).toInt()));
             });
-            layout->addWidget(blendModeCombo);
-        }
-
-        if (!locked) {
-            auto* deleteButton = new QPushButton(QStringLiteral("×"));
-            deleteButton->setObjectName(QStringLiteral("deleteButton"));
-            deleteButton->setFlat(true);
-            deleteButton->setFixedWidth(22);
-            deleteButton->setStyleSheet(QStringLiteral("color: #c04040;"));
-            deleteButton->setToolTip(tr("Delete layer"));
-            connect(deleteButton, &QPushButton::clicked, this, [this]() { emit deleteRequested(id_); });
-            layout->addWidget(deleteButton);
+            controlsRowTwo->addWidget(blendModeCombo, 1);
+            outer->addLayout(controlsRowTwo);
         }
     }
 
@@ -342,6 +418,61 @@ signals:
 
 private:
     sound_mind::core::LayerId id_;
+};
+
+/// @brief A smaller, non-interactive, visually indented "child" row shown
+/// directly beneath a layer whose opacity is bound to a MindWave -
+/// `docs/sound-mind-design.md`'s "Layer panel styling" ("Any MindWave
+/// applied for opacity is shown as a smaller, tabbed-in, 'child' layer,
+/// with the visual contents being the grayscale 'preview'"), `v0.Y.44.1`
+/// (Layers Panel Redesign). Purely informational - unlike LayerRowWidget,
+/// this has no signals of its own and its own QListWidgetItem is marked
+/// unselectable/undraggable (see rebuildRows()'s own construction site),
+/// so it never becomes the list's current selection or an independent drag
+/// source.
+class MindWaveChildRowWidget : public QWidget {
+public:
+    MindWaveChildRowWidget(const QString& mindWaveName, const QImage& previewImage, QWidget* parent = nullptr)
+        : QWidget(parent) {
+        auto* layout = new QHBoxLayout(this);
+        layout->setContentsMargins(2, 0, 2, 0);
+        layout->setSpacing(4);
+
+        // A fixed-width indent, visually "tabbing in" this child row
+        // beneath its own parent layer's row - roughly the width of the
+        // parent's own lock/drag-handle slot plus its visibility eye, so
+        // this row's own content lines up starting where the parent's own
+        // name area begins.
+        auto* indent = new QWidget();
+        indent->setFixedWidth(40);
+        layout->addWidget(indent);
+
+        auto* previewArea = new QWidget();
+        previewArea->setObjectName(QStringLiteral("mindWavePreviewArea"));
+        previewArea->setFixedHeight(kRowHeaderHeight * 3 / 4);
+        auto* previewStack = new QStackedLayout(previewArea);
+        previewStack->setStackingMode(QStackedLayout::StackAll);
+        previewStack->setContentsMargins(0, 0, 0, 0);
+
+        if (!previewImage.isNull()) {
+            auto* previewLabel = new QLabel();
+            previewLabel->setObjectName(QStringLiteral("mindWavePreviewLabel"));
+            previewLabel->setPixmap(QPixmap::fromImage(previewImage));
+            previewLabel->setScaledContents(true);
+            previewStack->addWidget(previewLabel);
+        } else {
+            previewArea->setStyleSheet(
+                QStringLiteral("background-color: %1;").arg(QLatin1String(kPlainRowBackground)));
+        }
+
+        auto* nameLabel = new QLabel(mindWaveName);
+        nameLabel->setObjectName(QStringLiteral("mindWaveNameLabel"));
+        nameLabel->setStyleSheet(QStringLiteral(
+            "color: #ffffff; font-style: italic; font-size: 10px; background-color: rgba(0, 0, 0, 150); padding: 1px;"));
+        previewStack->addWidget(nameLabel);
+
+        layout->addWidget(previewArea, 1);
+    }
 };
 
 }  // namespace
@@ -427,6 +558,11 @@ void LayersPanel::setAvailableMindWaves(const std::vector<std::pair<MindWaveId, 
     rebuildRows();
 }
 
+void LayersPanel::setMindWavePreviewImages(const std::map<MindWaveId, QImage>& previewImages) {
+    mindWavePreviewImages_ = previewImages;
+    rebuildRows();
+}
+
 void LayersPanel::setDisallowedLayers(const std::vector<sound_mind::core::LayerId>& disallowed) {
     disallowedLayers_ = disallowed;
     rebuildRows();
@@ -459,18 +595,24 @@ void LayersPanel::rebuildRows() {
     }
     list_->clear();
     for (auto it = currentRows_.rbegin(); it != currentRows_.rend(); ++it) {
+        const bool selected = selectedLayerId_.has_value() && *selectedLayerId_ == it->id;
+
         auto* item = new QListWidgetItem();
         item->setData(Qt::UserRole, QVariant::fromValue(static_cast<qulonglong>(it->id)));
-        item->setSizeHint(QSize(0, 32));
         if (isLocked(it->type)) {
             item->setFlags(item->flags() & ~Qt::ItemIsDragEnabled);
         }
         list_->addItem(item);
         const bool disallowedForMindGrain =
             std::find(disallowedLayers_.begin(), disallowedLayers_.end(), it->id) != disallowedLayers_.end();
-        list_->setItemWidget(item, new LayerRowWidget(*it, list_, availableMindWaves_, disallowedForMindGrain));
+        auto* row = new LayerRowWidget(*it, list_, availableMindWaves_, disallowedForMindGrain, selected);
+        // Built from the actual widget's own preferred size (which now
+        // varies with selected/collapsed state and locked/Background type -
+        // see LayerRowWidget's own docs) rather than a single hardcoded
+        // constant every row used before the redesign.
+        item->setSizeHint(row->sizeHint());
+        list_->setItemWidget(item, row);
 
-        auto* row = qobject_cast<LayerRowWidget*>(list_->itemWidget(item));
         connect(row, &LayerRowWidget::visibilityToggled, this, &LayersPanel::visibilityToggled);
         connect(row, &LayerRowWidget::opacityChanged, this, &LayersPanel::opacityChanged);
         connect(row, &LayerRowWidget::translationChanged, this, &LayersPanel::translationChanged);
@@ -483,29 +625,60 @@ void LayersPanel::rebuildRows() {
 
         // Restores the selection highlight across this refresh, for the
         // (already-verified-still-present, above) previously-selected id.
-        if (selectedLayerId_.has_value() && *selectedLayerId_ == it->id) {
+        if (selected) {
             list_->setCurrentItem(item);
+        }
+
+        // MindWave-bound-opacity child row (see setMindWavePreviewImages()'s
+        // own docs) - a separate, smaller, non-selectable/non-draggable
+        // QListWidgetItem placed directly beneath this layer's own, only
+        // when a preview image is actually available for the bound id (a
+        // dangling id - the MindWave was since deleted - simply has no
+        // entry, so no child row, matching Layer::opacityMindWave()'s own
+        // graceful-dangling-reference contract).
+        if (it->opacityMindWaveId.has_value()) {
+            const auto previewIt = mindWavePreviewImages_.find(*it->opacityMindWaveId);
+            if (previewIt != mindWavePreviewImages_.end()) {
+                QString mindWaveName;
+                for (const auto& [mindWaveId, name] : availableMindWaves_) {
+                    if (mindWaveId == *it->opacityMindWaveId) {
+                        mindWaveName = name;
+                        break;
+                    }
+                }
+                auto* childItem = new QListWidgetItem();
+                childItem->setFlags(childItem->flags() & ~Qt::ItemIsSelectable & ~Qt::ItemIsDragEnabled);
+                childItem->setData(kChildRowRole, true);
+                list_->addItem(childItem);
+                auto* childRow = new MindWaveChildRowWidget(mindWaveName, previewIt->second);
+                childItem->setSizeHint(childRow->sizeHint());
+                list_->setItemWidget(childItem, childRow);
+            }
         }
     }
 }
 
 void LayersPanel::selectLayer(sound_mind::core::LayerId id) {
-    for (int i = 0; i < list_->count(); ++i) {
-        QListWidgetItem* item = list_->item(i);
-        if (static_cast<sound_mind::core::LayerId>(item->data(Qt::UserRole).toULongLong()) == id) {
-            selectedLayerId_ = id;
-            list_->setCurrentItem(item);
-            emit selectionChanged(selectedLayerId_);
-            return;
-        }
+    const bool exists =
+        std::any_of(currentRows_.begin(), currentRows_.end(), [id](const RowData& row) { return row.id == id; });
+    if (!exists) {
+        // No row has this id - a no-op, per this method's own docs, rather
+        // than setting selectedLayerId_ to an id with no matching row.
+        return;
     }
-    // No row has this id - a no-op, per this method's own docs, rather
-    // than setting selectedLayerId_ to an id with no matching row.
+    selectedLayerId_ = id;
+    // Rebuilds every row, not just moves the list's own native highlight -
+    // since the Layers Panel Redesign (v0.Y.44.1), which controls a row's
+    // own widget actually contains depends on whether it's the selected
+    // one (see LayerRowWidget's own docs), so a *different* row becoming
+    // selected needs its own widget rebuilt too, not just this one's.
+    rebuildRows();
+    emit selectionChanged(selectedLayerId_);
 }
 
 void LayersPanel::clearSelection() {
     selectedLayerId_.reset();
-    list_->setCurrentItem(nullptr);
+    rebuildRows();  // see selectLayer()'s own docs on why a rebuild, not just setCurrentItem(nullptr), is needed now.
     emit selectionChanged(std::nullopt);
 }
 
@@ -513,7 +686,11 @@ void LayersPanel::handleRowsMoved() {
     std::vector<sound_mind::core::LayerId> newOrderTopToBottom;
     newOrderTopToBottom.reserve(static_cast<std::size_t>(list_->count()));
     for (int i = 0; i < list_->count(); ++i) {
-        newOrderTopToBottom.push_back(static_cast<sound_mind::core::LayerId>(list_->item(i)->data(Qt::UserRole).toULongLong()));
+        QListWidgetItem* item = list_->item(i);
+        if (item->data(kChildRowRole).toBool()) {
+            continue;  // A MindWave child row, not a real layer - see kChildRowRole's own docs.
+        }
+        newOrderTopToBottom.push_back(static_cast<sound_mind::core::LayerId>(item->data(Qt::UserRole).toULongLong()));
     }
 
     // Bottom-to-top, matching setLayers()'s/reorderRequested()'s own

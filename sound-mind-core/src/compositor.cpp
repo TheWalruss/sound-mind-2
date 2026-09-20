@@ -8,6 +8,7 @@
 
 #include "gpu_compute_access.h"
 #include "sound_mind/codec/color_mapping.h"
+#include "sound_mind/codec/rgb_image_resample.h"
 #include "sound_mind/core/blend_mode_application.h"
 #include "sound_mind/core/filter_application.h"
 #include "sound_mind/core/mind_wave.h"
@@ -489,6 +490,15 @@ std::optional<sound_mind::codec::RgbImage> renderLayer(const Layer& layer, std::
     const RgbImage rescaled = resampleHorizontally(base, rescaledWidth);
 
     return placeOnCanvas(rescaled, layer.translationColumns(), canvasWidth);
+}
+
+std::optional<sound_mind::codec::RgbImage> renderLayerThumbnail(const Layer& layer, std::uint32_t width,
+                                                                  std::uint32_t height) {
+    if (!layer.content().has_value()) {
+        return std::nullopt;
+    }
+    const RgbImage base = sound_mind::codec::toRgbImage(*layer.content());
+    return sound_mind::codec::downsampleAveraged(base, width, height);
 }
 
 std::optional<StreamImage> compositeProject(const Project& project) {

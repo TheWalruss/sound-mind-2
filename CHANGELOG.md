@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.44.1] - 2026-09-20
+
+**Layers Panel Redesign.** A real visual and functional overhaul of the Layers panel, taken out of its normal roadmap order (ahead of the "Refactor & Clean Up" pass) per `docs/sound-mind-design.md`'s "Layer panel styling".
+
+### Added
+
+- **Layer thumbnails**: each row's name is now overlaid on a small, rescaled preview of that layer's own visual content (a plain background for Filter/Background/Equalizer layers, which have none), area-averaged to minimize aliasing rather than just sampled.
+- **A collapsed/expanded row - accordion-style**: an unselected row shows only its visibility eye and name/thumbnail; selecting it reveals the drag handle, opacity slider, MindWave combo, Time Alignment controls, Blend Mode combo, and delete button.
+- **A MindWave child row**: a layer whose opacity is bound to a MindWave now shows a smaller, indented row directly beneath it, with that MindWave's own grayscale preview.
+- **Automatic unique layer names**: adding or renaming a layer to a name that's already taken appends " (2)", " (3)", etc. automatically - no more two layers both silently named "New Layer".
+
+Full regression: sound-mind-codec 51/51 (up from 46), sound-mind-core 812/812 (up from 804), sound-mind-studio full suite passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #121.
+
 ## [0.0.42.5] - 2026-09-20
 
 The fifth and final installment of "Workflow & Device Polish" - **the Hardware Acceleration toggle**. Closes out this milestone in full.

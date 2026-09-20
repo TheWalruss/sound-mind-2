@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <fstream>
 #include <ios>
+#include <string>
 
 #include "sound_mind/codec/pool_file.h"
 #include "sound_mind/codec/stream_file.h"
@@ -109,12 +110,37 @@ void Project::save(const std::filesystem::path& path) const {
     }
 }
 
+std::string Project::uniqueLayerName(const std::string& desiredName, std::optional<LayerId> excludingId) const {
+    auto collides = [&](const std::string& candidate) {
+        for (const Layer& layer : layers_) {
+            if (excludingId.has_value() && layer.id() == *excludingId) {
+                continue;
+            }
+            if (layer.name() == candidate) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if (!collides(desiredName)) {
+        return desiredName;
+    }
+    for (int suffix = 2;; ++suffix) {
+        std::string candidate = desiredName + " (" + std::to_string(suffix) + ")";
+        if (!collides(candidate)) {
+            return candidate;
+        }
+    }
+}
+
 LayerId Project::addLayer(Layer layer) {
     const auto maxId = std::max_element(
         layers_.begin(), layers_.end(), [](const Layer& a, const Layer& b) { return a.id() < b.id(); });
     const LayerId newId = (maxId == layers_.end() ? kBackgroundLayerId : maxId->id()) + 1;
 
     layer.setId(newId);
+    layer.setName(uniqueLayerName(layer.name()));
     // See this method's own docs - inserted just below an existing
     // Equalizer layer rather than unconditionally appended to the top.
     if (!layers_.empty() && layers_.back().type() == LayerType::Equalizer) {

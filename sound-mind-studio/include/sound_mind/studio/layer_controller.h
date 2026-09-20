@@ -2,8 +2,10 @@
 
 #include <cstdint>
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
+#include <QImage>
 #include <QObject>
 #include <QString>
 
@@ -125,9 +127,30 @@ public:
      */
     [[nodiscard]] std::optional<sound_mind::core::LayerId> paintTargetLayerId() const;
 
-    /// @brief Pushes the current project's layer stack into the Layers
-    ///        Panel - an empty list (not a no-op) when no project is set.
-    void refreshLayersPanel();
+    /**
+     * @brief Pushes the current project's layer stack into the Layers
+     *        Panel - an empty list (not a no-op) when no project is set.
+     *
+     * Each row's own thumbnail (`v0.Y.44.1`, Layers Panel Redesign) comes
+     * from a per-layer cache, not a fresh render every call - refreshing
+     * runs after nearly every canvas edit (`ToolPaletteController::
+     * contentChanged()`'s own connection in `MainWindow`), so re-rendering
+     * *every* layer's own thumbnail on *every* edit would cost real,
+     * needless work as layer count grows, for every layer except the one
+     * that actually just changed.
+     *
+     * @param changedContentLayer If given, that layer's own cached
+     *        thumbnail is discarded first, so this call re-renders a fresh
+     *        one for it - pass the id of whichever layer a paint/pick/
+     *        fill/paste/warp/chord-stamp/undo/redo operation just changed
+     *        (see `ToolPaletteController::contentChanged()`'s own docs).
+     *        `std::nullopt` (the default) leaves every cached thumbnail
+     *        as-is - correct for every mutation here that doesn't touch a
+     *        layer's own raw content (opacity, translation, rescale, blend
+     *        mode, visibility, rename, add, delete, reorder - none of
+     *        which change what `Layer::content()` itself holds).
+     */
+    void refreshLayersPanel(std::optional<sound_mind::core::LayerId> changedContentLayer = std::nullopt);
 
     /// @brief Sets whether the layer with the given id contributes to the
     ///        project. Repaints the canvas and invalidates cached
@@ -190,6 +213,13 @@ public:
     /// @brief Renames the layer with the given id, without prompting -
     ///        the non-prompting core behind `MainWindow::renameLayer()`'s
     ///        own `QInputDialog`. Refreshes the Layers Panel on success.
+    ///        The applied name is passed through
+    ///        `Project::uniqueLayerName()` first (`v0.Y.44.1`, Layers Panel
+    ///        Redesign) - excluding `id` itself from the collision check,
+    ///        so renaming a layer to the exact name it already has is a
+    ///        no-op rename, not a needless "(2)" suffix - so the layer may
+    ///        end up with a slightly different name than `newName` if it
+    ///        collided with another layer's own current name.
     /// @param id The layer to rename.
     /// @param newName The new name - an empty name is rejected.
     /// @return `true` on success; `false` if no layer with this id
@@ -293,12 +323,30 @@ private:
     ///        undo()/redo() callbacks - see the class's own docs.
     void applyBlendMode(sound_mind::core::LayerId id, sound_mind::core::BlendMode mode);
 
+    /// @brief `layer`'s own thumbnail (`v0.Y.44.1`, Layers Panel Redesign) -
+    ///        `thumbnailCache_`'s cached image if one exists, or a freshly
+    ///        rendered one (cached for next time) otherwise. A null `QImage`
+    ///        for a layer with no content at all (Filter/Background/
+    ///        Equalizer, or a brand-new empty layer) - never cached, so a
+    ///        later `setContent()` on the same layer id renders a real
+    ///        thumbnail the next time this is asked for it.
+    /// @param layer The layer to get a thumbnail for.
+    /// @return That layer's own thumbnail, or a null `QImage`.
+    [[nodiscard]] QImage thumbnailFor(const sound_mind::core::Layer& layer);
+
     CanvasWidget* canvas_;
     PlaybackController* playbackController_;
     LayersPanel* layersPanel_;
     FilterConfigurationPanel* filterConfigurationPanel_;
     UndoStack* undoStack_;
     sound_mind::core::Project* project_ = nullptr;
+
+    /// @brief See thumbnailFor()'s own docs - discarded per-id by
+    ///        refreshLayersPanel()'s own `changedContentLayer` parameter,
+    ///        and per-id by deleteLayer() on removal (tidiness, not
+    ///        correctness - a stale entry for a since-deleted id is simply
+    ///        never looked up again).
+    std::unordered_map<sound_mind::core::LayerId, QImage> thumbnailCache_;
 };
 
 }  // namespace sound_mind::studio

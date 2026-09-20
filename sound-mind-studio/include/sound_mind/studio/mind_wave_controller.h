@@ -95,6 +95,14 @@ public:
     /// @brief Pushes the current project's MindWave library into
     ///        `MindWavesPanel` and `LayersPanel` - an empty library (not a
     ///        no-op) when no project is set.
+    ///
+    /// As of `v0.Y.44.1` (Layers Panel Redesign), also renders each
+    /// MindWave's own small grayscale preview thumbnail (the same
+    /// evaluate-then-grayscale pipeline `CanvasWidget::setMindWavePreview()`
+    /// already uses, shrunk via `sound_mind::codec::downsampleAveraged()`)
+    /// and pushes them into `LayersPanel::setMindWavePreviewImages()` - the
+    /// source for the smaller, tabbed-in child row a layer with a
+    /// MindWave-bound opacity now shows.
     void refreshMindWavesPanel();
 
     /// @brief Adds a new, default MindWave to the current project (see

@@ -1,14 +1,33 @@
 #include "sound_mind/studio/mind_wave_controller.h"
 
+#include <map>
 #include <optional>
 #include <utility>
 #include <vector>
 
+#include <QImage>
+
+#include "sound_mind/codec/color_mapping.h"
+#include "sound_mind/codec/rgb_image_resample.h"
+#include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/mind_waves_panel.h"
+#include "sound_mind/studio/qt_image_conversion.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
+
+namespace {
+
+/// @brief The Layers Panel's own MindWave child-row thumbnail size, in
+/// pixels (`v0.Y.44.1`, Layers Panel Redesign) - smaller than a layer's own
+/// thumbnail (`layer_controller.cpp`'s own `kThumbnailWidth`/
+/// `kThumbnailHeight`), matching the child row's own smaller, "tabbed-in"
+/// treatment.
+constexpr std::uint32_t kMindWavePreviewWidth = 120;
+constexpr std::uint32_t kMindWavePreviewHeight = 24;
+
+}  // namespace
 
 namespace sound_mind::studio {
 
@@ -94,15 +113,34 @@ void MindWaveController::handleMindWaveEditedWhilePreviewing(MindWaveId id, cons
 void MindWaveController::refreshMindWavesPanel() {
     std::vector<MindWavesPanel::RowData> rows;
     std::vector<std::pair<MindWaveId, QString>> availableForBinding;
+    std::map<MindWaveId, QImage> previewImages;
     if (project_ != nullptr) {
+        const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
         for (const NamedMindWave& entry : project_->mindWaves()) {
             const QString name = QString::fromStdString(entry.name);
             rows.push_back(MindWavesPanel::RowData{entry.id, name, entry.wave});
             availableForBinding.emplace_back(entry.id, name);
+
+            // The Layers Panel's own MindWave child-row preview
+            // (`v0.Y.44.1`, Layers Panel Redesign) - the same evaluate-
+            // then-grayscale pipeline the canvas's own live MindWave
+            // Preview overlay uses (see CanvasWidget::setMindWavePreview()),
+            // shrunk to thumbnail size via the shared area-averaging
+            // downsample (correct here for the same reason it's correct
+            // for a layer's own thumbnail - see renderLayerThumbnail()'s
+            // own docs).
+            const auto field =
+                sound_mind::core::evaluateMindWaveField(entry.wave, config, project_->settings().canvasWidth);
+            const auto grayscale =
+                sound_mind::codec::toGrayscaleImage(field, project_->settings().canvasWidth, config.binCount);
+            const auto downsampled =
+                sound_mind::codec::downsampleAveraged(grayscale, kMindWavePreviewWidth, kMindWavePreviewHeight);
+            previewImages[entry.id] = toQImageView(downsampled).copy();
         }
     }
     mindWavesPanel_->setMindWaves(rows);
     layersPanel_->setAvailableMindWaves(availableForBinding);
+    layersPanel_->setMindWavePreviewImages(previewImages);
     filterConfigurationPanel_->setAvailableMindWaves(availableForBinding);
     toolConfigurationPanel_->setAvailableMindWaves(availableForBinding);
 }

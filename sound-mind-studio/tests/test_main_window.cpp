@@ -1217,17 +1217,21 @@ void MainWindowTest::changingARealRowsOpacitySliderDoesNotCrash() {
     // setLayers() deletes old rows via deleteLater() (see its own docs) -
     // without waiting a tick, createFreshTestProject()'s own now-stale
     // Equalizer row (with its own now-orphaned slider) would still be
-    // findable alongside the two real, current sliders (Equalizer +
-    // imported) - see refreshLayersPanelReflectsTheCurrentLayers()'s own
-    // comment for the identical timing issue.
+    // findable alongside the current one - see
+    // refreshLayersPanelReflectsTheCurrentLayers()'s own comment for the
+    // identical timing issue.
     QTest::qWait(0);
-    // Two sliders now, not one - the Equalizer also has an opacity
-    // slider (only Background is excluded). Rows list top-to-bottom, so
-    // index 0 is the Equalizer's own (topmost), index 1 the imported
-    // layer's.
+    // The opacity slider is one of the Layers Panel Redesign's own
+    // (v0.Y.44.1) selection-revealed controls - select the imported
+    // layer's own row first, matching how a real user would actually
+    // reach its slider.
+    const auto importedLayerId = topmostNonEqualizerLayer(*window.project()).id();
+    panel->selectLayer(importedLayerId);
+    QTest::qWait(0);  // let selectLayer()'s own rebuildRows() finish deleteLater()-ing the stale rows too.
+
     const auto sliders = panel->findChildren<QSlider*>(QStringLiteral("opacitySlider"));
-    QCOMPARE(sliders.size(), 2);
-    QSlider* slider = sliders.at(1);
+    QCOMPARE(sliders.size(), 1);  // only the selected row's own.
+    QSlider* slider = sliders.at(0);
 
     slider->setValue(42);  // Emits valueChanged() for real, synchronously.
 

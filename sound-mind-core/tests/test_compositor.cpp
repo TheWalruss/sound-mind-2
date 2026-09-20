@@ -60,6 +60,36 @@ TEST_CASE("renderLayer renders a layer's content the same way toRgbImage does wh
     CHECK(rendered->pixels == expected.pixels);
 }
 
+TEST_CASE("renderLayerThumbnail returns nullopt for a layer with no content", "[core][compositor]") {
+    const Layer layer(1, "Untitled", LayerType::Normal);
+    CHECK_FALSE(renderLayerThumbnail(layer, 40, 24).has_value());
+}
+
+TEST_CASE("renderLayerThumbnail renders at exactly the requested size, ignoring canvas placement",
+          "[core][compositor]") {
+    StreamImage content;
+    content.config.binCount = 10;
+    content.frameCount = 50;
+    content.leftMagnitudeDb.assign(500, -20.0f);
+    content.rightMagnitudeDb.assign(500, -20.0f);
+    content.sharedPhaseRadians.assign(500, 0.0f);
+
+    Layer layer(1, "Untitled", LayerType::Normal);
+    layer.setContent(content);
+    // translationColumns()/rescaleFactor() are deliberately ignored by a
+    // thumbnail (see its own docs) - set to obviously-distinguishing
+    // values here so a test failure would show if that ever changed.
+    layer.setTranslationColumns(1000);
+    layer.setRescaleFactor(3.0);
+
+    const auto thumbnail = renderLayerThumbnail(layer, /*width=*/16, /*height=*/8);
+
+    REQUIRE(thumbnail.has_value());
+    CHECK(thumbnail->width == 16);
+    CHECK(thumbnail->height == 8);
+    CHECK(thumbnail->pixels.size() == std::size_t{16} * 8 * 3);
+}
+
 namespace {
 
 /// @brief A single-bin, per-column-distinctive StreamImage: column `i`
