@@ -166,9 +166,7 @@ constexpr float kMinLinearAmplitude = 1e-7f;
     if (!opacityMindWave) {
         return 1.0f;
     }
-    const TimeFrequencyPoint point{frameIndexToTime(outputColumn, config),
-                                    binIndexToFrequency(static_cast<float>(bin), config)};
-    return opacityMindWave->evaluate(point, config);
+    return mindWaveValueAt(*opacityMindWave, bin, outputColumn, config);
 }
 
 /// @brief Builds a full `canvasWidth x config.binCount` array of
@@ -179,21 +177,17 @@ constexpr float kMinLinearAmplitude = 1e-7f;
 /// CPU path, which can call `mindWaveGainAt()` inline per cell with no
 /// array at all. Returns all-`1.0` (no effect), without evaluating
 /// anything, when `opacityMindWave` is `nullptr` - the common, unbound
-/// case skips every `MindWave::evaluate()` call entirely.
+/// case skips every `MindWave::evaluate()` call entirely. Delegates to
+/// `evaluateMindWaveField()` for the bound case (`v0.Y.45.1` Refactor &
+/// Clean Up, Installment B) - previously its own independent copy of the
+/// same bin/frame loop.
 [[nodiscard]] std::vector<float> buildMindWaveField(const MindWave* opacityMindWave,
                                                      const sound_mind::codec::StreamCodecConfig& config,
                                                      std::uint32_t canvasWidth) {
-    const std::size_t cellCount = std::size_t{config.binCount} * canvasWidth;
     if (!opacityMindWave) {
-        return std::vector<float>(cellCount, 1.0f);
+        return std::vector<float>(std::size_t{config.binCount} * canvasWidth, 1.0f);
     }
-    std::vector<float> field(cellCount);
-    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
-        for (std::uint32_t x = 0; x < canvasWidth; ++x) {
-            field[cellIndex(bin, x, canvasWidth)] = mindWaveGainAt(opacityMindWave, bin, x, config);
-        }
-    }
-    return field;
+    return evaluateMindWaveField(*opacityMindWave, config, canvasWidth);
 }
 
 /// @brief The width a `sourceWidth`-wide sequence rescales to under

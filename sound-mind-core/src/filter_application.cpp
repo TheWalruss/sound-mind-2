@@ -52,8 +52,7 @@ double perCellParameterValue(const MindWave* mindWave, double baseline, double c
     if (mindWave == nullptr) {
         return ceiling;
     }
-    const TimeFrequencyPoint point{frameIndexToTime(frame, config), binIndexToFrequency(static_cast<float>(bin), config)};
-    const double field = mindWave->evaluate(point, config);
+    const double field = static_cast<double>(mindWaveValueAt(*mindWave, bin, frame, config));
     return baseline + (ceiling - baseline) * field;
 }
 
@@ -73,19 +72,23 @@ double perCellParameterValue(const MindWave* mindWave, double baseline, double c
 /// unbound case skips every `MindWave::evaluate()` call entirely, the
 /// same short-circuit `compositor.cpp`'s own `buildMindWaveField()`
 /// already establishes.
+///
+/// Delegates the actual per-cell evaluation to `evaluateMindWaveField()`
+/// (`v0.Y.45.1` Refactor & Clean Up, Installment B) rather than its own
+/// independent bin/frame loop, then applies this parameter's own
+/// baseline/ceiling lerp as a single pass over the returned array -
+/// `binCount` is always `config`'s own `binCount` at every call site
+/// (`applyFilter()` never filters a sub-region), so `evaluateMindWaveField()`'s
+/// own `config.binCount`-driven row count already matches it exactly.
 std::vector<float> buildParameterField(const MindWave* mindWave, double baseline, double ceiling,
                                         std::uint32_t binCount, std::uint32_t frameCount,
                                         const sound_mind::codec::StreamCodecConfig& config) {
-    const std::size_t cellCount = std::size_t{binCount} * frameCount;
     if (mindWave == nullptr) {
-        return std::vector<float>(cellCount, static_cast<float>(ceiling));
+        return std::vector<float>(std::size_t{binCount} * frameCount, static_cast<float>(ceiling));
     }
-    std::vector<float> field(cellCount);
-    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
-        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
-            field[static_cast<std::size_t>(bin) * frameCount + frame] =
-                static_cast<float>(perCellParameterValue(mindWave, baseline, ceiling, bin, frame, config));
-        }
+    std::vector<float> field = evaluateMindWaveField(*mindWave, config, frameCount);
+    for (float& value : field) {
+        value = static_cast<float>(baseline + (ceiling - baseline) * static_cast<double>(value));
     }
     return field;
 }

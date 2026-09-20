@@ -897,6 +897,26 @@ private:
                                                         std::uint32_t canvasWidth);
 
 /**
+ * @brief Evaluates `wave` at one `[bin][frame]` cell - the single-cell
+ *        primitive `evaluateMindWaveField()` and every other per-cell
+ *        MindWave-bound lookup in Core (layer-opacity gain, filter-
+ *        parameter binding) build on, rather than each independently
+ *        constructing the same `TimeFrequencyPoint` (`v0.Y.45.1` Refactor &
+ *        Clean Up, Installment B - previously three near-identical copies
+ *        of this same point-construction-and-evaluate step).
+ *
+ * @param wave The MindWave to evaluate.
+ * @param bin The cell's row (frequency axis).
+ * @param frame The cell's column (time axis).
+ * @param config Interprets `bin`/`frame` as a real time/frequency point,
+ *        the same config every other domain conversion in Core already
+ *        uses.
+ * @return `wave`'s own value at this cell, in `[0, 1]`.
+ */
+[[nodiscard]] float mindWaveValueAt(const MindWave& wave, std::uint32_t bin, std::uint32_t frame,
+                                     const sound_mind::codec::StreamCodecConfig& config);
+
+/**
  * @brief How `reduceMindWaveToSignal()` collapses every bin at one time
  *        sample into that sample's own single value - see its own docs.
  */

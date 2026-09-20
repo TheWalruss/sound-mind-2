@@ -1001,6 +1001,55 @@ TEST_CASE("A NamedMindWave round-trips through JSON unchanged", "[core][mind_wav
     REQUIRE(restored.wave.periodicWaveform() == original.wave.periodicWaveform());
 }
 
+// --- mindWaveValueAt() - the shared single-cell primitive every per-cell
+// MindWave-bound lookup in Core builds on (`v0.Y.45.1` Refactor & Clean Up,
+// Installment B) ---
+
+TEST_CASE("mindWaveValueAt matches evaluate() at the equivalent TimeFrequencyPoint", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(2.0);
+    const auto config = testConfig();
+    constexpr std::uint32_t bin = 3;
+    constexpr std::uint32_t frame = 5;
+
+    const float actual = sound_mind::core::mindWaveValueAt(wave, bin, frame, config);
+
+    const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), config);
+    const float expected =
+        wave.evaluate(TimeFrequencyPoint{sound_mind::core::frameIndexToTime(frame, config), frequencyHz}, config);
+    REQUIRE(actual == Catch::Approx(expected));
+}
+
+TEST_CASE("mindWaveValueAt threads bin into a frequency-axis wave's own value", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setAxis(MindWaveAxis::Frequency);
+    wave.setType(GeneratorType::SteppedNoise);
+    wave.setSteppedNoiseShape(SteppedNoiseShape::GaussianNoise);
+    const auto config = testConfig();
+
+    const float atOrigin = sound_mind::core::mindWaveValueAt(wave, 0, 0, config);
+    const float atOtherBin = sound_mind::core::mindWaveValueAt(wave, 7, 0, config);
+
+    // Not asserting an exact value (noise-derived) - just that `bin` is
+    // actually threaded through to a different TimeFrequencyPoint, rather
+    // than silently ignored.
+    REQUIRE(atOrigin != Catch::Approx(atOtherBin));
+}
+
+TEST_CASE("mindWaveValueAt threads frame into a time-axis wave's own value", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setType(GeneratorType::SteppedNoise);
+    wave.setSteppedNoiseShape(SteppedNoiseShape::GaussianNoise);
+    const auto config = testConfig();
+
+    const float atOrigin = sound_mind::core::mindWaveValueAt(wave, 0, 0, config);
+    const float atOtherFrame = sound_mind::core::mindWaveValueAt(wave, 0, 7, config);
+
+    REQUIRE(atOrigin != Catch::Approx(atOtherFrame));
+}
+
 // --- evaluateMindWaveField() - the Studio's own MindWave Preview overlay ---
 
 TEST_CASE("evaluateMindWaveField returns one value per bin/frame cell, matching evaluate() at each position",

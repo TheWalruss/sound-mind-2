@@ -504,14 +504,19 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
     return static_cast<float>(std::clamp(result, 0.0, 1.0));
 }
 
+float mindWaveValueAt(const MindWave& wave, std::uint32_t bin, std::uint32_t frame,
+                       const sound_mind::codec::StreamCodecConfig& config) {
+    const TimeFrequencyPoint point{frameIndexToTime(frame, config),
+                                    binIndexToFrequency(static_cast<float>(bin), config)};
+    return wave.evaluate(point, config);
+}
+
 std::vector<float> evaluateMindWaveField(const MindWave& wave, const sound_mind::codec::StreamCodecConfig& config,
                                           std::uint32_t canvasWidth) {
     std::vector<float> field(std::size_t{config.binCount} * canvasWidth);
     for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
-        const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), config);
         for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {
-            const TimeFrequencyPoint point{frameIndexToTime(frame, config), frequencyHz};
-            field[cellIndex(bin, frame, canvasWidth)] = wave.evaluate(point, config);
+            field[cellIndex(bin, frame, canvasWidth)] = mindWaveValueAt(wave, bin, frame, config);
         }
     }
     return field;
