@@ -21,7 +21,8 @@ now. Click **OK** - the canvas opens, showing an empty dark-gray rectangle
 ## 2. Import something
 
 **File → Import Audio...** or **File → Import Image...** - or just drag a
-file (WAV audio; PNG/JPG/BMP/TGA/WebP images) straight onto the window.
+file (WAV/MP3/FLAC/Ogg/AIFF/M4A/Opus audio; PNG/JPG/BMP/TGA/WebP images)
+straight onto the window.
 For an image, you'll be asked how to fit it to the canvas; **Rescale to fit
 project** is a safe default. The imported file appears in the canvas as a
 spectrogram, and as a new row in the **Layers** panel on the right.

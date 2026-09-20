@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.42.3] - 2026-09-20
+
+The third installment of "Workflow & Device Polish" - **additional audio import formats**.
+
+### Added
+
+- **Audio import now accepts MP3, FLAC, Ogg, AIFF, M4A, and Opus, alongside WAV** - drag-and-drop, **File → Import Audio...**, and the audio snippet picker all recognize every format uniformly. Decoding goes through ffmpeg (already a required dependency for MP3/MP4 export) for anything other than `.wav`, which keeps using the existing hand-rolled WAV reader; format detection is by the file's own content, not its extension, so a misnamed file still decodes correctly.
+
+### Fixed
+
+- **A stack-overflow crash in Repeat Playback (`v0.0.42.2`)**: a single-click (rather than dragged) paint stroke while Repeat was on with Delta or Review scope produced a zero-width "edited region," which made the very `seek()` that started the loop immediately look like it had already reached the loop's own end - re-triggering itself forever. A zero-width range now just plays through instead of looping, matching Repeat being off for that one edit. See `docs/sound-mind-architecture.md`'s Decision #118 for the full root-cause analysis.
+
+Full regression: sound-mind-codec 46/46 (up from 39), sound-mind-core 801/801, sound-mind-studio full suite passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #118.
+
 ## [0.0.42.2] - 2026-09-20
 
 The second installment of "Workflow & Device Polish" - **Repeat Playback**.

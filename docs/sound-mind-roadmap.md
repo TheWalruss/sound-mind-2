@@ -661,7 +661,15 @@ As shipped (Installment B, `v0.0.42.2`):
 
 **Demo:** check Repeat with Scope set to Delta, paint a stroke while a track plays, and hear it immediately without pressing Play; switch Scope to Track and confirm an edit no longer jumps the playback position.
 
-Additional import formats, documentation links, and the Hardware Acceleration toggle remain scheduled as Installments C-E.
+As shipped (Installment C, `v0.0.42.3`, see `docs/sound-mind-architecture.md`'s Decision #118):
+
+- **`sound_mind::codec::readAudioFile()`**: a new dispatch point in front of `readWavFile()`, routing `.wav` (case-insensitively) to the existing hand-rolled reader and everything else through a new ffmpeg-based generic decoder - MP3, FLAC, Ogg, AIFF, M4A, and Opus, matching this milestone's own stated target list, all sharing ffmpeg's own content-based format detection rather than trusting the extension.
+- **`isAudioExtension()`** (Studio, mirroring the existing `isImageExtension()`): the shared, testable check behind the broadened `kAudioFileFilter` file-picker filter and both drag-and-drop recognition points (`dropEvent()`/`handleDroppedFiles()`), replacing the previous hardcoded `.wav`-only checks.
+- **A bug fix bundled into the same release, unrelated to import formats**: a stack-overflow crash in `v0.0.42.2`'s own Repeat Playback, found while running this installment's regression suite - see the Fixed section of `CHANGELOG.md`'s `v0.0.42.3` entry and Decision #118 for the full root-cause analysis.
+
+**Demo:** drag an MP3 (or FLAC/Ogg/AIFF/M4A/Opus) file onto the canvas, or use **File → Import Audio...**, and confirm it imports exactly like a WAV file always has.
+
+Documentation links and the Hardware Acceleration toggle remain scheduled as Installments D-E.
 
 **No Y bump** - workflow/device/UI additions; no project file format change.
 

@@ -6,9 +6,9 @@
 #include <QCoreApplication>
 #include <QImage>
 
+#include "sound_mind/codec/audio_file.h"
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/stream_codec.h"
-#include "sound_mind/codec/wav_file.h"
 #include "sound_mind/core/layer_export.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/import_helpers.h"
@@ -32,7 +32,7 @@ std::vector<AudioSnippetPickerDialog::RowData> audioSnippetsForFile(const sound_
                                                                       const std::filesystem::path& path,
                                                                       QString* errorMessage) {
     try {
-        const auto audio = sound_mind::codec::readWavFile(path);
+        const auto audio = sound_mind::codec::readAudioFile(path);
         const auto config = sound_mind::core::streamCodecConfigFor(project.settings());
         const auto loopLengthSamples =
             static_cast<std::size_t>(project.settings().canvasWidth) * static_cast<std::size_t>(config.hopLength);
@@ -70,7 +70,7 @@ std::vector<AudioSnippetPickerDialog::RowData> audioSnippetsForFile(const sound_
 int importAudioSnippetsInto(sound_mind::core::Project& project, const std::filesystem::path& path,
                              const std::vector<std::size_t>& snippetIndices, QString* errorMessage) {
     try {
-        const auto audio = sound_mind::codec::readWavFile(path);
+        const auto audio = sound_mind::codec::readAudioFile(path);
         const auto config = sound_mind::core::streamCodecConfigFor(project.settings());
         const auto loopLengthSamples =
             static_cast<std::size_t>(project.settings().canvasWidth) * static_cast<std::size_t>(config.hopLength);

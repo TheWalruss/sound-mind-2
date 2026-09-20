@@ -21,6 +21,12 @@ bool isImageExtension(const std::string& lowercaseExtension) {
            lowercaseExtension == ".bmp" || lowercaseExtension == ".tga" || lowercaseExtension == ".webp";
 }
 
+bool isAudioExtension(const std::string& lowercaseExtension) {
+    return lowercaseExtension == ".wav" || lowercaseExtension == ".mp3" || lowercaseExtension == ".flac" ||
+           lowercaseExtension == ".ogg" || lowercaseExtension == ".aiff" || lowercaseExtension == ".aif" ||
+           lowercaseExtension == ".m4a" || lowercaseExtension == ".opus";
+}
+
 std::optional<sound_mind::codec::CompressedAudioFormat> audioFormatFromExtension(const std::filesystem::path& path) {
     const std::string extension = lowercasedExtension(path);
     if (extension == ".flac") {

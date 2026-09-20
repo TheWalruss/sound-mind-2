@@ -68,32 +68,6 @@ AudioEncoder createAudioEncoder(AVFormatContext& formatCtx, AVCodecID codecId, c
 
 namespace {
 
-/// @brief RAII owner for the data-pointer-array + sample buffer that
-/// av_samples_alloc_array_and_samples() allocates together - freed per its
-/// documented pattern (av_freep(&array[0]) for the buffer, then
-/// av_freep(&array) for the array itself).
-class PlanarSampleBuffer {
-public:
-    PlanarSampleBuffer(int numChannels, int nbSamples, AVSampleFormat format) {
-        checkFfmpeg(av_samples_alloc_array_and_samples(&data_, &linesize_, numChannels, nbSamples, format, 0),
-                    "could not allocate a resample buffer");
-    }
-    ~PlanarSampleBuffer() {
-        if (data_ != nullptr) {
-            av_freep(&data_[0]);
-            av_freep(&data_);
-        }
-    }
-    PlanarSampleBuffer(const PlanarSampleBuffer&) = delete;
-    PlanarSampleBuffer& operator=(const PlanarSampleBuffer&) = delete;
-
-    [[nodiscard]] std::uint8_t** data() const { return data_; }
-
-private:
-    std::uint8_t** data_ = nullptr;
-    int linesize_ = 0;
-};
-
 /// @brief Allocates a new AVFrame configured to match `ctx`'s audio format,
 /// holding `nbSamples` samples of freshly allocated buffer space.
 AVFramePtr allocAudioFrame(const AVCodecContext& ctx, int nbSamples) {

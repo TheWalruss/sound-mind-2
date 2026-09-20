@@ -22,6 +22,7 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -56,6 +57,21 @@ struct AVFormatContextOutputDeleter {
     }
 };
 using AVFormatContextOutputPtr = std::unique_ptr<AVFormatContext, AVFormatContextOutputDeleter>;
+
+/// @brief Closes an input AVFormatContext opened via avformat_open_input()
+/// - avformat_close_input() closes the AVIO handle it opened internally
+/// and frees the context itself, both in one call (unlike the output side,
+/// which needs the two separate steps AVFormatContextOutputDeleter above
+/// performs).
+struct AVFormatContextInputDeleter {
+    /// @brief Closes and frees `ctx` (a no-op if `nullptr`), per
+    /// avformat_close_input()'s own contract - it takes `AVFormatContext**`
+    /// and nulls the pointer itself, which this wraps for the deleter's own
+    /// by-value `AVFormatContext*` signature.
+    /// @param ctx The context to close/free.
+    void operator()(AVFormatContext* ctx) const { avformat_close_input(&ctx); }
+};
+using AVFormatContextInputPtr = std::unique_ptr<AVFormatContext, AVFormatContextInputDeleter>;
 
 /// @brief Frees an AVCodecContext (avcodec_free_context()).
 struct AVCodecContextDeleter {
@@ -104,6 +120,40 @@ struct AVAudioFifoDeleter {
     void operator()(AVAudioFifo* fifo) const { av_audio_fifo_free(fifo); }
 };
 using AVAudioFifoPtr = std::unique_ptr<AVAudioFifo, AVAudioFifoDeleter>;
+
+/// @brief RAII owner for the data-pointer-array + sample buffer that
+/// av_samples_alloc_array_and_samples() allocates together - freed per its
+/// documented pattern (av_freep(&array[0]) for the buffer, then
+/// av_freep(&array) for the array itself). Shared by ffmpeg_audio_encoder.cpp
+/// (resampling toward an encoder's own format) and ffmpeg_audio_decoder.cpp
+/// (resampling away from a decoder's own format) - identical need, opposite
+/// direction.
+class PlanarSampleBuffer {
+public:
+    /// @param numChannels Number of channels to allocate space for.
+    /// @param nbSamples Number of samples (per channel) to allocate space for.
+    /// @param format The sample format to allocate for.
+    /// @throws std::runtime_error if allocation fails.
+    PlanarSampleBuffer(int numChannels, int nbSamples, AVSampleFormat format) {
+        checkFfmpeg(av_samples_alloc_array_and_samples(&data_, &linesize_, numChannels, nbSamples, format, 0),
+                    "could not allocate a resample buffer");
+    }
+    ~PlanarSampleBuffer() {
+        if (data_ != nullptr) {
+            av_freep(&data_[0]);
+            av_freep(&data_);
+        }
+    }
+    PlanarSampleBuffer(const PlanarSampleBuffer&) = delete;
+    PlanarSampleBuffer& operator=(const PlanarSampleBuffer&) = delete;
+
+    /// @return The allocated per-channel data pointer array.
+    [[nodiscard]] std::uint8_t** data() const { return data_; }
+
+private:
+    std::uint8_t** data_ = nullptr;
+    int linesize_ = 0;
+};
 
 /// @brief Sends `frame` (nullptr to flush/drain the encoder at end-of-stream)
 /// to `codecCtx`'s encoder and writes every packet it produces to `stream`

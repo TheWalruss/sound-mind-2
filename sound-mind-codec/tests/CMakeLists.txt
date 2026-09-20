@@ -10,6 +10,7 @@ add_executable(sound-mind-codec-tests
     test_pool_codec.cpp
     test_pool_file.cpp
     test_audio_export.cpp
+    test_audio_file.cpp
     test_video_export.cpp
 )
 

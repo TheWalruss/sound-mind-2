@@ -164,11 +164,12 @@ toolbar buttons):
 
 ### Importing Audio
 
-**File → Import Audio...** prompts for a WAV file. If it's no longer than
-your project's Duration, it's imported directly as one new layer. If it's
-longer, it's split into consecutive Duration-length snippets and you're
-shown a list to check/uncheck - only the checked snippets become layers,
-named `<filename>_0000`, `<filename>_0001`, and so on.
+**File → Import Audio...** prompts for an audio file - WAV, MP3, FLAC, Ogg,
+AIFF, M4A, or Opus. If it's no longer than your project's Duration, it's
+imported directly as one new layer. If it's longer, it's split into
+consecutive Duration-length snippets and you're shown a list to
+check/uncheck - only the checked snippets become layers, named
+`<filename>_0000`, `<filename>_0001`, and so on.
 
 ### Importing Images
 
@@ -199,9 +200,10 @@ automatically.
 
 Dragging files onto the main window imports/opens them, by extension, with
 the same choices the File menu offers: dropped images show the same
-scaling/sequencing picker **File → Import Image...** does; a dropped
-`.wav` with more than one computed snippet shows the same snippet picker
-**File → Import Audio...** does, one picker per such file; `.smproj` opens
+scaling/sequencing picker **File → Import Image...** does; a dropped audio
+file (WAV, MP3, FLAC, Ogg, AIFF, M4A, or Opus) with more than one computed
+snippet shows the same snippet picker **File → Import Audio...** does, one
+picker per such file; `.smproj` opens
 that project (after confirming if your current project has unsaved
 changes). Anything else is ignored. **Cancelling any one of these pickers
 cancels the whole drop** - nothing in it is imported or opened, even files

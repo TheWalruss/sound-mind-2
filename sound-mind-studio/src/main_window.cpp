@@ -76,7 +76,7 @@ namespace sound_mind::studio {
 
 namespace {
 const char* kProjectFileFilter = "Sound Mind Projects (*.smproj)";
-const char* kAudioFileFilter = "WAV Audio (*.wav)";
+const char* kAudioFileFilter = "Audio (*.wav *.mp3 *.flac *.ogg *.aiff *.aif *.m4a *.opus)";
 const char* kImageFileFilter = "Images (*.png *.jpg *.jpeg *.bmp *.tga *.webp)";
 const char* kExportAudioFileFilter = "FLAC Audio (*.flac);;Ogg Vorbis Audio (*.ogg);;MP3 Audio (*.mp3)";
 const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
@@ -889,7 +889,7 @@ void MainWindow::dropEvent(QDropEvent* event) {
         const std::string extension = lowercasedExtension(path);
         if (isImageExtension(extension)) {
             imagePaths.push_back(path);
-        } else if (extension == ".wav") {
+        } else if (isAudioExtension(extension)) {
             audioPaths.push_back(path);
         }
     }
@@ -949,7 +949,7 @@ void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& pa
         const std::string extension = lowercasedExtension(path);
 
         QString errorMessage;
-        if (extension == ".wav") {
+        if (isAudioExtension(extension)) {
             const auto selection = audioSnippetSelections.find(path);
             const bool ok = selection != audioSnippetSelections.end()
                                  ? importAudioSnippets(path, selection->second, &errorMessage)
@@ -2272,7 +2272,22 @@ void MainWindow::handleContentChangedForRepeat(sound_mind::core::LayerId layer) 
 }
 
 void MainWindow::checkRepeatPlaybackRange(double positionSeconds) {
-    if (!repeatEnabled_ || repeatRangeEndSeconds_ <= 0.0) {
+    // `<= repeatRangeStartSeconds_`, not `<= 0.0`: a single-click (as
+    // opposed to dragged) paint stroke's own bounds() is a genuine
+    // zero-width point - Delta/Review scope then sets
+    // repeatRangeEndSeconds_ == repeatRangeStartSeconds_ exactly (see
+    // handleContentChangedForRepeat() above). The seek() below emits
+    // positionChanged() synchronously (see PlaybackController::seek()'s
+    // own docs), re-entering this same function - with the old `<= 0.0`
+    // guard, a zero-width range still looked "active" (end > 0), so the
+    // very seek() that establishes it already satisfies "past the end"
+    // (positionSeconds == repeatRangeEndSeconds_), triggering another
+    // seek(), another positionChanged(), and so on - unbounded recursion
+    // until the stack overflows. A range with nothing to actually loop
+    // over (end <= start) is treated the same as "no range yet": play
+    // straight through without any auto-loop-back, exactly like Repeat
+    // being off for that one edit.
+    if (!repeatEnabled_ || repeatRangeEndSeconds_ <= repeatRangeStartSeconds_) {
         return;
     }
     if (positionSeconds < repeatRangeEndSeconds_) {

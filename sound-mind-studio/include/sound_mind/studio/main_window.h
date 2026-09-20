@@ -271,9 +271,11 @@ public slots:
     void saveProjectAs();
 
     /**
-     * @brief Prompts for a WAV file and imports it as one or more new
-     *        layers - see `docs/sound-mind-roadmap.md`'s Audio Import
-     *        Snippets milestone (`v0.Y.19.1`).
+     * @brief Prompts for an audio file (see `kAudioFileFilter` - WAV, MP3,
+     *        FLAC, Ogg, AIFF, M4A, or Opus, since `v0.0.42.3`) and imports
+     *        it as one or more new layers - see
+     *        `docs/sound-mind-roadmap.md`'s Audio Import Snippets
+     *        milestone (`v0.Y.19.1`).
      *
      * Audio longer than the current project's own duration is split into
      * project-length snippets first (see audioSnippetsForFile()'s docs).
@@ -1456,7 +1458,7 @@ public:
     [[nodiscard]] float playbackVolume() const noexcept;
 
     /**
-     * @brief Imports every project-length snippet of a WAV file as new
+     * @brief Imports every project-length snippet of an audio file as new
      *        layers, without prompting or showing an error dialog on
      *        failure.
      *
@@ -1479,7 +1481,7 @@ public:
      * Marks hasUnsavedChanges() on success, per the Project Lifecycle
      * milestone (`v0.Y.10.1`).
      *
-     * @param path Path to the WAV file to import.
+     * @param path Path to the audio file to import.
      * @param errorMessage If non-null and this returns `false`, set to a
      *        human-readable description of what went wrong.
      * @return `true` on success; `false` if reading or encoding it failed.
@@ -1498,7 +1500,7 @@ public:
      * the rest if the source's length isn't an exact multiple. Audio no
      * longer than one snippet's worth always returns exactly one entry.
      *
-     * @param path Path to the WAV file to analyze.
+     * @param path Path to the audio file to analyze.
      * @param errorMessage If non-null and this returns empty, set to a
      *        human-readable description of what went wrong.
      * @return One entry per snippet, in order; empty if no project is
@@ -1525,7 +1527,7 @@ public:
      * the layer is named from the file's own name directly, matching
      * importAudioFile()'s pre-existing single-layer behavior exactly.
      *
-     * @param path Path to the WAV file to import from.
+     * @param path Path to the audio file to import from.
      * @param snippetIndices Which of the source's snippets to import, in
      *        any order and with any duplicates ignored; an index at or
      *        beyond the source's actual snippet count is silently
@@ -1617,10 +1619,12 @@ public:
      *        `docs/sound-mind-roadmap.md`'s Drag & Drop Import milestone
      *        (`v0.Y.17.1`).
      *
-     * `.wav` goes to importAudioSnippets() with whatever indices
-     * `audioSnippetSelections` gives that path, or - for a path with no
-     * entry there - the same "every computed snippet, no picker" behavior
-     * importAudioFile() always had; every image extension
+     * A recognized audio extension (see `isAudioExtension()` - WAV, MP3,
+     * FLAC, Ogg, AIFF, M4A, or Opus, since `v0.0.42.3`) goes to
+     * importAudioSnippets() with whatever indices `audioSnippetSelections`
+     * gives that path, or - for a path with no entry there - the same
+     * "every computed snippet, no picker" behavior importAudioFile()
+     * always had; every image extension
      * `importImageFiles()` accepts is collected and imported as one batch
      * with `imageMode`/`importAsSequence`. dropEvent() is the one that
      * actually decides all of this (via real `AudioSnippetPickerDialog`/
@@ -1654,10 +1658,10 @@ public:
      *        independently - see `importImageFiles()`'s own docs. Defaults
      *        to `false`.
      * @param audioSnippetSelections Which snippet indices to import for a
-     *        given `.wav` path among `paths` - see
+     *        given recognized-audio-extension path among `paths` - see
      *        `audioSnippetsForFile()`/`importAudioSnippets()`'s own docs. A
-     *        `.wav` path with no entry here imports every snippet it has,
-     *        the pre-existing default every test predating this parameter
+     *        path with no entry here imports every snippet it has, the
+     *        pre-existing default every test predating this parameter
      *        still gets.
      */
     void handleDroppedFiles(
@@ -1752,8 +1756,9 @@ protected:
      *   `ImageScalePickerDialog` is shown once for the whole batch (with
      *   its "Import as sequence" checkbox offered exactly when more than
      *   one image was dropped, same as `importImage()`'s own file dialog).
-     * - Each `.wav` file among `event`'s files gets its own
-     *   `audioSnippetsForFile()` check; one with more than one snippet
+     * - Each recognized-audio-extension file (see `isAudioExtension()`)
+     *   among `event`'s files gets its own `audioSnippetsForFile()` check;
+     *   one with more than one snippet
      *   shows its own `AudioSnippetPickerDialog`, exactly as
      *   `importAudio()` would for that file alone - per-file, not batched,
      *   since (unlike images) audio snippets aren't a cross-file concept.
@@ -1934,6 +1939,20 @@ private:
      * `Track` (`repeatRangeEndSeconds_` is the whole track's own
      * duration), `Delta`, and `Review` alike, with no per-scope branching
      * needed here at all.
+     *
+     * Also a no-op whenever `repeatRangeEndSeconds_ <= repeatRangeStartSeconds_`
+     * - not just the pre-edit "no range yet" default (both `0.0`), but
+     * also a genuinely zero-width `Delta`/`Review` range: a single-click
+     * (as opposed to dragged) paint stroke's own `bounds()` has an equal
+     * start/end, which `handleContentChangedForRepeat()` copies straight
+     * into `repeatRangeStartSeconds_`/`repeatRangeEndSeconds_`. Since
+     * `PlaybackController::seek()` emits `positionChanged()` synchronously,
+     * re-entering this same method, treating a zero-width range as
+     * "already past the end" would `seek()` back to its own start over
+     * and over with no base case - unbounded recursion until the stack
+     * overflows (a real, since-fixed crash - see `CHANGELOG.md`'s
+     * `v0.0.42.3` entry). Nothing meaningful to loop over just plays
+     * straight through instead, same as Repeat being off for that edit.
      *
      * @param positionSeconds The current playback position, in seconds.
      */

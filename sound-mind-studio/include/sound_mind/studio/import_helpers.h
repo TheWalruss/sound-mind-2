@@ -35,6 +35,31 @@ namespace sound_mind::studio {
 [[nodiscard]] bool isImageExtension(const std::string& lowercaseExtension);
 
 /**
+ * @brief Whether `lowercaseExtension` is one of the audio extensions
+ *        `MainWindow::importAudioFile()` (via `sound_mind::codec::
+ *        readAudioFile()`) accepts as an import source - `v0.0.42.3`
+ *        (Workflow & Device Polish, Installment C).
+ *
+ * Deliberately not exhaustive of everything ffmpeg's own generic decoder
+ * (`readAudioFile()`'s own non-`.wav` path) could actually open - just the
+ * extensions `docs/sound-mind-design.md`'s own Import section names by
+ * name ("WAV, MP3, FLAC, OGG, AIFF, M4A, and Opus"), matching
+ * `kAudioFileFilter`'s own file-picker filter and this same list's own
+ * role gating which dropped files `dropEvent()`/`handleDroppedFiles()`
+ * treat as audio at all - a file with some other, unlisted audio
+ * extension can still be imported via **File -> Import Audio...**'s own
+ * file picker (whose own filter also isn't exhaustive - see
+ * `kAudioFileFilter`'s own docs), just not auto-recognized by a drag-and-
+ * drop.
+ *
+ * @param lowercaseExtension An extension as lowercasedExtension() returns
+ *        it - including its leading `.`.
+ * @return `true` for `.wav`/`.mp3`/`.flac`/`.ogg`/`.aiff`/`.aif`/`.m4a`/
+ *         `.opus`.
+ */
+[[nodiscard]] bool isAudioExtension(const std::string& lowercaseExtension);
+
+/**
  * @brief Maps a destination path's extension to a compressed audio format.
  * @param path The destination path to inspect - its extension is
  *        recognized case-insensitively, via lowercasedExtension().

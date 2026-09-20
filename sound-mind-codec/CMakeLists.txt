@@ -50,7 +50,9 @@ add_library(sound-mind-codec
     src/pool_codec.cpp
     src/pool_file.cpp
     src/ffmpeg_audio_encoder.cpp
+    src/ffmpeg_audio_decoder.cpp
     src/audio_export.cpp
+    src/audio_file.cpp
     src/video_export.cpp
 )
 
