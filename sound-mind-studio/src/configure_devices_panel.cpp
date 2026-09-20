@@ -14,31 +14,9 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "sound_mind/studio/device_combo_helpers.h"
+
 namespace sound_mind::studio {
-
-namespace {
-
-const QString kSystemDefaultLabel = QObject::tr("(System Default)");
-
-/// @brief Replaces `combo`'s items with a "(System Default)" entry
-/// followed by `deviceNames`, preserving the previously selected device
-/// name across the refresh if it's still present - the same helper
-/// `PlaybackPanel`/`LoopPanel` each already have their own copy of.
-void populateDeviceCombo(QComboBox* combo, const QStringList& deviceNames) {
-    const QString previousSelection = combo->currentData().toString();
-
-    combo->blockSignals(true);
-    combo->clear();
-    combo->addItem(kSystemDefaultLabel, QString());
-    for (const QString& name : deviceNames) {
-        combo->addItem(name, name);
-    }
-    const int previousIndex = combo->findData(previousSelection);
-    combo->setCurrentIndex(previousIndex >= 0 ? previousIndex : 0);
-    combo->blockSignals(false);
-}
-
-}  // namespace
 
 ConfigureDevicesPanel::ConfigureDevicesPanel(QWidget* parent) : QDockWidget(tr("Configure Devices"), parent) {
     auto* container = new QWidget(this);

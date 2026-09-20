@@ -17,11 +17,11 @@
 #include <QVariant>
 #include <QWidget>
 
+#include "sound_mind/studio/device_combo_helpers.h"
+
 namespace sound_mind::studio {
 
 namespace {
-
-const QString kSystemDefaultLabel = QObject::tr("(System Default)");
 
 constexpr std::array<std::pair<PlaybackScope, const char*>, 3> kScopes = {{
     {PlaybackScope::Track, "Track"},
@@ -39,23 +39,6 @@ QString formatMinutesSeconds(double seconds) {
     const int minutes = totalWholeSeconds / 60;
     const int remainingSeconds = totalWholeSeconds % 60;
     return QStringLiteral("%1:%2").arg(minutes).arg(remainingSeconds, 2, 10, QLatin1Char('0'));
-}
-
-/// @brief Replaces `combo`'s items with a "(System Default)" entry
-/// followed by `deviceNames` - see `LoopPanel`'s identical helper for why
-/// device name (not display index) is what's preserved across a refresh.
-void populateDeviceCombo(QComboBox* combo, const QStringList& deviceNames) {
-    const QString previousSelection = combo->currentData().toString();
-
-    combo->blockSignals(true);
-    combo->clear();
-    combo->addItem(kSystemDefaultLabel, QString());
-    for (const QString& name : deviceNames) {
-        combo->addItem(name, name);
-    }
-    const int previousIndex = combo->findData(previousSelection);
-    combo->setCurrentIndex(previousIndex >= 0 ? previousIndex : 0);
-    combo->blockSignals(false);
 }
 
 }  // namespace
@@ -151,9 +134,7 @@ void PlaybackPanel::setOutputDevices(const QStringList& deviceNames) {
 }
 
 void PlaybackPanel::setSelectedOutputDevice(const QString& deviceName) {
-    const QSignalBlocker blocker(outputDeviceCombo_);
-    const int index = outputDeviceCombo_->findData(deviceName);
-    outputDeviceCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    setSelectedDeviceInCombo(outputDeviceCombo_, deviceName);
 }
 
 void PlaybackPanel::setRepeatChecked(bool checked) {

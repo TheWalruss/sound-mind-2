@@ -5,34 +5,12 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollArea>
-#include <QSignalBlocker>
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "sound_mind/studio/device_combo_helpers.h"
+
 namespace sound_mind::studio {
-
-namespace {
-
-const QString kSystemDefaultLabel = QObject::tr("(System Default)");
-
-/// @brief Replaces `combo`'s items with a "(System Default)" entry
-/// followed by `deviceNames` - see `LoopPanel`'s identical helper for why
-/// device name (not display index) is what's preserved across a refresh.
-void populateDeviceCombo(QComboBox* combo, const QStringList& deviceNames) {
-    const QString previousSelection = combo->currentData().toString();
-
-    combo->blockSignals(true);
-    combo->clear();
-    combo->addItem(kSystemDefaultLabel, QString());
-    for (const QString& name : deviceNames) {
-        combo->addItem(name, name);
-    }
-    const int previousIndex = combo->findData(previousSelection);
-    combo->setCurrentIndex(previousIndex >= 0 ? previousIndex : 0);
-    combo->blockSignals(false);
-}
-
-}  // namespace
 
 RecordPanel::RecordPanel(QWidget* parent) : QDockWidget(tr("Record"), parent) {
     auto* container = new QWidget(this);
@@ -75,9 +53,7 @@ void RecordPanel::setInputDevices(const QStringList& deviceNames) {
 }
 
 void RecordPanel::setSelectedInputDevice(const QString& deviceName) {
-    const QSignalBlocker blocker(inputDeviceCombo_);
-    const int index = inputDeviceCombo_->findData(deviceName);
-    inputDeviceCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    setSelectedDeviceInCombo(inputDeviceCombo_, deviceName);
 }
 
 }  // namespace sound_mind::studio

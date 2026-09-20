@@ -10,34 +10,9 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "sound_mind/studio/device_combo_helpers.h"
+
 namespace sound_mind::studio {
-
-namespace {
-
-/// @brief The display text for the "use whatever the system default is"
-/// entry every device combo gets as its first item - its itemData() is an
-/// empty QString, matching the engines' own empty-string-means-default
-/// convention.
-const QString kSystemDefaultLabel = QObject::tr("(System Default)");
-
-/// @brief Replaces `combo`'s items with a "(System Default)" entry
-/// followed by `deviceNames`, preserving the current selection by device
-/// name where possible (falling back to the default entry otherwise).
-void populateDeviceCombo(QComboBox* combo, const QStringList& deviceNames) {
-    const QString previousSelection = combo->currentData().toString();
-
-    combo->blockSignals(true);
-    combo->clear();
-    combo->addItem(kSystemDefaultLabel, QString());
-    for (const QString& name : deviceNames) {
-        combo->addItem(name, name);
-    }
-    const int previousIndex = combo->findData(previousSelection);
-    combo->setCurrentIndex(previousIndex >= 0 ? previousIndex : 0);
-    combo->blockSignals(false);
-}
-
-}  // namespace
 
 LoopPanel::LoopPanel(QWidget* parent) : QDockWidget(tr("Loop"), parent) {
     auto* container = new QWidget(this);
@@ -111,15 +86,11 @@ void LoopPanel::setOutputDevices(const QStringList& deviceNames) {
 }
 
 void LoopPanel::setSelectedInputDevice(const QString& deviceName) {
-    const QSignalBlocker blocker(inputDeviceCombo_);
-    const int index = inputDeviceCombo_->findData(deviceName);
-    inputDeviceCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    setSelectedDeviceInCombo(inputDeviceCombo_, deviceName);
 }
 
 void LoopPanel::setSelectedOutputDevice(const QString& deviceName) {
-    const QSignalBlocker blocker(outputDeviceCombo_);
-    const int index = outputDeviceCombo_->findData(deviceName);
-    outputDeviceCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    setSelectedDeviceInCombo(outputDeviceCombo_, deviceName);
 }
 
 void LoopPanel::setKeepLoopingChecked(bool checked) {

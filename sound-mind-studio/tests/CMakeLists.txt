@@ -10,6 +10,7 @@ add_executable(sound-mind-studio-tests
     test_chord_generator_panel.cpp
     test_configure_devices_panel.cpp
     test_create_project_wizard.cpp
+    test_device_combo_helpers.cpp
     test_filter_configuration_panel.cpp
     test_grid_config.cpp
     test_grid_panel.cpp

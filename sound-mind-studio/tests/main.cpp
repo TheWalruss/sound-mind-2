@@ -21,6 +21,7 @@
 #include "test_chord_generator_panel.h"
 #include "test_configure_devices_panel.h"
 #include "test_create_project_wizard.h"
+#include "test_device_combo_helpers.h"
 #include "test_filter_configuration_panel.h"
 #include "test_grid_config.h"
 #include "test_grid_panel.h"
@@ -146,6 +147,9 @@ int main(int argc, char** argv) {
 
     ImportHelpersTest importHelpersTest;
     status |= QTest::qExec(&importHelpersTest, argc, argv);
+
+    DeviceComboHelpersTest deviceComboHelpersTest;
+    status |= QTest::qExec(&deviceComboHelpersTest, argc, argv);
 
     ImportExportTest importExportTest;
     status |= QTest::qExec(&importExportTest, argc, argv);
