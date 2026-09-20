@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(SoundMind
-    VERSION 0.0.42.3
+    VERSION 0.0.42.4
     DESCRIPTION "Sound Mind Studio: a spectrogram-as-image DAW and graphics studio"
     LANGUAGES CXX C
 )
@@ -44,13 +44,30 @@ add_subdirectory(sound-mind-studio)
 # See CLAUDE.md's "Code Documentation (Doxygen)" section: this is the
 # unit-level design doc, meant to be cross-checked against
 # docs/sound-mind-architecture.md and against the test suite.
+#
+# Since v0.0.42.4 (Workflow & Device Polish, Installment D), this same
+# target also builds the *user-facing* docs (README/QUICKSTART/USER_GUIDE/
+# CHANGELOG, rendered to HTML - see docs/user-docs/Doxyfile) and copies the
+# result next to sound-mind-studio.exe in the current build tree, so a
+# local dev build's own Help menu/Landing Page documentation links resolve
+# the same way an installed/packaged build's do (see
+# sound-mind-studio/CMakeLists.txt's own install(DIRECTORY ...) rule for the
+# packaged side) - MainWindow::openUserDocIfBundled() always just looks
+# next to the running executable, in both cases.
 find_package(Doxygen QUIET)
 if (DOXYGEN_FOUND)
     add_custom_target(docs
         COMMAND ${CMAKE_COMMAND} -E env "SOUND_MIND_VERSION=${PROJECT_VERSION}"
                 ${DOXYGEN_EXECUTABLE} docs/doxygen/Doxyfile
+        COMMAND ${CMAKE_COMMAND} -P docs/user-docs/stage_docs.cmake
+        COMMAND ${CMAKE_COMMAND} -E env "SOUND_MIND_VERSION=${PROJECT_VERSION}"
+                ${DOXYGEN_EXECUTABLE} docs/user-docs/Doxyfile
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:sound-mind-studio>/docs"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_SOURCE_DIR}/docs/generated-user-docs/html"
+                "$<TARGET_FILE_DIR:sound-mind-studio>/docs"
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "Generating Doxygen documentation into docs/generated"
+        COMMENT "Generating Doxygen documentation into docs/generated, user docs into docs/generated-user-docs (and copied next to sound-mind-studio.exe)"
         VERBATIM
     )
 else ()

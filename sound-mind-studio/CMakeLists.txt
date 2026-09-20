@@ -26,6 +26,7 @@ set(CMAKE_AUTORCC ON)
 # under include/sound_mind/studio/ while the sources live under src/ - so
 # without this, AUTOMOC silently never scans them and moc never runs.
 add_library(sound-mind-studio-lib
+    src/about_dialog.cpp
     src/audio_snippet_picker_dialog.cpp
     src/axis_labels.cpp
     src/canvas_widget.cpp
@@ -65,6 +66,7 @@ add_library(sound-mind-studio-lib
     src/tool_palette_controller.cpp
     src/warp_dialog.cpp
     src/undo_stack.cpp
+    include/sound_mind/studio/about_dialog.h
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/canvas_widget.h
     include/sound_mind/studio/chord_generator_controller.h
@@ -159,6 +161,27 @@ endif ()
 # native (non-cross) build QT_ROOT_DIR's own copy is used directly.
 
 install(TARGETS sound-mind-studio RUNTIME DESTINATION . COMPONENT Runtime)
+
+# Documentation links, v0.0.42.4 (Workflow & Device Polish, Installment D):
+# the user-facing docs (README/QUICKSTART/USER_GUIDE/CHANGELOG, rendered to
+# HTML by the top-level `docs` CMake target - see docs/user-docs/Doxyfile)
+# copied into the packaged output's own "docs" subfolder, next to
+# sound-mind-studio.exe - the same relative location the `docs` target's
+# own build-tree copy step uses (see top-level CMakeLists.txt), so
+# MainWindow::openUserDocIfBundled() resolves identically whether running
+# from the build tree or an installed/packaged copy.
+#
+# Requires the `docs` target to have been built (`cmake --build <dir>
+# --target docs`) before `cmake --install`/cpack runs, the same real
+# build-order requirement windeployqt below already has for Qt's own
+# runtime - if docs/generated-user-docs/html doesn't exist yet, this rule
+# simply has nothing to install (CMake doesn't require the source
+# directory to exist at configure time for install(DIRECTORY ...), only at
+# install time).
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/docs/generated-user-docs/html/"
+        DESTINATION docs
+        COMPONENT Runtime
+)
 
 # vcpkg's own VCPKG_APPLOCAL_DEPS mechanism (see CMakePresets.json; ON for
 # both the debug and release presets) already copies every non-Qt runtime

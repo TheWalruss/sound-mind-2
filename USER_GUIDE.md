@@ -60,6 +60,9 @@ list:
 - **Open Project...** - browse to an existing `.smproj` file.
 - **Recent Projects** - your most recently opened projects, click one to
   reopen it directly.
+- **Documentation** - Quick Start, Readme, User Guide, Changelog, and
+  About - the same five links the Help menu offers once a project is
+  open, available here too.
 
 ## Creating a Project
 
@@ -109,6 +112,9 @@ Once a project is open, the title bar shows the project's name next to
   Audio/Video.
 - **View menu** - Zoom controls; see [Canvas Navigation](#canvas-navigation)
   below.
+- **Help menu** - Quick Start, Readme, User Guide, and Changelog (each
+  opens a styled HTML page in your default browser), plus About Sound
+  Mind Studio.
 - **Pool Layer** toolbar button - see [Pooling a Layer](#pooling-a-layer).
 - **Status bar** (bottom) - the left side shows the mouse cursor's
   position while it's over the canvas, both in pixels and in time/
@@ -391,8 +397,8 @@ group's own controls while it was hidden.
 - **Frequency-Axis Gradient** shows two groups, **Start (t=0, lowest
   frequency)** and **End (t=1, highest frequency)**, each with **Left
   Intensity**/**Left Opacity**/**Right Intensity**/**Right Opacity** -
-  the exact same gradient controls Path Gradient and Fill already use
-  (see [Gradients](#gradients) below), applied across the frequency axis
+  the exact same gradient controls Path Gradient and Fill already use,
+  applied across the frequency axis
   instead of along a path: at each frequency, the composite's own
   loudness blends toward that stop's own Intensity, by that stop's own
   Opacity (`0` leaves it untouched, `1` forces it all the way to
@@ -1212,7 +1218,7 @@ FLAC, Ogg Vorbis, or MP3 (pick the format via the save dialog's file type).
 with the audio played alongside it.
 
 Both act on the same "one layer" rule described above - see
-[the note above](#important-whats-actually-shown-right-now).
+[the note above](#important-whats-actually-shown-and-played-right-now).
 
 ## Saving and Project Files
 

@@ -51,6 +51,8 @@ CMakeUserPresets.json
 
 # Generated Doxygen output (regenerate via the `docs` CMake target)
 docs/generated/
+docs/generated-user-docs/
+docs/generated-user-docs-staging/
 
 # CMake generated files
 CMakeFiles/

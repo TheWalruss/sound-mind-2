@@ -2,6 +2,7 @@ find_package(Qt6 REQUIRED COMPONENTS Test)
 
 add_executable(sound-mind-studio-tests
     main.cpp
+    test_about_dialog.cpp
     test_audio_snippet_picker_dialog.cpp
     test_axis_labels.cpp
     test_canvas_widget.cpp

@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.42.4] - 2026-09-20
+
+The fourth installment of "Workflow & Device Polish" - **documentation links**.
+
+### Added
+
+- **A Help menu**: Quick Start, Readme, User Guide, Changelog, and an About Sound Mind Studio box - each opens a styled HTML page (built from the repo's own markdown docs) in your default browser.
+- **A matching Documentation section on the Landing Page**, with the same five links, reachable before a project is even open.
+- **A simple About box**: app name, version, a one-line description, and a copyright line - no third-party license notices tab (a deliberate scope decision, see Decision #119).
+
+Full regression: sound-mind-codec 46/46, sound-mind-core 801/801, sound-mind-studio full suite passing. Doxygen: 0 warnings (code docs and the new user-docs HTML alike). See `docs/sound-mind-architecture.md`'s Decision #119.
+
 ## [0.0.42.3] - 2026-09-20
 
 The third installment of "Workflow & Device Polish" - **additional audio import formats**.

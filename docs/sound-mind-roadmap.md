@@ -669,7 +669,15 @@ As shipped (Installment C, `v0.0.42.3`, see `docs/sound-mind-architecture.md`'s 
 
 **Demo:** drag an MP3 (or FLAC/Ogg/AIFF/M4A/Opus) file onto the canvas, or use **File → Import Audio...**, and confirm it imports exactly like a WAV file always has.
 
-Documentation links and the Hardware Acceleration toggle remain scheduled as Installments D-E.
+As shipped (Installment D, `v0.0.42.4`, see `docs/sound-mind-architecture.md`'s Decision #119):
+
+- **A Help menu** (Quick Start, Readme, User Guide, Changelog, then a separator and About Sound Mind Studio) and **a matching "Documentation" section on the Landing Page**, both wired to the same five shared handlers.
+- **The four markdown docs render as styled HTML** (reusing the existing Doxygen code-docs theme, `docs/doxygen/sound-mind-theme.css` - no new third-party markdown/rendering dependency), built by the same `docs` CMake target that already generates the code docs, and copied next to `sound-mind-studio.exe` for both a local dev build and an installed/packaged one alike.
+- **A simple `AboutDialog`**: name, version, a one-line description, copyright - no "Open Source Notices" tab enumerating third-party dependency licenses the way the legacy Studio's own About box had (confirmed with the user: real license-review work worth its own deliberate pass, not folded in here).
+
+**Demo:** open **Help → Quick Start** (or any of the other four) and confirm it opens in your browser; open the Landing Page (close any open project) and confirm the same five links appear there too.
+
+Documentation links now ship in Installment D; the Hardware Acceleration toggle remains scheduled as Installment E.
 
 **No Y bump** - workflow/device/UI additions; no project file format change.
 

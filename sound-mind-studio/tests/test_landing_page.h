@@ -12,4 +12,9 @@ private slots:
     void setRecentProjectsWithNoPathsShowsNoClickableEntries();
     void setRecentProjectsCreatesEntriesThatEmitTheirPath();
     void setRecentProjectsReplacesThePreviousEntries();
+    void quickStartButtonEmitsQuickStartRequested();
+    void readmeButtonEmitsReadmeRequested();
+    void userGuideButtonEmitsUserGuideRequested();
+    void changelogButtonEmitsChangelogRequested();
+    void aboutButtonEmitsAboutRequested();
 };

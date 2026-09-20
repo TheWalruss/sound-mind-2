@@ -10,6 +10,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDir>
 #include <QDoubleSpinBox>
 #include <QEvent>
 #include <QFile>
@@ -22,6 +23,7 @@
 #include <QSlider>
 #include <QStatusBar>
 #include <QToolBar>
+#include <QUrl>
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/fill_operation.h"
@@ -83,6 +85,16 @@ namespace {
 class TestMainWindow : public MainWindow {
 public:
     TestMainWindow() : MainWindow(nullptr, sound_mind::core::AudioDeviceMode::None) {}
+
+    /// @brief The last URL passed to openExternalUrl() - see its own
+    /// override below.
+    std::optional<QUrl> lastOpenedUrl;
+
+protected:
+    /// @brief Records `url` instead of actually launching a real browser/OS
+    /// handler (`QDesktopServices::openUrl()`'s own real effect) - see
+    /// `MainWindow::openExternalUrl()`'s own docs on why this seam exists.
+    void openExternalUrl(const QUrl& url) override { lastOpenedUrl = url; }
 };
 
 /// @brief The topmost layer that isn't the Equalizer - what this whole
@@ -3731,4 +3743,35 @@ void MainWindowTest::cancelingAPickedStrokesPathEditDiscardsTheDragWithoutCommit
     window.cancelPickedPathEdit();
 
     QCOMPARE(window.project()->operationLog().size(), std::size_t{1});  // nothing committed.
+}
+
+void MainWindowTest::openUserDocIfBundledOpensItAndReturnsTrueWhenPresent() {
+    const QString docsDir = QCoreApplication::applicationDirPath() + QStringLiteral("/docs");
+    QVERIFY(QDir().mkpath(docsDir));
+    const QString docPath = docsDir + QStringLiteral("/sound_mind_test_doc.html");
+    QFile file(docPath);
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("<html></html>");
+    file.close();
+
+    TestMainWindow window;
+    const bool opened = window.openUserDocIfBundled(QStringLiteral("sound_mind_test_doc.html"));
+
+    QFile::remove(docPath);
+
+    QVERIFY(opened);
+    QVERIFY(window.lastOpenedUrl.has_value());
+    QCOMPARE(window.lastOpenedUrl->toLocalFile(), docPath);
+}
+
+void MainWindowTest::openUserDocIfBundledReturnsFalseWithoutOpeningAnythingWhenMissing() {
+    const QString docPath = QCoreApplication::applicationDirPath() +
+                             QStringLiteral("/docs/sound_mind_test_doc_missing.html");
+    QFile::remove(docPath);  // in case a previous run left it behind.
+
+    TestMainWindow window;
+    const bool opened = window.openUserDocIfBundled(QStringLiteral("sound_mind_test_doc_missing.html"));
+
+    QVERIFY(!opened);
+    QVERIFY(!window.lastOpenedUrl.has_value());
 }

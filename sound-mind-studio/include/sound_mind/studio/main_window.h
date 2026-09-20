@@ -9,6 +9,7 @@
 #include <QColor>
 #include <QMainWindow>
 #include <QSettings>
+#include <QUrl>
 
 #include "sound_mind/core/device_test_tone_player.h"
 #include "sound_mind/core/loop_engine.h"
@@ -1723,7 +1724,46 @@ public:
      */
     bool exportTopmostLayerVideoNow(const std::filesystem::path& path, QString* errorMessage = nullptr);
 
+    /**
+     * @brief Opens the bundled user-facing HTML doc at
+     *        `"<applicationDirPath()>/docs/<htmlFilename>"` via
+     *        openExternalUrl() if it exists there - the headless-testable
+     *        half of every Help-menu/Landing-Page documentation link
+     *        (`v0.0.42.4`, Workflow & Device Polish, Installment D), split
+     *        out for the same reason importAudioFile() splits its own
+     *        actual work from the interactive slot that shows a dialog on
+     *        failure (see its docs).
+     *
+     * `applicationDirPath()`, not a source-tree-relative path: the same
+     * "next to the running executable" location `windeployqt`'s own Qt
+     * DLLs and the `VCPKG_APPLOCAL_DEPS`-copied third-party DLLs already
+     * land in (see `sound-mind-studio/CMakeLists.txt`'s own install rules)
+     * - the `docs` CMake target's own build step copies the generated
+     * user-doc HTML there too, so a local dev build and an installed/
+     * packaged one both resolve the exact same way.
+     *
+     * @param htmlFilename The bundled doc's own filename, e.g.
+     *        `"index.html"` or `"user_guide.html"`.
+     * @return `true` if the file exists and openExternalUrl() was called;
+     *         `false` if it doesn't (nothing else happens - no dialog is
+     *         shown; that's openUserDocOrShowFallback()'s own job).
+     */
+    bool openUserDocIfBundled(const QString& htmlFilename);
+
 protected:
+    /**
+     * @brief Actually opens `url` via the OS's own default handler
+     *        (`QDesktopServices::openUrl()`) - the one real side effect
+     *        openUserDocIfBundled() causes, factored out into its own
+     *        overridable seam so a test can observe *that* a doc would
+     *        have opened, and with which URL, without a headless test run
+     *        actually launching a real browser every time (`TestMainWindow`
+     *        overrides this to just record the call - see
+     *        `test_main_window.cpp`).
+     * @param url The `file://` URL to open.
+     */
+    virtual void openExternalUrl(const QUrl& url);
+
     /**
      * @brief Guards window close the same way newProject()/openProject()
      *        do: refuses (ignores the event, a status-bar message) while
@@ -1957,6 +1997,24 @@ private:
      * @param positionSeconds The current playback position, in seconds.
      */
     void checkRepeatPlaybackRange(double positionSeconds);
+
+    /**
+     * @brief openUserDocIfBundled(), plus a `QMessageBox::information()`
+     *        fallback (mentioning this project's own GitHub repository) if
+     *        the doc isn't bundled - the actual interactive behavior behind
+     *        every Help-menu action and Landing Page documentation button
+     *        (`v0.0.42.4`, Workflow & Device Polish, Installment D).
+     *
+     * Untestable directly, like every other modal-showing interactive slot
+     * in this file (see `importAudio()`'s own docs on the same pattern) -
+     * `openUserDocIfBundled()`'s own headless-safe half is what
+     * `test_main_window.cpp` actually exercises.
+     *
+     * @param htmlFilename Forwarded to openUserDocIfBundled() unchanged.
+     * @param friendlyName A human-readable name for the doc (e.g. "the
+     *        Quick Start guide"), used only in the fallback message.
+     */
+    void openUserDocOrShowFallback(const QString& htmlFilename, const QString& friendlyName);
 
     std::optional<sound_mind::core::Project> project_;
     std::optional<std::filesystem::path> currentPath_;

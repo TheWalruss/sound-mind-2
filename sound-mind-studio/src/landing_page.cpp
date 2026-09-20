@@ -81,6 +81,26 @@ LandingPage::LandingPage(QWidget* parent) : QWidget(parent) {
     recentProjectsLayout_ = new QVBoxLayout();
     root->addLayout(recentProjectsLayout_);
 
+    root->addSpacing(24);
+    root->addWidget(makeHeading(tr("Documentation"), 2), 0, Qt::AlignHCenter);
+    root->addWidget(makeSeparator());
+
+    auto* docsLayout = new QVBoxLayout();
+    root->addLayout(docsLayout);
+
+    auto addDocButton = [&](const QString& objectName, const QString& text, void (LandingPage::*signal)()) {
+        auto* button = new QPushButton(text, this);
+        button->setObjectName(objectName);
+        button->setFlat(true);
+        connect(button, &QPushButton::clicked, this, signal);
+        docsLayout->addWidget(button, 0, Qt::AlignHCenter);
+    };
+    addDocButton(QStringLiteral("quickStartButton"), tr("Quick Start"), &LandingPage::quickStartRequested);
+    addDocButton(QStringLiteral("readmeButton"), tr("Readme"), &LandingPage::readmeRequested);
+    addDocButton(QStringLiteral("userGuideButton"), tr("User Guide"), &LandingPage::userGuideRequested);
+    addDocButton(QStringLiteral("changelogButton"), tr("Changelog"), &LandingPage::changelogRequested);
+    addDocButton(QStringLiteral("aboutButton"), tr("About"), &LandingPage::aboutRequested);
+
     root->addStretch(2);
 }
 

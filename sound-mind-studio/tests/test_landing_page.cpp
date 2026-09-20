@@ -74,3 +74,58 @@ void LandingPageTest::setRecentProjectsReplacesThePreviousEntries() {
 
     QCOMPARE(page.findChildren<QPushButton*>(QStringLiteral("recentProjectButton")).size(), 2);
 }
+
+void LandingPageTest::quickStartButtonEmitsQuickStartRequested() {
+    LandingPage page;
+    QSignalSpy spy(&page, &LandingPage::quickStartRequested);
+
+    auto* button = page.findChild<QPushButton*>(QStringLiteral("quickStartButton"));
+    QVERIFY(button != nullptr);
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void LandingPageTest::readmeButtonEmitsReadmeRequested() {
+    LandingPage page;
+    QSignalSpy spy(&page, &LandingPage::readmeRequested);
+
+    auto* button = page.findChild<QPushButton*>(QStringLiteral("readmeButton"));
+    QVERIFY(button != nullptr);
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void LandingPageTest::userGuideButtonEmitsUserGuideRequested() {
+    LandingPage page;
+    QSignalSpy spy(&page, &LandingPage::userGuideRequested);
+
+    auto* button = page.findChild<QPushButton*>(QStringLiteral("userGuideButton"));
+    QVERIFY(button != nullptr);
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void LandingPageTest::changelogButtonEmitsChangelogRequested() {
+    LandingPage page;
+    QSignalSpy spy(&page, &LandingPage::changelogRequested);
+
+    auto* button = page.findChild<QPushButton*>(QStringLiteral("changelogButton"));
+    QVERIFY(button != nullptr);
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void LandingPageTest::aboutButtonEmitsAboutRequested() {
+    LandingPage page;
+    QSignalSpy spy(&page, &LandingPage::aboutRequested);
+
+    auto* button = page.findChild<QPushButton*>(QStringLiteral("aboutButton"));
+    QVERIFY(button != nullptr);
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+}

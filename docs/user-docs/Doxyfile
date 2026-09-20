@@ -1,0 +1,58 @@
+# Doxyfile for Sound Mind Studio's *user-facing* documentation (README,
+# QUICKSTART, USER_GUIDE, CHANGELOG) - reachable from the app's own Help
+# menu and Landing Page (v0.0.42.4, Workflow & Device Polish, Installment D).
+#
+# A separate, deliberately minimal config from docs/doxygen/Doxyfile (that
+# one is the *code* docs - unit-level, cross-checked against
+# docs/sound-mind-architecture.md, per CLAUDE.md). This one's INPUT is
+# docs/generated-user-docs-staging/ (see stage_docs.cmake, run first by the
+# same `docs` CMake target step that invokes this) - staged copies of the
+# four real markdown files, each with an invisible (HTML-comment) Doxygen
+# `\page`/`\mainpage` directive prepended so the generated HTML filenames
+# are predictable (readme -> index.html, since it uses `\mainpage`;
+# quickstart.html, user_guide.html, changelog.html) rather than Doxygen's
+# own default absolute-path-derived hash for an un-annotated markdown file.
+# MainWindow's own openUserDocIfBundled() call sites depend on these exact,
+# stable filenames.
+#
+# Only the tags that differ from Doxygen's own compiled-in defaults are
+# listed here - unlike docs/doxygen/Doxyfile's full commented template,
+# there's no need to restate every default tag for a config this small.
+#
+# Invoke as `doxygen docs/user-docs/Doxyfile` from the repository root (or
+# via the `docs` CMake target, which sets the same working directory).
+
+PROJECT_NAME           = "Sound Mind Studio"
+PROJECT_NUMBER         = $(SOUND_MIND_VERSION)
+PROJECT_BRIEF          = "User documentation"
+OUTPUT_DIRECTORY       = docs/generated-user-docs
+
+INPUT                  = docs/generated-user-docs-staging
+FILE_PATTERNS          = *.md
+RECURSIVE              = NO
+MARKDOWN_SUPPORT       = YES
+
+# The four real markdown files use plain GitHub-style relative anchor links
+# (e.g. "[Working with Layers](#working-with-layers)") throughout, for
+# GitHub's own rendering - Doxygen's markdown extension treats `(#anchor)`
+# as a \ref command, and its own *default* heading-anchor scheme
+# (MARKDOWN_ID_STYLE=DOXYGEN, an autotoc_md0/autotoc_md1/... sequence) never
+# matches those anchors, so every single internal link would otherwise be
+# an "unable to resolve reference" warning - GITHUB's own lowercased,
+# dash-joined heading-derived scheme is exactly what these files already
+# assume, with no changes needed to the files themselves.
+MARKDOWN_ID_STYLE      = GITHUB
+
+# No source code at all in this run - EXTRACT_ALL/warnings about
+# undocumented entities don't apply, and would just add noise.
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+
+GENERATE_HTML          = YES
+HTML_EXTRA_STYLESHEET  = docs/doxygen/sound-mind-theme.css
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+HAVE_DOT               = NO

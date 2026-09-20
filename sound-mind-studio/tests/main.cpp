@@ -13,6 +13,7 @@
 #include <QStandardPaths>
 #include <QtTest/QtTest>
 
+#include "test_about_dialog.h"
 #include "test_audio_snippet_picker_dialog.h"
 #include "test_axis_labels.h"
 #include "test_canvas_widget.h"
@@ -178,6 +179,9 @@ int main(int argc, char** argv) {
 
     WarpDialogTest warpDialogTest;
     status |= QTest::qExec(&warpDialogTest, argc, argv);
+
+    AboutDialogTest aboutDialogTest;
+    status |= QTest::qExec(&aboutDialogTest, argc, argv);
 
     return status;
 }

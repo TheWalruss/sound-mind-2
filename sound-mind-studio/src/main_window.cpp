@@ -18,6 +18,7 @@
 #include <QCloseEvent>
 #include <QColorDialog>
 #include <QCoreApplication>
+#include <QDesktopServices>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
@@ -50,6 +51,7 @@
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/about_dialog.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/color_conversion.h"
@@ -717,6 +719,46 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* zoomToActualSizeAction = zoomMenu->addAction(tr("&Actual Size"));
     zoomToActualSizeAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_1));
     connect(zoomToActualSizeAction, &QAction::triggered, this, &MainWindow::zoomToActualSize);
+
+    // Workflow & Device Polish, Installment D: Documentation links
+    // (v0.0.42.4) - each link is reachable from both the Help menu and the
+    // Landing Page's own Documentation section (see LandingPage's own
+    // docs), so each is wired to one shared lambda rather than duplicating
+    // the same openUserDocOrShowFallback() call at two separate connect()
+    // sites. Ordering matches docs/sound-mind-design.md's own "Quickstart,
+    // Readme, and Userguide" list, with Changelog appended after (a legacy-
+    // Studio precedent, confirmed with the user) and About last, separated
+    // - the same layout the legacy Studio's own Help menu used.
+    auto openQuickStart = [this]() {
+        openUserDocOrShowFallback(QStringLiteral("quickstart.html"), tr("The Quick Start guide"));
+    };
+    auto openReadme = [this]() { openUserDocOrShowFallback(QStringLiteral("index.html"), tr("The Readme")); };
+    auto openUserGuideDoc = [this]() {
+        openUserDocOrShowFallback(QStringLiteral("user_guide.html"), tr("The User Guide"));
+    };
+    auto openChangelog = [this]() {
+        openUserDocOrShowFallback(QStringLiteral("changelog.html"), tr("The Changelog"));
+    };
+    auto openAbout = [this]() { AboutDialog(this).exec(); };
+
+    QMenu* helpMenu = menuBar()->addMenu(tr("&Help"));
+    QAction* quickStartAction = helpMenu->addAction(tr("&Quick Start"));
+    connect(quickStartAction, &QAction::triggered, this, openQuickStart);
+    QAction* readmeAction = helpMenu->addAction(tr("&Readme"));
+    connect(readmeAction, &QAction::triggered, this, openReadme);
+    QAction* userGuideAction = helpMenu->addAction(tr("&User Guide"));
+    connect(userGuideAction, &QAction::triggered, this, openUserGuideDoc);
+    QAction* changelogAction = helpMenu->addAction(tr("&Changelog"));
+    connect(changelogAction, &QAction::triggered, this, openChangelog);
+    helpMenu->addSeparator();
+    QAction* aboutAction = helpMenu->addAction(tr("&About Sound Mind Studio..."));
+    connect(aboutAction, &QAction::triggered, this, openAbout);
+
+    connect(landingPage_, &LandingPage::quickStartRequested, this, openQuickStart);
+    connect(landingPage_, &LandingPage::readmeRequested, this, openReadme);
+    connect(landingPage_, &LandingPage::userGuideRequested, this, openUserGuideDoc);
+    connect(landingPage_, &LandingPage::changelogRequested, this, openChangelog);
+    connect(landingPage_, &LandingPage::aboutRequested, this, openAbout);
 
     QToolBar* transportToolBar = addToolBar(tr("Transport"));
     // Plain text actions rather than icons - no icon assets exist yet, and
@@ -1453,6 +1495,30 @@ bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, Q
     }
     statusBar()->showMessage(tr("Exported video to \"%1\".").arg(QString::fromStdString(path.string())), 5000);
     return true;
+}
+
+bool MainWindow::openUserDocIfBundled(const QString& htmlFilename) {
+    const QString docPath = QCoreApplication::applicationDirPath() + QStringLiteral("/docs/") + htmlFilename;
+    if (!std::filesystem::exists(docPath.toStdString())) {
+        return false;
+    }
+    openExternalUrl(QUrl::fromLocalFile(docPath));
+    return true;
+}
+
+void MainWindow::openExternalUrl(const QUrl& url) {
+    QDesktopServices::openUrl(url);
+}
+
+void MainWindow::openUserDocOrShowFallback(const QString& htmlFilename, const QString& friendlyName) {
+    if (openUserDocIfBundled(htmlFilename)) {
+        return;
+    }
+    QMessageBox::information(
+        this, tr("Documentation Not Found"),
+        tr("%1 isn't bundled with this build. You can view it online instead, at:\n"
+           "https://github.com/TheWalruss/sound-mind-2")
+            .arg(friendlyName));
 }
 
 void MainWindow::updateWindowTitle() {

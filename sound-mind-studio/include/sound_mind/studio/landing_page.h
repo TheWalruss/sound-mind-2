@@ -30,6 +30,14 @@ namespace sound_mind::studio {
  * Studio's own logo (`ChooseAgainLarge.png`, embedded via `assets/app.qrc`
  * - see `theme.h`) alongside the title text, matching the legacy
  * `WelcomePanel`'s header layout now that the asset has been carried over.
+ *
+ * **As of `v0.0.42.4` (Workflow & Device Polish, Installment D):** a
+ * "Documentation" section below Recent Projects - Quick Start/Readme/User
+ * Guide/Changelog/About, each a flat button emitting its own signal - the
+ * same "Read" column the legacy `WelcomePanel` had (informed by, per this
+ * class's own header docs, without carrying over its two-column Open/Read
+ * layout - a single centered column matches this class's own existing
+ * style instead).
  */
 class LandingPage : public QWidget {
     Q_OBJECT
@@ -63,6 +71,21 @@ signals:
     /// @brief The user clicked one of the Recent Projects entries.
     /// @param path The project file path that was clicked.
     void recentProjectRequested(const QString& path);
+
+    /// @brief The user clicked "Quick Start" in the Documentation section.
+    void quickStartRequested();
+
+    /// @brief The user clicked "Readme" in the Documentation section.
+    void readmeRequested();
+
+    /// @brief The user clicked "User Guide" in the Documentation section.
+    void userGuideRequested();
+
+    /// @brief The user clicked "Changelog" in the Documentation section.
+    void changelogRequested();
+
+    /// @brief The user clicked "About" in the Documentation section.
+    void aboutRequested();
 
 private:
     QVBoxLayout* recentProjectsLayout_ = nullptr;
