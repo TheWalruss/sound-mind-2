@@ -699,6 +699,15 @@ A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, So
 
 **No Y bump expected.**
 
+**Planned as five installments**, per a dedicated Phase 4 audit (two parallel passes - one on the MindWave binding machinery specifically, one on everything else - confirmed with the user, 2026-09-20; also covers the Layers Panel Redesign's own new code, done just ahead of this pass specifically to be swept up by it):
+
+- **A** (mechanical/safe): `populateDeviceCombo()` and the device-combo selection-sync logic are copied independently, near-verbatim, across `ConfigureDevicesPanel`/`LoopPanel`/`RecordPanel`/`PlaybackPanel` - unify into one shared helper.
+- **B** (the audit's own flagged top priority): the MindWave binding machinery - layer opacity and filter parameter binding share an identical resolve/per-cell-evaluate/build-array shape (only their combine formula differs - multiply vs. lerp), plus a second, already-documented duplicate in the canvas's own MindWave Preview overlay (Decision #89) - all three collapse onto shared helpers. Instrument note vibrato/tremolo binding (Decision #108) is a deliberately different mechanism (a per-stroke 1D reduction, not canvas-space per-cell) and stays untouched - forcing it into the same abstraction would fight that decision's own reasoning. Existing GPU/CPU parity tests constrain this one; treat it with care, not as purely mechanical.
+- **C** (moderate): `LayerRowWidget`'s ~245-line constructor (rendering, signal wiring, and selection-gated accordion logic all inline) splits into 2-3 private builder methods.
+- **D** (larger/riskier): a new `DeviceConfigController`, extracting Configure Devices' own state/logic out of `MainWindow` (it doesn't fit any existing controller - Record/Loop/Playback engines all involved); Repeat Playback's own state/logic (`handleContentChangedForRepeat()`/`checkRepeatPlaybackRange()`) folds into `PlaybackController` instead.
+
+**Two real, pre-existing bugs surfaced by the audit, confirmed with the user as their own separate, non-refactor commits** (matching `v0.0.30.3`'s own precedent - a genuine behavior fix during a "no behavior change" pass gets its own labeled commit, not folded into an installment): `WarpOperation` is never wired into `rebuildPaintedContent()`'s replay dispatch (silently dropped on undo/redo/reload - already flagged, deferred, in Decision #112); `PickController::selectedConfiguration()` only `dynamic_cast`s to `PaintOperation`, so picking a chord/sequence stroke can't reopen its instrument config (already flagged, deferred, in Decision #113).
+
 ---
 
 ## Phase 4.5 - Workflow & Device Refinements
