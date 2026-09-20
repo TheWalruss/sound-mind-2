@@ -1,15 +1,43 @@
 #pragma once
 
 #include <QDockWidget>
+#include <QMetaType>
 #include <QString>
 #include <QStringList>
 
+class QCheckBox;
 class QComboBox;
 class QLabel;
 class QPushButton;
 class QSlider;
 
 namespace sound_mind::studio {
+
+/**
+ * @brief Which portion of the track Repeat Playback's own "restart on
+ *        canvas edit" behavior targets - `docs/sound-mind-design.md`'s
+ *        "Repeat Playback", `v0.0.42.2` (Workflow & Device Polish,
+ *        Installment B).
+ *
+ * Only meaningful while `PlaybackPanel`'s own Repeat checkbox is checked -
+ * see its own docs on why the whole "live re-render + scope-aware
+ * restart" behavior is gated by that one control, matching the design
+ * doc's own "[the Repeat checkbox] loops the output sound... and updates
+ * the output sound when the canvas is modified" framing as a single,
+ * checkbox-gated feature.
+ */
+enum class PlaybackScope {
+    /// @brief Plays the whole track, start to end (today's only
+    ///        behavior, and the default) - an edit re-renders the audio
+    ///        in place without moving the playback position.
+    Track,
+    /// @brief An edit jumps playback to the edited operation's own start,
+    ///        continuing only to its own end before halting/repeating.
+    Delta,
+    /// @brief Like `Delta`, but continues past the edited operation's own
+    ///        end to the end of the track before halting/repeating.
+    Review,
+};
 
 /**
  * @brief A dockable panel exposing Playback's transport, output device
@@ -29,6 +57,13 @@ namespace sound_mind::studio {
  * playhead line drawn over the canvas itself - see `CanvasWidget`'s own
  * docs) - the position display the class docs above used to say wasn't in
  * scope.
+ *
+ * **As of `v0.0.42.2` (Workflow & Device Polish, Installment B):** a
+ * Repeat checkbox and a Scope combo (`PlaybackScope`) - see
+ * `PlaybackScope`'s own docs. All of the actual "loop at the end, restart
+ * on a canvas edit" logic lives in `MainWindow` (this panel only ever
+ * reports the two controls' own state, purely presentational like
+ * everything else here).
  *
  * Purely presentational, the same division of responsibility as
  * `LayersPanel`/`LoopPanel`/`RecordPanel`: every user action is a signal
@@ -110,6 +145,12 @@ public:
      */
     void setPositionSeconds(double positionSeconds);
 
+    /// @brief Sets the Repeat checkbox's displayed state without emitting
+    ///        repeatChanged() - for `MainWindow` to sync display state
+    ///        without a signal feedback loop.
+    /// @param checked The new displayed state.
+    void setRepeatChecked(bool checked);
+
 signals:
     /// @brief The Play button was clicked.
     void playRequested();
@@ -134,6 +175,14 @@ signals:
     ///        duration setDuration() was last called with.
     void seekRequested(double positionSeconds);
 
+    /// @brief The Repeat checkbox changed.
+    /// @param checked The new state.
+    void repeatChanged(bool checked);
+
+    /// @brief The Scope combo's selection changed.
+    /// @param scope The newly selected scope.
+    void scopeChanged(sound_mind::studio::PlaybackScope scope);
+
 private:
     /// @brief Refreshes positionLabel_'s text from totalSeconds_ and
     /// whatever positionSlider_'s current value implies.
@@ -141,6 +190,8 @@ private:
 
     QComboBox* outputDeviceCombo_ = nullptr;
     QSlider* volumeSlider_ = nullptr;
+    QCheckBox* repeatCheckBox_ = nullptr;
+    QComboBox* scopeCombo_ = nullptr;
     QSlider* positionSlider_ = nullptr;
     QLabel* positionLabel_ = nullptr;
     double totalSeconds_ = 0.0;
@@ -148,3 +199,5 @@ private:
 };
 
 }  // namespace sound_mind::studio
+
+Q_DECLARE_METATYPE(sound_mind::studio::PlaybackScope)

@@ -1123,14 +1123,30 @@ and a volume slider. It plays the project's own real composite - every
 visible layer mixed together (see [Compositing](#compositing) above),
 spanning the project's own full canvas-width duration, silence included
 past wherever real content ends. Pressing Play decodes that composite
-once; it doesn't yet keep re-decoding live as you make further edits
-during playback.
+once, unless **Repeat** (below) is checked.
 
 While playing, a white line sweeps across the canvas in real time,
 tracking the current position - the same playhead line a video export
 would show, live. Drag the position bar (whether playing or paused) to
 seek to a different point; both the bar and the canvas playhead jump to
 match immediately.
+
+### Repeat Playback
+
+Check **Repeat** to loop playback once it reaches the end, and to hear
+your edits live: while checked, painting (or any other edit) while
+playing immediately re-renders the composite and picks up where the
+**Scope** drop-down says to:
+
+- **Track** (the default) - keeps playing from wherever it already was;
+  the edit is heard "in place", without jumping.
+- **Delta** - jumps to whatever you just edited, then loops just that
+  region, so you hear a fresh brush stroke immediately and repeatedly.
+- **Review** - jumps to the edit like Delta, but plays through to the end
+  of the track each time before looping back.
+
+Unchecking Repeat, or dragging the position bar yourself, always goes
+back to playing (or looping) the whole track.
 
 ## Recording
 

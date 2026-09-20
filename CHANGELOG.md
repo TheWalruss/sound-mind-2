@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.42.2] - 2026-09-20
+
+The second installment of "Workflow & Device Polish" - **Repeat Playback**.
+
+### Added
+
+- **A Repeat checkbox on the Playback panel**: once checked, playback loops from the start when it reaches the end, and re-renders live whenever you edit the canvas while it's playing.
+- **A Scope drop-down alongside it**: **Track** (the whole project, today's default) re-renders in place without moving the playback position; **Delta** jumps playback to whatever you just edited and loops just that region; **Review** jumps to the edit but plays through to the end of the track before looping.
+
+Full regression: sound-mind-codec 39/39, sound-mind-core 801/801, sound-mind-studio full suite passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #117.
+
 ## [0.0.42.1] - 2026-09-20
 
 The first installment of the "Workflow & Device Polish" milestone - a **Configure Devices** panel.

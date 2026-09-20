@@ -638,7 +638,7 @@ As shipped (see `docs/sound-mind-architecture.md`'s Decision #115):
 A lumped milestone, per the same "bundle smaller UI changes into one point release" precedent `v0.Y.16.1` (Visual Identity) already established - several independent, individually small quality-of-life items from the 2026-09-17 design pass, rather than a Z-slot each:
 
 - **A central Configure Devices panel** (`v0.0.42.1`, Installment A - see `docs/sound-mind-architecture.md`'s Decision #116): refresh input/output devices, choose the active one for each, test them, and adjust a master volume/gain per device - consolidating what `v0.Y.18.1` left scattered one picker per engine panel (Playback/Loop/Record each own their own today) into a single place, without removing those per-panel pickers' own quick-access convenience.
-- **Repeat Playback**: a "Repeat" checkbox on the Playback panel - loops the output from the start once it reaches the end, and re-renders on every canvas edit, the same way Loop Mode works but with no recording/input side. A new **Scope** drop-down alongside it: **Track** (the whole project, today's only behavior) plays start-to-end; **Delta** restarts playback from the first column modified since the last edit the moment the canvas updates (so a fresh brush stroke is heard immediately), continuing to the last modified column before halting or repeating per the checkbox; **Review** behaves like Delta but continues playing past the last modified column to the end of the track before halting or repeating.
+- **Repeat Playback** (`v0.0.42.2`, Installment B - see `docs/sound-mind-architecture.md`'s Decision #117): a "Repeat" checkbox on the Playback panel - loops the output from the start once it reaches the end, and re-renders on every canvas edit, the same way Loop Mode works but with no recording/input side. A new **Scope** drop-down alongside it: **Track** (the whole project, today's only behavior) plays start-to-end; **Delta** restarts playback from the first column modified since the last edit the moment the canvas updates (so a fresh brush stroke is heard immediately), continuing to the last modified column before halting or repeating per the checkbox; **Review** behaves like Delta but continues playing past the last modified column to the end of the track before halting or repeating.
 - **Additional audio import formats**: `importAudioFile()` only accepts WAV today (`sound_mind::codec::readWavFile()`) - MP3 and whatever else ffmpeg (already a dependency, since `v0.Y.7.1`'s export work) can decode should be accepted as import sources too, not just export targets.
 - **Documentation links in the Help menu and Landing Page**: `README.md`/`QUICKSTART.md`/`USER_GUIDE.md` plus an About box, reachable from both - the legacy Studio's own Help menu structure is worth checking first for a layout that already worked.
 - **A Hardware Acceleration toggle**: a menu option to turn GPU compute (`v0.Y.30.1`) on/off at will, so its actual effect (speed, correctness, power/heat/battery) can be evaluated on demand rather than assumed.
@@ -652,7 +652,16 @@ As shipped (Installment A, `v0.0.42.1`):
 
 **Demo:** open the new Configure Devices panel, switch the active input device and watch the level meter respond to Test; switch the active output device and hear the test tone; adjust both gain sliders.
 
-Repeat Playback, additional import formats, documentation links, and the Hardware Acceleration toggle remain scheduled as Installments B-E.
+As shipped (Installment B, `v0.0.42.2`):
+
+- **"Audible restart on edit", confirmed with the user over building genuine seamless live double-buffering into `PlaybackEngine`** - an edit mid-playback stops, re-renders the project's own current composite, and resumes per the current Scope's own rule, reusing `PlaybackController::load()`/`play()` exactly as they already work rather than adding a second `LoopEngine`-style buffer-swap primitive.
+- **Repeat gates the whole feature** - Scope only customizes what happens *while* Repeat is checked (what an edit does, and where the loop-back point is); unchecking Repeat immediately widens the active range back to the whole track, so nothing about a stale Delta/Review range lingers.
+- **`Track`/`Delta`/`Review` share one uniform "reached the range end, loop back" check** - `Track`'s own range is simply `[0, totalSeconds()]`, so the exact same range-end poll that drives Delta/Review's own loop-back also reproduces Track's "loops the output from the start once it reaches the end" with no special-casing.
+- **The edited region comes from the layer's own most recently active operation**, a practical approximation that works uniformly for a fresh stroke and for undo/redo alike (neither of the latter two appends a fresh operation of its own to read timing from).
+
+**Demo:** check Repeat with Scope set to Delta, paint a stroke while a track plays, and hear it immediately without pressing Play; switch Scope to Track and confirm an edit no longer jumps the playback position.
+
+Additional import formats, documentation links, and the Hardware Acceleration toggle remain scheduled as Installments C-E.
 
 **No Y bump** - workflow/device/UI additions; no project file format change.
 

@@ -55,6 +55,7 @@ using sound_mind::studio::LayersPanel;
 using sound_mind::studio::LoopPanel;
 using sound_mind::studio::MainWindow;
 using sound_mind::studio::PlaybackPanel;
+using sound_mind::studio::PlaybackScope;
 using sound_mind::studio::RecordPanel;
 using sound_mind::studio::SelectionConfigurationPanel;
 using sound_mind::studio::ToolConfigurationPanel;
@@ -2226,6 +2227,132 @@ void MainWindowTest::stopPlaybackResetsThePlaybackPanelPosition() {
     auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
     QVERIFY(label != nullptr);
     QCOMPARE(label->text(), QStringLiteral("0:00 / 0:00"));
+}
+
+void MainWindowTest::setPlaybackRepeatAndScopeDoNothingWithNoProjectOpen() {
+    TestMainWindow window;
+    window.setPlaybackRepeat(true);
+    window.setPlaybackScope(PlaybackScope::Delta);
+    // If this line is reached at all, neither call crashed with no project
+    // open - matching the same no-project-open safety every other
+    // engine-adjacent setter in this class already guarantees.
+    QVERIFY(!window.isPlaying());
+}
+
+void MainWindowTest::paintingWhileRepeatIsOffDoesNotInterruptPlayback() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-repeat-off.wav";
+    writeTestWavFile(path);
+
+    // A wider-than-tall canvas (200x50, 10ms/column = 2s total) so a paint
+    // click's own column maps to a time distinguishable from a seeked
+    // position at the position label's own whole-second resolution - see
+    // this test's own assertions below.
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 200;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-repeat-off.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(settings, projectPath));
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.startPlayback();
+    window.seekPlayback(1.5);  // "0:01 / 0:02".
+    QVERIFY(window.isPlaying());
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(200, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));    // ~0.1s - far from 1.5s.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+
+    // Repeat is off by default - the edit shouldn't have reloaded or
+    // repositioned playback at all.
+    QVERIFY(window.isPlaying());
+    auto* panel = window.findChild<PlaybackPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("0:01 / 0:02"));
+
+    window.stopPlayback();
+}
+
+void MainWindowTest::paintingWhileRepeatIsOnWithDeltaScopeJumpsPlaybackToTheEditedRegion() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-repeat-delta.wav";
+    writeTestWavFile(path);
+
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 200;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-repeat-delta.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(settings, projectPath));
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.setPlaybackRepeat(true);
+    window.setPlaybackScope(PlaybackScope::Delta);
+    window.startPlayback();  // starts at "0:00 / 0:02" - never seeked.
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(200, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));  // ~1.5s.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
+
+    // Delta scope jumps playback to the just-painted stroke's own start -
+    // ~1.5s, not the "0:00" it started at.
+    QVERIFY(window.isPlaying());
+    auto* panel = window.findChild<PlaybackPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("0:01 / 0:02"));
+
+    window.stopPlayback();
+}
+
+void MainWindowTest::paintingWhileRepeatIsOnWithTrackScopeKeepsTheSamePosition() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-repeat-track.wav";
+    writeTestWavFile(path);
+
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 200;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-repeat-track.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(settings, projectPath));
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.setPlaybackRepeat(true);
+    window.setPlaybackScope(PlaybackScope::Track);  // the default, set explicitly for clarity.
+    window.startPlayback();
+    window.seekPlayback(1.5);  // "0:01 / 0:02".
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(200, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));  // ~0.1s.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+
+    // Track scope re-renders in place - unlike Delta, it never jumps to
+    // the edited region, even with Repeat on.
+    QVERIFY(window.isPlaying());
+    auto* panel = window.findChild<PlaybackPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("0:01 / 0:02"));
+
+    window.stopPlayback();
 }
 
 void MainWindowTest::paintModeIsOffByDefault() {

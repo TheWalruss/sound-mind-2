@@ -140,6 +140,12 @@ private slots:
     void seekPlaybackMovesThePlaybackPosition();
     void stopPlaybackResetsThePlaybackPanelPosition();
 
+    // Workflow & Device Polish, Installment B: Repeat Playback (v0.0.42.2)
+    void setPlaybackRepeatAndScopeDoNothingWithNoProjectOpen();
+    void paintingWhileRepeatIsOffDoesNotInterruptPlayback();
+    void paintingWhileRepeatIsOnWithDeltaScopeJumpsPlaybackToTheEditedRegion();
+    void paintingWhileRepeatIsOnWithTrackScopeKeepsTheSamePosition();
+
     // Basic Painting (v0.Y.24.1)
     void paintModeIsOffByDefault();
     void setPaintModeEnabledTogglesTheCanvasToolMode();

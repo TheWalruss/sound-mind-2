@@ -46,6 +46,8 @@
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/layer_export.h"
 #include "sound_mind/core/mind_grain.h"
+#include "sound_mind/core/operation.h"
+#include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
@@ -236,9 +238,13 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(playbackController_, &PlaybackController::durationChanged, playbackPanel_, &PlaybackPanel::setDuration);
     connect(playbackController_, &PlaybackController::positionChanged, this, [this](double positionSeconds) {
         playbackPanel_->setPositionSeconds(positionSeconds);
+        currentPlaybackPositionSeconds_ = positionSeconds;
         const double total = playbackController_->totalSeconds();
         canvas_->setPlayheadFraction(total > 0.0 ? std::optional<double>(positionSeconds / total) : std::nullopt);
+        checkRepeatPlaybackRange(positionSeconds);
     });
+    connect(playbackPanel_, &PlaybackPanel::repeatChanged, this, &MainWindow::setPlaybackRepeat);
+    connect(playbackPanel_, &PlaybackPanel::scopeChanged, this, &MainWindow::setPlaybackScope);
     playbackPanel_->setOutputDevices(toQStringList(playbackController_->availableOutputDeviceNames()));
 
     toolConfigurationPanel_ = new ToolConfigurationPanel(this);
@@ -397,9 +403,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // connection - see ToolPaletteController::contentChanged()'s own
     // docs; it has already called canvas_->update() itself by this point.
     connect(toolPaletteController_, &ToolPaletteController::contentChanged, this,
-            [this](sound_mind::core::LayerId) {
+            [this](sound_mind::core::LayerId layer) {
                 hasUnsavedChanges_ = true;
                 layerController_->refreshLayersPanel();
+                handleContentChangedForRepeat(layer);
             });
 
     gridPanel_ = new GridPanel(this);
@@ -1848,6 +1855,11 @@ void MainWindow::startPlayback() {
         // doing once per load, not on every resume, which load() already
         // guarantees since this whole branch is skipped once isLoaded().
         playbackController_->load(sound_mind::codec::decode(*composite));
+        // A fresh load starts a new "nothing edited yet this session" range
+        // - the whole track, regardless of playbackScope_ - narrowed only
+        // once a real edit actually arrives (handleContentChangedForRepeat()).
+        repeatRangeStartSeconds_ = 0.0;
+        repeatRangeEndSeconds_ = playbackController_->totalSeconds();
     }
 
     playbackController_->play();
@@ -1871,6 +1883,13 @@ void MainWindow::seekPlayback(double positionSeconds) {
     // emits positionChanged() itself, synchronously) - a drag that ends
     // while paused should still show the new position right away.
     playbackController_->seek(positionSeconds);
+    // A manual seek is deliberate user override - widen back to the whole
+    // track, the same "forget any delta-range restriction" reasoning
+    // setPlaybackRepeat(false)'s own docs give, so a subsequent edit's own
+    // Delta/Review jump isn't fighting a range the user just moved away
+    // from by hand.
+    repeatRangeStartSeconds_ = 0.0;
+    repeatRangeEndSeconds_ = playbackController_->totalSeconds();
 }
 
 void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
@@ -1885,6 +1904,21 @@ void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
 
 void MainWindow::setPlaybackVolume(int percent) {
     playbackController_->setVolume(percent);
+}
+
+void MainWindow::setPlaybackRepeat(bool enabled) {
+    repeatEnabled_ = enabled;
+    if (!enabled && playbackController_->isLoaded()) {
+        // Widen back to the whole track immediately - see this method's
+        // own docs on why nothing about a stale Delta/Review range should
+        // linger once Repeat is unchecked.
+        repeatRangeStartSeconds_ = 0.0;
+        repeatRangeEndSeconds_ = playbackController_->totalSeconds();
+    }
+}
+
+void MainWindow::setPlaybackScope(sound_mind::studio::PlaybackScope scope) {
+    playbackScope_ = scope;
 }
 
 void MainWindow::toggleLoopMode() {
@@ -2184,6 +2218,68 @@ void MainWindow::pollTestInputLevel() {
     // start dropping samples mid-block, same reasoning as drainRecording().
     deviceTestRecordEngine_.drainAvailable();
     configureDevicesPanel_->setInputLevel(deviceTestRecordEngine_.currentInputLevel());
+}
+
+void MainWindow::handleContentChangedForRepeat(sound_mind::core::LayerId layer) {
+    if (!repeatEnabled_ || !project_ || !playbackController_->isPlaying()) {
+        return;
+    }
+
+    const auto composite = sound_mind::core::compositeProject(*project_);
+    if (!composite.has_value()) {
+        return;
+    }
+
+    // The edited region, for Delta/Review - layer's own most recently
+    // active operation is a practical approximation of "what just
+    // changed": exact for a fresh paint/fill/paste/warp/sequence stamp
+    // (that operation is always the newest active one on its own layer),
+    // and still reasonable for an undo/redo (neither appends a fresh
+    // operation of its own - the layer's own now-different "most recently
+    // active" operation is the closest available stand-in for what the
+    // user just saw change).
+    std::optional<sound_mind::core::TimeFrequencyRect> editedBounds;
+    const auto operations = project_->operationLog().activeOperationsTargeting(layer);
+    if (!operations.empty()) {
+        editedBounds = operations.back()->bounds();
+    }
+
+    // Stops playback first (see load()'s own docs) - the confirmed
+    // "audible restart on edit" behavior, not seamless live double-
+    // buffering.
+    playbackController_->load(sound_mind::codec::decode(*composite));
+    const double totalSeconds = playbackController_->totalSeconds();
+
+    switch (playbackScope_) {
+        case sound_mind::studio::PlaybackScope::Track:
+            repeatRangeStartSeconds_ = 0.0;
+            repeatRangeEndSeconds_ = totalSeconds;
+            playbackController_->seek(currentPlaybackPositionSeconds_);
+            break;
+        case sound_mind::studio::PlaybackScope::Delta:
+            repeatRangeStartSeconds_ = editedBounds ? editedBounds->startTimeSeconds : 0.0;
+            repeatRangeEndSeconds_ = editedBounds ? editedBounds->endTimeSeconds : totalSeconds;
+            playbackController_->seek(repeatRangeStartSeconds_);
+            break;
+        case sound_mind::studio::PlaybackScope::Review:
+            repeatRangeStartSeconds_ = editedBounds ? editedBounds->startTimeSeconds : 0.0;
+            repeatRangeEndSeconds_ = totalSeconds;
+            playbackController_->seek(repeatRangeStartSeconds_);
+            break;
+    }
+
+    playbackController_->play();
+}
+
+void MainWindow::checkRepeatPlaybackRange(double positionSeconds) {
+    if (!repeatEnabled_ || repeatRangeEndSeconds_ <= 0.0) {
+        return;
+    }
+    if (positionSeconds < repeatRangeEndSeconds_) {
+        return;
+    }
+    playbackController_->seek(repeatRangeStartSeconds_);
+    playbackController_->play();
 }
 
 void MainWindow::poolTopmostLayer() {

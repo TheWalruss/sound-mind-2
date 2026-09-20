@@ -1,15 +1,18 @@
 #include "test_playback_panel.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QSlider>
+#include <QVariant>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/playback_panel.h"
 
 using sound_mind::studio::PlaybackPanel;
+using sound_mind::studio::PlaybackScope;
 
 void PlaybackPanelTest::playPauseStopButtonsEmitTheirSignals() {
     PlaybackPanel panel;
@@ -147,6 +150,49 @@ void PlaybackPanelTest::setSelectedOutputDeviceFallsBackToSystemDefaultForAnUnkn
     QVERIFY(combo != nullptr);
     QCOMPARE(combo->currentIndex(), 0);
     QCOMPARE(combo->currentData().toString(), QString());
+}
+
+void PlaybackPanelTest::repeatCheckBoxEmitsRepeatChanged() {
+    PlaybackPanel panel;
+    QSignalSpy spy(&panel, &PlaybackPanel::repeatChanged);
+
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("repeatCheckBox"));
+    QVERIFY(checkBox != nullptr);
+    checkBox->setChecked(true);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toBool(), true);
+}
+
+void PlaybackPanelTest::setRepeatCheckedDoesNotEmitRepeatChanged() {
+    PlaybackPanel panel;
+    QSignalSpy spy(&panel, &PlaybackPanel::repeatChanged);
+
+    panel.setRepeatChecked(true);
+
+    QCOMPARE(spy.count(), 0);
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("repeatCheckBox"));
+    QVERIFY(checkBox != nullptr);
+    QVERIFY(checkBox->isChecked());
+}
+
+void PlaybackPanelTest::scopeComboDefaultsToTrackAndEmitsScopeChanged() {
+    PlaybackPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("scopeCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(static_cast<PlaybackScope>(combo->currentData().toInt()), PlaybackScope::Track);
+
+    int callCount = 0;
+    PlaybackScope capturedScope = PlaybackScope::Track;
+    QObject::connect(&panel, &PlaybackPanel::scopeChanged, [&](PlaybackScope scope) {
+        ++callCount;
+        capturedScope = scope;
+    });
+    const int deltaIndex = combo->findData(QVariant::fromValue(static_cast<int>(PlaybackScope::Delta)));
+    combo->setCurrentIndex(deltaIndex);
+
+    QCOMPARE(callCount, 1);
+    QCOMPARE(capturedScope, PlaybackScope::Delta);
 }
 
 void PlaybackPanelTest::setPositionSecondsUpdatesTheTimeLabel() {

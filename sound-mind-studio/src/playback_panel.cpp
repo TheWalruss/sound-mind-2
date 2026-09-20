@@ -1,8 +1,11 @@
 #include "sound_mind/studio/playback_panel.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <utility>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -11,6 +14,7 @@
 #include <QSignalBlocker>
 #include <QSlider>
 #include <QVBoxLayout>
+#include <QVariant>
 #include <QWidget>
 
 namespace sound_mind::studio {
@@ -18,6 +22,12 @@ namespace sound_mind::studio {
 namespace {
 
 const QString kSystemDefaultLabel = QObject::tr("(System Default)");
+
+constexpr std::array<std::pair<PlaybackScope, const char*>, 3> kScopes = {{
+    {PlaybackScope::Track, "Track"},
+    {PlaybackScope::Delta, "Delta"},
+    {PlaybackScope::Review, "Review"},
+}};
 
 /// @brief Formats `seconds` as "M:SS" - the position bar's own time label,
 /// both halves of "elapsed / total". Negative or non-finite input is
@@ -108,6 +118,24 @@ PlaybackPanel::PlaybackPanel(QWidget* parent) : QDockWidget(tr("Playback"), pare
     volumeRow->addWidget(volumeSlider_, 1);
     root->addLayout(volumeRow);
 
+    auto* repeatRow = new QHBoxLayout();
+    repeatCheckBox_ = new QCheckBox(tr("Repeat"), container);
+    repeatCheckBox_->setObjectName(QStringLiteral("repeatCheckBox"));
+    connect(repeatCheckBox_, &QCheckBox::toggled, this, &PlaybackPanel::repeatChanged);
+    repeatRow->addWidget(repeatCheckBox_);
+
+    repeatRow->addWidget(new QLabel(tr("Scope:"), container));
+    scopeCombo_ = new QComboBox(container);
+    scopeCombo_->setObjectName(QStringLiteral("scopeCombo"));
+    for (const auto& [scope, name] : kScopes) {
+        scopeCombo_->addItem(tr(name), QVariant::fromValue(static_cast<int>(scope)));
+    }
+    connect(scopeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        emit scopeChanged(static_cast<PlaybackScope>(scopeCombo_->itemData(index).toInt()));
+    });
+    repeatRow->addWidget(scopeCombo_, 1);
+    root->addLayout(repeatRow);
+
     root->addStretch();
 
     populateDeviceCombo(outputDeviceCombo_, {});
@@ -126,6 +154,11 @@ void PlaybackPanel::setSelectedOutputDevice(const QString& deviceName) {
     const QSignalBlocker blocker(outputDeviceCombo_);
     const int index = outputDeviceCombo_->findData(deviceName);
     outputDeviceCombo_->setCurrentIndex(index >= 0 ? index : 0);
+}
+
+void PlaybackPanel::setRepeatChecked(bool checked) {
+    const QSignalBlocker blocker(repeatCheckBox_);
+    repeatCheckBox_->setChecked(checked);
 }
 
 void PlaybackPanel::setVolumePercent(int percent) {

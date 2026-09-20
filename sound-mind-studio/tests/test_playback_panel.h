@@ -18,4 +18,7 @@ private slots:
     void setPositionSecondsUpdatesTheTimeLabel();
     void setSelectedOutputDeviceChangesTheComboWithoutEmittingOutputDeviceChanged();
     void setSelectedOutputDeviceFallsBackToSystemDefaultForAnUnknownName();
+    void repeatCheckBoxEmitsRepeatChanged();
+    void setRepeatCheckedDoesNotEmitRepeatChanged();
+    void scopeComboDefaultsToTrackAndEmitsScopeChanged();
 };

@@ -24,6 +24,7 @@
 #include "sound_mind/studio/layer_controller.h"
 #include "sound_mind/studio/mind_wave_controller.h"
 #include "sound_mind/studio/playback_controller.h"
+#include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/recent_projects.h"
 #include "sound_mind/studio/selection_configuration_panel.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
@@ -375,6 +376,29 @@ public slots:
      *        confirmed scope for this milestone.
      */
     void setPlaybackVolume(int percent);
+
+    /**
+     * @brief Sets whether Repeat Playback is active - the actual work
+     *        behind the Playback panel's own Repeat checkbox (`v0.0.42.2`,
+     *        Workflow & Device Polish, Installment B).
+     *
+     * Gates the *entire* "re-render on every canvas edit, jump per the
+     * current Scope, loop or halt at the active range's own end" behavior
+     * - see `PlaybackScope`'s own docs on why. Turning it off immediately
+     * widens the active range back to the whole track (`[0,
+     * totalSeconds()]`), so nothing about a stale Delta/Review range
+     * lingers once Repeat is unchecked.
+     *
+     * @param enabled The new state.
+     */
+    void setPlaybackRepeat(bool enabled);
+
+    /// @brief Sets which portion of the track Repeat Playback targets -
+    /// the actual work behind the Playback panel's own Scope combo
+    /// (`v0.0.42.2`). Only takes effect on the *next* canvas edit or
+    /// natural loop-around - see `PlaybackScope`'s own docs.
+    /// @param scope The new scope.
+    void setPlaybackScope(sound_mind::studio::PlaybackScope scope);
 
     /**
      * @brief Starts or stops Loop Mode (renamed from Live Mode): a fixed-
@@ -1871,6 +1895,50 @@ private:
     /// device. `v0.0.42.1`.
     void pollTestInputLevel();
 
+    /**
+     * @brief Repeat Playback's own edit hook - connected to
+     *        `toolPaletteController_::contentChanged()` (which already
+     *        merges every content-changing action: Paint/Pick/Fill/Paste/
+     *        Warp/a stamped sequence, undo, and redo). A no-op unless
+     *        `repeatEnabled_` and playback is currently active.
+     *
+     * Re-renders the project's own current composite and reloads it
+     * (`PlaybackController::load()` stops playback first, per its own
+     * docs - "audible restart on edit", confirmed with the user over
+     * building genuine seamless live double-buffering into
+     * `PlaybackEngine`), then repositions and resumes per
+     * `playbackScope_`:
+     * - `Track`: keeps the pre-edit position
+     *   (`currentPlaybackPositionSeconds_`) - the edit is heard "in
+     *   place", playback never jumps.
+     * - `Delta`/`Review`: jumps to `layer`'s own most recently active
+     *   operation's own `bounds().startTimeSeconds` - a practical
+     *   approximation of "what just changed" that works uniformly for a
+     *   fresh paint stroke *and* an undo/redo (neither of which has a
+     *   freshly-appended operation of its own to read `bounds()` from) -
+     *   see this method's own definition for the exact reasoning.
+     *
+     * @param layer Which layer changed.
+     */
+    void handleContentChangedForRepeat(sound_mind::core::LayerId layer);
+
+    /**
+     * @brief Repeat Playback's own range-end check - called from the
+     *        existing `PlaybackController::positionChanged()` poll
+     *        (already running at ~30fps while playing). A no-op unless
+     *        `repeatEnabled_`.
+     *
+     * Once `positionSeconds` reaches `repeatRangeEndSeconds_`, seeks back
+     * to `repeatRangeStartSeconds_` and resumes - the "loops... when it
+     * reaches the end" half of Repeat Playback, uniformly covering
+     * `Track` (`repeatRangeEndSeconds_` is the whole track's own
+     * duration), `Delta`, and `Review` alike, with no per-scope branching
+     * needed here at all.
+     *
+     * @param positionSeconds The current playback position, in seconds.
+     */
+    void checkRepeatPlaybackRange(double positionSeconds);
+
     std::optional<sound_mind::core::Project> project_;
     std::optional<std::filesystem::path> currentPath_;
 
@@ -2125,6 +2193,28 @@ private:
     /// class already follows.
     QString configuredInputDeviceName_;
     QString configuredOutputDeviceName_;
+
+    /// @brief Repeat Playback's own current state - see
+    /// setPlaybackRepeat()'s/setPlaybackScope()'s own docs. `v0.0.42.2`.
+    bool repeatEnabled_ = false;
+    sound_mind::studio::PlaybackScope playbackScope_ = sound_mind::studio::PlaybackScope::Track;
+
+    /// @brief The currently active repeat range, in seconds - `[0,
+    /// totalSeconds()]` (the whole track) whenever repeatEnabled_ is
+    /// `false`, or right after startPlayback()/a manual seekPlayback();
+    /// narrowed to the edited operation's own bounds() by
+    /// handleContentChangedForRepeat() while `playbackScope_` is `Delta`/
+    /// `Review`. See checkRepeatPlaybackRange()'s own docs for how this is
+    /// actually used.
+    double repeatRangeStartSeconds_ = 0.0;
+    double repeatRangeEndSeconds_ = 0.0;
+
+    /// @brief The most recently reported playback position, in seconds -
+    /// tracked here (PlaybackController exposes no positionSeconds()
+    /// getter, only the positionChanged() signal) so
+    /// handleContentChangedForRepeat() knows where to resume from for
+    /// `PlaybackScope::Track` (which never jumps on an edit).
+    double currentPlaybackPositionSeconds_ = 0.0;
 };
 
 }  // namespace sound_mind::studio
