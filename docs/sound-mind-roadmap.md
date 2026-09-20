@@ -416,7 +416,7 @@ Inserted ahead of Phase 4, the same "checkpoint before more creative features la
 
 Also where `docs/sound-mind-architecture.md`'s own still-open Decisions Needed get resolved: the **GPU/audio-thread handoff mechanism** (that section's own "plausible direction, not yet a decision" - a DX12 fence feeding a lock-free ring buffer for the audio thread, a simpler double-buffered pointer for the UI thread - gets its first real prototype), and Decision #4's own **testing strategy for real-time/GPU code** (behavioral tests confirming the GPU path and the CPU fallback produce equivalent results, plus separate performance tests confirming the GPU path is actually *faster* - a GPU path that's merely correct hasn't earned its own existence).
 
-**Real desktop GPU validation stays deferred, to the milestone this was moved ahead of.** This laptop's Adreno GPU is mobile-class, not representative of desktop Nvidia/AMD compute performance (`tech-stack-decisions.md`'s own caveat) - proving this milestone's own GPU path is actually faster *on real desktop hardware*, not just this laptop, needs physical desktop access or a cloud GPU instance neither available yet, so that validation stays at `v0.Y.53.1` (renamed accordingly - it now validates an already-built path rather than building one).
+**Real desktop GPU validation stays deferred, to the milestone this was moved ahead of.** This laptop's Adreno GPU is mobile-class, not representative of desktop Nvidia/AMD compute performance (`tech-stack-decisions.md`'s own caveat) - proving this milestone's own GPU path is actually faster *on real desktop hardware*, not just this laptop, needs physical desktop access or a cloud GPU instance neither available yet, so that validation stays at `v0.Y.54.1` (renamed accordingly - it now validates an already-built path rather than building one).
 
 **Demo:** the same operation, same visible/audible result, measurably faster on this laptop's own GPU than the CPU path it replaced - and still correct, falling back cleanly, on a machine without a usable DX12 device.
 
@@ -430,7 +430,7 @@ The core generator types (periodic, envelope, stepped/noise, spatial, a first fr
 
 **Scoped in a dedicated planning pass** (confirmed with the user, `v0.0.30.6`+) rather than pre-committed here in detail, the same way Filter Layers' and GPU Compute Enablement's own installment plans were worked out separately from this document's own one-paragraph entry. Three things worth recording from that pass:
 
-- **The "first fractal field" generator has no earlier implementation to build on** - the design doc's own cross-reference ("the same kind of branching grammar behind fractal MindWave functions") points at `v0.Y.48.1` (Generators, Phase 5), which comes *after* this milestone. This installment plan is what builds that branching-grammar primitive first, for its own narrower (1D-field, not full amplitude/phase) need - the same "simpler first pass, since scheduled before what it'd otherwise lean on" shape this document's own Sequencing principle #4 already names for other milestones.
+- **The "first fractal field" generator has no earlier implementation to build on** - the design doc's own cross-reference ("the same kind of branching grammar behind fractal MindWave functions") points at `v0.Y.49.1` (Generators, Phase 5), which comes *after* this milestone. This installment plan is what builds that branching-grammar primitive first, for its own narrower (1D-field, not full amplitude/phase) need - the same "simpler first pass, since scheduled before what it'd otherwise lean on" shape this document's own Sequencing principle #4 already names for other milestones.
 - **The design doc's own original "shape parameter" description was wrong and has been corrected as part of this installment's own `D` scoping pass** - it previously described a shape parameter (blur radius, kernel size, and similar) as unable to vary per cell "without recomputing the whole operation at every point," so it was "approximated" by running the filter once and blending the filtered/unfiltered result per cell via the field. That approximation is functionally identical to binding a MindWave to the *layer's own opacity* (see `docs/sound-mind-design.md`'s own *Layer opacity* section) applied to a Filter layer instead - a real, unwanted redundancy the user caught and corrected: **filter-parameter binding must produce genuine per-cell variation of the parameter itself**, feeding a filter's own algorithm a different, independently-evaluated value at every canvas cell, not a blend of two whole-image results. The design doc's *Filter parameters* section now describes this correctly - the old "direct vs. shape, exact vs. approximated" framing is replaced with "pixel-local vs. kernel-shape," a distinction about *cost*, not about needing a different (approximated) mechanism; both kinds are evaluated exactly. **No pixel-local filter parameter exists in this codebase yet** (offset distance/angle, hue-rotation belong to the still-out-of-scope Geometric/Space filter families) - every filter parameter Filter Layers actually built is a kernel-shape one, so this installment's own real DSP work is entirely in that harder category: `blurSigma`, `medianSize`, `directionalBlurLength`/`directionalBlurAngleDegrees`, and `sharpenAmount` (the five single-scalar parameters among the six filter types - `ToneCurve`'s control points and `FrequencyAxisGradient`'s stops are structured, not one number, so neither gets a bindable scalar here).
 - **Per-cell opacity/filter-parameter evaluation is designed GPU-aware starting with the installment that builds layer-opacity binding** (confirmed with the user, explicitly overriding the "CPU-first, add GPU later" pattern every other DSP feature so far has used) - `v0.Y.30.1`'s own justification for existing at all ("a filter's own scalar parameter... turning into a per-pixel field... before that load lands") applies just as directly to opacity once a MindWave replaces a layer's single scalar gain with a per-cell one, so this is the milestone that finally exercises that motivation rather than deferring it again.
 
@@ -689,11 +689,34 @@ This closes out the "Workflow & Device Polish" milestone (Installments A-E) in f
 
 **No Y bump** - workflow/device/UI additions; no project file format change.
 
-**Moved here from its own original Phase 4.5 slot** (confirmed with the user, 2026-09-19) - none of its five items actually depend on Phase 4.5's own remaining milestones (Layers Panel Redesign/Principal Modes/Composer Mode) or vice versa, so there was no ordering reason to hold it for that later, bolted-on phase. Sequencing it here, directly after Loop Mode Live Preview, means Phase 4's own closing cleanup below sweeps it up along with everything else Phase 4 added, rather than needing a separate cleanup pass of its own in Phase 4.5.
+**Moved here from its own original Phase 4.5 slot** (confirmed with the user, 2026-09-19) - none of its five items actually depend on Phase 4.5's own remaining milestones (Principal Modes/Composer Mode) or vice versa, so there was no ordering reason to hold it for that later, bolted-on phase. Sequencing it here, directly after Loop Mode Live Preview, means Phase 4's own closing cleanup below sweeps it up along with everything else Phase 4 added, rather than needing a separate cleanup pass of its own in Phase 4.5.
 
-### v0.Y.43.1 - Refactor & Clean Up
+### v0.Y.44.1 - Layers Panel Redesign ✅
 
-A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, Sound Mind Instruments, Mind Shots & Mind Grains, Chords/Arpeggiator/Sequencer, Loop Mode Live Preview, Workflow & Device Polish) added, same purpose and scope as `v0.Y.5.1`'s entry. This is the largest phase in the whole roadmap - a strong candidate for the biggest structural payoff of any of these cleanup milestones, particularly around the MindWave binding machinery (used by opacity, filter parameters, and instrument notes alike by this point). Composer Mode is Phase 4.5's own, not this phase's - see `v0.Y.47.1`'s entry there for its own operation-to-track bookkeeping cleanup.
+A real visual and functional overhaul of `v0.Y.15.1`'s deliberately minimal first pass, per `docs/sound-mind-design.md`'s new "Layer panel styling": layer names enforced unique (serial-number suffixes where needed); each row shows its name in a legible high-contrast font overlaid on a rescaled thumbnail of its own visual content (rescaled diligently to minimize aliasing and preserve the features that help recognize it at a glance); a layer with a MindWave bound to its opacity (`v0.Y.31.1`) shows as a smaller, tabbed-in child row beneath it, its own thumbnail being the MindWave's grayscale preview (reusing `v0.0.31.12`'s existing preview-rendering machinery); a Filter layer, having no visual content of its own to thumbnail, shows its name and filter type on a plain, theme-matching background instead. An unselected row shows no controls beyond the visibility eye; selecting a row expands it to reveal the rest (opacity slider, a move/reorder handle, blend mode selection, MindWave selection, delete) - room enough for all of them without crowding, and an unambiguous visual answer to "which layer is currently active."
+
+**Demo:** open a project with several layers including one with a MindWave-bound opacity and one Filter layer; see each rendered according to its own kind; select a layer and watch its row expand to reveal its full control set, collapsing again once deselected.
+
+**Settled at implementation time (`v0.0.44.1`)**: the "anything else I might have missed" open question resolved in favor of keeping the pre-existing Time Alignment controls (`translationColumns()`/`rescaleFactor()`, `v0.Y.21.1`) in the expanded row too, alongside the five named controls - dropping already-shipped functionality wasn't what this redesign asked for. See `docs/sound-mind-architecture.md`'s Decision #121 for this and several other real implementation-time decisions (the reorder handle being one of the selection-revealed controls in particular, and layer-name auto-uniqueness being fully automatic/silent).
+
+**Taken out of its normal roadmap order** (confirmed with the user, 2026-09-20) - implemented directly after "Workflow & Device Polish" (`v0.0.42.5`), ahead of this phase's own closing "Refactor & Clean Up" pass below, since a cleanup pass is more useful once this redesign's own new code already exists to be swept up by it, not before. Mirrors exactly how Workflow & Device Polish (above) was itself already pulled forward from its own original Phase 4.5 slot into Phase 4 proper, for the identical reason - the roadmap's own numbering here now reflects both moves directly, rather than needing this note to explain a numeric-vs-physical-order mismatch.
+
+As shipped (`v0.0.44.1`, see `docs/sound-mind-architecture.md`'s Decision #121):
+
+- **`Project::uniqueLayerName()`**, called automatically by `addLayer()` for every newly added layer (audio import, "+ Add Layer"/"+ Add Filter Layer" alike) and explicitly by the Studio's own rename flow - appends `" (2)"`, `" (3)"`, ... until free, silently, with no error dialog ever shown for a name collision.
+- **`sound_mind::codec::downsampleAveraged()`** (new, Codec) and **`sound_mind::core::renderLayerThumbnail()`** (new, Core) - area-averaging shrink, not the existing nearest-neighbor `resampleHorizontally()` (correct for a *timeline* rescale, wrong for a thumbnail).
+- **A per-layer thumbnail cache in `LayerController`**, invalidated only for the specific layer a paint/pick/fill/paste/warp/chord-stamp/undo/redo operation actually changed - not regenerated for every layer on every edit.
+- **`LayersPanel`'s own accordion row restructuring**, `MindWaveController` pushing each MindWave's own preview thumbnail into it, and `Project`'s new name-uniqueness enforcement.
+
+**Demo:** drag two identical audio files onto the canvas and confirm the second lands as `"<name> (2)"`, not a silent duplicate name; select and deselect a layer row and watch its full control set appear/disappear; bind a layer's opacity to a MindWave and see its grayscale preview appear as a child row beneath it.
+
+**No Y bump** - presentation/UI plus one new `Project` method; nothing about a project file's own serialized fields changed.
+
+### v0.Y.45.1 - Refactor & Clean Up
+
+**`v0.Y.43.1` is a retired number, not a gap** - this pass was originally planned under that number; renumbered to `v0.Y.45.1` (confirmed with the user, 2026-09-20) once the Layers Panel Redesign's own already-shipped `v0.0.44.1` needed to sit ahead of it, both in the document and in the numbering, rather than the two disagreeing about which came first.
+
+A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, Sound Mind Instruments, Mind Shots & Mind Grains, Chords/Arpeggiator/Sequencer, Loop Mode Live Preview, Workflow & Device Polish, Layers Panel Redesign) added, same purpose and scope as `v0.Y.5.1`'s entry. This is the largest phase in the whole roadmap - a strong candidate for the biggest structural payoff of any of these cleanup milestones, particularly around the MindWave binding machinery (used by opacity, filter parameters, and instrument notes alike by this point). Composer Mode is Phase 4.5's own, not this phase's - see `v0.Y.48.1`'s entry there for its own operation-to-track bookkeeping cleanup.
 
 **Demo:** the full regression suite still passes, unchanged in behavior.
 
@@ -712,30 +735,9 @@ A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, So
 
 ## Phase 4.5 - Workflow & Device Refinements
 
-Inserted after the fact (following `v0.Y.43.1`), the same reasoning `Phase 2.5`'s own intro and `Phase 3.5`'s own intro already establish for a `.5` phase - added 2026-09-17, from a fresh design-doc pass (`docs/sound-mind-design.md`'s "Additional design principles (2026-09-17)") that surfaced a batch of workflow/device/UI gaps against systems already built: the Layers Panel's own scope frozen at `v0.Y.15.1`'s deliberately minimal first pass, and a real open question about how painting's own geometry should behave, `docs/sound-mind-design.md`'s new "Principal modes" (a third gap from that same pass - device pickers scattered one-per-panel since `v0.Y.18.1` - was instead pulled forward into Phase 4 proper as `v0.Y.42.1`, confirmed with the user, 2026-09-19, since nothing about it actually depended on this phase's own remaining scope). None of this phase's own content depends on anything Phase 4's remaining milestones (Mind Shots & Mind Grains onward) build - it's sequenced here, at the phase boundary, matching every other `.5` phase's own placement, rather than interrupting Phase 4's own in-progress feature work partway through.
+Inserted after the fact (following `v0.Y.45.1`), the same reasoning `Phase 2.5`'s own intro and `Phase 3.5`'s own intro already establish for a `.5` phase - added 2026-09-17, from a fresh design-doc pass (`docs/sound-mind-design.md`'s "Additional design principles (2026-09-17)") that surfaced a batch of workflow/device/UI gaps against systems already built: `docs/sound-mind-design.md`'s new "Principal modes", a real open question about how painting's own geometry should behave. (The pass's other two gaps - the Layers Panel's own scope frozen at `v0.Y.15.1`'s deliberately minimal first pass, and device pickers scattered one-per-panel since `v0.Y.18.1` - were each pulled forward into Phase 4 proper instead, confirmed with the user: device pickers as `v0.Y.42.1` on 2026-09-19, and the Layers Panel Redesign as `v0.0.44.1` on 2026-09-20, since neither actually depended on this phase's own remaining scope.) None of this phase's own content depends on anything Phase 4's remaining milestones (Mind Shots & Mind Grains onward) build - it's sequenced here, at the phase boundary, matching every other `.5` phase's own placement, rather than interrupting Phase 4's own in-progress feature work partway through.
 
-### v0.Y.44.1 - Layers Panel Redesign ✅
-
-A real visual and functional overhaul of `v0.Y.15.1`'s deliberately minimal first pass, per `docs/sound-mind-design.md`'s new "Layer panel styling": layer names enforced unique (serial-number suffixes where needed); each row shows its name in a legible high-contrast font overlaid on a rescaled thumbnail of its own visual content (rescaled diligently to minimize aliasing and preserve the features that help recognize it at a glance); a layer with a MindWave bound to its opacity (`v0.Y.31.1`) shows as a smaller, tabbed-in child row beneath it, its own thumbnail being the MindWave's grayscale preview (reusing `v0.0.31.12`'s existing preview-rendering machinery); a Filter layer, having no visual content of its own to thumbnail, shows its name and filter type on a plain, theme-matching background instead. An unselected row shows no controls beyond the visibility eye; selecting a row expands it to reveal the rest (opacity slider, a move/reorder handle, blend mode selection, MindWave selection, delete) - room enough for all of them without crowding, and an unambiguous visual answer to "which layer is currently active."
-
-**Demo:** open a project with several layers including one with a MindWave-bound opacity and one Filter layer; see each rendered according to its own kind; select a layer and watch its row expand to reveal its full control set, collapsing again once deselected.
-
-**Settled at implementation time (`v0.0.44.1`)**: the "anything else I might have missed" open question resolved in favor of keeping the pre-existing Time Alignment controls (`translationColumns()`/`rescaleFactor()`, `v0.Y.21.1`) in the expanded row too, alongside the five named controls - dropping already-shipped functionality wasn't what this redesign asked for. See `docs/sound-mind-architecture.md`'s Decision #121 for this and several other real implementation-time decisions (the reorder handle being one of the selection-revealed controls in particular, and layer-name auto-uniqueness being fully automatic/silent).
-
-**Taken out of its normal roadmap order** (confirmed with the user, 2026-09-20) - implemented directly after "Workflow & Device Polish" (`v0.0.42.5`), ahead of `v0.Y.43.1`'s own "Refactor & Clean Up" pass, since a cleanup pass is more useful once this redesign's own new code already exists to be swept up by it, not before.
-
-As shipped (`v0.0.44.1`, see `docs/sound-mind-architecture.md`'s Decision #121):
-
-- **`Project::uniqueLayerName()`**, called automatically by `addLayer()` for every newly added layer (audio import, "+ Add Layer"/"+ Add Filter Layer" alike) and explicitly by the Studio's own rename flow - appends `" (2)"`, `" (3)"`, ... until free, silently, with no error dialog ever shown for a name collision.
-- **`sound_mind::codec::downsampleAveraged()`** (new, Codec) and **`sound_mind::core::renderLayerThumbnail()`** (new, Core) - area-averaging shrink, not the existing nearest-neighbor `resampleHorizontally()` (correct for a *timeline* rescale, wrong for a thumbnail).
-- **A per-layer thumbnail cache in `LayerController`**, invalidated only for the specific layer a paint/pick/fill/paste/warp/chord-stamp/undo/redo operation actually changed - not regenerated for every layer on every edit.
-- **`LayersPanel`'s own accordion row restructuring**, `MindWaveController` pushing each MindWave's own preview thumbnail into it, and `Project`'s new name-uniqueness enforcement.
-
-**Demo:** drag two identical audio files onto the canvas and confirm the second lands as `"<name> (2)"`, not a silent duplicate name; select and deselect a layer row and watch its full control set appear/disappear; bind a layer's opacity to a MindWave and see its grayscale preview appear as a child row beneath it.
-
-**No Y bump** - presentation/UI plus one new `Project` method; nothing about a project file's own serialized fields changed.
-
-### v0.Y.45.1 - Principal Modes
+### v0.Y.46.1 - Principal Modes
 
 Per `docs/sound-mind-design.md`'s new "Principal modes": a **Sound-mode** vs. **Image-mode** toggle. Sound-mode is every geometric operation's own behavior today (implicit, never named as a "mode" until now) - a circle-shaped brush stamp, or a translated selection, keeps a fixed extent in time-seconds and log-frequency-space, so it reads as an oval in a high-frequency region and a narrower vertical shape lower down, but a one-octave selection covers one octave at any frequency, preserving time-frequency invariance rather than pixel-shape invariance. Image-mode, closer to the legacy Studio, keeps a shape's *on-screen pixel footprint* fixed instead - a circle stays a circle anywhere on the canvas, and a translated shape keeps its exact pixel dimensions - trading time-frequency invariance for pixel-space invariance (an embedded image or face stays visually undistorted under translation/rotation, at the cost of a translated *sound* shifting in perceived timbre, not just pitch, since its harmonics no longer land where they did).
 
@@ -745,17 +747,17 @@ Per `docs/sound-mind-design.md`'s new "Principal modes": a **Sound-mode** vs. **
 
 **Likely Y bump candidate, flagged not decided**: if a per-stroke or per-object record of which mode it was painted under turns out to be needed (so old content keeps rendering under the mode it was actually painted in, rather than being silently reinterpreted), that's a new field on `PaintOperation`'s own `ToolConfiguration` snapshot - additive, unless an existing project's own already-painted geometry needs reinterpreting under the new toggle, which the dedicated planning pass above should settle either way.
 
-### v0.Y.46.1 - Composer Mode
+### v0.Y.47.1 - Composer Mode
 
 The DAW-style track view: each layer as a track, operations drawn as boxes via `Operation::bounds()`, retiming/moving an operation between layers via the `supersedes` mechanism, the three track background styles.
 
-Moved here, to the end of Phase 4.5, rather than staying among Phase 4's own Expressive Tools milestones (its original slot, `v0.Y.38.1` at the time it was moved - since renumbered again by `v0.Y.38.1`'s own later, unrelated Filter Parameter Binding insertion) - track view naturally reads best once the Layers Panel Redesign (`v0.Y.44.1`, immediately above) has already reshaped how a layer presents itself, rather than being built against the panel's own pre-redesign shape and then needing rework.
+Moved here, to the end of Phase 4.5, rather than staying among Phase 4's own Expressive Tools milestones (its original slot, `v0.Y.38.1` at the time it was moved - since renumbered again by `v0.Y.38.1`'s own later, unrelated Filter Parameter Binding insertion) - track view naturally reads best once the Layers Panel Redesign (`v0.0.44.1`, shipped ahead of Phase 4's own closing cleanup, above) has already reshaped how a layer presents itself, rather than being built against the panel's own pre-redesign shape and then needing rework.
 
 **Demo:** arrange a multi-layer piece in the track view; move a stamped note to a different layer without repainting it.
 
-### v0.Y.47.1 - Refactor & Clean Up
+### v0.Y.48.1 - Refactor & Clean Up
 
-A dedicated pass over everything Phase 4.5 (Layers Panel Redesign, Principal Modes, Composer Mode) added, same purpose and scope as `v0.Y.5.1`'s entry - Workflow & Device Polish moved to Phase 4 proper (`v0.Y.42.1`), so `v0.Y.43.1`'s own cleanup already swept it up. Composer Mode's own operation-to-track bookkeeping is this pass's own likely biggest structural payoff, the same role it would have played in Phase 4's own cleanup had it stayed there.
+A dedicated pass over everything Phase 4.5 (Principal Modes, Composer Mode) added, same purpose and scope as `v0.Y.5.1`'s entry - Workflow & Device Polish and the Layers Panel Redesign were both moved to Phase 4 proper (`v0.Y.42.1`/`v0.0.44.1`), so `v0.Y.45.1`'s own cleanup already swept up both. Composer Mode's own operation-to-track bookkeeping is this pass's own likely biggest structural payoff, the same role it would have played in Phase 4's own cleanup had it stayed there.
 
 **Demo:** the full regression suite still passes, unchanged in behavior.
 
@@ -765,25 +767,25 @@ A dedicated pass over everything Phase 4.5 (Layers Panel Redesign, Principal Mod
 
 ## Phase 5 - Generative & Analytical
 
-### v0.Y.48.1 - Generators
+### v0.Y.49.1 - Generators
 
 Lattice, fractal, and streaming procedural content generators, sharing the Order/Chaos criticality axis.
 
 **Demo:** generate a fractal melodic texture as a new layer, tuned from rigid to chaotic.
 
-### v0.Y.49.1 - Analysis Tools v1
+### v0.Y.50.1 - Analysis Tools v1
 
 A first useful cross-section across all five categories (loudness/mastering, pitch/vocal, stereo/phase, spectral health, criticality/pattern) - not every meter the legacy version had, but at least one representative of each.
 
 **Demo:** check integrated loudness and stereo correlation on a real mix.
 
-### v0.Y.50.1 - Sound Flower
+### v0.Y.51.1 - Sound Flower
 
 Polar canvas view, and polar-form image import.
 
 **Demo:** toggle Sound Flower view while painting and keep working without switching tools.
 
-### v0.Y.51.1 - Refactor & Clean Up
+### v0.Y.52.1 - Refactor & Clean Up
 
 A dedicated pass over everything Phase 5 (Generators, Analysis Tools v1, Sound Flower) added, same purpose and scope as `v0.Y.5.1`'s entry.
 
@@ -795,27 +797,27 @@ A dedicated pass over everything Phase 5 (Generators, Analysis Tools v1, Sound F
 
 ## Phase 6 - Interchange & Polish
 
-### v0.Y.52.1 - Portable Resources
+### v0.Y.53.1 - Portable Resources
 
 Standalone `.smwave` and `.sminst` files; cross-project import of layers, Mind Shots, MindWaves, and Sound Mind Instruments. Resolves the Mind Grain portability Deferred Decision one way or the other.
 
 **Demo:** export an instrument from one project, import it cleanly into another.
 
-### v0.Y.53.1 - Performance Validation & Hardening
+### v0.Y.54.1 - Performance Validation & Hardening
 
 By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. **Narrower than this entry's own original scope, now that `v0.Y.30.1` moved GPU compute enablement ahead of Phase 4**: the DX12 compute path itself already exists by this point, built and validated on this laptop's own Adreno GPU - what's left here is validating it (and the ~100 ms / ~250 ms latency targets generally) for real, on actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding), extending GPU acceleration to whichever operations `v0.Y.30.1` didn't already cover if profiling still shows a need, and hardening what's there rather than building it fresh. Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
 
 **Demo:** the full design-doc feature set, exercised together, meeting the latency targets on real desktop GPU hardware.
 
-### v0.Y.54.1 - UI polish
+### v0.Y.55.1 - UI polish
 
 A pass over two controls that shipped functional but plain, once the rest of the design-doc feature set exists to compare them against: a real **visual editor** for a Sound Mind Instrument's own harmonic series (dragging harmonic-strength bars directly, rather than only the plain per-harmonic spin boxes `v0.Y.32.1` shipped) and a **preview image** shown alongside each saved instrument in its own selection menu (a small rendered thumbnail of its harmonic content, the same spirit as `v0.0.31.12`'s MindWave grayscale preview); and a **MindWave UI/UX uplift** - `docs/sound-mind-design.md`'s own **Continuous Controls** interaction model (still an open question as of `v0.Y.31.1`'s own scoping pass - a classic visual LFO-style interface is one candidate, not yet a settled answer), plus a real affordance for combining several MindWaves together (superposition already exists in Core since `v0.Y.31.1`'s own Installment B; nothing exposes it as a user gesture yet).
 
 **Demo:** drag a harmonic-strength bar directly in the Instrument editor and hear the timbre change; browse a list of saved instruments and recognize one by its own preview thumbnail; combine two MindWaves through the uplifted UI without hand-editing JSON.
 
-### v0.Y.55.1 - Refactor & Clean Up
+### v0.Y.56.1 - Refactor & Clean Up
 
-A dedicated pass over everything Phase 6 (Portable Resources, Performance Validation & Hardening, UI polish) added, same purpose and scope as `v0.Y.5.1`'s entry - and, by extension, the last general cleanup pass before `v1.0.0.0` itself. Real overlap with `v0.Y.53.1`'s own "full pass reconciling Doxygen output, architecture.md, and the test suite" - that milestone already covers documentation/test consistency end to end, so this one's own scope is specifically the code structure/decomposition half Sequencing principle #7 describes, not a duplicate documentation pass.
+A dedicated pass over everything Phase 6 (Portable Resources, Performance Validation & Hardening, UI polish) added, same purpose and scope as `v0.Y.5.1`'s entry - and, by extension, the last general cleanup pass before `v1.0.0.0` itself. Real overlap with `v0.Y.54.1`'s own "full pass reconciling Doxygen output, architecture.md, and the test suite" - that milestone already covers documentation/test consistency end to end, so this one's own scope is specifically the code structure/decomposition half Sequencing principle #7 describes, not a duplicate documentation pass.
 
 **Demo:** the full regression suite still passes, unchanged in behavior.
 
