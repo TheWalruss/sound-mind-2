@@ -125,3 +125,45 @@ TEST_CASE("StreamIncrementalEncoder gives the same result regardless of how audi
     CHECK(a.rightMagnitudeDb == b.rightMagnitudeDb);
     CHECK(a.sharedPhaseRadians == b.sharedPhaseRadians);
 }
+
+TEST_CASE("reset returns the encoder to its just-constructed, empty state", "[stream_incremental_encoder]") {
+    StreamCodecConfig config;
+    std::vector<float> left;
+    std::vector<float> right;
+    makeSineTone(1000.0f, 44100, config.sampleRateHz, left, right);
+
+    StreamIncrementalEncoder encoder{config};
+    encoder.pushSamples(left.data(), right.data(), left.size());
+    REQUIRE(encoder.frameCount() > 0);
+    REQUIRE(encoder.sampleCount() > 0);
+
+    encoder.reset();
+
+    CHECK(encoder.frameCount() == 0);
+    CHECK(encoder.sampleCount() == 0);
+    const StreamImage image = encoder.snapshot();
+    CHECK(image.frameCount == 0);
+    CHECK(image.sampleCount == 0);
+}
+
+TEST_CASE("reset then pushSamples behaves exactly like a freshly constructed encoder", "[stream_incremental_encoder]") {
+    StreamCodecConfig config;
+    std::vector<float> left;
+    std::vector<float> right;
+    makeSineTone(1000.0f, 44100, config.sampleRateHz, left, right);
+
+    StreamIncrementalEncoder reused{config};
+    reused.pushSamples(left.data(), right.data(), left.size() / 2);  // some unrelated prior audio.
+    reused.reset();
+    reused.pushSamples(left.data(), right.data(), left.size());
+
+    StreamIncrementalEncoder fresh{config};
+    fresh.pushSamples(left.data(), right.data(), left.size());
+
+    REQUIRE(reused.frameCount() == fresh.frameCount());
+    const StreamImage reusedImage = reused.snapshot();
+    const StreamImage freshImage = fresh.snapshot();
+    CHECK(reusedImage.leftMagnitudeDb == freshImage.leftMagnitudeDb);
+    CHECK(reusedImage.rightMagnitudeDb == freshImage.rightMagnitudeDb);
+    CHECK(reusedImage.sharedPhaseRadians == freshImage.sharedPhaseRadians);
+}

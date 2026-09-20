@@ -1767,9 +1767,13 @@ private:
     void updateWindowTitle();
 
     /// @brief loopUpdateTimer_'s slot: refreshes the Loop layer's content
-    /// from loopEngine_->currentImage() and repaints the canvas, and shows
-    /// loopEngine_->loopsBehind() in the status bar, while Loop Mode is
-    /// running - see toggleLoopMode()'s docs.
+    /// and repaints the canvas, and shows loopEngine_->loopsBehind() in the
+    /// status bar, while Loop Mode is running - see toggleLoopMode()'s
+    /// docs. As of `v0.0.41.1` (Loop Mode Live Preview), prefers
+    /// loopEngine_->currentPreviewImage() (the in-progress loop's own
+    /// growing preview) whenever it has content, falling back to
+    /// loopEngine_->currentImage() (the last *completed* loop) right after
+    /// a loop boundary - see currentPreviewImage()'s own docs.
     void updateLoopLayer();
 
     /// @brief recordDrainTimer_'s slot: moves whatever's newly captured

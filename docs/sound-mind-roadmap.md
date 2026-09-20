@@ -615,17 +615,23 @@ As shipped (Installment C, `v0.0.40.3` - see `docs/sound-mind-architecture.md`'s
 
 **Demo:** open the Chord Generator, pick a chord (or switch to Custom Notation and type a melodic line with a rest and a chord in it), arm the Chord toolbar toggle, and click the canvas to stamp it (the Chord Overlay previews its pitches beforehand); switch to Pick and drag the stamped sequence to re-time it (left/right) or uniformly re-voice it (up/down) - both without repainting, regardless of which input mode built it.
 
-### v0.Y.41.1 - Loop Mode Live Preview
+### v0.0.41.1 - Loop Mode Live Preview
 
-A live-updating preview of the *currently capturing* loop, rendered incrementally as it's captured - restoring the visual behavior the original Live Mode (`v0.0.7.1`) had before Loop Mode's fixed-length redesign (`v0.Y.14.1`) replaced it. Today, the canvas only updates once a whole loop finishes - a real, silent wait as long as the project's own duration (see `v0.Y.14.1`'s own "Fixed in manual testing" note on how confusing that first wait already reads, even with a placeholder image now covering the very first activation).
+A live-updating preview of the *currently capturing* loop, rendered incrementally as it's captured - restoring the visual behavior the original Live Mode (`v0.0.7.1`) had before Loop Mode's fixed-length redesign (`v0.Y.14.1`) replaced it. Previously, the canvas only updated once a whole loop finished - a real, silent wait as long as the project's own duration (see `v0.Y.14.1`'s own "Fixed in manual testing" note on how confusing that first wait already reads, even with a placeholder image now covering the very first activation).
 
 **A second, parallel pipeline - not a change to what's actually played back.** LoopEngine's own whole-buffer encode/decode-per-loop design (confirmed, `v0.Y.14.1`) stays exactly as-is for the audio that's actually heard - this milestone is purely about what's *rendered on the canvas* while a loop is still being captured. A `sound_mind::codec::StreamIncrementalEncoder` instance (the same one the original Live Mode used, still present in `sound-mind-codec`, unused since the `v0.Y.14.1` rewrite) tracks just the current loop's progress, reset at every loop boundary rather than growing across a whole session - sidestepping the original Live Mode's own "cost grows with session length" limitation by construction, since a loop is always bounded.
 
 **Distinct from `v0.Y.32.1`'s own "revisit Loop Mode" note**: that one is about *audio* - a per-note, operation-relative retrigger feel, once Sound Mind Instruments exists. This one is purely visual - what the canvas shows while a loop is in progress - and doesn't depend on Instruments existing first.
 
+As shipped (see `docs/sound-mind-architecture.md`'s Decision #115):
+
+- **`StreamIncrementalEncoder` gained a `reset()` method**, so `LoopEngine` can reuse one instance across a whole session (resetting it at every loop boundary) instead of needing to construct a fresh one each time - which its own `std::mutex` member would have made awkward anyway (neither movable nor copyable).
+- **`LoopEngine::currentPreviewImage()`**: a snapshot of the in-progress loop's own partial encode, fed the same raw audio `processPendingAudio()` already accumulates toward the next whole-loop `encode()`/`decode()` - correctly re-synced even when the worker has fallen behind and catches up on several loops within a single `processPendingAudio()` call, not just the normal one-loop-at-a-time case.
+- **`MainWindow`'s existing 33ms Loop layer poll now prefers `currentPreviewImage()`** whenever it has frames, falling back to `currentImage()` (the last *completed* loop) right after a loop boundary - the combination that actually produces continuous growth rather than a once-per-loop jump.
+
 **Demo:** start Loop Mode and watch the spectrogram grow continuously *during* the current loop, the same way the original Live Mode used to, rather than jumping once per completed loop.
 
-**No Y bump expected** - a rendering-only addition; the project file format, and what's actually captured/played back, are unchanged.
+**No Y bump** - a rendering-only addition; the project file format, and what's actually captured/played back, are unchanged.
 
 ### v0.Y.42.1 - Workflow & Device Polish
 

@@ -20,7 +20,8 @@ LoopEngine::LoopEngine(sound_mind::codec::StreamCodecConfig config, std::size_t 
       // 0 in practice (a project's duration is always positive).
       loopLengthSamples_(std::max<std::size_t>(loopLengthSamples, 1)),
       captureRingLeft_(static_cast<std::size_t>(kRingCapacity), 0.0f),
-      captureRingRight_(static_cast<std::size_t>(kRingCapacity), 0.0f) {
+      captureRingRight_(static_cast<std::size_t>(kRingCapacity), 0.0f),
+      previewEncoder_(config) {
     for (int slot = 0; slot < 2; ++slot) {
         playbackLeft_[static_cast<std::size_t>(slot)].assign(loopLengthSamples_, 0.0f);
         playbackRight_[static_cast<std::size_t>(slot)].assign(loopLengthSamples_, 0.0f);
@@ -55,6 +56,8 @@ void LoopEngine::start() {
         std::lock_guard<std::mutex> lock(imageMutex_);
         currentImage_ = sound_mind::codec::StreamImage{};
     }
+    previewEncoder_.reset();
+    previewPushedSamples_ = 0;
 
     if (deviceMode_ == AudioDeviceMode::Real) {
         juce::AudioDeviceManager::AudioDeviceSetup setup;
@@ -132,6 +135,8 @@ sound_mind::codec::StreamImage LoopEngine::currentImage() const {
     std::lock_guard<std::mutex> lock(imageMutex_);
     return currentImage_;
 }
+
+sound_mind::codec::StreamImage LoopEngine::currentPreviewImage() const { return previewEncoder_.snapshot(); }
 
 sound_mind::codec::StreamImage LoopEngine::emptyImage() const {
     sound_mind::codec::AudioBuffer silence;
@@ -216,6 +221,20 @@ void LoopEngine::processPendingAudio() {
         });
     }
 
+    // Feed the live preview encoder whatever new audio has accumulated in
+    // pendingLoopLeft_/Right_ since it was last fed (tracked by
+    // previewPushedSamples_) - covers everything newly drained above, plus
+    // (if the worker has fallen behind) any earlier backlog not yet pushed.
+    // See LoopEngine's own class docs on currentPreviewImage()'s `v0.0.41.1`
+    // addition, and the loop-boundary re-sync below for why this can be fed
+    // audio spanning more than one loop before any reset happens.
+    if (pendingLoopLeft_.size() > previewPushedSamples_) {
+        const std::size_t newCount = pendingLoopLeft_.size() - previewPushedSamples_;
+        previewEncoder_.pushSamples(pendingLoopLeft_.data() + previewPushedSamples_,
+                                     pendingLoopRight_.data() + previewPushedSamples_, newCount);
+        previewPushedSamples_ = pendingLoopLeft_.size();
+    }
+
     // Process every whole loop now accumulated - normally at most one, but
     // more than one can be queued if the worker has fallen behind (see
     // loopsBehind()'s docs) or a caller (a test, in particular) feeds
@@ -230,6 +249,22 @@ void LoopEngine::processPendingAudio() {
         pendingLoopLeft_.erase(pendingLoopLeft_.begin(), pendingLoopLeft_.begin() + static_cast<long>(loopLengthSamples_));
         pendingLoopRight_.erase(pendingLoopRight_.begin(),
                                   pendingLoopRight_.begin() + static_cast<long>(loopLengthSamples_));
+
+        // A loop boundary was just crossed: previewEncoder_ resets so the
+        // next loop's own preview starts fresh (see currentPreviewImage()'s
+        // own docs) - but it may already hold audio belonging to the loop
+        // that's just starting (fed above, before this loop's own slice was
+        // erased), so previewPushedSamples_ shifts down by the same amount
+        // pendingLoopLeft_/Right_ just did, and whatever of it remains gets
+        // re-pushed into the freshly-reset encoder immediately, rather than
+        // waiting for the next processPendingAudio() call to notice it's
+        // "new" again.
+        previewPushedSamples_ =
+            previewPushedSamples_ > loopLengthSamples_ ? previewPushedSamples_ - loopLengthSamples_ : 0;
+        previewEncoder_.reset();
+        if (previewPushedSamples_ > 0) {
+            previewEncoder_.pushSamples(pendingLoopLeft_.data(), pendingLoopRight_.data(), previewPushedSamples_);
+        }
 
         sound_mind::codec::StreamImage image = sound_mind::codec::encode(captured, config_);
         const sound_mind::codec::AudioBuffer decoded = sound_mind::codec::decode(image);

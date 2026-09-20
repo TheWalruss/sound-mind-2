@@ -33,6 +33,7 @@ TEST_CASE("LoopEngine starts with no image, not running, and keepLooping off", "
     CHECK_FALSE(engine.isDeviceAvailable());
     CHECK_FALSE(engine.keepLooping());
     CHECK(engine.currentImage().frameCount == 0);
+    CHECK(engine.currentPreviewImage().frameCount == 0);
     CHECK(engine.loopsCaptured() == 0);
     CHECK(engine.loopsBehind() == 0);
 }
@@ -189,6 +190,90 @@ TEST_CASE("keepLooping discards newly captured input instead of recording over t
     // Nothing was ever captured - see processBlock()'s docs.
     CHECK(engine.loopsCaptured() == 0);
     CHECK(engine.currentImage().frameCount == 0);
+}
+
+TEST_CASE("currentPreviewImage grows incrementally as a loop is captured, resetting once the loop completes",
+          "[loop_engine]") {
+    const StreamCodecConfig config;
+    constexpr std::size_t loopLen = 4000;  // several incremental frames' worth (fftSize = hopLength*4 = 1764).
+    constexpr std::size_t chunk = 500;
+    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
+
+    const std::vector<float> tone = makeSineTone(440.0f, loopLen, config.sampleRateHz);
+    std::vector<float> scratchOut(chunk, 0.0f);
+    float* outputChannels[1] = {scratchOut.data()};
+
+    std::uint32_t previousFrameCount = 0;
+    bool sawGrowth = false;
+    for (std::size_t offset = 0; offset < loopLen; offset += chunk) {
+        const float* inputChannels[1] = {tone.data() + offset};
+        engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(chunk));
+        engine.processPendingAudio();
+
+        const std::uint32_t frameCount = engine.currentPreviewImage().frameCount;
+        const bool loopJustCompleted = offset + chunk >= loopLen;
+        if (!loopJustCompleted) {
+            CHECK(frameCount >= previousFrameCount);  // never shrinks mid-loop.
+        }
+        if (frameCount > previousFrameCount) {
+            sawGrowth = true;
+        }
+        previousFrameCount = frameCount;
+    }
+
+    CHECK(sawGrowth);
+    CHECK(engine.currentImage().frameCount > 0);        // the loop completed...
+    CHECK(engine.currentPreviewImage().frameCount == 0);  // ...and the preview reset for the next one.
+}
+
+TEST_CASE("currentPreviewImage resyncs correctly when multiple loops complete within a single processPendingAudio call",
+          "[loop_engine]") {
+    const StreamCodecConfig config;
+    constexpr std::size_t loopLen = 2000;
+    constexpr std::size_t trailingLeftover = 1000;
+    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
+
+    const std::vector<float> input = makeSineTone(440.0f, loopLen * 2 + trailingLeftover, config.sampleRateHz);
+    const float* inputChannels[1] = {input.data()};
+    std::vector<float> scratchOut(input.size(), 0.0f);
+    float* outputChannels[1] = {scratchOut.data()};
+
+    // Feed two whole loops plus a partial third loop's worth in one shot,
+    // without ever draining the worker in between - simulates falling
+    // behind, then catching up in a single processPendingAudio() call (see
+    // the analogous loopsBehind() test above).
+    engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(input.size()));
+    engine.processPendingAudio();
+
+    CHECK(engine.loopsCaptured() == 2);
+    CHECK(engine.loopsBehind() == 0);
+    // The preview should reflect only the third loop's own leftover
+    // samples, correctly resynced across both loop-boundary resets - not
+    // left stale, or holding audio belonging to an already-completed loop.
+    const auto preview = engine.currentPreviewImage();
+    CHECK(preview.sampleCount == trailingLeftover);
+    CHECK(preview.frameCount == 0);  // not enough for a full frame yet.
+}
+
+TEST_CASE("start() resets currentPreviewImage back to empty, same as currentImage", "[loop_engine]") {
+    const StreamCodecConfig config;
+    constexpr std::size_t loopLen = 2000;
+    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
+
+    const std::vector<float> tone = makeSineTone(440.0f, loopLen, config.sampleRateHz);
+    const float* inputChannels[1] = {tone.data()};
+    std::vector<float> scratchOut(tone.size(), 0.0f);
+    float* outputChannels[1] = {scratchOut.data()};
+
+    engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(tone.size()));
+    engine.processPendingAudio();
+    REQUIRE(engine.currentImage().frameCount > 0);
+
+    engine.stop();
+    engine.start();
+
+    CHECK(engine.currentImage().frameCount == 0);
+    CHECK(engine.currentPreviewImage().frameCount == 0);
 }
 
 TEST_CASE("loopsBehind reflects loops captured but not yet processed by the worker", "[loop_engine]") {

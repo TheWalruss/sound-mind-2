@@ -1946,7 +1946,17 @@ void MainWindow::updateLoopLayer() {
         return;
     }
 
-    sound_mind::codec::StreamImage image = loopEngine_->currentImage();
+    // Loop Mode Live Preview (v0.0.41.1) - prefer the current loop's own
+    // still-growing preview whenever it has anything to show, falling back
+    // to the last *completed* loop's image otherwise (right after a loop
+    // boundary, before the new loop has captured enough for even one
+    // preview frame) - see LoopEngine::currentPreviewImage()'s own docs for
+    // why this combination is what actually produces continuous growth
+    // rather than a once-per-loop jump.
+    sound_mind::codec::StreamImage image = loopEngine_->currentPreviewImage();
+    if (image.frameCount == 0) {
+        image = loopEngine_->currentImage();
+    }
     if (image.frameCount > 0) {
         layer->setContent(std::move(image));
         canvas_->update();

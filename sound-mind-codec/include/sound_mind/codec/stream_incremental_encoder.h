@@ -81,6 +81,21 @@ public:
      */
     [[nodiscard]] StreamImage snapshot() const;
 
+    /**
+     * @brief Discards every sample/frame accumulated so far, returning this
+     *        encoder to exactly the state a freshly-constructed instance
+     *        (with the same `config`) would be in.
+     *
+     * For a bounded, repeating capture (a fixed-length loop, in particular -
+     * see `docs/sound-mind-roadmap.md`'s Loop Mode Live Preview milestone)
+     * that wants this class's own incremental preview *within* each cycle
+     * without it growing forever *across* cycles: call this at each cycle's
+     * own boundary, rather than constructing a fresh `StreamIncrementalEncoder`
+     * (which `std::mutex`'s own non-movable, non-copyable nature would make
+     * awkward to swap in anyway).
+     */
+    void reset();
+
 private:
     /// @brief Encodes the one frame starting at `startSample` (which must
     ///        already be known to have a complete window available) and

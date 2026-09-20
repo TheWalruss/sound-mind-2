@@ -1149,6 +1149,10 @@ just repeats instead of being overwritten. Input and output devices are
 chosen the same way as Playback/Recording; a device change takes effect
 the next time you start the loop, not immediately.
 
+While a pass is being captured, the canvas grows continuously as audio
+comes in, rather than waiting silently until the whole pass finishes -
+watch the spectrogram fill in live, in real time.
+
 ## Pooling a Layer
 
 The **Pool Layer** toolbar button runs the topmost visible layer with

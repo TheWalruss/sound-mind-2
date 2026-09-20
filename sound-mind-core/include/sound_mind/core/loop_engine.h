@@ -11,6 +11,7 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/codec/stream_incremental_encoder.h"
 #include "sound_mind/core/playback_engine.h"
 
 namespace sound_mind::core {
@@ -31,8 +32,23 @@ namespace sound_mind::core {
  * completed loop of raw input is handed to the background worker thread as
  * one bounded buffer, encoded and decoded via the same whole-buffer
  * `sound_mind::codec::encode()`/`decode()` any import or Recording already
- * uses (not `StreamIncrementalEncoder` - there is no continuously-growing
- * history to maintain incrementally here, unlike the original Live Mode).
+ * uses - `currentImage()`'s own result, what's actually played back, is
+ * exclusively a whole-buffer-per-loop result, never a partial one.
+ *
+ * **As of `v0.0.41.1` (Loop Mode Live Preview):** a second, purely visual
+ * result - `currentPreviewImage()` - *does* use `sound_mind::codec::
+ * StreamIncrementalEncoder` after all, reviving it for the one case it was
+ * always suited to (see that class's own docs): a bounded, repeating
+ * capture that wants a growing preview *within* each cycle without it
+ * growing forever *across* cycles. `previewEncoder_` is fed the same raw
+ * audio `pendingLoopLeft_`/`pendingLoopRight_` accumulate, then reset (via
+ * `StreamIncrementalEncoder::reset()`) at every loop boundary the worker
+ * itself crosses - never growing across more than one loop's worth, unlike
+ * the original `LiveEngine`'s unboundedly-growing use of the same class.
+ * This changes nothing about what's actually heard - `processPendingAudio()`'s
+ * own whole-buffer `encode()`/`decode()` per completed loop stays exactly
+ * as it was; `previewEncoder_` is purely an additional, parallel pipeline
+ * feeding `currentPreviewImage()`, never consulted for playback.
  *
  * **No compositing with the rest of the project** - the confirmed reduced
  * scope for this milestone: real multi-layer audio mixing still doesn't
@@ -222,6 +238,33 @@ public:
     [[nodiscard]] sound_mind::codec::StreamImage currentImage() const;
 
     /**
+     * @brief The *currently in-progress* loop's own partial Stream image,
+     *        growing continuously as more of it is captured -
+     *        `docs/sound-mind-roadmap.md`'s Loop Mode Live Preview
+     *        milestone (`v0.0.41.1`).
+     *
+     * A snapshot of `previewEncoder_` (see the class's own docs), which the
+     * worker thread feeds the same raw audio `processPendingAudio()`
+     * accumulates toward the next whole-loop `encode()`/`decode()` - purely
+     * a visual preview, never consulted for what's actually played back.
+     * Resets to a default-constructed (`frameCount == 0`) image at every
+     * loop boundary the worker crosses (immediately after that boundary's
+     * own `currentImage()` update - see `processPendingAudio()`'s own
+     * comments for the exact ordering and its one accepted, self-correcting
+     * race), so a caller polling both this and `currentImage()` should
+     * prefer this one whenever it has frames, falling back to
+     * `currentImage()` (the last *completed* loop) otherwise - that
+     * combination is what actually produces a continuously-growing canvas
+     * that jumps cleanly to the completed result at each loop boundary,
+     * rather than freezing for a whole loop's duration at a time.
+     *
+     * @return The in-progress loop's own partial image; `frameCount == 0`
+     *         right after a reset (a fresh loop just started, or too little
+     *         of it has arrived yet for even one analysis frame).
+     */
+    [[nodiscard]] sound_mind::codec::StreamImage currentPreviewImage() const;
+
+    /**
      * @brief A correctly-dimensioned, silent placeholder Stream image -
      *        exactly what encoding a whole loop's worth of pure silence,
      *        at this engine's own config/loop length, would produce.
@@ -346,6 +389,23 @@ private:
     /// whole-loop capture - never touched by the audio thread.
     std::vector<float> pendingLoopLeft_;
     std::vector<float> pendingLoopRight_;
+
+    /// @brief Feeds currentPreviewImage() - see the class's own docs on
+    /// `v0.0.41.1`. Worker-thread-only, like pendingLoopLeft_/Right_ (its
+    /// own pushSamples()/reset() calls are never concurrent with each
+    /// other, satisfying StreamIncrementalEncoder's own single-producer
+    /// contract); currentPreviewImage()'s snapshot() call is the one
+    /// cross-thread access, already safe via that class's own internal
+    /// mutex.
+    sound_mind::codec::StreamIncrementalEncoder previewEncoder_;
+
+    /// @brief How many of pendingLoopLeft_'s/pendingLoopRight_'s own
+    /// leading samples have already been pushed into previewEncoder_ -
+    /// tracks position across processPendingAudio() calls so each call only
+    /// pushes genuinely new audio, and so a loop-boundary erase() (which
+    /// shifts pendingLoopLeft_'s own indexing down) can shift this down by
+    /// the same amount to stay correctly aligned. Worker-thread-only.
+    std::size_t previewPushedSamples_ = 0;
 
     /// @brief Two fixed-size (loopLengthSamples_ each), pre-allocated
     /// playback buffers - the worker always writes a newly-decoded loop

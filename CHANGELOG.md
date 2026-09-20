@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.41.1] - 2026-09-20
+
+**Loop Mode Live Preview.** While Loop Mode is capturing the current pass, the canvas now grows continuously as audio comes in, restoring the visual behavior the original Live Mode had before Loop Mode's fixed-length redesign replaced it - previously, the canvas sat silent for the whole pass's duration and only updated once it finished.
+
+### Added
+
+- The spectrogram fills in live during Loop Mode capture, not just once per completed pass. Purely a rendering change - what's actually captured and played back is unaffected; no project file format change.
+
+Full regression: sound-mind-codec 39/39, sound-mind-core 788/788 (up from 785), sound-mind-studio full suite passing. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #115.
+
 ## [0.0.40.3] - 2026-09-20
 
 The third and final installment of the "Chords/Arpeggiator/Sequencer" milestone - the generalized **text notation**. Closes out this milestone in full.

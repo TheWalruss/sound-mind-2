@@ -107,4 +107,14 @@ StreamImage StreamIncrementalEncoder::snapshot() const {
     return image;
 }
 
+void StreamIncrementalEncoder::reset() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    left_.clear();
+    right_.clear();
+    mid_.clear();
+    framesLeftDb_.clear();
+    framesRightDb_.clear();
+    framesPhase_.clear();
+}
+
 }  // namespace sound_mind::codec
