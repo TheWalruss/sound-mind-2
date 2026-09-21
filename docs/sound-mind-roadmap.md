@@ -754,6 +754,7 @@ A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, So
 18. **New filter idea, inspired by how well the granular-noise filter turned out: a "Downsample" filter**, with a choice of downsample algorithm/mode and a bindable amount parameter (MindWave-bindable, matching this milestone's own binding machinery).
 19. **The "Overwrite" blend mode ignores both layer opacity and MindWave-bound opacity** - every other blend mode respects both; Overwrite should too, for consistency.
 20. **Open question, not yet a confirmed bug: what is "Warp selection" actually supposed to do?** Needs its own clarifying answer (most likely from `docs/sound-mind-design.md`'s own Warp/Selection sections, cross-checked against `WarpOperation`'s current implementation) before any fix or scoping can happen - flagged here rather than guessed at.
+21. **MindWaves panel: show a small preview of each MindWave, always active regardless of whether the Preview checkbox is checked** - similarly dimensioned to the small thumbnail the Layers panel already shows for a layer with a MindWave-bound opacity (`v0.0.44.1`'s own child-row grayscale preview). The existing Preview checkbox's own canvas-overlay behavior is unaffected by this - this is a separate, always-on mini-preview local to the MindWaves panel itself, not a replacement for it.
 
 ---
 
