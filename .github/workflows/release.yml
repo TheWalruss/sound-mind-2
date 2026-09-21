@@ -79,6 +79,32 @@ jobs:
         shell: pwsh
         run: python -m aqt install-qt windows desktop ${{ env.QT_VERSION }} ${{ matrix.qt_target_pkg }} --outputdir C:/Qt --modules qtimageformats
 
+      # Needed before Configure below, not just before Package: the
+      # top-level CMakeLists.txt's `docs` target is only ever created if
+      # `find_package(Doxygen)` succeeds at *configure* time - installing
+      # Doxygen after configuring would leave that target undefined, and
+      # `sound-mind-studio/CMakeLists.txt`'s own install(DIRECTORY
+      # docs/generated-user-docs/html/ ...) rule fails outright at
+      # `cmake --install` if that directory was never generated (confirmed
+      # by `v0.0.45.2`'s own real failed release run, 2026-09-21 - see that
+      # file's own updated comment on the rule).
+      - name: Install Doxygen
+        shell: pwsh
+        run: |
+          choco install doxygen.install -y --no-progress
+          # A step's own PATH is a snapshot taken at job start, not a live
+          # read of the registry Chocolatey just updated - without this,
+          # find_package(Doxygen) below wouldn't see the new install until
+          # (never, within this same job). Located dynamically, rather than
+          # assuming the installer's default directory, so a Chocolatey
+          # packaging change fails loudly here instead of surfacing later
+          # as a confusing "target 'docs' not found".
+          $doxygenExe = Get-ChildItem "C:\Program Files\doxygen" -Recurse -Filter doxygen.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $doxygenExe) {
+            throw "doxygen.exe not found after 'choco install doxygen.install' - installer layout may have changed."
+          }
+          echo $doxygenExe.DirectoryName >> $env:GITHUB_PATH
+
       - name: Configure (Release)
         shell: pwsh
         env:
@@ -93,6 +119,12 @@ jobs:
       - name: Build sound-mind-studio (Release)
         shell: pwsh
         run: cmake --build --preset release --target sound-mind-studio
+
+      # Required before Package below - see sound-mind-studio/CMakeLists.txt's
+      # own install(DIRECTORY docs/generated-user-docs/html/ ...) rule docs.
+      - name: Build docs
+        shell: pwsh
+        run: cmake --build --preset release --target docs
 
       # Uses `cmake --install` rather than a hand-rolled Copy-Item +
       # windeployqt sequence of its own - sound-mind-studio/CMakeLists.txt's

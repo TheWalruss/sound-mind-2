@@ -176,10 +176,16 @@ install(TARGETS sound-mind-studio RUNTIME DESTINATION . COMPONENT Runtime)
 # Requires the `docs` target to have been built (`cmake --build <dir>
 # --target docs`) before `cmake --install`/cpack runs, the same real
 # build-order requirement windeployqt below already has for Qt's own
-# runtime - if docs/generated-user-docs/html doesn't exist yet, this rule
-# simply has nothing to install (CMake doesn't require the source
-# directory to exist at configure time for install(DIRECTORY ...), only at
-# install time).
+# runtime. **Hard requirement, not a graceful skip**: this was originally
+# assumed to tolerate docs/generated-user-docs/html not existing yet (CMake
+# doesn't require install(DIRECTORY ...)'s own source directory to exist at
+# configure time), but a real release build against a fresh checkout
+# (`.github/workflows/release.yml`, confirmed 2026-09-21) proved that
+# assumption wrong: a missing source directory fails `cmake --install`
+# outright ("file INSTALL cannot find ... File exists" - a confusing
+# message for what's actually a missing-directory error), it doesn't just
+# skip installing nothing. `release.yml` now installs Doxygen and builds
+# `docs` before packaging specifically because of this.
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/docs/generated-user-docs/html/"
         DESTINATION docs
         COMPONENT Runtime
