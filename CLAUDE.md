@@ -11,6 +11,16 @@ Guidance for Claude Code when working on this repository. This is a ground-up re
 - **Predecessor**: previous Python codebase, kept only as a "lessons learned" reference, not as code to port directly. Previous Python codebase is in ../sound-mind/
 - Real-time audio paths must remain allocation-free, lock-free where needed, and never touch GC'd/interpreted code
 
+## Standing Directive: Autonomous Mode (active as of 2026-09-24)
+
+Until told to stop, this overrides the gating in the two sections below:
+
+- **Push without waiting for manual QA.** Step 10's "push only when I've indicated pushes are expected" and the Commit & Push Policy's "Development/implementation phase" bullet are both suspended for now — push automatically once a step's own workflow (tests passing, docs updated, `docs` target built) is complete, the same way the Design/planning phase already pushes eagerly.
+- **Don't block on step 2 as a hard checkpoint.** Still identify ambiguities and state how you're resolving them, but only stop and wait for an actual answer when something genuinely can't be reasonably resolved from the design docs, the existing code, or sound engineering judgment — not by default on every step.
+- Everything else in this file stays exactly as written below: testing, documentation, Doxygen cross-checks, no force-pushing/rewriting history, no new third-party dependency without asking, version-bump judgment calls, and the general "ask, don't assume" stance on anything touching public API/file-format compatibility.
+
+Say "stop" (or similar) to end this and fall back to the default gating in the sections below.
+
 ## Required Workflow for Every Implementation Step
 
 Follow this sequence for **every** unit of work (feature, fix, or refactor), without skipping or reordering steps. Treat each numbered step as a checkpoint — do not silently proceed past step 2 without my explicit confirmation.
