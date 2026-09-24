@@ -102,6 +102,17 @@ QPushButton:pressed {
     border-color: #DD4B00;
     color: #ffffff;
 }
+/* A checkable QPushButton (Configure Devices' own Test buttons, Loop/
+ * Record's own Start/Stop toggles) had no visual distinction from a plain
+ * one-shot button while checked - easy to forget it's still running, real-
+ * world testing pass, 2026-09-20 finding #4. Same highlight palette as
+ * QToolBar QToolButton:checked above, for one consistent "this is
+ * currently active" language app-wide. */
+QPushButton:checked {
+    background-color: #1a0f00;
+    color: #FEC100;
+    border-color: #FEC100;
+}
 QPushButton:disabled {
     color: #6a6a72;
     border-color: #2a2a33;

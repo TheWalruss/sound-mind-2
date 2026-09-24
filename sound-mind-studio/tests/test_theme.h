@@ -9,4 +9,5 @@ private slots:
     void studioStyleSheetIsNotEmpty();
     void studioStyleSheetContainsBothBrandColors();
     void studioWindowIconIsNotNull();
+    void studioStyleSheetGivesACheckedPushButtonAVisiblyDistinctStyle();
 };
