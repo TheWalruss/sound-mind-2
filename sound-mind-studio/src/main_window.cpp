@@ -318,6 +318,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // ToolPaletteController::applyPasteBlendMode() itself no-ops otherwise.
     connect(selectionConfigurationPanel_, &SelectionConfigurationPanel::pasteBlendModeChanged, this,
             [this](sound_mind::core::BlendMode mode) { toolPaletteController_->applyPasteBlendMode(mode); });
+    connect(selectionConfigurationPanel_, &SelectionConfigurationPanel::deselectRequested, this,
+            &MainWindow::deselect);
     // Mind Grain ordering-rule guardrail (v0.Y.33.1 Installment B) - a type
     // switch, a different Mind Grain picked, or any other edit could change
     // whether the active layer is currently paintable with it. layerController_/

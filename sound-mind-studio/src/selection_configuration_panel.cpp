@@ -7,6 +7,7 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QPushButton>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 #include <QVariant>
@@ -94,6 +95,15 @@ SelectionConfigurationPanel::SelectionConfigurationPanel(QWidget* parent)
     });
     pasteForm->addRow(tr("Paste Blend Mode:"), pasteBlendModeCombo_);
     root->addLayout(pasteForm);
+
+    // Real-world testing pass, 2026-09-20, finding #6: the underlying
+    // action already existed (Edit -> Deselect, Ctrl+D), but nothing
+    // surfaced it from this panel itself while actually configuring a
+    // selection.
+    auto* deselectButton = new QPushButton(tr("Deselect"), container);
+    deselectButton->setObjectName(QStringLiteral("deselectButton"));
+    connect(deselectButton, &QPushButton::clicked, this, &SelectionConfigurationPanel::deselectRequested);
+    root->addWidget(deselectButton);
 
     setWidget(container);
     updateWandGroupVisibility();

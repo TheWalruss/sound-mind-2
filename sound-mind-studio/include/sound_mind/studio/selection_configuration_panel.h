@@ -119,6 +119,14 @@ signals:
     /// @param mode The newly-selected blend mode.
     void pasteBlendModeChanged(sound_mind::core::BlendMode mode);
 
+    /// @brief Emitted whenever the Deselect button is clicked - forwards to
+    ///        `MainWindow::deselect()`, the same action `Edit -> Deselect`
+    ///        (Ctrl+D) already triggers (real-world testing pass,
+    ///        2026-09-20, finding #6). A plain convenience surfaced from
+    ///        this panel, not a new capability - cancels whatever selection
+    ///        is currently in progress, with no other side effect.
+    void deselectRequested();
+
 private:
     /// @brief Shows wandGroup_ only when the Selection Type dropdown is
     ///        currently Wand - called from the constructor and whenever

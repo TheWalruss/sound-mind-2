@@ -5,6 +5,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QWidget>
 #include <QtTest/QtTest>
@@ -130,4 +131,15 @@ void SelectionConfigurationPanelTest::setPasteBlendModeUpdatesTheComboWithoutEmi
 
     QCOMPARE(panel.pasteBlendMode(), BlendMode::Multiply);
     QCOMPARE(spy.count(), 0);
+}
+
+void SelectionConfigurationPanelTest::clickingDeselectEmitsDeselectRequested() {
+    SelectionConfigurationPanel panel;
+    auto* button = panel.findChild<QPushButton*>(QStringLiteral("deselectButton"));
+    QVERIFY(button != nullptr);
+    QSignalSpy spy(&panel, &SelectionConfigurationPanel::deselectRequested);
+
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
 }

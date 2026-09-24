@@ -20,4 +20,5 @@ private slots:
     void changingThePasteBlendModeComboUpdatesPasteBlendMode();
     void changingThePasteBlendModeComboEmitsPasteBlendModeChanged();
     void setPasteBlendModeUpdatesTheComboWithoutEmittingPasteBlendModeChanged();
+    void clickingDeselectEmitsDeselectRequested();
 };
