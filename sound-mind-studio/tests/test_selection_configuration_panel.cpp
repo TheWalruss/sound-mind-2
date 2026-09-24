@@ -108,3 +108,26 @@ void SelectionConfigurationPanelTest::changingThePasteBlendModeComboUpdatesPaste
 
     QCOMPARE(panel.pasteBlendMode(), BlendMode::Multiply);
 }
+
+void SelectionConfigurationPanelTest::changingThePasteBlendModeComboEmitsPasteBlendModeChanged() {
+    SelectionConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("pasteBlendModeCombo"));
+    QVERIFY(combo != nullptr);
+    std::optional<BlendMode> received;
+    connect(&panel, &SelectionConfigurationPanel::pasteBlendModeChanged, [&](BlendMode mode) { received = mode; });
+
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Multiply")));
+
+    QVERIFY(received.has_value());
+    QCOMPARE(*received, BlendMode::Multiply);
+}
+
+void SelectionConfigurationPanelTest::setPasteBlendModeUpdatesTheComboWithoutEmittingPasteBlendModeChanged() {
+    SelectionConfigurationPanel panel;
+    QSignalSpy spy(&panel, &SelectionConfigurationPanel::pasteBlendModeChanged);
+
+    panel.setPasteBlendMode(BlendMode::Multiply);
+
+    QCOMPARE(panel.pasteBlendMode(), BlendMode::Multiply);
+    QCOMPARE(spy.count(), 0);
+}

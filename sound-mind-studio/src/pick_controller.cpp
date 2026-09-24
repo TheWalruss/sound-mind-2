@@ -9,6 +9,7 @@
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
+#include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/paint_controller.h"
 
@@ -222,6 +223,17 @@ std::unique_ptr<sound_mind::core::ToolConfiguration> PickController::selectedCon
     return paint->config().clone();
 }
 
+std::optional<sound_mind::core::BlendMode> PickController::selectedPasteBlendMode() const {
+    if (!pickedOperationId_.has_value()) {
+        return std::nullopt;
+    }
+    const auto* paste = dynamic_cast<const sound_mind::core::PasteOperation*>(pickedOperation_);
+    if (paste == nullptr) {
+        return std::nullopt;
+    }
+    return paste->blendMode();
+}
+
 std::optional<sound_mind::core::TimeFrequencyRect> PickController::selectionBounds() const {
     if (!pickedOperationId_.has_value()) {
         return std::nullopt;
@@ -319,6 +331,21 @@ void PickController::applyToolConfiguration(const sound_mind::core::ToolConfigur
     const sound_mind::core::OperationId newId = log.reserveId();
     commitReplacement(std::make_unique<sound_mind::core::PaintOperation>(newId, pickedLayer_, std::move(newPath),
                                                                             config.clone(), pickedOperationId_));
+}
+
+void PickController::applyPasteBlendMode(sound_mind::core::BlendMode mode) {
+    if (!pickedOperationId_.has_value()) {
+        return;
+    }
+    const auto* paste = dynamic_cast<const sound_mind::core::PasteOperation*>(pickedOperation_);
+    if (paste == nullptr) {
+        return;  // Only a PasteOperation has a blend mode to reapply - see this method's own docs.
+    }
+
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    const sound_mind::core::OperationId newId = log.reserveId();
+    commitReplacement(std::make_unique<sound_mind::core::PasteOperation>(
+        newId, pickedLayer_, paste->bounds(), paste->clip(), pickedOperationId_, paste->boundary(), mode));
 }
 
 void PickController::deleteSelection() {

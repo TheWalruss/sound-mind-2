@@ -61,6 +61,7 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
         if (const auto config = pickController_->selectedConfiguration(); config != nullptr) {
             toolConfigurationPanel_->setToolConfiguration(*config);
         }
+        emit pickSelectionChanged();
     });
 
     // Selection & Fill (v0.Y.25.1) - shares paintController_'s own
@@ -266,6 +267,14 @@ void ToolPaletteController::warpSelection(sound_mind::core::Path curve, sound_mi
 
 std::optional<sound_mind::core::Path> ToolPaletteController::selectedPath() const {
     return pickController_->selectedPath();
+}
+
+std::optional<sound_mind::core::BlendMode> ToolPaletteController::selectedPasteBlendMode() const {
+    return pickController_->selectedPasteBlendMode();
+}
+
+void ToolPaletteController::applyPasteBlendMode(sound_mind::core::BlendMode mode) {
+    pickController_->applyPasteBlendMode(mode);
 }
 
 bool ToolPaletteController::hasSelection() const { return selectionController_->hasSelection(); }

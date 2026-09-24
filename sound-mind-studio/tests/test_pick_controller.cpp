@@ -190,7 +190,8 @@ OperationId addFillOperation(Project& project, LayerId layer, double startTime, 
 /// @brief Appends a real PasteOperation directly to `project`'s own
 /// OperationLog - the "already pasted, ready to be Picked" starting state.
 OperationId addPasteOperation(Project& project, LayerId layer, double startTime, double startFrequency,
-                               double endTime, double endFrequency) {
+                               double endTime, double endFrequency,
+                               sound_mind::core::BlendMode blendMode = sound_mind::core::BlendMode::Overwrite) {
     Clip clip;
     clip.frameCount = 2;
     clip.binCount = 2;
@@ -200,8 +201,8 @@ OperationId addPasteOperation(Project& project, LayerId layer, double startTime,
 
     auto& log = project.operationLog();
     const OperationId id = log.reserveId();
-    log.append(std::make_unique<PasteOperation>(
-        id, layer, makeTestBounds(startTime, startFrequency, endTime, endFrequency), clip));
+    log.append(std::make_unique<PasteOperation>(id, layer, makeTestBounds(startTime, startFrequency, endTime, endFrequency),
+                                                 clip, std::nullopt, std::nullopt, blendMode));
     return id;
 }
 
@@ -755,6 +756,80 @@ void PickControllerTest::applyToolConfigurationIsANoOpWhenAFillOperationIsSelect
     QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
 
     controller.applyToolConfiguration(makeOpaqueTool(0.05));
+
+    QCOMPARE(project.operationLog().size(), std::size_t{1});  // nothing new committed.
+}
+
+void PickControllerTest::selectedPasteBlendModeReturnsTheSelectedPasteOperationsOwnBlendMode() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPasteOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, sound_mind::core::BlendMode::Normal);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    QVERIFY(controller.selectedPasteBlendMode().has_value());
+    QCOMPARE(*controller.selectedPasteBlendMode(), sound_mind::core::BlendMode::Normal);
+}
+
+void PickControllerTest::selectedPasteBlendModeIsNullForAPaintOrFillSelection() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    QVERIFY(!controller.selectedPasteBlendMode().has_value());
+}
+
+void PickControllerTest::applyPasteBlendModeCommitsANewOperationWithTheSameGeometry() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId originalId =
+        addPasteOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, sound_mind::core::BlendMode::Overwrite);
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.applyPasteBlendMode(sound_mind::core::BlendMode::Normal);
+
+    QCOMPARE(project.operationLog().size(), std::size_t{2});
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* modified = dynamic_cast<const PasteOperation*>(active.front());
+    QVERIFY(modified != nullptr);
+    QVERIFY(modified->supersedes().has_value());
+    QCOMPARE(*modified->supersedes(), originalId);
+    QCOMPARE(modified->blendMode(), sound_mind::core::BlendMode::Normal);
+    // Same geometry - unaffected by a blend-mode-only edit.
+    QCOMPARE(modified->bounds().startTimeSeconds, 0.2);
+    QCOMPARE(modified->bounds().lowFrequencyHz, 400.0);
+    QVERIFY(controller.selectedPasteBlendMode().has_value());
+    QCOMPARE(*controller.selectedPasteBlendMode(), sound_mind::core::BlendMode::Normal);
+}
+
+void PickControllerTest::applyPasteBlendModeIsANoOpWhenAPaintOperationIsSelected() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.4, 600.0, makeOpaqueTool(0.02));
+
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.3, 500.0}));
+
+    controller.applyPasteBlendMode(sound_mind::core::BlendMode::Normal);
 
     QCOMPARE(project.operationLog().size(), std::size_t{1});  // nothing new committed.
 }

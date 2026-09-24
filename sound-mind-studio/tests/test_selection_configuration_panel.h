@@ -18,4 +18,6 @@ private slots:
     // Paste Blend Mode (v0.Y.37.1).
     void freshPanelDefaultsPasteBlendModeToOverwrite();
     void changingThePasteBlendModeComboUpdatesPasteBlendMode();
+    void changingThePasteBlendModeComboEmitsPasteBlendModeChanged();
+    void setPasteBlendModeUpdatesTheComboWithoutEmittingPasteBlendModeChanged();
 };

@@ -280,6 +280,23 @@ public:
     ///         is Picked.
     [[nodiscard]] std::optional<sound_mind::core::Path> selectedPath() const;
 
+    /// @brief The currently Picked object's own paste blend mode, if any -
+    ///        forwards to `PickController::selectedPasteBlendMode()`. The
+    ///        mechanism behind pre-filling Selection Configuration's own
+    ///        Paste Blend Mode combo when a pasted region is Picked (real-
+    ///        world testing pass, 2026-09-20, finding #5) - `MainWindow`
+    ///        calls this from its own `pickSelectionChanged()` handler.
+    /// @return The selected object's own blend mode, or `std::nullopt` if
+    ///         nothing suitable is Picked.
+    [[nodiscard]] std::optional<sound_mind::core::BlendMode> selectedPasteBlendMode() const;
+
+    /// @brief Applies a new blend mode to the currently Picked object -
+    ///        forwards to `PickController::applyPasteBlendMode()`. A no-op
+    ///        if nothing is Picked, or the selection isn't a pasted region
+    ///        (real-world testing pass, 2026-09-20, finding #5).
+    /// @param mode The new blend mode to apply.
+    void applyPasteBlendMode(sound_mind::core::BlendMode mode);
+
     /// @brief Whether there's a committed selection right now - forwards
     ///        to `SelectionController::hasSelection()`.
     /// @return `true` if there's a selection to fill/copy/cut.
@@ -386,6 +403,16 @@ signals:
     ///        `canvas_->update()` itself by the time this is emitted.
     /// @param layer Which layer's content changed.
     void contentChanged(sound_mind::core::LayerId layer);
+
+    /// @brief Emitted whenever Pick's own current selection changes - a new
+    ///        pick, a clear, or a committed edit. `MainWindow` connects
+    ///        this to pre-fill Selection Configuration's own Paste Blend
+    ///        Mode combo via selectedPasteBlendMode() (real-world testing
+    ///        pass, 2026-09-20, finding #5) - `ToolConfigurationPanel`'s
+    ///        own equivalent pre-fill (selectedConfiguration()) is handled
+    ///        internally instead, since this controller already owns that
+    ///        panel directly, unlike `SelectionConfigurationPanel`.
+    void pickSelectionChanged();
 
 private:
     CanvasWidget* canvas_;

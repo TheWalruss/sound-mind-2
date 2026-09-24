@@ -313,6 +313,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             [this](double tolerancePercent) { toolPaletteController_->setWandTolerance(tolerancePercent); });
     connect(selectionConfigurationPanel_, &SelectionConfigurationPanel::wandHarmonicsAwareChanged, this,
             [this](bool harmonicsAware) { toolPaletteController_->setWandHarmonicsAware(harmonicsAware); });
+    // Real-world testing pass, 2026-09-20, finding #5: also applies live to
+    // whatever's currently Picked, if it's a pasted region -
+    // ToolPaletteController::applyPasteBlendMode() itself no-ops otherwise.
+    connect(selectionConfigurationPanel_, &SelectionConfigurationPanel::pasteBlendModeChanged, this,
+            [this](sound_mind::core::BlendMode mode) { toolPaletteController_->applyPasteBlendMode(mode); });
     // Mind Grain ordering-rule guardrail (v0.Y.33.1 Installment B) - a type
     // switch, a different Mind Grain picked, or any other edit could change
     // whether the active layer is currently paintable with it. layerController_/
@@ -345,6 +350,18 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // ToolPaletteController's constructor at all (see that class's own docs
     // on why).
     toolPaletteController_->setChordParams(chordGeneratorPanel_->params());
+    // Real-world testing pass, 2026-09-20, finding #5: pre-fills Selection
+    // Configuration's own Paste Blend Mode combo with a newly-Picked pasted
+    // region's own real value, ready to reopen and adjust - the same
+    // "reopen and adjust" precedent ToolPaletteController's own internal
+    // ToolConfigurationPanel pre-fill already establishes for a picked
+    // PaintOperation. Left showing whatever it last displayed when nothing
+    // suitable is Picked, matching that same precedent.
+    connect(toolPaletteController_, &ToolPaletteController::pickSelectionChanged, this, [this]() {
+        if (const auto mode = toolPaletteController_->selectedPasteBlendMode(); mode.has_value()) {
+            selectionConfigurationPanel_->setPasteBlendMode(*mode);
+        }
+    });
     connect(canvas_, &CanvasWidget::paintStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
         if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->beginPaintStroke(*layerId, point);

@@ -5,6 +5,7 @@
 
 #include <QObject>
 
+#include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/path.h"
@@ -265,6 +266,21 @@ public:
     [[nodiscard]] std::optional<sound_mind::core::Path> selectedPath() const;
 
     /**
+     * @brief The selected object's own paste blend mode, if it's a
+     *        `PasteOperation` - for pre-filling the Selection Configuration
+     *        panel's own Paste Blend Mode combo with the picked object's
+     *        real, current value, the same "reopen and adjust" precedent
+     *        `selectedConfiguration()`/`selectedPath()` already establish
+     *        for other operation kinds (real-world testing pass,
+     *        2026-09-20, finding #5).
+     * @return The selected object's own blend mode, or `std::nullopt` if
+     *         nothing is selected, or the selected object isn't a
+     *         `PasteOperation` (nothing else has a blend mode of its own to
+     *         reopen).
+     */
+    [[nodiscard]] std::optional<sound_mind::core::BlendMode> selectedPasteBlendMode() const;
+
+    /**
      * @brief Continues an in-progress drag, live-previewing the selected
      *        object translated by how far the cursor has moved since
      *        pick(). A no-op if nothing is selected.
@@ -335,6 +351,28 @@ public:
      * @param config The new tool configuration to apply.
      */
     void applyToolConfiguration(const sound_mind::core::ToolConfiguration& config);
+
+    /**
+     * @brief Applies a new blend mode to the selected object - the actual
+     *        work behind changing Selection Configuration's own Paste
+     *        Blend Mode combo while a pasted region is Picked (real-world
+     *        testing pass, 2026-09-20, finding #5). A no-op if nothing is
+     *        selected, or the selected object isn't a `PasteOperation` -
+     *        the combo already only ever pre-fills for that kind (see
+     *        `selectedPasteBlendMode()`'s own docs), so this case isn't
+     *        expected to be reached via normal UI interaction, only
+     *        guarded defensively, the same as `applyToolConfiguration()`.
+     *
+     * Commits immediately, no drag/live-preview phase: a new
+     * `PasteOperation` with the selected object's own unchanged placement,
+     * clip, and boundary but `mode` as its own new blend mode, superseding
+     * the one picked. The new operation becomes the current selection.
+     *
+     * Emits contentChanged() for the affected layer.
+     *
+     * @param mode The new blend mode to apply.
+     */
+    void applyPasteBlendMode(sound_mind::core::BlendMode mode);
 
     /**
      * @brief Deletes the selected object - a no-op if nothing is

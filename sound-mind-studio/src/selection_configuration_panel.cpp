@@ -7,6 +7,7 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
+#include <QSignalBlocker>
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QWidget>
@@ -88,6 +89,9 @@ SelectionConfigurationPanel::SelectionConfigurationPanel(QWidget* parent)
     for (const auto& [mode, name] : kPasteBlendModes) {
         pasteBlendModeCombo_->addItem(tr(name), QVariant::fromValue(static_cast<int>(mode)));
     }
+    connect(pasteBlendModeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        emit pasteBlendModeChanged(static_cast<sound_mind::core::BlendMode>(pasteBlendModeCombo_->itemData(index).toInt()));
+    });
     pasteForm->addRow(tr("Paste Blend Mode:"), pasteBlendModeCombo_);
     root->addLayout(pasteForm);
 
@@ -105,6 +109,14 @@ bool SelectionConfigurationPanel::wandHarmonicsAware() const { return wandHarmon
 
 sound_mind::core::BlendMode SelectionConfigurationPanel::pasteBlendMode() const {
     return static_cast<sound_mind::core::BlendMode>(pasteBlendModeCombo_->currentData().toInt());
+}
+
+void SelectionConfigurationPanel::setPasteBlendMode(sound_mind::core::BlendMode mode) {
+    const QSignalBlocker blocker(pasteBlendModeCombo_);
+    const int index = pasteBlendModeCombo_->findData(QVariant::fromValue(static_cast<int>(mode)));
+    if (index >= 0) {
+        pasteBlendModeCombo_->setCurrentIndex(index);
+    }
 }
 
 void SelectionConfigurationPanel::updateWandGroupVisibility() {

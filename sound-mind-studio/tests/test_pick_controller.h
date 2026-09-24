@@ -31,6 +31,10 @@ private slots:
     void continueMoveOnAPasteOperationShowsCorrectlyTranslatedOutlineCorners();
     void continueMoveOnAFillOperationShowsARectangularOutlinePreview();
     void applyToolConfigurationIsANoOpWhenAFillOperationIsSelected();
+    void selectedPasteBlendModeReturnsTheSelectedPasteOperationsOwnBlendMode();
+    void selectedPasteBlendModeIsNullForAPaintOrFillSelection();
+    void applyPasteBlendModeCommitsANewOperationWithTheSameGeometry();
+    void applyPasteBlendModeIsANoOpWhenAPaintOperationIsSelected();
     void deleteSelectionOnAFillOperationCommitsASilenceFillTombstone();
     void deleteSelectionOnAPasteOperationCommitsASilenceFillTombstone();
     void endMovePreservesTheMovedOperationsOwnStackPosition();

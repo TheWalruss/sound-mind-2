@@ -65,17 +65,33 @@ public:
      *        `ToolConfigurationPanel`.
      *
      * Read on demand at the moment of a Paste (`MainWindow`'s own `Edit ->
-     * Paste` handler), not pushed live to a controller the way
-     * `selectionShapeChanged()`/`wandToleranceChanged()`/
-     * `wandHarmonicsAwareChanged()` are - a blend mode only matters at the
-     * instant a paste actually happens, unlike Selection Type/Wand's own
-     * parameters, which affect an in-progress selection as it's drawn.
+     * Paste` handler) - a blend mode only matters at the instant a paste
+     * actually happens, unlike Selection Type/Wand's own parameters, which
+     * affect an in-progress selection as it's drawn. As of the real-world
+     * testing pass (2026-09-20, finding #5), this combo is *also* pushed
+     * live to whatever's currently Picked (see pasteBlendModeChanged()'s
+     * own docs) - the two uses don't conflict: a plain future paste still
+     * just reads this getter, and an already-pasted, currently-picked
+     * object additionally reacts live to a change here.
      *
      * @return The Paste Blend Mode dropdown's own current value;
      *         `sound_mind::core::BlendMode::Overwrite` by default,
      *         matching `PasteOperation`'s own pre-`v0.Y.37.1` behavior.
      */
     [[nodiscard]] sound_mind::core::BlendMode pasteBlendMode() const;
+
+    /**
+     * @brief Sets the Paste Blend Mode dropdown's own current value,
+     *        without emitting pasteBlendModeChanged() - for pre-filling it
+     *        with an already-picked pasted object's own real value (real-
+     *        world testing pass, 2026-09-20, finding #5), the same
+     *        "silent setter, reopen and adjust" shape `ToolConfigurationPanel::
+     *        setToolConfiguration()` already establishes.
+     * @param mode The value to select. A no-op if `mode` isn't one of this
+     *        combo's own listed options (every `BlendMode` value is, so
+     *        this can't currently happen in practice).
+     */
+    void setPasteBlendMode(sound_mind::core::BlendMode mode);
 
 signals:
     /// @brief Emitted whenever the Selection Type dropdown changes - a
@@ -93,6 +109,15 @@ signals:
     ///        forwards to `ToolPaletteController::setWandHarmonicsAware()`.
     /// @param harmonicsAware The new value.
     void wandHarmonicsAwareChanged(bool harmonicsAware);
+
+    /// @brief Emitted whenever the Paste Blend Mode dropdown changes from a
+    ///        real user edit - setPasteBlendMode() blocks this combo's own
+    ///        signals while it sets it, so that doesn't re-emit this.
+    ///        Forwarded to `ToolPaletteController::applyPasteBlendMode()`,
+    ///        which itself no-ops unless something is currently Picked
+    ///        (real-world testing pass, 2026-09-20, finding #5).
+    /// @param mode The newly-selected blend mode.
+    void pasteBlendModeChanged(sound_mind::core::BlendMode mode);
 
 private:
     /// @brief Shows wandGroup_ only when the Selection Type dropdown is
