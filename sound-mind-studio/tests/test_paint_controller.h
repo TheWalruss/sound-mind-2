@@ -22,6 +22,8 @@ private slots:
     void setProjectClearsAnyInProgressStroke();
 
     // Mind Grains (v0.Y.33.1 Installment B).
+    void beginStrokeRefusesSilentlyOnAnEqualizerLayer();
+    void beginStrokeRefusesSilentlyOnAFilterLayer();
     void beginStrokeRefusesSilentlyWhenTheMindGrainToolIsNotAllowedOnTheTargetLayer();
     void beginStrokeStartsNormallyWhenTheMindGrainToolIsAllowedOnTheTargetLayer();
     void endStrokeWithAMindGrainToolPaintsFromTheSourceLayersCurrentContent();

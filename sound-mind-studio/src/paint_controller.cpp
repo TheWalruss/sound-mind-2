@@ -26,6 +26,17 @@ void PaintController::beginStroke(sound_mind::core::LayerId targetLayer, sound_m
     if (project_ == nullptr || strokeInProgress_) {
         return;
     }
+    // A Filter (or Equalizer) layer was never meant to hold its own
+    // paintable amplitude content - it only composites-and-transforms the
+    // layers beneath it (see docs/sound-mind-design.md's "Filter Layer").
+    // Previously unguarded anywhere in the paint path (a real, pre-existing
+    // gap - see docs/sound-mind-roadmap.md's Phase 4 "Known bug" note),
+    // re-surfaced by a real-world testing pass; fixed here the same way the
+    // Mind Grain guard just below silently refuses rather than erroring.
+    if (const auto* targetLayerPtr = project_->layerById(targetLayer);
+        targetLayerPtr != nullptr && sound_mind::core::isFilterLayerType(targetLayerPtr->type())) {
+        return;
+    }
     // Silent refusal to even start a Mind Grain stroke on/below its own
     // source layer - the backstop layer of defense described in
     // docs/sound-mind-design.md's "Mind Grains"; every other guardrail

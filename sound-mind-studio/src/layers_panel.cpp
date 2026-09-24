@@ -283,6 +283,16 @@ public:
         connect(nameLabel, &ClickableNameLabel::clicked, this, [this]() { emit selected(id_); });
         connect(nameLabel, &ClickableNameLabel::doubleClicked, this, [this]() { emit renameRequested(id_); });
         nameAreaStack->addWidget(nameLabel);
+        // QStackedLayout::StackAll draws every child, but still raises only
+        // the *current* one (index 0 by default) in front of the rest - a
+        // real, easy-to-miss gotcha, not "all children just overlay in
+        // insertion order." Without this, a row with a thumbnail (added at
+        // index 0, above) left the thumbnail as the default-current, and
+        // therefore frontmost, child - hiding nameLabel entirely behind it.
+        // A Filter/Equalizer row never adds a thumbnail, so nameLabel ends
+        // up as index 0 - the only, and therefore already-current - child,
+        // which is why only those rows ever showed their own name.
+        nameAreaStack->setCurrentWidget(nameLabel);
 
         header->addWidget(nameArea, 1);
 

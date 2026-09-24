@@ -10,6 +10,7 @@
 #include <QSignalSpy>
 #include <QSlider>
 #include <QSpinBox>
+#include <QStackedLayout>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/layers_panel.h"
@@ -672,6 +673,16 @@ void LayersPanelTest::aRowsThumbnailIsShownWhenGivenAndAPlainBackgroundWhenNot()
     // "Top" is displayed first (index 0) - see setLayersCreatesOneRowPerLayerTopFirst.
     QVERIFY(nameAreas.at(0)->findChild<QLabel*>(QStringLiteral("thumbnailLabel")) != nullptr);
     QVERIFY(nameAreas.at(1)->findChild<QLabel*>(QStringLiteral("thumbnailLabel")) == nullptr);
+
+    // Regression test: QStackedLayout::StackAll still only raises its own
+    // *current* widget (index 0 by default) in front of the rest - adding
+    // thumbnailLabel at index 0 previously left it as the default-current,
+    // and therefore frontmost, child, hiding nameLabel entirely behind it
+    // for any row that actually has a thumbnail. nameLabel must be the
+    // stack's own current widget regardless of whether a thumbnail exists.
+    auto* stack = qobject_cast<QStackedLayout*>(nameAreas.at(0)->layout());
+    QVERIFY(stack != nullptr);
+    QCOMPARE(stack->currentWidget()->objectName(), QStringLiteral("nameLabel"));
 }
 
 void LayersPanelTest::mindWaveChildRowAppearsOnlyWhenBoundAndAPreviewImageExists() {

@@ -303,6 +303,32 @@ void PaintControllerTest::setProjectClearsAnyInProgressStroke() {
     QVERIFY(!controller.isStrokeInProgress());
 }
 
+void PaintControllerTest::beginStrokeRefusesSilentlyOnAnEqualizerLayer() {
+    Project project = Project::createNew(testSettings());
+    const LayerId equalizerId = project.layers().back().id();  // see Project::createNew()'s own docs.
+    QCOMPARE(project.layers().back().type(), LayerType::Equalizer);
+    PaintController controller;
+    controller.setProject(&project);
+
+    controller.beginStroke(equalizerId, TimeFrequencyPoint{0.1, 500.0});
+
+    QVERIFY(!controller.isStrokeInProgress());
+    QCOMPARE(project.operationLog().size(), std::size_t{0});
+}
+
+void PaintControllerTest::beginStrokeRefusesSilentlyOnAFilterLayer() {
+    Project project = Project::createNew(testSettings());
+    Layer filterLayer(0, "My Filter", LayerType::Filter);
+    const LayerId filterId = project.addLayer(std::move(filterLayer));
+    PaintController controller;
+    controller.setProject(&project);
+
+    controller.beginStroke(filterId, TimeFrequencyPoint{0.1, 500.0});
+
+    QVERIFY(!controller.isStrokeInProgress());
+    QCOMPARE(project.operationLog().size(), std::size_t{0});
+}
+
 // --- Mind Grains (v0.Y.33.1 Installment B) ----------------------------------
 
 void PaintControllerTest::beginStrokeRefusesSilentlyWhenTheMindGrainToolIsNotAllowedOnTheTargetLayer() {

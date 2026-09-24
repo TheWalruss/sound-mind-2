@@ -85,9 +85,13 @@ public:
      *
      * Does nothing if a project isn't set, or a stroke is already in
      * progress (call endStroke()/cancelStroke() first). Also refuses
-     * silently - the stroke simply never starts - if the current tool
-     * configuration is a `MindGrainConfiguration` and `targetLayer` isn't
-     * above its own source layer (see
+     * silently whenever `targetLayer` is a Filter or Equalizer layer (see
+     * `sound_mind::core::isFilterLayerType()`) - neither is meant to hold
+     * its own paintable amplitude content, only to composite-and-transform
+     * the layers beneath it (`docs/sound-mind-design.md`'s "Filter Layer").
+     * Also refuses silently - the stroke simply never starts - if the
+     * current tool configuration is a `MindGrainConfiguration` and
+     * `targetLayer` isn't above its own source layer (see
      * `sound_mind::core::isLayerAbove()`'s own docs): this is the last-line
      * backstop of `docs/sound-mind-design.md`'s "Mind Grains" ordering
      * rule - callers are expected to already prevent reaching this call in
