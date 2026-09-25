@@ -147,6 +147,7 @@ private slots:
     void paintingWhileRepeatIsOffDoesNotInterruptPlayback();
     void paintingWhileRepeatIsOnWithDeltaScopeJumpsPlaybackToTheEditedRegion();
     void paintingWhileRepeatIsOnWithTrackScopeKeepsTheSamePosition();
+    void paintingWhileRepeatIsOnWithReviewScopeWrapsToTheTrackStartNotTheEdit();
 
     // Basic Painting (v0.Y.24.1)
     void paintModeIsOffByDefault();

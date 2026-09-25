@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.9] - 2026-09-25
+
+Real-world testing pass finding #8: **Review scope's own end-of-track loop-back point.**
+
+### Fixed
+
+- **Repeat Playback's Review scope now loops back to the start of the whole track when it reaches the end**, not back to the start of the edit that triggered it - matching `docs/sound-mind-design.md`'s own "Repeat Playback" description, which this had silently drifted from.
+
+Full regression: no new failures (175/175 `MainWindowTest`, up from 174). Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #130.
+
 ## [0.0.45.8] - 2026-09-25
 
 Real-world testing pass finding #7: **Playback/Record/Loop panels no longer have their own device pickers.**

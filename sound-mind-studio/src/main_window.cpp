@@ -1972,6 +1972,7 @@ void MainWindow::startPlayback() {
         // once a real edit actually arrives (handleContentChangedForRepeat()).
         repeatRangeStartSeconds_ = 0.0;
         repeatRangeEndSeconds_ = playbackController_->totalSeconds();
+        repeatLoopBackSeconds_ = 0.0;
     }
 
     playbackController_->play();
@@ -2002,6 +2003,7 @@ void MainWindow::seekPlayback(double positionSeconds) {
     // from by hand.
     repeatRangeStartSeconds_ = 0.0;
     repeatRangeEndSeconds_ = playbackController_->totalSeconds();
+    repeatLoopBackSeconds_ = 0.0;
 }
 
 void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
@@ -2032,6 +2034,7 @@ void MainWindow::setPlaybackRepeat(bool enabled) {
         // linger once Repeat is unchecked.
         repeatRangeStartSeconds_ = 0.0;
         repeatRangeEndSeconds_ = playbackController_->totalSeconds();
+        repeatLoopBackSeconds_ = 0.0;
     }
 }
 
@@ -2345,16 +2348,21 @@ void MainWindow::handleContentChangedForRepeat(sound_mind::core::LayerId layer) 
         case sound_mind::studio::PlaybackScope::Track:
             repeatRangeStartSeconds_ = 0.0;
             repeatRangeEndSeconds_ = totalSeconds;
+            repeatLoopBackSeconds_ = repeatRangeStartSeconds_;
             playbackController_->seek(currentPlaybackPositionSeconds_);
             break;
         case sound_mind::studio::PlaybackScope::Delta:
             repeatRangeStartSeconds_ = editedBounds ? editedBounds->startTimeSeconds : 0.0;
             repeatRangeEndSeconds_ = editedBounds ? editedBounds->endTimeSeconds : totalSeconds;
+            repeatLoopBackSeconds_ = repeatRangeStartSeconds_;
             playbackController_->seek(repeatRangeStartSeconds_);
             break;
         case sound_mind::studio::PlaybackScope::Review:
             repeatRangeStartSeconds_ = editedBounds ? editedBounds->startTimeSeconds : 0.0;
             repeatRangeEndSeconds_ = totalSeconds;
+            // Unlike Delta, Review loops the whole track once it reaches
+            // the end - back to the track's own start, not the edit's.
+            repeatLoopBackSeconds_ = 0.0;
             playbackController_->seek(repeatRangeStartSeconds_);
             break;
     }
@@ -2384,7 +2392,7 @@ void MainWindow::checkRepeatPlaybackRange(double positionSeconds) {
     if (positionSeconds < repeatRangeEndSeconds_) {
         return;
     }
-    playbackController_->seek(repeatRangeStartSeconds_);
+    playbackController_->seek(repeatLoopBackSeconds_);
     playbackController_->play();
 }
 

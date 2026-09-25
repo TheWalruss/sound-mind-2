@@ -1164,7 +1164,8 @@ playing immediately re-renders the composite and picks up where the
 - **Delta** - jumps to whatever you just edited, then loops just that
   region, so you hear a fresh brush stroke immediately and repeatedly.
 - **Review** - jumps to the edit like Delta, but plays through to the end
-  of the track each time before looping back.
+  of the track each time before looping back to the very start of the
+  track (not back to the edit itself).
 
 Unchecking Repeat, or dragging the position bar yourself, always goes
 back to playing (or looping) the whole track.

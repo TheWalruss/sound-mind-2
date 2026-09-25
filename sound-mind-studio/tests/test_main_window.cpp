@@ -2416,6 +2416,50 @@ void MainWindowTest::paintingWhileRepeatIsOnWithTrackScopeKeepsTheSamePosition()
     window.stopPlayback();
 }
 
+void MainWindowTest::paintingWhileRepeatIsOnWithReviewScopeWrapsToTheTrackStartNotTheEdit() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-repeat-review.wav";
+    writeTestWavFile(path);
+
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 200;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-repeat-review.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(settings, projectPath));
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.setPlaybackRepeat(true);
+    window.setPlaybackScope(PlaybackScope::Review);
+    window.startPlayback();  // starts at "0:00 / 0:02" - never seeked.
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(200, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));  // ~1.5s.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
+
+    // Review jumps to the edit's own start, same as Delta - confirmed
+    // first, since the wrap-at-end behavior below only matters once this
+    // part still holds.
+    auto* panel = window.findChild<PlaybackPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("0:01 / 0:02"));
+
+    // Reaching the end of the track (unlike Delta, Review's own range runs
+    // to the whole track's end, not just the edited region's) should wrap
+    // back to the start of the whole track - see docs/sound-mind-design.md's
+    // "Repeat Playback" section - not back to the edit's own start.
+    window.seekPlayback(2.0);
+    QCOMPARE(label->text(), QStringLiteral("0:00 / 0:02"));
+
+    window.stopPlayback();
+}
+
 void MainWindowTest::paintModeIsOffByDefault() {
     const TestMainWindow window;
     auto* canvas = window.findChild<CanvasWidget*>();

@@ -1995,11 +1995,12 @@ private:
      *        `repeatEnabled_`.
      *
      * Once `positionSeconds` reaches `repeatRangeEndSeconds_`, seeks back
-     * to `repeatRangeStartSeconds_` and resumes - the "loops... when it
+     * to `repeatLoopBackSeconds_` and resumes - the "loops... when it
      * reaches the end" half of Repeat Playback, uniformly covering
-     * `Track` (`repeatRangeEndSeconds_` is the whole track's own
-     * duration), `Delta`, and `Review` alike, with no per-scope branching
-     * needed here at all.
+     * `Track`, `Delta`, and `Review` alike, with no per-scope branching
+     * needed here at all (the per-scope difference for `Review` - looping
+     * back to the track's start rather than the edit's - is already baked
+     * into `repeatLoopBackSeconds_` by handleContentChangedForRepeat()).
      *
      * Also a no-op whenever `repeatRangeEndSeconds_ <= repeatRangeStartSeconds_`
      * - not just the pre-edit "no range yet" default (both `0.0`), but
@@ -2306,6 +2307,18 @@ private:
     /// actually used.
     double repeatRangeStartSeconds_ = 0.0;
     double repeatRangeEndSeconds_ = 0.0;
+
+    /// @brief Where checkRepeatPlaybackRange() seeks back to once playback
+    /// reaches repeatRangeEndSeconds_ - equal to repeatRangeStartSeconds_
+    /// for `Track`/`Delta` (looping the same range it's built from), but
+    /// `0.0` for `Review`: `Review`'s own range runs from the edit's start
+    /// to the whole track's end (see docs/sound-mind-design.md's "Repeat
+    /// Playback" - "reaches the end of the track... repeats from the start
+    /// of the track"), so the loop-back target is the *track's* start, not
+    /// the edit's. Kept in sync with repeatRangeStartSeconds_ everywhere
+    /// the latter is reset to `0.0` (a fresh load, a manual seek, Repeat
+    /// turned off), since those all mean "no active Delta/Review range".
+    double repeatLoopBackSeconds_ = 0.0;
 
     /// @brief The most recently reported playback position, in seconds -
     /// tracked here (PlaybackController exposes no positionSeconds()
