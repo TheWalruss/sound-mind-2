@@ -511,6 +511,160 @@ void MainWindowTest::poolTopmostLayerNowPoolsAnImportedLayer() {
     QFile::remove(poolPngPath);
 }
 
+void MainWindowTest::poolTopmostLayerAsyncRunsInTheBackgroundAndShowsTheCancelButton() {
+    // Real-world testing pass, 2026-09-20, finding #12 ("a real,
+    // non-blocking cancel affordance for long operations"), Installment G.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-pool-async.wav";
+    writeTestWavFile(path);
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("poolCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+    QVERIFY(cancelButton->isHidden());
+
+    window.poolTopmostLayerAsync();
+
+    QVERIFY(window.isPoolRunning());
+    QVERIFY(!cancelButton->isHidden());
+
+    // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
+    // own comment on why this waits for the cancel button itself, not just
+    // isPoolRunning().
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+}
+
+void MainWindowTest::poolTopmostLayerAsyncCompletesSuccessfullyAndAppliesTheResult() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-pool-async-success.wav";
+    writeTestWavFile(path);
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("poolCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.poolTopmostLayerAsync();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+
+    QCOMPARE(topmostNonEqualizerLayer(*window.project()).poolContent().has_value(), true);
+    QVERIFY(window.statusBar()->currentMessage().contains(QStringLiteral("Pooled layer")));
+}
+
+void MainWindowTest::cancelPoolDiscardsTheComputedResultWithoutApplyingIt() {
+    // A several-second clip - see cancelVideoExportStopsItAndDeletesThePartialFile()'s
+    // own comment on why a real, non-trivial encode gives requestCancel()
+    // (called immediately after starting) a reliable window to land before
+    // all four of computePooledContent()'s own phases (see its docs) race
+    // through to completion.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-pool-cancel.wav";
+    writeTestWavFileWithFrameCount(path, 441000, 44100);  // 10 seconds.
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("poolCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.poolTopmostLayerAsync();
+    QVERIFY(window.isPoolRunning());
+
+    window.cancelPool();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+
+    // The whole point of finding #12's own "rolls back" requirement: the
+    // layer's own real content is untouched.
+    QCOMPARE(topmostNonEqualizerLayer(*window.project()).poolContent().has_value(), false);
+    QCOMPARE(window.statusBar()->currentMessage(), QStringLiteral("Pooling cancelled."));
+}
+
+void MainWindowTest::poolTopmostLayerAsyncDoesNothingWhileAlreadyRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-pool-already-running.wav";
+    writeTestWavFileWithFrameCount(path, 441000, 44100);  // stays running for this whole test.
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("poolCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.poolTopmostLayerAsync();
+    QVERIFY(window.isPoolRunning());
+
+    // A second call while the first is still running must not destroy (and
+    // therefore block on joining) the still-running task.
+    window.poolTopmostLayerAsync();
+    QVERIFY(window.isPoolRunning());
+
+    window.cancelPool();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+}
+
+void MainWindowTest::closeRefusesWhileAPoolIsRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-pool-refuse-close.wav";
+    writeTestWavFileWithFrameCount(path, 441000, 44100);
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("poolCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.poolTopmostLayerAsync();
+    QVERIFY(window.isPoolRunning());
+
+    QVERIFY(!window.close());
+    QVERIFY(window.isPoolRunning());
+
+    window.cancelPool();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+}
+
+void MainWindowTest::newProjectRefusesWhileAPoolIsRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-pool-refuse-new.wav";
+    writeTestWavFileWithFrameCount(path, 441000, 44100);
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("poolCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.poolTopmostLayerAsync();
+    QVERIFY(window.isPoolRunning());
+
+    window.newProject();
+    QVERIFY(window.isPoolRunning());
+
+    window.cancelPool();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+}
+
 void MainWindowTest::exportTopmostLayerAudioNowFailsGracefullyWithNoContent() {
     // A fresh project's Background/Equalizer layers have no content yet.
     TestMainWindow window;

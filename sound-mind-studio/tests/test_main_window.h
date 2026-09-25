@@ -22,6 +22,12 @@ private slots:
     void stopPlaybackStopsIt();
     void poolTopmostLayerNowFailsGracefullyWithNoContent();
     void poolTopmostLayerNowPoolsAnImportedLayer();
+    void poolTopmostLayerAsyncRunsInTheBackgroundAndShowsTheCancelButton();
+    void poolTopmostLayerAsyncCompletesSuccessfullyAndAppliesTheResult();
+    void cancelPoolDiscardsTheComputedResultWithoutApplyingIt();
+    void poolTopmostLayerAsyncDoesNothingWhileAlreadyRunning();
+    void closeRefusesWhileAPoolIsRunning();
+    void newProjectRefusesWhileAPoolIsRunning();
     void exportTopmostLayerAudioNowFailsGracefullyWithNoContent();
     void exportTopmostLayerAudioNowExportsAnImportedLayer();
     void exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension();

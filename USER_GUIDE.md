@@ -1239,6 +1239,11 @@ and recording normally uses. There's no visible difference for most
 material; it matters most before an audio export you want to sound as
 close as possible to the original.
 
+Pooling runs in the background - you can keep working while it processes,
+and a small **✕** button appears in the status bar to cancel it if you
+change your mind; cancelling leaves the layer exactly as it was, as if
+pooling had never been started.
+
 ## Exporting
 
 **File → Export Audio...** saves the topmost visible layer with content as

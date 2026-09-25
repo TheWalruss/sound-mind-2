@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.19] - 2026-09-25
+
+Real-world testing pass finding #12, Installment G: **Pool Layer is now a real, cancellable background operation, with true rollback.**
+
+### Changed
+
+- **Pool Layer no longer blocks the app while it processes.** It now runs on a background thread, with its own status-bar cancel button; cancelling leaves the layer's content completely untouched, as if pooling had never been started.
+- **New/Open Project and closing the Studio are now disabled while a pool is running**, matching the existing Import Audio/Loop Mode/Recording behavior.
+
+Full regression: `sound-mind-core` 828/828 (3 new), `sound-mind-studio` 201/201 `MainWindowTest` (up from 195). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #140.
+
 ## [0.0.45.18] - 2026-09-25
 
 Real-world testing pass finding #12, Installment F: **Import Audio is now a real, cancellable background operation, with true rollback.**

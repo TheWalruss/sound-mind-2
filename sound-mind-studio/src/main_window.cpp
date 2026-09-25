@@ -337,6 +337,20 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     importProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
     connect(importProgressTimer_, &QTimer::timeout, this, &MainWindow::pollImportProgress);
 
+    // Finding #12, Installment G - see poolTopmostLayerAsync()'s own docs.
+    // A third, independent slot - not shared with export's or import's own.
+    poolCancelButton_ = new QPushButton(tr("✕"));  // "✕".
+    poolCancelButton_->setObjectName(QStringLiteral("poolCancelButton"));
+    poolCancelButton_->setToolTip(tr("Cancel"));
+    poolCancelButton_->setFixedWidth(24);
+    poolCancelButton_->hide();
+    connect(poolCancelButton_, &QPushButton::clicked, this, &MainWindow::cancelPool);
+    statusBar()->addPermanentWidget(poolCancelButton_);
+
+    poolProgressTimer_ = new QTimer(this);
+    poolProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
+    connect(poolProgressTimer_, &QTimer::timeout, this, &MainWindow::pollPoolProgress);
+
     // Selection & Fill (v0.Y.25.1), Selection Type (v0.Y.35.1 Installment
     // A) - toolPaletteController_ isn't constructed until just below, but
     // this lambda only ever runs later, on a real dropdown change - safe
@@ -981,6 +995,11 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         event->ignore();
         return;
     }
+    if (isPoolRunning()) {
+        statusBar()->showMessage(tr("Wait for pooling to finish, or cancel it, before closing."), 5000);
+        event->ignore();
+        return;
+    }
     if (!confirmDiscardUnsavedChanges()) {
         event->ignore();
         return;
@@ -1254,6 +1273,11 @@ void MainWindow::newProject() {
                                   5000);
         return;
     }
+    if (isPoolRunning()) {
+        statusBar()->showMessage(tr("Wait for pooling to finish, or cancel it, before starting a new project."),
+                                  5000);
+        return;
+    }
     if (!confirmDiscardUnsavedChanges()) {
         return;
     }
@@ -1298,6 +1322,10 @@ void MainWindow::openProject() {
         statusBar()->showMessage(tr("Wait for the import to finish, or cancel it, before opening a project."), 5000);
         return;
     }
+    if (isPoolRunning()) {
+        statusBar()->showMessage(tr("Wait for pooling to finish, or cancel it, before opening a project."), 5000);
+        return;
+    }
     if (!confirmDiscardUnsavedChanges()) {
         return;
     }
@@ -1324,6 +1352,12 @@ bool MainWindow::openProjectAt(const std::filesystem::path& path, QString* error
     if (isImportRunning()) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("Wait for the import to finish, or cancel it, before opening a project.");
+        }
+        return false;
+    }
+    if (isPoolRunning()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("Wait for pooling to finish, or cancel it, before opening a project.");
         }
         return false;
     }
@@ -2725,17 +2759,7 @@ void MainWindow::checkRepeatPlaybackRange(double positionSeconds) {
     }
 }
 
-void MainWindow::poolTopmostLayer() {
-    QString errorMessage;
-    // Success is reported via the status bar (see poolTopmostLayerNow()),
-    // not a modal - only a failure needs one here, since it's the one
-    // outcome the status bar's "helpful, not intrusive" role isn't
-    // appropriate for (per the confirmed scope for this milestone: a
-    // missed error is worse than an intrusive one).
-    if (!poolTopmostLayerNow(&errorMessage, nullptr, nullptr)) {
-        QMessageBox::critical(this, tr("Pool Layer Failed"), errorMessage);
-    }
-}
+void MainWindow::poolTopmostLayer() { poolTopmostLayerAsync(); }
 
 bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPath, QString* poolPngPath) {
     sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
@@ -2791,6 +2815,104 @@ bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPa
         }
         return false;
     }
+}
+
+void MainWindow::poolTopmostLayerAsync() {
+    if (isPoolRunning()) {
+        statusBar()->showMessage(tr("Already pooling - wait for it to finish, or cancel it, first."), 5000);
+        return;
+    }
+
+    sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
+    if (layer == nullptr || !layer->content().has_value()) {
+        QMessageBox::critical(this, tr("Pool Layer Failed"), tr("No layer with content to pool."));
+        return;
+    }
+
+    poolLayerId_ = layer->id();
+    poolLayerName_ = QString::fromStdString(layer->name());
+    poolOutcome_ = PoolOutcome::Success;
+    poolErrorMessage_.clear();
+    pooledContent_.reset();
+
+    // content copied by value - computePooledContent() never touches
+    // project_/layer itself, so the background thread has nothing shared
+    // to synchronize against - see this method's own docs.
+    const auto content = *layer->content();
+    poolTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, content](sound_mind::core::CancellationToken& token) {
+            try {
+                pooledContent_ = sound_mind::core::computePooledContent(
+                    content, [&token]() { return token.cancellationRequested(); });
+            } catch (const sound_mind::core::PoolCancelled&) {
+                poolOutcome_ = PoolOutcome::Cancelled;
+            } catch (const std::exception& e) {
+                poolOutcome_ = PoolOutcome::Failed;
+                poolErrorMessage_ = QString::fromStdString(e.what());
+            }
+        });
+    poolTask_->start();
+
+    statusBar()->showMessage(tr("Pooling layer..."));
+    poolCancelButton_->show();
+    poolProgressTimer_->start();
+}
+
+bool MainWindow::isPoolRunning() const noexcept { return poolTask_ != nullptr && poolTask_->isRunning(); }
+
+void MainWindow::cancelPool() {
+    if (poolTask_) {
+        poolTask_->requestCancel();
+    }
+}
+
+void MainWindow::pollPoolProgress() {
+    if (poolTask_->isRunning()) {
+        return;
+    }
+    poolProgressTimer_->stop();
+    poolCancelButton_->hide();
+
+    switch (poolOutcome_) {
+        case PoolOutcome::Success: {
+            sound_mind::core::Layer* layer =
+                poolLayerId_.has_value() ? layerController_->layerById(*poolLayerId_) : nullptr;
+            if (layer != nullptr && pooledContent_.has_value()) {
+                layer->setPoolContent(std::move(pooledContent_->poolImage));
+                layer->setContent(std::move(pooledContent_->streamContent));
+                canvas_->update();
+                // The layer's content was just replaced with a fresh,
+                // pool-derived Stream copy - the next startPlayback()
+                // should pick that up rather than continue playing
+                // whatever was loaded before.
+                playbackController_->invalidate();
+                hasUnsavedChanges_ = true;
+                statusBar()->showMessage(tr("Pooled layer \"%1\".").arg(poolLayerName_), 5000);
+            } else {
+                // The layer was deleted (or the project switched - though
+                // newProject()/openProject()/openProjectAt()/closeEvent()
+                // all refuse outright while isPoolRunning(), see this
+                // class's own docs) while pooling ran.
+                statusBar()->showMessage(tr("Pooling finished, but the layer no longer exists."), 5000);
+            }
+            break;
+        }
+        case PoolOutcome::Cancelled:
+            // Nothing to roll back beyond discarding pooledContent_ - the
+            // layer's own real content was never touched, unlike Export's
+            // "delete the partial file" rollback - matching finding #12's
+            // confirmed "cancel rolls back partial work" semantics with the
+            // simplest rollback a pool can have: not applying anything.
+            statusBar()->showMessage(tr("Pooling cancelled."), 5000);
+            break;
+        case PoolOutcome::Failed:
+            statusBar()->clearMessage();
+            QMessageBox::critical(this, tr("Pool Layer Failed"), poolErrorMessage_);
+            break;
+    }
+    pooledContent_.reset();
+    poolLayerId_.reset();
+    poolTask_.reset();
 }
 
 }  // namespace sound_mind::studio

@@ -10,9 +10,11 @@
 using sound_mind::codec::AudioBuffer;
 using sound_mind::codec::encode;
 using sound_mind::codec::StreamCodecConfig;
+using sound_mind::core::computePooledContent;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
 using sound_mind::core::poolLayer;
+using sound_mind::core::PoolCancelled;
 
 namespace {
 
@@ -63,4 +65,50 @@ TEST_CASE("poolLayer re-derives the layer's Stream content from the pooled resul
     REQUIRE(layer.content().has_value());
     CHECK(layer.content()->frameCount == originalFrameCount);
     CHECK(layer.content()->sampleCount == layer.poolContent()->sampleCount);
+}
+
+TEST_CASE("computePooledContent computes the same result poolLayer() applies to a layer",
+          "[core][pooling][cancellation]") {
+    // Real-world testing pass, 2026-09-20, finding #12 ("a real,
+    // non-blocking cancel affordance for long operations"), Installment G -
+    // computePooledContent() is poolLayer()'s own encode-only half, split
+    // out so it can run somewhere that isn't safe to mutate a live Layer
+    // from directly (a background thread).
+    const auto content = encode(makeSineTone(1000.0f, 0.5f, 44100), StreamCodecConfig{});
+
+    const auto result = computePooledContent(content);
+
+    CHECK(result.poolImage.config.sampleRateHz == 44100);
+    CHECK(result.streamContent.frameCount == content.frameCount);
+    CHECK(result.streamContent.sampleCount == result.poolImage.sampleCount);
+}
+
+TEST_CASE("computePooledContent throws PoolCancelled once shouldCancel starts returning true",
+          "[core][pooling][cancellation]") {
+    const auto content = encode(makeSineTone(1000.0f, 0.5f, 44100), StreamCodecConfig{});
+
+    int callCount = 0;
+    const auto shouldCancel = [&callCount]() {
+        ++callCount;
+        return callCount >= 2;
+    };
+
+    CHECK_THROWS_AS((void)computePooledContent(content, shouldCancel), PoolCancelled);
+    CHECK(callCount == 2);
+}
+
+TEST_CASE("computePooledContent with a shouldCancel that never returns true behaves exactly as without one",
+          "[core][pooling][cancellation]") {
+    const auto content = encode(makeSineTone(1000.0f, 0.5f, 44100), StreamCodecConfig{});
+
+    int callCount = 0;
+    const auto neverCancel = [&callCount]() {
+        ++callCount;
+        return false;
+    };
+
+    const auto result = computePooledContent(content, neverCancel);
+
+    CHECK(result.poolImage.config.sampleRateHz == 44100);
+    CHECK(callCount > 0);
 }
