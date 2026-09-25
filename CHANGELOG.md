@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.14] - 2026-09-25
+
+Real-world testing pass finding #12, Installment B: **video export gains real cancellation support** (no user-visible change yet - see the milestone's later installments).
+
+### Added
+
+- **`sound_mind::codec::exportVideo()`/`sound_mind::core::exportLayerVideo()` accept an optional cancellation callback**, checked once per video frame, throwing a new `ExportCancelled` the moment it's requested - the synchronous groundwork Export Video's own real cancel button (a later installment) will build on.
+
+Full regression: `sound-mind-codec` 53/53 (2 new), `sound-mind-core` 823/823 (1 new), `sound-mind-studio` unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #135.
+
 ## [0.0.45.13] - 2026-09-25
 
 Real-world testing pass finding #12, Installment A: **the reusable background-task/cancellation foundation** (no user-visible change yet - see the milestone's later installments).

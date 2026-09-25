@@ -28,7 +28,7 @@ bool exportLayerAudio(const Layer& layer, const std::filesystem::path& path,
 }
 
 bool exportLayerVideo(const Layer& layer, const std::filesystem::path& path, std::uint32_t canvasWidth,
-                       int frameRate) {
+                       int frameRate, const std::function<bool()>& shouldCancel) {
     const auto audio = decodeLayerForExport(layer);
     if (!audio.has_value()) {
         return false;
@@ -41,7 +41,7 @@ bool exportLayerVideo(const Layer& layer, const std::filesystem::path& path, std
         // this function's own "false means nothing to export" contract.
         return false;
     }
-    sound_mind::codec::exportVideo(path, *canvas, *audio, frameRate);
+    sound_mind::codec::exportVideo(path, *canvas, *audio, frameRate, shouldCancel);
     return true;
 }
 

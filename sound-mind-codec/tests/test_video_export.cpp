@@ -16,6 +16,7 @@ extern "C" {
 
 using sound_mind::codec::AudioBuffer;
 using sound_mind::codec::exportVideo;
+using sound_mind::codec::ExportCancelled;
 using sound_mind::codec::RgbImage;
 
 namespace {
@@ -128,4 +129,46 @@ TEST_CASE("exportVideo throws for an unwritable path", "[video_export]") {
     const auto path = std::filesystem::path("Z:/does/not/exist/sound-mind-test-export.mp4");
 
     CHECK_THROWS_AS(exportVideo(path, canvas, audio), std::runtime_error);
+}
+
+TEST_CASE("exportVideo throws ExportCancelled once shouldCancel starts returning true",
+          "[video_export][cancellation]") {
+    // A few seconds at a low frame rate - enough real frames that a
+    // cancel-after-N-calls callback below is exercising an in-progress,
+    // multi-frame encode, not a one-frame edge case.
+    const RgbImage canvas = makeTestCanvas(16, 16);
+    const AudioBuffer audio = makeSineTone(440.0f, 3.0f, 44100);
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export-cancel.mp4";
+
+    int callCount = 0;
+    const auto shouldCancel = [&callCount]() {
+        ++callCount;
+        return callCount >= 3;  // cancels partway through, not on the very first frame.
+    };
+
+    CHECK_THROWS_AS(exportVideo(path, canvas, audio, /*frameRate=*/10, shouldCancel), ExportCancelled);
+    CHECK(callCount == 3);  // stops checking (and encoding) the moment it cancels - doesn't run to completion first.
+
+    std::filesystem::remove(path);  // exportVideo() itself leaves whatever partial file ffmpeg already wrote -
+                                     // see this test file's own docs on why cleanup is the caller's job.
+}
+
+TEST_CASE("exportVideo with a shouldCancel that never returns true behaves exactly as without one",
+          "[video_export][cancellation]") {
+    const RgbImage canvas = makeTestCanvas(16, 16);
+    const AudioBuffer audio = makeSineTone(440.0f, 0.2f, 44100);
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export-not-cancelled.mp4";
+
+    int callCount = 0;
+    const auto neverCancel = [&callCount]() {
+        ++callCount;
+        return false;
+    };
+
+    exportVideo(path, canvas, audio, /*frameRate=*/10, neverCancel);
+    const VideoInfo info = readBackVideoInfo(path);
+    std::filesystem::remove(path);
+
+    CHECK(info.hasMpeg4Video);
+    CHECK(callCount > 0);  // the callback really was consulted, not just accepted and ignored.
 }

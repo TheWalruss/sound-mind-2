@@ -120,8 +120,8 @@ void drawPlayheadLine(std::vector<std::uint8_t>& frameRgb24, std::uint32_t width
 /// @brief Renders every video frame (static canvas + moving playhead line,
 /// see exportVideo()'s docs) through `sws`, encoding+writing each one.
 void encodeVideoTrack(AVFormatContext& formatCtx, VideoEncoder& encoder, const RgbImage& canvas,
-                       std::uint32_t paddedWidth, std::uint32_t paddedHeight, double durationSeconds,
-                       int frameRate) {
+                       std::uint32_t paddedWidth, std::uint32_t paddedHeight, double durationSeconds, int frameRate,
+                       const std::function<bool()>& shouldCancel) {
     AVCodecContext& ctx = *encoder.codecCtx;
     AVStream& stream = *encoder.stream;
 
@@ -136,6 +136,10 @@ void encodeVideoTrack(AVFormatContext& formatCtx, VideoEncoder& encoder, const R
     const auto totalFrames = static_cast<std::int64_t>(std::ceil(durationSeconds * frameRate));
 
     for (std::int64_t frameIndex = 0; frameIndex < totalFrames; ++frameIndex) {
+        if (shouldCancel && shouldCancel()) {
+            throw ExportCancelled{};
+        }
+
         std::vector<std::uint8_t> frameRgb24 = baseFrame;
 
         const double playheadSeconds = static_cast<double>(frameIndex) / frameRate;
@@ -168,8 +172,8 @@ void encodeVideoTrack(AVFormatContext& formatCtx, VideoEncoder& encoder, const R
 
 }  // namespace
 
-void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, const AudioBuffer& audio,
-                  int frameRate) {
+void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, const AudioBuffer& audio, int frameRate,
+                  const std::function<bool()>& shouldCancel) {
     if (canvas.width == 0 || canvas.height == 0) {
         throw std::runtime_error("cannot export video for an empty canvas");
     }
@@ -198,7 +202,8 @@ void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, cons
     // (used by both encode*Track() helpers) buffers and reorders packets across
     // streams by dts as needed, so encoding the whole video track and then the
     // whole audio track is just as correct as interleaving them here, and simpler.
-    encodeVideoTrack(*formatCtx, videoEncoder, canvas, paddedWidth, paddedHeight, durationSeconds, frameRate);
+    encodeVideoTrack(*formatCtx, videoEncoder, canvas, paddedWidth, paddedHeight, durationSeconds, frameRate,
+                      shouldCancel);
     encodeAudioTrack(*formatCtx, audioEncoder, audio);
 
     checkFfmpeg(av_write_trailer(formatCtx.get()), "could not finalize the MP4 file");

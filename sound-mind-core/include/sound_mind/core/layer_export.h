@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 
 #include "sound_mind/codec/audio_buffer.h"
@@ -55,12 +56,16 @@ bool exportLayerAudio(const Layer& layer, const std::filesystem::path& path,
  *        same way the on-screen canvas does.
  * @param frameRate Video frame rate, in frames per second - see
  *        `sound_mind::codec::exportVideo()`.
+ * @param shouldCancel Forwarded straight through to
+ *        `sound_mind::codec::exportVideo()` - see its own docs.
  * @return `true` if exported; `false` if the layer had no content to
  *         export (nothing written).
  * @throws std::runtime_error if the underlying codec export fails (see
  *         `sound_mind::codec::exportVideo()`'s docs).
+ * @throws sound_mind::codec::ExportCancelled if `shouldCancel` returns
+ *         `true` - see its own docs.
  */
 bool exportLayerVideo(const Layer& layer, const std::filesystem::path& path, std::uint32_t canvasWidth,
-                       int frameRate = 30);
+                       int frameRate = 30, const std::function<bool()>& shouldCancel = nullptr);
 
 }  // namespace sound_mind::core

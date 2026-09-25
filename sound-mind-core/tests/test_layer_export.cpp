@@ -5,6 +5,7 @@
 #include <numbers>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/layer_export.h"
 #include "sound_mind/core/pooling.h"
@@ -12,6 +13,7 @@
 using sound_mind::codec::AudioBuffer;
 using sound_mind::codec::CompressedAudioFormat;
 using sound_mind::codec::encode;
+using sound_mind::codec::ExportCancelled;
 using sound_mind::codec::StreamCodecConfig;
 using sound_mind::core::decodeLayerForExport;
 using sound_mind::core::exportLayerAudio;
@@ -113,4 +115,23 @@ TEST_CASE("exportLayerVideo writes a real file for a layer with content", "[core
 
     CHECK(exported);
     CHECK(exists);
+}
+
+TEST_CASE("exportLayerVideo forwards shouldCancel through to sound_mind::codec::exportVideo",
+          "[core][layer_export][cancellation]") {
+    Layer layer(1, "Imported", LayerType::Normal);
+    layer.setContent(encode(makeSineTone(1000.0f, 3.0f, 44100), StreamCodecConfig{}));
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layer-export-cancel.mp4";
+
+    int callCount = 0;
+    const auto shouldCancel = [&callCount]() {
+        ++callCount;
+        return callCount >= 3;
+    };
+
+    CHECK_THROWS_AS(exportLayerVideo(layer, path, /*canvasWidth=*/64, /*frameRate=*/10, shouldCancel),
+                    ExportCancelled);
+    CHECK(callCount == 3);
+
+    std::filesystem::remove(path);
 }

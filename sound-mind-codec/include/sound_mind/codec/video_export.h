@@ -1,11 +1,33 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
+#include <stdexcept>
 
 #include "sound_mind/codec/audio_buffer.h"
 #include "sound_mind/codec/rgb_image.h"
 
 namespace sound_mind::codec {
+
+/**
+ * @brief Thrown by exportVideo() when its own `shouldCancel` callback
+ *        starts returning `true` mid-encode - `docs/sound-mind-roadmap.md`'s
+ *        "real, non-blocking cancel affordance for long operations"
+ *        milestone (`v0.0.45.14`, Installment B).
+ *
+ * A distinct type, not a plain `std::runtime_error`, specifically so a
+ * caller can tell "cancelled on request" apart from a genuine encode
+ * failure - e.g. to skip showing an error message for the former while
+ * still surfacing the latter. `exportVideo()` itself doesn't clean up
+ * whatever partial file ffmpeg had already written by the point of
+ * cancellation - matching every other error path in this function, which
+ * also leaves the caller responsible for deciding what to do with a
+ * partially-written output on failure.
+ */
+class ExportCancelled : public std::runtime_error {
+public:
+    ExportCancelled() : std::runtime_error("export cancelled") {}
+};
 
 /**
  * @brief Exports an MP4 video of a spectrogram canvas, synced to its audio.
@@ -39,10 +61,19 @@ namespace sound_mind::codec {
  * @param audio The audio to mux alongside the video, and to derive the
  *        video's total duration and playhead speed from.
  * @param frameRate Video frame rate, in frames per second.
+ * @param shouldCancel Consulted once per video frame, right before that
+ *        frame's own render+encode work begins - `docs/sound-mind-roadmap.md`'s
+ *        "real, non-blocking cancel affordance for long operations"
+ *        milestone. Once it returns `true`, throws `ExportCancelled`
+ *        immediately rather than doing that frame's work, or any
+ *        subsequent one. `nullptr` (the default) never cancels - the
+ *        exact prior behavior, unchanged for every existing caller.
  * @throws std::runtime_error if the file can't be written, or ffmpeg
  *         couldn't create/open an encoder or muxer for it.
+ * @throws ExportCancelled if `shouldCancel` returns `true` - see its own
+ *         docs.
  */
 void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, const AudioBuffer& audio,
-                  int frameRate = 30);
+                  int frameRate = 30, const std::function<bool()>& shouldCancel = nullptr);
 
 }  // namespace sound_mind::codec
