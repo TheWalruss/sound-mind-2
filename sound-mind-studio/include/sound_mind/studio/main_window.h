@@ -810,6 +810,24 @@ public slots:
     void deleteLayer(sound_mind::core::LayerId id);
 
     /**
+     * @brief Duplicates the layer with the given id - the actual work
+     *        behind `LayersPanel`'s duplicate button, real-world testing
+     *        pass finding #22.
+     *
+     * A full copy - content, opacity (and its own bound MindWave, if
+     * any), blend mode, translation/rescale, and filter configuration all
+     * carry over unchanged - see `LayerController::duplicateLayer()`'s own
+     * docs for the exact mechanism. Refuses (no-op) for a `Background`/
+     * `Equalizer` layer, or if no layer with this id exists, the same
+     * restriction deleteLayer() gives. Marks hasUnsavedChanges() and
+     * refreshes the canvas and Layers Panel on success, selecting the new
+     * copy immediately.
+     *
+     * @param id The layer to duplicate.
+     */
+    void duplicateLayer(sound_mind::core::LayerId id);
+
+    /**
      * @brief Adds a new, empty `Normal` layer to the current project - the
      *        actual work behind `LayersPanel`'s "+ Add Layer" button.
      *

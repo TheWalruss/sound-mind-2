@@ -342,6 +342,29 @@ void LayerController::deleteLayer(sound_mind::core::LayerId id) {
     }
 }
 
+void LayerController::duplicateLayer(sound_mind::core::LayerId id) {
+    if (project_ == nullptr) {
+        return;
+    }
+    const sound_mind::core::Layer* source = layerById(id);
+    if (source == nullptr) {
+        return;
+    }
+    if (sound_mind::core::isLockedLayerType(source->type())) {
+        // Defense in depth - LayersPanel doesn't even show a duplicate
+        // button for these, but refuse here too regardless of caller.
+        return;
+    }
+
+    sound_mind::core::Layer copy(*source);
+    const sound_mind::core::LayerId newId = project_->addLayer(std::move(copy));
+    emit layersChanged();
+    playbackController_->invalidate();
+    canvas_->update();
+    refreshLayersPanel();
+    layersPanel_->selectLayer(newId);
+}
+
 void LayerController::addEmptyLayer(sound_mind::codec::StreamImage placeholderContent) {
     if (project_ == nullptr) {
         return;

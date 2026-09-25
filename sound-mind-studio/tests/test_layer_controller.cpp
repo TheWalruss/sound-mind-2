@@ -330,6 +330,69 @@ void LayerControllerTest::deleteLayerRemovesALayerButRefusesALockedOne() {
     QVERIFY(fixture.controller.layerById(normalId) == nullptr);
 }
 
+void LayerControllerTest::duplicateLayerCopiesContentAndPropertiesButRefusesALockedOne() {
+    // Real-world testing pass finding #22.
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    const LayerId equalizerId = project.layers().back().id();
+    Layer normal(0, "Normal", LayerType::Normal);
+    normal.setOpacity(0.42f);
+    sound_mind::codec::StreamImage content;
+    content.config = sound_mind::core::streamCodecConfigFor(project.settings());
+    content.frameCount = project.settings().canvasWidth;
+    const std::size_t pixelCount = std::size_t{content.config.binCount} * content.frameCount;
+    content.leftMagnitudeDb.assign(pixelCount, -10.0f);
+    content.rightMagnitudeDb.assign(pixelCount, -20.0f);
+    content.sharedPhaseRadians.assign(pixelCount, 0.0f);
+    normal.setContent(content);
+    const LayerId normalId = project.addLayer(std::move(normal));
+    fixture.controller.setProject(&project);
+    const std::size_t countBefore = project.layers().size();
+
+    fixture.controller.duplicateLayer(backgroundId);  // locked - refused.
+    QCOMPARE(project.layers().size(), countBefore);
+    fixture.controller.duplicateLayer(equalizerId);  // locked - refused.
+    QCOMPARE(project.layers().size(), countBefore);
+
+    fixture.controller.duplicateLayer(normalId);  // not locked - duplicated.
+
+    QCOMPARE(project.layers().size(), countBefore + 1);
+    // duplicateLayer() selects the new copy immediately - the same
+    // mechanism addEmptyLayerAddsAndSelectsANormalLayer() already relies
+    // on, and more direct than assuming any particular position in
+    // layers() (addLayer() inserts just below an existing Equalizer
+    // layer, not necessarily at the very end - see its own docs).
+    QVERIFY(fixture.layersPanel.selectedLayerId().has_value());
+    const LayerId duplicateId = *fixture.layersPanel.selectedLayerId();
+    QVERIFY(duplicateId != normalId);
+    const Layer* duplicate = fixture.controller.layerById(duplicateId);
+    QVERIFY(duplicate != nullptr);
+    QCOMPARE(duplicate->type(), LayerType::Normal);
+    QCOMPARE(duplicate->opacity(), 0.42f);
+    QVERIFY(duplicate->content().has_value());
+    QCOMPARE(duplicate->content()->leftMagnitudeDb.front(), -10.0f);
+    QCOMPARE(duplicate->content()->rightMagnitudeDb.front(), -20.0f);
+}
+
+void LayerControllerTest::duplicateLayerNamesTheCopyUniquelyAndSelectsIt() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    Layer normal(0, "My Layer", LayerType::Normal);
+    const LayerId normalId = project.addLayer(std::move(normal));
+    fixture.controller.setProject(&project);
+
+    fixture.controller.duplicateLayer(normalId);
+
+    QVERIFY(fixture.layersPanel.selectedLayerId().has_value());
+    const LayerId duplicateId = *fixture.layersPanel.selectedLayerId();
+    const Layer* duplicate = fixture.controller.layerById(duplicateId);
+    QVERIFY(duplicate != nullptr);
+    // addLayer()'s own uniqueLayerName() dedupes the identical copied name
+    // automatically - see LayerController::duplicateLayer()'s own docs.
+    QCOMPARE(QString::fromStdString(duplicate->name()), QStringLiteral("My Layer (2)"));
+}
+
 void LayerControllerTest::addEmptyLayerAddsAndSelectsANormalLayer() {
     Fixture fixture;
     Project project = Project::createNew(testSettings());

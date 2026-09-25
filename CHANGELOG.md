@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.0.2] - 2026-09-25
+
+Real-world testing pass finding #22: **Duplicate layer button.**
+
+### Added
+
+- **A "Duplicate" button next to Delete in the Layers panel** - copies a layer and everything about it (content, opacity and its own bound MindWave, blend mode, translation/rescale, filter configuration) into a new layer, uniquely named and selected immediately. Not available for the Background/Equalizer layers, the same restriction Delete already has.
+
+Full regression: `sound-mind-studio` `LayerControllerTest` (2 new), `LayersPanelTest` (1 new), full suite otherwise unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #151.
+
 ## [0.1.0.1] - 2026-09-25
 
 Real-world testing pass finding #21: **MindWaves panel: always-on per-row mini-preview.**

@@ -257,6 +257,10 @@ stroke paints into) to reveal its full set of controls:
   combo (see [Compositing](#compositing) below) - except on the
   **Background** layer's row, which has none of these: it's always fully
   opaque and always first in time, so none of them apply to it.
+- A **duplicate** button (⧉), for any layer except the locked one(s) -
+  copies it, and everything about it (content, opacity and its own bound
+  MindWave, blend mode, translation/rescale, filter configuration), into
+  a new layer, named uniquely and selected immediately.
 - A **delete** button (×), for any layer except the locked one(s).
 
 Double-clicking a row's name renames it, whether the row is currently

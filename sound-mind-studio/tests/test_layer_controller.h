@@ -21,6 +21,8 @@ private slots:
     void settingTheSameValueAgainDoesNotPushAnUndoEntry();
     void renameLayerToRenamesAndRejectsEmptyName();
     void deleteLayerRemovesALayerButRefusesALockedOne();
+    void duplicateLayerCopiesContentAndPropertiesButRefusesALockedOne();
+    void duplicateLayerNamesTheCopyUniquelyAndSelectsIt();
     void addEmptyLayerAddsAndSelectsANormalLayer();
     void addFilterLayerAddsAndSelectsAFilterLayer();
     void handleLayerSelectionChangedSyncsFilterConfigurationPanel();

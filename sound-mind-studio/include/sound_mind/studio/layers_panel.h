@@ -275,6 +275,10 @@ signals:
     /// @brief A row's delete button was clicked.
     void deleteRequested(sound_mind::core::LayerId id);
 
+    /// @brief A row's duplicate button was clicked - real-world testing
+    ///        pass finding #22.
+    void duplicateRequested(sound_mind::core::LayerId id);
+
     /// @brief The "+ Add Layer" button was clicked - `MainWindow` responds
     ///        by adding a new, silent, project-sized `Normal` layer (see
     ///        `MainWindow::addEmptyLayer()`'s own docs) and selecting it

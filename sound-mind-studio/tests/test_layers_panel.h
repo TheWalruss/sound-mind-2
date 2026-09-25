@@ -16,6 +16,7 @@ private slots:
     void rescaleSpinBoxEmitsRescaleChanged();
     void doubleClickingNameEmitsRenameRequested();
     void deleteButtonEmitsDeleteRequestedForNormalLayers();
+    void duplicateButtonEmitsDuplicateRequestedForNormalLayers();
     void lockedLayersHaveNoDeleteButton();
     void lockedLayersHaveALockIconInsteadOfADragHandle();
     void nonNormalLayersShowATypeTag();

@@ -204,6 +204,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layersPanel_, &LayersPanel::blendModeChanged, this, &MainWindow::setLayerBlendMode);
     connect(layersPanel_, &LayersPanel::renameRequested, this, &MainWindow::renameLayer);
     connect(layersPanel_, &LayersPanel::deleteRequested, this, &MainWindow::deleteLayer);
+    connect(layersPanel_, &LayersPanel::duplicateRequested, this, &MainWindow::duplicateLayer);
     connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
     connect(layersPanel_, &LayersPanel::addLayerRequested, this, &MainWindow::addEmptyLayer);
     connect(layersPanel_, &LayersPanel::addFilterLayerRequested, this, &MainWindow::addFilterLayer);
@@ -1972,6 +1973,8 @@ bool MainWindow::renameLayerTo(sound_mind::core::LayerId id, const QString& newN
 }
 
 void MainWindow::deleteLayer(sound_mind::core::LayerId id) { layerController_->deleteLayer(id); }
+
+void MainWindow::duplicateLayer(sound_mind::core::LayerId id) { layerController_->duplicateLayer(id); }
 
 void MainWindow::addEmptyLayer() {
     if (!project_) {

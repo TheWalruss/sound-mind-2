@@ -238,6 +238,33 @@ public:
     /// @param id The layer to delete.
     void deleteLayer(sound_mind::core::LayerId id);
 
+    /**
+     * @brief Duplicates the layer with the given id - real-world testing
+     *        pass finding #22. Refuses (no-op) for a `Background`/
+     *        `Equalizer` layer, or if no layer with this id exists - the
+     *        same restriction `deleteLayer()`'s own docs give (there's
+     *        exactly one of each, and duplicating either would violate
+     *        that).
+     *
+     * A full copy of the source layer - content, Pool content, opacity
+     * (and its own bound MindWave, if any), blend mode, translation/
+     * rescale, and `filterConfiguration()` all carry over unchanged, the
+     * same "everything, as-is" contract a plain `Layer` copy already gives
+     * (no member is a reference or otherwise needs special handling).
+     * `Project::addLayer()` assigns the copy a fresh id and, since its
+     * name is identical to the source's own, its own `uniqueLayerName()`
+     * call disambiguates it automatically (`"My Layer"` ->
+     * `"My Layer (2)"`) - no separate renaming logic needed here.
+     *
+     * Repaints the canvas and invalidates cached playback audio, then
+     * refreshes the Layers Panel and selects the new copy immediately -
+     * the same post-add sequence addEmptyLayer()/addFilterLayer() already
+     * follow.
+     *
+     * @param id The layer to duplicate.
+     */
+    void duplicateLayer(sound_mind::core::LayerId id);
+
     /// @brief Adds a new, empty `Normal` layer to the current project,
     ///        selecting it immediately in the Layers Panel. Repaints the
     ///        canvas and invalidates cached playback audio, then

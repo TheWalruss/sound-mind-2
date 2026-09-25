@@ -181,6 +181,7 @@ void LayersPanelTest::unselectedRowsShowNoOpacityOrTransformOrBlendModeOrDeleteC
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")) == nullptr);
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("deleteButton")) == nullptr);
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("duplicateButton")) == nullptr);
     QVERIFY(panel.findChild<QWidget*>(QStringLiteral("dragHandle")) == nullptr);
     // The visibility eye is the one named exception - always present.
     QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton")).size(), 2);
@@ -197,6 +198,7 @@ void LayersPanelTest::selectingARowRevealsItsOwnControlsAndDeselectingHidesThemA
     QCOMPARE(panel.findChildren<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")).size(), 1);
     QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo")).size(), 1);
     QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("deleteButton")).size(), 1);
+    QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("duplicateButton")).size(), 1);
     QCOMPARE(panel.findChildren<QWidget*>(QStringLiteral("dragHandle")).size(), 1);
 
     panel.clearSelection();
@@ -204,6 +206,7 @@ void LayersPanelTest::selectingARowRevealsItsOwnControlsAndDeselectingHidesThemA
 
     QVERIFY(panel.findChild<QSlider*>(QStringLiteral("opacitySlider")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("deleteButton")) == nullptr);
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("duplicateButton")) == nullptr);
 }
 
 void LayersPanelTest::doubleClickingNameEmitsRenameRequested() {
@@ -242,11 +245,29 @@ void LayersPanelTest::lockedLayersHaveNoDeleteButton() {
     LayersPanel panel;
     panel.setLayers({background});
     QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("deleteButton")).isEmpty());
+    QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("duplicateButton")).isEmpty());
 
     // Still none once selected - locked stays locked regardless of the
     // redesign's own selection-gated controls.
     panel.selectLayer(static_cast<LayerId>(1));
     QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("deleteButton")).isEmpty());
+    QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("duplicateButton")).isEmpty());
+}
+
+void LayersPanelTest::duplicateButtonEmitsDuplicateRequestedForNormalLayers() {
+    // Real-world testing pass finding #22.
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(2));  // "Top" - duplicate is one of the redesign's own
+                                                  // "revealed once selected" controls.
+    QSignalSpy spy(&panel, &LayersPanel::duplicateRequested);
+
+    const auto buttons = panel.findChildren<QPushButton*>(QStringLiteral("duplicateButton"));
+    QCOMPARE(buttons.size(), 1);
+    buttons.at(0)->click();
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(2));
 }
 
 void LayersPanelTest::lockedLayersHaveALockIconInsteadOfADragHandle() {

@@ -305,8 +305,17 @@ public:
         }
 
         if (isSelected && !locked) {
-            // Delete is another of the redesign's own "revealed once
-            // selected" controls - see the class docs.
+            // Duplicate/Delete are two more of the redesign's own
+            // "revealed once selected" controls - see the class docs.
+            // Real-world testing pass finding #22.
+            auto* duplicateButton = new QPushButton(QStringLiteral("⧉"));
+            duplicateButton->setObjectName(QStringLiteral("duplicateButton"));
+            duplicateButton->setFlat(true);
+            duplicateButton->setFixedWidth(22);
+            duplicateButton->setToolTip(tr("Duplicate layer"));
+            connect(duplicateButton, &QPushButton::clicked, this, [this]() { emit duplicateRequested(id_); });
+            header->addWidget(duplicateButton);
+
             auto* deleteButton = new QPushButton(QStringLiteral("×"));
             deleteButton->setObjectName(QStringLiteral("deleteButton"));
             deleteButton->setFlat(true);
@@ -424,6 +433,7 @@ signals:
     void blendModeChanged(sound_mind::core::LayerId id, BlendMode mode);
     void renameRequested(sound_mind::core::LayerId id);
     void deleteRequested(sound_mind::core::LayerId id);
+    void duplicateRequested(sound_mind::core::LayerId id);
     void selected(sound_mind::core::LayerId id);
 
 private:
@@ -631,6 +641,7 @@ void LayersPanel::rebuildRows() {
         connect(row, &LayerRowWidget::blendModeChanged, this, &LayersPanel::blendModeChanged);
         connect(row, &LayerRowWidget::renameRequested, this, &LayersPanel::renameRequested);
         connect(row, &LayerRowWidget::deleteRequested, this, &LayersPanel::deleteRequested);
+        connect(row, &LayerRowWidget::duplicateRequested, this, &LayersPanel::duplicateRequested);
         connect(row, &LayerRowWidget::selected, this, &LayersPanel::selectLayer);
 
         // Restores the selection highlight across this refresh, for the
