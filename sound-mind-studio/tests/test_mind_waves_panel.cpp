@@ -157,6 +157,63 @@ void MindWavesPanelTest::removingASelectedStackMemberShrinksTheStackAndEmits() {
     QCOMPARE(stackList->count(), 0);
 }
 
+void MindWavesPanelTest::superpositionControlsStayHiddenWithAnEmptyStack() {
+    // Real-world testing pass, 2026-09-20, finding #11: a fresh selection
+    // with no superposition stack yet shouldn't show the full set of
+    // stack-editing controls - just "Superposition" and "+ Add Member",
+    // the one control actually usable from an empty stack.
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+
+    QVERIFY(!panel.findChild<QPushButton*>(QStringLiteral("addMemberButton"))->isHidden());
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton"))->isHidden());
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"))->isHidden());
+    QVERIFY(panel.findChild<QListWidget*>(QStringLiteral("stackList"))->isHidden());
+    QVERIFY(panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))->isHidden());
+}
+
+void MindWavesPanelTest::addingTheFirstStackMemberRevealsTheSuperpositionControls() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+
+    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")), Qt::LeftButton);
+
+    QVERIFY(!panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton"))->isHidden());
+    QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"))->isHidden());
+    QVERIFY(!panel.findChild<QListWidget*>(QStringLiteral("stackList"))->isHidden());
+    QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))->isHidden());
+}
+
+void MindWavesPanelTest::removingTheLastStackMemberHidesTheSuperpositionControlsAgain() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(1);
+    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")), Qt::LeftButton);
+    panel.findChild<QListWidget*>(QStringLiteral("stackList"))->setCurrentRow(0);
+
+    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton")), Qt::LeftButton);
+
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton"))->isHidden());
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"))->isHidden());
+    QVERIFY(panel.findChild<QListWidget*>(QStringLiteral("stackList"))->isHidden());
+    QVERIFY(panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))->isHidden());
+}
+
+void MindWavesPanelTest::selectingARowWithAnExistingStackShowsTheSuperpositionControlsImmediately() {
+    MindWavesPanel panel;
+    auto rows = twoRows();
+    rows[1].wave.setSuperpositionStack({MindWave{}});
+    panel.setMindWaves(rows);
+
+    panel.selectMindWave(2);
+
+    QVERIFY(!panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton"))->isHidden());
+    QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"))->isHidden());
+    QVERIFY(!panel.findChild<QListWidget*>(QStringLiteral("stackList"))->isHidden());
+}
+
 void MindWavesPanelTest::editingASelectedStackMemberUpdatesThatIndexAndEmits() {
     MindWavesPanel panel;
     panel.setMindWaves(twoRows());

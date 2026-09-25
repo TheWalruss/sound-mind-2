@@ -14,6 +14,10 @@ private slots:
     void editingTheTopEditorEmitsMindWaveChangedWithTheSelectedId();
     void addingAStackMemberGrowsTheStackAndEmits();
     void removingASelectedStackMemberShrinksTheStackAndEmits();
+    void superpositionControlsStayHiddenWithAnEmptyStack();
+    void addingTheFirstStackMemberRevealsTheSuperpositionControls();
+    void removingTheLastStackMemberHidesTheSuperpositionControlsAgain();
+    void selectingARowWithAnExistingStackShowsTheSuperpositionControlsImmediately();
     void editingASelectedStackMemberUpdatesThatIndexAndEmits();
     void changingBlendModeEmits();
     void selectMindWaveSelectsAnExistingRowAndNoOpsForUnknownId();

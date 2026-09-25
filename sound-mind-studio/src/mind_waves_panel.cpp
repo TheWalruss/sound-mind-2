@@ -202,7 +202,8 @@ MindWavesPanel::MindWavesPanel(QWidget* parent) : QDockWidget(tr("MindWaves"), p
     root->addLayout(stackButtonRow);
 
     auto* blendForm = new QHBoxLayout();
-    blendForm->addWidget(new QLabel(tr("Blend Mode:")));
+    blendModeLabel_ = new QLabel(tr("Blend Mode:"));
+    blendForm->addWidget(blendModeLabel_);
     blendModeCombo_ = new QComboBox();
     blendModeCombo_->setObjectName(QStringLiteral("blendModeCombo"));
     blendModeCombo_->addItem(tr("Multiply"), QVariant::fromValue(static_cast<int>(SuperpositionBlendMode::Multiply)));
@@ -314,6 +315,12 @@ MindWavesPanel::MindWavesPanel(QWidget* parent) : QDockWidget(tr("MindWaves"), p
     scrollArea->setWidget(container);
     scrollArea->setWidgetResizable(true);
     setWidget(scrollArea);
+
+    // currentStack_ starts empty (no selection yet) - this establishes the
+    // correct initial hidden state for the Superposition section's own
+    // controls (see refreshStackList()'s own docs) rather than leaving them
+    // at Qt's default-visible state until the first real selection.
+    refreshStackList();
 }
 
 void MindWavesPanel::loadStackState(const MindWave& wave) {
@@ -351,6 +358,15 @@ void MindWavesPanel::refreshStackList() {
             tr("%1: %2").arg(i + 1).arg(generatorTypeBadge(currentStack_[i].type())));
         stackList_->addItem(item);
     }
+
+    // See this method's own docs - addMemberButton_ (and the "Superposition"
+    // label) are the only controls still shown with an empty stack.
+    const bool hasMembers = !currentStack_.empty();
+    removeMemberButton_->setVisible(hasMembers);
+    blendModeLabel_->setVisible(hasMembers);
+    blendModeCombo_->setVisible(hasMembers);
+    stackList_->setVisible(hasMembers);
+    stackMemberEditor_->setVisible(hasMembers);
 }
 
 void MindWavesPanel::emitCurrentMindWaveChanged() {

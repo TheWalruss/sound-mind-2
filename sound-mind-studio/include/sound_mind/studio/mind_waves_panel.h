@@ -11,6 +11,7 @@
 class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
+class QLabel;
 class QListWidget;
 class QListWidgetItem;
 class QPushButton;
@@ -166,7 +167,16 @@ signals:
     void previewToggled(bool enabled);
 
 private:
-    /// @brief Rebuilds `stackList_` from `currentStack_`.
+    /// @brief Rebuilds `stackList_` from `currentStack_`, then shows or
+    ///        hides the rest of the Superposition section
+    ///        (`removeMemberButton_`/`blendModeLabel_`/`blendModeCombo_`/
+    ///        `stackList_`/`stackMemberEditor_`) depending on whether
+    ///        `currentStack_` is empty - real-world testing pass,
+    ///        2026-09-20, finding #11: a full set of stack-editing controls
+    ///        is clutter with nothing in the stack yet. `addMemberButton_`
+    ///        (and the "Superposition" label) stay visible unconditionally
+    ///        - the one control still usable, and needed, from an empty
+    ///        stack.
     void refreshStackList();
 
     /// @brief Reconstructs this panel's own current, complete MindWave
@@ -197,6 +207,7 @@ private:
     QListWidget* stackList_ = nullptr;
     QPushButton* addMemberButton_ = nullptr;
     QPushButton* removeMemberButton_ = nullptr;
+    QLabel* blendModeLabel_ = nullptr;
     QComboBox* blendModeCombo_ = nullptr;
     MindWaveEditor* stackMemberEditor_ = nullptr;
 

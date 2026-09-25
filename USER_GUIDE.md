@@ -375,9 +375,11 @@ shape instead of staying fixed.
   with your project, so reopening one shows them exactly where you left
   them.
 - **Superposition** lets one MindWave combine several others together
-  (multiply, add, min, max, or average) - the **+ Add Member**/**- Remove
-  Member** buttons and the small list beside them manage that MindWave's
-  own combined members, each editable the same way as a top-level one.
+  (multiply, add, min, max, or average) - **+ Add Member** starts the
+  first one. The rest of Superposition's own controls (**- Remove
+  Member**, the Blend Mode drop-down, and the small member list/editor)
+  stay hidden until at least one member exists, then appear for managing
+  them, each editable the same way as a top-level MindWave.
 - **Warp** lets one MindWave distort the position another is sampled at,
   giving a wavier, less mechanically regular result than either shape
   alone - check **Enable Warp** to reveal a **Strength** spin box and a

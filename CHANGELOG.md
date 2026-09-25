@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.12] - 2026-09-25
+
+Real-world testing pass finding #11: **MindWaves' Superposition controls no longer clutter the panel when unused.**
+
+### Changed
+
+- **The Superposition section's Remove Member/Blend Mode/member-list controls are now hidden until at least one member has actually been added** - previously shown, full and mostly-empty, for every MindWave regardless of whether Superposition was in use at all. **+ Add Member** stays visible as the way to start.
+
+Full regression: no new failures (30/30 `MindWavesPanelTest`, up from 26). Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #133.
+
 ## [0.0.45.11] - 2026-09-25
 
 Real-world testing pass finding #10: **Loop Mode losing its configured device/gain on every project switch.**
