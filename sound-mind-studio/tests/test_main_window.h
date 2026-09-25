@@ -196,7 +196,10 @@ private slots:
     void addEmptyLayerIsANoOpWithNoProjectOpen();
     void addFilterLayerAddsAFilterTypeLayerAndSelectsIt();
     void selectingAFilterLayerLoadsAndEnablesFilterConfigurationPanel();
-    void selectingANormalLayerDisablesFilterConfigurationPanel();
+    void selectingANormalLayerShowsThePendingFilterConfigurationInsteadOfDisablingThePanel();
+    void addFilterLayerSeedsTheNewLayerFromThePendingFilterConfiguration();
+    void pendingFilterConfigurationPersistsAcrossMultipleAddedFilterLayers();
+    void pendingFilterConfigurationResetsForAFreshProject();
     void selectingTheEqualizerLayerSwitchesTheFilterConfigurationPanelToCutMode();
     void editingFilterConfigurationPanelWritesBackToTheSelectedLayer();
     void movingTheMouseOverTheCanvasUpdatesTheCursorPositionLabel();

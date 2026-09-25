@@ -3906,7 +3906,15 @@ void MainWindowTest::selectingAFilterLayerLoadsAndEnablesFilterConfigurationPane
     config.frequencyGradient().setStopValues(0, {0.0f, -20.0f, -30.0f, 0.5f, 0.6f});
     window.applyFilterConfiguration(config);
     layersPanel->clearSelection();
-    QVERIFY(!filterPanel->isEnabled());
+    // Finding #13 (real-world testing pass, 2026-09-20): the panel stays
+    // enabled with nothing selected, now showing/editing the *pending*
+    // configuration the next "+ Add Filter Layer" will use - see
+    // addFilterLayerSeedsTheNewLayerFromThePendingFilterConfiguration()'s
+    // own docs. It's still a fresh default here (that -20.0f edit above
+    // went to the real, already-added filter layer, not the pending slot).
+    QVERIFY(filterPanel->isEnabled());
+    QCOMPARE(filterPanel->filterConfiguration().frequencyGradient().stops().front().leftIntensity,
+              sound_mind::core::FilterConfiguration{}.frequencyGradient().stops().front().leftIntensity);
 
     layersPanel->selectLayer(filterLayerId);
 
@@ -3914,7 +3922,12 @@ void MainWindowTest::selectingAFilterLayerLoadsAndEnablesFilterConfigurationPane
     QCOMPARE(filterPanel->filterConfiguration().frequencyGradient().stops().front().leftIntensity, -20.0f);
 }
 
-void MainWindowTest::selectingANormalLayerDisablesFilterConfigurationPanel() {
+void MainWindowTest::selectingANormalLayerShowsThePendingFilterConfigurationInsteadOfDisablingThePanel() {
+    // Finding #13 (real-world testing pass, 2026-09-20): selecting a
+    // Normal-type layer used to disable the panel entirely - it now stays
+    // enabled, showing/editing the *pending* configuration (the one the
+    // next "+ Add Filter Layer" will use), so a filter can be dialed in
+    // before any Filter layer exists at all.
     TestMainWindow window;
     createFreshTestProject(window);
     window.addFilterLayer();
@@ -3926,9 +3939,84 @@ void MainWindowTest::selectingANormalLayerDisablesFilterConfigurationPanel() {
     QVERIFY(filterPanel != nullptr);
     QVERIFY(filterPanel->isEnabled());
 
+    sound_mind::core::FilterConfiguration config;
+    config.frequencyGradient().setStopValues(0, {0.0f, -20.0f, -30.0f, 0.5f, 0.6f});
+    window.applyFilterConfiguration(config);  // Written to the real, selected filter layer.
+
     layersPanel->selectLayer(window.project()->layers().front().id());  // Background - a Normal-ish, non-Filter type.
 
-    QVERIFY(!filterPanel->isEnabled());
+    QVERIFY(filterPanel->isEnabled());
+    // Shows the (still-default) pending configuration, not the filter
+    // layer's own just-edited -20.0f - the two are deliberately separate.
+    QCOMPARE(filterPanel->filterConfiguration().frequencyGradient().stops().front().leftIntensity,
+              sound_mind::core::FilterConfiguration{}.frequencyGradient().stops().front().leftIntensity);
+
+    const auto* filterLayer = window.project()->layerById(filterLayerId);
+    QVERIFY(filterLayer != nullptr);
+    QCOMPARE(filterLayer->filterConfiguration().frequencyGradient().stops().front().leftIntensity, -20.0f);
+}
+
+void MainWindowTest::addFilterLayerSeedsTheNewLayerFromThePendingFilterConfiguration() {
+    // Finding #13's own motivating case: configure the filter *before*
+    // adding one, so "+ Add Filter Layer" lands already set up the way
+    // the user wants, rather than forcing an unwanted default filter to
+    // land on the canvas first.
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    auto* filterPanel = window.findChild<FilterConfigurationPanel*>();
+    QVERIFY(filterPanel != nullptr);
+    QVERIFY(filterPanel->isEnabled());  // Nothing selected yet - still enabled.
+
+    sound_mind::core::FilterConfiguration config;
+    config.frequencyGradient().setStopValues(0, {0.0f, -20.0f, -30.0f, 0.5f, 0.6f});
+    window.applyFilterConfiguration(config);
+
+    window.addFilterLayer();
+
+    const auto* newLayer = &topmostNonEqualizerLayer(*window.project());
+    QCOMPARE(newLayer->filterConfiguration().frequencyGradient().stops().front().leftIntensity, -20.0f);
+}
+
+void MainWindowTest::pendingFilterConfigurationPersistsAcrossMultipleAddedFilterLayers() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    sound_mind::core::FilterConfiguration config;
+    config.frequencyGradient().setStopValues(0, {0.0f, -20.0f, -30.0f, 0.5f, 0.6f});
+    window.applyFilterConfiguration(config);
+
+    window.addFilterLayer();
+    const auto firstFilterId = topmostNonEqualizerLayer(*window.project()).id();
+
+    // Deselecting (rather than leaving the just-added filter layer
+    // selected) confirms the *pending* value survived being consumed once
+    // - not just that the still-selected layer's own real config didn't
+    // change.
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    layersPanel->clearSelection();
+
+    window.addFilterLayer();
+    const auto* secondLayer = &topmostNonEqualizerLayer(*window.project());
+    QVERIFY(secondLayer->id() != firstFilterId);
+    QCOMPARE(secondLayer->filterConfiguration().frequencyGradient().stops().front().leftIntensity, -20.0f);
+}
+
+void MainWindowTest::pendingFilterConfigurationResetsForAFreshProject() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    sound_mind::core::FilterConfiguration config;
+    config.frequencyGradient().setStopValues(0, {0.0f, -20.0f, -30.0f, 0.5f, 0.6f});
+    window.applyFilterConfiguration(config);
+
+    createFreshTestProject(window);  // A brand new project in the same window.
+
+    window.addFilterLayer();
+    const auto* newLayer = &topmostNonEqualizerLayer(*window.project());
+    QCOMPARE(newLayer->filterConfiguration().frequencyGradient().stops().front().leftIntensity,
+              sound_mind::core::FilterConfiguration{}.frequencyGradient().stops().front().leftIntensity);
 }
 
 void MainWindowTest::selectingTheEqualizerLayerSwitchesTheFilterConfigurationPanelToCutMode() {

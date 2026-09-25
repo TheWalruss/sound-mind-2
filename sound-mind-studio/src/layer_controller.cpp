@@ -37,7 +37,20 @@ LayerController::LayerController(CanvasWidget* canvas, PlaybackController* playb
       filterConfigurationPanel_(filterConfigurationPanel),
       undoStack_(undoStack) {}
 
-void LayerController::setProject(sound_mind::core::Project* project) { project_ = project; }
+void LayerController::setProject(sound_mind::core::Project* project) {
+    project_ = project;
+    // See pendingFilterConfiguration()'s own docs - a fresh default for
+    // whatever new/opened project this now is, not carried over from
+    // whatever project (if any) was previously set.
+    pendingFilterConfiguration_ = sound_mind::core::FilterConfiguration{};
+    // Re-syncs filterConfigurationPanel_ against the *new* project_ -
+    // MainWindow's own real caller already clears layersPanel_'s selection
+    // before calling this, but whatever earlier handleLayerSelectionChanged()
+    // call that triggered only ever saw the *old* project_ (or none at all,
+    // for the very first project a session ever creates), so the panel's
+    // enabled state needs re-checking here rather than being left stale.
+    handleLayerSelectionChanged(std::nullopt);
+}
 
 sound_mind::core::Layer* LayerController::topmostLayerWithContent() {
     if (project_ == nullptr) {
@@ -354,6 +367,9 @@ void LayerController::addFilterLayer() {
         return;
     }
     sound_mind::core::Layer layer(0, tr("New Filter").toStdString(), sound_mind::core::LayerType::Filter);
+    // Seeded from whatever's pending (finding #13) - a fresh default the
+    // very first time, or whatever the user already dialed in beforehand.
+    layer.setFilterConfiguration(pendingFilterConfiguration_);
     const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
     emit layersChanged();
     playbackController_->invalidate();
@@ -374,25 +390,32 @@ void LayerController::handleLayerSelectionChanged(std::optional<sound_mind::core
     // user edits, and updateVisibleGroup() reads isEqualizerMode_ as part
     // of loading a fresh configuration's own visible group).
     filterConfigurationPanel_->setEqualizerMode(isEqualizer);
-    if (isFilterLayer) {
-        filterConfigurationPanel_->setFilterConfiguration(layer->filterConfiguration());
-    }
-    filterConfigurationPanel_->setEnabled(isFilterLayer);
+    // Finding #13: the panel always shows *something* editable, whether
+    // that's a real Filter/Equalizer layer's own configuration, or (if the
+    // selection isn't one) pendingFilterConfiguration_ - never disabled
+    // purely for lack of a Filter layer being selected.
+    filterConfigurationPanel_->setFilterConfiguration(isFilterLayer ? layer->filterConfiguration()
+                                                                     : pendingFilterConfiguration_);
+    filterConfigurationPanel_->setEnabled(project_ != nullptr);
 }
 
 void LayerController::applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
+    if (project_ == nullptr) {
+        return;
+    }
     const auto id = layersPanel_->selectedLayerId();
-    if (project_ == nullptr || !id.has_value()) {
+    sound_mind::core::Layer* layer = id.has_value() ? layerById(*id) : nullptr;
+    if (layer != nullptr && sound_mind::core::isFilterLayerType(layer->type())) {
+        layer->setFilterConfiguration(config);
+        emit layersChanged();
+        playbackController_->invalidate();
+        canvas_->update();
         return;
     }
-    sound_mind::core::Layer* layer = layerById(*id);
-    if (layer == nullptr || !sound_mind::core::isFilterLayerType(layer->type())) {
-        return;
-    }
-    layer->setFilterConfiguration(config);
-    emit layersChanged();
-    playbackController_->invalidate();
-    canvas_->update();
+    // Finding #13: nothing (or a non-Filter layer) is selected - the edit
+    // isn't discarded, it seeds whatever Filter layer addFilterLayer()
+    // adds next.
+    pendingFilterConfiguration_ = config;
 }
 
 void LayerController::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {

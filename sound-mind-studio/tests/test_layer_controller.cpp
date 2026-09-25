@@ -369,8 +369,12 @@ void LayerControllerTest::handleLayerSelectionChangedSyncsFilterConfigurationPan
     const LayerId backgroundId = project.layers().front().id();  // Normal - not a Filter layer.
     fixture.controller.setProject(&project);
 
+    // Finding #13 (real-world testing pass, 2026-09-20): the panel stays
+    // enabled regardless of whether the selection is a Filter/Equalizer
+    // layer - see pendingFilterConfigurationTests below for what it shows/
+    // edits in that case.
     fixture.controller.handleLayerSelectionChanged(backgroundId);
-    QVERIFY(!fixture.filterConfigurationPanel.isEnabled());
+    QVERIFY(fixture.filterConfigurationPanel.isEnabled());
 
     fixture.controller.addFilterLayer();
     const auto filterId = fixture.layersPanel.selectedLayerId();
@@ -378,7 +382,7 @@ void LayerControllerTest::handleLayerSelectionChangedSyncsFilterConfigurationPan
     QVERIFY(fixture.filterConfigurationPanel.isEnabled());
 
     fixture.controller.handleLayerSelectionChanged(std::nullopt);
-    QVERIFY(!fixture.filterConfigurationPanel.isEnabled());
+    QVERIFY(fixture.filterConfigurationPanel.isEnabled());
 }
 
 void LayerControllerTest::applyFilterConfigurationAppliesOnlyToAFilterLayer() {
@@ -390,8 +394,13 @@ void LayerControllerTest::applyFilterConfigurationAppliesOnlyToAFilterLayer() {
     sound_mind::core::FilterConfiguration config;
     config.setBlurSigma(3.0f);
 
-    // No selection at all - a no-op.
+    // No real Filter/Equalizer layer selected in the LayersPanel itself -
+    // updates pendingFilterConfiguration(), not any real layer - see
+    // applyFilterConfigurationWithNoFilterLayerSelectedUpdatesThePendingConfiguration()
+    // for the dedicated test of that.
     fixture.controller.applyFilterConfiguration(config);
+    QCOMPARE(fixture.controller.layerById(backgroundId)->filterConfiguration().blurSigma(),
+             sound_mind::core::FilterConfiguration{}.blurSigma());
 
     fixture.controller.addFilterLayer();
     const auto filterId = fixture.layersPanel.selectedLayerId();
@@ -402,6 +411,50 @@ void LayerControllerTest::applyFilterConfigurationAppliesOnlyToAFilterLayer() {
     // The Normal (Background) layer is untouched by a config meant for
     // whichever layer is currently selected in the panel.
     QVERIFY(backgroundId != *filterId);
+}
+
+void LayerControllerTest::applyFilterConfigurationWithNoFilterLayerSelectedUpdatesThePendingConfiguration() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+
+    sound_mind::core::FilterConfiguration config;
+    config.setBlurSigma(3.0f);
+
+    // No selection at all.
+    fixture.controller.applyFilterConfiguration(config);
+    QCOMPARE(fixture.controller.pendingFilterConfiguration().blurSigma(), 3.0f);
+}
+
+void LayerControllerTest::addFilterLayerSeedsFromThePendingFilterConfiguration() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+
+    sound_mind::core::FilterConfiguration config;
+    config.setBlurSigma(3.0f);
+    fixture.controller.applyFilterConfiguration(config);
+
+    fixture.controller.addFilterLayer();
+    const auto filterId = fixture.layersPanel.selectedLayerId();
+    QVERIFY(filterId.has_value());
+    QCOMPARE(fixture.controller.layerById(*filterId)->filterConfiguration().blurSigma(), 3.0f);
+}
+
+void LayerControllerTest::setProjectResetsThePendingFilterConfiguration() {
+    Fixture fixture;
+    Project firstProject = Project::createNew(testSettings());
+    fixture.controller.setProject(&firstProject);
+
+    sound_mind::core::FilterConfiguration config;
+    config.setBlurSigma(3.0f);
+    fixture.controller.applyFilterConfiguration(config);
+    QCOMPARE(fixture.controller.pendingFilterConfiguration().blurSigma(), 3.0f);
+
+    Project secondProject = Project::createNew(testSettings());
+    fixture.controller.setProject(&secondProject);
+    QCOMPARE(fixture.controller.pendingFilterConfiguration().blurSigma(),
+             sound_mind::core::FilterConfiguration{}.blurSigma());
 }
 
 void LayerControllerTest::reorderLayersRefreshesEitherWay() {

@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.21] - 2026-09-25
+
+Real-world testing pass finding #13: **Filter Configuration can now be edited before a Filter layer is added, not only after.**
+
+### Changed
+
+- **The Filter Configuration panel no longer greys out just because a Filter layer isn't selected.** Dial in a filter's settings first, then click "+ Add Filter Layer" - the new layer lands already configured that way, instead of starting from a blank default. Whatever you last set stays in place for the next Filter layer too.
+
+Full regression: `sound-mind-studio` `MainWindowTest` 211/211 (up from 208), `LayerControllerTest` 26/28 (2 pre-existing, unrelated failures - tracked separately in `docs/sound-mind-roadmap.md`'s finding #25). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #142.
+
 ## [0.0.45.20] - 2026-09-25
 
 Real-world testing pass finding #12, Installment H (the last): **Starting playback on a large project no longer blocks the app - and this closes out finding #12 in full.**

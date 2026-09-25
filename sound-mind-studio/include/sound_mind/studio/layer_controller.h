@@ -249,28 +249,53 @@ public:
     void addEmptyLayer(sound_mind::codec::StreamImage placeholderContent);
 
     /// @brief Adds a new `Filter`-type layer to the current project,
-    ///        selecting it immediately in the Layers Panel. Repaints the
-    ///        canvas and invalidates cached playback audio, then
-    ///        refreshes the Layers Panel. A no-op if no project is set.
+    ///        seeded from `pendingFilterConfiguration()` (see its own
+    ///        docs) rather than a blank default, and selecting it
+    ///        immediately in the Layers Panel. Repaints the canvas and
+    ///        invalidates cached playback audio, then refreshes the
+    ///        Layers Panel. A no-op if no project is set.
     void addFilterLayer();
 
     /// @brief Reacts to the Layers Panel's own selection changing -
-    ///        keeps `FilterConfigurationPanel` in sync (loads the newly
+    ///        keeps `FilterConfigurationPanel` in sync. Loads the newly
     ///        selected layer's own configuration, in the right display
-    ///        mode, if it's a Filter/Equalizer layer; disables the panel
-    ///        entirely otherwise).
+    ///        mode, if it's a Filter/Equalizer layer; otherwise loads
+    ///        `pendingFilterConfiguration()` instead (real-world testing
+    ///        pass, 2026-09-20, finding #13) - the panel stays enabled
+    ///        either way (as long as a project is set), rather than
+    ///        disabling whenever the selection isn't a Filter/Equalizer
+    ///        layer, so a filter can be configured before one exists.
     /// @param id The newly selected layer's id, or `std::nullopt` if the
     ///        selection was cleared.
     void handleLayerSelectionChanged(std::optional<sound_mind::core::LayerId> id);
 
     /// @brief Applies `FilterConfigurationPanel`'s own edited
-    ///        configuration back onto whichever layer it's currently
-    ///        editing. Repaints the canvas and invalidates cached
-    ///        playback audio. A no-op if no project is set, or the panel
-    ///        isn't currently editing a real, still-selected Filter/
-    ///        Equalizer layer.
+    ///        configuration. If the panel is currently editing a real,
+    ///        still-selected Filter/Equalizer layer, writes onto that
+    ///        layer directly (repainting the canvas and invalidating
+    ///        cached playback audio, as before). Otherwise (real-world
+    ///        testing pass, 2026-09-20, finding #13) updates
+    ///        `pendingFilterConfiguration()` instead, so an edit made with
+    ///        nothing (or a non-Filter layer) selected isn't simply
+    ///        discarded - it seeds whatever Filter layer gets added next.
+    ///        A no-op only if no project is set at all.
     /// @param config The panel's own new, complete configuration.
     void applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config);
+
+    /// @brief The configuration `addFilterLayer()` will seed its next new
+    ///        layer with, and what `FilterConfigurationPanel` shows/edits
+    ///        whenever the current selection isn't a real Filter/Equalizer
+    ///        layer - real-world testing pass, 2026-09-20, finding #13
+    ///        ("allow editing Filter Configuration before a Filter layer
+    ///        is added, not only after"). Resets to a fresh default in
+    ///        `setProject()`; otherwise persists across however many
+    ///        `addFilterLayer()` calls consume it, so dialing in a favorite
+    ///        setting once seeds every filter added afterward, not just
+    ///        the next one.
+    /// @return The current pending configuration.
+    [[nodiscard]] const sound_mind::core::FilterConfiguration& pendingFilterConfiguration() const noexcept {
+        return pendingFilterConfiguration_;
+    }
 
     /// @brief Reorders the current project's layer stack. Refuses -
     ///        showing an explanatory modal, and cancelling outright rather
@@ -340,6 +365,9 @@ private:
     FilterConfigurationPanel* filterConfigurationPanel_;
     UndoStack* undoStack_;
     sound_mind::core::Project* project_ = nullptr;
+
+    /// @brief See pendingFilterConfiguration()'s own docs.
+    sound_mind::core::FilterConfiguration pendingFilterConfiguration_;
 
     /// @brief See thumbnailFor()'s own docs - discarded per-id by
     ///        refreshLayersPanel()'s own `changedContentLayer` parameter,

@@ -409,6 +409,13 @@ Layer** to add one; it's tagged **Filter** in its own row, and selecting
 it (click its name, the same as any other layer) opens the **Filter
 Configuration** panel with its own controls.
 
+The Filter Configuration panel is available even before you've added a
+Filter layer at all - dial in the settings you want first, then click
+**+ Add Filter Layer**, and the new layer lands already configured that
+way rather than starting from scratch. Whatever you last set stays in
+place for the *next* Filter layer too, so adding several in a row can
+start each one from the same settings.
+
 The Filter Configuration panel starts with a **Filter Type** dropdown -
 every new Filter layer starts as **Frequency-Axis Gradient**. Choosing a
 different type shows only that type's own controls below the dropdown;

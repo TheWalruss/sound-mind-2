@@ -25,6 +25,9 @@ private slots:
     void addFilterLayerAddsAndSelectsAFilterLayer();
     void handleLayerSelectionChangedSyncsFilterConfigurationPanel();
     void applyFilterConfigurationAppliesOnlyToAFilterLayer();
+    void applyFilterConfigurationWithNoFilterLayerSelectedUpdatesThePendingConfiguration();
+    void addFilterLayerSeedsFromThePendingFilterConfiguration();
+    void setProjectResetsThePendingFilterConfiguration();
     void reorderLayersRefreshesEitherWay();
     void paintTargetLayerIdFallsBackToTheBottommostLayer();
 
