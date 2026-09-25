@@ -5,13 +5,11 @@
 #include <utility>
 
 #include <QCheckBox>
-#include <QColorDialog>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -22,7 +20,7 @@
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/project.h"
-#include "sound_mind/studio/color_conversion.h"
+#include "sound_mind/studio/gradient_editor_widget.h"
 
 namespace sound_mind::studio {
 
@@ -402,34 +400,18 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     sharedControlsForm_->addRow(tr("Stamp Interval:"), stampIntervalSpinBox_);
     updateStampIntervalAppearance();
 
-    // Color/opacity directly below set *both* gradient stops uniformly -
-    // the design doc's own "Uniform color" example (see
-    // sound-mind-design.md's Gradients) - a real, full multi-stop
-    // gradient editor is a separate, later feature (see this class's own
-    // docs); this is the simplest control that still lets a stroke
-    // actually paint something visible.
-    colorButton_ = new QPushButton(container);
-    colorButton_->setObjectName(QStringLiteral("colorButton"));
-    colorButton_->setToolTip(
-        tr("Brush color (stereo balance) - red: left channel, green: right channel"));
-    connect(colorButton_, &QPushButton::clicked, this, &ToolConfigurationPanel::openColorDialog);
-    sharedControlsForm_->addRow(tr("Color:"), colorButton_);
-
-    opacitySpinBox_ = new QDoubleSpinBox(container);
-    opacitySpinBox_->setObjectName(QStringLiteral("opacitySpinBox"));
-    opacitySpinBox_->setRange(0.0, 100.0);
-    opacitySpinBox_->setSingleStep(5.0);
-    opacitySpinBox_->setSuffix(tr("%"));
-    opacitySpinBox_->setValue(100.0);
-    connect(opacitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
-        auto stop = config_->defaultGradient().stops().front();
-        stop.leftOpacity = static_cast<float>(value / 100.0);
-        stop.rightOpacity = static_cast<float>(value / 100.0);
-        config_->defaultGradient().setStopValues(0, stop);
-        config_->defaultGradient().setStopValues(1, stop);
-        emitConfigChanged();
-    });
-    sharedControlsForm_->addRow(tr("Opacity:"), opacitySpinBox_);
+    // The stroke's own real, multi-stop gradient - see the class's own
+    // docs. Every edit here writes straight into config_'s own
+    // defaultGradient() and emits, the same "purely presentational"
+    // pattern every other control in this panel already follows.
+    gradientEditor_ = new GradientEditorWidget(container);
+    gradientEditor_->setObjectName(QStringLiteral("gradientEditor"));
+    connect(gradientEditor_, &GradientEditorWidget::gradientChanged, this,
+            [this](const sound_mind::core::Gradient& gradient) {
+                config_->defaultGradient() = gradient;
+                emitConfigChanged();
+            });
+    sharedControlsForm_->addRow(tr("Gradient:"), gradientEditor_);
 
     blendModeCombo_ = new QComboBox(container);
     blendModeCombo_->setObjectName(QStringLiteral("blendModeCombo"));
@@ -446,11 +428,11 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     // Panel-own default: a real, fully-opaque brush (not the transparent
     // default a bare ToolConfiguration starts with - see its own docs) -
     // so a fresh stroke, painted before ever touching a control, is
-    // already visible rather than silently doing nothing. Opacity's spin
-    // box above is already constructed with the matching displayed value
-    // (100%), so this just makes config_ itself agree with it; the color
-    // swatch is synced to it right after (updateColorButtonAppearance()
-    // needs colorButton_ to already exist, which it now does).
+    // already visible rather than silently doing nothing. 0 dB on both
+    // channels is the loudest a stop can be - loaded into gradientEditor_
+    // right after (non-emitting - see GradientEditorWidget::setGradient()'s
+    // own docs) so the panel's own displayed controls agree with config_
+    // from the very start.
     {
         auto stop = config_->defaultGradient().stops().front();
         stop.leftIntensity = 0.0f;
@@ -460,7 +442,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
         config_->defaultGradient().setStopValues(0, stop);
         config_->defaultGradient().setStopValues(1, stop);
     }
-    updateColorButtonAppearance();
+    gradientEditor_->setGradient(config_->defaultGradient());
 
     // The Instrument group's own rows are built from config_'s current
     // (default) harmonicStrengths() even while Procedural is selected and
@@ -601,14 +583,17 @@ void ToolConfigurationPanel::updateSharedControlVisibility() {
 
     const bool showFalloffSizeAndOpacity = !isMindShotOrGrain;
     const bool showStampModeAndInterval = !isFixedPlacement;
-    const bool showColor = !isMindShotOrGrain && !isFixedPlacement;
+    const bool showGradientEditor = !isMindShotOrGrain;
 
     sharedControlsForm_->setRowVisible(falloffSpinBox_, showFalloffSizeAndOpacity);
     sharedControlsForm_->setRowVisible(sizeSpinBox_, showFalloffSizeAndOpacity);
     sharedControlsForm_->setRowVisible(stampModeCombo_, showStampModeAndInterval);
     sharedControlsForm_->setRowVisible(stampIntervalSpinBox_, showStampModeAndInterval);
-    sharedControlsForm_->setRowVisible(colorButton_, showColor);
-    sharedControlsForm_->setRowVisible(opacitySpinBox_, showFalloffSizeAndOpacity);
+    sharedControlsForm_->setRowVisible(gradientEditor_, showGradientEditor);
+    // Intensity is genuinely unused by FixedStampPlacementConfiguration's
+    // own blend (opacity alone is the blend strength) - see the class's
+    // own docs.
+    gradientEditor_->setIntensityVisible(!isFixedPlacement);
     sharedControlsForm_->setRowVisible(blendModeCombo_, isMindShotOrGrain);
 }
 
@@ -753,38 +738,7 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
         stampIntervalSpinBox_->setValue(config_->stampInterval());
     }
     updateStampIntervalAppearance();
-    {
-        const QSignalBlocker blocker(opacitySpinBox_);
-        opacitySpinBox_->setValue(static_cast<double>(config_->defaultGradient().stops().front().leftOpacity) *
-                                   100.0);
-    }
-    updateColorButtonAppearance();
-}
-
-QColor ToolConfigurationPanel::color() const {
-    const auto& stop = config_->defaultGradient().stops().front();
-    return QColor(dbToDisplayByte(stop.leftIntensity), dbToDisplayByte(stop.rightIntensity), 0);
-}
-
-void ToolConfigurationPanel::setColor(QColor color) {
-    auto stop = config_->defaultGradient().stops().front();
-    stop.leftIntensity = displayByteToDb(color.red());
-    stop.rightIntensity = displayByteToDb(color.green());
-    config_->defaultGradient().setStopValues(0, stop);
-    config_->defaultGradient().setStopValues(1, stop);
-    updateColorButtonAppearance();
-    emitConfigChanged();
-}
-
-void ToolConfigurationPanel::openColorDialog() {
-    // getColor() returns an invalid QColor for Cancel - see its own docs -
-    // left as a no-op rather than applying it, matching every other
-    // dialog-driven action in this codebase (e.g. MainWindow's own Import/
-    // Export) treating a cancelled dialog as "nothing happened".
-    const QColor picked = QColorDialog::getColor(color(), this, tr("Choose Brush Color"));
-    if (picked.isValid()) {
-        setColor(picked);
-    }
+    gradientEditor_->setGradient(config_->defaultGradient());
 }
 
 void ToolConfigurationPanel::updateStampIntervalAppearance() {
@@ -946,15 +900,6 @@ void ToolConfigurationPanel::updateMindGrainValidity() {
     mindGrainGroup_->setStyleSheet(invalid ? QString::fromUtf8(kMindGrainInvalidStyleSheet) : QString());
     mindGrainGroup_->setToolTip(reason);
     mindGrainCombo_->setToolTip(reason);
-}
-
-void ToolConfigurationPanel::updateColorButtonAppearance() {
-    const QColor current = color();
-    colorButton_->setStyleSheet(QStringLiteral("background-color: %1;").arg(current.name()));
-    // A readable hex label alongside the swatch fill - accessible even
-    // where color alone isn't (e.g. colorblindness), and gives tests a
-    // stable text() to check instead of parsing a stylesheet string.
-    colorButton_->setText(current.name());
 }
 
 }  // namespace sound_mind::studio

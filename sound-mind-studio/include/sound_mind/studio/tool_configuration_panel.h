@@ -4,7 +4,6 @@
 #include <utility>
 #include <vector>
 
-#include <QColor>
 #include <QDockWidget>
 #include <QString>
 
@@ -15,7 +14,6 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QFormLayout;
-class QPushButton;
 class QSpinBox;
 class QVBoxLayout;
 class QWidget;
@@ -25,6 +23,8 @@ class Project;
 }  // namespace sound_mind::core
 
 namespace sound_mind::studio {
+
+class GradientEditorWidget;
 
 /**
  * @brief A dockable panel for configuring the current painting tool - see
@@ -91,12 +91,23 @@ namespace sound_mind::studio {
  * panel's own current, complete `ToolConfiguration` - `MainWindow` is
  * what actually threads it into `PaintController`.
  *
- * **Color, not a separate "Intensity" control**: per
- * `docs/sound-mind-design.md`'s own "Color - stereo balance" framing, a
- * single RGB color swatch (red = left channel, green = right channel)
- * replaces what an earlier version of this panel exposed as a single
- * "Intensity" spin box driving both channels identically - see
- * setColor()'s own docs for the exact conversion.
+ * **A real, multi-stop gradient, not a flat color swatch** - real-world
+ * testing pass, 2026-09-20, finding #17: `gradientEditor_`
+ * (`GradientEditorWidget`) edits `config_->defaultGradient()` directly,
+ * replacing the single flat `QColorDialog`-driven Color/Opacity pair an
+ * earlier version of this panel exposed (that pair only ever wrote both
+ * of the gradient's two endpoint stops identically - see this class's own
+ * prior revision for the exact conversion it used). A fresh stroke still
+ * starts from a real, fully-opaque two-stop gradient (the same default
+ * this panel always seeded), but the editor now lets a stroke's own
+ * gradient vary continuously along its own length, the same "one shared
+ * gradient model, one shared widget" principle
+ * `docs/sound-mind-design.md`'s own "Gradients" section establishes -
+ * `FilterConfigurationPanel`'s Frequency-Axis Gradient/Equalizer Cut
+ * sections embed the identical widget over `FilterConfiguration`'s own
+ * gradient. `updateSharedControlVisibility()`'s own docs cover which tool
+ * types show it, and in which of `GradientEditorWidget::setCutMode()`'s/
+ * `setIntensityVisible()`'s own display modes.
  */
 class ToolConfigurationPanel : public QDockWidget {
     Q_OBJECT
@@ -222,28 +233,6 @@ public:
      */
     void setActiveLayer(sound_mind::core::LayerId layer);
 
-    /**
-     * @brief Sets the brush's color (stereo balance) directly - the
-     *        testable core behind the "Color" swatch button's own
-     *        QColorDialog, per `docs/sound-mind-design.md`'s "Color -
-     *        stereo balance (left channel is one color, right channel
-     *        another)": the color's red channel becomes the left
-     *        channel's intensity, green becomes the right channel's,
-     *        both applied to *both* of `config_`'s gradient stops
-     *        uniformly (blue is unused - painting doesn't touch phase
-     *        yet). Updates the swatch's own displayed color and emits
-     *        toolConfigurationChanged().
-     * @param color The color to apply.
-     */
-    void setColor(QColor color);
-
-    /// @brief The color the panel's controls currently describe - the
-    ///        exact inverse of setColor(), derived from `config_`'s own
-    ///        current gradient stop intensities.
-    /// @return The current color, per setColor()'s own red=left/
-    ///         green=right convention (blue always `0`).
-    [[nodiscard]] QColor color() const;
-
 signals:
     /// @brief Emitted whenever any parameter control changes.
     /// @param config The panel's own new, complete configuration.
@@ -260,22 +249,6 @@ signals:
 private:
     /// @brief Emits toolConfigurationChanged() with the current config_.
     void emitConfigChanged();
-
-    /// @brief `colorButton_`'s own `clicked()` handler - shows a real,
-    ///        modal `QColorDialog` seeded with color(), and calls
-    ///        setColor() with the result if the user accepts it (a no-op
-    ///        if cancelled). Kept separate from setColor() itself so
-    ///        tests can call the latter directly without ever having to
-    ///        drive a real modal dialog - the same "testable core, plus a
-    ///        thin dialog-showing wrapper" shape `MainWindow`'s own
-    ///        import/export actions already use.
-    void openColorDialog();
-
-    /// @brief Syncs colorButton_'s own displayed swatch (background fill
-    ///        and hex-code text) to color()'s current value - called
-    ///        after any change to config_'s color, so the button never
-    ///        shows a stale swatch.
-    void updateColorButtonAppearance();
 
     /// @brief Syncs stampIntervalSpinBox_'s own suffix/tooltip to
     ///        config_'s current `stampMode()`, and disables it entirely
@@ -311,39 +284,46 @@ private:
 
     /**
      * @brief Hides/shows Falloff/Brush Size/Stamp Mode/Stamp Interval/
-     *        Color/Opacity's own individual rows in `sharedControlsForm_`
-     *        (via `QFormLayout::setRowVisible()`) according to which of
-     *        them `config_`'s own current type actually consults - a
-     *        review pass confirmed with the user (`v0.Y.34.1` Installment
-     *        C): a control the active tool type never reads is hidden
-     *        entirely, the same "don't build placeholder UI for something
-     *        that doesn't do anything" philosophy this panel's own class
-     *        docs already establish for the Wizard/Tool Preset drop-down,
-     *        rather than left visible but silently inert.
+     *        `gradientEditor_`'s own individual rows in
+     *        `sharedControlsForm_` (via `QFormLayout::setRowVisible()`)
+     *        according to which of them `config_`'s own current type
+     *        actually consults - a review pass confirmed with the user
+     *        (`v0.Y.34.1` Installment C): a control the active tool type
+     *        never reads is hidden entirely, the same "don't build
+     *        placeholder UI for something that doesn't do anything"
+     *        philosophy this panel's own class docs already establish for
+     *        the Wizard/Tool Preset drop-down, rather than left visible
+     *        but silently inert. Where `gradientEditor_` itself stays
+     *        visible, `GradientEditorWidget::setIntensityVisible()` further
+     *        controls whether its own Intensity fields specifically are
+     *        shown - see the bullets below.
      *
      * - **`MindShotConfiguration`/`MindGrainConfiguration`**: hides
-     *   Falloff/Brush Size/Color/Opacity - both stamp a captured/live
-     *   `Clip` (`blitClipCentered()`), never reading `size()`/`falloff()`,
-     *   and never touching the stroke's own gradient at all (opacity/
-     *   intensity meaningless - see each class's own docs). Stamp Mode/
-     *   Interval stay visible - still a real, meaningful placement choice
-     *   for a repeated stamp. As of `v0.Y.37.1` (Deferred Blend Modes),
-     *   `blendModeCombo_` is shown *only* for these two - the exact inverse
-     *   of Falloff/Size/Color/Opacity's own visibility here - since it's
-     *   the one control these two types uniquely have that no other type
-     *   does.
+     *   Falloff/Brush Size/`gradientEditor_` entirely - both stamp a
+     *   captured/live `Clip` (`blitClipCentered()`), never reading
+     *   `size()`/`falloff()`, and never touching the stroke's own gradient
+     *   at all (opacity/intensity meaningless - see each class's own
+     *   docs). Stamp Mode/Interval stay visible - still a real, meaningful
+     *   placement choice for a repeated stamp. As of `v0.Y.37.1` (Deferred
+     *   Blend Modes), `blendModeCombo_` is shown *only* for these two - the
+     *   exact inverse of Falloff/Size/`gradientEditor_`'s own visibility
+     *   here - since it's the one control these two types uniquely have
+     *   that no other type does.
      * - **`FixedStampPlacementConfiguration`'s own four subtypes** (`Heal`/
-     *   `Soften`/`Smudge`/`OrderChaos`): hides Color (never consulted - see
-     *   each one's own docs on why only the stroke's own gradient
-     *   *opacity*, not intensity, feeds into their blend) and Stamp Mode/
-     *   Stamp Interval (forced to `AlongCurve`/`66%` of `size()` - see
+     *   `Soften`/`Smudge`/`OrderChaos`): keeps `gradientEditor_` visible
+     *   but with `setIntensityVisible(false)` - only the stroke's own
+     *   gradient stop *opacity*, not intensity, feeds into their blend
+     *   (see each one's own docs) - and hides Stamp Mode/Stamp Interval
+     *   (forced to `AlongCurve`/`66%` of `size()` - see
      *   `FixedStampPlacementConfiguration`'s own docs on why showing a
      *   control the value can no longer actually change would be
      *   misleading, not just inert). Falloff/Brush Size/Opacity stay
      *   visible - all three are real, load-bearing parameters for every
      *   one of the four.
      * - **`ProceduralConfiguration`/`InstrumentConfiguration`**: every
-     *   shared control stays visible - both genuinely use all six.
+     *   shared control stays visible, `gradientEditor_` with
+     *   `setIntensityVisible(true)` - both genuinely use all of Falloff/
+     *   Size/Stamp Mode/Interval/Intensity/Opacity.
      *
      * Called wherever `updateVisibleToolTypeGroup()` already is, right
      * alongside it - the same "config_'s type just changed" trigger.
@@ -483,15 +463,18 @@ private:
     QDoubleSpinBox* sizeSpinBox_ = nullptr;
     QComboBox* stampModeCombo_ = nullptr;
     QDoubleSpinBox* stampIntervalSpinBox_ = nullptr;
-    QPushButton* colorButton_ = nullptr;
-    QDoubleSpinBox* opacitySpinBox_ = nullptr;
+
+    /// @brief The stroke's own gradient editor - see the class's own docs
+    ///        and updateSharedControlVisibility()'s own docs for which
+    ///        tool types show it, and in which display mode.
+    GradientEditorWidget* gradientEditor_ = nullptr;
 
     /// @brief Mind Shot's/Mind Grain's own blend mode - `v0.Y.37.1`
     ///        (Deferred Blend Modes). Lives in `sharedControlsForm_`
-    ///        alongside Falloff/Size/Color/Opacity (shown only for those
-    ///        two types, the exact inverse of those four) rather than
-    ///        duplicated once per type-specific group, even though it's
-    ///        stored as two separately-declared fields
+    ///        alongside Falloff/Size/`gradientEditor_` (shown only for
+    ///        those two types, the exact inverse of those three) rather
+    ///        than duplicated once per type-specific group, even though
+    ///        it's stored as two separately-declared fields
     ///        (`MindShotConfiguration::blendMode()`/
     ///        `MindGrainConfiguration::blendMode()`, not a shared
     ///        `ToolConfiguration` base member) - see

@@ -11,12 +11,9 @@ private slots:
     void changingTheTipShapeEmitsToolConfigurationChanged();
     void changingFalloffEmitsToolConfigurationChanged();
     void changingSizeEmitsToolConfigurationChanged();
-    void changingOpacitySetsBothGradientStopsOpacity();
+    void editingTheGradientEditorUpdatesDefaultGradientAndEmits();
     void togglingShowBoundingBoxesEmitsItsOwnSignal();
     void togglingShowPathGeometryEmitsItsOwnSignal();
-    void setColorSetsBothGradientStopsIntensityAndEmitsChange();
-    void colorRoundTripsThroughSetColor();
-    void colorButtonExistsForOpeningTheRealDialog();
     void freshPanelHasStampModeStrokeAndTheIntervalSpinBoxDisabled();
     void changingTheStampModeEmitsToolConfigurationChangedAndEnablesTheIntervalSpinBox();
     void changingTheStampIntervalEmitsToolConfigurationChanged();
@@ -74,12 +71,12 @@ private slots:
 
     // Shared control visibility review (v0.Y.34.1 Installment C).
     void proceduralShowsEverySharedControl();
-    void mindShotHidesFalloffSizeColorAndOpacityButKeepsStampControls();
-    void mindGrainHidesFalloffSizeColorAndOpacityButKeepsStampControls();
-    void healHidesColorAndStampControlsButKeepsFalloffSizeAndOpacity();
-    void softenHidesColorAndStampControls();
-    void smudgeHidesColorAndStampControls();
-    void orderChaosHidesColorAndStampControls();
+    void mindShotHidesFalloffSizeAndGradientEditorButKeepsStampControls();
+    void mindGrainHidesFalloffSizeAndGradientEditorButKeepsStampControls();
+    void healHidesIntensityAndStampControlsButKeepsFalloffSizeAndOpacity();
+    void softenHidesIntensityAndStampControls();
+    void smudgeHidesIntensityAndStampControls();
+    void orderChaosHidesIntensityAndStampControls();
     void switchingFromHealBackToProceduralPreservesTheOriginalStampMode();
 
     // Blend Mode (v0.Y.37.1).

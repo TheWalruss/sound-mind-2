@@ -9,7 +9,7 @@ private slots:
     void freshPanelHasAFullyTransparentDefaultConfiguration();
     void changingAStartSpinBoxUpdatesStop0AndEmitsFilterConfigurationChanged();
     void changingAnEndSpinBoxUpdatesStop1AndEmitsFilterConfigurationChanged();
-    void setFilterConfigurationSyncsAllEightSpinBoxesWithoutEmitting();
+    void setFilterConfigurationSyncsBothEndpointStopsWithoutEmitting();
     void freshPanelShowsOnlyTheFrequencyAxisGradientGroup();
     void selectingAFilterTypeShowsOnlyThatTypesOwnGroupAndEmitsTheNewType();
     void changingBlurSigmaUpdatesConfigAndEmits();
@@ -20,8 +20,8 @@ private slots:
     void selectingToneCurveShowsItsOwnGroup();
     void editingTheToneCurveEditorUpdatesConfigAndEmits();
     void setFilterConfigurationSyncsTheToneCurveEditorWithoutEmitting();
-    void equalizerModeHidesTheFilterTypeComboAndShowsTheCutGroup();
-    void equalizerModeOffRestoresTheNormalPerTypeGroup();
+    void equalizerModeHidesTheFilterTypeComboAndSwitchesTheGradientEditorToCutMode();
+    void equalizerModeOffRestoresTheNormalPerTypeGroupAndIntensityFields();
     void editingACutSpinBoxWritesOpacityAndForcesIntensityToTheSilenceFloor();
     void setFilterConfigurationSyncsTheCutSpinBoxesFromOpacityWithoutEmitting();
     void freshCombosOfferOnlyNoneUntilSetAvailableMindWavesIsCalled();

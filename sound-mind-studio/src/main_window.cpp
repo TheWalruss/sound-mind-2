@@ -16,7 +16,6 @@
 
 #include <QAction>
 #include <QCloseEvent>
-#include <QColorDialog>
 #include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDragEnterEvent>
@@ -59,6 +58,7 @@
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/color_conversion.h"
 #include "sound_mind/studio/create_project_wizard.h"
+#include "sound_mind/studio/fill_gradient_dialog.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/import_export.h"
 #include "sound_mind/studio/import_helpers.h"
@@ -2217,6 +2217,13 @@ void MainWindow::fillSelectionWith(QColor color) {
     stop.rightOpacity = 1.0f;
     gradient.setStopValues(0, stop);
     gradient.setStopValues(1, stop);
+    fillSelectionWithGradient(gradient);
+}
+
+void MainWindow::fillSelectionWithGradient(const sound_mind::core::Gradient& gradient) {
+    if (!toolPaletteController_->hasSelection()) {
+        return;
+    }
     toolPaletteController_->fill(gradient);
 }
 
@@ -2224,9 +2231,22 @@ void MainWindow::fillSelection() {
     if (!toolPaletteController_->hasSelection()) {
         return;
     }
-    const QColor picked = QColorDialog::getColor(QColor(255, 255, 0), this, tr("Fill Selection"));
-    if (picked.isValid()) {
-        fillSelectionWith(picked);
+    // Seeded with the same fully-opaque yellow default fillSelectionWith()'s
+    // own flat-color shortcut always used (0 dB both channels, full
+    // opacity) - accepting immediately reproduces that exact prior
+    // behavior; the editor lets it be varied into a real gradient instead.
+    sound_mind::core::Gradient defaultGradient;
+    auto stop = defaultGradient.stops().front();
+    stop.leftIntensity = 0.0f;
+    stop.rightIntensity = 0.0f;
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    defaultGradient.setStopValues(0, stop);
+    defaultGradient.setStopValues(1, stop);
+
+    FillGradientDialog dialog(defaultGradient, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        fillSelectionWithGradient(dialog.gradient());
     }
 }
 

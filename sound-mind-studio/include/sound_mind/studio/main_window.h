@@ -1182,35 +1182,50 @@ public slots:
     void deselect();
 
     /**
-     * @brief Fills the current selection with `color` - the testable core
-     *        behind the Edit menu's Fill Selection action's own
-     *        `QColorDialog` (see fillSelection()'s own docs), and directly
-     *        callable without one (e.g. by a test).
+     * @brief Fills the current selection with a flat `color` - a thin,
+     *        still-supported shortcut onto fillSelectionWithGradient()
+     *        (see its own docs), kept for direct/test use where a real
+     *        gradient editor would be overkill.
      *
      * `color`'s red/green channels become the fill's own left/right
      * channel intensity (`sound_mind::studio::dbToDisplayByte()`'s own
      * inverse - the identical red=left/green=right convention
-     * `ToolConfigurationPanel`'s own brush Color swatch already
+     * `ToolConfigurationPanel`'s own brush Color/gradient controls already
      * established), applied uniformly (both gradient stops the same
-     * value - the same "simplest control that still works" shortcut the
-     * brush panel's own Color/Opacity controls use, a full multi-stop
-     * gradient fill being a separate, later feature) at full opacity. A
-     * no-op if there's no committed selection.
+     * value) at full opacity. A no-op if there's no committed selection.
      *
      * @param color The color to fill with.
      */
     void fillSelectionWith(QColor color);
 
     /**
-     * @brief Shows a real, modal `QColorDialog` and fills the current
-     *        selection with whatever's accepted - the actual work behind
-     *        the Edit menu's Fill Selection action.
+     * @brief Fills the current selection with `gradient` directly - the
+     *        testable core behind the Edit menu's Fill Selection action's
+     *        own `FillGradientDialog` (see fillSelection()'s own docs),
+     *        and directly callable without one (e.g. by a test).
+     *
+     * A real, full multi-stop gradient fill - `applyFillOperation()`
+     * already evaluates `gradient` across the selection's own time axis
+     * (`t` running left-to-right), so this needed no core-level changes,
+     * only this real gradient-editing entry point where the panel used to
+     * flatten every fill to a single uniform color/opacity pair (see
+     * fillSelectionWith()'s own docs for that still-supported shortcut). A
+     * no-op if there's no committed selection.
+     *
+     * @param gradient The gradient to fill with.
+     */
+    void fillSelectionWithGradient(const sound_mind::core::Gradient& gradient);
+
+    /**
+     * @brief Shows `FillGradientDialog`, seeded with a fully-opaque
+     *        default gradient, and fills the current selection with
+     *        whatever's accepted - the actual work behind the Edit menu's
+     *        Fill Selection action.
      *
      * Cancelling leaves the selection untouched, matching every other
-     * dialog-driven action in this codebase (e.g. `ToolConfigurationPanel
-     * ::openColorDialog()`) treating a cancelled dialog as "nothing
-     * happened". A no-op (dialog never shown) if there's no selection to
-     * fill in the first place.
+     * dialog-driven action in this codebase (e.g. `warpSelection()`)
+     * treating a cancelled dialog as "nothing happened". A no-op (dialog
+     * never shown) if there's no selection to fill in the first place.
      */
     void fillSelection();
 

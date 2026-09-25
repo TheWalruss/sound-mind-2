@@ -22,6 +22,7 @@
 #include <QVariant>
 #include <QWidget>
 
+#include "sound_mind/studio/gradient_editor_widget.h"
 #include "sound_mind/studio/tone_curve_editor.h"
 
 namespace sound_mind::studio {
@@ -31,7 +32,6 @@ namespace {
 using sound_mind::core::ConvolutionKernelId;
 using sound_mind::core::DownsampleMode;
 using sound_mind::core::FilterType;
-using sound_mind::core::GradientStop;
 using sound_mind::core::MindWaveId;
 
 /// @brief One of Convolve's own eight built-in presets - a name plus a
@@ -114,28 +114,6 @@ constexpr std::array<std::pair<DownsampleMode, const char*>, 2> kDownsampleModes
     {DownsampleMode::BlockAverage, "Block Average"},
 }};
 
-/// @brief A `[-96, 0]` dB spin box, matching `silenceGradient()`'s own
-/// floor and `color_mapping.cpp`'s own display range - the same range
-/// every other dB-valued control in this codebase already uses.
-QDoubleSpinBox* makeIntensitySpinBox(QWidget* parent, const QString& objectName) {
-    auto* spinBox = new QDoubleSpinBox(parent);
-    spinBox->setObjectName(objectName);
-    spinBox->setRange(-96.0, 0.0);
-    spinBox->setSingleStep(1.0);
-    spinBox->setSuffix(QStringLiteral(" dB"));
-    return spinBox;
-}
-
-/// @brief A `[0, 1]` opacity spin box.
-QDoubleSpinBox* makeOpacitySpinBox(QWidget* parent, const QString& objectName) {
-    auto* spinBox = new QDoubleSpinBox(parent);
-    spinBox->setObjectName(objectName);
-    spinBox->setRange(0.0, 1.0);
-    spinBox->setSingleStep(0.05);
-    spinBox->setDecimals(2);
-    return spinBox;
-}
-
 }  // namespace
 
 FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
@@ -158,6 +136,11 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     filterTypeLabel_ = qobject_cast<QLabel*>(typeForm->labelForField(filterTypeCombo_));
     root->addLayout(typeForm);
 
+    // Real-world testing pass, 2026-09-20, finding #17: a real, shared
+    // GradientEditorWidget replaces the old two-endpoint-only Start/End
+    // spin-box groups - also reused directly for the Equalizer's own Cut
+    // mode (see setEqualizerMode()'s own docs), rather than a second,
+    // separate widget mirroring the same config_.frequencyGradient().
     auto* frequencyGroupContainer = new QWidget(container);
     frequencyGroupContainer->setObjectName(QStringLiteral("frequencyAxisGradientSection"));
     auto* frequencyLayout = new QVBoxLayout(frequencyGroupContainer);
@@ -168,65 +151,16 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     frequencyGradientLabel_->setObjectName(QStringLiteral("frequencyGradientLabel"));
     frequencyLayout->addWidget(frequencyGradientLabel_);
 
-    auto* startGroup = new QGroupBox(tr("Start (t=0, lowest frequency)"), frequencyGroupContainer);
-    auto* startForm = new QFormLayout(startGroup);
-    startLeftIntensitySpinBox_ = makeIntensitySpinBox(startGroup, QStringLiteral("startLeftIntensitySpinBox"));
-    startForm->addRow(tr("Left Intensity:"), startLeftIntensitySpinBox_);
-    startLeftOpacitySpinBox_ = makeOpacitySpinBox(startGroup, QStringLiteral("startLeftOpacitySpinBox"));
-    startForm->addRow(tr("Left Opacity:"), startLeftOpacitySpinBox_);
-    startRightIntensitySpinBox_ = makeIntensitySpinBox(startGroup, QStringLiteral("startRightIntensitySpinBox"));
-    startForm->addRow(tr("Right Intensity:"), startRightIntensitySpinBox_);
-    startRightOpacitySpinBox_ = makeOpacitySpinBox(startGroup, QStringLiteral("startRightOpacitySpinBox"));
-    startForm->addRow(tr("Right Opacity:"), startRightOpacitySpinBox_);
-    frequencyLayout->addWidget(startGroup);
-
-    auto* endGroup = new QGroupBox(tr("End (t=1, highest frequency)"), frequencyGroupContainer);
-    auto* endForm = new QFormLayout(endGroup);
-    endLeftIntensitySpinBox_ = makeIntensitySpinBox(endGroup, QStringLiteral("endLeftIntensitySpinBox"));
-    endForm->addRow(tr("Left Intensity:"), endLeftIntensitySpinBox_);
-    endLeftOpacitySpinBox_ = makeOpacitySpinBox(endGroup, QStringLiteral("endLeftOpacitySpinBox"));
-    endForm->addRow(tr("Left Opacity:"), endLeftOpacitySpinBox_);
-    endRightIntensitySpinBox_ = makeIntensitySpinBox(endGroup, QStringLiteral("endRightIntensitySpinBox"));
-    endForm->addRow(tr("Right Intensity:"), endRightIntensitySpinBox_);
-    endRightOpacitySpinBox_ = makeOpacitySpinBox(endGroup, QStringLiteral("endRightOpacitySpinBox"));
-    endForm->addRow(tr("Right Opacity:"), endRightOpacitySpinBox_);
-    frequencyLayout->addWidget(endGroup);
+    frequencyGradientEditor_ = new GradientEditorWidget(frequencyGroupContainer);
+    frequencyGradientEditor_->setObjectName(QStringLiteral("frequencyGradientEditor"));
+    connect(frequencyGradientEditor_, &GradientEditorWidget::gradientChanged, this,
+            [this](const sound_mind::core::Gradient& gradient) {
+                config_.frequencyGradient() = gradient;
+                emitConfigChanged();
+            });
+    frequencyLayout->addWidget(frequencyGradientEditor_);
 
     root->addWidget(frequencyGroupContainer);
-
-    // Every spin box in a group re-reads all four of that group's own
-    // current values and writes them back as one stop - simpler than
-    // updating a single field in place, and no less correct, since
-    // every control is always visible/current at once (unlike, say, a
-    // multi-page wizard where only one field might be on-screen).
-    const auto applyStart = [this]() {
-        GradientStop stop = config_.frequencyGradient().stops().front();
-        stop.leftIntensity = static_cast<float>(startLeftIntensitySpinBox_->value());
-        stop.leftOpacity = static_cast<float>(startLeftOpacitySpinBox_->value());
-        stop.rightIntensity = static_cast<float>(startRightIntensitySpinBox_->value());
-        stop.rightOpacity = static_cast<float>(startRightOpacitySpinBox_->value());
-        config_.frequencyGradient().setStopValues(0, stop);
-        emitConfigChanged();
-    };
-    connect(startLeftIntensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [applyStart](double) { applyStart(); });
-    connect(startLeftOpacitySpinBox_, &QDoubleSpinBox::valueChanged, this, [applyStart](double) { applyStart(); });
-    connect(startRightIntensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [applyStart](double) { applyStart(); });
-    connect(startRightOpacitySpinBox_, &QDoubleSpinBox::valueChanged, this, [applyStart](double) { applyStart(); });
-
-    const auto applyEnd = [this]() {
-        GradientStop stop = config_.frequencyGradient().stops().back();
-        stop.leftIntensity = static_cast<float>(endLeftIntensitySpinBox_->value());
-        stop.leftOpacity = static_cast<float>(endLeftOpacitySpinBox_->value());
-        stop.rightIntensity = static_cast<float>(endRightIntensitySpinBox_->value());
-        stop.rightOpacity = static_cast<float>(endRightOpacitySpinBox_->value());
-        const auto& stops = config_.frequencyGradient().stops();
-        config_.frequencyGradient().setStopValues(stops.size() - 1, stop);
-        emitConfigChanged();
-    };
-    connect(endLeftIntensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [applyEnd](double) { applyEnd(); });
-    connect(endLeftOpacitySpinBox_, &QDoubleSpinBox::valueChanged, this, [applyEnd](double) { applyEnd(); });
-    connect(endRightIntensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [applyEnd](double) { applyEnd(); });
-    connect(endRightOpacitySpinBox_, &QDoubleSpinBox::valueChanged, this, [applyEnd](double) { applyEnd(); });
 
     uniformBlurGroup_ = new QGroupBox(tr("Uniform Blur"), container);
     uniformBlurGroup_->setObjectName(QStringLiteral("uniformBlurGroup"));
@@ -979,56 +913,6 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
                             makeBoundFieldRow(downsampleBlockSizeSpinBox_, downsampleBlockSizeMindWaveCombo_));
     root->addWidget(downsampleGroup_);
 
-    equalizerCutGroup_ = new QGroupBox(tr("Cut"), container);
-    equalizerCutGroup_->setObjectName(QStringLiteral("equalizerCutGroup"));
-    auto* cutLayout = new QVBoxLayout(equalizerCutGroup_);
-
-    auto* cutStartGroup = new QGroupBox(tr("Start (t=0, lowest frequency)"), equalizerCutGroup_);
-    auto* cutStartForm = new QFormLayout(cutStartGroup);
-    startLeftCutSpinBox_ = makeOpacitySpinBox(cutStartGroup, QStringLiteral("startLeftCutSpinBox"));
-    cutStartForm->addRow(tr("Left Cut:"), startLeftCutSpinBox_);
-    startRightCutSpinBox_ = makeOpacitySpinBox(cutStartGroup, QStringLiteral("startRightCutSpinBox"));
-    cutStartForm->addRow(tr("Right Cut:"), startRightCutSpinBox_);
-    cutLayout->addWidget(cutStartGroup);
-
-    auto* cutEndGroup = new QGroupBox(tr("End (t=1, highest frequency)"), equalizerCutGroup_);
-    auto* cutEndForm = new QFormLayout(cutEndGroup);
-    endLeftCutSpinBox_ = makeOpacitySpinBox(cutEndGroup, QStringLiteral("endLeftCutSpinBox"));
-    cutEndForm->addRow(tr("Left Cut:"), endLeftCutSpinBox_);
-    endRightCutSpinBox_ = makeOpacitySpinBox(cutEndGroup, QStringLiteral("endRightCutSpinBox"));
-    cutEndForm->addRow(tr("Right Cut:"), endRightCutSpinBox_);
-    cutLayout->addWidget(cutEndGroup);
-
-    // Cut only ever writes opacity - intensity is always the silence
-    // floor underneath (-96 dB, this codebase's own established floor),
-    // never shown or user-editable here - see this class's own docs.
-    const auto applyCutStart = [this]() {
-        GradientStop stop = config_.frequencyGradient().stops().front();
-        stop.leftIntensity = -96.0f;
-        stop.rightIntensity = -96.0f;
-        stop.leftOpacity = static_cast<float>(startLeftCutSpinBox_->value());
-        stop.rightOpacity = static_cast<float>(startRightCutSpinBox_->value());
-        config_.frequencyGradient().setStopValues(0, stop);
-        emitConfigChanged();
-    };
-    connect(startLeftCutSpinBox_, &QDoubleSpinBox::valueChanged, this, [applyCutStart](double) { applyCutStart(); });
-    connect(startRightCutSpinBox_, &QDoubleSpinBox::valueChanged, this, [applyCutStart](double) { applyCutStart(); });
-
-    const auto applyCutEnd = [this]() {
-        GradientStop stop = config_.frequencyGradient().stops().back();
-        stop.leftIntensity = -96.0f;
-        stop.rightIntensity = -96.0f;
-        stop.leftOpacity = static_cast<float>(endLeftCutSpinBox_->value());
-        stop.rightOpacity = static_cast<float>(endRightCutSpinBox_->value());
-        const auto& stops = config_.frequencyGradient().stops();
-        config_.frequencyGradient().setStopValues(stops.size() - 1, stop);
-        emitConfigChanged();
-    };
-    connect(endLeftCutSpinBox_, &QDoubleSpinBox::valueChanged, this, [applyCutEnd](double) { applyCutEnd(); });
-    connect(endRightCutSpinBox_, &QDoubleSpinBox::valueChanged, this, [applyCutEnd](double) { applyCutEnd(); });
-
-    root->addWidget(equalizerCutGroup_);
-
     root->addStretch();
 
     auto* scrollArea = new QScrollArea(this);
@@ -1047,15 +931,15 @@ void FilterConfigurationPanel::updateVisibleGroup() {
     if (filterTypeLabel_ != nullptr) {
         filterTypeLabel_->setVisible(!isEqualizerMode_);
     }
-    equalizerCutGroup_->setVisible(isEqualizerMode_);
+    frequencyGradientEditor_->setCutMode(isEqualizerMode_);
 
-    // In Equalizer mode, the Cut group above is the only one shown -
-    // config_.type() is always FrequencyAxisGradient for the Equalizer
-    // anyway (it's never switched away, since the combo above is
-    // hidden), but every per-type group stays hidden regardless of
-    // type() while this mode is active.
+    // In Equalizer mode, frequencyAxisGradientSection_ (now in Cut mode)
+    // is the only one shown - config_.type() is always
+    // FrequencyAxisGradient for the Equalizer anyway (it's never switched
+    // away, since the combo above is hidden), but every per-type group
+    // stays hidden regardless of type() while this mode is active.
     const FilterType type = config_.type();
-    frequencyAxisGradientSection_->setVisible(!isEqualizerMode_ && type == FilterType::FrequencyAxisGradient);
+    frequencyAxisGradientSection_->setVisible(isEqualizerMode_ || type == FilterType::FrequencyAxisGradient);
     uniformBlurGroup_->setVisible(!isEqualizerMode_ && type == FilterType::UniformBlur);
     edgePreservingBlurGroup_->setVisible(!isEqualizerMode_ && type == FilterType::EdgePreservingBlur);
     directionalBlurGroup_->setVisible(!isEqualizerMode_ && type == FilterType::DirectionalBlur);
@@ -1092,14 +976,6 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     // handler (which would both redundantly re-set config_ to the value
     // it already has and spuriously emit filterConfigurationChanged()).
     const QSignalBlocker filterTypeBlocker(filterTypeCombo_);
-    const QSignalBlocker startLeftIntensityBlocker(startLeftIntensitySpinBox_);
-    const QSignalBlocker startLeftOpacityBlocker(startLeftOpacitySpinBox_);
-    const QSignalBlocker startRightIntensityBlocker(startRightIntensitySpinBox_);
-    const QSignalBlocker startRightOpacityBlocker(startRightOpacitySpinBox_);
-    const QSignalBlocker endLeftIntensityBlocker(endLeftIntensitySpinBox_);
-    const QSignalBlocker endLeftOpacityBlocker(endLeftOpacitySpinBox_);
-    const QSignalBlocker endRightIntensityBlocker(endRightIntensitySpinBox_);
-    const QSignalBlocker endRightOpacityBlocker(endRightOpacitySpinBox_);
     const QSignalBlocker blurSigmaBlocker(blurSigmaSpinBox_);
     const QSignalBlocker medianSizeBlocker(medianSizeSpinBox_);
     const QSignalBlocker directionalBlurLengthBlocker(directionalBlurLengthSpinBox_);
@@ -1132,10 +1008,6 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     const QSignalBlocker convolveAmountBlocker(convolveAmountSpinBox_);
     const QSignalBlocker downsampleModeBlocker(downsampleModeCombo_);
     const QSignalBlocker downsampleBlockSizeBlocker(downsampleBlockSizeSpinBox_);
-    const QSignalBlocker startLeftCutBlocker(startLeftCutSpinBox_);
-    const QSignalBlocker startRightCutBlocker(startRightCutSpinBox_);
-    const QSignalBlocker endLeftCutBlocker(endLeftCutSpinBox_);
-    const QSignalBlocker endRightCutBlocker(endRightCutSpinBox_);
 
     // Every FilterType is selectable now - findData() only ever falls
     // back to index 0 here for a corrupted/out-of-range stored value
@@ -1145,21 +1017,10 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     const int typeIndex = filterTypeCombo_->findData(QVariant::fromValue(static_cast<int>(config_.type())));
     filterTypeCombo_->setCurrentIndex(typeIndex >= 0 ? typeIndex : 0);
 
-    const auto& stops = config_.frequencyGradient().stops();
-    startLeftIntensitySpinBox_->setValue(stops.front().leftIntensity);
-    startLeftOpacitySpinBox_->setValue(stops.front().leftOpacity);
-    startRightIntensitySpinBox_->setValue(stops.front().rightIntensity);
-    startRightOpacitySpinBox_->setValue(stops.front().rightOpacity);
-    endLeftIntensitySpinBox_->setValue(stops.back().leftIntensity);
-    endLeftOpacitySpinBox_->setValue(stops.back().leftOpacity);
-    endRightIntensitySpinBox_->setValue(stops.back().rightIntensity);
-    endRightOpacitySpinBox_->setValue(stops.back().rightOpacity);
-    // Cut mirrors the same gradient's own opacity - intensity has no Cut
-    // counterpart to sync (it's write-only from this panel's own side).
-    startLeftCutSpinBox_->setValue(stops.front().leftOpacity);
-    startRightCutSpinBox_->setValue(stops.front().rightOpacity);
-    endLeftCutSpinBox_->setValue(stops.back().leftOpacity);
-    endRightCutSpinBox_->setValue(stops.back().rightOpacity);
+    // GradientEditorWidget::setGradient() doesn't emit on its own (see its
+    // own docs) - no separate QSignalBlocker needed here, matching
+    // rebuildMindWaveCombos()'s own reasoning for the same thing.
+    frequencyGradientEditor_->setGradient(config_.frequencyGradient());
 
     blurSigmaSpinBox_->setValue(config_.blurSigma());
     medianSizeSpinBox_->setValue(config_.medianSize());

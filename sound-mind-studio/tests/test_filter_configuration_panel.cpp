@@ -17,6 +17,7 @@
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/filter_configuration_panel.h"
+#include "sound_mind/studio/gradient_bar_widget.h"
 #include "sound_mind/studio/tone_curve_editor.h"
 
 using sound_mind::core::FilterConfiguration;
@@ -25,7 +26,20 @@ using sound_mind::core::FilterType;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::NamedConvolutionKernel;
 using sound_mind::studio::FilterConfigurationPanel;
+using sound_mind::studio::GradientBarWidget;
 using sound_mind::studio::ToneCurveEditor;
+
+namespace {
+
+/// @brief See test_gradient_bar_widget.cpp's own identical helper - kept
+/// as its own local copy, matching that file's own comment on why.
+int xPosFor(float t) {
+    constexpr double margin = 8.0;
+    constexpr double width = 240.0 - 2 * margin;
+    return static_cast<int>(margin + static_cast<double>(t) * width);
+}
+
+}  // namespace
 
 void FilterConfigurationPanelTest::freshPanelHasAFullyTransparentDefaultConfiguration() {
     const FilterConfigurationPanel panel;
@@ -37,7 +51,9 @@ void FilterConfigurationPanelTest::freshPanelHasAFullyTransparentDefaultConfigur
 
 void FilterConfigurationPanelTest::changingAStartSpinBoxUpdatesStop0AndEmitsFilterConfigurationChanged() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("startLeftIntensitySpinBox"));
+    // The gradient editor's own selection defaults to stop 0 (t=0) - see
+    // GradientBarWidget::setGradient()'s own docs.
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"));
     QVERIFY(spinBox != nullptr);
 
     std::optional<FilterConfiguration> received;
@@ -55,7 +71,15 @@ void FilterConfigurationPanelTest::changingAStartSpinBoxUpdatesStop0AndEmitsFilt
 
 void FilterConfigurationPanelTest::changingAnEndSpinBoxUpdatesStop1AndEmitsFilterConfigurationChanged() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("endRightOpacitySpinBox"));
+    // Select the last stop (t=1) first - see
+    // changingAStartSpinBoxUpdatesStop0AndEmitsFilterConfigurationChanged()'s
+    // own comment on why stop 0 is selected by default otherwise.
+    auto* bar = panel.findChild<GradientBarWidget*>(QStringLiteral("gradientBar"));
+    QVERIFY(bar != nullptr);
+    bar->resize(240, 48);
+    QTest::mousePress(bar, Qt::LeftButton, Qt::NoModifier, QPoint(xPosFor(1.0f), 24));
+    QTest::mouseRelease(bar, Qt::LeftButton, Qt::NoModifier, QPoint(xPosFor(1.0f), 24));
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightOpacitySpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -67,7 +91,7 @@ void FilterConfigurationPanelTest::changingAnEndSpinBoxUpdatesStop1AndEmitsFilte
     QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().front().rightOpacity, 0.0f);
 }
 
-void FilterConfigurationPanelTest::setFilterConfigurationSyncsAllEightSpinBoxesWithoutEmitting() {
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsBothEndpointStopsWithoutEmitting() {
     FilterConfigurationPanel panel;
     FilterConfiguration config;
     config.frequencyGradient().setStopValues(0, {0.0f, -10.0f, -20.0f, 0.3f, 0.4f});
@@ -77,14 +101,19 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsAllEightSpinBoxesW
     panel.setFilterConfiguration(config);
 
     QCOMPARE(spy.count(), 0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("startLeftIntensitySpinBox"))->value(), -10.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("startRightIntensitySpinBox"))->value(), -20.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("startLeftOpacitySpinBox"))->value(), 0.3);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("startRightOpacitySpinBox"))->value(), 0.4);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endLeftIntensitySpinBox"))->value(), -30.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endRightIntensitySpinBox"))->value(), -40.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endLeftOpacitySpinBox"))->value(), 0.5);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endRightOpacitySpinBox"))->value(), 0.6);
+    // setGradient() (called by setFilterConfiguration()) selects stop 0 -
+    // its own values show directly; the last stop's own values are
+    // checked via the model itself (already proven correct above and by
+    // GradientEditorWidgetTest's own selection-sync tests), not by
+    // reselecting it here too.
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->value(), -10.0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightIntensitySpinBox"))->value(), -20.0);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightOpacitySpinBox"))->value(), 0.4);
+    QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().leftIntensity, -30.0f);
+    QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().rightIntensity, -40.0f);
+    QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().leftOpacity, 0.5f);
+    QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().rightOpacity, 0.6f);
 }
 
 void FilterConfigurationPanelTest::freshPanelShowsOnlyTheFrequencyAxisGradientGroup() {
@@ -248,33 +277,37 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheToneCurveEditor
     QCOMPARE(editor->points(), config.toneCurvePoints());
 }
 
-void FilterConfigurationPanelTest::equalizerModeHidesTheFilterTypeComboAndShowsTheCutGroup() {
+void FilterConfigurationPanelTest::equalizerModeHidesTheFilterTypeComboAndSwitchesTheGradientEditorToCutMode() {
     FilterConfigurationPanel panel;
 
     panel.setEqualizerMode(true);
 
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
-    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("equalizerCutGroup"))->isHidden());
-    // Every per-type group stays hidden while in Equalizer mode, even
-    // though config_.type() is still FrequencyAxisGradient (the default).
-    QVERIFY(panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
+    // Real-world testing pass, 2026-09-20, finding #17: Cut mode now
+    // reuses frequencyAxisGradientSection_'s own GradientEditorWidget,
+    // switched into Cut mode (intensity hidden), rather than a second,
+    // separate group - see setEqualizerMode()'s own docs.
+    QVERIFY(!panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightIntensitySpinBox"))->isHidden());
 }
 
-void FilterConfigurationPanelTest::equalizerModeOffRestoresTheNormalPerTypeGroup() {
+void FilterConfigurationPanelTest::equalizerModeOffRestoresTheNormalPerTypeGroupAndIntensityFields() {
     FilterConfigurationPanel panel;
     panel.setEqualizerMode(true);
 
     panel.setEqualizerMode(false);
 
     QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
-    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("equalizerCutGroup"))->isHidden());
     QVERIFY(!panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightIntensitySpinBox"))->isHidden());
 }
 
 void FilterConfigurationPanelTest::editingACutSpinBoxWritesOpacityAndForcesIntensityToTheSilenceFloor() {
     FilterConfigurationPanel panel;
     panel.setEqualizerMode(true);
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("startLeftCutSpinBox"));
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -300,10 +333,13 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheCutSpinBoxesFro
     panel.setFilterConfiguration(config);
 
     QCOMPARE(spy.count(), 0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("startLeftCutSpinBox"))->value(), 0.3);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("startRightCutSpinBox"))->value(), 0.4);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endLeftCutSpinBox"))->value(), 0.5);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("endRightCutSpinBox"))->value(), 0.6);
+    // setGradient() selects stop 0 - see
+    // setFilterConfigurationSyncsBothEndpointStopsWithoutEmitting()'s own
+    // comment on why the last stop is checked via the model instead.
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightOpacitySpinBox"))->value(), 0.4);
+    QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().leftOpacity, 0.5f);
+    QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().rightOpacity, 0.6f);
 }
 
 // --- v0.Y.31.1 Installment D3: filter-parameter MindWave bindings -----

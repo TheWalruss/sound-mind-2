@@ -6,6 +6,22 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.26] - 2026-09-25
+
+Real-world testing pass finding #17: **A real, draggable gradient editor, everywhere.**
+
+### Added
+
+- **A real, draggable, multi-stop gradient editor** now backs every gradient control in the app: Painting's own brush Gradient, Filter Configuration's Frequency-Axis Gradient and the Equalizer's Cut editor, and Fill Selection's own picker. Click a stop on the bar to select and edit it, double-click the bar to add a new stop, drag an interior stop to move it (the two endpoints are fixed), and check **Link Channels** to mirror an edit onto both Left/Right at once.
+- **Painting a stroke with more than two gradient stops now varies continuously along the stroke's own length**, the same way Fill Selection already varies across a selection and Frequency-Axis Gradient varies across frequency - no separate "Path Gradient" feature was needed; the mechanism already existed underneath the old, flattened two-endpoint editor.
+
+### Changed
+
+- **Fill Selection** (`Edit → Fill Selection...`) now opens the same gradient editor instead of a flat color picker, so a fill can vary across the selection instead of being a single uniform color.
+- **Painting's old Color swatch/Opacity spin box are gone**, replaced by the new Gradient editor; Heal/Soften/Smudge/Order-Chaos hide only its Intensity fields (their own blend never reads intensity, only Opacity as blend strength).
+
+Full regression: `sound-mind-studio` `GradientBarWidgetTest` 14/14 (new), `GradientEditorWidgetTest` 11/11 (new), `FilterConfigurationPanelTest` 68/68, `ToolConfigurationPanelTest` 65/65, `MainWindowTest` 213/213 (2 new). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #147.
+
 ## [0.0.45.25] - 2026-09-25
 
 Real-world testing pass finding #18: **A new "Downsample" filter.**

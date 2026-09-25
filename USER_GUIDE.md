@@ -422,18 +422,21 @@ different type shows only that type's own controls below the dropdown;
 switching back and forth doesn't lose whatever you entered into a
 group's own controls while it was hidden.
 
-- **Frequency-Axis Gradient** shows two groups, **Start (t=0, lowest
-  frequency)** and **End (t=1, highest frequency)**, each with **Left
-  Intensity**/**Left Opacity**/**Right Intensity**/**Right Opacity** -
-  the exact same gradient controls Path Gradient and Fill already use,
-  applied across the frequency axis
-  instead of along a path: at each frequency, the composite's own
-  loudness blends toward that stop's own Intensity, by that stop's own
-  Opacity (`0` leaves it untouched, `1` forces it all the way to
-  Intensity). A fresh Filter layer starts fully transparent (both stops
-  at `0` opacity) - it does nothing until you raise an Opacity. This is
-  a basic, spin-box-only editor for now - just the gradient's own two
-  endpoint stops, no draggable visual editor and no interior stops yet.
+- **Frequency-Axis Gradient** shows a draggable gradient bar spanning
+  low frequency (left) to high frequency (right), the same gradient
+  editor Painting's own brush and Fill Selection use: click a stop on
+  the bar to select it and edit its **Left Intensity**/**Left
+  Opacity**/**Right Intensity**/**Right Opacity** below, double-click
+  anywhere on the bar to add a new stop there, and drag an interior stop
+  left/right to move it (the two endpoint stops, at the far left/right,
+  can't be moved or deleted - **Delete Stop** is disabled while one of
+  them is selected). At each frequency, the composite's own loudness
+  blends toward the nearest stops' own interpolated Intensity, by their
+  interpolated Opacity (`0` leaves it untouched, `1` forces it all the
+  way to Intensity). **Link Channels** mirrors every edit onto both
+  Left/Right fields at once, for the common case of an identical stereo
+  effect. A fresh Filter layer starts fully transparent (every stop at
+  `0` opacity) - it does nothing until you raise an Opacity.
 - **Uniform Blur** softens evenly in every direction - one **Sigma**
   control (the blur's own strength, in bins/columns).
 - **Edge-Preserving Blur** softens without smearing across a sharp
@@ -589,12 +592,13 @@ deleted - see [Working with Layers](#working-with-layers) above). It
 starts with no effect (its Cut is `0` everywhere). Selecting it opens the
 Filter Configuration panel in a dedicated mode: no Filter Type
 drop-down (the Equalizer is always Frequency-Axis Gradient underneath,
-so there's nothing to switch), just a **Cut** group with the same
-**Start**/**End** stops as Frequency-Axis Gradient, but only **Left
-Cut**/**Right Cut** per stop - `0` leaves that frequency untouched, `1`
-silences it completely. Unlike the ordinary Frequency-Axis Gradient
-editor, there's no Intensity to set here - the Equalizer only ever cuts
-toward silence, never toward some other target loudness.
+so there's nothing to switch), just the same draggable gradient bar
+Frequency-Axis Gradient uses, but with both Intensity fields hidden and
+the Opacity fields relabeled **Left Cut**/**Right Cut** - `0` leaves that
+frequency untouched, `1` silences it completely. Unlike the ordinary
+Frequency-Axis Gradient editor, there's no Intensity to set here - the
+Equalizer only ever cuts toward silence, never toward some other target
+loudness.
 
 ## Painting
 
@@ -695,21 +699,21 @@ settings:
   neighboring moments, as well as covering more canvas), **Opacity is the
   blend strength** (how much of the averaged result replaces the original -
   100% fully replaces it, lower values only partially smooth it), and the
-  Color swatch has no effect (there's no fixed target color for a blur to
-  paint toward). Repeated or overlapping strokes over the same spot blur it
-  further each time, the same way a real blur brush would. **Stamp Mode is
-  always Along Curve and Stamp Interval is always fixed to 66% of Brush
-  Size** - both hidden from the panel, for consistent results; see Stamp
-  Mode's own entry below.
+  Gradient editor's Intensity fields hide entirely (there's no fixed
+  target color for a blur to paint toward). Repeated or overlapping
+  strokes over the same spot blur it further each time, the same way a
+  real blur brush would. **Stamp Mode is always Along Curve and Stamp
+  Interval is always fixed to 66% of Brush Size** - both hidden from the
+  panel, for consistent results; see Stamp Mode's own entry below.
 - **Soften** (Soften only, no controls of its own) - the same idea as Heal,
   but blurs uniformly in every direction (time *and* frequency) rather than
   time alone, for a general softening instead of Heal's own
-  defect-erasing, single-axis blend. Brush Size/Opacity/Color work exactly
-  the same way Heal's own do, and Stamp Mode/Interval are fixed the same
-  way too.
+  defect-erasing, single-axis blend. Brush Size/Opacity/Gradient work
+  exactly the same way Heal's own do, and Stamp Mode/Interval are fixed
+  the same way too.
 - **Smudge** (Smudge only, no controls of its own) - drags pixels along the
   direction you're actually dragging the stroke, the way a finger smudges
-  wet paint. Brush Size/Falloff/Opacity/Color all work the same way
+  wet paint. Brush Size/Falloff/Opacity/Gradient all work the same way
   Heal's/Soften's own do, and Stamp Mode/Interval are fixed the same way
   too; the smear's own direction and reach come from how you're moving the
   stroke itself, not a separate control. A single click (no drag) has
@@ -771,19 +775,25 @@ settings:
   canvas zoom yet, so seconds/Hz are the only units that make sense). For
   Heal/Soften/Smudge/Order-Chaos, Interval is likewise hidden - it's always
   66% of Brush Size, so it stays proportional as Brush Size changes.
-- **Color** - a swatch button; click it to open a color picker. This is
-  how loud the stroke paints, *and* its stereo balance, at once: the
-  picked color's red channel sets the left channel's loudness, green
-  sets the right channel's - full red with no green paints loud on the
-  left and silent on the right, and so on. The swatch shows the color's
-  hex code as well as its fill. The panel's own default (bright yellow -
-  full red and green) paints loud on both channels equally. Hidden for
-  Mind Shot, Mind Grain, Heal, Soften, Smudge, and Order/Chaos - none of
-  them paint toward a fixed color.
-- **Opacity** - how strongly the stroke's color is actually applied,
-  regardless of what it is. The panel's own default (100%) paints at
-  full strength right away, no setup required. Hidden for Mind Shot/Mind
-  Grain, which don't use it.
+- **Gradient** - the same draggable gradient bar/stop editor Filter
+  Configuration's Frequency-Axis Gradient uses (see [Filter
+  Layers](#filter-layers) above), here editing the stroke's own
+  gradient: click a stop to select it and edit its **Left
+  Intensity**/**Left Opacity**/**Right Intensity**/**Right Opacity**,
+  double-click the bar to add a new stop, drag an interior stop to move
+  it. This is how loud the stroke paints, *and* its stereo balance, at
+  once - Left/Right Intensity set each channel's own target loudness,
+  Left/Right Opacity set how strongly the stroke actually pushes toward
+  it (`0` leaves the canvas untouched, `1` paints at full strength). A
+  gradient with more than two stops varies continuously along the
+  stroke's own length as you draw it, the same way Fill Selection's own
+  gradient varies across a selection. The panel's own default (both
+  endpoint stops at `0` dB, full opacity) paints loud on both channels
+  equally at full strength right away, no setup required. Hidden for
+  Mind Shot and Mind Grain, which don't paint toward a fixed target at
+  all; for Heal, Soften, Smudge, and Order/Chaos, only the Intensity
+  fields hide - Opacity stays, as the blend's own strength (see each
+  tool's own entry below).
 - **Blend Mode** - how a Mind Shot/Mind Grain stamp combines with what's
   already there: **Overwrite** (the default) replaces it entirely, same
   as before this control existed; **Normal**, **Multiply**, **Screen**,
@@ -965,11 +975,13 @@ its exact shape. Shifted content can spill outside the selection's own
 box, overwriting whatever was there; anywhere nothing shifts in to fill a
 gap is left silent.
 
-- **Fill** it - **Edit → Fill Selection...** opens a color picker; the
-  picked color fills the selection at full strength, confined exactly to
-  its own boundary. The color's red channel controls how loud the left
-  channel is filled, green controls the right - the same convention
-  Painting's own Color control uses.
+- **Fill** it - **Edit → Fill Selection...** opens the same draggable
+  gradient editor Painting's brush and Filter Configuration's
+  Frequency-Axis Gradient use (see [Painting](#painting)/[Filter
+  Layers](#filter-layers) above), seeded with a fully-opaque default;
+  accepting fills the selection, confined exactly to its own boundary. A
+  gradient with more than two stops varies continuously left-to-right
+  across the selection, not just a single flat color.
 - **Copy** it - **Edit → Copy** (Ctrl+C) captures the selection's own
   pixels onto the clipboard, leaving them in place.
 - **Cut** it - **Edit → Cut** (Ctrl+X) does the same as Copy, then
@@ -1411,11 +1423,6 @@ designed for it:
 milestone - all twenty-one designed filter types work now - but a couple
 of loose ends remain:
 
-- **No draggable visual gradient editor for Frequency-Axis Gradient
-  (including the Equalizer's own Cut editor), and no interior stops** -
-  just the two endpoint stops (`t=0`, `t=1`), via plain spin boxes. (Tone
-  Curve, unlike Frequency-Axis Gradient, does have a real draggable point
-  editor now.)
 - **MindWave-bound filter parameters exist now** (see
   [MindWaves](#mindwaves) above) for nearly every scalar control across
   every filter type - see [Filter Layers](#filter-layers)'s own list
@@ -1479,7 +1486,12 @@ a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,
   retune the note grid's own tuning reference (fixed at 440 Hz/A4) or
   change the project's own default tempo (fixed at 120 BPM) - Custom
   Frequencies is free-entry only for now (type your own Hz values).
-- No dedicated Path Gradient UI - a finished path uses the current
-  Painting brush's own Color/Opacity settings (the same uniform-color
-  shortcut Fill Selection's own picker uses), not a real multi-stop
-  gradient along the path's own length.
+- No *separate* Path Gradient UI, but none is needed any more - a
+  finished path uses whatever gradient Painting's own Gradient editor
+  held at the moment it was drawn (see [Painting](#painting) above), and
+  a gradient with more than two stops really does vary continuously
+  along the path's own length as it's stamped, the same way it varies
+  across a Fill Selection or Filter Configuration's own frequency axis.
+  Editing the panel's Gradient afterward doesn't retroactively change an
+  already-finished path, the same snapshot-at-draw-time rule every other
+  tool setting already follows.

@@ -29,6 +29,7 @@
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/gpu_compute_availability.h"
+#include "sound_mind/core/gradient.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/playback_engine.h"
@@ -48,6 +49,7 @@
 using sound_mind::codec::CompressedAudioFormat;
 using sound_mind::core::BlendMode;
 using sound_mind::core::FillOperation;
+using sound_mind::core::Gradient;
 using sound_mind::core::PaintOperation;
 using sound_mind::core::PasteOperation;
 using sound_mind::core::PathNodeType;
@@ -4031,19 +4033,24 @@ void MainWindowTest::selectingTheEqualizerLayerSwitchesTheFilterConfigurationPan
     window.addFilterLayer();
     const auto ordinaryFilterId = topmostNonEqualizerLayer(*window.project()).id();
     layersPanel->selectLayer(ordinaryFilterId);
-    QVERIFY(filterPanel->findChild<QGroupBox*>(QStringLiteral("equalizerCutGroup"))->isHidden());
+    // Real-world testing pass, 2026-09-20, finding #17: Cut mode now
+    // reuses the same gradient editor a regular Filter layer shows,
+    // switched into Cut mode (intensity fields hidden) - see
+    // FilterConfigurationPanel::setEqualizerMode()'s own docs - rather
+    // than a second, separate "Cut" group.
+    QVERIFY(!filterPanel->findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
 
     const auto equalizerId = window.project()->layers().back().id();  // Always the topmost layer.
     layersPanel->selectLayer(equalizerId);
 
     QVERIFY(filterPanel->isEnabled());
     QVERIFY(filterPanel->findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
-    QVERIFY(!filterPanel->findChild<QGroupBox*>(QStringLiteral("equalizerCutGroup"))->isHidden());
+    QVERIFY(filterPanel->findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
 
     layersPanel->selectLayer(ordinaryFilterId);
 
     QVERIFY(!filterPanel->findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
-    QVERIFY(filterPanel->findChild<QGroupBox*>(QStringLiteral("equalizerCutGroup"))->isHidden());
+    QVERIFY(!filterPanel->findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
 }
 
 void MainWindowTest::editingFilterConfigurationPanelWritesBackToTheSelectedLayer() {
@@ -4056,7 +4063,7 @@ void MainWindowTest::editingFilterConfigurationPanelWritesBackToTheSelectedLayer
     layersPanel->selectLayer(filterLayerId);
     auto* filterPanel = window.findChild<FilterConfigurationPanel*>();
     QVERIFY(filterPanel != nullptr);
-    auto* spinBox = filterPanel->findChild<QDoubleSpinBox*>(QStringLiteral("startLeftIntensitySpinBox"));
+    auto* spinBox = filterPanel->findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"));
     QVERIFY(spinBox != nullptr);
 
     spinBox->setValue(-15.0);
@@ -4453,6 +4460,58 @@ float leftDbAtWidgetPixel(const sound_mind::codec::StreamImage& content, int wid
 }
 
 }  // namespace
+
+void MainWindowTest::fillSelectionWithGradientAppliesARealMultiStopGradientAcrossTheSelection() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-fill-gradient.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));  // 100x50 canvas.
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    // Loud - quiet - loud across the selection's own time axis (t=0/0.5/1)
+    // - applyFillOperation() evaluates the gradient left-to-right across the
+    // selection (see its own docs); a flat, single-color fill (this
+    // method's own prior shape) couldn't produce this at all.
+    Gradient gradient;
+    auto loud = gradient.stops().front();
+    loud.leftIntensity = 0.0f;
+    loud.rightIntensity = 0.0f;
+    loud.leftOpacity = 1.0f;
+    loud.rightOpacity = 1.0f;
+    gradient.setStopValues(0, loud);
+    gradient.setStopValues(1, loud);
+    auto quiet = loud;
+    quiet.leftIntensity = -80.0f;
+    quiet.rightIntensity = -80.0f;
+    const std::size_t midIndex = gradient.insertStop(0.5f);
+    gradient.setStopValues(midIndex, quiet);
+
+    window.fillSelectionWithGradient(gradient);
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    const auto& content = *topmostNonEqualizerLayer(*window.project()).content();
+    // x=20/60 are the selection's own start/end (t=0/1, loud); x=40 is its
+    // midpoint (t=0.5, quiet).
+    QVERIFY(leftDbAtWidgetPixel(content, 20, 20) > -10.0f);
+    QVERIFY(leftDbAtWidgetPixel(content, 60, 20) > -10.0f);
+    QVERIFY(leftDbAtWidgetPixel(content, 40, 20) < -50.0f);
+}
+
+void MainWindowTest::fillSelectionWithGradientIsANoOpWithNoSelection() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.fillSelectionWithGradient(Gradient{});
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}
 
 void MainWindowTest::copyThenPasteOnTheSameLayerReproducesTheSelection() {
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-copy-paste-same-layer.smproj";

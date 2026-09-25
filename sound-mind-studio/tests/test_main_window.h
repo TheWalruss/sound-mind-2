@@ -216,6 +216,8 @@ private slots:
     void selectionPersistsAfterSwitchingAwayFromSelectMode();
     void deselectClearsTheCurrentSelectionSoFillBecomesANoOp();
     void fillSelectionWithIsANoOpWithNoSelection();
+    void fillSelectionWithGradientAppliesARealMultiStopGradientAcrossTheSelection();
+    void fillSelectionWithGradientIsANoOpWithNoSelection();
     void settingANewProjectResetsSelectModeToOff();
     void copyThenPasteOnTheSameLayerReproducesTheSelection();
     void pasteUsesTheSelectionConfigurationPanelsOwnBlendMode();

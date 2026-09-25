@@ -23,6 +23,8 @@
 #include "test_create_project_wizard.h"
 #include "test_device_combo_helpers.h"
 #include "test_filter_configuration_panel.h"
+#include "test_gradient_bar_widget.h"
+#include "test_gradient_editor_widget.h"
 #include "test_grid_config.h"
 #include "test_grid_panel.h"
 #include "test_image_scale_picker_dialog.h"
@@ -165,6 +167,12 @@ int main(int argc, char** argv) {
 
     FilterConfigurationPanelTest filterConfigurationPanelTest;
     status |= QTest::qExec(&filterConfigurationPanelTest, argc, argv);
+
+    GradientBarWidgetTest gradientBarWidgetTest;
+    status |= QTest::qExec(&gradientBarWidgetTest, argc, argv);
+
+    GradientEditorWidgetTest gradientEditorWidgetTest;
+    status |= QTest::qExec(&gradientEditorWidgetTest, argc, argv);
 
     ToneCurveEditorTest toneCurveEditorTest;
     status |= QTest::qExec(&toneCurveEditorTest, argc, argv);

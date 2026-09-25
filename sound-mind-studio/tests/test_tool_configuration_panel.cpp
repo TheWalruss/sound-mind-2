@@ -5,10 +5,8 @@
 #include <optional>
 
 #include <QCheckBox>
-#include <QColor>
 #include <QComboBox>
 #include <QDoubleSpinBox>
-#include <QPushButton>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QtTest/QtTest>
@@ -19,6 +17,7 @@
 #include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/gradient_editor_widget.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
 using sound_mind::core::BlendMode;
@@ -44,6 +43,7 @@ using sound_mind::core::StampMode;
 using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ToolConfiguration;
 using sound_mind::core::ToolType;
+using sound_mind::studio::GradientEditorWidget;
 using sound_mind::studio::ToolConfigurationPanel;
 
 namespace {
@@ -67,10 +67,9 @@ void ToolConfigurationPanelTest::freshPanelIsAnOpaqueCircularBrush() {
     QCOMPARE(dynamic_cast<const ProceduralConfiguration&>(config).tipShape(), BrushTipShape::Circle);
     QCOMPARE(config.defaultGradient().stops().front().leftOpacity, 1.0f);
     QCOMPARE(config.defaultGradient().stops().front().rightOpacity, 1.0f);
-    // 0 dB on both channels is byte 255 on both red and green - a bright
-    // yellow (no blue - painting doesn't touch phase yet) - see color()'s
-    // own docs.
-    QCOMPARE(panel.color(), QColor(255, 255, 0));
+    // 0 dB on both channels - the loudest a stop can be.
+    QCOMPARE(config.defaultGradient().stops().front().leftIntensity, 0.0f);
+    QCOMPARE(config.defaultGradient().stops().front().rightIntensity, 0.0f);
 }
 
 void ToolConfigurationPanelTest::freshPanelHasBothOverlayCheckboxesOff() {
@@ -124,16 +123,19 @@ void ToolConfigurationPanelTest::changingSizeEmitsToolConfigurationChanged() {
     QCOMPARE(panel.toolConfiguration().size(), 2.5);
 }
 
-void ToolConfigurationPanelTest::changingOpacitySetsBothGradientStopsOpacity() {
+void ToolConfigurationPanelTest::editingTheGradientEditorUpdatesDefaultGradientAndEmits() {
     ToolConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"));
-    QVERIFY(spinBox != nullptr);
+    auto* opacitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"));
+    QVERIFY(opacitySpinBox != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
-    spinBox->setValue(50.0);
+    opacitySpinBox->setValue(0.5);
 
-    const auto& stops = panel.toolConfiguration().defaultGradient().stops();
-    QCOMPARE(stops.front().leftOpacity, 0.5f);
-    QCOMPARE(stops.front().rightOpacity, 0.5f);
+    QCOMPARE(spy.count(), 1);
+    // gradientEditor_ starts with stop 0 selected - see
+    // GradientBarWidget::setGradient()'s own "always resets to stop 0"
+    // contract.
+    QCOMPARE(panel.toolConfiguration().defaultGradient().stops().front().leftOpacity, 0.5f);
 }
 
 void ToolConfigurationPanelTest::togglingShowBoundingBoxesEmitsItsOwnSignal() {
@@ -158,44 +160,6 @@ void ToolConfigurationPanelTest::togglingShowPathGeometryEmitsItsOwnSignal() {
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).toBool(), true);
-}
-
-void ToolConfigurationPanelTest::setColorSetsBothGradientStopsIntensityAndEmitsChange() {
-    ToolConfigurationPanel panel;
-    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
-
-    panel.setColor(QColor(128, 64, 255));  // blue is ignored - painting doesn't touch phase yet.
-
-    QCOMPARE(spy.count(), 1);
-    const auto& stops = panel.toolConfiguration().defaultGradient().stops();
-    // displayByteToDb(128) ~= -47.8 dB, displayByteToDb(64) ~= -71.9 dB, over
-    // the -96..0 dB display range dbToDisplayByte()/displayByteToDb() share
-    // with color_mapping.cpp's own (unexported) formula.
-    QVERIFY(qAbs(stops.front().leftIntensity - (-47.8f)) < 1.0f);
-    QVERIFY(qAbs(stops.front().rightIntensity - (-71.9f)) < 1.0f);
-    QCOMPARE(stops.back().leftIntensity, stops.front().leftIntensity);
-    QCOMPARE(stops.back().rightIntensity, stops.front().rightIntensity);
-}
-
-void ToolConfigurationPanelTest::colorRoundTripsThroughSetColor() {
-    ToolConfigurationPanel panel;
-
-    panel.setColor(QColor(200, 40, 0));
-
-    // Round-trips exactly for red/green (blue is always 0 - see color()'s
-    // own docs) - dbToDisplayByte()/displayByteToDb() are exact inverses over
-    // the 0-255 byte range.
-    QCOMPARE(panel.color(), QColor(200, 40, 0));
-}
-
-void ToolConfigurationPanelTest::colorButtonExistsForOpeningTheRealDialog() {
-    const ToolConfigurationPanel panel;
-    auto* button = panel.findChild<QPushButton*>(QStringLiteral("colorButton"));
-    QVERIFY(button != nullptr);
-    // Its own displayed swatch already matches color() - see
-    // updateColorButtonAppearance()'s own docs - checked via the hex text
-    // it sets alongside the background fill, not by parsing a stylesheet.
-    QCOMPARE(button->text(), panel.color().name());
 }
 
 void ToolConfigurationPanelTest::freshPanelHasStampModeStrokeAndTheIntervalSpinBoxDisabled() {
@@ -874,11 +838,12 @@ void ToolConfigurationPanelTest::proceduralShowsEverySharedControl() {
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<GradientEditorWidget*>(QStringLiteral("gradientEditor"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
 }
 
-void ToolConfigurationPanelTest::mindShotHidesFalloffSizeColorAndOpacityButKeepsStampControls() {
+void ToolConfigurationPanelTest::mindShotHidesFalloffSizeAndGradientEditorButKeepsStampControls() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Shot")));
@@ -886,27 +851,25 @@ void ToolConfigurationPanelTest::mindShotHidesFalloffSizeColorAndOpacityButKeeps
     // Never consulted by applyMindShotPaintOperation() - see its own docs.
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
-    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<GradientEditorWidget*>(QStringLiteral("gradientEditor"))->isHidden());
     // Still a real, meaningful placement choice.
     QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
 }
 
-void ToolConfigurationPanelTest::mindGrainHidesFalloffSizeColorAndOpacityButKeepsStampControls() {
+void ToolConfigurationPanelTest::mindGrainHidesFalloffSizeAndGradientEditorButKeepsStampControls() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Grain")));
 
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
-    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<GradientEditorWidget*>(QStringLiteral("gradientEditor"))->isHidden());
     QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
 }
 
-void ToolConfigurationPanelTest::healHidesColorAndStampControlsButKeepsFalloffSizeAndOpacity() {
+void ToolConfigurationPanelTest::healHidesIntensityAndStampControlsButKeepsFalloffSizeAndOpacity() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Heal")));
@@ -914,50 +877,51 @@ void ToolConfigurationPanelTest::healHidesColorAndStampControlsButKeepsFalloffSi
     // Real, load-bearing parameters for Heal.
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
-    // Never consulted, or no longer settable.
-    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(!panel.findChild<GradientEditorWidget*>(QStringLiteral("gradientEditor"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
+    // Never consulted by Heal's own blend - see HealConfiguration's docs.
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
 }
 
-void ToolConfigurationPanelTest::softenHidesColorAndStampControls() {
+void ToolConfigurationPanelTest::softenHidesIntensityAndStampControls() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Soften")));
 
-    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
 }
 
-void ToolConfigurationPanelTest::smudgeHidesColorAndStampControls() {
+void ToolConfigurationPanelTest::smudgeHidesIntensityAndStampControls() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Smudge")));
 
-    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
 }
 
-void ToolConfigurationPanelTest::orderChaosHidesColorAndStampControls() {
+void ToolConfigurationPanelTest::orderChaosHidesIntensityAndStampControls() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Order/Chaos")));
 
-    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("colorButton"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("opacitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
 }
 
 void ToolConfigurationPanelTest::switchingFromHealBackToProceduralPreservesTheOriginalStampMode() {

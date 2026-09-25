@@ -21,6 +21,7 @@ class QWidget;
 
 namespace sound_mind::studio {
 
+class GradientEditorWidget;
 class ToneCurveEditor;
 
 /**
@@ -191,7 +192,7 @@ public:
 
     /**
      * @brief Switches between the generic per-`FilterType` editor (the
-     *        default) and the Equalizer's own specialized "Cut" editor -
+     *        default) and the Equalizer's own specialized "Cut" mode -
      *        see this class's own docs.
      *
      * Purely a display mode - like `setFilterConfiguration()`, this
@@ -200,8 +201,16 @@ public:
      * layer's own `type()`, entirely separately from loading that
      * layer's own configuration.
      *
-     * @param isEqualizer `true` to show the Cut editor (and hide the
-     *        `FilterType` combo); `false` for the normal, generic panel.
+     * As of finding #17's own `GradientEditorWidget` (real-world testing
+     * pass, 2026-09-20), Cut mode reuses the exact same
+     * `frequencyGradientEditor_` a regular Frequency-Axis Gradient layer
+     * shows - both edit the same `frequencyGradient()`, so there's no
+     * longer a reason for a second, separate "Cut" widget mirroring it -
+     * only the `FilterType` combo hides (an Equalizer layer is always
+     * `FrequencyAxisGradient`, never switchable to anything else).
+     *
+     * @param isEqualizer `true` to hide the `FilterType` combo (Cut mode);
+     *        `false` for the normal, generic panel.
      */
     void setEqualizerMode(bool isEqualizer);
 
@@ -313,14 +322,7 @@ private:
 
     QWidget* frequencyAxisGradientSection_ = nullptr;
     QLabel* frequencyGradientLabel_ = nullptr;
-    QDoubleSpinBox* startLeftIntensitySpinBox_ = nullptr;
-    QDoubleSpinBox* startLeftOpacitySpinBox_ = nullptr;
-    QDoubleSpinBox* startRightIntensitySpinBox_ = nullptr;
-    QDoubleSpinBox* startRightOpacitySpinBox_ = nullptr;
-    QDoubleSpinBox* endLeftIntensitySpinBox_ = nullptr;
-    QDoubleSpinBox* endLeftOpacitySpinBox_ = nullptr;
-    QDoubleSpinBox* endRightIntensitySpinBox_ = nullptr;
-    QDoubleSpinBox* endRightOpacitySpinBox_ = nullptr;
+    GradientEditorWidget* frequencyGradientEditor_ = nullptr;
 
     QGroupBox* uniformBlurGroup_ = nullptr;
     QDoubleSpinBox* blurSigmaSpinBox_ = nullptr;
@@ -452,12 +454,6 @@ private:
     QComboBox* downsampleModeCombo_ = nullptr;
     QSpinBox* downsampleBlockSizeSpinBox_ = nullptr;
     QComboBox* downsampleBlockSizeMindWaveCombo_ = nullptr;
-
-    QGroupBox* equalizerCutGroup_ = nullptr;
-    QDoubleSpinBox* startLeftCutSpinBox_ = nullptr;
-    QDoubleSpinBox* startRightCutSpinBox_ = nullptr;
-    QDoubleSpinBox* endLeftCutSpinBox_ = nullptr;
-    QDoubleSpinBox* endRightCutSpinBox_ = nullptr;
 };
 
 }  // namespace sound_mind::studio
