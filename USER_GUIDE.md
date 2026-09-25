@@ -273,9 +273,11 @@ than one covering another - two layers at full opacity both come through
 in full, exactly like two instruments or voices sounding at once; a
 layer's own **Opacity** slider acts as its own volume in that mix, from
 silent (`0%`) to full strength (`100%`), rather than making it "more
-see-through" the way opacity works in an image editor. **Overwrite** is a
-hard, unconditional replacement - whatever's beneath a layer set to this
-mode is fully replaced, opacity ignored entirely. **Multiply**,
+see-through" the way opacity works in an image editor. **Overwrite**
+replaces whatever's beneath a layer set to this mode, faded by that
+layer's own Opacity the same way every other blend mode is - full Opacity
+replaces it entirely, `0%` leaves it untouched, and values in between mix
+the two proportionally. **Multiply**,
 **Screen**, **Overlay**, **Difference**, and **Add** are the familiar
 image-editor blend modes, each combining a layer with what's beneath it
 by the same formula an image editor would, rather than summing real

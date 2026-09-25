@@ -453,6 +453,29 @@ TEST_CASE("compositeProject applies a layer's own Multiply blend mode against wh
     CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(-72.0f).margin(0.05));
 }
 
+TEST_CASE("compositeProject's Overwrite blend mode respects a layer's own opacity",
+          "[core][compositor][blend_mode]") {
+    // Real-world testing pass finding #19: Overwrite used to always fully
+    // replace the base regardless of opacity - now it crossfades the same
+    // way every other mode does.
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-96.0f, -96.0f, -96.0f}, {-96.0f, -96.0f, -96.0f}, {0.0f, 0.0f, 0.0f}));
+    Layer second(0, "Second", LayerType::Normal);
+    second.setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    second.setBlendMode(BlendMode::Overwrite);
+    second.setOpacity(0.5f);
+    project.addLayer(std::move(second));
+
+    const auto composite = compositeProject(project);
+
+    // Half opacity should land exactly halfway between base (unit 0) and
+    // overlay (unit 1) - unit 0.5 -> -48dB, not overlay's own raw 0dB (the
+    // old, opacity-ignoring behavior).
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-48.0f).margin(0.05));
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(-48.0f).margin(0.05));
+}
+
 TEST_CASE("compositeProject's Multiply blend mode agrees between the GPU-preferred and CPU-forced "
           "paths, since Multiply always runs on the CPU regardless",
           "[core][compositor][blend_mode][gpu]") {

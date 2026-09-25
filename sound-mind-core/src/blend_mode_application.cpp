@@ -43,7 +43,9 @@ constexpr float kMinComplexMagnitude = 1e-6f;
 
 /// @brief One mode's own amplitude formula, in `dbToUnit()`-normalized
 /// space - see `applyBlendedCell()`'s own docs. Never called for `Normal`/
-/// `Overwrite`, which have no per-channel amplitude formula of this shape.
+/// `Overwrite`, both of which have their own dedicated branch before this
+/// is ever reached (`Overwrite`'s specifically to avoid `dbToUnit()`'s own
+/// display-range clamp - see `applyBlendedCell()`'s own docs).
 float blendAmplitudeUnit(BlendMode mode, float base, float overlay) {
     switch (mode) {
         case BlendMode::Multiply:
@@ -105,9 +107,6 @@ std::complex<float> blendPhaseComplex(BlendMode mode, std::complex<float> baseZ,
 }  // namespace
 
 BlendedCell applyBlendedCell(BlendMode mode, BlendedCell base, BlendedCell overlay, float opacity) {
-    if (mode == BlendMode::Overwrite) {
-        return overlay;
-    }
     if (mode == BlendMode::Normal) {
         // This codebase's own pre-v0.Y.37.1 audio-style mixing, unchanged -
         // see applyBlendedCell()'s own docs on why this stays in linear-
@@ -130,6 +129,31 @@ BlendedCell applyBlendedCell(BlendMode mode, BlendedCell base, BlendedCell overl
         const std::complex<float> mid = (newLeft + newRight) / 2.0f;
         return BlendedCell{linearAmplitudeToDb(std::abs(newLeft)), linearAmplitudeToDb(std::abs(newRight)),
                             (std::abs(mid) > 0.0f) ? std::arg(mid) : 0.0f};
+    }
+
+    if (mode == BlendMode::Overwrite) {
+        // A plain linear crossfade of the *raw* dB/phase values -
+        // deliberately its own branch, not routed through dbToUnit()'s
+        // shared [-96, 0]dB-clamping path below, unlike every other mode -
+        // real-world testing pass finding #19. Overwrite must still
+        // reproduce overlay bit-for-bit at opacity=1.0 (Paste's/Mind Shot's
+        // own established "exact copy" contract, which both intentionally
+        // exercise with values outside the normal display range as opaque
+        // test data - see test_paste_application.cpp's own captureClip
+        // round-trip test); dbToUnit()'s own clamp would silently corrupt
+        // exactly those out-of-range values even at full opacity, which a
+        // plain linear crossfade in raw dB space never does (dbToUnit()
+        // is itself an affine transform of dB, so this is numerically
+        // identical to the general path below for any in-range value -
+        // only out-of-range values are treated differently, and only by
+        // *not* clamping them).
+        const float leftDb = base.leftMagnitudeDb * (1.0f - opacity) + overlay.leftMagnitudeDb * opacity;
+        const float rightDb = base.rightMagnitudeDb * (1.0f - opacity) + overlay.rightMagnitudeDb * opacity;
+        const std::complex<float> baseZ(std::cos(base.phaseRadians), std::sin(base.phaseRadians));
+        const std::complex<float> overlayZ(std::cos(overlay.phaseRadians), std::sin(overlay.phaseRadians));
+        const std::complex<float> resultZ = (1.0f - opacity) * baseZ + opacity * overlayZ;
+        const float resultPhase = (std::abs(resultZ) > kMinComplexMagnitude) ? std::arg(resultZ) : overlay.phaseRadians;
+        return BlendedCell{leftDb, rightDb, resultPhase};
     }
 
     // Multiply/Screen/Overlay/Difference/Add - dbToUnit()-normalized space,

@@ -13,20 +13,44 @@ constexpr float kPi = std::numbers::pi_v<float>;
 }
 
 // --- Overwrite -----------------------------------------------------------
+//
+// Real-world testing pass finding #19: Overwrite now respects opacity the
+// same way every other mode does (a final crossfade against base), rather
+// than always returning overlay verbatim regardless of opacity.
 
-TEST_CASE("applyBlendedCell's Overwrite always returns overlay verbatim, regardless of opacity",
-          "[core][blend_mode_application]") {
+TEST_CASE("applyBlendedCell's Overwrite at full opacity returns overlay", "[core][blend_mode_application]") {
     const BlendedCell base{-10.0f, -20.0f, 0.1f};
     const BlendedCell overlay{-30.0f, -40.0f, 2.0f};
 
-    const auto result1 = applyBlendedCell(BlendMode::Overwrite, base, overlay, 1.0f);
-    const auto result0 = applyBlendedCell(BlendMode::Overwrite, base, overlay, 0.0f);
+    const auto result = applyBlendedCell(BlendMode::Overwrite, base, overlay, 1.0f);
 
-    for (const auto* result : {&result1, &result0}) {
-        CHECK(result->leftMagnitudeDb == overlay.leftMagnitudeDb);
-        CHECK(result->rightMagnitudeDb == overlay.rightMagnitudeDb);
-        CHECK(result->phaseRadians == overlay.phaseRadians);
-    }
+    CHECK(result.leftMagnitudeDb == Catch::Approx(overlay.leftMagnitudeDb).margin(0.05));
+    CHECK(result.rightMagnitudeDb == Catch::Approx(overlay.rightMagnitudeDb).margin(0.05));
+    CHECK(result.phaseRadians == Catch::Approx(overlay.phaseRadians).margin(0.01));
+}
+
+TEST_CASE("applyBlendedCell's Overwrite at zero opacity leaves base unchanged", "[core][blend_mode_application]") {
+    const BlendedCell base{-10.0f, -20.0f, 0.1f};
+    const BlendedCell overlay{-30.0f, -40.0f, 2.0f};
+
+    const auto result = applyBlendedCell(BlendMode::Overwrite, base, overlay, 0.0f);
+
+    CHECK(result.leftMagnitudeDb == Catch::Approx(base.leftMagnitudeDb).margin(0.05));
+    CHECK(result.rightMagnitudeDb == Catch::Approx(base.rightMagnitudeDb).margin(0.05));
+    CHECK(result.phaseRadians == Catch::Approx(base.phaseRadians).margin(0.01));
+}
+
+TEST_CASE("applyBlendedCell's Overwrite at half opacity crossfades linearly between base and overlay",
+          "[core][blend_mode_application]") {
+    // base at the silence floor (unit 0), overlay at 0dB (unit 1) - half
+    // opacity should land exactly at unit 0.5 -> -48dB.
+    const BlendedCell base{-96.0f, -96.0f, 0.0f};
+    const BlendedCell overlay{0.0f, 0.0f, 0.0f};
+
+    const auto result = applyBlendedCell(BlendMode::Overwrite, base, overlay, 0.5f);
+
+    CHECK(result.leftMagnitudeDb == Catch::Approx(-48.0f).margin(0.05));
+    CHECK(result.rightMagnitudeDb == Catch::Approx(-48.0f).margin(0.05));
 }
 
 // --- Normal ----------------------------------------------------------------

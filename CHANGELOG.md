@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.27] - 2026-09-25
+
+Real-world testing pass finding #19: **The Overwrite blend mode now respects opacity.**
+
+### Fixed
+
+- **The "Overwrite" blend mode now respects a layer's own Opacity slider and MindWave-bound opacity gain**, the same as every other blend mode - previously it always fully replaced whatever was beneath it regardless of opacity, which was inconsistent with Normal/Multiply/Screen/Overlay/Difference/Add. Paste and Mind Shot/Mind Grain's own Overwrite are unaffected (they always apply at full strength regardless of blend mode).
+
+Full regression: `sound-mind-core` 846/846 (4 new), `sound-mind-codec` 57/57, `sound-mind-studio` full suite unaffected. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #148.
+
 ## [0.0.45.26] - 2026-09-25
 
 Real-world testing pass finding #17: **A real, draggable gradient editor, everywhere.**

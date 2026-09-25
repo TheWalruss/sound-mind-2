@@ -38,17 +38,24 @@ enum class BlendMode {
     ///        gets this value, reproducing its own prior, only-ever-Normal
     ///        behavior exactly.
     Normal,
-    /// @brief A hard, unconditional replacement - the incoming content
-    ///        entirely replaces whatever's there, ignoring opacity
-    ///        completely. This is Paste's and Mind Shot/Mind Grain
-    ///        stamping's own pre-existing, only-ever behavior before this
-    ///        milestone (`blitClipCentered()`/`applyPasteOperation()`'s own
-    ///        verbatim-copy contract) - not a new mode being introduced so
-    ///        much as an existing, already-shipped behavior finally being
-    ///        named and made one selectable option among several. The
-    ///        default for Paste/Mind Shot/Mind Grain, for the same
-    ///        old-project-compatibility reason `Normal` is the default for
-    ///        layers.
+    /// @brief The incoming content replaces whatever's there, crossfaded
+    ///        by opacity the same way every mode below is (`base * (1 -
+    ///        opacity) + overlay * opacity`) - see `applyBlendedCell()`'s
+    ///        own docs; real-world testing pass finding #19 fixed this to
+    ///        respect opacity, having previously ignored it completely
+    ///        through `v0.Y.37.1`. This was originally named after Paste's
+    ///        and Mind Shot/Mind Grain stamping's own pre-existing, only-
+    ///        ever behavior before that milestone
+    ///        (`blitClipCentered()`/`applyPasteOperation()`'s own verbatim-
+    ///        copy contract) - not a new mode being introduced so much as
+    ///        an existing, already-shipped behavior finally being named and
+    ///        made one selectable option among several; both of those call
+    ///        sites always pass a fixed, full `opacity = 1.0` regardless of
+    ///        blend mode, so finding #19's fix changes nothing observable
+    ///        for either - only layer compositing, where opacity can
+    ///        genuinely vary, sees a real difference. The default for
+    ///        Paste/Mind Shot/Mind Grain, for the same old-project-
+    ///        compatibility reason `Normal` is the default for layers.
     Overwrite,
     /// @brief `result = base * overlay` (in `dbToUnit()`-normalized space).
     Multiply,
