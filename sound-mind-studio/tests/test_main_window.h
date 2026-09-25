@@ -31,6 +31,9 @@ private slots:
     void exportTopmostLayerVideoAsyncCompletesSuccessfullyAndHidesTheCancelButton();
     void cancelVideoExportStopsItAndDeletesThePartialFile();
     void exportTopmostLayerVideoAsyncDoesNothingWhileAlreadyRunning();
+    void exportTopmostLayerAudioAsyncCompletesSuccessfullyAndHidesTheCancelButton();
+    void cancelAudioExportStopsItAndDeletesThePartialFile();
+    void exportTopmostLayerAudioAsyncDoesNothingWhileAVideoExportIsRunning();
     void importAudioFileShowsProgressThenCompletionInTheStatusBar();
     void poolTopmostLayerNowShowsProgressThenCompletionInTheStatusBar();
     void exportTopmostLayerAudioNowShowsProgressThenCompletionInTheStatusBar();

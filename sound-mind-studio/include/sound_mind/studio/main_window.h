@@ -11,6 +11,7 @@
 #include <QSettings>
 #include <QUrl>
 
+#include "sound_mind/codec/audio_export.h"
 #include "sound_mind/core/background_task.h"
 #include "sound_mind/core/device_test_tone_player.h"
 #include "sound_mind/core/loop_engine.h"
@@ -1708,9 +1709,13 @@ public:
 
     /**
      * @brief Exports the topmost layer with content's audio to `path`,
-     *        without prompting or showing an error dialog on failure - the
-     *        actual work behind exportAudio(), split out for the same
-     *        headless-testability reason as importAudioFile() (see its docs).
+     *        synchronously and without prompting or showing an error dialog
+     *        on failure - kept as the direct, blocking, headless-testable
+     *        entry point (matching importAudioFile()'s own reason for
+     *        existing) even though exportAudio()'s own interactive slot no
+     *        longer calls this directly - see
+     *        exportTopmostLayerAudioAsync()'s own docs (`v0.0.45.17`,
+     *        finding #12 Installment E) for what actually backs it now.
      *
      * @param path Destination path; its extension (`.flac`/`.ogg`/`.mp3`)
      *        selects the compressed format.
@@ -1758,14 +1763,16 @@ public:
      * touches no shared/mutable project state at all once started, so
      * editing the project while this one runs is safe by construction, not
      * by locking anything. A no-op (just a status bar message, no dialog)
-     * if isVideoExportRunning() is already `true` - a second call would
-     * otherwise destroy the still-running `videoExportTask_`, whose
-     * destructor blocks until its thread joins, silently freezing the UI
-     * for however long the first export had left to run.
+     * if isExportRunning() is already `true` (whether that's a video *or*
+     * an audio export already in progress - see exportTopmostLayerAudioAsync()'s
+     * own docs on why they share one slot) - a second call would otherwise
+     * destroy the still-running `exportTask_`, whose destructor blocks
+     * until its thread joins, silently freezing the UI for however long
+     * the first export had left to run.
      *
      * Returns immediately once the background encode has started - see
-     * isVideoExportRunning()/cancelVideoExport() for inspecting/stopping
-     * it. Completion is detected by an internal `QTimer` poll (the same
+     * isExportRunning()/cancelExport() for inspecting/stopping it.
+     * Completion is detected by an internal `QTimer` poll (the same
      * "background worker + UI-thread polling timer" pattern
      * `loopUpdateTimer_`/`updateLoopLayer()` already establish for
      * `LoopEngine`): on success, a status bar message naming the
@@ -1784,18 +1791,44 @@ public:
      */
     void exportTopmostLayerVideoAsync(const std::filesystem::path& path);
 
-    /// @brief Whether an exportTopmostLayerVideoAsync() video export is
-    /// still running.
-    /// @return `true` from exportTopmostLayerVideoAsync() (once it actually
+    /**
+     * @brief Starts an asynchronous compressed-audio export of the topmost
+     *        layer with content - the real work behind the interactive
+     *        exportAudio() slot's own file-dialog flow, mirroring
+     *        exportTopmostLayerVideoAsync()'s own shape exactly - real-world
+     *        testing pass finding #12, Installment E.
+     *
+     * Shares `exportTask_`/`exportProgressTimer_`/`exportCancelButton_` with
+     * the video path rather than keeping two independent sets: the status
+     * bar has room for one message and one cancel button at a time, and a
+     * user is never meaningfully exporting both at once from a single
+     * project - see isExportRunning()'s own docs for what "already
+     * running" means across both. `exportKind_` records which one is
+     * actually in flight, purely so pollExportProgress() can phrase its own
+     * status bar message correctly ("audio"/"video").
+     *
+     * @param path Destination path; its extension (`.flac`/`.ogg`/`.mp3`)
+     *        selects the compressed format, matching exportAudio()'s own
+     *        existing `QFileDialog` filter.
+     * @param format Which compressed format to write - see
+     *        `sound_mind::codec::exportCompressedAudio()`.
+     */
+    void exportTopmostLayerAudioAsync(const std::filesystem::path& path, sound_mind::codec::CompressedAudioFormat format);
+
+    /// @brief Whether an exportTopmostLayerVideoAsync()/
+    /// exportTopmostLayerAudioAsync() export - either kind - is still
+    /// running. Only one export (of either kind) runs at a time - see
+    /// exportTopmostLayerAudioAsync()'s own docs on why they share one slot.
+    /// @return `true` from either async export method (once it actually
     ///         started a background task - not for its own synchronous
     ///         "nothing to export" early-out) until the background encode
     ///         finishes, one way or another.
-    [[nodiscard]] bool isVideoExportRunning() const noexcept;
+    [[nodiscard]] bool isExportRunning() const noexcept;
 
-    /// @brief Requests cancellation of the currently running video export -
-    /// the actual work behind the status bar's own cancel button. A no-op
-    /// if isVideoExportRunning() is `false`.
-    void cancelVideoExport();
+    /// @brief Requests cancellation of the currently running export
+    /// (whichever kind it is) - the actual work behind the status bar's own
+    /// cancel button. A no-op if isExportRunning() is `false`.
+    void cancelExport();
 
     /**
      * @brief Opens the bundled user-facing HTML doc at
@@ -2034,17 +2067,18 @@ private:
     /// device. `v0.0.42.1`.
     void pollTestInputLevel();
 
-    /// @brief videoExportProgressTimer_'s slot: a no-op while
-    /// isVideoExportRunning() (still polling); once the background encode
-    /// finishes, stops the timer, hides exportCancelButton_, and reports
-    /// the outcome per videoExportOutcome_ - success (a status bar
-    /// message), cancelled (deletes the necessarily-partial output file
-    /// first, then a status bar message), or failed
-    /// (`QMessageBox::critical()`, matching exportVideo()'s own prior
-    /// synchronous failure presentation). See
-    /// exportTopmostLayerVideoAsync()'s own docs. `v0.0.45.15`, finding #12
-    /// Installment C.
-    void pollVideoExportProgress();
+    /// @brief exportProgressTimer_'s slot: a no-op while isExportRunning()
+    /// (still polling); once the background encode finishes, stops the
+    /// timer, hides exportCancelButton_, and reports the outcome per
+    /// exportOutcome_ - success (a status bar message naming the
+    /// destination, phrased per exportKind_), cancelled (deletes the
+    /// necessarily-partial output file first, then a status bar message),
+    /// or failed (`QMessageBox::critical()`, matching exportVideo()'s/
+    /// exportAudio()'s own prior synchronous failure presentation). See
+    /// exportTopmostLayerVideoAsync()'s/exportTopmostLayerAudioAsync()'s own
+    /// docs. `v0.0.45.15`, finding #12 Installment C (video), generalized
+    /// to cover audio too in Installment E.
+    void pollExportProgress();
 
     /**
      * @brief Repeat Playback's/one-shot preview's shared edit hook -
@@ -2442,32 +2476,40 @@ private:
     /// `PlaybackScope::Track` (which never jumps on an edit).
     double currentPlaybackPositionSeconds_ = 0.0;
 
-    /// @brief The currently running video export, if any - see
-    /// exportTopmostLayerVideoAsync()'s own docs. `nullptr` whenever
-    /// isVideoExportRunning() is `false` (including before the first
-    /// export ever starts) - reset once pollVideoExportProgress() has
-    /// finished reporting a run's own outcome, not left holding a finished
-    /// task around. `v0.0.45.15`, finding #12 Installment C.
-    std::unique_ptr<sound_mind::core::BackgroundTask> videoExportTask_;
-    QTimer* videoExportProgressTimer_ = nullptr;
+    /// @brief The currently running export (video or audio), if any - see
+    /// exportTopmostLayerVideoAsync()'s/exportTopmostLayerAudioAsync()'s own
+    /// docs on why both kinds share this one slot. `nullptr` whenever
+    /// isExportRunning() is `false` (including before the first export ever
+    /// starts) - reset once pollExportProgress() has finished reporting a
+    /// run's own outcome, not left holding a finished task around.
+    /// `v0.0.45.15`, finding #12 Installment C (video); generalized to cover
+    /// audio too in Installment E.
+    std::unique_ptr<sound_mind::core::BackgroundTask> exportTask_;
+    QTimer* exportProgressTimer_ = nullptr;
     QPushButton* exportCancelButton_ = nullptr;
 
-    /// @brief Where the currently (or most recently) running video export
-    /// is/was writing to - pollVideoExportProgress()'s own docs on why this
-    /// is deleted rather than kept on cancellation.
-    std::filesystem::path videoExportPath_;
+    /// @brief Which kind of export exportTask_ actually is - purely so
+    /// pollExportProgress() can phrase its own status bar message
+    /// correctly ("audio"/"video").
+    enum class ExportKind { Video, Audio };
+    ExportKind exportKind_ = ExportKind::Video;
 
-    /// @brief videoExportTask_'s own work function's outcome, written just
-    /// before it returns and read by pollVideoExportProgress() only after
-    /// observing isVideoExportRunning() == false - safe without its own
+    /// @brief Where the currently (or most recently) running export is/was
+    /// writing to - pollExportProgress()'s own docs on why this is deleted
+    /// rather than kept on cancellation.
+    std::filesystem::path exportPath_;
+
+    /// @brief exportTask_'s own work function's outcome, written just
+    /// before it returns and read by pollExportProgress() only after
+    /// observing isExportRunning() == false - safe without its own
     /// separate synchronization thanks to BackgroundTask::isRunning()'s own
     /// release/acquire pairing (see its docs). Reset to `Success` at the
-    /// start of every new exportTopmostLayerVideoAsync() call, not left
-    /// holding a stale value from whatever the previous run's own outcome
-    /// was.
-    enum class VideoExportOutcome { Success, Cancelled, Failed };
-    VideoExportOutcome videoExportOutcome_ = VideoExportOutcome::Success;
-    QString videoExportErrorMessage_;
+    /// start of every new exportTopmostLayerVideoAsync()/
+    /// exportTopmostLayerAudioAsync() call, not left holding a stale value
+    /// from whatever the previous run's own outcome was.
+    enum class ExportOutcome { Success, Cancelled, Failed };
+    ExportOutcome exportOutcome_ = ExportOutcome::Success;
+    QString exportErrorMessage_;
 };
 
 }  // namespace sound_mind::studio
