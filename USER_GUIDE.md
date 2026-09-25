@@ -346,7 +346,7 @@ shape instead of staying fixed.
   parameters, or superposition stack, and as you select a different
   MindWave while Preview stays on. A judgment aid only - it never affects
   the actual composite, and switches off automatically when you open or
-  create a different project.
+  create a different project, or when you close this panel.
 - Selecting a MindWave shows its own editor: a **Generator Type** (Periodic,
   Envelope, Stepped/Noise, Spatial, Fractal, Drawn, Step Grid, or
   Continuous) and that type's own plain numeric parameters - a period, a

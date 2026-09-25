@@ -319,3 +319,27 @@ void MindWaveControllerTest::settingANewProjectTurnsPreviewOffAndClearsTheOverla
 
     QVERIFY(!fixture.mindWavesPanel.previewEnabled());
 }
+
+void MindWaveControllerTest::closingTheMindWavesPanelTurnsPreviewOffAndClearsTheOverlay() {
+    // Real-world testing pass, 2026-09-20, finding #14: the overlay
+    // shouldn't be able to stay active with no panel open to control it.
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    fixture.controller.addMindWave();
+    fixture.canvas.setProject(&project);
+    fixture.canvas.resize(20, 10);
+    fixture.mindWavesPanel.findChild<QPushButton*>(QStringLiteral("previewButton"))->click();
+    QVERIFY(fixture.mindWavesPanel.previewEnabled());
+
+    // show() first - a never-shown widget is already hidden, so hide()
+    // alone wouldn't be a real visible-to-hidden transition for
+    // QDockWidget::visibilityChanged() to fire on. hide() then triggers it
+    // the same way clicking the panel's own title-bar close button, or
+    // unchecking MainWindow's own toolbar toggle for it, would - all three
+    // are "closing the panel" as far as this finding is concerned.
+    fixture.mindWavesPanel.show();
+    fixture.mindWavesPanel.hide();
+
+    QVERIFY(!fixture.mindWavesPanel.previewEnabled());
+}

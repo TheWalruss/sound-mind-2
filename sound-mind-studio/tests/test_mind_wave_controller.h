@@ -21,4 +21,5 @@ private slots:
     void selectingADifferentMindWaveWhilePreviewingUpdatesTheOverlay();
     void editingTheSelectedMindWaveWhilePreviewingUpdatesTheOverlayLive();
     void settingANewProjectTurnsPreviewOffAndClearsTheOverlay();
+    void closingTheMindWavesPanelTurnsPreviewOffAndClearsTheOverlay();
 };

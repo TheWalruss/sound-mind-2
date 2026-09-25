@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.22] - 2026-09-25
+
+Real-world testing pass finding #14: **Closing the MindWaves panel now turns off MindWave Preview.**
+
+### Changed
+
+- **MindWave Preview switches off automatically when you close the MindWaves panel** (its own close button or MainWindow's toolbar toggle for it) - the same as it already did when switching projects. The overlay can no longer stay active with no panel open to control it.
+
+Full regression: `sound-mind-studio` `MindWaveControllerTest` 17/18 (1 pre-existing, unrelated failure - tracked in `docs/sound-mind-roadmap.md`'s finding #25). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #143.
+
 ## [0.0.45.21] - 2026-09-25
 
 Real-world testing pass finding #13: **Filter Configuration can now be edited before a Filter layer is added, not only after.**

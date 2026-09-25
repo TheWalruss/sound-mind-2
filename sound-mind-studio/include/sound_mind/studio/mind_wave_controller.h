@@ -201,6 +201,24 @@ private:
      */
     void handleMindWaveEditedWhilePreviewing(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave);
 
+    /**
+     * @brief Turns Preview off (and clears the canvas overlay) if
+     *        `mindWavesPanel_` becomes hidden while it was on - real-world
+     *        testing pass, 2026-09-20, finding #14 ("the overlay shouldn't
+     *        be able to stay active with no panel open to control it").
+     *
+     * Connected to `mindWavesPanel_`'s own (inherited from `QDockWidget`)
+     * `visibilityChanged(bool)` signal, which fires whenever the panel's
+     * visibility changes for *any* reason - closing it via its own
+     * title-bar button, unchecking `MainWindow`'s own toolbar toggle for
+     * it, or otherwise - not just one specific mechanism, matching this
+     * finding's own "no panel open" framing rather than "only the X
+     * button." A no-op while `visible` is `true`.
+     *
+     * @param visible The panel's own new visibility.
+     */
+    void handleMindWavesPanelVisibilityChanged(bool visible);
+
     MindWavesPanel* mindWavesPanel_;
     LayersPanel* layersPanel_;
     FilterConfigurationPanel* filterConfigurationPanel_;

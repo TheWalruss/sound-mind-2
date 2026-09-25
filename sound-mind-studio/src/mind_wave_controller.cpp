@@ -78,10 +78,20 @@ MindWaveController::MindWaveController(MindWavesPanel* mindWavesPanel, LayersPan
     connect(mindWavesPanel_, &MindWavesPanel::selectionChanged, this, &MindWaveController::updateMindWavePreview);
     connect(mindWavesPanel_, &MindWavesPanel::mindWaveChanged, this,
             &MindWaveController::handleMindWaveEditedWhilePreviewing);
+    connect(mindWavesPanel_, &MindWavesPanel::visibilityChanged, this,
+            &MindWaveController::handleMindWavesPanelVisibilityChanged);
 }
 
 void MindWaveController::setProject(sound_mind::core::Project* project) {
     project_ = project;
+    mindWavesPanel_->setPreviewEnabled(false);
+    canvas_->setMindWavePreview(std::nullopt);
+}
+
+void MindWaveController::handleMindWavesPanelVisibilityChanged(bool visible) {
+    if (visible) {
+        return;
+    }
     mindWavesPanel_->setPreviewEnabled(false);
     canvas_->setMindWavePreview(std::nullopt);
 }
