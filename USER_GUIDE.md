@@ -546,8 +546,16 @@ group's own controls while it was hidden.
     way a real room's own walls and air would.
   - **Mix** blends the reverberated result back in with the original -
     `0` is no effect at all, `1` is fully wet.
+- **Downsample** is a "pixelate" effect - reduces effective resolution
+  over square blocks:
+  - **Mode** picks how a block's own value is chosen: **Block Hold** reads
+    the block's own top-left corner cell, for the classic, hard-edged
+    blocky look; **Block Average** takes the mean of the block's own
+    cells instead, for a smoother, more "lo-fi resample" feel.
+  - **Block Size** sets how big each block is, in bins/columns - `1` is no
+    effect at all.
 
-Every one of the twenty designed filter types now has a real, working
+Every one of the twenty-one designed filter types now has a real, working
 algorithm, completing this milestone. Every one of them except Invert (no
 parameters of its own) also has at least one MindWave-binding combo, the
 same "None" or any MindWave `setAvailableMindWaves()` currently lists you
@@ -556,12 +564,18 @@ Dynamic Speckle's Density and Intensity, Speckle Remove's Threshold,
 Denoise's Noise Floor and Reduction, Bit-Depth Crush's Amount, Granular
 Noise's Grain Amount, Feedback Distortion's Amount, Spectral Wavefold's
 Fold Gain, Channel Balance's Balance, Convolve's Amount, Displace's
-Distance and Angle, Channel Cycle's Angle, and Spectral Reverb's Mix.
-Three parameters have no binding combo, deliberately - Convolve's Kernel
-Size, Granular Noise's Grain Size, and Spectral Reverb's Pre-Delay/Decay/
-Room Size/Diffusion/Absorption - each shapes a fixed-size grid or a
-computation spanning many cells at once, not a single value one cell owns
-on its own.
+Distance and Angle, Channel Cycle's Angle, Spectral Reverb's Mix, and
+Downsample's Block Size. Three parameters have no binding combo,
+deliberately - Convolve's Kernel Size, Granular Noise's Grain Size, and
+Spectral Reverb's Pre-Delay/Decay/Room Size/Diffusion/Absorption - each
+shapes a fixed-size grid or a computation spanning many cells at once,
+not a single value one cell owns on its own. Downsample's own Block Size
+*is* bindable, unlike Granular Noise's near-identical-sounding Grain
+Size - the difference is what a MindWave-bound value would mean: Granular
+Noise's own per-block *random* offset has no well-defined per-cell
+version, while Downsample's block size is a plain kernel-shape parameter
+(the same treatment Sigma/Size/Length already get), so it can genuinely
+vary smoothly across the canvas.
 
 A Filter layer with nothing beneath it (or with everything beneath it
 hidden) has nothing to filter, so it has no effect. An ordinary Filter
@@ -1394,8 +1408,8 @@ designed for it:
   re-decoding live as you make further edits during playback.
 
 [Filter Layers](#filter-layers) (see above) have finished their own
-milestone - all twenty designed filter types work now - but a couple of
-loose ends remain:
+milestone - all twenty-one designed filter types work now - but a couple
+of loose ends remain:
 
 - **No draggable visual gradient editor for Frequency-Axis Gradient
   (including the Equalizer's own Cut editor), and no interior stops** -

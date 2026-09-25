@@ -56,7 +56,9 @@ void to_json(nlohmann::json& json, const FilterConfiguration& config) {
                            {"reverbRoomSize", config.reverbRoomSize_},
                            {"reverbDiffusion", config.reverbDiffusion_},
                            {"reverbAbsorption", config.reverbAbsorption_},
-                           {"reverbMix", config.reverbMix_}};
+                           {"reverbMix", config.reverbMix_},
+                           {"downsampleMode", config.downsampleMode_},
+                           {"downsampleBlockSize", config.downsampleBlockSize_}};
     writeOptionalMindWaveId(json, "blurSigmaMindWaveId", config.blurSigmaMindWave_);
     writeOptionalMindWaveId(json, "medianSizeMindWaveId", config.medianSizeMindWave_);
     writeOptionalMindWaveId(json, "directionalBlurLengthMindWaveId", config.directionalBlurLengthMindWave_);
@@ -78,6 +80,7 @@ void to_json(nlohmann::json& json, const FilterConfiguration& config) {
     writeOptionalMindWaveId(json, "displaceAngleMindWaveId", config.displaceAngleMindWave_);
     writeOptionalMindWaveId(json, "channelCycleAngleMindWaveId", config.channelCycleAngleMindWave_);
     writeOptionalMindWaveId(json, "reverbMixMindWaveId", config.reverbMixMindWave_);
+    writeOptionalMindWaveId(json, "downsampleBlockSizeMindWaveId", config.downsampleBlockSizeMindWave_);
 }
 
 void from_json(const nlohmann::json& json, FilterConfiguration& config) {
@@ -128,6 +131,10 @@ void from_json(const nlohmann::json& json, FilterConfiguration& config) {
     config.reverbDiffusion_ = json.value("reverbDiffusion", config.reverbDiffusion_);
     config.reverbAbsorption_ = json.value("reverbAbsorption", config.reverbAbsorption_);
     config.reverbMix_ = json.value("reverbMix", config.reverbMix_);
+    // Lenient, same reasoning - didn't exist before finding #18's own
+    // installment (real-world testing pass, 2026-09-20).
+    config.downsampleMode_ = json.value("downsampleMode", config.downsampleMode_);
+    config.downsampleBlockSize_ = json.value("downsampleBlockSize", config.downsampleBlockSize_);
     // Lenient (defaults to unbound if absent) - didn't exist before
     // v0.Y.38.1 (Filter Parameter Binding Completion); a configuration
     // saved before this milestone was never bound on any of these anyway.
@@ -146,6 +153,7 @@ void from_json(const nlohmann::json& json, FilterConfiguration& config) {
     config.displaceAngleMindWave_ = readOptionalMindWaveId(json, "displaceAngleMindWaveId");
     config.channelCycleAngleMindWave_ = readOptionalMindWaveId(json, "channelCycleAngleMindWaveId");
     config.reverbMixMindWave_ = readOptionalMindWaveId(json, "reverbMixMindWaveId");
+    config.downsampleBlockSizeMindWave_ = readOptionalMindWaveId(json, "downsampleBlockSizeMindWaveId");
 }
 
 }  // namespace sound_mind::core

@@ -16,6 +16,7 @@
 
 using sound_mind::codec::StreamImage;
 using sound_mind::core::applyFilter;
+using sound_mind::core::DownsampleMode;
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterParameterMindWaves;
 using sound_mind::core::FilterType;
@@ -1622,6 +1623,127 @@ TEST_CASE("applyFilter's SpectralReverb leaves phase untouched", "[core][filter_
 }
 
 // ---------------------------------------------------------------------------
+// Downsample - real-world testing pass, 2026-09-20, finding #18.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// @brief A `binCount` x `frameCount` composite where cell (row, col) holds
+/// a distinct value (`-96 + row * frameCount + col`, so every cell in the
+/// whole grid is numerically unique) - needed to tell `BlockHold`'s "reads
+/// the block's own top-left corner" apart from `BlockAverage`'s "reads the
+/// block's own mean", which a uniform grid (every existing helper here)
+/// can't distinguish at all.
+StreamImage makeIndexedGridComposite(std::uint32_t binCount, std::uint32_t frameCount) {
+    StreamImage composite;
+    composite.config.binCount = binCount;
+    composite.frameCount = frameCount;
+    const std::size_t cellCount = std::size_t{binCount} * frameCount;
+    composite.leftMagnitudeDb.resize(cellCount);
+    composite.rightMagnitudeDb.resize(cellCount);
+    composite.sharedPhaseRadians.assign(cellCount, 0.5f);
+    for (std::uint32_t row = 0; row < binCount; ++row) {
+        for (std::uint32_t col = 0; col < frameCount; ++col) {
+            const std::size_t cell = std::size_t{row} * frameCount + col;
+            const float value = -96.0f + static_cast<float>(row * frameCount + col);
+            composite.leftMagnitudeDb[cell] = value;
+            composite.rightMagnitudeDb[cell] = value;
+        }
+    }
+    return composite;
+}
+
+}  // namespace
+
+TEST_CASE("applyFilter's Downsample is a no-op at block size 1", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Downsample);
+    config.setDownsampleBlockSize(1);
+    const auto composite = makeIndexedGridComposite(4, 4);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    CHECK(filtered.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's Downsample BlockHold replaces every cell in a block with its own top-left "
+          "corner value",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Downsample);
+    config.setDownsampleMode(DownsampleMode::BlockHold);
+    config.setDownsampleBlockSize(2);
+    const auto composite = makeIndexedGridComposite(4, 4);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // Top-left 2x2 block (bin 0-1, frame 0-1): every cell reads (0, 0)'s
+    // own value.
+    const float topLeft = composite.leftMagnitudeDb[0];
+    CHECK(filtered.leftMagnitudeDb[0] == topLeft);            // (0, 0) itself.
+    CHECK(filtered.leftMagnitudeDb[1] == topLeft);            // (0, 1).
+    CHECK(filtered.leftMagnitudeDb[4] == topLeft);            // (1, 0).
+    CHECK(filtered.leftMagnitudeDb[5] == topLeft);            // (1, 1).
+    // The next block over (bin 0-1, frame 2-3) reads its own (0, 2).
+    const float nextBlockTopLeft = composite.leftMagnitudeDb[2];
+    CHECK(filtered.leftMagnitudeDb[2] == nextBlockTopLeft);
+    CHECK(filtered.leftMagnitudeDb[3] == nextBlockTopLeft);
+}
+
+TEST_CASE("applyFilter's Downsample BlockAverage replaces every cell in a block with the block's own mean",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Downsample);
+    config.setDownsampleMode(DownsampleMode::BlockAverage);
+    config.setDownsampleBlockSize(2);
+    const auto composite = makeIndexedGridComposite(4, 4);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    // Top-left 2x2 block: mean of (0,0), (0,1), (1,0), (1,1).
+    const float expectedMean = (composite.leftMagnitudeDb[0] + composite.leftMagnitudeDb[1] +
+                                 composite.leftMagnitudeDb[4] + composite.leftMagnitudeDb[5]) /
+                                4.0f;
+    CHECK(filtered.leftMagnitudeDb[0] == Catch::Approx(expectedMean));
+    CHECK(filtered.leftMagnitudeDb[1] == Catch::Approx(expectedMean));
+    CHECK(filtered.leftMagnitudeDb[4] == Catch::Approx(expectedMean));
+    CHECK(filtered.leftMagnitudeDb[5] == Catch::Approx(expectedMean));
+}
+
+TEST_CASE("applyFilter's Downsample clamps a block straddling the grid's own far edge to whatever's "
+          "actually there, rather than wrapping or padding",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Downsample);
+    config.setDownsampleMode(DownsampleMode::BlockAverage);
+    config.setDownsampleBlockSize(4);  // Bigger than the 3x3 grid itself.
+    const auto composite = makeIndexedGridComposite(3, 3);
+
+    const auto filtered = applyFilter(composite, config, ProjectSettings{});
+
+    float sum = 0.0f;
+    for (const float value : composite.leftMagnitudeDb) {
+        sum += value;
+    }
+    const float expectedMean = sum / static_cast<float>(composite.leftMagnitudeDb.size());
+    for (const float value : filtered.leftMagnitudeDb) {
+        CHECK(value == Catch::Approx(expectedMean));
+    }
+}
+
+TEST_CASE("applyFilter's Downsample leaves phase untouched", "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Downsample);
+    config.setDownsampleBlockSize(2);
+
+    const auto filtered = applyFilter(makeComposite(), config, ProjectSettings{});
+
+    for (const float phase : filtered.sharedPhaseRadians) {
+        CHECK(phase == 0.5f);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // v0.Y.38.1: Filter Parameter Binding Completion.
 // ---------------------------------------------------------------------------
 
@@ -2205,6 +2327,39 @@ TEST_CASE("applyFilter's GranularNoise, bound to a MindWave always at baseline o
     const auto baselineWave = alwaysBaselineWave();
     const auto bound =
         applyFilter(composite, config, ProjectSettings{}, FilterParameterMindWaves{.grainAmount = &baselineWave});
+
+    CHECK(bound.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's Downsample, bound to a MindWave always at ceiling on downsampleBlockSize, "
+          "matches the fixed-size result",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Downsample);
+    config.setDownsampleMode(DownsampleMode::BlockHold);
+    config.setDownsampleBlockSize(2);
+    const auto composite = makeIndexedGridComposite(4, 4);
+
+    const auto unbound = applyFilter(composite, config, ProjectSettings{});
+    const auto ceilingWave = alwaysCeilingWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{},
+                                    FilterParameterMindWaves{.downsampleBlockSize = &ceilingWave});
+
+    CHECK(bound.leftMagnitudeDb == unbound.leftMagnitudeDb);
+}
+
+TEST_CASE("applyFilter's Downsample, bound to a MindWave always at baseline on downsampleBlockSize, "
+          "leaves the composite unchanged (a 1-cell block is the identity)",
+          "[core][filter_application][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Downsample);
+    config.setDownsampleMode(DownsampleMode::BlockHold);
+    config.setDownsampleBlockSize(2);
+    const auto composite = makeIndexedGridComposite(4, 4);
+
+    const auto baselineWave = alwaysBaselineWave();
+    const auto bound = applyFilter(composite, config, ProjectSettings{},
+                                    FilterParameterMindWaves{.downsampleBlockSize = &baselineWave});
 
     CHECK(bound.leftMagnitudeDb == composite.leftMagnitudeDb);
 }

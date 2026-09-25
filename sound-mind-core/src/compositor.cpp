@@ -121,11 +121,12 @@ constexpr float kMinLinearAmplitude = 1e-7f;
     return named ? &named->wave : nullptr;
 }
 
-/// @brief `config`'s own twenty bindable filter parameters, each resolved
-/// against `project`'s own library - `v0.Y.31.1` Installment D's own
-/// filter-parameter-binding entry point (the first five), extended by
-/// `v0.Y.38.1` (Filter Parameter Binding Completion) to the remaining
-/// fifteen - the `FilterConfiguration`-level counterpart to
+/// @brief `config`'s own twenty-one bindable filter parameters, each
+/// resolved against `project`'s own library - `v0.Y.31.1` Installment D's
+/// own filter-parameter-binding entry point (the first five), extended by
+/// `v0.Y.38.1` (Filter Parameter Binding Completion) to fifteen more, and
+/// by real-world testing pass finding #18 to a twenty-first
+/// (`downsampleBlockSize`) - the `FilterConfiguration`-level counterpart to
 /// `resolveOpacityMindWave()`.
 [[nodiscard]] FilterParameterMindWaves resolveFilterParameterMindWaves(const FilterConfiguration& config,
                                                                         const Project& project) noexcept {
@@ -150,6 +151,7 @@ constexpr float kMinLinearAmplitude = 1e-7f;
         resolveMindWaveId(config.displaceAngleMindWave(), project),
         resolveMindWaveId(config.channelCycleAngleMindWave(), project),
         resolveMindWaveId(config.reverbMixMindWave(), project),
+        resolveMindWaveId(config.downsampleBlockSizeMindWave(), project),
     };
 }
 

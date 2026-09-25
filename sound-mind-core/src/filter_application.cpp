@@ -1548,6 +1548,106 @@ std::vector<float> applyReverbVarying(const std::vector<float>& grid, std::uint3
     return result;
 }
 
+/// @brief `Downsample`'s own value for one `size` x `size` block, anchored
+/// at `(blockRow, blockCol)` (its own top-left corner) - `BlockHold` reads
+/// that corner cell directly; `BlockAverage` means the block's own cells,
+/// clamped to the grid's own far edge (a block straddling it is simply
+/// smaller there, not wrapped or padded).
+[[nodiscard]] float downsampleBlockValue(const std::vector<float>& grid, std::uint32_t binCount,
+                                          std::uint32_t frameCount, int blockRow, int blockCol, int size,
+                                          DownsampleMode mode) {
+    const int rows = static_cast<int>(binCount);
+    const int cols = static_cast<int>(frameCount);
+    const std::size_t topLeft =
+        static_cast<std::size_t>(blockRow) * static_cast<std::size_t>(cols) + static_cast<std::size_t>(blockCol);
+    if (mode == DownsampleMode::BlockHold) {
+        return grid[topLeft];
+    }
+    const int rowEnd = std::min(rows, blockRow + size);
+    const int colEnd = std::min(cols, blockCol + size);
+    float sum = 0.0f;
+    int count = 0;
+    for (int row = blockRow; row < rowEnd; ++row) {
+        for (int col = blockCol; col < colEnd; ++col) {
+            sum += grid[static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) + static_cast<std::size_t>(col)];
+            ++count;
+        }
+    }
+    return sum / static_cast<float>(count);
+}
+
+/// @brief `Downsample`'s own implementation - see `applyFilter()`'s docs.
+/// A classic "pixelate" effect: the grid is tiled into non-overlapping
+/// `size` x `size` blocks (anchored at `(0, 0)`, per `downsampleBlockValue()`'s
+/// own docs), and every cell within a block is replaced with that block's
+/// own single value. A no-op whenever `size` is `1` or less (the smallest
+/// meaningful block already is the identity).
+std::vector<float> applyDownsample(const std::vector<float>& grid, std::uint32_t binCount, std::uint32_t frameCount,
+                                    int size, DownsampleMode mode) {
+    if (size <= 1) {
+        return grid;
+    }
+    std::vector<float> result(grid.size());
+    const int rows = static_cast<int>(binCount);
+    const int cols = static_cast<int>(frameCount);
+    for (int blockRow = 0; blockRow < rows; blockRow += size) {
+        for (int blockCol = 0; blockCol < cols; blockCol += size) {
+            const float value = downsampleBlockValue(grid, binCount, frameCount, blockRow, blockCol, size, mode);
+            const int rowEnd = std::min(rows, blockRow + size);
+            const int colEnd = std::min(cols, blockCol + size);
+            for (int row = blockRow; row < rowEnd; ++row) {
+                for (int col = blockCol; col < colEnd; ++col) {
+                    result[static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) +
+                           static_cast<std::size_t>(col)] = value;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+/// @brief `applyDownsample()` above, but with `size` evaluated fresh per
+/// cell via `sizePerCell` (real-world testing pass, 2026-09-20, finding
+/// #18's own `downsampleBlockSize` binding - confirmed with the user that,
+/// unlike `GranularNoise`'s own `grainSize()`, a varying block size *is*
+/// meaningful here, the same kernel-shape-parameter treatment `medianSize()`
+/// already gets).
+///
+/// A single global tiling (like the fixed-size case above) has no meaning
+/// once block size can differ cell to cell - there's no one grid every
+/// cell could agree on. Instead, each cell resolves its *own* block by
+/// snapping its own `(row, col)` down to the nearest multiple of its own
+/// size, anchored at the same fixed `(0, 0)` origin every cell shares -
+/// well-defined for any combination of per-cell sizes, and reduces to
+/// exactly the fixed-size tiling above wherever the field is locally
+/// uniform. A per-cell size of `1` or less is the identity, matching
+/// `medianBlur2DVarying()`'s own baseline convention. Clamped to at most
+/// `64` (matching this parameter's own realistic Studio UI range) so a
+/// wildly out-of-range bound value can't force an unbounded block scan.
+std::vector<float> applyDownsampleVarying(const std::vector<float>& grid, std::uint32_t binCount,
+                                           std::uint32_t frameCount, const std::vector<float>& sizePerCell,
+                                           DownsampleMode mode) {
+    const int rows = static_cast<int>(binCount);
+    const int cols = static_cast<int>(frameCount);
+    std::vector<float> result(grid.size());
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            const std::size_t cell = static_cast<std::size_t>(row) * static_cast<std::size_t>(cols) +
+                                      static_cast<std::size_t>(col);
+            const float rawSize = sizePerCell[cell];
+            if (rawSize <= 1.0f) {
+                result[cell] = grid[cell];
+                continue;
+            }
+            const int size = std::min(64, static_cast<int>(std::lround(rawSize)));
+            const int blockRow = (row / size) * size;
+            const int blockCol = (col / size) * size;
+            result[cell] = downsampleBlockValue(grid, binCount, frameCount, blockRow, blockCol, size, mode);
+        }
+    }
+    return result;
+}
+
 }  // namespace
 
 StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration& config,
@@ -1851,6 +1951,21 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
                     return applyReverb(grid, bins, frames, config.reverbPreDelayFrames(), config.reverbDecayFrames(),
                                         config.reverbRoomSize(), config.reverbDiffusion(), config.reverbAbsorption(),
                                         config.reverbMix());
+                });
+        case FilterType::Downsample:
+            if (mindWaves.downsampleBlockSize != nullptr) {
+                const auto sizeField = buildParameterField(mindWaves.downsampleBlockSize, 1.0,
+                                                             config.downsampleBlockSize(), binCount, frameCount,
+                                                             streamConfig);
+                return applyPerChannelGridFilter(
+                    composite,
+                    [&sizeField, &config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                        return applyDownsampleVarying(grid, bins, frames, sizeField, config.downsampleMode());
+                    });
+            }
+            return applyPerChannelGridFilter(
+                composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
+                    return applyDownsample(grid, bins, frames, config.downsampleBlockSize(), config.downsampleMode());
                 });
     }
     return composite;

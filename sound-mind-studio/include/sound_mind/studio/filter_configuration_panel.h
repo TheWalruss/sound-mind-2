@@ -44,16 +44,20 @@ class ToneCurveEditor;
  * `v0.Y.36.1` (Deferred Filters) added the rest across four installments,
  * in `docs/sound-mind-design.md`'s own family order (Blur & focus, then
  * Noise & distortion, then Geometric, then Tonal, then Spectral shaping,
- * then Space) - so this selector now lists twenty, closing out the
- * milestone. Selecting a type shows only that type's own parameter group;
- * every other group stays hidden (`QWidget::setVisible(false)`), the same
- * "meaningless unless `type()` matches" contract `FilterConfiguration`'s
- * own per-field docs already state. As of `v0.Y.38.1` (Filter Parameter
- * Binding Completion), every one of the nineteen `v0.Y.36.1` types except
- * `Invert` (which has no parameters of its own) offers at least one
- * MindWave-binding combo - see each group's own docs below for exactly
- * which parameters, and `FilterConfiguration`'s own docs for the three
- * that remain deliberately unbound.
+ * then Space) - twenty, closing out that milestone - and real-world
+ * testing pass finding #18 added a twenty-first, `Downsample`, inspired by
+ * how well `GranularNoise` turned out. Selecting a type shows only that
+ * type's own parameter group; every other group stays hidden
+ * (`QWidget::setVisible(false)`), the same "meaningless unless `type()`
+ * matches" contract `FilterConfiguration`'s own per-field docs already
+ * state. As of `v0.Y.38.1` (Filter Parameter Binding Completion), every
+ * one of the nineteen `v0.Y.36.1` types except `Invert` (which has no
+ * parameters of its own) offers at least one MindWave-binding combo - see
+ * each group's own docs below for exactly which parameters, and
+ * `FilterConfiguration`'s own docs for the three that remain deliberately
+ * unbound. `Downsample`'s own `downsampleBlockSize` is bindable too - see
+ * `downsampleGroup_`'s own docs for why, unlike `GranularNoise`'s
+ * `grainSize`.
  *
  * **`SpeckleAdd`'s own Density/Intensity
  * controls and `DynamicSpeckle`'s own are separate widgets that both
@@ -437,6 +441,17 @@ private:
     QDoubleSpinBox* reverbAbsorptionSpinBox_ = nullptr;
     QDoubleSpinBox* reverbMixSpinBox_ = nullptr;
     QComboBox* reverbMixMindWaveCombo_ = nullptr;
+
+    // --- Downsample - real-world testing pass, 2026-09-20, finding #18.
+    // downsampleBlockSize gets a MindWave-binding combo, unlike
+    // GranularNoise's own grainSize (see FilterConfiguration::
+    // downsampleBlockSize()'s own docs for why a varying block size *is*
+    // meaningful here, confirmed with the user).
+
+    QGroupBox* downsampleGroup_ = nullptr;
+    QComboBox* downsampleModeCombo_ = nullptr;
+    QSpinBox* downsampleBlockSizeSpinBox_ = nullptr;
+    QComboBox* downsampleBlockSizeMindWaveCombo_ = nullptr;
 
     QGroupBox* equalizerCutGroup_ = nullptr;
     QDoubleSpinBox* startLeftCutSpinBox_ = nullptr;

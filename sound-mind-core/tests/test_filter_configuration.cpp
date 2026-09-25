@@ -4,6 +4,7 @@
 #include "sound_mind/core/filter_configuration.h"
 
 using sound_mind::core::FilterConfiguration;
+using sound_mind::core::DownsampleMode;
 using sound_mind::core::FilterType;
 using sound_mind::core::MindWaveId;
 
@@ -535,6 +536,76 @@ TEST_CASE("A FilterConfiguration loads from JSON missing every SpectralReverb ke
     REQUIRE(restored.reverbDiffusion() == 0.5f);
     REQUIRE(restored.reverbAbsorption() == 0.4f);
     REQUIRE(restored.reverbMix() == 0.4f);
+}
+
+// --- Downsample - real-world testing pass, 2026-09-20, finding #18 -----
+
+TEST_CASE("A fresh FilterConfiguration has sensible Downsample defaults", "[core][filter_configuration]") {
+    const FilterConfiguration config;
+    REQUIRE(config.downsampleMode() == DownsampleMode::BlockHold);
+    REQUIRE(config.downsampleBlockSize() == 4);
+    REQUIRE_FALSE(config.downsampleBlockSizeMindWave().has_value());
+}
+
+TEST_CASE("Downsample FilterType can be set", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Downsample);
+    REQUIRE(config.type() == FilterType::Downsample);
+}
+
+TEST_CASE("A FilterConfiguration's Downsample parameters can be changed", "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setDownsampleMode(DownsampleMode::BlockAverage);
+    config.setDownsampleBlockSize(9);
+
+    REQUIRE(config.downsampleMode() == DownsampleMode::BlockAverage);
+    REQUIRE(config.downsampleBlockSize() == 9);
+}
+
+TEST_CASE("A FilterConfiguration's downsampleBlockSize can be bound to a MindWave and unbound again",
+          "[core][filter_configuration][mind_wave_binding]") {
+    FilterConfiguration config;
+    config.setDownsampleBlockSizeMindWave(MindWaveId{7});
+    REQUIRE(config.downsampleBlockSizeMindWave() == MindWaveId{7});
+
+    config.setDownsampleBlockSizeMindWave(std::nullopt);
+    REQUIRE_FALSE(config.downsampleBlockSizeMindWave().has_value());
+}
+
+TEST_CASE("A FilterConfiguration's Downsample parameters round-trip through JSON",
+          "[core][filter_configuration]") {
+    FilterConfiguration config;
+    config.setType(FilterType::Downsample);
+    config.setDownsampleMode(DownsampleMode::BlockAverage);
+    config.setDownsampleBlockSize(9);
+    config.setDownsampleBlockSizeMindWave(MindWaveId{7});
+
+    const nlohmann::json json = config;
+    const FilterConfiguration roundTripped = json.get<FilterConfiguration>();
+
+    REQUIRE(roundTripped.type() == FilterType::Downsample);
+    REQUIRE(roundTripped.downsampleMode() == DownsampleMode::BlockAverage);
+    REQUIRE(roundTripped.downsampleBlockSize() == 9);
+    REQUIRE(roundTripped.downsampleBlockSizeMindWave() == MindWaveId{7});
+}
+
+TEST_CASE("A FilterConfiguration loads from JSON missing every Downsample key "
+          "(a configuration saved before finding #18's own installment) using sensible defaults",
+          "[core][filter_configuration]") {
+    const nlohmann::json json{{"type", "uniformBlur"},
+                               {"blurSigma", 2.0f},
+                               {"medianSize", 3},
+                               {"directionalBlurLength", 10},
+                               {"directionalBlurAngleDegrees", 0.0f},
+                               {"sharpenAmount", 1.0f},
+                               {"toneCurvePoints", std::vector<std::array<float, 2>>{{0.0f, 0.0f}, {1.0f, 1.0f}}},
+                               {"frequencyGradient", FilterConfiguration{}.frequencyGradient()}};
+
+    const FilterConfiguration restored = json.get<FilterConfiguration>();
+
+    REQUIRE(restored.downsampleMode() == DownsampleMode::BlockHold);
+    REQUIRE(restored.downsampleBlockSize() == 4);
+    REQUIRE_FALSE(restored.downsampleBlockSizeMindWave().has_value());
 }
 
 // --- v0.Y.38.1: Filter Parameter Binding Completion ---------------------

@@ -29,6 +29,7 @@ namespace sound_mind::studio {
 namespace {
 
 using sound_mind::core::ConvolutionKernelId;
+using sound_mind::core::DownsampleMode;
 using sound_mind::core::FilterType;
 using sound_mind::core::GradientStop;
 using sound_mind::core::MindWaveId;
@@ -82,7 +83,7 @@ QHBoxLayout* makeBoundFieldRow(QWidget* spinBox, QWidget* combo) {
 /// `v0.Y.36.1`'s own four installments (Noise & distortion, then
 /// ChannelBalance/Invert/Convolve, then Displace/ChannelCycle, then
 /// SpectralReverb, closing out the milestone).
-constexpr std::array<std::pair<FilterType, const char*>, 20> kSelectableFilterTypes{{
+constexpr std::array<std::pair<FilterType, const char*>, 21> kSelectableFilterTypes{{
     {FilterType::UniformBlur, "Uniform Blur"},
     {FilterType::EdgePreservingBlur, "Edge-Preserving Blur"},
     {FilterType::DirectionalBlur, "Directional Blur"},
@@ -103,6 +104,14 @@ constexpr std::array<std::pair<FilterType, const char*>, 20> kSelectableFilterTy
     {FilterType::FrequencyAxisGradient, "Frequency-Axis Gradient"},
     {FilterType::Convolve, "Convolve"},
     {FilterType::SpectralReverb, "Spectral Reverb"},
+    {FilterType::Downsample, "Downsample"},
+}};
+
+/// @brief Every `DownsampleMode`, for `downsampleModeCombo_` - real-world
+/// testing pass, 2026-09-20, finding #18.
+constexpr std::array<std::pair<DownsampleMode, const char*>, 2> kDownsampleModes{{
+    {DownsampleMode::BlockHold, "Block Hold"},
+    {DownsampleMode::BlockAverage, "Block Average"},
 }};
 
 /// @brief A `[-96, 0]` dB spin box, matching `silenceGradient()`'s own
@@ -937,6 +946,39 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     reverbForm->addRow(tr("Mix:"), makeBoundFieldRow(reverbMixSpinBox_, reverbMixMindWaveCombo_));
     root->addWidget(spectralReverbGroup_);
 
+    downsampleGroup_ = new QGroupBox(tr("Downsample"), container);
+    downsampleGroup_->setObjectName(QStringLiteral("downsampleGroup"));
+    auto* downsampleForm = new QFormLayout(downsampleGroup_);
+    downsampleModeCombo_ = new QComboBox(downsampleGroup_);
+    downsampleModeCombo_->setObjectName(QStringLiteral("downsampleModeCombo"));
+    for (const auto& [mode, name] : kDownsampleModes) {
+        downsampleModeCombo_->addItem(tr(name), QVariant::fromValue(static_cast<int>(mode)));
+    }
+    connect(downsampleModeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        config_.setDownsampleMode(static_cast<DownsampleMode>(downsampleModeCombo_->itemData(index).toInt()));
+        emitConfigChanged();
+    });
+    downsampleForm->addRow(tr("Mode:"), downsampleModeCombo_);
+    downsampleBlockSizeSpinBox_ = new QSpinBox(downsampleGroup_);
+    downsampleBlockSizeSpinBox_->setObjectName(QStringLiteral("downsampleBlockSizeSpinBox"));
+    downsampleBlockSizeSpinBox_->setRange(1, 64);
+    downsampleBlockSizeSpinBox_->setToolTip(tr("The pixelation block's own size, in bins/columns."));
+    connect(downsampleBlockSizeSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+        config_.setDownsampleBlockSize(value);
+        emitConfigChanged();
+    });
+    downsampleBlockSizeMindWaveCombo_ =
+        makeMindWaveCombo(downsampleGroup_, QStringLiteral("downsampleBlockSizeMindWaveCombo"));
+    connect(downsampleBlockSizeMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = downsampleBlockSizeMindWaveCombo_->itemData(index).toULongLong();
+        config_.setDownsampleBlockSizeMindWave(
+            rawId == 0 ? std::nullopt : std::optional<MindWaveId>(static_cast<MindWaveId>(rawId)));
+        emitConfigChanged();
+    });
+    downsampleForm->addRow(tr("Block Size:"),
+                            makeBoundFieldRow(downsampleBlockSizeSpinBox_, downsampleBlockSizeMindWaveCombo_));
+    root->addWidget(downsampleGroup_);
+
     equalizerCutGroup_ = new QGroupBox(tr("Cut"), container);
     equalizerCutGroup_->setObjectName(QStringLiteral("equalizerCutGroup"));
     auto* cutLayout = new QVBoxLayout(equalizerCutGroup_);
@@ -1033,6 +1075,7 @@ void FilterConfigurationPanel::updateVisibleGroup() {
     channelBalanceGroup_->setVisible(!isEqualizerMode_ && type == FilterType::ChannelBalance);
     invertGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Invert);
     convolveGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Convolve);
+    downsampleGroup_->setVisible(!isEqualizerMode_ && type == FilterType::Downsample);
 }
 
 void FilterConfigurationPanel::setEqualizerMode(bool isEqualizer) {
@@ -1087,6 +1130,8 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     const QSignalBlocker convolveKernelSizeBlocker(convolveKernelSizeSpinBox_);
     const QSignalBlocker convolveNormalizeBlocker(convolveNormalizeCheckBox_);
     const QSignalBlocker convolveAmountBlocker(convolveAmountSpinBox_);
+    const QSignalBlocker downsampleModeBlocker(downsampleModeCombo_);
+    const QSignalBlocker downsampleBlockSizeBlocker(downsampleBlockSizeSpinBox_);
     const QSignalBlocker startLeftCutBlocker(startLeftCutSpinBox_);
     const QSignalBlocker startRightCutBlocker(startRightCutSpinBox_);
     const QSignalBlocker endLeftCutBlocker(endLeftCutSpinBox_);
@@ -1148,6 +1193,10 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     convolveKernelSizeSpinBox_->setValue(config_.convolveKernelSize());
     convolveNormalizeCheckBox_->setChecked(config_.convolveNormalize());
     convolveAmountSpinBox_->setValue(config_.convolveAmount());
+    const int downsampleModeIndex =
+        downsampleModeCombo_->findData(QVariant::fromValue(static_cast<int>(config_.downsampleMode())));
+    downsampleModeCombo_->setCurrentIndex(downsampleModeIndex >= 0 ? downsampleModeIndex : 0);
+    downsampleBlockSizeSpinBox_->setValue(config_.downsampleBlockSize());
     // rebuildConvolveKernelGrid() reads the freshly-loaded config_.convolveKernel()
     // itself when its own length already matches the new size - see its
     // own docs - so this always ends up showing the loaded kernel's own
@@ -1211,6 +1260,7 @@ void FilterConfigurationPanel::rebuildMindWaveCombos() {
     populate(displaceAngleMindWaveCombo_, config_.displaceAngleMindWave());
     populate(channelCycleAngleMindWaveCombo_, config_.channelCycleAngleMindWave());
     populate(reverbMixMindWaveCombo_, config_.reverbMixMindWave());
+    populate(downsampleBlockSizeMindWaveCombo_, config_.downsampleBlockSizeMindWave());
 }
 
 void FilterConfigurationPanel::setAvailableConvolutionKernels(

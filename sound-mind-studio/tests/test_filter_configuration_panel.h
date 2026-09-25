@@ -71,6 +71,13 @@ private slots:
     void changingEverySpectralReverbControlUpdatesConfigAndEmits();
     void setFilterConfigurationSyncsSpectralReverbWithoutEmitting();
 
+    // --- Downsample - real-world testing pass, 2026-09-20, finding #18 ---
+    void freshPanelHasDownsampleGroupHidden();
+    void selectingDownsampleShowsOnlyItsOwnGroup();
+    void changingEveryDownsampleControlUpdatesConfigAndEmits();
+    void downsampleBlockSizeMindWaveComboBindsAndUnbindsAndEmits();
+    void setFilterConfigurationSyncsDownsampleWithoutEmitting();
+
     // --- v0.Y.38.1: Filter Parameter Binding Completion ---
     void freshNewCombosOfferOnlyNoneUntilSetAvailableMindWavesIsCalled();
     void setAvailableMindWavesPopulatesEveryNewCombo();

@@ -20,6 +20,7 @@
 #include "sound_mind/studio/tone_curve_editor.h"
 
 using sound_mind::core::FilterConfiguration;
+using sound_mind::core::DownsampleMode;
 using sound_mind::core::FilterType;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::NamedConvolutionKernel;
@@ -966,6 +967,83 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsSpectralReverbWith
     QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbMixSpinBox"))->value(), 0.8);
     // SpectralReverb's own group is now the visible one.
     QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("spectralReverbGroup"))->isHidden());
+}
+
+// --- Downsample - real-world testing pass, 2026-09-20, finding #18 -----
+
+void FilterConfigurationPanelTest::freshPanelHasDownsampleGroupHidden() {
+    const FilterConfigurationPanel panel;
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("downsampleGroup"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::selectingDownsampleShowsOnlyItsOwnGroup() {
+    FilterConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
+    QVERIFY(combo != nullptr);
+
+    const int index = combo->findData(QVariant::fromValue(static_cast<int>(FilterType::Downsample)));
+    QVERIFY(index >= 0);
+    combo->setCurrentIndex(index);
+
+    QCOMPARE(panel.filterConfiguration().type(), FilterType::Downsample);
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("downsampleGroup"))->isHidden());
+    QVERIFY(panel.findChild<QGroupBox*>(QStringLiteral("spectralReverbGroup"))->isHidden());
+}
+
+void FilterConfigurationPanelTest::changingEveryDownsampleControlUpdatesConfigAndEmits() {
+    FilterConfigurationPanel panel;
+    auto* modeCombo = panel.findChild<QComboBox*>(QStringLiteral("downsampleModeCombo"));
+    auto* blockSizeSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("downsampleBlockSizeSpinBox"));
+    QVERIFY(modeCombo != nullptr);
+    QVERIFY(blockSizeSpinBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    const int averageIndex = modeCombo->findData(QVariant::fromValue(static_cast<int>(DownsampleMode::BlockAverage)));
+    QVERIFY(averageIndex >= 0);
+    modeCombo->setCurrentIndex(averageIndex);
+    blockSizeSpinBox->setValue(9);
+
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(panel.filterConfiguration().downsampleMode(), DownsampleMode::BlockAverage);
+    QCOMPARE(panel.filterConfiguration().downsampleBlockSize(), 9);
+}
+
+void FilterConfigurationPanelTest::downsampleBlockSizeMindWaveComboBindsAndUnbindsAndEmits() {
+    FilterConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("downsampleBlockSizeMindWaveCombo"));
+    QVERIFY(combo != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    combo->setCurrentIndex(1);  // "Slow Pulse".
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().downsampleBlockSizeMindWave(), std::optional<MindWaveId>(MindWaveId{5}));
+
+    combo->setCurrentIndex(0);  // "None".
+    QCOMPARE(spy.count(), 2);
+    QVERIFY(!panel.filterConfiguration().downsampleBlockSizeMindWave().has_value());
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsDownsampleWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    FilterConfiguration config;
+    config.setType(FilterType::Downsample);
+    config.setDownsampleMode(DownsampleMode::BlockAverage);
+    config.setDownsampleBlockSize(9);
+    config.setDownsampleBlockSizeMindWave(MindWaveId{5});
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    auto* modeCombo = panel.findChild<QComboBox*>(QStringLiteral("downsampleModeCombo"));
+    QCOMPARE(static_cast<DownsampleMode>(modeCombo->currentData().toInt()), DownsampleMode::BlockAverage);
+    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("downsampleBlockSizeSpinBox"))->value(), 9);
+    QCOMPARE(panel.findChild<QComboBox*>(QStringLiteral("downsampleBlockSizeMindWaveCombo"))->currentText(),
+             QStringLiteral("Slow Pulse"));
+    // Downsample's own group is now the visible one.
+    QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("downsampleGroup"))->isHidden());
 }
 
 // --- v0.Y.38.1: Filter Parameter Binding Completion -------------------

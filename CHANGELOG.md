@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.25] - 2026-09-25
+
+Real-world testing pass finding #18: **A new "Downsample" filter.**
+
+### Added
+
+- **A new "Downsample" filter** - a "pixelate" effect, reducing effective resolution over square blocks. **Mode** picks Block Hold (hard-edged classic pixelation) or Block Average (smoother); **Block Size** sets how big each block is, and can be bound to a MindWave to vary the pixelation strength smoothly across the canvas.
+
+Full regression: `sound-mind-core` 843/843 (13 new), `sound-mind-studio` `FilterConfigurationPanelTest` 68/68 (5 new). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #146.
+
 ## [0.0.45.24] - 2026-09-25
 
 Real-world testing pass finding #16: **The green selection/Paste highlight now hides when it should.**

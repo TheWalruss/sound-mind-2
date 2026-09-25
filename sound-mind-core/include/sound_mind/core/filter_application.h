@@ -65,6 +65,8 @@ struct FilterParameterMindWaves {
     const MindWave* channelCycleAngle = nullptr;
     /// @brief Resolved `FilterConfiguration::reverbMixMindWave()`.
     const MindWave* reverbMix = nullptr;
+    /// @brief Resolved `FilterConfiguration::downsampleBlockSizeMindWave()`.
+    const MindWave* downsampleBlockSize = nullptr;
 };
 
 /**
@@ -300,6 +302,25 @@ struct FilterParameterMindWaves {
  *      frames/bins, not an independent per-cell value (see
  *      `FilterConfiguration`'s own docs).
  *   Phase is left untouched, matching every filter type built so far.
+ *
+ * - **`Downsample`** (real-world testing pass, 2026-09-20, finding #18,
+ *   inspired by how well `GranularNoise` turned out): a classic "pixelate"
+ *   effect - the grid tiles into non-overlapping `downsampleBlockSize()` x
+ *   `downsampleBlockSize()` blocks, anchored at `(0, 0)`, and every cell in
+ *   a block is replaced with one representative value per
+ *   `downsampleMode()`: `BlockHold` reads the block's own top-left corner
+ *   cell (the hard-edged classic look); `BlockAverage` takes the mean dB
+ *   of the block's own cells (smoother). Operates directly in dB space,
+ *   per-channel independently, phase untouched - the same convention every
+ *   other amplitude-only filter above already follows. Confirmed with the
+ *   user: unlike `GranularNoise`'s own `grainSize()` (a block size varying
+ *   per cell has no well-defined meaning for a *random* per-block offset),
+ *   `downsampleBlockSize()` genuinely *is* MindWave-bindable, evaluated
+ *   per cell as a kernel-shape parameter (the same treatment `blurSigma`/
+ *   `medianSize` already get) - see `applyDownsampleVarying()`'s own
+ *   implementation notes for how a per-cell-varying block size is resolved
+ *   into a well-defined result once there's no longer one shared tiling
+ *   every cell can agree on.
  *
  * As of `v0.Y.31.1` (MindWaves v1) Installment D, any of the four
  * kernel-shape parameters (`blurSigma`/`medianSize`/

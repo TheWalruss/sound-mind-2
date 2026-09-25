@@ -109,6 +109,11 @@ enum class FilterType {
     ///        `reverbDecayFrames()`/`reverbRoomSize()`/
     ///        `reverbDiffusion()`/`reverbAbsorption()`/`reverbMix()`.
     SpectralReverb,
+    /// @brief Reduces effective resolution over `downsampleBlockSize()` x
+    ///        `downsampleBlockSize()` blocks - a "pixelate"-style effect,
+    ///        per `downsampleMode()`. Inspired by how well `GranularNoise`
+    ///        turned out (real-world testing pass, 2026-09-20, finding #18).
+    Downsample,
 };
 
 // clang-format off
@@ -133,6 +138,26 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FilterType, {
     {FilterType::Displace, "displace"},
     {FilterType::ChannelCycle, "channelCycle"},
     {FilterType::SpectralReverb, "spectralReverb"},
+    {FilterType::Downsample, "downsample"},
+})
+// clang-format on
+
+/// @brief Which value replaces every cell within one of `Downsample`'s own
+///        `downsampleBlockSize()`-sized blocks - real-world testing pass,
+///        2026-09-20, finding #18.
+enum class DownsampleMode {
+    /// @brief Each block takes its own top-left cell's value - the classic,
+    ///        blocky "pixelate" look.
+    BlockHold,
+    /// @brief Each block takes the mean dB of its own cells - a smoother,
+    ///        "lo-fi resample" feel than `BlockHold`'s hard edges.
+    BlockAverage,
+};
+
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(DownsampleMode, {
+    {DownsampleMode::BlockHold, "blockHold"},
+    {DownsampleMode::BlockAverage, "blockAverage"},
 })
 // clang-format on
 
@@ -1052,6 +1077,59 @@ public:
     /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
     void setReverbMixMindWave(std::optional<MindWaveId> mindWaveId) noexcept { reverbMixMindWave_ = mindWaveId; }
 
+    /// @brief Which value `Downsample` writes into each of its own blocks -
+    ///        see `DownsampleMode`'s own docs.
+    /// @return The current mode; meaningless unless `type()` is
+    ///         `Downsample`.
+    [[nodiscard]] DownsampleMode downsampleMode() const noexcept { return downsampleMode_; }
+
+    /// @brief Sets `Downsample`'s own mode.
+    /// @param mode The new mode.
+    void setDownsampleMode(DownsampleMode mode) noexcept { downsampleMode_ = mode; }
+
+    /**
+     * @brief `Downsample`'s own block size, in bins/columns - unlike
+     *        `GranularNoise`'s own `grainSize()` (a block size varying per
+     *        cell has no well-defined meaning for a *random* per-block
+     *        offset), this one *is* MindWave-bindable (confirmed with the
+     *        user): each cell resolves its own local block size, the same
+     *        kernel-shape-parameter treatment `blurSigma()`/`medianSize()`
+     *        already get, snapping to a block anchored at a fixed (0, 0)
+     *        origin using that cell's own size - see `downsampleBlockSizeMindWave()`'s
+     *        own docs and `applyDownsampleVarying()`'s own implementation
+     *        notes for exactly how a per-cell-varying size is resolved
+     *        into a well-defined result.
+     * @return The current size; meaningless unless `type()` is
+     *         `Downsample`. Not clamped here - `applyFilter()`'s own
+     *         implementation clamps to a sane range before use.
+     */
+    [[nodiscard]] int downsampleBlockSize() const noexcept { return downsampleBlockSize_; }
+
+    /// @brief Sets `Downsample`'s own block size.
+    /// @param size The new size, in bins/columns; intended to be at least 1.
+    void setDownsampleBlockSize(int size) noexcept { downsampleBlockSize_ = size; }
+
+    /**
+     * @brief The MindWave (if any) `downsampleBlockSize()` is bound to -
+     *        see `blurSigmaMindWave()`'s own docs for the general
+     *        mechanism. Falls toward `1` (a 1-cell block - the true
+     *        identity, no downsampling at all) where the wave is dark, the
+     *        same baseline convention `medianSizeMindWave()`'s own docs
+     *        establish.
+     * @return The bound MindWave's id, or `std::nullopt` for a plain,
+     *         uniform `downsampleBlockSize()` (the default).
+     */
+    [[nodiscard]] std::optional<MindWaveId> downsampleBlockSizeMindWave() const noexcept {
+        return downsampleBlockSizeMindWave_;
+    }
+
+    /// @brief Sets (or clears) which MindWave `downsampleBlockSize()` is
+    ///        bound to.
+    /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
+    void setDownsampleBlockSizeMindWave(std::optional<MindWaveId> mindWaveId) noexcept {
+        downsampleBlockSizeMindWave_ = mindWaveId;
+    }
+
     friend void to_json(nlohmann::json& json, const FilterConfiguration& config);
     friend void from_json(const nlohmann::json& json, FilterConfiguration& config);
 
@@ -1109,6 +1187,9 @@ private:
     float reverbAbsorption_ = 0.4f;
     float reverbMix_ = 0.4f;
     std::optional<MindWaveId> reverbMixMindWave_;
+    DownsampleMode downsampleMode_ = DownsampleMode::BlockHold;
+    int downsampleBlockSize_ = 4;
+    std::optional<MindWaveId> downsampleBlockSizeMindWave_;
 };
 
 /// @brief Serializes a filter configuration to its JSON representation.
