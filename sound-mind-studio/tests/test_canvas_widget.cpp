@@ -1286,3 +1286,67 @@ void CanvasWidgetTest::settingANewProjectClearsTheMindWavePreview() {
 
     QVERIFY(withPreview != afterSwitch);
 }
+
+void CanvasWidgetTest::chordPreviewIsHiddenByDefaultEvenWithDataSet() {
+    // Real-world testing pass, 2026-09-20, finding #15: the Chord Overlay
+    // shouldn't be visible unconditionally just because setChordPreview()
+    // was last called with some data - only while the Chord Generator
+    // panel is open or the Chord tool is active.
+    Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    const QImage withoutData = widget.grab().toImage();
+    widget.setChordPreview({1000.0});
+    const QImage withDataButNeitherConditionHolds = widget.grab().toImage();
+
+    QCOMPARE(withDataButNeitherConditionHolds, withoutData);
+}
+
+void CanvasWidgetTest::chordPreviewShowsWhenTheChordGeneratorPanelIsVisible() {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setChordPreview({1000.0});
+    const QImage hidden = widget.grab().toImage();
+
+    widget.setChordGeneratorPanelVisible(true);
+    const QImage shown = widget.grab().toImage();
+
+    QVERIFY(shown != hidden);
+}
+
+void CanvasWidgetTest::chordPreviewShowsWhenTheChordStampToolIsActive() {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setChordPreview({1000.0});
+    const QImage hidden = widget.grab().toImage();
+
+    widget.setToolMode(CanvasWidget::ToolMode::ChordStamp);
+    const QImage shown = widget.grab().toImage();
+
+    QVERIFY(shown != hidden);
+    QCOMPARE(shown, widget.grab().toImage());  // stable/repeatable, not a one-off render glitch.
+}
+
+void CanvasWidgetTest::chordPreviewHidesAgainOnceNeitherConditionHolds() {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    const QImage hidden = widget.grab().toImage();
+
+    widget.setChordPreview({1000.0});
+    widget.setChordGeneratorPanelVisible(true);
+    widget.setToolMode(CanvasWidget::ToolMode::ChordStamp);
+    QVERIFY(widget.grab().toImage() != hidden);
+
+    widget.setChordGeneratorPanelVisible(false);
+    widget.setToolMode(CanvasWidget::ToolMode::None);
+
+    QCOMPARE(widget.grab().toImage(), hidden);
+}

@@ -135,6 +135,11 @@ public:
      * there, and `ChordStamp`'s own single-press gesture has no
      * in-progress state at all to begin with.
      *
+     * Also repaints - `ChordStamp` specifically gates the Chord Overlay
+     * (see `setChordGeneratorPanelVisible()`'s own docs), so switching
+     * into or out of it needs to show/hide that overlay immediately,
+     * not just on whatever unrelated repaint happens to come next.
+     *
      * @param mode The new tool mode.
      */
     void setToolMode(ToolMode mode);
@@ -344,6 +349,26 @@ public:
      *        clearing any previous overlay.
      */
     void setChordPreview(std::vector<double> frequenciesHz);
+
+    /**
+     * @brief Sets whether the Chord Generator panel is currently visible -
+     *        real-world testing pass, 2026-09-20, finding #15 ("stamped
+     *        chords [the Chord Overlay] should only be visible... while
+     *        the Chord Generator panel is open, or the Chord tool is the
+     *        active tool - not unconditionally").
+     *
+     * A separate flag from `setChordPreview()`'s own data, the same
+     * "what to show" vs. "whether to show it right now" split
+     * `setShowBoundingBoxes()`/`showBoundingBoxes_` already establish for
+     * the bounding-box overlay - so toggling the panel's own visibility
+     * back and forth never loses or needs to recompute the actual preview
+     * data. The overlay itself only ever draws while this is `true` *or*
+     * `toolMode() == ToolMode::ChordStamp` (see `setToolMode()`'s own
+     * docs) - either one alone is enough.
+     *
+     * @param visible The panel's own current visibility.
+     */
+    void setChordGeneratorPanelVisible(bool visible);
 
     /**
      * @brief Sets what the frequency (vertical) axis's own labels show,
@@ -821,6 +846,9 @@ private:
     /// @brief The Chord Overlay's own current note pitches, in Hz - see
     ///        setChordPreview()'s own docs; empty draws nothing.
     std::vector<double> chordPreviewFrequenciesHz_;
+
+    /// @brief See setChordGeneratorPanelVisible()'s own docs.
+    bool chordGeneratorPanelVisible_ = false;
     ZoomMode zoomMode_ = ZoomMode::FitToWindow;
     /// @brief `Manual` mode's own stored pixels-per-column scale - `1.0`
     ///        is "Actual Size" (one screen pixel per column). Unused

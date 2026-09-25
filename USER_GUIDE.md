@@ -1068,6 +1068,13 @@ flagged immediately below the text box as you type, with **BPM** and
 **Reference** (tuning, in Hz) spin boxes controlling how beats-suffixed
 durations and note names are resolved.
 
+While you're building a chord or arpeggio, its notes are drawn live as
+dashed amber lines on the canvas's own frequency axis, so you can see
+where they'll land before committing anything. This overlay only shows
+while the Chord Generator panel is open, or the Chord tool is the
+active one - it disappears once neither is true, rather than staying
+visible unconditionally.
+
 ### Instrument and Placing It
 
 Either way, a stamped sequence always plays through whatever the

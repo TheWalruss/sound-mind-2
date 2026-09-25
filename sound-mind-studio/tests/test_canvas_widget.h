@@ -70,4 +70,8 @@ private slots:
     void setMindWavePreviewDrawsASemiTransparentGrayscaleOverlay();
     void setMindWavePreviewWithNulloptClearsIt();
     void settingANewProjectClearsTheMindWavePreview();
+    void chordPreviewIsHiddenByDefaultEvenWithDataSet();
+    void chordPreviewShowsWhenTheChordGeneratorPanelIsVisible();
+    void chordPreviewShowsWhenTheChordStampToolIsActive();
+    void chordPreviewHidesAgainOnceNeitherConditionHolds();
 };

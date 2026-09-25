@@ -265,6 +265,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     chordGeneratorPanel_ = new ChordGeneratorPanel(this);
     chordGeneratorPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, chordGeneratorPanel_);
+    // Real-world testing pass, 2026-09-20, finding #15 - see
+    // CanvasWidget::setChordGeneratorPanelVisible()'s own docs.
+    connect(chordGeneratorPanel_, &ChordGeneratorPanel::visibilityChanged, canvas_,
+            &CanvasWidget::setChordGeneratorPanelVisible);
     connect(chordGeneratorPanel_, &ChordGeneratorPanel::paramsChanged, this,
             [this](const sound_mind::core::ChordGeneratorParams& params) {
                 toolPaletteController_->setChordParams(params);

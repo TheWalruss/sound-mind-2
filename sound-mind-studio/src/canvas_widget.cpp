@@ -105,6 +105,7 @@ void CanvasWidget::setToolMode(ToolMode mode) {
     pickStrokeActive_ = false;
     selectStrokeActive_ = false;
     rotateHandleDragActive_ = false;
+    update();
 }
 
 void CanvasWidget::setPaintPreviewPath(sound_mind::core::Path path) {
@@ -159,6 +160,11 @@ void CanvasWidget::setMindWavePreview(std::optional<sound_mind::core::MindWave> 
 
 void CanvasWidget::setChordPreview(std::vector<double> frequenciesHz) {
     chordPreviewFrequenciesHz_ = std::move(frequenciesHz);
+    update();
+}
+
+void CanvasWidget::setChordGeneratorPanelVisible(bool visible) {
+    chordGeneratorPanelVisible_ = visible;
     update();
 }
 
@@ -538,7 +544,11 @@ void CanvasWidget::drawGrid(QPainter& painter) const {
 }
 
 void CanvasWidget::drawChordPreview(QPainter& painter) const {
-    if (project_ == nullptr || chordPreviewFrequenciesHz_.empty()) {
+    // Real-world testing pass, 2026-09-20, finding #15: only drawn while
+    // the Chord Generator panel is open or the Chord tool is active -
+    // either is enough - not unconditionally just because there's data.
+    if (project_ == nullptr || chordPreviewFrequenciesHz_.empty() ||
+        !(chordGeneratorPanelVisible_ || toolMode_ == ToolMode::ChordStamp)) {
         return;
     }
     // A distinct amber/dashed style from drawGrid()'s own Frequency Grid

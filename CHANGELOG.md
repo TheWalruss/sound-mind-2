@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.23] - 2026-09-25
+
+Real-world testing pass finding #15: **The Chord Overlay now hides when it should.**
+
+### Changed
+
+- **The Chord Generator's live note-preview overlay (the dashed amber lines on the frequency axis) no longer stays on the canvas indefinitely.** It now only shows while the Chord Generator panel is open, or the Chord tool is the active one - it disappears once neither is true, instead of persisting after you close the panel or switch tools.
+
+Full regression: `sound-mind-studio` `CanvasWidgetTest` 70/70 (4 new), `MainWindowTest` 211/211. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #144.
+
 ## [0.0.45.22] - 2026-09-25
 
 Real-world testing pass finding #14: **Closing the MindWaves panel now turns off MindWave Preview.**
