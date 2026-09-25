@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <optional>
+#include <stdexcept>
 
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
@@ -9,6 +11,24 @@
 #include "sound_mind/core/project.h"
 
 namespace sound_mind::core {
+
+/**
+ * @brief Thrown by compositeProject() when its own `shouldCancel` callback
+ *        returns `true` - `docs/sound-mind-roadmap.md`'s finding #12
+ *        (Installment H).
+ *
+ * A distinct type, not a plain `std::runtime_error`, specifically so a
+ * caller can tell "cancelled on request" apart from a genuine compositing
+ * failure. A separate type from `sound_mind::core::PoolCancelled`,
+ * `sound_mind::codec::ExportCancelled`, and `sound_mind::studio::
+ * ImportCancelled` - each names the operation it actually belongs to, and
+ * "pool cancelled"/"export cancelled" both read backwards for a cancelled
+ * playback composite.
+ */
+class CompositeCancelled : public std::runtime_error {
+public:
+    CompositeCancelled() : std::runtime_error("composite cancelled") {}
+};
 
 /**
  * @brief Renders a single layer's cached content as displayable pixels,
@@ -137,9 +157,22 @@ namespace sound_mind::core {
  *       to a dedicated performance pass, not built speculatively here).
  *
  * @param project The project to composite.
+ * @param shouldCancel Consulted once per layer, before that layer is
+ *        mixed in or applied as a filter - `docs/sound-mind-roadmap.md`'s
+ *        finding #12 (Installment H). Once it returns `true`, throws
+ *        `CompositeCancelled` immediately rather than processing that
+ *        layer or any layer after it. Not consulted at all on the
+ *        single-layer fast path (see the `@note` above) - that path has
+ *        no per-layer loop to check between, and is specifically the
+ *        case cheap enough not to need cancelling. `nullptr` (the
+ *        default) never cancels - the exact prior behavior, unchanged for
+ *        every existing caller.
  * @return The combined `StreamImage`, or `std::nullopt` if no layer in
  *         `project` is both visible and has any cached content at all.
+ * @throws CompositeCancelled if `shouldCancel` returns `true` - see its
+ *         own docs.
  */
-[[nodiscard]] std::optional<sound_mind::codec::StreamImage> compositeProject(const Project& project);
+[[nodiscard]] std::optional<sound_mind::codec::StreamImage> compositeProject(
+    const Project& project, const std::function<bool()>& shouldCancel = nullptr);
 
 }  // namespace sound_mind::core

@@ -13,6 +13,7 @@
 
 #include "sound_mind/codec/audio_export.h"
 #include "sound_mind/core/background_task.h"
+#include "sound_mind/core/compositor.h"
 #include "sound_mind/core/device_test_tone_player.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/loop_engine.h"
@@ -332,8 +333,40 @@ public slots:
      * has content), or no project is open, or Loop Mode or Recording is
      * currently running (see toggleLoopMode()'s/toggleRecording()'s docs
      * for why all three are mutually exclusive).
+     *
+     * As of `v0.0.45.20` (finding #12, Installment H): a fresh (not yet
+     * loaded) start runs `compositeProject()` on a `BackgroundTask`
+     * instead of blocking the UI thread - the one call site among
+     * `compositeProject()`'s three (this one, the live canvas redraw, and
+     * Repeat/Delta/Review's per-edit recomposite) that's a genuine
+     * one-shot "click and wait" action rather than part of the
+     * interactive edit/render loop; the other two stay synchronous (see
+     * `docs/sound-mind-architecture.md`'s "Threading & Real-Time Model"
+     * for why). A copy of `*project_` is captured by value before
+     * backgrounding, so the background thread never touches the live
+     * `project_` - the same "compute independently, commit on the UI
+     * thread only once fully successful" shape every other Finding #12
+     * installment already uses. Cancelling rolls back cleanly:
+     * `playbackController_` was never touched, so there's nothing to
+     * undo, just a discarded, uncommitted result - the same trivial
+     * rollback importAudioSnippetsAsync() already established. A no-op
+     * (status bar message only) if isCompositingForPlayback() is already
+     * `true`. Resuming after pausePlayback() (already loaded) stays fully
+     * synchronous, unchanged - only a *fresh* start composites at all.
      */
     void startPlayback();
+
+    /// @brief Whether startPlayback()'s own background composite is still
+    /// running.
+    /// @return `true` from startPlayback() (once it actually started a
+    ///         background task for a fresh load) until the background
+    ///         compute finishes, one way or another.
+    [[nodiscard]] bool isCompositingForPlayback() const noexcept;
+
+    /// @brief Requests cancellation of the currently running playback
+    /// composite - the actual work behind the status bar's own cancel
+    /// button. A no-op if isCompositingForPlayback() is `false`.
+    void cancelPlaybackComposite();
 
     /// @brief Pauses playback; startPlayback() resumes from the same
     /// position. The position bar/playhead stay at their current position
@@ -2224,6 +2257,21 @@ private:
     /// Installment G.
     void pollPoolProgress();
 
+    /// @brief compositeProgressTimer_'s slot: a no-op while
+    /// isCompositingForPlayback() (still polling); once the background
+    /// composite finishes, stops the timer, hides
+    /// compositeCancelButton_, and reports the outcome per
+    /// compositeOutcome_ - success (loads compositedResult_ into
+    /// playbackController_ and starts playback, the same
+    /// load()-then-play() sequence startPlayback() always did
+    /// synchronously - or a status message noting there was nothing to
+    /// play, if compositedResult_ ended up empty), cancelled (discards
+    /// compositedResult_ without ever touching playbackController_ - see
+    /// startPlayback()'s own docs on why that's the whole rollback
+    /// needed), or failed (`QMessageBox::critical()`). Finding #12
+    /// Installment H.
+    void pollCompositeProgress();
+
     /**
      * @brief Repeat Playback's/one-shot preview's shared edit hook -
      *        connected to `toolPaletteController_::contentChanged()`
@@ -2711,6 +2759,26 @@ private:
     enum class PoolOutcome { Success, Cancelled, Failed };
     PoolOutcome poolOutcome_ = PoolOutcome::Success;
     QString poolErrorMessage_;
+
+    /// @brief The currently running playback composite, if any - see
+    /// startPlayback()'s own docs. A separate slot from exportTask_/
+    /// importTask_/poolTask_ - see poolTask_'s own docs on why none of
+    /// these are shared. Finding #12 Installment H.
+    std::unique_ptr<sound_mind::core::BackgroundTask> compositeTask_;
+    QTimer* compositeProgressTimer_ = nullptr;
+    QPushButton* compositeCancelButton_ = nullptr;
+
+    /// @brief compositeTask_'s own work function's result on success -
+    /// written just before it returns and read only after observing
+    /// isCompositingForPlayback() == false, safe for the same release/
+    /// acquire reason exportOutcome_/pooledContent_ are (see
+    /// BackgroundTask::isRunning()'s own docs). `std::nullopt` on
+    /// cancellation, failure, or a composite with nothing to play.
+    std::optional<sound_mind::codec::StreamImage> compositedResult_;
+
+    enum class CompositeOutcome { Success, Cancelled, Failed };
+    CompositeOutcome compositeOutcome_ = CompositeOutcome::Success;
+    QString compositeErrorMessage_;
 };
 
 }  // namespace sound_mind::studio

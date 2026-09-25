@@ -34,8 +34,8 @@ public:
  *        fresh Stream re-encode derived from it.
  */
 struct PooledContent {
-    sound_mind::codec::PoolImage poolImage;
-    sound_mind::codec::StreamImage streamContent;
+    sound_mind::codec::PoolImage poolImage;        ///< The layer's own Pool-encoded image - `Layer::setPoolContent()`'s own argument.
+    sound_mind::codec::StreamImage streamContent;  ///< The fresh Stream re-encode derived from it - `Layer::setContent()`'s own argument.
 };
 
 /**

@@ -351,6 +351,21 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     poolProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
     connect(poolProgressTimer_, &QTimer::timeout, this, &MainWindow::pollPoolProgress);
 
+    // Finding #12, Installment H - see startPlayback()'s own docs. A
+    // fourth, independent slot - not shared with export's/import's/pool's
+    // own.
+    compositeCancelButton_ = new QPushButton(tr("✕"));  // "✕".
+    compositeCancelButton_->setObjectName(QStringLiteral("compositeCancelButton"));
+    compositeCancelButton_->setToolTip(tr("Cancel"));
+    compositeCancelButton_->setFixedWidth(24);
+    compositeCancelButton_->hide();
+    connect(compositeCancelButton_, &QPushButton::clicked, this, &MainWindow::cancelPlaybackComposite);
+    statusBar()->addPermanentWidget(compositeCancelButton_);
+
+    compositeProgressTimer_ = new QTimer(this);
+    compositeProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
+    connect(compositeProgressTimer_, &QTimer::timeout, this, &MainWindow::pollCompositeProgress);
+
     // Selection & Fill (v0.Y.25.1), Selection Type (v0.Y.35.1 Installment
     // A) - toolPaletteController_ isn't constructed until just below, but
     // this lambda only ever runs later, on a real dropdown change - safe
@@ -1000,6 +1015,11 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         event->ignore();
         return;
     }
+    if (isCompositingForPlayback()) {
+        statusBar()->showMessage(tr("Wait for playback to finish preparing, or cancel it, before closing."), 5000);
+        event->ignore();
+        return;
+    }
     if (!confirmDiscardUnsavedChanges()) {
         event->ignore();
         return;
@@ -1278,6 +1298,11 @@ void MainWindow::newProject() {
                                   5000);
         return;
     }
+    if (isCompositingForPlayback()) {
+        statusBar()->showMessage(
+            tr("Wait for playback to finish preparing, or cancel it, before starting a new project."), 5000);
+        return;
+    }
     if (!confirmDiscardUnsavedChanges()) {
         return;
     }
@@ -1326,6 +1351,11 @@ void MainWindow::openProject() {
         statusBar()->showMessage(tr("Wait for pooling to finish, or cancel it, before opening a project."), 5000);
         return;
     }
+    if (isCompositingForPlayback()) {
+        statusBar()->showMessage(tr("Wait for playback to finish preparing, or cancel it, before opening a project."),
+                                  5000);
+        return;
+    }
     if (!confirmDiscardUnsavedChanges()) {
         return;
     }
@@ -1358,6 +1388,12 @@ bool MainWindow::openProjectAt(const std::filesystem::path& path, QString* error
     if (isPoolRunning()) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("Wait for pooling to finish, or cancel it, before opening a project.");
+        }
+        return false;
+    }
+    if (isCompositingForPlayback()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("Wait for playback to finish preparing, or cancel it, before opening a project.");
         }
         return false;
     }
@@ -2283,25 +2319,53 @@ void MainWindow::startPlayback() {
     }
 
     if (!playbackController_->isLoaded()) {
-        // As of v0.Y.27.1 (Multi-layer Compositing): the project's own real
-        // composite (every visible layer mixed together), not just
-        // whichever layer happens to be on top - see
-        // sound_mind::core::compositeProject()'s own docs.
-        const auto composite = sound_mind::core::compositeProject(*project_);
-        if (!composite.has_value()) {
+        if (isCompositingForPlayback()) {
+            statusBar()->showMessage(
+                tr("Already preparing playback - wait for it to finish, or cancel it, first."), 5000);
             return;
         }
-        // load() itself emits durationChanged() (connected in the
-        // constructor to playbackPanel_->setDuration()) - only needs
-        // doing once per load, not on every resume, which load() already
-        // guarantees since this whole branch is skipped once isLoaded().
-        playbackController_->load(sound_mind::codec::decode(*composite));
-        // A fresh load starts a new "nothing edited yet this session" range
-        // - the whole track, regardless of playbackScope_ - narrowed only
-        // once a real edit actually arrives (handleContentChangedForPlayback()).
-        repeatRangeStartSeconds_ = 0.0;
-        repeatRangeEndSeconds_ = playbackController_->totalSeconds();
-        repeatLoopBackSeconds_ = 0.0;
+
+        // Cheap synchronous pre-check, mirroring compositeProject()'s own
+        // pre-pass (see its docs): is there anything to composite at all?
+        // Kept synchronous (not backgrounded) so the no-content case stays
+        // an instant no-op, exactly as before - only a real composite
+        // attempt is worth backgrounding.
+        const auto& layers = project_->layers();
+        const bool anyContributor =
+            std::any_of(layers.begin(), layers.end(), [](const sound_mind::core::Layer& layer) {
+                return layer.visible() && layer.content().has_value() &&
+                       !sound_mind::core::isFilterLayerType(layer.type());
+            });
+        if (!anyContributor) {
+            return;
+        }
+
+        compositeOutcome_ = CompositeOutcome::Success;
+        compositeErrorMessage_.clear();
+        compositedResult_.reset();
+
+        // project_ copied by value - compositeProject() never touches
+        // project_ itself once backgrounded, so the background thread has
+        // nothing shared to synchronize against - see startPlayback()'s
+        // own docs.
+        compositeTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+            [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
+                try {
+                    compositedResult_ = sound_mind::core::compositeProject(
+                        projectCopy, [&token]() { return token.cancellationRequested(); });
+                } catch (const sound_mind::core::CompositeCancelled&) {
+                    compositeOutcome_ = CompositeOutcome::Cancelled;
+                } catch (const std::exception& e) {
+                    compositeOutcome_ = CompositeOutcome::Failed;
+                    compositeErrorMessage_ = QString::fromStdString(e.what());
+                }
+            });
+        compositeTask_->start();
+
+        statusBar()->showMessage(tr("Preparing playback..."));
+        compositeCancelButton_->show();
+        compositeProgressTimer_->start();
+        return;
     }
 
     playbackController_->play();
@@ -2913,6 +2977,64 @@ void MainWindow::pollPoolProgress() {
     pooledContent_.reset();
     poolLayerId_.reset();
     poolTask_.reset();
+}
+
+bool MainWindow::isCompositingForPlayback() const noexcept {
+    return compositeTask_ != nullptr && compositeTask_->isRunning();
+}
+
+void MainWindow::cancelPlaybackComposite() {
+    if (compositeTask_) {
+        compositeTask_->requestCancel();
+    }
+}
+
+void MainWindow::pollCompositeProgress() {
+    if (compositeTask_->isRunning()) {
+        return;
+    }
+    compositeProgressTimer_->stop();
+    compositeCancelButton_->hide();
+
+    switch (compositeOutcome_) {
+        case CompositeOutcome::Success:
+            if (compositedResult_.has_value()) {
+                // load() itself emits durationChanged() (connected in the
+                // constructor to playbackPanel_->setDuration()) - only
+                // needs doing once per load, matching startPlayback()'s own
+                // prior synchronous contract.
+                playbackController_->load(sound_mind::codec::decode(*compositedResult_));
+                // A fresh load starts a new "nothing edited yet this
+                // session" range - the whole track, regardless of
+                // playbackScope_ - narrowed only once a real edit actually
+                // arrives (handleContentChangedForPlayback()).
+                repeatRangeStartSeconds_ = 0.0;
+                repeatRangeEndSeconds_ = playbackController_->totalSeconds();
+                repeatLoopBackSeconds_ = 0.0;
+                playbackController_->play();
+                statusBar()->clearMessage();
+            } else {
+                // Shouldn't happen given startPlayback()'s own pre-check
+                // already confirmed a contributor exists - kept as a safe
+                // fallback rather than an assert, the same caution
+                // pollPoolProgress()'s own "layer no longer exists" branch
+                // takes.
+                statusBar()->showMessage(tr("Nothing to play."), 5000);
+            }
+            break;
+        case CompositeOutcome::Cancelled:
+            // Nothing to roll back beyond discarding compositedResult_ -
+            // playbackController_ was never touched, matching Pool's own
+            // simplest-possible rollback.
+            statusBar()->showMessage(tr("Playback preparation cancelled."), 5000);
+            break;
+        case CompositeOutcome::Failed:
+            statusBar()->clearMessage();
+            QMessageBox::critical(this, tr("Playback Failed"), compositeErrorMessage_);
+            break;
+    }
+    compositedResult_.reset();
+    compositeTask_.reset();
 }
 
 }  // namespace sound_mind::studio

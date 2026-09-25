@@ -233,6 +233,24 @@ void createFreshTestProject(MainWindow& window) {
     QVERIFY(window.createProjectAt(sound_mind::core::ProjectSettings{}, path));
 }
 
+/// @brief Imports the same tiny WAV `layerCount` times, giving `window`'s
+/// current (default-sized, 1024x512) project that many real, contributing
+/// layers - so compositeProject()'s own per-layer loop (see its docs) has
+/// enough real per-cell mixing work, spread over enough layers, to give
+/// requestCancel() (called right after startPlayback() starts its own
+/// background composite) a reliable window to land before the whole
+/// composite finishes - the same reasoning cancelPoolDiscardsTheComputedResultWithoutApplyingIt()'s
+/// own comment gives for a several-second clip, applied here to "many
+/// layers" instead (compositeProject()'s own cost scales with canvasWidth
+/// x binCount x layer count, not with any one layer's own source clip
+/// length).
+void importSeveralLayersForASlowComposite(MainWindow& window, const std::filesystem::path& path,
+                                           int layerCount = 20) {
+    for (int i = 0; i < layerCount; ++i) {
+        QVERIFY(window.importAudioFile(path));
+    }
+}
+
 }  // namespace
 
 void MainWindowTest::hasARealWindowIconNotTheDefaultOne() {
@@ -435,7 +453,19 @@ void MainWindowTest::startPlaybackPlaysAnImportedLayer() {
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
+    // As of v0.0.45.20 (finding #12, Installment H), a fresh start runs
+    // compositeProject() on a background task - see
+    // poolTopmostLayerAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
+    // own comment on why this waits for the cancel button itself, not
+    // just isPlaying() (which could still read stale for a few ticks
+    // after the underlying BackgroundTask finishes but before this
+    // window's own ~33ms poll timer has had its own next chance to react).
     window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
     QVERIFY(window.isPlaying());
 }
 
@@ -451,7 +481,16 @@ void MainWindowTest::pauseAndResumePlayback() {
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why the
+    // first (fresh) startPlayback() needs to wait for the background
+    // composite - the second one (resuming after pausePlayback(), already
+    // loaded) stays fully synchronous, unchanged.
     window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
     QVERIFY(window.isPlaying());
 
     window.pausePlayback();
@@ -473,11 +512,221 @@ void MainWindowTest::stopPlaybackStopsIt() {
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why this
+    // waits for the background composite to finish.
     window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
     QVERIFY(window.isPlaying());
 
     window.stopPlayback();
     QVERIFY(!window.isPlaying());
+}
+
+void MainWindowTest::startPlaybackRunsCompositeInTheBackgroundAndShowsTheCancelButton() {
+    // Real-world testing pass, 2026-09-20, finding #12 ("a real,
+    // non-blocking cancel affordance for long operations"), Installment H.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-composite-async.wav";
+    writeTestWavFile(path);
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    importSeveralLayersForASlowComposite(window, path);
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+    QVERIFY(cancelButton->isHidden());
+
+    window.startPlayback();
+
+    QVERIFY(window.isCompositingForPlayback());
+    QVERIFY(!cancelButton->isHidden());
+
+    // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
+    // own comment on why this waits for the cancel button itself, not just
+    // isCompositingForPlayback().
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+}
+
+void MainWindowTest::cancelPlaybackCompositeDiscardsTheResultWithoutStartingPlayback() {
+    // Many layers - see importSeveralLayersForASlowComposite()'s own
+    // comment on why that (not a longer clip) is what gives
+    // requestCancel() (called immediately after starting) a reliable
+    // window to land before compositeProject()'s own per-layer loop races
+    // through to completion.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-composite-cancel.wav";
+    writeTestWavFile(path);
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    importSeveralLayersForASlowComposite(window, path);
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.startPlayback();
+    QVERIFY(window.isCompositingForPlayback());
+
+    window.cancelPlaybackComposite();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+
+    // Nothing to roll back beyond discarding the computed result -
+    // playbackController_ was never touched, matching Pool's own
+    // simplest-possible rollback (see cancelPoolDiscardsTheComputedResultWithoutApplyingIt()'s
+    // own comment).
+    QVERIFY(!window.isPlaying());
+    QVERIFY(window.statusBar()->currentMessage().contains(QStringLiteral("cancelled")));
+}
+
+void MainWindowTest::startPlaybackDoesNothingWhileAlreadyCompositing() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-composite-already.wav";
+    writeTestWavFile(path);
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    importSeveralLayersForASlowComposite(window, path);
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.startPlayback();
+    QVERIFY(window.isCompositingForPlayback());
+
+    // A second call while the first is still running is refused outright
+    // (a status bar message only) rather than starting a second
+    // BackgroundTask - matching every other Finding #12 installment's own
+    // "already running" guard.
+    window.startPlayback();
+    QVERIFY(window.isCompositingForPlayback());
+    QVERIFY(window.statusBar()->currentMessage().contains(QStringLiteral("Already preparing")));
+
+    window.cancelPlaybackComposite();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+}
+
+void MainWindowTest::closeRefusesWhileCompositingForPlayback() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-composite-refuse-close.wav";
+    writeTestWavFile(path);
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-composite-refuse-close.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(sound_mind::core::ProjectSettings{}, projectPath));
+    importSeveralLayersForASlowComposite(window, path);
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.startPlayback();
+    QVERIFY(window.isCompositingForPlayback());
+
+    // Refused outright (no dialog reached - see closeEvent()'s docs).
+    QVERIFY(!window.close());
+    QVERIFY(window.isCompositingForPlayback());
+
+    window.cancelPlaybackComposite();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+}
+
+void MainWindowTest::newProjectRefusesWhileCompositingForPlayback() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-composite-refuse-new.wav";
+    writeTestWavFile(path);
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-composite-refuse-new.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(sound_mind::core::ProjectSettings{}, projectPath));
+    importSeveralLayersForASlowComposite(window, path);
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.startPlayback();
+    QVERIFY(window.isCompositingForPlayback());
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    // The real, interactive newProject() - safe to call directly, since
+    // the composite check runs before the wizard would ever be shown.
+    window.newProject();
+
+    QVERIFY(window.isCompositingForPlayback());
+    QCOMPARE(window.project()->layers().size(), layerCountBefore);
+
+    window.cancelPlaybackComposite();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+}
+
+void MainWindowTest::openProjectRefusesWhileCompositingForPlayback() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-composite-refuse-open.wav";
+    writeTestWavFile(path);
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-composite-refuse-open.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(sound_mind::core::ProjectSettings{}, projectPath));
+    importSeveralLayersForASlowComposite(window, path);
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.startPlayback();
+    QVERIFY(window.isCompositingForPlayback());
+
+    // Refused before ever reaching the file dialog.
+    window.openProject();
+    QVERIFY(window.isCompositingForPlayback());
+
+    window.cancelPlaybackComposite();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+}
+
+void MainWindowTest::openProjectAtRefusesWhileCompositingForPlayback() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-composite-refuse-openat.wav";
+    writeTestWavFile(path);
+
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "sound-mind-test-composite-refuse-openat.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(sound_mind::core::ProjectSettings{}, projectPath));
+    importSeveralLayersForASlowComposite(window, path);
+    std::filesystem::remove(path);
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.startPlayback();
+    QVERIFY(window.isCompositingForPlayback());
+
+    QString errorMessage;
+    const bool ok = window.openProjectAt(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.smproj",
+                                          &errorMessage);
+
+    QVERIFY(!ok);
+    QVERIFY(!errorMessage.isEmpty());
+    QVERIFY(window.isCompositingForPlayback());
+
+    window.cancelPlaybackComposite();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
 }
 
 void MainWindowTest::poolTopmostLayerNowFailsGracefullyWithNoContent() {
@@ -2035,7 +2284,14 @@ void MainWindowTest::playbackPanelButtonsDriveRealPlayback() {
     QVERIFY(playButton != nullptr);
     QVERIFY(stopButton != nullptr);
 
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why this
+    // waits for the background composite to finish.
     playButton->click();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
     QVERIFY(window.isPlaying());
 
     stopButton->click();
@@ -2944,7 +3200,14 @@ void MainWindowTest::startPlaybackSetsThePlaybackPanelDuration() {
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why this
+    // waits for the background composite to finish.
     window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
 
     auto* panel = window.findChild<PlaybackPanel*>();
     QVERIFY(panel != nullptr);
@@ -2964,7 +3227,14 @@ void MainWindowTest::seekPlaybackMovesThePlaybackPosition() {
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why this
+    // waits for the background composite to finish.
     window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
     window.seekPlayback(5.0);
 
     auto* panel = window.findChild<PlaybackPanel*>();
@@ -2985,7 +3255,14 @@ void MainWindowTest::stopPlaybackResetsThePlaybackPanelPosition() {
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why this
+    // waits for the background composite to finish.
     window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
     window.seekPlayback(5.0);
 
     window.stopPlayback();
@@ -3025,7 +3302,14 @@ void MainWindowTest::paintingWhileRepeatIsOffDoesNotInterruptPlayback() {
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why this
+    // waits for the background composite to finish.
     window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
     window.seekPlayback(1.5);  // "0:01 / 0:02".
     QVERIFY(window.isPlaying());
 
@@ -3064,7 +3348,14 @@ void MainWindowTest::paintingWhileRepeatIsOnWithDeltaScopeJumpsPlaybackToTheEdit
 
     window.setPlaybackRepeat(true);
     window.setPlaybackScope(PlaybackScope::Delta);
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why this
+    // waits for the background composite to finish.
     window.startPlayback();  // starts at "0:00 / 0:02" - never seeked.
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
 
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);
@@ -3101,7 +3392,14 @@ void MainWindowTest::paintingWhileRepeatIsOnWithTrackScopeKeepsTheSamePosition()
 
     window.setPlaybackRepeat(true);
     window.setPlaybackScope(PlaybackScope::Track);  // the default, set explicitly for clarity.
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why this
+    // waits for the background composite to finish.
     window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
     window.seekPlayback(1.5);  // "0:01 / 0:02".
 
     auto* canvas = window.findChild<CanvasWidget*>();
@@ -3139,7 +3437,14 @@ void MainWindowTest::paintingWhileRepeatIsOnWithReviewScopeWrapsToTheTrackStartN
 
     window.setPlaybackRepeat(true);
     window.setPlaybackScope(PlaybackScope::Review);
+    // See startPlaybackPlaysAnImportedLayer()'s own comment on why this
+    // waits for the background composite to finish.
     window.startPlayback();  // starts at "0:00 / 0:02" - never seeked.
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
 
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);

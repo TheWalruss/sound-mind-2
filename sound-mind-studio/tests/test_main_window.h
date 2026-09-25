@@ -20,6 +20,13 @@ private slots:
     void startPlaybackPlaysAnImportedLayer();
     void pauseAndResumePlayback();
     void stopPlaybackStopsIt();
+    void startPlaybackRunsCompositeInTheBackgroundAndShowsTheCancelButton();
+    void cancelPlaybackCompositeDiscardsTheResultWithoutStartingPlayback();
+    void startPlaybackDoesNothingWhileAlreadyCompositing();
+    void closeRefusesWhileCompositingForPlayback();
+    void newProjectRefusesWhileCompositingForPlayback();
+    void openProjectRefusesWhileCompositingForPlayback();
+    void openProjectAtRefusesWhileCompositingForPlayback();
     void poolTopmostLayerNowFailsGracefullyWithNoContent();
     void poolTopmostLayerNowPoolsAnImportedLayer();
     void poolTopmostLayerAsyncRunsInTheBackgroundAndShowsTheCancelButton();

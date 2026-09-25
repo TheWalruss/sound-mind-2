@@ -495,7 +495,7 @@ std::optional<sound_mind::codec::RgbImage> renderLayerThumbnail(const Layer& lay
     return sound_mind::codec::downsampleAveraged(base, width, height);
 }
 
-std::optional<StreamImage> compositeProject(const Project& project) {
+std::optional<StreamImage> compositeProject(const Project& project, const std::function<bool()>& shouldCancel) {
     const auto& layers = project.layers();
 
     // Pre-pass: which Normal/Background layers actually contribute their
@@ -594,6 +594,9 @@ std::optional<StreamImage> compositeProject(const Project& project) {
     result.sharedPhaseRadians.assign(cellCount, 0.0f);
     bool anyMixedIn = false;
     for (const Layer& layer : layers) {
+        if (shouldCancel && shouldCancel()) {
+            throw CompositeCancelled{};
+        }
         if (!layer.visible()) {
             continue;
         }

@@ -1,4 +1,5 @@
 #include <cmath>
+#include <functional>
 #include <optional>
 
 #include <catch2/catch_approx.hpp>
@@ -18,6 +19,7 @@
 using sound_mind::codec::StreamImage;
 using sound_mind::codec::toRgbImage;
 using sound_mind::core::BlendMode;
+using sound_mind::core::CompositeCancelled;
 using sound_mind::core::compositeProject;
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterType;
@@ -690,6 +692,60 @@ TEST_CASE("compositeProject applies a Filter layer's own filter to everything be
     REQUIRE(composite.has_value());
     CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
     CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject throws CompositeCancelled once shouldCancel starts returning true",
+          "[core][compositor][cancellation]") {
+    // Project::createNew() already seeds Background + Equalizer (itself a
+    // Filter-type layer, opacity 0 by default) - adding one more Filter
+    // layer here makes three layers total for the general path's own
+    // per-layer loop to iterate over, so a callCount >= 3 cancellation
+    // (reaching this test's own added Filter layer, the third) proves the
+    // check really runs once per layer, not just once before the loop
+    // starts.
+    Project project = Project::createNew(testSettings());  // canvasWidth = 3, binCount = 1.
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    FilterConfiguration filterConfig;
+    filterConfig.setType(FilterType::FrequencyAxisGradient);
+    filterConfig.frequencyGradient().setStopValues(0, {0.0f, 0.0f, 0.0f, 1.0f, 1.0f});
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(filterConfig);
+    project.addLayer(std::move(filterLayer));
+
+    int callCount = 0;
+    const auto shouldCancel = [&callCount]() {
+        ++callCount;
+        return callCount >= 3;
+    };
+
+    CHECK_THROWS_AS((void)compositeProject(project, shouldCancel), CompositeCancelled);
+    CHECK(callCount == 3);
+}
+
+TEST_CASE("compositeProject with a shouldCancel that never returns true behaves exactly as without one",
+          "[core][compositor][cancellation]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    FilterConfiguration filterConfig;
+    filterConfig.setType(FilterType::FrequencyAxisGradient);
+    filterConfig.frequencyGradient().setStopValues(0, {0.0f, 0.0f, 0.0f, 1.0f, 1.0f});
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(filterConfig);
+    project.addLayer(std::move(filterLayer));
+
+    int callCount = 0;
+    const auto neverCancel = [&callCount]() {
+        ++callCount;
+        return false;
+    };
+
+    const auto composite = compositeProject(project, neverCancel);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(callCount == 3);
 }
 
 TEST_CASE("compositeProject applies a Filter layer's own MindWave-bound parameter per cell",

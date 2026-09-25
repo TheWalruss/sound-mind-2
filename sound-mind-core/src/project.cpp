@@ -65,6 +65,30 @@ Project Project::createNew(ProjectSettings settings) {
     return project;
 }
 
+Project::Project(const Project& other)
+    : settings_(other.settings_),
+      layers_(other.layers_),
+      mindWaves_(other.mindWaves_),
+      mindShots_(other.mindShots_),
+      mindGrains_(other.mindGrains_),
+      convolutionKernels_(other.convolutionKernels_) {
+    // operationLog_ deliberately left default-constructed (empty) - see
+    // this constructor's own docs.
+}
+
+Project& Project::operator=(const Project& other) {
+    if (this != &other) {
+        settings_ = other.settings_;
+        layers_ = other.layers_;
+        mindWaves_ = other.mindWaves_;
+        mindShots_ = other.mindShots_;
+        mindGrains_ = other.mindGrains_;
+        convolutionKernels_ = other.convolutionKernels_;
+        operationLog_ = OperationLog{};
+    }
+    return *this;
+}
+
 Project Project::load(const std::filesystem::path& path) {
     std::ifstream file(path);
     if (!file) {

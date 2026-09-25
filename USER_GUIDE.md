@@ -1161,6 +1161,13 @@ would show, live. Drag the position bar (whether playing or paused) to
 seek to a different point; both the bar and the canvas playhead jump to
 match immediately.
 
+The first time you press Play in a session, preparing that composite runs
+in the background rather than freezing the app - for a large project, a
+small **✕** button appears in the status bar to cancel it if you change
+your mind; cancelling just means playback doesn't start. New/Open Project
+and closing the Studio are all disabled while playback is being prepared,
+the same as while an import or a pool is running.
+
 ### Repeat Playback
 
 The **Scope** drop-down decides how an edit affects playback, and

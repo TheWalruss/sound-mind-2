@@ -49,6 +49,10 @@ AudioEncoder createAudioEncoder(AVFormatContext& formatCtx, AVCodecID codecId, c
 /// final short frame for any samples left over, and a trailing flush of the
 /// encoder itself. Must be called *after* avformat_write_header().
 ///
+/// @param formatCtx The already-open (header already written) muxer to
+///        write encoded packets into.
+/// @param encoder The encoder/stream pair `createAudioEncoder()` returned.
+/// @param audio The decoded audio to resample/reformat and encode.
 /// @param shouldCancel Consulted once per input chunk (see the function's
 ///        own definition) - `docs/sound-mind-roadmap.md`'s "real,
 ///        non-blocking cancel affordance for long operations" milestone.

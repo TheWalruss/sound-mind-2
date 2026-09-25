@@ -44,6 +44,68 @@ public:
     Project() = default;
 
     /**
+     * @brief Copy-constructs a Project - **the copy starts with an empty
+     *        `operationLog()`, not a duplicate of the original's own
+     *        undo/redo history**.
+     *
+     * Hand-written (not defaulted) specifically because of this: a plain
+     * member-wise copy is impossible anyway (`OperationLog` holds
+     * `std::vector<std::unique_ptr<Operation>>`, which
+     * `std::vector::vector(const std::vector&)` can't copy - `Operation`
+     * is a polymorphic hierarchy with no `clone()`). Rather than adding
+     * one (a materially larger change, and not needed by this copy
+     * constructor's own actual motivating use - see below), this simply
+     * defines "copying a Project" as copying everything *except* its own
+     * edit history - settings, layers (including each layer's own
+     * `filterConfiguration()`/`opacityMindWave()` bindings), MindWaves,
+     * MindShots, MindGrains, and convolution kernels, all copied
+     * verbatim, ids and all, since nothing here reassigns any id (unlike
+     * `addLayer()`/`addMindWave()`/etc., which each assign a *fresh* one -
+     * not usable to rebuild an equivalent copy, since every cross-
+     * reference by id, e.g. a `MindGrain`'s own `sourceLayerId`, would
+     * silently point at the wrong thing afterward).
+     *
+     * Added for `MainWindow::startPlayback()`'s own background-compositing
+     * use (`docs/sound-mind-roadmap.md`'s finding #12, Installment H):
+     * `sound_mind::core::compositeProject()` needs a snapshot it can read
+     * from a background thread with no risk of the UI thread mutating the
+     * same `Project` concurrently, and has no reason to touch
+     * `operationLog()` at all (undo/redo is a UI-thread-only concern) - a
+     * copy's own empty log is simply never read by anything that copy is
+     * used for.
+     *
+     * @note Not intended for general "clone this project, undo history and
+     *       all" use - there's no such use yet, and this constructor
+     *       deliberately doesn't provide it. If one arises, giving
+     *       `Operation` a real `clone()` (so `OperationLog` itself can
+     *       become copyable) is the more honest fix, not layering more
+     *       meaning onto this one.
+     *
+     * @param other The project to copy from; left unchanged.
+     */
+    Project(const Project& other);
+
+    /// @brief Copy-assigns a Project - see the copy constructor's own docs
+    ///        for why the result's `operationLog()` is empty, not a copy
+    ///        of `other`'s.
+    /// @param other The project to copy from; left unchanged.
+    /// @return `*this`, for chaining - the usual copy-assignment contract.
+    Project& operator=(const Project& other);
+
+    /// @brief Defaulted move constructor - declaring the copy constructor
+    ///        above suppresses the implicitly-declared one, so this
+    ///        restores it explicitly. Unlike the copy constructor, a move
+    ///        *does* carry `operationLog()` over untouched (there's only
+    ///        ever one logical owner left after a move, so there's no
+    ///        "which copy keeps the history" question to answer).
+    Project(Project&&) = default;
+
+    /// @brief Defaulted move assignment - see the move constructor's own
+    ///        docs.
+    /// @return `*this`, for chaining - the usual move-assignment contract.
+    Project& operator=(Project&&) = default;
+
+    /**
      * @brief Creates a new project with the given settings, a Background
      *        layer, and an Equalizer layer, per `docs/sound-mind-design.md`'s
      *        "Special Layers".
