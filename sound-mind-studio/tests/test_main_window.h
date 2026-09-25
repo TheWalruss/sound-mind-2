@@ -80,6 +80,8 @@ private slots:
     void setKeepLoopingDoesNothingWithNoProjectOpen();
     void toggleLoopModeReusesAnExistingLoopInputLayerInsteadOfCreatingANewOne();
     void toggleLoopModeGivesANewLoopInputLayerAPlaceholderContentImmediately();
+    void configuredDeviceAndGainPersistAcrossANewProjectsFreshLoopEngine();
+    void theLoopInputLayersNameIsActuallyVisibleInTheLayersPanel();
 
     // Transport Panels (v0.Y.16.1)
     void transportPanelsStayHiddenByDefaultEvenAfterAProjectExists();

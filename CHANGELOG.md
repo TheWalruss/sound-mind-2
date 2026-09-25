@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.11] - 2026-09-25
+
+Real-world testing pass finding #10: **Loop Mode losing its configured device/gain on every project switch.**
+
+### Fixed
+
+- **Loop Mode no longer silently resets to system-default input/output devices at unity gain every time a project is created or opened.** `loopEngine_` is rebuilt fresh on every project switch (unlike Recording's persistent engine), and previously never had the already-configured device/gain re-applied to it - this is what "no audio is heard" during Loop Mode actually was, for anyone whose real devices aren't the system default.
+- Confirmed (with a new regression test) that Loop Mode's "Loop Input" layer *does* actually appear in the Layers panel - that half of this finding was already fixed by `v0.0.45.4`'s layer-name/thumbnail fix, just never independently verified against this specific layer until now.
+
+Full regression: no new failures (180/180 `MainWindowTest`, up from 178). Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #132.
+
 ## [0.0.45.10] - 2026-09-25
 
 Real-world testing pass finding #9: **Delta/Review's own auto-preview no longer requires Repeat.**

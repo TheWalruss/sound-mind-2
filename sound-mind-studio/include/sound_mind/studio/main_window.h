@@ -1459,6 +1459,12 @@ public:
     /// @return The preferred input device name.
     [[nodiscard]] QString recordInputDevice() const;
 
+    /// @brief Loop Mode's own currently configured input gain - see
+    /// setConfiguredInputGain(). `1.0` is unity, or if no project has ever
+    /// been opened yet.
+    /// @return The underlying LoopEngine's inputGain().
+    [[nodiscard]] float loopInputGain() const noexcept;
+
     /// @brief The current Playback output gain - see setPlaybackVolume().
     /// @return `1.0` is unity; the underlying PlaybackEngine's volume().
     [[nodiscard]] float playbackVolume() const noexcept;
@@ -2310,9 +2316,21 @@ private:
     /// actually open for testing - kept up to date by
     /// setConfiguredInputDevice()/setConfiguredOutputDevice(). Empty means
     /// the system default, the same convention every device name in this
-    /// class already follows.
+    /// class already follows. **Also** what setProject() re-applies to each
+    /// freshly (re)constructed `loopEngine_` - see its own docs on why that
+    /// matters (real-world testing pass, 2026-09-20, finding #10).
     QString configuredInputDeviceName_;
     QString configuredOutputDeviceName_;
+
+    /// @brief The Configure Devices panel's own currently configured input
+    /// gain, tracked here for the same reason as
+    /// configuredInputDeviceName_/configuredOutputDeviceName_ just above -
+    /// `recordEngine_`/`deviceTestRecordEngine_` are persistent members that
+    /// never lose a `setInputGain()` call, but `loopEngine_` is rebuilt
+    /// fresh by setProject() on every new/opened project, so this is what
+    /// setProject() re-applies to it. `1.0f` (unity) is the same default
+    /// `LoopEngine`/`RecordEngine` themselves start at.
+    float configuredInputGain_ = 1.0f;
 
     /// @brief Repeat Playback's own current state - see
     /// setPlaybackRepeat()'s/setPlaybackScope()'s own docs. `v0.0.42.2`.

@@ -1151,6 +1151,15 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     const auto config = sound_mind::core::streamCodecConfigFor(settings);
     const auto loopLengthSamples = static_cast<std::size_t>(settings.canvasWidth) * config.hopLength;
     loopEngine_ = std::make_unique<sound_mind::core::LoopEngine>(config, loopLengthSamples, audioDeviceMode_);
+    // Unlike recordEngine_ (a persistent member, never recreated), this is a
+    // brand new engine with no memory of whatever was already configured in
+    // Configure Devices - re-applying it here is what stops a project
+    // switch from silently resetting Loop Mode back to system-default
+    // devices at unity gain (real-world testing pass, 2026-09-20,
+    // finding #10 - see configuredInputDeviceName_'s own docs).
+    loopEngine_->setPreferredInputDevice(configuredInputDeviceName_.toStdString());
+    loopEngine_->setPreferredOutputDevice(configuredOutputDeviceName_.toStdString());
+    loopEngine_->setInputGain(configuredInputGain_);
 
     canvas_->setProject(&*project_);
     toolPaletteController_->setProject(&*project_);
@@ -2184,6 +2193,10 @@ QString MainWindow::recordInputDevice() const {
     return QString::fromStdString(recordEngine_.preferredInputDevice());
 }
 
+float MainWindow::loopInputGain() const noexcept {
+    return loopEngine_ ? loopEngine_->inputGain() : 1.0f;
+}
+
 float MainWindow::playbackVolume() const noexcept {
     return playbackController_->volume();
 }
@@ -2270,6 +2283,7 @@ void MainWindow::setConfiguredOutputDevice(const QString& deviceName) {
 
 void MainWindow::setConfiguredInputGain(int percent) {
     const float gain = static_cast<float>(percent) / 100.0f;
+    configuredInputGain_ = gain;
     recordEngine_.setInputGain(gain);
     // Kept consistent with the real configured gain, so "test" actually
     // reflects what real recording would sound/level like.

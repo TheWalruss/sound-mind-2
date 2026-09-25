@@ -1361,6 +1361,67 @@ void MainWindowTest::toggleLoopModeGivesANewLoopInputLayerAPlaceholderContentImm
     window.toggleLoopMode();  // cleanup.
 }
 
+void MainWindowTest::configuredDeviceAndGainPersistAcrossANewProjectsFreshLoopEngine() {
+    // Regression test - real-world testing pass, 2026-09-20, finding #10
+    // ("no audio is heard" during Loop Mode): unlike recordEngine_ (a
+    // persistent member, never recreated), setProject() rebuilds
+    // loopEngine_ fresh for every new/opened project - previously without
+    // re-applying whatever input/output device and gain were already
+    // configured, so a project switch silently reset Loop Mode's own
+    // engine back to system-default devices at unity gain, regardless of
+    // what Configure Devices actually showed as selected.
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.setConfiguredInputDevice(QStringLiteral("Some Microphone"));
+    window.setConfiguredOutputDevice(QStringLiteral("Some Speakers"));
+    window.setConfiguredInputGain(150);
+    QCOMPARE(window.loopInputDevice(), QStringLiteral("Some Microphone"));
+    QCOMPARE(window.loopOutputDevice(), QStringLiteral("Some Speakers"));
+    QCOMPARE(window.loopInputGain(), 1.5f);
+
+    createFreshTestProject(window);  // reconstructs loopEngine_.
+
+    QCOMPARE(window.loopInputDevice(), QStringLiteral("Some Microphone"));
+    QCOMPARE(window.loopOutputDevice(), QStringLiteral("Some Speakers"));
+    QCOMPARE(window.loopInputGain(), 1.5f);
+}
+
+void MainWindowTest::theLoopInputLayersNameIsActuallyVisibleInTheLayersPanel() {
+    // Regression test - real-world testing pass, 2026-09-20, finding #10's
+    // other symptom ("the Loop Input layer never actually appears in the
+    // Layers panel"). Every prior test covering this layer only checked
+    // window.project()->layers() (the model) - never the actual
+    // LayersPanel widget. At the time this was reported, a layer with any
+    // real thumbnail content (which a freshly-seeded "Loop Input" layer
+    // always has - see toggleLoopModeGivesANewLoopInputLayerAPlaceholderContentImmediately())
+    // had its own name label hidden behind that thumbnail (Decision #125's
+    // QStackedLayout bug, fixed in v0.0.45.4) - indistinguishable from "not
+    // there at all" without recognizing a near-silent spectrogram thumbnail
+    // for what it is. This locks in that the fix actually covers this case
+    // too, not just the cases findings #1/#2/#3 originally reported.
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.toggleLoopMode();
+    QVERIFY(window.isLoopModeRunning());
+
+    auto* panel = window.findChild<LayersPanel*>();
+    QVERIFY(panel != nullptr);
+    QTest::qWait(0);  // see refreshLayersPanelReflectsTheCurrentLayers()'s own comment on why.
+    const auto nameLabels = panel->findChildren<QLabel*>(QStringLiteral("nameLabel"));
+    bool foundLoopInput = false;
+    for (const auto* label : nameLabels) {
+        if (label->text() == QStringLiteral("Loop Input")) {
+            foundLoopInput = true;
+            break;
+        }
+    }
+    QVERIFY(foundLoopInput);
+
+    window.toggleLoopMode();  // cleanup.
+}
+
 void MainWindowTest::transportPanelsStayHiddenByDefaultEvenAfterAProjectExists() {
     // Unlike the Layers panel (shown automatically the first time a
     // project exists - see layersPanelIsHiddenUntilAProjectExists()),
