@@ -14,7 +14,6 @@
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/selection_region.h"
-#include "sound_mind/core/warp_operation.h"
 #include "sound_mind/studio/grid_config.h"
 
 namespace sound_mind::studio {
@@ -434,31 +433,6 @@ public:
      * @param gradient The color (or gradient) to fill with.
      */
     void fill(const sound_mind::core::Gradient& gradient);
-
-    /**
-     * @brief Warps the current committed selection's own bounding box
-     *        along `curve` - the actual work behind Edit → Warp Selection
-     *        (`docs/sound-mind-design.md`'s "Selection" ("Warp"),
-     *        `v0.Y.35.1` Installment C). A no-op if there's no committed
-     *        selection.
-     *
-     * Appends a new `WarpOperation` (not superseding anything, the same
-     * "a fresh, additive edit" reasoning `fill()`'s own docs give) and
-     * rebuilds the target layer's content via `paintController_`. Always
-     * scoped to `committedBounds_` - the selection's own plain bounding
-     * box - regardless of its actual shape (Rectangle, rotated Rectangle,
-     * Lasso, Wand, or a boolean-combined result); see
-     * `sound_mind::core::WarpOperation`'s own docs for why.
-     *
-     * Emits contentChanged() for the affected layer.
-     *
-     * @param curve The warp curve - typically `PickController::
-     *        selectedPath()`'s own result (see `MainWindow::
-     *        warpSelection()`'s own docs for the full workflow).
-     * @param axis Which direction content is displaced.
-     * @param mode How far along each column/row the deflection carries.
-     */
-    void warpSelection(sound_mind::core::Path curve, sound_mind::core::WarpAxis axis, sound_mind::core::WarpMode mode);
 
     /// @brief Whether a clip is currently on the clipboard (from a prior
     ///        copySelection()/cutSelection()).

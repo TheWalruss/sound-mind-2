@@ -142,7 +142,7 @@ public:
      * @param changedContentLayer If given, that layer's own cached
      *        thumbnail is discarded first, so this call re-renders a fresh
      *        one for it - pass the id of whichever layer a paint/pick/
-     *        fill/paste/warp/chord-stamp/undo/redo operation just changed
+     *        fill/paste/chord-stamp/undo/redo operation just changed
      *        (see `ToolPaletteController::contentChanged()`'s own docs).
      *        `std::nullopt` (the default) leaves every cached thumbnail
      *        as-is - correct for every mutation here that doesn't touch a

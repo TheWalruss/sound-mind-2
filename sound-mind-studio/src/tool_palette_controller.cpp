@@ -260,11 +260,6 @@ void ToolPaletteController::clearSelection() { selectionController_->clearSelect
 
 void ToolPaletteController::fill(const sound_mind::core::Gradient& gradient) { selectionController_->fill(gradient); }
 
-void ToolPaletteController::warpSelection(sound_mind::core::Path curve, sound_mind::core::WarpAxis axis,
-                                           sound_mind::core::WarpMode mode) {
-    selectionController_->warpSelection(std::move(curve), axis, mode);
-}
-
 std::optional<sound_mind::core::Path> ToolPaletteController::selectedPath() const {
     return pickController_->selectedPath();
 }

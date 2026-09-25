@@ -956,27 +956,6 @@ themselves to the rotated shape exactly like they do for a Lasso
 selection. Rotating back to (approximately) no rotation returns the
 selection to a plain, axis-aligned rectangle.
 
-**Warping a selection's content**: draw a curve as an ordinary paint
-stroke, switch to [Pick](#pick) and click the curve to select it, then
-make (or keep) a selection and choose **Edit → Warp Selection...** while
-still in Pick mode - leaving Pick mode first loses track of which curve
-you picked. A dialog then asks for:
-
-- **Axis** - **Frequency** shifts each column of the selection up or down
-  in pitch, following the curve's own vertical deflection there;
-  **Time** shifts each row left or right instead, following the curve's
-  own horizontal deflection.
-- **Mode** - **Displace** shifts every column/row by the curve's own full
-  deflection at that position. **Stretch** ramps the shift from none at
-  one edge of the selection to the curve's full deflection at the other,
-  scaling smoothly in between.
-
-Warp always displaces content within the selection's own plain bounding
-box, even for a Lasso, Wand, or rotated selection - not yet confined to
-its exact shape. Shifted content can spill outside the selection's own
-box, overwriting whatever was there; anywhere nothing shifts in to fill a
-gap is left silent.
-
 - **Fill** it - **Edit → Fill Selection...** opens the same draggable
   gradient editor Painting's brush and Filter Configuration's
   Frequency-Axis Gradient use (see [Painting](#painting)/[Filter
@@ -1024,8 +1003,7 @@ Filling and pasting are both undoable (Ctrl+Z), the same as painting a
 stroke; so is Cut's own silencing of the source region.
 
 Rectangle, Lasso, and Wand selections all exist today, can be combined
-with each other, a Rectangle selection can be rotated, and a selection's
-content can be Warped along a hand-drawn curve.
+with each other, and a Rectangle selection can be rotated.
 
 ## Path Tool
 
@@ -1389,15 +1367,18 @@ but only a fraction of what's designed for it:
 
 - **Rectangle** (rotatable), **Lasso** (freehand), and **Wand**
   (flood-fill by amplitude similarity, optionally harmonics-aware)
-  selection all exist, can be combined (add/subtract/intersect), and
-  **Warp** (bending a selection's own content along a hand-drawn curve) is
-  here too. A Wand or combined selection shows as a dashed bounding box
-  rather than its own exact outline (a Lasso selection still gets a real
-  curve) - the underlying Fill/Copy/Cut/Paste still respect its precise
-  shape regardless; Warp always operates on a selection's plain bounding
-  box, whatever its actual shape. Mind Shot/Mind Grain capture from a
-  Lasso/Wand/combined selection still captures/references its full
-  bounding box, not confined to its actual shape.
+  selection all exist, and can be combined (add/subtract/intersect). A
+  Wand or combined selection shows as a dashed bounding box rather than
+  its own exact outline (a Lasso selection still gets a real curve) - the
+  underlying Fill/Copy/Cut/Paste still respect its precise shape
+  regardless. Mind Shot/Mind Grain capture from a Lasso/Wand/combined
+  selection still captures/references its full bounding box, not confined
+  to its actual shape.
+- **Warp Selection was removed** - it never actually survived a layer
+  rebuild (undo/redo, reopening a project) the way every other edit does,
+  and the workflow needed to use it at all (draw a curve, Pick it, keep a
+  separate rectangular selection, invoke the action while still in Pick
+  mode) proved too confusing in practice. No replacement is planned.
 - **Paste** always lands back at the exact position it was copied/cut
   from - there's no click-to-place gesture yet to paste somewhere else on
   the same layer (pasting onto a *different* layer is supported today;

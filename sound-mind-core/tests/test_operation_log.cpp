@@ -528,6 +528,25 @@ TEST_CASE("An OperationLog fails to load JSON with an unrecognized operation kin
     REQUIRE_THROWS_AS(malformed.get<OperationLog>(), std::invalid_argument);
 }
 
+TEST_CASE("An OperationLog fails to load JSON with the old \"warp\" operation kind, a deliberate breaking "
+          "removal, not a regression",
+          "[core][operation_log]") {
+    // Warp Selection (WarpOperation/"warp") was removed outright - see
+    // docs/sound-mind-architecture.md's own Decision on the removal. A
+    // project file saved before the removal, with a Warp edit in its
+    // history, is expected to fail to load rather than silently drop or
+    // misinterpret that entry - confirmed with the user as an acceptable
+    // pre-1.0 breaking change (a real Y version bump), not something to
+    // handle leniently the way most other JSON shape changes in this file
+    // are.
+    const nlohmann::json warpEntry = nlohmann::json{
+        {"operations", nlohmann::json::array({nlohmann::json{{"kind", "warp"}, {"id", 1}, {"targetLayer", 1}}})},
+        {"activeCount", 1},
+        {"nextId", 2},
+    };
+    REQUIRE_THROWS_AS(warpEntry.get<OperationLog>(), std::invalid_argument);
+}
+
 TEST_CASE("An empty OperationLog's pre-v0.0.24.1 JSON shape (a bare empty array) still parses",
           "[core][operation_log]") {
     const nlohmann::json legacyEmpty = nlohmann::json::array();

@@ -15,7 +15,6 @@
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
-#include "sound_mind/core/warp_operation.h"
 #include "sound_mind/studio/grid_config.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/selection_controller.h"
@@ -37,9 +36,6 @@ using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::timeToFrameIndex;
 using sound_mind::core::TimeFrequencyPoint;
-using sound_mind::core::WarpAxis;
-using sound_mind::core::WarpMode;
-using sound_mind::core::WarpOperation;
 using sound_mind::studio::FrequencyGridConfig;
 using sound_mind::studio::PaintController;
 using sound_mind::studio::SelectionCombineMode;
@@ -1202,57 +1198,4 @@ void SelectionControllerTest::displayRotationHandleIsPresentOnlyWhenRotatable() 
     controller.setSelectionShape(SelectionShape::Lasso);
     dragLasso(controller, layerId, config, {{20, 5}, {30, 5}, {25, 15}});
     QVERIFY(!controller.displayRotationHandle().has_value());
-}
-
-void SelectionControllerTest::warpSelectionAppendsAWarpOperationOverTheCommittedSelection() {
-    const auto config = testConfig();
-    Project project = Project::createNew(testSettings());
-    const LayerId layerId = addBlankNormalLayer(project);
-    PaintController paintController;
-    paintController.setProject(&project);
-    SelectionController controller(&paintController);
-    controller.setProject(&project);
-    selectRect(controller, layerId, config, 20, 40, 10, 30);
-    QSignalSpy contentSpy(&controller, &SelectionController::contentChanged);
-
-    Path curve;
-    PathNode start;
-    start.anchor = TimeFrequencyPoint{0.2, 400.0};
-    start.type = PathNodeType::Corner;
-    curve.addNode(start);
-    PathNode end;
-    end.anchor = TimeFrequencyPoint{0.4, 500.0};
-    end.type = PathNodeType::Corner;
-    curve.addNode(end);
-
-    controller.warpSelection(curve, WarpAxis::Frequency, WarpMode::Stretch);
-
-    QCOMPARE(project.operationLog().size(), std::size_t{1});
-    QCOMPARE(contentSpy.count(), 1);
-    const auto active = project.operationLog().activeOperationsTargeting(layerId);
-    QCOMPARE(active.size(), std::size_t{1});
-    const auto* warpOp = dynamic_cast<const WarpOperation*>(active.front());
-    QVERIFY(warpOp != nullptr);
-    QCOMPARE(warpOp->axis(), WarpAxis::Frequency);
-    QCOMPARE(warpOp->mode(), WarpMode::Stretch);
-    QCOMPARE(warpOp->curve().nodes().size(), std::size_t{2});
-}
-
-void SelectionControllerTest::warpSelectionIsANoOpWithNoCommittedSelection() {
-    Project project = Project::createNew(testSettings());
-    addBlankNormalLayer(project);
-    PaintController paintController;
-    paintController.setProject(&project);
-    SelectionController controller(&paintController);
-    controller.setProject(&project);
-
-    Path curve;
-    PathNode start;
-    start.anchor = TimeFrequencyPoint{0.2, 400.0};
-    start.type = PathNodeType::Corner;
-    curve.addNode(start);
-
-    controller.warpSelection(curve, WarpAxis::Frequency, WarpMode::Displace);
-
-    QCOMPARE(project.operationLog().size(), std::size_t{0});
 }

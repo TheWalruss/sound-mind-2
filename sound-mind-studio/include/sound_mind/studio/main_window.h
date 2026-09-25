@@ -1223,36 +1223,11 @@ public slots:
      *        Fill Selection action.
      *
      * Cancelling leaves the selection untouched, matching every other
-     * dialog-driven action in this codebase (e.g. `warpSelection()`)
-     * treating a cancelled dialog as "nothing happened". A no-op (dialog
-     * never shown) if there's no selection to fill in the first place.
+     * dialog-driven action in this codebase treating a cancelled dialog
+     * as "nothing happened". A no-op (dialog never shown) if there's no
+     * selection to fill in the first place.
      */
     void fillSelection();
-
-    /**
-     * @brief Shows `WarpDialog` and, if accepted, warps the current
-     *        selection along the currently Picked object's own `Path` -
-     *        the actual work behind the Edit menu's Warp Selection action
-     *        (`docs/sound-mind-design.md`'s "Selection" ("Warp"),
-     *        `v0.Y.35.1` Installment C).
-     *
-     * **The workflow, in full**: draw a curve as an ordinary paint
-     * stroke, switch to Pick and click it (selecting it the same way
-     * Pick already selects anything), then choose Edit → Warp Selection -
-     * no dedicated curve-drawing mode exists, or is needed, since Pick's
-     * own existing click-to-select mechanic already supplies exactly
-     * this. A no-op (dialog never shown) unless *both* a selection
-     * (`ToolPaletteController::hasSelection()`) and a Picked, `Path`-
-     * bearing object (`ToolPaletteController::selectedPath()`) exist -
-     * Select and Pick can be used in either order beforehand, since a
-     * committed selection persists across tool-mode switches independent
-     * of whatever is currently Picked (Pick's own selection, by contrast,
-     * is what actually needs to still be live - stay in Pick mode, don't
-     * switch back to Select, right up until choosing this action).
-     * Cancelling the dialog leaves everything untouched, the same
-     * convention `fillSelection()`'s own docs describe.
-     */
-    void warpSelection();
 
     /**
      * @brief Captures the currently Picked object's own `Path` as the
@@ -1260,16 +1235,19 @@ public slots:
      *        shape - `docs/sound-mind-design.md`'s "MindWave Functions"
      *        ("Drawn shapes"), `v0.Y.39.1` Installment B.
      *
-     * Mirrors `warpSelection()`'s own exact capture workflow (draw an
-     * ordinary paint stroke, Pick it, apply it) - no dedicated curve-
-     * drawing mode of its own. A no-op unless *both* something is Picked
+     * **The workflow, in full**: draw a curve as an ordinary paint
+     * stroke, switch to Pick and click it (selecting it the same way
+     * Pick already selects anything), then choose Edit → Use Picked Path
+     * as MindWave Shape - no dedicated curve-drawing mode exists, or is
+     * needed, since Pick's own existing click-to-select mechanic already
+     * supplies exactly this. A no-op unless *both* something is Picked
      * (`ToolPaletteController::selectedPath()`) and a library entry is
      * currently selected in `mindWavesPanel_`
-     * (`MindWavesPanel::selectedMindWaveId()`) - unlike `warpSelection()`,
-     * there's no separate "committed selection" concept to also require,
-     * since this applies to a MindWaves library entry, not canvas content.
-     * Switches that entry's own generator type to `Drawn` as part of the
-     * same action - see `MindWaveController::setDrawnPath()`'s own docs.
+     * (`MindWavesPanel::selectedMindWaveId()`) - stay in Pick mode, don't
+     * switch back to Select, right up until choosing this action, since
+     * leaving Pick mode clears whatever was Picked. Switches that entry's
+     * own generator type to `Drawn` as part of the same action - see
+     * `MindWaveController::setDrawnPath()`'s own docs.
      */
     void usePickedPathAsMindWaveShape();
 
@@ -2291,7 +2269,7 @@ private:
      * @brief Repeat Playback's/one-shot preview's shared edit hook -
      *        connected to `toolPaletteController_::contentChanged()`
      *        (which already merges every content-changing action:
-     *        Paint/Pick/Fill/Paste/Warp/a stamped sequence, undo, and
+     *        Paint/Pick/Fill/Paste/a stamped sequence, undo, and
      *        redo). A no-op with no `project_` open; otherwise gated by
      *        `repeatEnabled_` and `playbackScope_` together - see the two
      *        cases below.

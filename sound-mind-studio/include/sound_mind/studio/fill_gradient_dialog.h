@@ -19,9 +19,10 @@ class GradientEditorWidget;
  * prior shape. Wraps a plain `GradientEditorWidget` (the same shared editor
  * `ToolConfigurationPanel`/`FilterConfigurationPanel` already embed) plus an
  * OK/Cancel `QDialogButtonBox`, the same "purely presentational, read back
- * after `exec()`" shape `WarpDialog`'s own docs establish: `MainWindow`
- * reads gradient() back after `exec()` returns `QDialog::Accepted` and
- * applies it itself - no content is ever displaced by this class.
+ * after `exec()`" shape every other dialog-driven action in this codebase
+ * follows: `MainWindow` reads gradient() back after `exec()` returns
+ * `QDialog::Accepted` and applies it itself - no content is ever displaced
+ * by this class.
  */
 class FillGradientDialog : public QDialog {
     Q_OBJECT

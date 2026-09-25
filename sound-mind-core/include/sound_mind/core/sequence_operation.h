@@ -60,8 +60,8 @@ void from_json(const nlohmann::json& json, NoteEvent& note);
  *        `docs/sound-mind-architecture.md`'s Core Data Model. `v0.Y.40.1`
  *        Installment A.
  *
- * The fifth concrete `Operation` subtype (after `PaintOperation`,
- * `FillOperation`, `PasteOperation`, `WarpOperation`). **The core
+ * The fourth concrete `Operation` subtype (after `PaintOperation`,
+ * `FillOperation`, `PasteOperation`). **The core
  * "generated sequences stay editable" mechanism**: this operation stores
  * `notes()` themselves, not baked pixels - `applySequenceOperation()`
  * regenerates every note's own stamp fresh, every time a layer's content is

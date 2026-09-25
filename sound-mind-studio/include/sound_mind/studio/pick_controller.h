@@ -251,17 +251,18 @@ public:
 
     /**
      * @brief The selected object's own `Path`, if it's a `PaintOperation`
-     *        - the actual mechanism behind supplying Warp with a curve
-     *        (`docs/sound-mind-design.md`'s "Selection" ("Warp"),
-     *        `v0.Y.35.1` Installment C): draw a stroke as an ordinary
-     *        paint stroke, then Pick it, and Edit → Warp Selection reads
-     *        its own `Path` from here - no dedicated curve-drawing mode
-     *        needed at all. An owned copy, same "owned, not shared"
+     *        - the actual mechanism behind
+     *        `MainWindow::usePickedPathAsMindWaveShape()`
+     *        (`docs/sound-mind-design.md`'s "MindWave Functions"
+     *        ("Drawn shapes")): draw a stroke as an ordinary paint stroke,
+     *        then Pick it, and Edit → Use Picked Path as MindWave Shape
+     *        reads its own `Path` from here - no dedicated curve-drawing
+     *        mode needed at all. An owned copy, same "owned, not shared"
      *        reasoning `selectedConfiguration()`'s own docs give.
      * @return The selected object's own path, or `std::nullopt` if
      *         nothing is selected, or the selected object isn't a
-     *         `PaintOperation` (a `FillOperation`/`PasteOperation`/
-     *         `WarpOperation` has no `Path` of its own to warp along).
+     *         `PaintOperation` (a `FillOperation`/`PasteOperation` has no
+     *         `Path` of its own).
      */
     [[nodiscard]] std::optional<sound_mind::core::Path> selectedPath() const;
 

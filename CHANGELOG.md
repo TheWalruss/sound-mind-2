@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.0.0] - 2026-09-25
+
+Real-world testing pass finding #20: **Warp Selection removed.**
+
+### Removed
+
+- **Warp Selection is gone** - the Edit → Warp Selection... action, its dialog, and the underlying `WarpOperation` core type. Investigating the "what is Warp Selection actually supposed to do?" open question found the mechanism itself matched its own design faithfully, but two real problems made it unusable in practice: the workflow required a rectangular selection *and* a separately-Picked curve active at once, in a specific order, with no hint anywhere in the app about that; and a Warp's own effect never actually survived undo/redo or reopening a project (a known, never-fixed gap). Rather than fix either, the feature is removed outright.
+
+### ⚠ Breaking change
+
+- **A project file with a Warp edit anywhere in its history will no longer load.** `WarpOperation` was a real, saved operation type - removing it means the project file format itself changed incompatibly, the reason this release bumps to `v0.1.0.0` rather than another `v0.0.45.x` point release.
+
+Full regression: `sound-mind-core` 836/836 (846 → 836: 11 removed, 1 new), `sound-mind-codec` 57/57, `sound-mind-studio` full suite otherwise unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #149.
+
 ## [0.0.45.27] - 2026-09-25
 
 Real-world testing pass finding #19: **The Overwrite blend mode now respects opacity.**

@@ -1571,7 +1571,7 @@ void PickControllerTest::continuePathNodeDragSnapsToTheNearestGridLineWhenSnapTo
 }
 
 void PickControllerTest::selectedPathReturnsTheGeometryOfASelectedPaintOperation() {
-    // Warp's own curve-input workflow (Deferred Selection, Installment C)
+    // MainWindow::usePickedPathAsMindWaveShape()'s own curve-input workflow
     // relies on selectedPath() to hand back a Picked stroke's own Path -
     // this is the mechanism, exercised directly rather than through
     // MainWindow's own UI glue.

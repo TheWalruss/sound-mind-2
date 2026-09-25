@@ -42,7 +42,6 @@ add_executable(sound-mind-studio-tests
     test_tool_configuration_panel.cpp
     test_tool_palette_controller.cpp
     test_undo_stack.cpp
-    test_warp_dialog.cpp
 )
 
 target_link_libraries(sound-mind-studio-tests

@@ -10,7 +10,6 @@
 #include "sound_mind/core/paste_application.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/wand_selection.h"
-#include "sound_mind/core/warp_operation.h"
 #include "sound_mind/studio/paint_controller.h"
 
 namespace sound_mind::studio {
@@ -454,20 +453,6 @@ void SelectionController::fill(const sound_mind::core::Gradient& gradient) {
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_, gradient,
                                                                     std::nullopt, committedBoundary_));
-    paintController_->notifyOperationCommitted();
-    paintController_->rebuildLayerContent(selectionLayer_);
-    emit contentChanged(selectionLayer_);
-}
-
-void SelectionController::warpSelection(sound_mind::core::Path curve, sound_mind::core::WarpAxis axis,
-                                          sound_mind::core::WarpMode mode) {
-    if (!committedBounds_.has_value() || project_ == nullptr) {
-        return;
-    }
-    sound_mind::core::OperationLog& log = project_->operationLog();
-    const sound_mind::core::OperationId id = log.reserveId();
-    log.append(std::make_unique<sound_mind::core::WarpOperation>(id, selectionLayer_, *committedBounds_,
-                                                                    std::move(curve), axis, mode));
     paintController_->notifyOperationCommitted();
     paintController_->rebuildLayerContent(selectionLayer_);
     emit contentChanged(selectionLayer_);

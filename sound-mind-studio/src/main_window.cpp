@@ -71,7 +71,6 @@
 #include "sound_mind/studio/qt_image_conversion.h"
 #include "sound_mind/studio/record_panel.h"
 #include "sound_mind/studio/theme.h"
-#include "sound_mind/studio/warp_dialog.h"
 
 #ifndef SOUND_MIND_VERSION
 #define SOUND_MIND_VERSION "unknown"
@@ -731,18 +730,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* captureMindGrainAction = editMenu->addAction(tr("Capture as Mind &Grain"));
     connect(captureMindGrainAction, &QAction::triggered, this, &MainWindow::captureMindGrain);
 
-    // Deferred Selection, Installment C (v0.Y.35.1) - no standard shortcut
+    // MindWaves v2, Installment B (v0.Y.39.1) - no standard shortcut
     // (matching Fill Selection's own no-shortcut choice above); a no-op
-    // with no selection or no suitable Picked curve, the same "always
-    // present" choice deleteAction/Cut/Copy/Paste all make.
-    QAction* warpSelectionAction = editMenu->addAction(tr("&Warp Selection..."));
-    connect(warpSelectionAction, &QAction::triggered, this, &MainWindow::warpSelection);
-
-    // MindWaves v2, Installment B (v0.Y.39.1) - the same "no shortcut,
-    // no-op with nothing suitable Picked" treatment as Warp Selection's own
-    // action right above, mirroring its exact capture workflow (draw an
-    // ordinary paint stroke, Pick it, apply it) but for a MindWaves panel
-    // selection instead of a committed canvas selection.
+    // with nothing suitable Picked, the same "always present" choice
+    // deleteAction/Cut/Copy/Paste all make.
     QAction* usePickedPathAsMindWaveShapeAction = editMenu->addAction(tr("Use Picked Path as MindWave &Shape"));
     connect(usePickedPathAsMindWaveShapeAction, &QAction::triggered, this, &MainWindow::usePickedPathAsMindWaveShape);
 
@@ -2250,20 +2241,6 @@ void MainWindow::fillSelection() {
     }
 }
 
-void MainWindow::warpSelection() {
-    if (!toolPaletteController_->hasSelection()) {
-        return;
-    }
-    const auto curve = toolPaletteController_->selectedPath();
-    if (!curve.has_value()) {
-        return;
-    }
-    WarpDialog dialog(this);
-    if (dialog.exec() == QDialog::Accepted) {
-        toolPaletteController_->warpSelection(*curve, dialog.selectedAxis(), dialog.selectedMode());
-    }
-}
-
 void MainWindow::usePickedPathAsMindWaveShape() {
     const auto curve = toolPaletteController_->selectedPath();
     if (!curve.has_value()) {
@@ -2766,7 +2743,7 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
 
     // The edited region, for Delta/Review - layer's own most recently
     // active operation is a practical approximation of "what just
-    // changed": exact for a fresh paint/fill/paste/warp/sequence stamp
+    // changed": exact for a fresh paint/fill/paste/sequence stamp
     // (that operation is always the newest active one on its own layer),
     // and still reasonable for an undo/redo (neither appends a fresh
     // operation of its own - the layer's own now-different "most recently

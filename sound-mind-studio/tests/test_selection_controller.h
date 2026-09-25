@@ -69,8 +69,4 @@ private slots:
     void rotatingAppliesARotatedPathBoundaryAndBackToNulloptAtZero();
     void cancelRotateDragRevertsToThePriorRotation();
     void displayRotationHandleIsPresentOnlyWhenRotatable();
-
-    // Warp (v0.Y.35.1 Installment C).
-    void warpSelectionAppendsAWarpOperationOverTheCommittedSelection();
-    void warpSelectionIsANoOpWithNoCommittedSelection();
 };

@@ -265,17 +265,10 @@ public:
     /// @param gradient The color (or gradient) to fill with.
     void fill(const sound_mind::core::Gradient& gradient);
 
-    /// @brief Warps the current selection along `curve` - forwards to
-    ///        `SelectionController::warpSelection()`.
-    /// @param curve The warp curve.
-    /// @param axis Which direction content is displaced.
-    /// @param mode How far along each column/row the deflection carries.
-    void warpSelection(sound_mind::core::Path curve, sound_mind::core::WarpAxis axis, sound_mind::core::WarpMode mode);
-
     /// @brief The currently Picked object's own `Path`, if any - forwards
     ///        to `PickController::selectedPath()`. The actual mechanism
-    ///        behind supplying `warpSelection()` with a curve - see
-    ///        `MainWindow::warpSelection()`'s own docs.
+    ///        behind `MainWindow::usePickedPathAsMindWaveShape()` - see
+    ///        its own docs.
     /// @return The selected path, or `std::nullopt` if nothing suitable
     ///         is Picked.
     [[nodiscard]] std::optional<sound_mind::core::Path> selectedPath() const;

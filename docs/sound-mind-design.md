@@ -388,10 +388,6 @@ Freehand polygon selection, for tracing an irregular boundary — the body of a 
 
 Flood-fill-selects connected pixels by amplitude similarity from a chosen point. Optionally harmonics-aware, extending the selection to a note's overtone rows along with its fundamental, rather than only the pixels immediately touching it.
 
-#### Warp
-
-Warp a selection along a Path curve, in time or frequency.
-
 #### Fill
 
 Fills the selected region with a color or gradient (see [Gradients](#gradients)), confined exactly to the selection's boundary.
