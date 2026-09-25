@@ -1238,7 +1238,10 @@ close as possible to the original.
 FLAC, Ogg Vorbis, or MP3 (pick the format via the save dialog's file type).
 
 **File → Export Video...** saves it as an MP4: the spectrogram, animated
-with the audio played alongside it.
+with the audio played alongside it. Video export runs in the background -
+you can keep working while it encodes, and a small **✕** button appears in
+the status bar to cancel it if you change your mind; cancelling removes
+whatever it had written so far rather than leaving a broken file behind.
 
 Both act on the same "one layer" rule described above - see
 [the note above](#important-whats-actually-shown-and-played-right-now).

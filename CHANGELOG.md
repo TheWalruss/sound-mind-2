@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.15] - 2026-09-25
+
+Real-world testing pass finding #12, Installment C: **Export Video is now a real, cancellable background operation.**
+
+### Changed
+
+- **Export Video no longer blocks the app while it encodes.** It now runs on a background thread, with a small **✕** cancel button in the status bar visible while it's running; cancelling deletes the partial output file rather than leaving a broken one behind.
+
+Full regression: `sound-mind-core` 824/824 (1 new), `sound-mind-studio` 184/184 `MainWindowTest` (up from 180). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #136.
+
 ## [0.0.45.14] - 2026-09-25
 
 Real-world testing pass finding #12, Installment B: **video export gains real cancellation support** (no user-visible change yet - see the milestone's later installments).

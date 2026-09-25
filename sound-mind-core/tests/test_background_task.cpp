@@ -86,6 +86,25 @@ TEST_CASE("BackgroundTask::wasCancelled is false when requestCancel was never ca
     CHECK_FALSE(task.wasCancelled());
 }
 
+TEST_CASE("BackgroundTask::isRunning becoming false makes the work function's own result visible to the caller",
+          "[core][background_task]") {
+    // Exercises the poll-for-completion contract isRunning()'s own docs
+    // promise: a plain (non-atomic) result member, written by the work
+    // function right before it returns, must be safely readable by the
+    // caller once it observes isRunning() == false - the release (on the
+    // work side)/acquire (on isRunning() itself) pairing is what makes
+    // that safe without the result needing its own synchronization.
+    int result = 0;
+    BackgroundTask task([&](CancellationToken&) { result = 42; });
+
+    task.start();
+    while (task.isRunning()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    CHECK(result == 42);
+}
+
 TEST_CASE("BackgroundTask's destructor joins a still-running thread rather than leaving it detached",
           "[core][background_task]") {
     std::atomic<bool> workFinished{false};

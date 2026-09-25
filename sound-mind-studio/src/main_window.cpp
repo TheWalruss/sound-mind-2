@@ -31,6 +31,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QStackedWidget>
@@ -42,6 +43,7 @@
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/gpu_compute_availability.h"
 #include "sound_mind/core/gradient.h"
@@ -117,12 +119,16 @@ const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
 
 /// @brief Shows `message` in `bar` and forces an immediate repaint.
 ///
-/// Imports/exports/pooling are synchronous, blocking calls (see the
-/// confirmed scope for this milestone - a background-thread model is
-/// deferred to Loop Mode's real-time pipeline work) - without the explicit
-/// processEvents() call, Qt wouldn't actually paint the status bar's new
-/// text until *after* the blocking call already returned, defeating the
-/// whole point of showing progress before a slow operation starts.
+/// Import/Pool/Export Audio are still synchronous, blocking calls -
+/// without the explicit processEvents() call, Qt wouldn't actually paint
+/// the status bar's new text until *after* the blocking call already
+/// returned, defeating the whole point of showing progress before a slow
+/// operation starts. Export Video is the first exception (real-world
+/// testing pass, 2026-09-20, finding #12, Installment C) - see
+/// exportTopmostLayerVideoAsync()'s own docs for why it doesn't need this
+/// helper at all: its own status bar message is shown right after actually
+/// starting the background encode, by which point Qt's event loop is about
+/// to run again on its own regardless.
 void showBusyStatus(QStatusBar* bar, const QString& message) {
     bar->showMessage(message);
     QCoreApplication::processEvents();
@@ -295,6 +301,22 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     testInputLevelTimer_ = new QTimer(this);
     testInputLevelTimer_->setInterval(100);  // same cadence as recordDrainTimer_ - see its own docs.
     connect(testInputLevelTimer_, &QTimer::timeout, this, &MainWindow::pollTestInputLevel);
+
+    // Real-world testing pass, 2026-09-20, finding #12 (a real, non-blocking
+    // cancel affordance for long operations), Installment C - see
+    // exportTopmostLayerVideoAsync()'s own docs. Hidden until an export is
+    // actually running - see pollVideoExportProgress().
+    exportCancelButton_ = new QPushButton(tr("✕"));  // "✕".
+    exportCancelButton_->setObjectName(QStringLiteral("exportCancelButton"));
+    exportCancelButton_->setToolTip(tr("Cancel"));
+    exportCancelButton_->setFixedWidth(24);
+    exportCancelButton_->hide();
+    connect(exportCancelButton_, &QPushButton::clicked, this, &MainWindow::cancelVideoExport);
+    statusBar()->addPermanentWidget(exportCancelButton_);
+
+    videoExportProgressTimer_ = new QTimer(this);
+    videoExportProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
+    connect(videoExportProgressTimer_, &QTimer::timeout, this, &MainWindow::pollVideoExportProgress);
 
     // Selection & Fill (v0.Y.25.1), Selection Type (v0.Y.35.1 Installment
     // A) - toolPaletteController_ isn't constructed until just below, but
@@ -1503,10 +1525,7 @@ void MainWindow::exportVideo() {
     if (fileName.isEmpty()) {
         return;
     }
-    QString errorMessage;
-    if (!exportTopmostLayerVideoNow(std::filesystem::path(fileName.toStdString()), &errorMessage)) {
-        QMessageBox::critical(this, tr("Export Video Failed"), errorMessage);
-    }
+    exportTopmostLayerVideoAsync(std::filesystem::path(fileName.toStdString()));
 }
 
 bool MainWindow::exportTopmostLayerAudioNow(const std::filesystem::path& path, QString* errorMessage) {
@@ -1543,6 +1562,92 @@ bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, Q
     }
     statusBar()->showMessage(tr("Exported video to \"%1\".").arg(QString::fromStdString(path.string())), 5000);
     return true;
+}
+
+void MainWindow::exportTopmostLayerVideoAsync(const std::filesystem::path& path) {
+    if (isVideoExportRunning()) {
+        statusBar()->showMessage(tr("Already exporting a video - wait for it to finish, or cancel it, first."),
+                                  5000);
+        return;
+    }
+
+    sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
+    const auto audio = layer != nullptr ? sound_mind::core::decodeLayerForExport(*layer) : std::nullopt;
+    const auto canvas =
+        audio.has_value() ? sound_mind::core::renderLayer(*layer, project_->settings().canvasWidth) : std::nullopt;
+    if (!audio.has_value() || !canvas.has_value()) {
+        // Both decodeLayerForExport()/renderLayer() failing after a
+        // non-null layer would be the same "shouldn't happen given both
+        // read from the same layer state" case exportLayerVideo()'s own
+        // docs already note - treated identically here.
+        QMessageBox::critical(this, tr("Export Video Failed"), tr("No layer with content to export."));
+        return;
+    }
+
+    videoExportPath_ = path;
+    videoExportOutcome_ = VideoExportOutcome::Success;
+    videoExportErrorMessage_.clear();
+
+    // audio/canvas captured by value: independent, owned copies the
+    // background thread can safely touch with no synchronization needed
+    // against project_/layer, which stay exclusively the UI thread's own -
+    // see this method's own docs.
+    videoExportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, path, audio = *audio, canvas = *canvas](sound_mind::core::CancellationToken& token) {
+            try {
+                sound_mind::codec::exportVideo(path, canvas, audio, /*frameRate=*/30,
+                                                [&token]() { return token.cancellationRequested(); });
+            } catch (const sound_mind::codec::ExportCancelled&) {
+                videoExportOutcome_ = VideoExportOutcome::Cancelled;
+            } catch (const std::exception& e) {
+                videoExportOutcome_ = VideoExportOutcome::Failed;
+                videoExportErrorMessage_ = QString::fromStdString(e.what());
+            }
+        });
+    videoExportTask_->start();
+
+    statusBar()->showMessage(tr("Exporting video..."));
+    exportCancelButton_->show();
+    videoExportProgressTimer_->start();
+}
+
+bool MainWindow::isVideoExportRunning() const noexcept {
+    return videoExportTask_ != nullptr && videoExportTask_->isRunning();
+}
+
+void MainWindow::cancelVideoExport() {
+    if (videoExportTask_) {
+        videoExportTask_->requestCancel();
+    }
+}
+
+void MainWindow::pollVideoExportProgress() {
+    if (videoExportTask_->isRunning()) {
+        return;
+    }
+    videoExportProgressTimer_->stop();
+    exportCancelButton_->hide();
+
+    switch (videoExportOutcome_) {
+        case VideoExportOutcome::Success:
+            statusBar()->showMessage(
+                tr("Exported video to \"%1\".").arg(QString::fromStdString(videoExportPath_.string())), 5000);
+            break;
+        case VideoExportOutcome::Cancelled:
+            // Rolls back the partial file ExportCancelled itself
+            // deliberately leaves behind - see exportVideo()'s own docs -
+            // matching finding #12's confirmed "cancel rolls back partial
+            // work" semantics rather than leaving a broken, unplayable
+            // file at the path the user chose.
+            std::filesystem::remove(videoExportPath_);
+            statusBar()->showMessage(tr("Video export cancelled."), 5000);
+            break;
+        case VideoExportOutcome::Failed:
+            statusBar()->clearMessage();
+            QMessageBox::critical(this, tr("Export Video Failed"), videoExportErrorMessage_);
+            break;
+    }
+    videoExportTask_.reset();
 }
 
 bool MainWindow::openUserDocIfBundled(const QString& htmlFilename) {

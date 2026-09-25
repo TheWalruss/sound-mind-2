@@ -27,6 +27,10 @@ private slots:
     void exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension();
     void exportTopmostLayerVideoNowFailsGracefullyWithNoContent();
     void exportTopmostLayerVideoNowExportsAnImportedLayer();
+    void exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton();
+    void exportTopmostLayerVideoAsyncCompletesSuccessfullyAndHidesTheCancelButton();
+    void cancelVideoExportStopsItAndDeletesThePartialFile();
+    void exportTopmostLayerVideoAsyncDoesNothingWhileAlreadyRunning();
     void importAudioFileShowsProgressThenCompletionInTheStatusBar();
     void poolTopmostLayerNowShowsProgressThenCompletionInTheStatusBar();
     void exportTopmostLayerAudioNowShowsProgressThenCompletionInTheStatusBar();

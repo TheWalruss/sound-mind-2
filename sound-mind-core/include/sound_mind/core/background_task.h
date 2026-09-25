@@ -110,6 +110,16 @@ public:
     void requestCancel();
 
     /// @brief Whether the worker thread is currently running `work`.
+    ///
+    /// An acquire load, paired with a release store the instant `work`
+    /// returns: a caller that observes this go from `true` to `false` (by
+    /// polling, typically) is also guaranteed to see whatever `work` itself
+    /// wrote before returning - e.g. a result stored in a plain member the
+    /// caller owns and passed into `work` by reference/capture - not just
+    /// the flag itself. This is what makes a poll-for-completion pattern
+    /// (see the class docs) safe without needing its own separate
+    /// synchronization for the actual result.
+    ///
     /// @return `true` from start() until the work function returns
     ///         (whether it completed normally or bailed out early on
     ///         cancellation) - see waitForFinished()'s own docs for
