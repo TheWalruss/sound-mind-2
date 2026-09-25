@@ -130,4 +130,8 @@ void ConfigureDevicesPanel::setTestingOutput(bool testing) {
     testOutputButton_->setChecked(testing);
 }
 
+void ConfigureDevicesPanel::setInputDeviceSelectionEnabled(bool enabled) { inputDeviceCombo_->setEnabled(enabled); }
+
+void ConfigureDevicesPanel::setOutputDeviceSelectionEnabled(bool enabled) { outputDeviceCombo_->setEnabled(enabled); }
+
 }  // namespace sound_mind::studio

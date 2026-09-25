@@ -88,11 +88,13 @@ private slots:
     void toggleLoopModeSyncsTheLoopPanelsRunningState();
     void toggleRecordingSyncsTheRecordPanelsRecordingState();
     void setKeepLoopingSyncsTheLoopPanelsCheckBox();
-    void setLoopInputDeviceForwardsToTheLoopEngine();
-    void setLoopOutputDeviceForwardsToTheLoopEngine();
-    void setRecordInputDeviceForwardsToTheRecordEngine();
+    void setConfiguredInputDeviceForwardsToTheLoopEngine();
+    void setConfiguredOutputDeviceForwardsToTheLoopEngine();
+    void setConfiguredInputDeviceForwardsToTheRecordEngine();
     void setPlaybackVolumeForwardsToThePlaybackEngine();
     void loopPanelToggleButtonStartsAndStopsTheRealEngine();
+    void loopModeLocksAndUnlocksConfigureDevicesDeviceCombos();
+    void recordingLocksTheInputComboButNotTheOutputCombo();
     void playbackPanelButtonsDriveRealPlayback();
 
     // Audio Import Snippets (v0.Y.19.1)

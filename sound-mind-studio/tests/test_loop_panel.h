@@ -7,13 +7,8 @@ class LoopPanelTest : public QObject {
 
 private slots:
     void toggleButtonEmitsToggleRequested();
-    void setRunningUpdatesButtonAndDisablesDevicePickers();
+    void setRunningUpdatesButtonLabelAndCheckedState();
     void keepLoopingCheckBoxEmitsKeepLoopingChanged();
     void keepLoopingCheckBoxIsLabeledFreezeLoop();
     void setKeepLoopingCheckedDoesNotEmitKeepLoopingChanged();
-    void setInputDevicesListsSystemDefaultFirst();
-    void changingTheInputDeviceEmitsInputDeviceChanged();
-    void changingTheOutputDeviceEmitsOutputDeviceChanged();
-    void setSelectedInputDeviceChangesTheComboWithoutEmittingInputDeviceChanged();
-    void setSelectedOutputDeviceChangesTheComboWithoutEmittingOutputDeviceChanged();
 };

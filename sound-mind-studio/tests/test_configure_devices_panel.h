@@ -19,4 +19,6 @@ private slots:
     void testButtonsEmitTestToggledWithTheirCheckedState();
     void setInputLevelUpdatesTheLevelBarClamped();
     void setTestingInputAndOutputChangeCheckedStateWithoutEmittingSignals();
+    void setInputDeviceSelectionEnabledTogglesTheInputComboOnly();
+    void setOutputDeviceSelectionEnabledTogglesTheOutputComboOnly();
 };

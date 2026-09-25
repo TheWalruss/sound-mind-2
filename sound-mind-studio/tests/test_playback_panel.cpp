@@ -36,64 +36,6 @@ void PlaybackPanelTest::playPauseStopButtonsEmitTheirSignals() {
     QCOMPARE(stopSpy.count(), 1);
 }
 
-void PlaybackPanelTest::setOutputDevicesListsSystemDefaultFirst() {
-    PlaybackPanel panel;
-    panel.setOutputDevices({QStringLiteral("Speakers A"), QStringLiteral("Speakers B")});
-
-    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
-    QVERIFY(combo != nullptr);
-    QCOMPARE(combo->count(), 3);
-    QCOMPARE(combo->itemData(0).toString(), QString());
-    QCOMPARE(combo->itemData(1).toString(), QStringLiteral("Speakers A"));
-    QCOMPARE(combo->itemData(2).toString(), QStringLiteral("Speakers B"));
-}
-
-void PlaybackPanelTest::changingTheOutputDeviceEmitsOutputDeviceChanged() {
-    PlaybackPanel panel;
-    panel.setOutputDevices({QStringLiteral("Speakers A")});
-    QSignalSpy spy(&panel, &PlaybackPanel::outputDeviceChanged);
-
-    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
-    QVERIFY(combo != nullptr);
-    combo->setCurrentIndex(1);
-
-    QCOMPARE(spy.count(), 1);
-    QCOMPARE(spy.at(0).at(0).toString(), QStringLiteral("Speakers A"));
-}
-
-void PlaybackPanelTest::volumeSliderStartsAtUnityAndAllowsAboveIt() {
-    PlaybackPanel panel;
-    auto* slider = panel.findChild<QSlider*>(QStringLiteral("volumeSlider"));
-    QVERIFY(slider != nullptr);
-    QCOMPARE(slider->value(), 100);
-    QCOMPARE(slider->maximum(), PlaybackPanel::kMaxVolumePercent);
-    QVERIFY(PlaybackPanel::kMaxVolumePercent > 100);  // a real boost past unity is allowed.
-}
-
-void PlaybackPanelTest::movingTheVolumeSliderEmitsVolumePercentChanged() {
-    PlaybackPanel panel;
-    QSignalSpy spy(&panel, &PlaybackPanel::volumePercentChanged);
-
-    auto* slider = panel.findChild<QSlider*>(QStringLiteral("volumeSlider"));
-    QVERIFY(slider != nullptr);
-    slider->setValue(150);
-
-    QCOMPARE(spy.count(), 1);
-    QCOMPARE(spy.at(0).at(0).toInt(), 150);
-}
-
-void PlaybackPanelTest::setVolumePercentDoesNotEmitVolumePercentChanged() {
-    PlaybackPanel panel;
-    QSignalSpy spy(&panel, &PlaybackPanel::volumePercentChanged);
-
-    panel.setVolumePercent(150);
-
-    QCOMPARE(spy.count(), 0);
-    auto* slider = panel.findChild<QSlider*>(QStringLiteral("volumeSlider"));
-    QVERIFY(slider != nullptr);
-    QCOMPARE(slider->value(), 150);
-}
-
 void PlaybackPanelTest::positionSliderStartsAtZero() {
     PlaybackPanel panel;
     auto* slider = panel.findChild<QSlider*>(QStringLiteral("positionSlider"));
@@ -125,31 +67,6 @@ void PlaybackPanelTest::setPositionSecondsDoesNotEmitSeekRequested() {
     auto* slider = panel.findChild<QSlider*>(QStringLiteral("positionSlider"));
     QVERIFY(slider != nullptr);
     QCOMPARE(slider->value(), slider->maximum() / 2);
-}
-
-void PlaybackPanelTest::setSelectedOutputDeviceChangesTheComboWithoutEmittingOutputDeviceChanged() {
-    PlaybackPanel panel;
-    panel.setOutputDevices({QStringLiteral("Speakers A"), QStringLiteral("Speakers B")});
-    QSignalSpy spy(&panel, &PlaybackPanel::outputDeviceChanged);
-
-    panel.setSelectedOutputDevice(QStringLiteral("Speakers B"));
-
-    QCOMPARE(spy.count(), 0);
-    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
-    QVERIFY(combo != nullptr);
-    QCOMPARE(combo->currentData().toString(), QStringLiteral("Speakers B"));
-}
-
-void PlaybackPanelTest::setSelectedOutputDeviceFallsBackToSystemDefaultForAnUnknownName() {
-    PlaybackPanel panel;
-    panel.setOutputDevices({QStringLiteral("Speakers A")});
-
-    panel.setSelectedOutputDevice(QStringLiteral("Nonexistent Device"));
-
-    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
-    QVERIFY(combo != nullptr);
-    QCOMPARE(combo->currentIndex(), 0);
-    QCOMPARE(combo->currentData().toString(), QString());
 }
 
 void PlaybackPanelTest::repeatCheckBoxEmitsRepeatChanged() {

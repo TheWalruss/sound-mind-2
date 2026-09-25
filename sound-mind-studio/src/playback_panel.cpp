@@ -17,8 +17,6 @@
 #include <QVariant>
 #include <QWidget>
 
-#include "sound_mind/studio/device_combo_helpers.h"
-
 namespace sound_mind::studio {
 
 namespace {
@@ -81,26 +79,6 @@ PlaybackPanel::PlaybackPanel(QWidget* parent) : QDockWidget(tr("Playback"), pare
     root->addWidget(positionLabel_);
     updatePositionLabel();
 
-    auto* outputRow = new QHBoxLayout();
-    outputRow->addWidget(new QLabel(tr("Output:"), container));
-    outputDeviceCombo_ = new QComboBox(container);
-    outputDeviceCombo_->setObjectName(QStringLiteral("outputDeviceCombo"));
-    connect(outputDeviceCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
-        emit outputDeviceChanged(outputDeviceCombo_->itemData(index).toString());
-    });
-    outputRow->addWidget(outputDeviceCombo_, 1);
-    root->addLayout(outputRow);
-
-    auto* volumeRow = new QHBoxLayout();
-    volumeRow->addWidget(new QLabel(tr("Volume:"), container));
-    volumeSlider_ = new QSlider(Qt::Horizontal, container);
-    volumeSlider_->setObjectName(QStringLiteral("volumeSlider"));
-    volumeSlider_->setRange(0, kMaxVolumePercent);
-    volumeSlider_->setValue(100);
-    connect(volumeSlider_, &QSlider::valueChanged, this, &PlaybackPanel::volumePercentChanged);
-    volumeRow->addWidget(volumeSlider_, 1);
-    root->addLayout(volumeRow);
-
     auto* repeatRow = new QHBoxLayout();
     repeatCheckBox_ = new QCheckBox(tr("Repeat"), container);
     repeatCheckBox_->setObjectName(QStringLiteral("repeatCheckBox"));
@@ -121,30 +99,15 @@ PlaybackPanel::PlaybackPanel(QWidget* parent) : QDockWidget(tr("Playback"), pare
 
     root->addStretch();
 
-    populateDeviceCombo(outputDeviceCombo_, {});
-
     auto* scrollArea = new QScrollArea(this);
     scrollArea->setWidget(container);
     scrollArea->setWidgetResizable(true);
     setWidget(scrollArea);
 }
 
-void PlaybackPanel::setOutputDevices(const QStringList& deviceNames) {
-    populateDeviceCombo(outputDeviceCombo_, deviceNames);
-}
-
-void PlaybackPanel::setSelectedOutputDevice(const QString& deviceName) {
-    setSelectedDeviceInCombo(outputDeviceCombo_, deviceName);
-}
-
 void PlaybackPanel::setRepeatChecked(bool checked) {
     const QSignalBlocker blocker(repeatCheckBox_);
     repeatCheckBox_->setChecked(checked);
-}
-
-void PlaybackPanel::setVolumePercent(int percent) {
-    const QSignalBlocker blocker(volumeSlider_);
-    volumeSlider_->setValue(std::clamp(percent, 0, kMaxVolumePercent));
 }
 
 void PlaybackPanel::setDuration(double totalSeconds) {

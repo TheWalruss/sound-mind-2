@@ -17,13 +17,21 @@ namespace sound_mind::studio {
  *        `docs/sound-mind-roadmap.md`'s Workflow & Device Polish milestone
  *        (`v0.0.42.1`), Installment A.
  *
- * **Consolidates, doesn't replace** - `PlaybackPanel`'s own output device
- * picker, `RecordPanel`'s/`LoopPanel`'s own input device pickers (and
- * `LoopPanel`'s own output one) keep working exactly as they already do;
- * this panel is an additional, single place to change the *same*
- * underlying preferences at once, per the roadmap's own "without removing
- * those per-panel pickers' own quick-access convenience." `MainWindow`
- * owns keeping every picker in sync (whichever one last changed).
+ * **The sole place to change device/gain preferences, as of the real-world
+ * testing pass (2026-09-20, finding #7).** Originally billed as
+ * "consolidates, doesn't replace" - `PlaybackPanel`'s own output device
+ * picker and volume slider, and `RecordPanel`'s/`LoopPanel`'s own input
+ * (and `LoopPanel`'s own output) device pickers, were meant to keep working
+ * as quick-access shortcuts alongside this panel. In practice they were
+ * pure, always-in-sync duplicates of this panel's own controls for the
+ * exact same underlying preference (`MainWindow` was already keeping every
+ * picker in sync with every other one) - real redundancy, not genuine
+ * convenience, so those per-panel copies were removed and this panel is now
+ * the only place to change any of it. The one real, non-duplicate behavior
+ * those old pickers had - disabling input (or output, for Loop) device
+ * selection while an engine has the device actually open - is preserved
+ * here instead, via setInputDeviceSelectionEnabled()/
+ * setOutputDeviceSelectionEnabled().
  *
  * **One input device/gain, one output device/gain - not per-engine.**
  * Choosing an input device here applies to both `RecordEngine` and
@@ -49,8 +57,7 @@ class ConfigureDevicesPanel : public QDockWidget {
 
 public:
     /// @brief The gain sliders' own range, `[0, 200]` - a percentage where
-    /// `100` is unity gain, matching `PlaybackPanel::kMaxVolumePercent`'s
-    /// own identical convention (and `RecordEngine::kMaxGain`/
+    /// `100` is unity gain (matching `RecordEngine::kMaxGain`/
     /// `LoopEngine::kMaxGain`'s own `2.0` ceiling).
     static constexpr int kMaxGainPercent = 200;
 
@@ -104,6 +111,40 @@ public:
     ///        docs.
     /// @param testing The new checked state.
     void setTestingOutput(bool testing);
+
+    /**
+     * @brief Enables/disables the input device picker - `MainWindow` calls
+     *        this with `false` while `RecordEngine`/`LoopEngine` (the two
+     *        engines sharing this panel's own one input device/gain, per
+     *        the class's own docs) has the input device actually open, and
+     *        `true` once neither does.
+     *
+     * Preserves a real safety behavior `RecordPanel`'s/`LoopPanel`'s own
+     * now-removed input device pickers used to provide locally (real-world
+     * testing pass, 2026-09-20, finding #7) - switching the input device
+     * out from under an active recording/loop session mid-session was
+     * never a supported gesture, just one this panel's own consolidated
+     * picker hadn't yet been taught to prevent.
+     *
+     * @param enabled `false` to disable (something is actively using the
+     *        input device); `true` to re-enable.
+     */
+    void setInputDeviceSelectionEnabled(bool enabled);
+
+    /**
+     * @brief Enables/disables the output device picker - `MainWindow` calls
+     *        this with `false` while `LoopEngine` has the output device
+     *        actually open (the one engine, besides `PlaybackEngine`,
+     *        sharing this panel's own one output device/gain) and `true`
+     *        once it doesn't. Deliberately *not* tied to ordinary Playback
+     *        being active - `PlaybackPanel`'s own now-removed output
+     *        picker was never disabled during playback either, only
+     *        `LoopPanel`'s own was disabled while running (real-world
+     *        testing pass, 2026-09-20, finding #7) - this preserves that
+     *        exact distinction, not a broader one.
+     * @param enabled `false` to disable; `true` to re-enable.
+     */
+    void setOutputDeviceSelectionEnabled(bool enabled);
 
 signals:
     /// @brief The "Refresh Devices" button was clicked.

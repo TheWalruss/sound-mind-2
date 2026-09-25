@@ -137,11 +137,14 @@ class RecordPanel;
  * remaining actions for these are pure show/hide toggles
  * (`QDockWidget::toggleViewAction()`), not transport controls themselves.
  * The "Freeze Loop" checkbox mentioned above moved from the toolbar into
- * `loopPanel_`. Real input/output device selection
- * (`setLoopInputDevice()`/`setLoopOutputDevice()`/`setRecordInputDevice()`/
- * `setPlaybackOutputDevice()`) and an above-unity Playback volume control
- * (`setPlaybackVolume()`) - all previously-deferred scope across Playback/
- * Live Mode/Record's own original milestones - land on these panels too.
+ * `loopPanel_`. Real input/output device selection and an above-unity
+ * Playback volume control (`setPlaybackOutputDevice()`/
+ * `setPlaybackVolume()`) - all previously-deferred scope across Playback/
+ * Live Mode/Record's own original milestones - landed on these panels
+ * too, each with its own local device picker at first; those per-panel
+ * pickers were later removed once Configure Devices (`v0.0.42.1`)
+ * consolidated them into one shared picker (real-world testing pass,
+ * 2026-09-20, finding #7).
  *
  * **As of `v0.Y.17.1` (Drag & Drop Import):** dropping local files onto
  * the window imports/opens them via handleDroppedFiles() - see its own
@@ -373,10 +376,13 @@ public slots:
 
     /**
      * @brief Sets `playbackController_`'s output gain - the actual work
-     *        behind the Playback panel's volume slider (`v0.Y.16.1`).
-     * @param percent `[0, PlaybackPanel::kMaxVolumePercent]` (200) - `100`
-     *        is unity gain; above `100` is a real boost past it, per the
-     *        confirmed scope for this milestone.
+     *        behind Configure Devices' own output gain slider (originally
+     *        the Playback panel's own volume slider, `v0.Y.16.1`, before
+     *        that picker was removed - real-world testing pass,
+     *        2026-09-20, finding #7).
+     * @param percent `[0, ConfigureDevicesPanel::kMaxGainPercent]` (200) -
+     *        `100` is unity gain; above `100` is a real boost past it, per
+     *        the confirmed scope for this milestone.
      */
     void setPlaybackVolume(int percent);
 
@@ -498,28 +504,6 @@ public slots:
     void setKeepLooping(bool keepLooping);
 
     /**
-     * @brief Sets which input device Loop Mode's *next* start() should
-     *        open - the actual work behind the Loop panel's input device
-     *        picker (`v0.Y.16.1`).
-     *
-     * Forwards to `LoopEngine::setPreferredInputDevice()` - see its own
-     * docs for why this only takes effect on the next start(), not
-     * retroactively. Does nothing if no project is open yet.
-     *
-     * @param deviceName The device to prefer, or empty for the system
-     *        default.
-     */
-    void setLoopInputDevice(const QString& deviceName);
-
-    /// @brief Sets which output device Loop Mode's *next* start() should
-    /// open - the actual work behind the Loop panel's output device
-    /// picker (`v0.Y.16.1`). See setLoopInputDevice()'s docs for the same
-    /// "next start()", "does nothing with no project open" behavior.
-    /// @param deviceName The device to prefer, or empty for the system
-    ///        default.
-    void setLoopOutputDevice(const QString& deviceName);
-
-    /**
      * @brief Starts or stops Recording: one-shot capture from the default
      *        input device into a newly created layer, encoded exactly as
      *        an imported file would be once capture stops (see
@@ -530,7 +514,9 @@ public slots:
      * Loop Mode's own precedent): defers an input gain control - named in
      * the design doc's Record section - as a UI affordance layered on top
      * of a working capture pipeline. A real input-device picker landed in
-     * `v0.Y.16.1` - see setRecordInputDevice(). Stops Playback first if
+     * `v0.Y.16.1`, since consolidated into Configure Devices'
+     * `setConfiguredInputDevice()` (real-world testing pass, 2026-09-20,
+     * finding #7). Stops Playback first if
      * it's running (same device-contention
      * reasoning as toggleLoopMode()); does nothing (refuses to start) if
      * Loop Mode is currently running, or if no project is open. Creates a
@@ -545,26 +531,13 @@ public slots:
     void toggleRecording();
 
     /**
-     * @brief Sets which input device Recording's *next* start() should
-     *        open - the actual work behind the Record panel's input
-     *        device picker (`v0.Y.16.1`).
-     *
-     * Forwards to `RecordEngine::setPreferredInputDevice()`.
-     *
-     * @param deviceName The device to prefer, or empty for the system
-     *        default.
-     */
-    void setRecordInputDevice(const QString& deviceName);
-
-    /**
      * @brief Re-queries available input/output devices and refreshes
-     *        every device picker in the app (`configureDevicesPanel_`'s
-     *        own, plus `playbackPanel_`'s/`recordPanel_`'s/`loopPanel_`'s)
-     *        - the actual work behind the Configure Devices panel's own
-     *        "Refresh Devices" button (`v0.0.42.1`). Never opens or closes
-     *        a device itself - see `sound_mind::core::
-     *        availableAudioDeviceNames()`'s own docs for how a fresh scan
-     *        already works without one.
+     *        `configureDevicesPanel_`'s own device pickers - the only ones
+     *        left in the app (real-world testing pass, 2026-09-20, finding
+     *        #7) - the actual work behind its own "Refresh Devices" button
+     *        (`v0.0.42.1`). Never opens or closes a device itself - see
+     *        `sound_mind::core::availableAudioDeviceNames()`'s own docs
+     *        for how a fresh scan already works without one.
      */
     void refreshConfiguredDevices();
 
@@ -572,11 +545,10 @@ public slots:
      * @brief Sets the input device `recordEngine_`'s and `loopEngine_`'s
      *        (if a project is open) *next* start() should each open - the
      *        actual work behind the Configure Devices panel's own input
-     *        device picker (`v0.0.42.1`). Syncs `recordPanel_`'s/
-     *        `loopPanel_`'s own pickers to match, so every input device
-     *        picker in the app stays consistent regardless of which one a
-     *        user actually changed - see `ConfigureDevicesPanel`'s own
-     *        class docs on why this applies to both engines at once.
+     *        device picker (`v0.0.42.1`) - now the only input device
+     *        picker in the app (real-world testing pass, 2026-09-20,
+     *        finding #7; see `ConfigureDevicesPanel`'s own class docs on
+     *        why this applies to both engines at once).
      * @param deviceName The device to prefer, or empty for the system
      *        default.
      */
@@ -585,8 +557,10 @@ public slots:
     /// @brief Sets the output device `playbackController_`'s and
     /// `loopEngine_`'s (if a project is open) should each switch to - the
     /// actual work behind the Configure Devices panel's own output device
-    /// picker (`v0.0.42.1`). See setConfiguredInputDevice()'s own docs for
-    /// the same "applies to both, syncs every picker" reasoning.
+    /// picker (`v0.0.42.1`) - now the only output device picker in the app
+    /// (real-world testing pass, 2026-09-20, finding #7). See
+    /// setConfiguredInputDevice()'s own docs for the same "applies to both
+    /// engines at once" reasoning.
     /// @param deviceName The device to prefer, or empty for the system
     ///        default.
     void setConfiguredOutputDevice(const QString& deviceName);
@@ -601,9 +575,10 @@ public slots:
     /// @brief Sets `playbackController_`'s own output gain - the actual
     /// work behind the Configure Devices panel's own output gain slider
     /// (`v0.0.42.1`). Forwards straight to setPlaybackVolume() (the same
-    /// underlying `PlaybackController::setVolume()`) and keeps
-    /// `playbackPanel_`'s own volume slider in sync, so the two panels'
-    /// own gain controls for the same engine never disagree.
+    /// underlying `PlaybackController::setVolume()`) - `PlaybackPanel`'s
+    /// own, now-removed volume slider used to need syncing here too (real-
+    /// world testing pass, 2026-09-20, finding #7: it was a pure duplicate
+    /// of this same gain).
     /// @param percent `[0, ConfigureDevicesPanel::kMaxGainPercent]` (200).
     void setConfiguredOutputGain(int percent);
 
@@ -1463,19 +1438,19 @@ public:
     [[nodiscard]] bool isRecording() const noexcept;
 
     /// @brief The input device Loop Mode's next start() will prefer - see
-    /// setLoopInputDevice(). Empty for the system default, or if no
+    /// setConfiguredInputDevice(). Empty for the system default, or if no
     /// project has ever been opened yet.
     /// @return The preferred input device name.
     [[nodiscard]] QString loopInputDevice() const;
 
     /// @brief The output device Loop Mode's next start() will prefer -
-    /// see setLoopOutputDevice(). Empty for the system default, or if no
-    /// project has ever been opened yet.
+    /// see setConfiguredOutputDevice(). Empty for the system default, or
+    /// if no project has ever been opened yet.
     /// @return The preferred output device name.
     [[nodiscard]] QString loopOutputDevice() const;
 
     /// @brief The input device Recording's next start() will prefer - see
-    /// setRecordInputDevice(). Empty means the system default.
+    /// setConfiguredInputDevice(). Empty means the system default.
     /// @return The preferred input device name.
     [[nodiscard]] QString recordInputDevice() const;
 
@@ -1914,6 +1889,27 @@ private:
      * Grain at all.
      */
     void updateMindGrainGuardrails();
+
+    /**
+     * @brief Enables/disables Configure Devices' own input and output
+     *        device pickers to match whether an engine currently has that
+     *        device actually open - preserves the "locked while running"
+     *        safety behavior `RecordPanel`'s/`LoopPanel`'s own now-removed
+     *        device pickers used to provide locally (real-world testing
+     *        pass, 2026-09-20, finding #7).
+     *
+     * Input is locked while either `recordEngine_` or `loopEngine_` is
+     * active - both share the panel's own one input device/gain (see
+     * `ConfigureDevicesPanel`'s own class docs). Output is locked only
+     * while `loopEngine_` is running - ordinary Playback was never a
+     * reason to lock the output picker even before this milestone (see
+     * `setOutputDeviceSelectionEnabled()`'s own docs on preserving that
+     * exact distinction).
+     *
+     * Called after every place this app starts or stops Recording/Loop
+     * Mode, so the picker's own enabled state never goes stale.
+     */
+    void updateConfiguredDeviceLockState();
 
     /**
      * @brief If hasUnsavedChanges() is `false`, returns `true` immediately

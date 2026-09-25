@@ -193,3 +193,35 @@ void ConfigureDevicesPanelTest::setTestingInputAndOutputChangeCheckedStateWithou
     QCOMPARE(inputSpy.count(), 0);
     QVERIFY(!inputButton->isChecked());
 }
+
+void ConfigureDevicesPanelTest::setInputDeviceSelectionEnabledTogglesTheInputComboOnly() {
+    ConfigureDevicesPanel panel;
+    auto* inputCombo = panel.findChild<QComboBox*>(QStringLiteral("inputDeviceCombo"));
+    auto* outputCombo = panel.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
+    QVERIFY(inputCombo != nullptr);
+    QVERIFY(outputCombo != nullptr);
+
+    panel.setInputDeviceSelectionEnabled(false);
+
+    QVERIFY(!inputCombo->isEnabled());
+    QVERIFY(outputCombo->isEnabled());
+
+    panel.setInputDeviceSelectionEnabled(true);
+    QVERIFY(inputCombo->isEnabled());
+}
+
+void ConfigureDevicesPanelTest::setOutputDeviceSelectionEnabledTogglesTheOutputComboOnly() {
+    ConfigureDevicesPanel panel;
+    auto* inputCombo = panel.findChild<QComboBox*>(QStringLiteral("inputDeviceCombo"));
+    auto* outputCombo = panel.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
+    QVERIFY(inputCombo != nullptr);
+    QVERIFY(outputCombo != nullptr);
+
+    panel.setOutputDeviceSelectionEnabled(false);
+
+    QVERIFY(!outputCombo->isEnabled());
+    QVERIFY(inputCombo->isEnabled());
+
+    panel.setOutputDeviceSelectionEnabled(true);
+    QVERIFY(outputCombo->isEnabled());
+}

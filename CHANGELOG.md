@@ -6,6 +6,58 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.8] - 2026-09-25
+
+Real-world testing pass finding #7: **Playback/Record/Loop panels no longer have their own device pickers.**
+
+### Changed
+
+- **Configure Devices is now the sole input/output device and gain picker in the app.** The Playback panel's output device combo and volume slider, and the Record/Loop panels' input (and, for Loop, output) device combos are gone - all three now read whatever's set in Configure Devices instead of keeping their own, previously-duplicated, copy of the same state.
+- **The "locked while actively recording/looping" safety behavior those pickers used to provide locally now lives on Configure Devices' own combos**: its Input combo (and Gain) locks while Recording or Loop Mode is running, and its Output combo (and Gain) locks only while Loop Mode is running.
+
+Full regression: sound-mind-studio full suite passing (174/174 `MainWindowTest`, 17/17 `ConfigureDevicesPanelTest`, all `LoopPanelTest`/`RecordPanelTest`/`PlaybackPanelTest` cases). Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #129.
+
+## [0.0.45.7] - 2026-09-24
+
+Real-world testing pass finding #6: **a Deselect button on the Selection Configuration panel.**
+
+### Added
+
+- **A "Deselect" button** on the Selection Configuration panel, wired to the same clear-selection action `Edit -> Deselect` (Ctrl+D) already performed - a more discoverable path to it while the panel is already open, not a new capability.
+
+Full regression: no new failures. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #128.
+
+## [0.0.45.6] - 2026-09-24
+
+Real-world testing pass finding #5: **retroactive Paste Blend Mode edits.**
+
+### Added
+
+- **Picking an already-pasted region and changing Selection Configuration's own Paste Blend Mode combo now retroactively re-blends that specific object**, not just the next paste - the same "pick it, reopen its settings, adjust" workflow already available for a picked stroke's Tool Configuration.
+
+Full regression: no new failures. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #127.
+
+## [0.0.45.5] - 2026-09-24
+
+Real-world testing pass finding #4: **a visible highlighted style for checked buttons.**
+
+### Fixed
+
+- **Configure Devices' own Test buttons now show a visibly-active pressed/highlighted state** while their test tone/input monitoring is running, via a new app-wide `QPushButton:checked` theme rule (previously indistinguishable from an unchecked button).
+
+Full regression: no new failures. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #126.
+
+## [0.0.45.4] - 2026-09-24
+
+Real-world testing pass findings #1-#3.5: **a Layers panel name/thumbnail regression and an Equalizer/Filter paint guard.**
+
+### Fixed
+
+- **A layer row's name label was both hidden behind its thumbnail and unclickable**, since `QStackedLayout::StackAll` draws every child but still raises only its own current widget (the thumbnail) to the front for both painting and mouse hit-testing - the root cause behind three separately-reported symptoms turning out to be one bug.
+- **Painting directly onto the Equalizer (or a Filter) layer is now refused silently**, matching the Mind Grain guard's own established shape, instead of corrupting that layer's non-paintable content.
+
+Full regression: no new failures. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #125.
+
 ## [0.0.44.1] - 2026-09-20
 
 **Layers Panel Redesign.** A real visual and functional overhaul of the Layers panel, taken out of its normal roadmap order (ahead of the "Refactor & Clean Up" pass) per `docs/sound-mind-design.md`'s "Layer panel styling".

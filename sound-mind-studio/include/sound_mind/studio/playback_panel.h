@@ -40,17 +40,16 @@ enum class PlaybackScope {
 };
 
 /**
- * @brief A dockable panel exposing Playback's transport, output device
- *        selection, and volume control - see
+ * @brief A dockable panel exposing Playback's transport - see
  *        `docs/sound-mind-roadmap.md`'s Transport Panels milestone
  *        (`v0.Y.16.1`).
  *
  * Adapted from the legacy Studio's `PlaybackPanel`, narrowed to what this
  * codebase's Playback actually has scope for today: Play/Pause/Stop
  * buttons (mirroring `MainWindow`'s existing three-button transport - not
- * combined into a single toggle), an output device picker, and a volume
- * slider - none of legacy's loop-preview markers or follow mode, which
- * aren't part of this codebase's Playback scope at all.
+ * combined into a single toggle) - none of legacy's loop-preview markers
+ * or follow mode, which aren't part of this codebase's Playback scope at
+ * all.
  *
  * **As of `v0.0.21.1`:** a draggable position bar and elapsed/total time
  * label were added (confirmed with the user, alongside a matching moving
@@ -65,6 +64,15 @@ enum class PlaybackScope {
  * reports the two controls' own state, purely presentational like
  * everything else here).
  *
+ * **Output device picker and Volume slider removed (real-world testing
+ * pass, 2026-09-20, finding #7)**: both duplicated Configure Devices'
+ * own output device combo/output gain slider exactly - `MainWindow` had
+ * already been keeping the two in sync (`setConfiguredOutputGain()`'s own
+ * docs: "the two panels' own gain controls for the same engine never
+ * disagree"), so this panel's own copies were pure redundancy, not a
+ * distinct control. Configure Devices is now the single place to change
+ * either.
+ *
  * Purely presentational, the same division of responsibility as
  * `LayersPanel`/`LoopPanel`/`RecordPanel`: every user action is a signal
  * `MainWindow` connects to its own handlers. Wrapped in a `QScrollArea` so
@@ -75,11 +83,6 @@ class PlaybackPanel : public QDockWidget {
     Q_OBJECT
 
 public:
-    /// @brief The volume slider's range, `[0, 200]` - a percentage where
-    /// `100` is unity gain and above `100` is a real boost past it,
-    /// matching `PlaybackEngine::kMaxVolume` (`2.0`).
-    static constexpr int kMaxVolumePercent = 200;
-
     /// @brief The position slider's fixed resolution - its range is always
     /// `[0, kPositionSliderSteps]` regardless of the loaded audio's actual
     /// duration, mapped to/from seconds via totalSeconds_ at the moment
@@ -87,37 +90,10 @@ public:
     /// feels continuous even for a long recording.
     static constexpr int kPositionSliderSteps = 1000;
 
-    /// @brief Builds the panel with an empty device list and volume at
-    ///        100% (unity).
+    /// @brief Builds the panel with the position bar at `0:00 / 0:00`.
     /// @param parent The owning widget, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
     explicit PlaybackPanel(QWidget* parent = nullptr);
-
-    /// @brief Replaces the output device picker's choices - a
-    ///        "(System Default)" entry (mapping to an empty device name)
-    ///        always comes first.
-    /// @param deviceNames Real device names, in the order they should be
-    ///        listed after the default entry.
-    void setOutputDevices(const QStringList& deviceNames);
-
-    /**
-     * @brief Selects `deviceName` in the output device picker, without
-     *        repopulating its list or emitting outputDeviceChanged() -
-     *        `v0.0.42.1` (Configure Devices panel), for `MainWindow` to
-     *        keep this picker in sync when the *same* underlying
-     *        preference is changed from the Configure Devices panel
-     *        instead of this one.
-     * @param deviceName The device to select; falls back to
-     *        "(System Default)" if it isn't currently in the picker's own
-     *        list (e.g. stale until the next setOutputDevices() refresh).
-     */
-    void setSelectedOutputDevice(const QString& deviceName);
-
-    /// @brief Sets the volume slider's displayed position without emitting
-    ///        volumePercentChanged() - for `MainWindow` to sync display
-    ///        state without a signal feedback loop.
-    /// @param percent Clamped to `[0, kMaxVolumePercent]`.
-    void setVolumePercent(int percent);
 
     /**
      * @brief Sets the total duration the position bar/label represent -
@@ -161,15 +137,6 @@ signals:
     /// @brief The Stop button was clicked.
     void stopRequested();
 
-    /// @brief The output device picker's selection changed.
-    /// @param deviceName The chosen device's real name, or empty for
-    ///        "(System Default)".
-    void outputDeviceChanged(const QString& deviceName);
-
-    /// @brief The volume slider moved.
-    /// @param percent `[0, kMaxVolumePercent]` - `100` is unity gain.
-    void volumePercentChanged(int percent);
-
     /// @brief The position bar was dragged to a new position.
     /// @param positionSeconds The requested position, in seconds into the
     ///        duration setDuration() was last called with.
@@ -188,8 +155,6 @@ private:
     /// whatever positionSlider_'s current value implies.
     void updatePositionLabel();
 
-    QComboBox* outputDeviceCombo_ = nullptr;
-    QSlider* volumeSlider_ = nullptr;
     QCheckBox* repeatCheckBox_ = nullptr;
     QComboBox* scopeCombo_ = nullptr;
     QSlider* positionSlider_ = nullptr;

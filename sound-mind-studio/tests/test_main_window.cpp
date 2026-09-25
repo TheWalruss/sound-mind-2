@@ -1477,29 +1477,29 @@ void MainWindowTest::setKeepLoopingSyncsTheLoopPanelsCheckBox() {
     QVERIFY(!checkBox->isChecked());
 }
 
-void MainWindowTest::setLoopInputDeviceForwardsToTheLoopEngine() {
+void MainWindowTest::setConfiguredInputDeviceForwardsToTheLoopEngine() {
     TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.loopInputDevice().isEmpty());
 
-    window.setLoopInputDevice(QStringLiteral("Some Microphone"));
+    window.setConfiguredInputDevice(QStringLiteral("Some Microphone"));
     QCOMPARE(window.loopInputDevice(), QStringLiteral("Some Microphone"));
 }
 
-void MainWindowTest::setLoopOutputDeviceForwardsToTheLoopEngine() {
+void MainWindowTest::setConfiguredOutputDeviceForwardsToTheLoopEngine() {
     TestMainWindow window;
     createFreshTestProject(window);
     QVERIFY(window.loopOutputDevice().isEmpty());
 
-    window.setLoopOutputDevice(QStringLiteral("Some Speakers"));
+    window.setConfiguredOutputDevice(QStringLiteral("Some Speakers"));
     QCOMPARE(window.loopOutputDevice(), QStringLiteral("Some Speakers"));
 }
 
-void MainWindowTest::setRecordInputDeviceForwardsToTheRecordEngine() {
+void MainWindowTest::setConfiguredInputDeviceForwardsToTheRecordEngine() {
     TestMainWindow window;
     QVERIFY(window.recordInputDevice().isEmpty());
 
-    window.setRecordInputDevice(QStringLiteral("Some Microphone"));
+    window.setConfiguredInputDevice(QStringLiteral("Some Microphone"));
     QCOMPARE(window.recordInputDevice(), QStringLiteral("Some Microphone"));
 }
 
@@ -1524,6 +1524,50 @@ void MainWindowTest::loopPanelToggleButtonStartsAndStopsTheRealEngine() {
 
     button->click();
     QVERIFY(!window.isLoopModeRunning());
+}
+
+void MainWindowTest::loopModeLocksAndUnlocksConfigureDevicesDeviceCombos() {
+    // Real-world testing pass, 2026-09-20, finding #7: Configure Devices'
+    // own combos must preserve the "locked while running" safety behavior
+    // LoopPanel's own now-removed device pickers used to provide locally.
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* button = window.findChild<QPushButton*>(QStringLiteral("loopToggleButton"));
+    auto* inputCombo = window.findChild<QComboBox*>(QStringLiteral("inputDeviceCombo"));
+    auto* outputCombo = window.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
+    QVERIFY(button != nullptr);
+    QVERIFY(inputCombo != nullptr);
+    QVERIFY(outputCombo != nullptr);
+    QVERIFY(inputCombo->isEnabled());
+    QVERIFY(outputCombo->isEnabled());
+
+    button->click();
+    QVERIFY(!inputCombo->isEnabled());
+    QVERIFY(!outputCombo->isEnabled());
+
+    button->click();
+    QVERIFY(inputCombo->isEnabled());
+    QVERIFY(outputCombo->isEnabled());
+}
+
+void MainWindowTest::recordingLocksTheInputComboButNotTheOutputCombo() {
+    // Recording never touches the output device, unlike Loop Mode - see
+    // updateConfiguredDeviceLockState()'s own docs.
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* button = window.findChild<QPushButton*>(QStringLiteral("recordToggleButton"));
+    auto* inputCombo = window.findChild<QComboBox*>(QStringLiteral("inputDeviceCombo"));
+    auto* outputCombo = window.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
+    QVERIFY(button != nullptr);
+    QVERIFY(inputCombo != nullptr);
+    QVERIFY(outputCombo != nullptr);
+
+    button->click();
+    QVERIFY(!inputCombo->isEnabled());
+    QVERIFY(outputCombo->isEnabled());
+
+    button->click();
+    QVERIFY(inputCombo->isEnabled());
 }
 
 void MainWindowTest::playbackPanelButtonsDriveRealPlayback() {

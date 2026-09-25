@@ -7,8 +7,5 @@ class RecordPanelTest : public QObject {
 
 private slots:
     void toggleButtonEmitsToggleRequested();
-    void setRecordingUpdatesButtonAndDisablesTheDevicePicker();
-    void setInputDevicesListsSystemDefaultFirst();
-    void changingTheInputDeviceEmitsInputDeviceChanged();
-    void setSelectedInputDeviceChangesTheComboWithoutEmittingInputDeviceChanged();
+    void setRecordingUpdatesButtonLabelAndCheckedState();
 };

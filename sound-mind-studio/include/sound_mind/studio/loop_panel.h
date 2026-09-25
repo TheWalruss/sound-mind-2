@@ -1,30 +1,34 @@
 #pragma once
 
 #include <QDockWidget>
-#include <QString>
-#include <QStringList>
 
 class QCheckBox;
-class QComboBox;
 class QPushButton;
 
 namespace sound_mind::studio {
 
 /**
- * @brief A dockable panel exposing Loop Mode's transport, device
- *        selection, and "Freeze Loop" controls - see
- *        `docs/sound-mind-roadmap.md`'s Transport Panels milestone
- *        (`v0.Y.16.1`).
+ * @brief A dockable panel exposing Loop Mode's transport and "Freeze Loop"
+ *        control - see `docs/sound-mind-roadmap.md`'s Transport Panels
+ *        milestone (`v0.Y.16.1`).
  *
- * Adapted from the legacy Studio's `LivePanel`: a Start/Stop button, input
- * and output device pickers (each with a Refresh button), and "Freeze
- * Loop" (moved here from the transport toolbar checkbox `v0.Y.12.1`
+ * Adapted from the legacy Studio's `LivePanel`: a Start/Stop button and
+ * "Freeze Loop" (moved here from the transport toolbar checkbox `v0.Y.12.1`
  * added as a confirmed stopgap; labeled "Keep Looping" before a later
  * rename - the checkbox's internal name and API were never affected, only
  * the displayed text) - narrowed to what this codebase's Loop Mode
  * actually has scope for today: no channel selector, input level meter, or
  * session-saving - none of those are part of this milestone's confirmed
  * scope, unlike the legacy panel.
+ *
+ * **Input/output device pickers removed (real-world testing pass,
+ * 2026-09-20, finding #7)**: they duplicated Configure Devices' own
+ * combos exactly, always kept in sync with them by `MainWindow` - pure
+ * redundancy, not distinct controls. Configure Devices is now the single
+ * place to change either; its own combos are disabled while Loop Mode is
+ * running (`ConfigureDevicesPanel::setInputDeviceSelectionEnabled()`/
+ * `setOutputDeviceSelectionEnabled()`), preserving this panel's own prior
+ * "locked while running" behavior.
  *
  * Purely presentational, the same division of responsibility as
  * `LayersPanel`: every user action is a signal `MainWindow` connects to
@@ -36,52 +40,14 @@ class LoopPanel : public QDockWidget {
     Q_OBJECT
 
 public:
-    /// @brief Builds the panel with empty device lists and "Freeze Loop"
-    ///        unchecked.
+    /// @brief Builds the panel with "Freeze Loop" unchecked.
     /// @param parent The owning widget, per Qt's normal parent-ownership
     ///        convention; may be `nullptr`.
     explicit LoopPanel(QWidget* parent = nullptr);
 
-    /**
-     * @brief Updates the Start/Stop button's label/checked state and
-     *        enables/disables the device pickers.
-     *
-     * The pickers are locked while running - matching the legacy panel's
-     * own behavior - since `LoopEngine`'s device selection only takes
-     * effect on its *next* start() (see its own docs), so changing them
-     * mid-session wouldn't do anything until a restart anyway.
-     *
-     * @param running Whether Loop Mode is currently running.
-     */
+    /// @brief Updates the Start/Stop button's label/checked state.
+    /// @param running Whether Loop Mode is currently running.
     void setRunning(bool running);
-
-    /// @brief Replaces the input device picker's choices - a
-    ///        "(System Default)" entry (mapping to an empty device name)
-    ///        always comes first.
-    /// @param deviceNames Real device names, in the order they should be
-    ///        listed after the default entry.
-    void setInputDevices(const QStringList& deviceNames);
-
-    /// @brief Replaces the output device picker's choices - see
-    ///        setInputDevices()'s docs for the same "(System Default)"
-    ///        first-entry convention.
-    /// @param deviceNames Real device names, in the order they should be
-    ///        listed after the default entry.
-    void setOutputDevices(const QStringList& deviceNames);
-
-    /// @brief Selects `deviceName` in the input device picker, without
-    ///        repopulating its list or emitting inputDeviceChanged() -
-    ///        `v0.0.42.1` (Configure Devices panel) - see `RecordPanel::
-    ///        setSelectedInputDevice()`'s own docs for why this exists.
-    /// @param deviceName The device to select; falls back to
-    ///        "(System Default)" if not currently in the picker's list.
-    void setSelectedInputDevice(const QString& deviceName);
-
-    /// @brief Selects `deviceName` in the output device picker - see
-    ///        setSelectedInputDevice()'s own docs.
-    /// @param deviceName The device to select; falls back to
-    ///        "(System Default)" if not currently in the picker's list.
-    void setSelectedOutputDevice(const QString& deviceName);
 
     /// @brief Sets the "Freeze Loop" checkbox's displayed state without
     ///        emitting keepLoopingChanged() - for `MainWindow` to sync
@@ -96,21 +62,9 @@ signals:
     /// @brief The "Freeze Loop" checkbox changed.
     void keepLoopingChanged(bool checked);
 
-    /// @brief The input device picker's selection changed.
-    /// @param deviceName The chosen device's real name, or empty for
-    ///        "(System Default)".
-    void inputDeviceChanged(const QString& deviceName);
-
-    /// @brief The output device picker's selection changed - see
-    ///        inputDeviceChanged()'s docs for the same empty-means-default
-    ///        convention.
-    void outputDeviceChanged(const QString& deviceName);
-
 private:
     QPushButton* toggleButton_ = nullptr;
     QCheckBox* keepLoopingCheckBox_ = nullptr;
-    QComboBox* inputDeviceCombo_ = nullptr;
-    QComboBox* outputDeviceCombo_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

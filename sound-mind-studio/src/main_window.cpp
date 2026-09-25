@@ -227,8 +227,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(playbackPanel_, &PlaybackPanel::playRequested, this, &MainWindow::startPlayback);
     connect(playbackPanel_, &PlaybackPanel::pauseRequested, this, &MainWindow::pausePlayback);
     connect(playbackPanel_, &PlaybackPanel::stopRequested, this, &MainWindow::stopPlayback);
-    connect(playbackPanel_, &PlaybackPanel::outputDeviceChanged, this, &MainWindow::setPlaybackOutputDevice);
-    connect(playbackPanel_, &PlaybackPanel::volumePercentChanged, this, &MainWindow::setPlaybackVolume);
     connect(playbackPanel_, &PlaybackPanel::seekRequested, this, &MainWindow::seekPlayback);
 
     // Extracted as its own class (v0.Y.23.1, Refactor & Clean Up) - see its
@@ -248,7 +246,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     });
     connect(playbackPanel_, &PlaybackPanel::repeatChanged, this, &MainWindow::setPlaybackRepeat);
     connect(playbackPanel_, &PlaybackPanel::scopeChanged, this, &MainWindow::setPlaybackScope);
-    playbackPanel_->setOutputDevices(toQStringList(playbackController_->availableOutputDeviceNames()));
 
     toolConfigurationPanel_ = new ToolConfigurationPanel(this);
     toolConfigurationPanel_->hide();
@@ -501,16 +498,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     recordPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, recordPanel_);
     connect(recordPanel_, &RecordPanel::toggleRequested, this, &MainWindow::toggleRecording);
-    connect(recordPanel_, &RecordPanel::inputDeviceChanged, this, &MainWindow::setRecordInputDevice);
-    recordPanel_->setInputDevices(toQStringList(recordEngine_.availableInputDeviceNames()));
 
     loopPanel_ = new LoopPanel(this);
     loopPanel_->hide();  // also needs setProject() - loopEngine_ doesn't exist until then.
     addDockWidget(Qt::RightDockWidgetArea, loopPanel_);
     connect(loopPanel_, &LoopPanel::toggleRequested, this, &MainWindow::toggleLoopMode);
     connect(loopPanel_, &LoopPanel::keepLoopingChanged, this, &MainWindow::setKeepLooping);
-    connect(loopPanel_, &LoopPanel::inputDeviceChanged, this, &MainWindow::setLoopInputDevice);
-    connect(loopPanel_, &LoopPanel::outputDeviceChanged, this, &MainWindow::setLoopOutputDevice);
 
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
 
@@ -1107,6 +1100,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     recordDrainTimer_->stop();
     recordEngine_.stop();
     recordPanel_->setRecording(false);
+    updateConfiguredDeviceLockState();
     // Also stops any in-progress Configure Devices "test" session - a
     // project switch is exactly the kind of unrelated event every other
     // reset here already treats as "start clean", same reasoning as
@@ -1157,8 +1151,6 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     const auto config = sound_mind::core::streamCodecConfigFor(settings);
     const auto loopLengthSamples = static_cast<std::size_t>(settings.canvasWidth) * config.hopLength;
     loopEngine_ = std::make_unique<sound_mind::core::LoopEngine>(config, loopLengthSamples, audioDeviceMode_);
-    loopPanel_->setInputDevices(toQStringList(loopEngine_->availableInputDeviceNames()));
-    loopPanel_->setOutputDevices(toQStringList(loopEngine_->availableOutputDeviceNames()));
 
     canvas_->setProject(&*project_);
     toolPaletteController_->setProject(&*project_);
@@ -1790,6 +1782,13 @@ void MainWindow::updateMindGrainGuardrails() {
     }
 }
 
+void MainWindow::updateConfiguredDeviceLockState() {
+    const bool inputBusy = (loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording();
+    const bool outputBusy = loopEngine_ && loopEngine_->isRunning();
+    configureDevicesPanel_->setInputDeviceSelectionEnabled(!inputBusy);
+    configureDevicesPanel_->setOutputDeviceSelectionEnabled(!outputBusy);
+}
+
 void MainWindow::undo() { undoStack_.undo(); }
 
 void MainWindow::redo() { undoStack_.redo(); }
@@ -2054,6 +2053,7 @@ void MainWindow::toggleLoopMode() {
         loopEngine_->stop();
         loopLayerId_.reset();
         loopPanel_->setRunning(false);
+        updateConfiguredDeviceLockState();
         statusBar()->showMessage(tr("Loop capture stopped."), 5000);
         return;
     }
@@ -2099,6 +2099,7 @@ void MainWindow::toggleLoopMode() {
 
     loopEngine_->start();
     loopPanel_->setRunning(true);
+    updateConfiguredDeviceLockState();
     if (!loopEngine_->isDeviceAvailable()) {
         statusBar()->showMessage(
             tr("Loop capture started, but no input device is available - nothing will be captured."), 5000);
@@ -2114,20 +2115,6 @@ void MainWindow::setKeepLooping(bool keepLooping) {
         return;
     }
     loopEngine_->setKeepLooping(keepLooping);
-}
-
-void MainWindow::setLoopInputDevice(const QString& deviceName) {
-    if (!loopEngine_) {
-        return;
-    }
-    loopEngine_->setPreferredInputDevice(deviceName.toStdString());
-}
-
-void MainWindow::setLoopOutputDevice(const QString& deviceName) {
-    if (!loopEngine_) {
-        return;
-    }
-    loopEngine_->setPreferredOutputDevice(deviceName.toStdString());
 }
 
 void MainWindow::updateLoopLayer() {
@@ -2203,6 +2190,7 @@ void MainWindow::toggleRecording() {
         recordDrainTimer_->stop();
         recordEngine_.stop();
         recordPanel_->setRecording(false);
+        updateConfiguredDeviceLockState();
 
         const sound_mind::codec::AudioBuffer& captured = recordEngine_.capturedAudio();
         if (!project_ || captured.frameCount() == 0) {
@@ -2244,6 +2232,7 @@ void MainWindow::toggleRecording() {
 
     recordEngine_.start();
     recordPanel_->setRecording(true);
+    updateConfiguredDeviceLockState();
     if (!recordEngine_.isDeviceAvailable()) {
         statusBar()->showMessage(tr("Recording started, but no input device is available - nothing will be captured."),
                                   5000);
@@ -2253,21 +2242,11 @@ void MainWindow::toggleRecording() {
     recordDrainTimer_->start();
 }
 
-void MainWindow::setRecordInputDevice(const QString& deviceName) {
-    recordEngine_.setPreferredInputDevice(deviceName.toStdString());
-}
-
 void MainWindow::refreshConfiguredDevices() {
     const QStringList inputDevices = toQStringList(recordEngine_.availableInputDeviceNames());
     const QStringList outputDevices = toQStringList(playbackController_->availableOutputDeviceNames());
     configureDevicesPanel_->setInputDevices(inputDevices);
     configureDevicesPanel_->setOutputDevices(outputDevices);
-    recordPanel_->setInputDevices(inputDevices);
-    playbackPanel_->setOutputDevices(outputDevices);
-    if (loopEngine_) {
-        loopPanel_->setInputDevices(toQStringList(loopEngine_->availableInputDeviceNames()));
-        loopPanel_->setOutputDevices(toQStringList(loopEngine_->availableOutputDeviceNames()));
-    }
 }
 
 void MainWindow::setConfiguredInputDevice(const QString& deviceName) {
@@ -2276,8 +2255,6 @@ void MainWindow::setConfiguredInputDevice(const QString& deviceName) {
     if (loopEngine_) {
         loopEngine_->setPreferredInputDevice(deviceName.toStdString());
     }
-    recordPanel_->setSelectedInputDevice(deviceName);
-    loopPanel_->setSelectedInputDevice(deviceName);
 }
 
 void MainWindow::setConfiguredOutputDevice(const QString& deviceName) {
@@ -2286,8 +2263,6 @@ void MainWindow::setConfiguredOutputDevice(const QString& deviceName) {
     if (loopEngine_) {
         loopEngine_->setPreferredOutputDevice(deviceName.toStdString());
     }
-    playbackPanel_->setSelectedOutputDevice(deviceName);
-    loopPanel_->setSelectedOutputDevice(deviceName);
 }
 
 void MainWindow::setConfiguredInputGain(int percent) {
@@ -2301,10 +2276,7 @@ void MainWindow::setConfiguredInputGain(int percent) {
     }
 }
 
-void MainWindow::setConfiguredOutputGain(int percent) {
-    setPlaybackVolume(percent);
-    playbackPanel_->setVolumePercent(percent);
-}
+void MainWindow::setConfiguredOutputGain(int percent) { setPlaybackVolume(percent); }
 
 void MainWindow::toggleTestInputDevice(bool testing) {
     if (testing) {
