@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.13] - 2026-09-25
+
+Real-world testing pass finding #12, Installment A: **the reusable background-task/cancellation foundation** (no user-visible change yet - see the milestone's later installments).
+
+### Added
+
+- **`sound_mind::core::CancellationToken`/`BackgroundTask`**: a cooperative cancellation flag and a generic, `std::thread`-based background-work wrapper, meant to be reused by Import/Pool/Export/Filter application alike once each is wired through it in a later installment.
+
+Full regression: `sound-mind-core` 822/822 (7 new), `sound-mind-studio` unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #134.
+
 ## [0.0.45.12] - 2026-09-25
 
 Real-world testing pass finding #11: **MindWaves' Superposition controls no longer clutter the panel when unused.**

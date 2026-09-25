@@ -54,6 +54,7 @@ add_library(sound-mind-core
     src/pooling.cpp
     src/layer_export.cpp
     src/gpu_compute_access.cpp
+    src/background_task.cpp
 )
 
 target_include_directories(sound-mind-core

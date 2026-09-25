@@ -41,6 +41,7 @@ add_executable(sound-mind-core-tests
     test_record_engine.cpp
     test_pooling.cpp
     test_layer_export.cpp
+    test_background_task.cpp
 )
 
 target_link_libraries(sound-mind-core-tests
