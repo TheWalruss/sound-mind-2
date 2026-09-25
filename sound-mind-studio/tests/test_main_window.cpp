@@ -2024,6 +2024,267 @@ void MainWindowTest::importAudioSnippetsFailsWhenNothingWasImported() {
     QCOMPARE(window.project()->layers().size(), layerCountBefore);
 }
 
+void MainWindowTest::importAudioSnippetsAsyncRunsInTheBackgroundAndShowsTheCancelButton() {
+    // Real-world testing pass, 2026-09-20, finding #12 ("a real,
+    // non-blocking cancel affordance for long operations"), Installment F.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-async.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 2);  // 2 whole snippets.
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-async.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("importCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+    QVERIFY(cancelButton->isHidden());
+
+    window.importAudioSnippetsAsync(path, {0, 1});
+
+    QVERIFY(window.isImportRunning());
+    QVERIFY(!cancelButton->isHidden());
+
+    // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
+    // own comment on why this waits for the cancel button itself, not just
+    // isImportRunning().
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+}
+
+void MainWindowTest::importAudioSnippetsAsyncCompletesSuccessfullyAndAddsTheLayers() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-async-success.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 2);  // 2 whole snippets.
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-async-success.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("importCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    window.importAudioSnippetsAsync(path, {0, 1});
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
+    QVERIFY(window.statusBar()->currentMessage().contains(QStringLiteral("Imported")));
+
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+}
+
+void MainWindowTest::cancelImportDiscardsTheEncodedLayersWithoutAddingThem() {
+    // Several whole snippets - see cancelVideoExportStopsItAndDeletesThePartialFile()'s
+    // own comment on why this many real checkpoints (one per snippet - see
+    // encodeAudioSnippets()'s own docs) makes an immediate-after-start
+    // cancel() reliably land mid-encode.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-cancel.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 10);  // 10 whole snippets.
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-cancel.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("importCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    std::vector<std::size_t> allIndices;
+    for (std::size_t i = 0; i < 10; ++i) {
+        allIndices.push_back(i);
+    }
+    window.importAudioSnippetsAsync(path, allIndices);
+    QVERIFY(window.isImportRunning());
+
+    window.cancelImport();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+
+    // The whole point of finding #12's own "rolls back" requirement:
+    // nothing partially encoded ever reached the project.
+    QCOMPARE(window.project()->layers().size(), layerCountBefore);
+    QCOMPARE(window.statusBar()->currentMessage(), QStringLiteral("Audio import cancelled."));
+
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+}
+
+void MainWindowTest::importAudioSnippetsAsyncDoesNothingWhileAlreadyRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-already-running.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 10);  // stays running for this whole test.
+
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "sound-mind-test-import-already-running.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("importCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    std::vector<std::size_t> allIndices;
+    for (std::size_t i = 0; i < 10; ++i) {
+        allIndices.push_back(i);
+    }
+    window.importAudioSnippetsAsync(path, allIndices);
+    QVERIFY(window.isImportRunning());
+
+    // A second call while the first is still running must not destroy (and
+    // therefore block on joining) the still-running task.
+    window.importAudioSnippetsAsync(path, {0});
+    QVERIFY(window.isImportRunning());
+
+    window.cancelImport();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+    QCOMPARE(window.project()->layers().size(), layerCountBefore);
+
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+}
+
+void MainWindowTest::closeRefusesWhileAnImportIsRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-refuse-close.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 10);
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-refuse-close.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("importCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    std::vector<std::size_t> allIndices;
+    for (std::size_t i = 0; i < 10; ++i) {
+        allIndices.push_back(i);
+    }
+    window.importAudioSnippetsAsync(path, allIndices);
+    QVERIFY(window.isImportRunning());
+
+    // Refused outright (no dialog reached - see closeEvent()'s docs).
+    QVERIFY(!window.close());
+    QVERIFY(window.isImportRunning());
+
+    window.cancelImport();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+}
+
+void MainWindowTest::newProjectRefusesWhileAnImportIsRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-refuse-new.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 10);
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-refuse-new.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("importCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    std::vector<std::size_t> allIndices;
+    for (std::size_t i = 0; i < 10; ++i) {
+        allIndices.push_back(i);
+    }
+    window.importAudioSnippetsAsync(path, allIndices);
+    QVERIFY(window.isImportRunning());
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    // The real, interactive newProject() - safe to call directly, since
+    // the import check runs before the wizard would ever be shown.
+    window.newProject();
+
+    QVERIFY(window.isImportRunning());
+    QCOMPARE(window.project()->layers().size(), layerCountBefore);
+
+    window.cancelImport();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+}
+
+void MainWindowTest::openProjectRefusesWhileAnImportIsRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-refuse-open.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 10);
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-refuse-open.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("importCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    std::vector<std::size_t> allIndices;
+    for (std::size_t i = 0; i < 10; ++i) {
+        allIndices.push_back(i);
+    }
+    window.importAudioSnippetsAsync(path, allIndices);
+    QVERIFY(window.isImportRunning());
+
+    // Refused before ever reaching the file dialog.
+    window.openProject();
+    QVERIFY(window.isImportRunning());
+
+    window.cancelImport();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+}
+
+void MainWindowTest::openProjectAtRefusesWhileAnImportIsRunning() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-import-refuse-openat.wav";
+    constexpr std::size_t loopLengthSamples = 3528;
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 10);
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-import-refuse-openat.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("importCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    std::vector<std::size_t> allIndices;
+    for (std::size_t i = 0; i < 10; ++i) {
+        allIndices.push_back(i);
+    }
+    window.importAudioSnippetsAsync(path, allIndices);
+    QVERIFY(window.isImportRunning());
+
+    QString errorMessage;
+    const bool ok = window.openProjectAt(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.smproj",
+                                          &errorMessage);
+
+    QVERIFY(!ok);
+    QVERIFY(!errorMessage.isEmpty());
+    QVERIFY(window.isImportRunning());
+
+    window.cancelImport();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+}
+
 namespace {
 
 /// @brief Writes a 30x20 PNG to `path` - the fixed source size every Image

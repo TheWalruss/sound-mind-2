@@ -179,6 +179,13 @@ consecutive Duration-length snippets and you're shown a list to
 check/uncheck - only the checked snippets become layers, named
 `<filename>_0000`, `<filename>_0001`, and so on.
 
+Importing runs in the background - you can keep working while it encodes,
+and a small **✕** button appears in the status bar to cancel it if you
+change your mind; cancelling adds nothing to the project at all, as if it
+had never been started. New/Open Project and closing the Studio are all
+disabled while an import is running, so it always finishes (or gets
+cancelled) against the same project it started with.
+
 ### Importing Images
 
 **File → Import Image...** lets you select one or more image files

@@ -148,6 +148,43 @@ void ImportExportTest::importAudioSnippetsIntoReturnsZeroWhenNothingWasImported(
     QVERIFY(!errorMessage.isEmpty());
 }
 
+void ImportExportTest::encodeAudioSnippetsReturnsUnattachedLayersForTheRequestedSubset() {
+    // Real-world testing pass, 2026-09-20, finding #12 ("a real,
+    // non-blocking cancel affordance for long operations"), Installment F -
+    // encodeAudioSnippets() is importAudioSnippetsInto()'s own encode-only
+    // half, split out so it can run somewhere that isn't safe to mutate a
+    // live Project from directly (a background thread).
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-encode-subset.wav";
+    writeTestWavFileWithFrameCount(path, 3528 * 4);  // 4 whole snippets: 0, 1, 2, 3.
+
+    const auto layers = sound_mind::studio::encodeAudioSnippets(smallCanvasProjectSettings(), path, {0, 2});
+    std::filesystem::remove(path);
+
+    QCOMPARE(layers.size(), static_cast<std::size_t>(2));
+    for (const auto& layer : layers) {
+        QVERIFY(layer.content().has_value());
+    }
+}
+
+void ImportExportTest::encodeAudioSnippetsThrowsImportCancelledOnceShouldCancelStartsReturningTrue() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-encode-cancel.wav";
+    writeTestWavFileWithFrameCount(path, 3528 * 5);  // 5 whole snippets - enough checks to cancel mid-way.
+
+    int callCount = 0;
+    const auto shouldCancel = [&callCount]() {
+        ++callCount;
+        return callCount >= 3;
+    };
+
+    QVERIFY_EXCEPTION_THROWN(
+        (void)sound_mind::studio::encodeAudioSnippets(smallCanvasProjectSettings(), path, {0, 1, 2, 3, 4},
+                                                       shouldCancel),
+        sound_mind::studio::ImportCancelled);
+    QCOMPARE(callCount, 3);
+
+    std::filesystem::remove(path);
+}
+
 void ImportExportTest::importImageFileIntoAddsANewLayer() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-image-add.png";
     writeImageScalingTestImage(path);

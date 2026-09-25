@@ -67,32 +67,37 @@ std::vector<AudioSnippetPickerDialog::RowData> audioSnippetsForFile(const sound_
     }
 }
 
-int importAudioSnippetsInto(sound_mind::core::Project& project, const std::filesystem::path& path,
-                             const std::vector<std::size_t>& snippetIndices, QString* errorMessage) {
+std::vector<sound_mind::core::Layer> encodeAudioSnippets(const sound_mind::core::ProjectSettings& settings,
+                                                           const std::filesystem::path& path,
+                                                           const std::vector<std::size_t>& snippetIndices,
+                                                           const std::function<bool()>& shouldCancel,
+                                                           QString* errorMessage) {
     try {
         const auto audio = sound_mind::codec::readAudioFile(path);
-        const auto config = sound_mind::core::streamCodecConfigFor(project.settings());
+        const auto config = sound_mind::core::streamCodecConfigFor(settings);
         const auto loopLengthSamples =
-            static_cast<std::size_t>(project.settings().canvasWidth) * static_cast<std::size_t>(config.hopLength);
+            static_cast<std::size_t>(settings.canvasWidth) * static_cast<std::size_t>(config.hopLength);
         const std::size_t totalSamples = audio.frameCount();
         const std::size_t snippetCount =
             loopLengthSamples > 0
                 ? std::max<std::size_t>((totalSamples + loopLengthSamples - 1) / loopLengthSamples, std::size_t{1})
                 : 1;
 
-        // Sorted, de-duplicated so layers land in the project in ascending
-        // snippet order regardless of the order the caller listed indices
-        // in - a snippet picker's checked order needn't match position
-        // order.
+        // Sorted, de-duplicated so layers land in ascending snippet order
+        // regardless of the order the caller listed indices in - a snippet
+        // picker's checked order needn't match position order.
         std::vector<std::size_t> sortedIndices = snippetIndices;
         std::sort(sortedIndices.begin(), sortedIndices.end());
         sortedIndices.erase(std::unique(sortedIndices.begin(), sortedIndices.end()), sortedIndices.end());
 
         const std::string stem = path.stem().string();
-        int importedCount = 0;
+        std::vector<sound_mind::core::Layer> layers;
         for (const std::size_t index : sortedIndices) {
             if (index >= snippetCount) {
                 continue;  // silently skipped - see this function's own docs.
+            }
+            if (shouldCancel && shouldCancel()) {
+                throw ImportCancelled{};
             }
             const std::size_t start = loopLengthSamples > 0 ? index * loopLengthSamples : 0;
             const std::size_t end =
@@ -114,20 +119,30 @@ int importAudioSnippetsInto(sound_mind::core::Project& project, const std::files
 
             sound_mind::core::Layer layer(0, layerName, sound_mind::core::LayerType::Normal);
             layer.setContent(content);
-            project.addLayer(std::move(layer));
-            ++importedCount;
+            layers.push_back(std::move(layer));
         }
 
-        if (importedCount == 0 && errorMessage != nullptr) {
+        if (layers.empty() && errorMessage != nullptr) {
             *errorMessage = tr("No snippets were imported.");
         }
-        return importedCount;
+        return layers;
+    } catch (const ImportCancelled&) {
+        throw;
     } catch (const std::exception& e) {
         if (errorMessage != nullptr) {
             *errorMessage = QString::fromStdString(e.what());
         }
-        return 0;
+        return {};
     }
+}
+
+int importAudioSnippetsInto(sound_mind::core::Project& project, const std::filesystem::path& path,
+                             const std::vector<std::size_t>& snippetIndices, QString* errorMessage) {
+    auto layers = encodeAudioSnippets(project.settings(), path, snippetIndices, nullptr, errorMessage);
+    for (auto& layer : layers) {
+        project.addLayer(std::move(layer));
+    }
+    return static_cast<int>(layers.size());
 }
 
 bool importImageFileInto(sound_mind::core::Project& project, const std::filesystem::path& path,

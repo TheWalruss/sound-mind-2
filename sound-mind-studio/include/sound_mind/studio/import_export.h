@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
+#include <stdexcept>
 #include <vector>
 
 #include <QImage>
@@ -8,10 +10,32 @@
 
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/project.h"
+#include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 
 namespace sound_mind::studio {
+
+/**
+ * @brief Thrown by encodeAudioSnippets() when its own `shouldCancel`
+ *        callback starts returning `true` mid-encode -
+ *        `docs/sound-mind-roadmap.md`'s "real, non-blocking cancel
+ *        affordance for long operations" milestone (finding #12,
+ *        Installment F).
+ *
+ * A distinct type, not a plain `std::runtime_error`, specifically so a
+ * caller can tell "cancelled on request" apart from a genuine encode
+ * failure. The Studio-level counterpart to
+ * `sound_mind::codec::ExportCancelled` - a separate type, not the same one
+ * reused, since this is a Studio-level (import orchestration), not
+ * Codec-level, concern; `sound-mind-studio` already depends on
+ * `sound-mind-codec`, but sharing that exception type here would mean an
+ * "export" name on an import-side failure, which reads backwards.
+ */
+class ImportCancelled : public std::runtime_error {
+public:
+    ImportCancelled() : std::runtime_error("import cancelled") {}
+};
 
 /**
  * @brief The Import/Export operations extracted out of `MainWindow` as
@@ -53,6 +77,52 @@ namespace sound_mind::studio {
     const sound_mind::core::Project& project, const std::filesystem::path& path, QString* errorMessage = nullptr);
 
 /**
+ * @brief Encodes specific snippets (see audioSnippetsForFile()) of an audio
+ *        file into new, as-yet-unattached layers - importAudioSnippetsInto()'s
+ *        own encode-only half, split out so the actual (potentially slow)
+ *        encode work can run somewhere that isn't safe to mutate a live
+ *        `Project` from directly, such as a background thread -
+ *        `docs/sound-mind-roadmap.md`'s "real, non-blocking cancel
+ *        affordance for long operations" milestone (finding #12,
+ *        Installment F).
+ *
+ * Takes `settings` (a plain value, not a live `Project&`) rather than a
+ * `Project` reference for exactly this reason: nothing here touches
+ * anything shared or mutable, so a caller running this on a background
+ * thread never needs to synchronize against the UI thread's own concurrent
+ * project edits. Naming/content shape matches importAudioSnippetsInto()'s
+ * own docs exactly - the two functions produce identical layers, this one
+ * just doesn't add them to a project itself.
+ *
+ * @param settings The project settings (canvas width, codec config) to
+ *        split/encode against - see audioSnippetsForFile()'s own docs for
+ *        the same split math.
+ * @param path Path to the WAV file to encode from.
+ * @param snippetIndices Which of the source's snippets to encode, in any
+ *        order and with any duplicates ignored; an index at or beyond the
+ *        source's actual snippet count is silently skipped, not an error.
+ * @param shouldCancel Consulted once per snippet, right before that
+ *        snippet's own encode begins. Once it returns `true`, throws
+ *        `ImportCancelled` immediately rather than encoding any further
+ *        snippets - whatever's already been encoded into the return value
+ *        so far is simply discarded along with the exception, never having
+ *        touched any project. `nullptr` (the default) never cancels.
+ * @param errorMessage If non-null and this returns empty, set to a
+ *        human-readable description of what went wrong.
+ * @return The encoded layers, in ascending snippet order - `id() == 0` on
+ *         each (unattached; `Project::addLayer()` assigns a real one);
+ *         empty if the file couldn't be read, or nothing was actually
+ *         encoded (an empty `snippetIndices`, or every given index out of
+ *         range).
+ * @throws ImportCancelled if `shouldCancel` returns `true` - see its own
+ *         docs.
+ */
+[[nodiscard]] std::vector<sound_mind::core::Layer> encodeAudioSnippets(
+    const sound_mind::core::ProjectSettings& settings, const std::filesystem::path& path,
+    const std::vector<std::size_t>& snippetIndices, const std::function<bool()>& shouldCancel = nullptr,
+    QString* errorMessage = nullptr);
+
+/**
  * @brief Imports specific snippets (see audioSnippetsForFile()) of an
  *        audio file as new layers into `project`.
  *
@@ -61,6 +131,12 @@ namespace sound_mind::studio {
  * (the source file's stem, an underscore, and its snippet index
  * zero-padded to four digits); with only one, the layer is named from the
  * file's own name directly.
+ *
+ * A thin wrapper around encodeAudioSnippets() (with no `shouldCancel`,
+ * so it never throws `ImportCancelled`) plus `project.addLayer()` for each
+ * result - kept as its own synchronous, non-cancellable entry point for
+ * every existing caller (tests, `MainWindow`'s own drag-and-drop path)
+ * that doesn't need cancellation.
  *
  * @param project The project to import into.
  * @param path Path to the WAV file to import from.

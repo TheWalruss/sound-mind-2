@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.18] - 2026-09-25
+
+Real-world testing pass finding #12, Installment F: **Import Audio is now a real, cancellable background operation, with true rollback.**
+
+### Changed
+
+- **Import Audio no longer blocks the app while it encodes.** It now runs on a background thread, with its own status-bar cancel button; cancelling adds nothing to the project at all - the encoded-so-far content is simply discarded, never having been added in the first place.
+- **New/Open Project and closing the Studio are now disabled while an import is running**, matching the existing Loop Mode/Recording behavior, so an import always finishes against the same project it started with.
+
+Full regression: `sound-mind-studio` 195/195 `MainWindowTest` (up from 187), `ImportExportTest` 17/17 (2 new). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #139.
+
 ## [0.0.45.17] - 2026-09-25
 
 Real-world testing pass finding #12, Installment E: **Export Audio is now a real, cancellable background operation too.**

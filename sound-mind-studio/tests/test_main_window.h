@@ -114,6 +114,14 @@ private slots:
     void importAudioSnippetsImportsOnlyTheRequestedSubset();
     void importAudioSnippetsSkipsOutOfRangeIndicesGracefully();
     void importAudioSnippetsFailsWhenNothingWasImported();
+    void importAudioSnippetsAsyncRunsInTheBackgroundAndShowsTheCancelButton();
+    void importAudioSnippetsAsyncCompletesSuccessfullyAndAddsTheLayers();
+    void cancelImportDiscardsTheEncodedLayersWithoutAddingThem();
+    void importAudioSnippetsAsyncDoesNothingWhileAlreadyRunning();
+    void closeRefusesWhileAnImportIsRunning();
+    void newProjectRefusesWhileAnImportIsRunning();
+    void openProjectRefusesWhileAnImportIsRunning();
+    void openProjectAtRefusesWhileAnImportIsRunning();
 
     // Image Import Scaling (v0.Y.20.1)
     void importImageFileRescaleToFitProjectStretchesBothAxes();

@@ -11,6 +11,8 @@ private slots:
     void audioSnippetsForFileFailsGracefullyForAnUnreadableFile();
     void importAudioSnippetsIntoImportsOnlyTheRequestedSubset();
     void importAudioSnippetsIntoReturnsZeroWhenNothingWasImported();
+    void encodeAudioSnippetsReturnsUnattachedLayersForTheRequestedSubset();
+    void encodeAudioSnippetsThrowsImportCancelledOnceShouldCancelStartsReturningTrue();
     void importImageFileIntoAddsANewLayer();
     void importImageFileIntoFailsForAnUnreadableFile();
     void importImageFilesIntoImportsEachFileIndependentlyWhenNotSequential();

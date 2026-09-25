@@ -319,6 +319,24 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     exportProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
     connect(exportProgressTimer_, &QTimer::timeout, this, &MainWindow::pollExportProgress);
 
+    // Finding #12, Installment F - see importAudioSnippetsAsync()'s own
+    // docs. A separate slot from export's own, not shared - unlike
+    // Video/Audio export (both reading the same topmost layer, never
+    // meaningfully run together), importing new content and exporting
+    // existing content are independent operations with no reason to block
+    // each other.
+    importCancelButton_ = new QPushButton(tr("✕"));  // "✕".
+    importCancelButton_->setObjectName(QStringLiteral("importCancelButton"));
+    importCancelButton_->setToolTip(tr("Cancel"));
+    importCancelButton_->setFixedWidth(24);
+    importCancelButton_->hide();
+    connect(importCancelButton_, &QPushButton::clicked, this, &MainWindow::cancelImport);
+    statusBar()->addPermanentWidget(importCancelButton_);
+
+    importProgressTimer_ = new QTimer(this);
+    importProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
+    connect(importProgressTimer_, &QTimer::timeout, this, &MainWindow::pollImportProgress);
+
     // Selection & Fill (v0.Y.25.1), Selection Type (v0.Y.35.1 Installment
     // A) - toolPaletteController_ isn't constructed until just below, but
     // this lambda only ever runs later, on a real dropdown change - safe
@@ -958,6 +976,11 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         event->ignore();
         return;
     }
+    if (isImportRunning()) {
+        statusBar()->showMessage(tr("Wait for the import to finish, or cancel it, before closing."), 5000);
+        event->ignore();
+        return;
+    }
     if (!confirmDiscardUnsavedChanges()) {
         event->ignore();
         return;
@@ -1226,6 +1249,11 @@ void MainWindow::newProject() {
         statusBar()->showMessage(tr("Stop Loop Mode or Recording before starting a new project."), 5000);
         return;
     }
+    if (isImportRunning()) {
+        statusBar()->showMessage(tr("Wait for the import to finish, or cancel it, before starting a new project."),
+                                  5000);
+        return;
+    }
     if (!confirmDiscardUnsavedChanges()) {
         return;
     }
@@ -1266,6 +1294,10 @@ void MainWindow::openProject() {
         statusBar()->showMessage(tr("Stop Loop Mode or Recording before opening a project."), 5000);
         return;
     }
+    if (isImportRunning()) {
+        statusBar()->showMessage(tr("Wait for the import to finish, or cancel it, before opening a project."), 5000);
+        return;
+    }
     if (!confirmDiscardUnsavedChanges()) {
         return;
     }
@@ -1286,6 +1318,12 @@ bool MainWindow::openProjectAt(const std::filesystem::path& path, QString* error
     if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("Stop Loop Mode or Recording before opening a project.");
+        }
+        return false;
+    }
+    if (isImportRunning()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("Wait for the import to finish, or cancel it, before opening a project.");
         }
         return false;
     }
@@ -1372,10 +1410,7 @@ void MainWindow::importAudio() {
         }
     }
 
-    QString errorMessage;
-    if (!importAudioSnippets(path, indices, &errorMessage)) {
-        QMessageBox::critical(this, tr("Import Audio Failed"), errorMessage);
-    }
+    importAudioSnippetsAsync(path, indices);
 }
 
 void MainWindow::importImage() {
@@ -1458,6 +1493,101 @@ bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const st
         tr("Imported %1 layer(s) from \"%2\".").arg(importedCount).arg(QString::fromStdString(path.filename().string())),
         5000);
     return true;
+}
+
+void MainWindow::importAudioSnippetsAsync(const std::filesystem::path& path,
+                                           const std::vector<std::size_t>& snippetIndices) {
+    if (!project_) {
+        statusBar()->showMessage(tr("No project is open."), 5000);
+        return;
+    }
+    if (isImportRunning()) {
+        statusBar()->showMessage(tr("Already importing - wait for it to finish, or cancel it, first."), 5000);
+        return;
+    }
+
+    importPath_ = path;
+    importOutcome_ = ImportOutcome::Success;
+    importErrorMessage_.clear();
+    importedLayers_.clear();
+
+    // settings copied by value - encodeAudioSnippets() never touches
+    // project_ itself, so the background thread has nothing shared to
+    // synchronize against - see this method's own docs.
+    const auto settings = project_->settings();
+    importTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, path, snippetIndices, settings](sound_mind::core::CancellationToken& token) {
+            QString encodeError;
+            try {
+                importedLayers_ = sound_mind::studio::encodeAudioSnippets(
+                    settings, path, snippetIndices, [&token]() { return token.cancellationRequested(); },
+                    &encodeError);
+                if (importedLayers_.empty()) {
+                    importOutcome_ = ImportOutcome::Failed;
+                    importErrorMessage_ = encodeError;
+                }
+            } catch (const sound_mind::studio::ImportCancelled&) {
+                importOutcome_ = ImportOutcome::Cancelled;
+            } catch (const std::exception& e) {
+                importOutcome_ = ImportOutcome::Failed;
+                importErrorMessage_ = QString::fromStdString(e.what());
+            }
+        });
+    importTask_->start();
+
+    statusBar()->showMessage(tr("Importing audio..."));
+    importCancelButton_->show();
+    importProgressTimer_->start();
+}
+
+bool MainWindow::isImportRunning() const noexcept { return importTask_ != nullptr && importTask_->isRunning(); }
+
+void MainWindow::cancelImport() {
+    if (importTask_) {
+        importTask_->requestCancel();
+    }
+}
+
+void MainWindow::pollImportProgress() {
+    if (importTask_->isRunning()) {
+        return;
+    }
+    importProgressTimer_->stop();
+    importCancelButton_->hide();
+
+    switch (importOutcome_) {
+        case ImportOutcome::Success: {
+            const auto importedCount = static_cast<int>(importedLayers_.size());
+            for (auto& layer : importedLayers_) {
+                project_->addLayer(std::move(layer));
+            }
+            importedLayers_.clear();
+            canvas_->update();
+            playbackController_->invalidate();
+            hasUnsavedChanges_ = true;
+            layerController_->refreshLayersPanel();
+            statusBar()->showMessage(tr("Imported %1 layer(s) from \"%2\".")
+                                          .arg(importedCount)
+                                          .arg(QString::fromStdString(importPath_.filename().string())),
+                                      5000);
+            break;
+        }
+        case ImportOutcome::Cancelled:
+            // Nothing to roll back beyond discarding these - the encoded
+            // layers were never added to project_ in the first place,
+            // unlike Export's own "delete the partial file" rollback (see
+            // Decision #136) - matching finding #12's confirmed "cancel
+            // rolls back partial work" semantics with the simplest
+            // rollback an import can have: not committing anything at all.
+            importedLayers_.clear();
+            statusBar()->showMessage(tr("Audio import cancelled."), 5000);
+            break;
+        case ImportOutcome::Failed:
+            statusBar()->clearMessage();
+            QMessageBox::critical(this, tr("Import Audio Failed"), importErrorMessage_);
+            break;
+    }
+    importTask_.reset();
 }
 
 bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePickerDialog::Mode mode,

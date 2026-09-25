@@ -14,6 +14,7 @@
 #include "sound_mind/codec/audio_export.h"
 #include "sound_mind/core/background_task.h"
 #include "sound_mind/core/device_test_tone_player.h"
+#include "sound_mind/core/layer.h"
 #include "sound_mind/core/loop_engine.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/record_engine.h"
@@ -1526,11 +1527,14 @@ public:
 
     /**
      * @brief Imports specific snippets (see audioSnippetsForFile()) of an
-     *        audio file as new layers, without prompting or showing an
-     *        error dialog on failure - the actual work behind both
-     *        importAudioFile() (which requests every snippet) and
-     *        importAudio()'s snippet picker (which requests only the
-     *        checked subset).
+     *        audio file as new layers, synchronously and without prompting
+     *        or showing an error dialog on failure - the actual work
+     *        behind importAudioFile() (which requests every snippet), kept
+     *        as the direct, blocking, headless-testable entry point even
+     *        though importAudio()'s own snippet-picker interactive slot no
+     *        longer calls this directly - see importAudioSnippetsAsync()'s
+     *        own docs (finding #12, Installment F) for what actually backs
+     *        it now.
      *
      * Each imported snippet becomes its own new Normal layer. With more
      * than one snippet in the source overall, a layer's name is
@@ -1556,6 +1560,63 @@ public:
      */
     bool importAudioSnippets(const std::filesystem::path& path, const std::vector<std::size_t>& snippetIndices,
                               QString* errorMessage = nullptr);
+
+    /**
+     * @brief Starts an asynchronous import of specific snippets (see
+     *        audioSnippetsForFile()) of an audio file - the real work
+     *        behind importAudio()'s own snippet-picker interactive flow,
+     *        split out so tests can drive it directly - real-world testing
+     *        pass finding #12 ("a real, non-blocking cancel affordance for
+     *        long operations"), Installment F, the first installment
+     *        actually needing rollback.
+     *
+     * Encodes on a `sound_mind::core::BackgroundTask` via
+     * `sound_mind::studio::encodeAudioSnippets()` - the encode-only half of
+     * `importAudioSnippetsInto()`, which touches no shared/mutable project
+     * state at all (it takes a plain `ProjectSettings` value, not a live
+     * `Project&`), so the background thread never needs to synchronize
+     * against `project_`. The encoded layers are only ever added to
+     * `project_` afterward, on the UI thread, once the background encode
+     * has actually finished successfully - see pollImportProgress()'s own
+     * docs. Cancelling therefore rolls back cleanly by construction: the
+     * encoded-so-far layers are simply discarded, having never touched
+     * `project_` in the first place - simpler than Export's own "delete
+     * the partial file" rollback (Decision #136), since nothing persistent
+     * or shared was ever written to begin with.
+     *
+     * A no-op (just a status bar message, no dialog) if no project is open,
+     * or if isImportRunning() is already `true` - a second call would
+     * otherwise destroy the still-running `importTask_`, whose destructor
+     * blocks until its thread joins, silently freezing the UI. Also why
+     * newProject()/openProject()/openProjectAt()/closeEvent() all refuse
+     * outright while isImportRunning(): switching or closing the project
+     * out from under a background import that will later call
+     * `project_->addLayer()` on whatever `project_` turns out to be by
+     * then would silently misattribute those layers to the wrong project.
+     *
+     * A separate slot from exportTask_/exportProgressTimer_/
+     * exportCancelButton_, not shared with them - unlike Video/Audio
+     * export (which read the same topmost layer and are never meaningfully
+     * run together), importing new content and exporting existing content
+     * are independent operations with no reason to block each other.
+     *
+     * @param path Path to the audio file to import from.
+     * @param snippetIndices Which of the source's snippets to import - see
+     *        importAudioSnippets()'s own docs.
+     */
+    void importAudioSnippetsAsync(const std::filesystem::path& path, const std::vector<std::size_t>& snippetIndices);
+
+    /// @brief Whether an importAudioSnippetsAsync() import is still
+    /// running.
+    /// @return `true` from importAudioSnippetsAsync() (once it actually
+    ///         started a background task) until the background encode
+    ///         finishes, one way or another.
+    [[nodiscard]] bool isImportRunning() const noexcept;
+
+    /// @brief Requests cancellation of the currently running import - the
+    /// actual work behind the status bar's own cancel button. A no-op if
+    /// isImportRunning() is `false`.
+    void cancelImport();
 
     /**
      * @brief Imports an image file as a new layer, resized per `mode`,
@@ -2080,6 +2141,18 @@ private:
     /// to cover audio too in Installment E.
     void pollExportProgress();
 
+    /// @brief importProgressTimer_'s slot: a no-op while isImportRunning()
+    /// (still polling); once the background encode finishes, stops the
+    /// timer, hides importCancelButton_, and reports the outcome per
+    /// importOutcome_ - success (moves importedLayers_ into project_ one by
+    /// one, then the usual canvas/playback-invalidate/refresh-panel/status-
+    /// message sequence importAudioSnippets() already does), cancelled
+    /// (discards importedLayers_ without ever touching project_ - see
+    /// importAudioSnippetsAsync()'s own docs on why that's the whole
+    /// rollback needed), or failed (`QMessageBox::critical()`). See
+    /// importAudioSnippetsAsync()'s own docs. Finding #12 Installment F.
+    void pollImportProgress();
+
     /**
      * @brief Repeat Playback's/one-shot preview's shared edit hook -
      *        connected to `toolPaletteController_::contentChanged()`
@@ -2510,6 +2583,35 @@ private:
     enum class ExportOutcome { Success, Cancelled, Failed };
     ExportOutcome exportOutcome_ = ExportOutcome::Success;
     QString exportErrorMessage_;
+
+    /// @brief The currently running audio import, if any - see
+    /// importAudioSnippetsAsync()'s own docs. A separate slot from
+    /// exportTask_ - see its own docs on why the two aren't shared.
+    /// Finding #12 Installment F.
+    std::unique_ptr<sound_mind::core::BackgroundTask> importTask_;
+    QTimer* importProgressTimer_ = nullptr;
+    QPushButton* importCancelButton_ = nullptr;
+
+    /// @brief Where the currently (or most recently) running import is
+    /// reading from - purely for pollImportProgress()'s own status bar
+    /// message (naming the source file), unlike exportPath_ there's
+    /// nothing to delete here on cancellation.
+    std::filesystem::path importPath_;
+
+    /// @brief importTask_'s own work function's result on success - the
+    /// encoded-but-not-yet-added layers, moved into project_ one by one by
+    /// pollImportProgress() only once the whole encode succeeded, or
+    /// discarded untouched if it was cancelled. Written just before the
+    /// work function returns and read only after observing
+    /// isImportRunning() == false - safe without its own synchronization
+    /// for the same release/acquire reason exportOutcome_ is (see
+    /// BackgroundTask::isRunning()'s own docs). Cleared at the start of
+    /// every new importAudioSnippetsAsync() call.
+    std::vector<sound_mind::core::Layer> importedLayers_;
+
+    enum class ImportOutcome { Success, Cancelled, Failed };
+    ImportOutcome importOutcome_ = ImportOutcome::Success;
+    QString importErrorMessage_;
 };
 
 }  // namespace sound_mind::studio
