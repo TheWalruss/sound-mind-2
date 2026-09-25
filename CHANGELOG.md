@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.10] - 2026-09-25
+
+Real-world testing pass finding #9: **Delta/Review's own auto-preview no longer requires Repeat.**
+
+### Fixed
+
+- **Painting under Delta or Review scope now triggers a fresh, one-shot playback of the edit automatically**, even with Repeat unchecked and even if nothing was already playing - matching `docs/sound-mind-design.md`'s own description, where Scope alone (not the Repeat checkbox) was always meant to drive this. Previously the entire behavior silently required Repeat to be checked first.
+- **With Repeat unchecked, that one-shot preview now halts at the edited range's own end** instead of continuing to play straight through the rest of the track.
+
+Full regression: no new failures (178/178 `MainWindowTest`, up from 175). Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #131.
+
 ## [0.0.45.9] - 2026-09-25
 
 Real-world testing pass finding #8: **Review scope's own end-of-track loop-back point.**

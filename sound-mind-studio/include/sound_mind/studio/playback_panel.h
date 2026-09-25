@@ -19,12 +19,16 @@ namespace sound_mind::studio {
  *        "Repeat Playback", `v0.0.42.2` (Workflow & Device Polish,
  *        Installment B).
  *
- * Only meaningful while `PlaybackPanel`'s own Repeat checkbox is checked -
- * see its own docs on why the whole "live re-render + scope-aware
- * restart" behavior is gated by that one control, matching the design
- * doc's own "[the Repeat checkbox] loops the output sound... and updates
- * the output sound when the canvas is modified" framing as a single,
- * checkbox-gated feature.
+ * `Track` only reacts to an edit while `PlaybackPanel`'s own Repeat
+ * checkbox is checked *and* playback is already active - it has no
+ * narrower "the edit" region to preview on its own. `Delta`/`Review`
+ * instead jump-on-edit unconditionally, independent of Repeat and of
+ * whether anything was already playing (`v0.0.45.10` - previously this
+ * whole enum was, incorrectly, only meaningful with Repeat checked; see
+ * `docs/sound-mind-architecture.md`'s Decision #131). Repeat still decides
+ * one thing for every scope: whether the active range loops back
+ * (checked) or halts (unchecked) once its own end is reached - see
+ * `MainWindow::checkRepeatPlaybackRange()`'s own docs.
  */
 enum class PlaybackScope {
     /// @brief Plays the whole track, start to end (today's only

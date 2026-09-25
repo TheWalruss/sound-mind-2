@@ -416,12 +416,17 @@ public slots:
      *        behind the Playback panel's own Repeat checkbox (`v0.0.42.2`,
      *        Workflow & Device Polish, Installment B).
      *
-     * Gates the *entire* "re-render on every canvas edit, jump per the
-     * current Scope, loop or halt at the active range's own end" behavior
-     * - see `PlaybackScope`'s own docs on why. Turning it off immediately
-     * widens the active range back to the whole track (`[0,
-     * totalSeconds()]`), so nothing about a stale Delta/Review range
-     * lingers once Repeat is unchecked.
+     * Does *not* gate whether an edit re-renders and jumps under Delta/
+     * Review scope - see `handleContentChangedForPlayback()`'s own docs on
+     * why that's Scope's job alone, not this flag's. What this *does* gate
+     * is only what happens once the active range's own end is reached:
+     * loops back to its own start (`checkRepeatPlaybackRange()`) while
+     * `true`, halts there while `false` - and, for `Track` scope
+     * specifically, whether an edit re-renders in place at all (`Track` has
+     * no narrower region to preview on its own, so with Repeat off it does
+     * nothing). Turning Repeat off immediately widens the active range
+     * back to the whole track (`[0, totalSeconds()]`), so nothing about a
+     * stale Delta/Review range lingers once it's unchecked.
      *
      * @param enabled The new state.
      */
@@ -1962,11 +1967,13 @@ private:
     void pollTestInputLevel();
 
     /**
-     * @brief Repeat Playback's own edit hook - connected to
-     *        `toolPaletteController_::contentChanged()` (which already
-     *        merges every content-changing action: Paint/Pick/Fill/Paste/
-     *        Warp/a stamped sequence, undo, and redo). A no-op unless
-     *        `repeatEnabled_` and playback is currently active.
+     * @brief Repeat Playback's/one-shot preview's shared edit hook -
+     *        connected to `toolPaletteController_::contentChanged()`
+     *        (which already merges every content-changing action:
+     *        Paint/Pick/Fill/Paste/Warp/a stamped sequence, undo, and
+     *        redo). A no-op with no `project_` open; otherwise gated by
+     *        `repeatEnabled_` and `playbackScope_` together - see the two
+     *        cases below.
      *
      * Re-renders the project's own current composite and reloads it
      * (`PlaybackController::load()` stops playback first, per its own
@@ -1976,37 +1983,51 @@ private:
      * `playbackScope_`:
      * - `Track`: keeps the pre-edit position
      *   (`currentPlaybackPositionSeconds_`) - the edit is heard "in
-     *   place", playback never jumps.
+     *   place", playback never jumps. Only reacts while `repeatEnabled_`
+     *   *and* playback is already active - Track has no narrower "the
+     *   edit" region to preview on its own.
      * - `Delta`/`Review`: jumps to `layer`'s own most recently active
      *   operation's own `bounds().startTimeSeconds` - a practical
      *   approximation of "what just changed" that works uniformly for a
      *   fresh paint stroke *and* an undo/redo (neither of which has a
      *   freshly-appended operation of its own to read `bounds()` from) -
-     *   see this method's own definition for the exact reasoning.
+     *   see this method's own definition for the exact reasoning. Reacts
+     *   to *every* edit regardless of `repeatEnabled_` or whether playback
+     *   was already active - per `docs/sound-mind-design.md`'s "Repeat
+     *   Playback" section, this jump-on-edit behavior is driven by Scope
+     *   alone; Repeat only decides what happens once the edited range's
+     *   own end is reached (see `checkRepeatPlaybackRange()`'s own docs).
+     *   With Repeat off and nothing already playing, this is what starts
+     *   a fresh, automatic one-shot preview of the just-made edit.
      *
      * @param layer Which layer changed.
      */
-    void handleContentChangedForRepeat(sound_mind::core::LayerId layer);
+    void handleContentChangedForPlayback(sound_mind::core::LayerId layer);
 
     /**
-     * @brief Repeat Playback's own range-end check - called from the
-     *        existing `PlaybackController::positionChanged()` poll
-     *        (already running at ~30fps while playing). A no-op unless
-     *        `repeatEnabled_`.
+     * @brief Repeat Playback's/one-shot preview's shared range-end check -
+     *        called from the existing `PlaybackController::positionChanged()`
+     *        poll (already running at ~30fps while playing).
      *
-     * Once `positionSeconds` reaches `repeatRangeEndSeconds_`, seeks back
-     * to `repeatLoopBackSeconds_` and resumes - the "loops... when it
-     * reaches the end" half of Repeat Playback, uniformly covering
-     * `Track`, `Delta`, and `Review` alike, with no per-scope branching
-     * needed here at all (the per-scope difference for `Review` - looping
-     * back to the track's start rather than the edit's - is already baked
-     * into `repeatLoopBackSeconds_` by handleContentChangedForRepeat()).
+     * Once `positionSeconds` reaches `repeatRangeEndSeconds_`: with
+     * `repeatEnabled_`, seeks back to `repeatLoopBackSeconds_` and resumes
+     * - the "loops... when it reaches the end" half of Repeat Playback;
+     * without it, pauses right there instead (`pause()`, not `stop()` - the
+     * playhead stays put rather than resetting to `0.0`) - per
+     * `docs/sound-mind-design.md`'s "Repeat Playback" section, Delta/Review
+     * "halts... depending on the repeat checkbox" once their own range
+     * ends, regardless of which way that check falls; only the "or
+     * repeats" half is conditional on it. Both branches cover `Track`,
+     * `Delta`, and `Review` alike with no per-scope branching needed here
+     * at all (the per-scope difference for `Review` - looping back to the
+     * track's start rather than the edit's - is already baked into
+     * `repeatLoopBackSeconds_` by handleContentChangedForPlayback()).
      *
-     * Also a no-op whenever `repeatRangeEndSeconds_ <= repeatRangeStartSeconds_`
+     * A no-op whenever `repeatRangeEndSeconds_ <= repeatRangeStartSeconds_`
      * - not just the pre-edit "no range yet" default (both `0.0`), but
      * also a genuinely zero-width `Delta`/`Review` range: a single-click
      * (as opposed to dragged) paint stroke's own `bounds()` has an equal
-     * start/end, which `handleContentChangedForRepeat()` copies straight
+     * start/end, which `handleContentChangedForPlayback()` copies straight
      * into `repeatRangeStartSeconds_`/`repeatRangeEndSeconds_`. Since
      * `PlaybackController::seek()` emits `positionChanged()` synchronously,
      * re-entering this same method, treating a zero-width range as
@@ -2014,7 +2035,7 @@ private:
      * and over with no base case - unbounded recursion until the stack
      * overflows (a real, since-fixed crash - see `CHANGELOG.md`'s
      * `v0.0.42.3` entry). Nothing meaningful to loop over just plays
-     * straight through instead, same as Repeat being off for that edit.
+     * straight through instead, with no halt or loop-back for that edit.
      *
      * @param positionSeconds The current playback position, in seconds.
      */
@@ -2298,18 +2319,20 @@ private:
     bool repeatEnabled_ = false;
     sound_mind::studio::PlaybackScope playbackScope_ = sound_mind::studio::PlaybackScope::Track;
 
-    /// @brief The currently active repeat range, in seconds - `[0,
-    /// totalSeconds()]` (the whole track) whenever repeatEnabled_ is
-    /// `false`, or right after startPlayback()/a manual seekPlayback();
-    /// narrowed to the edited operation's own bounds() by
-    /// handleContentChangedForRepeat() while `playbackScope_` is `Delta`/
-    /// `Review`. See checkRepeatPlaybackRange()'s own docs for how this is
-    /// actually used.
+    /// @brief The currently active playback range, in seconds - `[0,
+    /// totalSeconds()]` (the whole track) right after startPlayback()/a
+    /// manual seekPlayback(); narrowed to the edited operation's own
+    /// bounds() by handleContentChangedForPlayback() while `playbackScope_`
+    /// is `Delta`/`Review` - independent of `repeatEnabled_`, which only
+    /// decides what checkRepeatPlaybackRange() does once this range's own
+    /// end is reached (see its own docs), not whether the range itself is
+    /// tracked.
     double repeatRangeStartSeconds_ = 0.0;
     double repeatRangeEndSeconds_ = 0.0;
 
     /// @brief Where checkRepeatPlaybackRange() seeks back to once playback
-    /// reaches repeatRangeEndSeconds_ - equal to repeatRangeStartSeconds_
+    /// reaches repeatRangeEndSeconds_, when `repeatEnabled_` - equal to
+    /// repeatRangeStartSeconds_
     /// for `Track`/`Delta` (looping the same range it's built from), but
     /// `0.0` for `Review`: `Review`'s own range runs from the edit's start
     /// to the whole track's end (see docs/sound-mind-design.md's "Repeat
@@ -2323,7 +2346,7 @@ private:
     /// @brief The most recently reported playback position, in seconds -
     /// tracked here (PlaybackController exposes no positionSeconds()
     /// getter, only the positionChanged() signal) so
-    /// handleContentChangedForRepeat() knows where to resume from for
+    /// handleContentChangedForPlayback() knows where to resume from for
     /// `PlaybackScope::Track` (which never jumps on an edit).
     double currentPlaybackPositionSeconds_ = 0.0;
 };

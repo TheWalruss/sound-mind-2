@@ -2460,6 +2460,127 @@ void MainWindowTest::paintingWhileRepeatIsOnWithReviewScopeWrapsToTheTrackStartN
     window.stopPlayback();
 }
 
+void MainWindowTest::paintingWithRepeatOffAndDeltaScopeStartsAOneShotPlaybackAutomatically() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-oneshot-delta.wav";
+    writeTestWavFile(path);
+
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 200;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-oneshot-delta.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(settings, projectPath));
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    // Repeat is off (the default) and Play was never pressed - per
+    // docs/sound-mind-design.md's "Repeat Playback" section, Delta/Review's
+    // own "restarts audio playback... the moment the canvas is updated" is
+    // driven by Scope alone, not gated behind Repeat or an already-playing
+    // session.
+    window.setPlaybackScope(PlaybackScope::Delta);
+    QVERIFY(!window.isPlaying());
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(200, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));  // ~1.5s.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
+
+    QVERIFY(window.isPlaying());
+    auto* panel = window.findChild<PlaybackPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("0:01 / 0:02"));
+
+    window.stopPlayback();
+}
+
+void MainWindowTest::oneShotDeltaPlaybackHaltsAtTheEditsEndWithoutLooping() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-oneshot-delta-halt.wav";
+    writeTestWavFile(path);
+
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 200;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-oneshot-delta-halt.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(settings, projectPath));
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.setPlaybackScope(PlaybackScope::Delta);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(200, 50);
+    window.setPaintModeEnabled(true);
+    // A single-column click (not a dragged stroke) so the edited region's
+    // own end is a known, narrow point well before the track's own end -
+    // see checkRepeatPlaybackRange()'s own docs on why a genuinely
+    // zero-width Delta/Review range is instead treated as "nothing to loop
+    // over" (no halt/loop at all, straight through) - a couple of columns
+    // wide avoids that edge case while keeping a known, narrow range.
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
+    QTest::mouseMove(canvas, QPoint(152, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(152, 10));
+    QVERIFY(window.isPlaying());
+
+    // Repeat is off, so per docs/sound-mind-design.md's "it continues to
+    // the last modified column, and then halts... depending on the repeat
+    // checkbox" - reaching the edited region's own end should halt there,
+    // not loop back to its start and not continue playing past it.
+    window.seekPlayback(1.52);
+    QVERIFY(!window.isPlaying());
+
+    window.stopPlayback();
+}
+
+void MainWindowTest::paintingWithRepeatOffAndReviewScopeStartsAOneShotPlaybackAutomatically() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-oneshot-review.wav";
+    writeTestWavFile(path);
+
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 200;
+    settings.canvasHeight = 50;
+    settings.binCount = 50;
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-oneshot-review.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(settings, projectPath));
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.setPlaybackScope(PlaybackScope::Review);
+    QVERIFY(!window.isPlaying());
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(200, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));  // ~1.5s.
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(150, 10));
+
+    QVERIFY(window.isPlaying());
+    auto* panel = window.findChild<PlaybackPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* label = panel->findChild<QLabel*>(QStringLiteral("positionLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("0:01 / 0:02"));
+
+    // Unlike Delta, Review's own range runs to the whole track's end - with
+    // Repeat off, reaching that end should still halt (not loop back to
+    // the track's start the way paintingWhileRepeatIsOnWithReviewScope...
+    // does with Repeat on).
+    window.seekPlayback(2.0);
+    QVERIFY(!window.isPlaying());
+
+    window.stopPlayback();
+}
+
 void MainWindowTest::paintModeIsOffByDefault() {
     const TestMainWindow window;
     auto* canvas = window.findChild<CanvasWidget*>();

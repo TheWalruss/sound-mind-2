@@ -1154,18 +1154,23 @@ match immediately.
 
 ### Repeat Playback
 
-Check **Repeat** to loop playback once it reaches the end, and to hear
-your edits live: while checked, painting (or any other edit) while
-playing immediately re-renders the composite and picks up where the
-**Scope** drop-down says to:
+The **Scope** drop-down decides how an edit affects playback, and
+**Repeat** decides what happens once that reaches its own end:
 
-- **Track** (the default) - keeps playing from wherever it already was;
-  the edit is heard "in place", without jumping.
-- **Delta** - jumps to whatever you just edited, then loops just that
-  region, so you hear a fresh brush stroke immediately and repeatedly.
-- **Review** - jumps to the edit like Delta, but plays through to the end
-  of the track each time before looping back to the very start of the
-  track (not back to the edit itself).
+- **Track** (the default) - only reacts to an edit while **Repeat** is
+  checked *and* something is already playing: it keeps playing from
+  wherever it already was, re-rendered "in place", without jumping.
+- **Delta** - painting (or any other edit) jumps playback to whatever you
+  just edited and plays through just that region - automatically, even if
+  nothing was playing yet and even with **Repeat** unchecked, so you hear
+  a fresh brush stroke immediately without pressing Play yourself. With
+  **Repeat** checked it then loops that region repeatedly; unchecked, it
+  plays through once and stops right there.
+- **Review** - jumps to the edit like Delta (same automatic, no-Play-
+  needed behavior), but plays through to the end of the track instead of
+  stopping at the edit. With **Repeat** checked it then loops back to the
+  very start of the track (not back to the edit itself); unchecked, it
+  just stops once it reaches the end.
 
 Unchecking Repeat, or dragging the position bar yourself, always goes
 back to playing (or looping) the whole track.

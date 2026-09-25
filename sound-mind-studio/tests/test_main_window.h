@@ -148,6 +148,9 @@ private slots:
     void paintingWhileRepeatIsOnWithDeltaScopeJumpsPlaybackToTheEditedRegion();
     void paintingWhileRepeatIsOnWithTrackScopeKeepsTheSamePosition();
     void paintingWhileRepeatIsOnWithReviewScopeWrapsToTheTrackStartNotTheEdit();
+    void paintingWithRepeatOffAndDeltaScopeStartsAOneShotPlaybackAutomatically();
+    void oneShotDeltaPlaybackHaltsAtTheEditsEndWithoutLooping();
+    void paintingWithRepeatOffAndReviewScopeStartsAOneShotPlaybackAutomatically();
 
     // Basic Painting (v0.Y.24.1)
     void paintModeIsOffByDefault();

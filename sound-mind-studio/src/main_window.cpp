@@ -430,7 +430,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
                 // refreshLayersPanel()'s own docs on why this matters:
                 // this fires after nearly every canvas edit).
                 layerController_->refreshLayersPanel(layer);
-                handleContentChangedForRepeat(layer);
+                handleContentChangedForPlayback(layer);
             });
 
     gridPanel_ = new GridPanel(this);
@@ -1969,7 +1969,7 @@ void MainWindow::startPlayback() {
         playbackController_->load(sound_mind::codec::decode(*composite));
         // A fresh load starts a new "nothing edited yet this session" range
         // - the whole track, regardless of playbackScope_ - narrowed only
-        // once a real edit actually arrives (handleContentChangedForRepeat()).
+        // once a real edit actually arrives (handleContentChangedForPlayback()).
         repeatRangeStartSeconds_ = 0.0;
         repeatRangeEndSeconds_ = playbackController_->totalSeconds();
         repeatLoopBackSeconds_ = 0.0;
@@ -2314,8 +2314,26 @@ void MainWindow::pollTestInputLevel() {
     configureDevicesPanel_->setInputLevel(deviceTestRecordEngine_.currentInputLevel());
 }
 
-void MainWindow::handleContentChangedForRepeat(sound_mind::core::LayerId layer) {
-    if (!repeatEnabled_ || !project_ || !playbackController_->isPlaying()) {
+void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer) {
+    if (!project_) {
+        return;
+    }
+    // Repeat ON only reacts to an edit while a session is already playing -
+    // "works in principle just like Loop Mode", which never auto-starts
+    // itself either. Repeat OFF, on the other hand, is a fresh one-shot
+    // preview per docs/sound-mind-design.md's "Repeat Playback" section:
+    // Delta/Review's own "restarts audio playback... the moment the canvas
+    // is updated" is driven by Scope alone, independent of Repeat and of
+    // whether anything was already playing - Track has no such behavior at
+    // all (it isn't "the edit" in the Track case, there's no narrower
+    // region to preview).
+    const bool deltaOrReview = playbackScope_ == sound_mind::studio::PlaybackScope::Delta ||
+                                playbackScope_ == sound_mind::studio::PlaybackScope::Review;
+    if (repeatEnabled_) {
+        if (!playbackController_->isPlaying()) {
+            return;
+        }
+    } else if (!deltaOrReview) {
         return;
     }
 
@@ -2375,7 +2393,7 @@ void MainWindow::checkRepeatPlaybackRange(double positionSeconds) {
     // opposed to dragged) paint stroke's own bounds() is a genuine
     // zero-width point - Delta/Review scope then sets
     // repeatRangeEndSeconds_ == repeatRangeStartSeconds_ exactly (see
-    // handleContentChangedForRepeat() above). The seek() below emits
+    // handleContentChangedForPlayback() above). The seek() below emits
     // positionChanged() synchronously (see PlaybackController::seek()'s
     // own docs), re-entering this same function - with the old `<= 0.0`
     // guard, a zero-width range still looked "active" (end > 0), so the
@@ -2384,16 +2402,27 @@ void MainWindow::checkRepeatPlaybackRange(double positionSeconds) {
     // seek(), another positionChanged(), and so on - unbounded recursion
     // until the stack overflows. A range with nothing to actually loop
     // over (end <= start) is treated the same as "no range yet": play
-    // straight through without any auto-loop-back, exactly like Repeat
-    // being off for that one edit.
-    if (!repeatEnabled_ || repeatRangeEndSeconds_ <= repeatRangeStartSeconds_) {
+    // straight through with no halt/loop-back at all for that one edit.
+    if (repeatRangeEndSeconds_ <= repeatRangeStartSeconds_) {
         return;
     }
     if (positionSeconds < repeatRangeEndSeconds_) {
         return;
     }
-    playbackController_->seek(repeatLoopBackSeconds_);
-    playbackController_->play();
+    // Repeat ON loops back (see repeatLoopBackSeconds_'s own docs for the
+    // per-scope target); Repeat OFF halts right here instead - per
+    // docs/sound-mind-design.md's "Repeat Playback" section, Delta "halts
+    // or repeats depending on the repeat checkbox" once it reaches its own
+    // range's end, regardless of which one happens. `pause()`, not
+    // `stop()`: the playhead stays exactly where it halted rather than
+    // resetting to the start - see stopPlayback()'s own docs on why that
+    // one's different (an explicit Stop is a deliberate reset).
+    if (repeatEnabled_) {
+        playbackController_->seek(repeatLoopBackSeconds_);
+        playbackController_->play();
+    } else {
+        playbackController_->pause();
+    }
 }
 
 void MainWindow::poolTopmostLayer() {
