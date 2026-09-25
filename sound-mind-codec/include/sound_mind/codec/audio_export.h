@@ -1,8 +1,10 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 
 #include "sound_mind/codec/audio_buffer.h"
+#include "sound_mind/codec/export_cancelled.h"
 
 namespace sound_mind::codec {
 
@@ -34,9 +36,20 @@ enum class CompressedAudioFormat {
  *        enforced - callers are expected to use one matching `format`.
  * @param audio The audio to export.
  * @param format Which compressed format to write.
+ * @param shouldCancel Consulted between fixed-size chunks of the write/
+ *        encode (4096 frames at a time for every format - see this
+ *        function's own definition) - `docs/sound-mind-roadmap.md`'s "real,
+ *        non-blocking cancel affordance for long operations" milestone.
+ *        Once it returns `true`, throws `ExportCancelled` immediately
+ *        rather than writing/encoding any further chunks. `nullptr` (the
+ *        default) never cancels - the exact prior behavior, unchanged for
+ *        every existing caller.
  * @throws std::runtime_error if the file can't be written, or the
  *         requested format's encoder couldn't be created/opened.
+ * @throws ExportCancelled if `shouldCancel` returns `true` - see its own
+ *         docs.
  */
-void exportCompressedAudio(const std::filesystem::path& path, const AudioBuffer& audio, CompressedAudioFormat format);
+void exportCompressedAudio(const std::filesystem::path& path, const AudioBuffer& audio, CompressedAudioFormat format,
+                            const std::function<bool()>& shouldCancel = nullptr);
 
 }  // namespace sound_mind::codec

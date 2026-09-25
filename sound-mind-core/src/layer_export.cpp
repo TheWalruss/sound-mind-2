@@ -18,12 +18,13 @@ std::optional<sound_mind::codec::AudioBuffer> decodeLayerForExport(const Layer& 
 }
 
 bool exportLayerAudio(const Layer& layer, const std::filesystem::path& path,
-                       sound_mind::codec::CompressedAudioFormat format) {
+                       sound_mind::codec::CompressedAudioFormat format,
+                       const std::function<bool()>& shouldCancel) {
     const auto audio = decodeLayerForExport(layer);
     if (!audio.has_value()) {
         return false;
     }
-    sound_mind::codec::exportCompressedAudio(path, *audio, format);
+    sound_mind::codec::exportCompressedAudio(path, *audio, format, shouldCancel);
     return true;
 }
 

@@ -14,6 +14,7 @@
 using sound_mind::codec::AudioBuffer;
 using sound_mind::codec::CompressedAudioFormat;
 using sound_mind::codec::exportCompressedAudio;
+using sound_mind::codec::ExportCancelled;
 
 namespace {
 
@@ -157,4 +158,81 @@ TEST_CASE("exportCompressedAudio throws for an unwritable path", "[audio_export]
     const auto path = std::filesystem::path("Z:/does/not/exist/sound-mind-test-export.flac");
 
     CHECK_THROWS_AS(exportCompressedAudio(path, original, CompressedAudioFormat::Flac), std::runtime_error);
+}
+
+TEST_CASE("exportCompressedAudio throws ExportCancelled once shouldCancel starts returning true (Flac)",
+          "[audio_export][cancellation]") {
+    // Several seconds at 44100Hz - enough 4096-frame chunks (see
+    // writeViaJuceFormat()'s own definition) that cancelling on the third
+    // check is exercising a real, in-progress multi-chunk write.
+    const AudioBuffer original = makeSineTone(1000.0f, 3.0f, 44100);
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export-cancel.flac";
+
+    int callCount = 0;
+    const auto shouldCancel = [&callCount]() {
+        ++callCount;
+        return callCount >= 3;
+    };
+
+    CHECK_THROWS_AS(exportCompressedAudio(path, original, CompressedAudioFormat::Flac, shouldCancel),
+                    ExportCancelled);
+    CHECK(callCount == 3);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("exportCompressedAudio throws ExportCancelled once shouldCancel starts returning true (Ogg)",
+          "[audio_export][cancellation]") {
+    const AudioBuffer original = makeSineTone(1000.0f, 3.0f, 44100);
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export-cancel.ogg";
+
+    int callCount = 0;
+    const auto shouldCancel = [&callCount]() {
+        ++callCount;
+        return callCount >= 3;
+    };
+
+    CHECK_THROWS_AS(exportCompressedAudio(path, original, CompressedAudioFormat::Ogg, shouldCancel),
+                    ExportCancelled);
+    CHECK(callCount == 3);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("exportCompressedAudio throws ExportCancelled once shouldCancel starts returning true (Mp3)",
+          "[audio_export][cancellation]") {
+    const AudioBuffer original = makeSineTone(1000.0f, 3.0f, 44100);
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export-cancel.mp3";
+
+    int callCount = 0;
+    const auto shouldCancel = [&callCount]() {
+        ++callCount;
+        return callCount >= 3;
+    };
+
+    CHECK_THROWS_AS(exportCompressedAudio(path, original, CompressedAudioFormat::Mp3, shouldCancel),
+                    ExportCancelled);
+    CHECK(callCount == 3);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("exportCompressedAudio with a shouldCancel that never returns true behaves exactly as without one",
+          "[audio_export][cancellation]") {
+    const AudioBuffer original = makeSineTone(1000.0f, 0.5f, 44100);
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export-not-cancelled.flac";
+
+    int callCount = 0;
+    const auto neverCancel = [&callCount]() {
+        ++callCount;
+        return false;
+    };
+
+    exportCompressedAudio(path, original, CompressedAudioFormat::Flac, neverCancel);
+    const AudioBuffer decoded = readBackViaJuce(path);
+    std::filesystem::remove(path);
+
+    REQUIRE(decoded.sampleRateHz == original.sampleRateHz);
+    CHECK(correlation(decoded.left, original.left) > 0.999f);
+    CHECK(callCount > 0);  // the callback really was consulted, not just accepted and ignored.
 }

@@ -204,7 +204,7 @@ void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, cons
     // whole audio track is just as correct as interleaving them here, and simpler.
     encodeVideoTrack(*formatCtx, videoEncoder, canvas, paddedWidth, paddedHeight, durationSeconds, frameRate,
                       shouldCancel);
-    encodeAudioTrack(*formatCtx, audioEncoder, audio);
+    encodeAudioTrack(*formatCtx, audioEncoder, audio, shouldCancel);
 
     checkFfmpeg(av_write_trailer(formatCtx.get()), "could not finalize the MP4 file");
 }

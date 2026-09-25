@@ -35,13 +35,18 @@ namespace sound_mind::core {
  * @param path Destination path.
  * @param format Which compressed format to write - see
  *        `sound_mind::codec::exportCompressedAudio()`.
+ * @param shouldCancel Forwarded straight through to
+ *        `sound_mind::codec::exportCompressedAudio()` - see its own docs.
  * @return `true` if exported; `false` if the layer had no content to
  *         export (nothing written).
  * @throws std::runtime_error if the underlying codec export fails (see
  *         `sound_mind::codec::exportCompressedAudio()`'s docs).
+ * @throws sound_mind::codec::ExportCancelled if `shouldCancel` returns
+ *         `true` - see its own docs.
  */
 bool exportLayerAudio(const Layer& layer, const std::filesystem::path& path,
-                       sound_mind::codec::CompressedAudioFormat format);
+                       sound_mind::codec::CompressedAudioFormat format,
+                       const std::function<bool()>& shouldCancel = nullptr);
 
 /**
  * @brief Exports `layer` as an MP4 video: its rendered canvas (see

@@ -7,6 +7,8 @@
 // codec parameters to be finalized *before* avformat_write_header(), while
 // the actual sample data can only be encoded *after* it.
 
+#include <functional>
+
 #include "ffmpeg_raii.h"
 #include "sound_mind/codec/audio_buffer.h"
 
@@ -47,7 +49,16 @@ AudioEncoder createAudioEncoder(AVFormatContext& formatCtx, AVCodecID codecId, c
 /// final short frame for any samples left over, and a trailing flush of the
 /// encoder itself. Must be called *after* avformat_write_header().
 ///
+/// @param shouldCancel Consulted once per input chunk (see the function's
+///        own definition) - `docs/sound-mind-roadmap.md`'s "real,
+///        non-blocking cancel affordance for long operations" milestone.
+///        Once it returns `true`, throws `sound_mind::codec::ExportCancelled`
+///        immediately rather than encoding any further chunks. `nullptr`
+///        (the default) never cancels.
 /// @throws std::runtime_error if resampling or encoding fails.
-void encodeAudioTrack(AVFormatContext& formatCtx, AudioEncoder& encoder, const AudioBuffer& audio);
+/// @throws sound_mind::codec::ExportCancelled if `shouldCancel` returns
+///         `true` - see its own docs.
+void encodeAudioTrack(AVFormatContext& formatCtx, AudioEncoder& encoder, const AudioBuffer& audio,
+                       const std::function<bool()>& shouldCancel = nullptr);
 
 }  // namespace sound_mind::codec::detail

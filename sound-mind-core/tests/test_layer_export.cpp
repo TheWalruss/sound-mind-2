@@ -96,6 +96,24 @@ TEST_CASE("exportLayerAudio writes a real file for a layer with content", "[core
     CHECK(exists);
 }
 
+TEST_CASE("exportLayerAudio forwards shouldCancel through to sound_mind::codec::exportCompressedAudio",
+          "[core][layer_export][cancellation]") {
+    Layer layer(1, "Imported", LayerType::Normal);
+    layer.setContent(encode(makeSineTone(1000.0f, 3.0f, 44100), StreamCodecConfig{}));
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layer-export-audio-cancel.flac";
+
+    int callCount = 0;
+    const auto shouldCancel = [&callCount]() {
+        ++callCount;
+        return callCount >= 3;
+    };
+
+    CHECK_THROWS_AS(exportLayerAudio(layer, path, CompressedAudioFormat::Flac, shouldCancel), ExportCancelled);
+    CHECK(callCount == 3);
+
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("exportLayerVideo does nothing for a layer with no content", "[core][layer_export]") {
     const Layer layer(1, "Untitled", LayerType::Normal);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layer-export.mp4";

@@ -1,5 +1,6 @@
 #include "sound_mind/codec/audio_export.h"
 
+#include <algorithm>
 #include <memory>
 #include <stdexcept>
 
@@ -12,10 +13,14 @@ namespace sound_mind::codec {
 
 namespace {
 
-/// @brief Writes `audio` through a JUCE AudioFormat's writer. Used for
+/// @brief Writes `audio` through a JUCE AudioFormat's writer, in fixed-size
+/// chunks so `shouldCancel` (see exportCompressedAudio()'s own docs) gets a
+/// real chance to interrupt a long write - a single whole-buffer
+/// `writeFromFloatArrays()` call had no such checkpoint at all. Used for
 /// Flac and Ogg, both of which have real, working JUCE writers (unlike
 /// MP3 - see audio_export.h's docs).
-void writeViaJuceFormat(juce::AudioFormat& format, const std::filesystem::path& path, const AudioBuffer& audio) {
+void writeViaJuceFormat(juce::AudioFormat& format, const std::filesystem::path& path, const AudioBuffer& audio,
+                        const std::function<bool()>& shouldCancel) {
     juce::File file(path.string());
     file.deleteFile();
 
@@ -41,9 +46,21 @@ void writeViaJuceFormat(juce::AudioFormat& format, const std::filesystem::path& 
     }
     stream.release();  // the writer now owns it.
 
-    const float* channels[] = {audio.left.data(), audio.right.data()};
-    if (!writer->writeFromFloatArrays(channels, 2, static_cast<int>(audio.frameCount()))) {
-        throw std::runtime_error("failed writing audio samples: " + path.string());
+    // Same chunk size as encodeAudioTrack()'s own kInputChunk - no
+    // particular need to match, just consistent with the other export
+    // path's own choice of "small enough for a responsive cancel, large
+    // enough not to churn on per-call overhead."
+    constexpr int kChunkFrames = 4096;
+    const auto totalFrames = static_cast<int>(audio.frameCount());
+    for (int pos = 0; pos < totalFrames; pos += kChunkFrames) {
+        if (shouldCancel && shouldCancel()) {
+            throw ExportCancelled{};
+        }
+        const int chunkFrames = std::min(kChunkFrames, totalFrames - pos);
+        const float* channels[] = {audio.left.data() + pos, audio.right.data() + pos};
+        if (!writer->writeFromFloatArrays(channels, 2, chunkFrames)) {
+            throw std::runtime_error("failed writing audio samples: " + path.string());
+        }
     }
 }
 
@@ -52,7 +69,8 @@ void writeViaJuceFormat(juce::AudioFormat& format, const std::filesystem::path& 
 /// unimplemented stub). 192kbps: a reasonable, unconfigurable-for-now
 /// default bitrate for lossy export, matching the "middle of the road"
 /// choice writeViaJuceFormat() makes for Flac/Ogg's own quality options.
-void writeMp3ViaFfmpeg(const std::filesystem::path& path, const AudioBuffer& audio) {
+void writeMp3ViaFfmpeg(const std::filesystem::path& path, const AudioBuffer& audio,
+                       const std::function<bool()>& shouldCancel) {
     using namespace detail;  // NOLINT(google-build-using-namespace) - this file's own ffmpeg detail helpers.
 
     AVFormatContext* formatCtxRaw = nullptr;
@@ -66,27 +84,28 @@ void writeMp3ViaFfmpeg(const std::filesystem::path& path, const AudioBuffer& aud
                 "could not open output file for writing: " + path.string());
     checkFfmpeg(avformat_write_header(formatCtx.get(), nullptr), "could not write the MP3 file header");
 
-    encodeAudioTrack(*formatCtx, encoder, audio);
+    encodeAudioTrack(*formatCtx, encoder, audio, shouldCancel);
 
     checkFfmpeg(av_write_trailer(formatCtx.get()), "could not finalize the MP3 file");
 }
 
 }  // namespace
 
-void exportCompressedAudio(const std::filesystem::path& path, const AudioBuffer& audio, CompressedAudioFormat format) {
+void exportCompressedAudio(const std::filesystem::path& path, const AudioBuffer& audio, CompressedAudioFormat format,
+                            const std::function<bool()>& shouldCancel) {
     switch (format) {
         case CompressedAudioFormat::Flac: {
             juce::FlacAudioFormat flac;
-            writeViaJuceFormat(flac, path, audio);
+            writeViaJuceFormat(flac, path, audio, shouldCancel);
             return;
         }
         case CompressedAudioFormat::Ogg: {
             juce::OggVorbisAudioFormat ogg;
-            writeViaJuceFormat(ogg, path, audio);
+            writeViaJuceFormat(ogg, path, audio, shouldCancel);
             return;
         }
         case CompressedAudioFormat::Mp3:
-            writeMp3ViaFfmpeg(path, audio);
+            writeMp3ViaFfmpeg(path, audio, shouldCancel);
             return;
     }
 }

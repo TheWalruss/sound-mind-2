@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstdint>
 
+#include "sound_mind/codec/export_cancelled.h"
+
 namespace sound_mind::codec::detail {
 
 AudioEncoder createAudioEncoder(AVFormatContext& formatCtx, AVCodecID codecId, const AudioBuffer& audio,
@@ -85,7 +87,8 @@ AVFramePtr allocAudioFrame(const AVCodecContext& ctx, int nbSamples) {
 
 }  // namespace
 
-void encodeAudioTrack(AVFormatContext& formatCtx, AudioEncoder& encoder, const AudioBuffer& audio) {
+void encodeAudioTrack(AVFormatContext& formatCtx, AudioEncoder& encoder, const AudioBuffer& audio,
+                       const std::function<bool()>& shouldCancel) {
     AVCodecContext& ctx = *encoder.codecCtx;
     AVStream& stream = *encoder.stream;
 
@@ -125,6 +128,9 @@ void encodeAudioTrack(AVFormatContext& formatCtx, AudioEncoder& encoder, const A
     constexpr int kInputChunk = 4096;
 
     for (int inputPos = 0; inputPos < totalInputFrames; inputPos += kInputChunk) {
+        if (shouldCancel && shouldCancel()) {
+            throw ExportCancelled{};
+        }
         const int chunkFrames = std::min(kInputChunk, totalInputFrames - inputPos);
         const std::uint8_t* inData[2] = {
             reinterpret_cast<const std::uint8_t*>(audio.left.data() + inputPos),

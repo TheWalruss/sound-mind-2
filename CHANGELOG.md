@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.16] - 2026-09-25
+
+Real-world testing pass finding #12, Installment D: **audio export gains real cancellation support** (no user-visible change yet - see the milestone's later installments).
+
+### Added
+
+- **`sound_mind::codec::exportCompressedAudio()`/`sound_mind::core::exportLayerAudio()` accept an optional cancellation callback**, for Flac, Ogg, and MP3 alike, throwing `ExportCancelled` the moment it's requested - the synchronous groundwork Export Audio's own real cancel button (a later installment) will build on. Also benefits video export: cancellation is now honored during its own (short) audio-track encode phase too, not just its video-frame phase.
+
+Full regression: `sound-mind-codec` 57/57 (4 new), `sound-mind-core` 825/825 (1 new), `sound-mind-studio` unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #137.
+
 ## [0.0.45.15] - 2026-09-25
 
 Real-world testing pass finding #12, Installment C: **Export Video is now a real, cancellable background operation.**
