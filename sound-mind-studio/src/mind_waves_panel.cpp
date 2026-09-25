@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QListWidget>
 #include <QMouseEvent>
+#include <QPixmap>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
@@ -79,19 +80,44 @@ protected:
     }
 };
 
-/// @brief One library row's own widget - a name (click to select, double-
-/// click to rename), a type badge, and a delete button. Deliberately
-/// simpler than `LayersPanel`'s own `LayerRowWidget` - no drag handle, no
-/// visibility toggle, no opacity slider: a MindWave library entry has
-/// none of those concepts.
+/// @brief The always-on per-row mini-preview's own fixed size - real-world
+/// testing pass finding #21, "similarly dimensioned to" (not identical to
+/// - this row has no room for `LayersPanel`'s own wider, stretch-filled
+/// child-row preview area alongside its name/type/delete controls) the
+/// small thumbnail `LayersPanel` already shows for a layer with a
+/// MindWave-bound opacity.
+constexpr int kPreviewWidth = 44;
+constexpr int kPreviewHeight = 20;
+
+/// @brief One library row's own widget - a small always-on preview, a
+/// name (click to select, double-click to rename), a type badge, and a
+/// delete button. Deliberately simpler than `LayersPanel`'s own
+/// `LayerRowWidget` - no drag handle, no visibility toggle, no opacity
+/// slider: a MindWave library entry has none of those concepts.
 class MindWaveRowWidget : public QWidget {
     Q_OBJECT
 
 public:
-    MindWaveRowWidget(const MindWavesPanel::RowData& data, QWidget* parent = nullptr) : QWidget(parent), id_(data.id) {
+    MindWaveRowWidget(const MindWavesPanel::RowData& data, const QImage& previewImage, QWidget* parent = nullptr)
+        : QWidget(parent), id_(data.id) {
         auto* layout = new QHBoxLayout(this);
         layout->setContentsMargins(2, 1, 2, 1);
         layout->setSpacing(4);
+
+        // Always present, regardless of whether previewImage has real
+        // data yet - see MindWavesPanel::setPreviewImages()'s own docs on
+        // why a missing entry gets a placeholder rather than an omitted
+        // preview.
+        auto* previewLabel = new QLabel();
+        previewLabel->setObjectName(QStringLiteral("mindWavePreviewLabel"));
+        previewLabel->setFixedSize(kPreviewWidth, kPreviewHeight);
+        if (previewImage.isNull()) {
+            previewLabel->setStyleSheet(QStringLiteral("background-color: #2a2a2a;"));
+        } else {
+            previewLabel->setPixmap(QPixmap::fromImage(previewImage));
+            previewLabel->setScaledContents(true);
+        }
+        layout->addWidget(previewLabel);
 
         auto* nameLabel = new ClickableNameLabel(data.name);
         nameLabel->setObjectName(QStringLiteral("nameLabel"));
@@ -426,7 +452,9 @@ void MindWavesPanel::setMindWaves(const std::vector<RowData>& entries) {
         item->setData(Qt::UserRole, QVariant::fromValue(static_cast<qulonglong>(row.id)));
         item->setSizeHint(QSize(0, 28));
         list_->addItem(item);
-        auto* rowWidget = new MindWaveRowWidget(row, list_);
+        const auto previewIt = previewImages_.find(row.id);
+        const QImage previewImage = previewIt != previewImages_.end() ? previewIt->second : QImage();
+        auto* rowWidget = new MindWaveRowWidget(row, previewImage, list_);
         connect(rowWidget, &MindWaveRowWidget::selected, list_, [this, i]() { list_->setCurrentRow(static_cast<int>(i)); });
         connect(rowWidget, &MindWaveRowWidget::renameRequested, this, &MindWavesPanel::renameRequested);
         connect(rowWidget, &MindWaveRowWidget::deleteRequested, this, &MindWavesPanel::deleteRequested);
@@ -446,6 +474,11 @@ void MindWavesPanel::setMindWaves(const std::vector<RowData>& entries) {
         loadStackState(row.wave);
         loadWarpState(row.wave);
     }
+}
+
+void MindWavesPanel::setPreviewImages(const std::map<MindWaveId, QImage>& previewImages) {
+    previewImages_ = previewImages;
+    setMindWaves(currentRows_);
 }
 
 void MindWavesPanel::clearSelection() {

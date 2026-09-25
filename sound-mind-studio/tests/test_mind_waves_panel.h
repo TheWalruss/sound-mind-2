@@ -29,6 +29,12 @@ private slots:
     void clickingThePreviewButtonEmitsPreviewToggled();
     void setPreviewEnabledChangesTheButtonWithoutEmitting();
 
+    // Always-on per-row mini-preview, real-world testing pass finding #21.
+    void freshRowsShowAPlaceholderPreviewBeforeSetPreviewImagesIsCalled();
+    void setPreviewImagesShowsThePreviewOnTheMatchingRow();
+    void setPreviewImagesLeavesANonMatchingRowsPreviewAsAPlaceholder();
+    void setPreviewImagesPreservesTheCurrentSelectionAndDoesNotEmit();
+
     // Warp (v0.Y.39.1 Installment A).
     void enablingWarpEmitsAndSetsHasWarpSourceOnTheComposite();
     void disablingWarpClearsTheWarpSourceAndEmits();

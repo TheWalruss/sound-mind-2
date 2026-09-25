@@ -1,9 +1,11 @@
 #pragma once
 
+#include <map>
 #include <optional>
 #include <vector>
 
 #include <QDockWidget>
+#include <QImage>
 #include <QString>
 
 #include "sound_mind/core/mind_wave.h"
@@ -60,6 +62,13 @@ class MindWaveEditor;
  * previewToggled()'s own docs. This panel only ever emits the toggle;
  * `MindWaveController` owns deciding *what* to preview and pushing it to
  * `CanvasWidget`.
+ *
+ * **A separate, always-on per-row mini-preview** (real-world testing pass
+ * finding #21, `setPreviewImages()`) also exists, entirely independent of
+ * the Preview toggle above: every row shows a small grayscale thumbnail of
+ * its own field regardless of whether Preview is checked, or which row is
+ * selected - the toggle's own canvas overlay is unaffected by this and
+ * vice versa.
  */
 class MindWavesPanel : public QDockWidget {
     Q_OBJECT
@@ -97,6 +106,31 @@ public:
      * @param entries The project's current MindWave library.
      */
     void setMindWaves(const std::vector<RowData>& entries);
+
+    /**
+     * @brief Sets the always-on, per-row grayscale mini-preview images -
+     *        real-world testing pass finding #21, similarly dimensioned to
+     *        the small thumbnail `LayersPanel` already shows for a layer
+     *        with a MindWave-bound opacity (`LayersPanel::
+     *        setMindWavePreviewImages()`) - the same evaluate-then-
+     *        grayscale-then-downsample image `MindWaveController::
+     *        refreshMindWavesPanel()` already computes for that call is
+     *        reused here too, not recomputed.
+     *
+     * Unlike `LayersPanel`'s own child-row preview (which only appears at
+     * all once a matching entry exists), every row here always shows
+     * *some* preview area - a row whose id has no entry in `previewImages`
+     * (not yet computed, or a stale id) shows a plain placeholder instead
+     * of omitting the preview entirely, since every row unconditionally
+     * represents a real library entry, not a conditional child row.
+     * Rebuilds every row from `currentRows_` immediately, the same way
+     * `LayersPanel::setMindWavePreviewImages()`'s own docs describe -
+     * doesn't itself emit selectionChanged() (the selection, if any,
+     * survives unchanged).
+     *
+     * @param previewImages Each entry's own current preview, keyed by id.
+     */
+    void setPreviewImages(const std::map<sound_mind::core::MindWaveId, QImage>& previewImages);
 
     /// @brief The currently selected library entry's id, if any.
     /// @return That entry's id, or `std::nullopt` if no row is selected.
@@ -214,6 +248,9 @@ private:
     /// @brief The rows as of the last setMindWaves() call - used to look
     /// up the currently selected entry's own data.
     std::vector<RowData> currentRows_;
+
+    /// @brief See setPreviewImages()'s own docs.
+    std::map<sound_mind::core::MindWaveId, QImage> previewImages_;
 
     /// @brief See selectedMindWaveId()'s own docs.
     std::optional<sound_mind::core::MindWaveId> selectedMindWaveId_;

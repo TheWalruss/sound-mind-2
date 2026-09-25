@@ -469,3 +469,66 @@ void MindWavesPanelTest::setPreviewEnabledChangesTheButtonWithoutEmitting() {
     QVERIFY(panel.previewEnabled());
     QCOMPARE(spy.count(), 0);
 }
+
+// --- Always-on per-row mini-preview (real-world testing pass finding #21) --
+
+void MindWavesPanelTest::freshRowsShowAPlaceholderPreviewBeforeSetPreviewImagesIsCalled() {
+    MindWavesPanel panel;
+
+    panel.setMindWaves(twoRows());
+
+    const auto previewLabels = panel.findChildren<QLabel*>(QStringLiteral("mindWavePreviewLabel"));
+    QCOMPARE(previewLabels.size(), 2);
+    for (const QLabel* label : previewLabels) {
+        QVERIFY(label->pixmap().isNull());
+    }
+}
+
+void MindWavesPanelTest::setPreviewImagesShowsThePreviewOnTheMatchingRow() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    QImage preview(4, 4, QImage::Format_RGB888);
+    preview.fill(Qt::gray);
+
+    panel.setPreviewImages({{MindWaveId{1}, preview}});
+    // setPreviewImages() rebuilds every row again on top of setMindWaves()'s
+    // own already-built rows - the previous generation's own widgets are
+    // only scheduled via deleteLater(), so a real event-loop turn is needed
+    // before findChildren() reflects only the current generation - the same
+    // gotcha LayersPanel's own equivalent tests already work around.
+    QTest::qWait(0);
+
+    const auto previewLabels = panel.findChildren<QLabel*>(QStringLiteral("mindWavePreviewLabel"));
+    QCOMPARE(previewLabels.size(), 2);
+    // "First" (id 1) is displayed first - see twoRows()'s own docs.
+    QVERIFY(!previewLabels.at(0)->pixmap().isNull());
+}
+
+void MindWavesPanelTest::setPreviewImagesLeavesANonMatchingRowsPreviewAsAPlaceholder() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    QImage preview(4, 4, QImage::Format_RGB888);
+    preview.fill(Qt::gray);
+
+    panel.setPreviewImages({{MindWaveId{1}, preview}});  // "Second" (id 2) has no entry.
+    QTest::qWait(0);  // See setPreviewImagesShowsThePreviewOnTheMatchingRow()'s own comment.
+
+    const auto previewLabels = panel.findChildren<QLabel*>(QStringLiteral("mindWavePreviewLabel"));
+    QCOMPARE(previewLabels.size(), 2);
+    QVERIFY(previewLabels.at(1)->pixmap().isNull());
+}
+
+void MindWavesPanelTest::setPreviewImagesPreservesTheCurrentSelectionAndDoesNotEmit() {
+    MindWavesPanel panel;
+    panel.setMindWaves(twoRows());
+    panel.selectMindWave(MindWaveId{2});
+    QSignalSpy spy(&panel, &MindWavesPanel::selectionChanged);
+    QImage preview(4, 4, QImage::Format_RGB888);
+    preview.fill(Qt::gray);
+
+    panel.setPreviewImages({{MindWaveId{1}, preview}});
+
+    QCOMPARE(spy.count(), 0);
+    QVERIFY(panel.selectedMindWaveId().has_value());
+    QCOMPARE(*panel.selectedMindWaveId(), MindWaveId{2});
+}

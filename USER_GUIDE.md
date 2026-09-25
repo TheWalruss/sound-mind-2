@@ -342,6 +342,11 @@ shape instead of staying fixed.
 - **+ Add MindWave** creates a new one with a sensible default (a plain,
   audible sine wave) and selects it. Double-click a MindWave's name to
   rename it; the **×** button deletes it.
+- Every row shows a small grayscale mini-preview of its own field,
+  always on - regardless of selection, and independent of the Preview
+  toggle below (which does something different - see its own entry). The
+  same small thumbnail the Layers panel already shows for a layer with a
+  MindWave-bound opacity.
 - **Preview** shows the currently selected MindWave's own field directly
   on the canvas, as a live grayscale overlay (black where it's 0, white
   where it's 1) - updating instantly as you change its generator type,

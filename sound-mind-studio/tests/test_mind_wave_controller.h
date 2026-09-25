@@ -16,6 +16,7 @@ private slots:
     void setDrawnPathSwitchesTypeToDrawnAndCapturesThePathPreservingOtherFields();
     void setDrawnPathWithNoProjectOrUnknownIdIsANoOp();
     void refreshMindWavesPanelPushesTheLibraryIntoBothPanels();
+    void refreshMindWavesPanelPopulatesItsOwnPerRowMiniPreview();
     void togglingPreviewOnWithASelectionShowsAnOverlayOnTheCanvas();
     void togglingPreviewOffClearsTheOverlay();
     void selectingADifferentMindWaveWhilePreviewingUpdatesTheOverlay();

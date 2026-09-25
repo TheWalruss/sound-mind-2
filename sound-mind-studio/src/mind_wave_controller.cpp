@@ -132,13 +132,16 @@ void MindWaveController::refreshMindWavesPanel() {
             availableForBinding.emplace_back(entry.id, name);
 
             // The Layers Panel's own MindWave child-row preview
-            // (`v0.Y.44.1`, Layers Panel Redesign) - the same evaluate-
-            // then-grayscale pipeline the canvas's own live MindWave
-            // Preview overlay uses (see CanvasWidget::setMindWavePreview()),
-            // shrunk to thumbnail size via the shared area-averaging
-            // downsample (correct here for the same reason it's correct
-            // for a layer's own thumbnail - see renderLayerThumbnail()'s
-            // own docs).
+            // (`v0.Y.44.1`, Layers Panel Redesign) and, as of real-world
+            // testing pass finding #21, MindWavesPanel's own always-on
+            // per-row mini-preview too - the same evaluate-then-grayscale
+            // pipeline the canvas's own live MindWave Preview overlay uses
+            // (see CanvasWidget::setMindWavePreview()), shrunk to
+            // thumbnail size via the shared area-averaging downsample
+            // (correct here for the same reason it's correct for a
+            // layer's own thumbnail - see renderLayerThumbnail()'s own
+            // docs). Computed once per entry, reused by both panels
+            // rather than each recomputing its own copy.
             const auto field =
                 sound_mind::core::evaluateMindWaveField(entry.wave, config, project_->settings().canvasWidth);
             const auto grayscale =
@@ -149,6 +152,7 @@ void MindWaveController::refreshMindWavesPanel() {
         }
     }
     mindWavesPanel_->setMindWaves(rows);
+    mindWavesPanel_->setPreviewImages(previewImages);
     layersPanel_->setAvailableMindWaves(availableForBinding);
     layersPanel_->setMindWavePreviewImages(previewImages);
     filterConfigurationPanel_->setAvailableMindWaves(availableForBinding);

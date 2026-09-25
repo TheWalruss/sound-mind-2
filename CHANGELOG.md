@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.0.1] - 2026-09-25
+
+Real-world testing pass finding #21: **MindWaves panel: always-on per-row mini-preview.**
+
+### Added
+
+- **Every MindWave library entry now shows a small, always-on grayscale preview of its own field**, right in its own row in the MindWaves panel - regardless of whether that entry is selected, or whether the separate Preview toggle (which shows a live overlay on the canvas) is checked. Similarly sized to the small thumbnail the Layers panel already shows for a layer with a MindWave-bound opacity.
+
+Full regression: `sound-mind-studio` `MindWavesPanelTest` 34/34 (4 new), `LayersPanelTest` 45/45, full suite otherwise unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #150.
+
 ## [0.1.0.0] - 2026-09-25
 
 Real-world testing pass finding #20: **Warp Selection removed.**

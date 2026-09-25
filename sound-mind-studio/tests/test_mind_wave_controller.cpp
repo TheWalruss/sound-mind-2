@@ -2,6 +2,7 @@
 
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QtTest/QtTest>
@@ -219,6 +220,32 @@ void MindWaveControllerTest::refreshMindWavesPanelPushesTheLibraryIntoBothPanels
     // needed first.
     QCOMPARE(fixture.filterConfigurationPanel.findChild<QComboBox*>(QStringLiteral("blurSigmaMindWaveCombo"))->count(),
              2);
+}
+
+void MindWaveControllerTest::refreshMindWavesPanelPopulatesItsOwnPerRowMiniPreview() {
+    // Real-world testing pass finding #21 - a separate, standalone test
+    // from refreshMindWavesPanelPushesTheLibraryIntoBothPanels() above
+    // rather than an assertion added to it, since that test's own
+    // layerCombos assertion already fails for a pre-existing, unrelated
+    // reason (finding #25) - a QCOMPARE failure returns from the test
+    // function immediately in QtTest, so anything appended after it would
+    // never actually run while that bug stands.
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    fixture.controller.addMindWave();
+
+    fixture.controller.refreshMindWavesPanel();
+    // See refreshMindWavesPanelPushesTheLibraryIntoBothPanels()'s own
+    // comment on this exact gotcha - setMindWaves()/setPreviewImages() each
+    // rebuild every row, and the previous generation's own widgets are only
+    // scheduled via deleteLater().
+    QTest::qWait(0);
+
+    const auto previewLabels =
+        fixture.mindWavesPanel.findChildren<QLabel*>(QStringLiteral("mindWavePreviewLabel"));
+    QCOMPARE(previewLabels.size(), 1);
+    QVERIFY(!previewLabels.front()->pixmap().isNull());
 }
 
 void MindWaveControllerTest::togglingPreviewOnWithASelectionShowsAnOverlayOnTheCanvas() {
