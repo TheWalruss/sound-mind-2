@@ -237,12 +237,20 @@ public:
     /**
      * @brief Sets (or clears) the current rectangular selection's own
      *        overlay and repaints - a distinct-colored (green) rectangle,
-     *        drawn over whatever the canvas otherwise shows, independent
-     *        of `toolMode()`: a selection scopes other operations (Fill,
-     *        in particular - see `docs/sound-mind-design.md`'s
-     *        "Selection") and so stays visible/usable even after
-     *        switching to a different tool, the same way it would in any
-     *        other image editor.
+     *        drawn over whatever the canvas otherwise shows.
+     *
+     * Only actually drawn while `toolMode()` is `Pick` or `Select` - real-
+     * world testing pass, 2026-09-20, finding #16. Previously drawn
+     * regardless of tool mode (a deliberate choice at the time, on the
+     * reasoning that a selection stays visible/usable after switching
+     * tools the way it would in any other image editor), but real-world
+     * use found that surprising in practice, especially once
+     * `SelectionController::pasteAt()`'s own "highlight the just-pasted
+     * region the same way a fresh selection would be" (see its own docs)
+     * meant this box could linger long after a Paste, through whatever
+     * unrelated tool switches followed. The underlying value set here is
+     * unchanged either way - only whether `paintEvent()`'s own drawing of
+     * it actually happens depends on the current tool now.
      *
      * @param bounds The selection to display - either a `SelectionController`'s
      *        own in-progress drag preview or its committed selection (see

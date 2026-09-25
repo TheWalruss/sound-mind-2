@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.0.45.24] - 2026-09-25
+
+Real-world testing pass finding #16: **The green selection/Paste highlight now hides when it should.**
+
+### Changed
+
+- **The green selection outline (including the "here's what you just pasted" highlight after Edit → Paste) no longer stays on the canvas regardless of which tool you're using.** It now only shows while Select or Pick is the active tool - the selection itself still stays active and usable in the meantime, only its outline hides.
+
+Full regression: `sound-mind-studio` `CanvasWidgetTest` 74/74 (4 new), `MainWindowTest` 211/211. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #145.
+
 ## [0.0.45.23] - 2026-09-25
 
 Real-world testing pass finding #15: **The Chord Overlay now hides when it should.**

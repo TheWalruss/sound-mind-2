@@ -74,4 +74,8 @@ private slots:
     void chordPreviewShowsWhenTheChordGeneratorPanelIsVisible();
     void chordPreviewShowsWhenTheChordStampToolIsActive();
     void chordPreviewHidesAgainOnceNeitherConditionHolds();
+    void selectionHighlightHidesWhenNeitherPickNorSelectIsActive();
+    void selectionHighlightShowsWithPickToolActive();
+    void selectionHighlightHidesAgainOnceSwitchingAwayFromSelectOrPick();
+    void selectionBoundaryHighlightAlsoHidesWhenNeitherPickNorSelectIsActive();
 };

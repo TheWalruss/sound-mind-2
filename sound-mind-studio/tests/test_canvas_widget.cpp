@@ -826,6 +826,9 @@ void CanvasWidgetTest::setSelectionBoundsDrawsAHighlight() {
     bounds.endTimeSeconds = sound_mind::core::frameIndexToTime(80.0, config);
     bounds.lowFrequencyHz = sound_mind::core::binIndexToFrequency(10.0f, config);
     bounds.highFrequencyHz = sound_mind::core::binIndexToFrequency(40.0f, config);
+    // Select (or Pick) must be the active tool - real-world testing pass,
+    // 2026-09-20, finding #16 - see selectionHighlightOnlyDrawsWhilePickOrSelectIsActive().
+    widget.setToolMode(CanvasWidget::ToolMode::Select);
     widget.setSelectionBounds(bounds);
 
     const QImage rendered = widget.grab().toImage();
@@ -858,6 +861,9 @@ void CanvasWidgetTest::setSelectionHasMaskShapeStillDrawsTheRectangleDashed() {
     bounds.endTimeSeconds = sound_mind::core::frameIndexToTime(80.0, config);
     bounds.lowFrequencyHz = sound_mind::core::binIndexToFrequency(10.0f, config);
     bounds.highFrequencyHz = sound_mind::core::binIndexToFrequency(40.0f, config);
+    // Select (or Pick) must be the active tool - see
+    // setSelectionBoundsDrawsAHighlight()'s own comment.
+    widget.setToolMode(CanvasWidget::ToolMode::Select);
     widget.setSelectionBounds(bounds);
     widget.setSelectionHasMaskShape(true);
 
@@ -866,6 +872,117 @@ void CanvasWidgetTest::setSelectionHasMaskShapeStillDrawsTheRectangleDashed() {
     // solid outline only in that the rest of each edge alternates on/off.
     const QImage rendered = widget.grab().toImage();
     QCOMPARE(rendered.pixelColor(20, 10), QColor(0, 255, 0));
+}
+
+void CanvasWidgetTest::selectionHighlightHidesWhenNeitherPickNorSelectIsActive() {
+    // Real-world testing pass, 2026-09-20, finding #16: the green
+    // selection/paste highlight shouldn't stay visible regardless of tool -
+    // only while Pick or Select is the active one.
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    sound_mind::core::TimeFrequencyRect bounds;
+    bounds.startTimeSeconds = sound_mind::core::frameIndexToTime(20.0, config);
+    bounds.endTimeSeconds = sound_mind::core::frameIndexToTime(80.0, config);
+    bounds.lowFrequencyHz = sound_mind::core::binIndexToFrequency(10.0f, config);
+    bounds.highFrequencyHz = sound_mind::core::binIndexToFrequency(40.0f, config);
+    widget.setSelectionBounds(bounds);  // toolMode() defaults to None.
+
+    const QImage rendered = widget.grab().toImage();
+    QVERIFY(rendered.pixelColor(20, 10) != QColor(0, 255, 0));
+}
+
+void CanvasWidgetTest::selectionHighlightShowsWithPickToolActive() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    sound_mind::core::TimeFrequencyRect bounds;
+    bounds.startTimeSeconds = sound_mind::core::frameIndexToTime(20.0, config);
+    bounds.endTimeSeconds = sound_mind::core::frameIndexToTime(80.0, config);
+    bounds.lowFrequencyHz = sound_mind::core::binIndexToFrequency(10.0f, config);
+    bounds.highFrequencyHz = sound_mind::core::binIndexToFrequency(40.0f, config);
+    widget.setToolMode(CanvasWidget::ToolMode::Pick);
+    widget.setSelectionBounds(bounds);
+
+    const QImage rendered = widget.grab().toImage();
+    QCOMPARE(rendered.pixelColor(20, 10), QColor(0, 255, 0));
+}
+
+void CanvasWidgetTest::selectionHighlightHidesAgainOnceSwitchingAwayFromSelectOrPick() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    sound_mind::core::TimeFrequencyRect bounds;
+    bounds.startTimeSeconds = sound_mind::core::frameIndexToTime(20.0, config);
+    bounds.endTimeSeconds = sound_mind::core::frameIndexToTime(80.0, config);
+    bounds.lowFrequencyHz = sound_mind::core::binIndexToFrequency(10.0f, config);
+    bounds.highFrequencyHz = sound_mind::core::binIndexToFrequency(40.0f, config);
+    widget.setToolMode(CanvasWidget::ToolMode::Select);
+    widget.setSelectionBounds(bounds);
+    QCOMPARE(widget.grab().toImage().pixelColor(20, 10), QColor(0, 255, 0));
+
+    // setToolMode() itself repaints (finding #15's own fix) - the overlay
+    // should disappear immediately, not just on some later, unrelated
+    // repaint.
+    widget.setToolMode(CanvasWidget::ToolMode::Paint);
+
+    QVERIFY(widget.grab().toImage().pixelColor(20, 10) != QColor(0, 255, 0));
+}
+
+void CanvasWidgetTest::selectionBoundaryHighlightAlsoHidesWhenNeitherPickNorSelectIsActive() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    // A rectangular Lasso boundary spanning the same region
+    // setSelectionBoundsDrawsAHighlight()'s own rect does, so pixel (20, 10)
+    // - its own top-left corner - lands on the drawn curve.
+    Path boundary;
+    PathNode topLeft;
+    topLeft.anchor = TimeFrequencyPoint{sound_mind::core::frameIndexToTime(20.0, config),
+                                         sound_mind::core::binIndexToFrequency(40.0f, config)};
+    topLeft.type = PathNodeType::Corner;
+    boundary.addNode(topLeft);
+    PathNode topRight;
+    topRight.anchor = TimeFrequencyPoint{sound_mind::core::frameIndexToTime(80.0, config), topLeft.anchor.frequencyHz};
+    topRight.type = PathNodeType::Corner;
+    boundary.addNode(topRight);
+    PathNode bottomRight;
+    bottomRight.anchor = TimeFrequencyPoint{topRight.anchor.timeSeconds,
+                                             sound_mind::core::binIndexToFrequency(10.0f, config)};
+    bottomRight.type = PathNodeType::Corner;
+    boundary.addNode(bottomRight);
+    PathNode bottomLeft;
+    bottomLeft.anchor = TimeFrequencyPoint{topLeft.anchor.timeSeconds, bottomRight.anchor.frequencyHz};
+    bottomLeft.type = PathNodeType::Corner;
+    boundary.addNode(bottomLeft);
+
+    widget.setSelectionBoundary(boundary);  // toolMode() defaults to None.
+
+    const QImage rendered = widget.grab().toImage();
+    QVERIFY(rendered.pixelColor(20, 10) != QColor(0, 255, 0));
+
+    widget.setToolMode(CanvasWidget::ToolMode::Select);
+    QCOMPARE(widget.grab().toImage().pixelColor(20, 10), QColor(0, 255, 0));
 }
 
 void CanvasWidgetTest::mousePressInPathModeEmitsPathNodePlacedWithAConvertedPoint() {

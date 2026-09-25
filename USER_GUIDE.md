@@ -871,9 +871,12 @@ Click the **Select** toolbar button (next to Paint/Pick) to switch the
 canvas into select mode; click it again (or Paint/Pick) to leave it.
 While it's on, drag (or, for Wand, click) on the canvas to select a
 region - shown as a green outline, dashed for a Wand or combined
-selection (see below). A selection stays active (and visible) even after
-switching to a different tool - it isn't tied to Select mode itself, only
-to having drawn one.
+selection (see below). A selection stays active (still scoping Fill/
+Copy/Paste, and usable again the moment you switch back to Select) even
+after switching to a different tool - it isn't tied to Select mode
+itself, only to having drawn one - but its green outline only shows
+while Select or Pick is the active tool, not while Paint or another tool
+is.
 
 The **Selection Configuration** toolbar button opens a dockable panel
 (off by default, alongside the others):

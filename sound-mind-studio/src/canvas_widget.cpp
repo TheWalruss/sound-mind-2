@@ -409,15 +409,19 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     }
 
     // The current selection (Select) - see setSelectionBounds()'s/
-    // setSelectionBoundary()'s own docs. Independent of toolMode(), the
-    // same "a selection stays visible/usable after switching tools"
-    // reasoning setSelectionBounds()'s own docs describe. A Lasso
-    // selection draws its own actual curve (setSelectionBoundary()) in
-    // place of the plain rectangle a Rectangle selection draws - the two
-    // are mutually exclusive (setSelectionBoundary() is only ever set
-    // alongside a Lasso-shaped setSelectionBounds()), so there's never a
-    // need to draw both.
-    if (project_ != nullptr && selectionBoundary_.has_value()) {
+    // setSelectionBoundary()'s own docs. Real-world testing pass,
+    // 2026-09-20, finding #16: only drawn while Pick or Select is the
+    // active tool - previously drawn regardless of toolMode(), which in
+    // practice meant this box (and, after a Paste, its own "highlight the
+    // pasted region" reuse of it - see SelectionController::pasteAt()'s
+    // own docs) could linger onscreen through whatever unrelated tool
+    // switches followed. A Lasso selection draws its own actual curve
+    // (setSelectionBoundary()) in place of the plain rectangle a
+    // Rectangle selection draws - the two are mutually exclusive
+    // (setSelectionBoundary() is only ever set alongside a Lasso-shaped
+    // setSelectionBounds()), so there's never a need to draw both.
+    const bool selectionToolActive = toolMode_ == ToolMode::Pick || toolMode_ == ToolMode::Select;
+    if (project_ != nullptr && selectionToolActive && selectionBoundary_.has_value()) {
         // closeSubpath() draws the same implicit straight closing edge
         // (last node back to first) sound_mind::core::containsPoint()
         // itself treats the boundary as having - toPainterPath() alone
@@ -427,7 +431,7 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         boundaryPath.closeSubpath();
         painter.setPen(QPen(Qt::green, 2));
         painter.drawPath(boundaryPath);
-    } else if (project_ != nullptr && selectionBounds_.has_value()) {
+    } else if (project_ != nullptr && selectionToolActive && selectionBounds_.has_value()) {
         // A Mask-shaped selection (Wand, or any boolean-combined result -
         // see setSelectionHasMaskShape()'s own docs) has no single curve to
         // draw - a dashed pen distinguishes "the real shape is somewhere
