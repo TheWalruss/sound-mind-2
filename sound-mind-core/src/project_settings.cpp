@@ -17,6 +17,7 @@ void to_json(nlohmann::json& json, const ProjectSettings& settings) {
         {"binCount", settings.binCount},
         {"minFrequencyHz", settings.minFrequencyHz},
         {"maxFrequencyHz", settings.maxFrequencyHz},
+        {"principalMode", settings.principalMode},
     };
 }
 
@@ -40,6 +41,10 @@ void from_json(const nlohmann::json& json, ProjectSettings& settings) {
     settings.binCount = json.value("binCount", ProjectSettings{}.binCount);
     settings.minFrequencyHz = json.value("minFrequencyHz", ProjectSettings{}.minFrequencyHz);
     settings.maxFrequencyHz = json.value("maxFrequencyHz", ProjectSettings{}.maxFrequencyHz);
+    // Additive since v0.Y.47.1 (Principal Modes) - same lenient pattern as
+    // the three fields above; absent (every project saved before this
+    // milestone) means Sound, exactly what always implicitly applied.
+    settings.principalMode = json.value("principalMode", ProjectSettings{}.principalMode);
 }
 
 sound_mind::codec::StreamCodecConfig streamCodecConfigFor(const ProjectSettings& settings) {

@@ -53,10 +53,15 @@ namespace sound_mind::core {
  * @param resolveMindWave Passed through to `applyPaintOperation()` for
  *        each note - only consulted when `operation.config()` is an
  *        `InstrumentConfiguration`; see its own docs.
+ * @param principalMode Passed through to `applyPaintOperation()` for each
+ *        note - see its own docs (`v0.Y.47.1`, Principal Modes). Defaults
+ *        to `Sound`, the only behavior that existed before this
+ *        parameter.
  */
 void applySequenceOperation(const SequenceOperation& operation, double frequencyToTimeScale,
                              sound_mind::codec::StreamImage& content,
                              const LayerContentResolver& resolveLayerContent = {},
-                             const MindWaveResolver& resolveMindWave = {});
+                             const MindWaveResolver& resolveMindWave = {},
+                             PrincipalMode principalMode = PrincipalMode::Sound);
 
 }  // namespace sound_mind::core

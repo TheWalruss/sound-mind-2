@@ -6,6 +6,7 @@
 #include "sound_mind/core/project_settings.h"
 
 using sound_mind::core::FrequencyScale;
+using sound_mind::core::PrincipalMode;
 using sound_mind::core::ProjectSettings;
 
 TEST_CASE("ProjectSettings has sensible defaults", "[core][project_settings]") {
@@ -18,6 +19,7 @@ TEST_CASE("ProjectSettings has sensible defaults", "[core][project_settings]") {
     REQUIRE(settings.binCount == 512);
     REQUIRE(settings.minFrequencyHz == 20.0f);
     REQUIRE(settings.maxFrequencyHz == 16000.0f);
+    REQUIRE(settings.principalMode == PrincipalMode::Sound);
 }
 
 TEST_CASE("ProjectSettings round-trips through JSON", "[core][project_settings]") {
@@ -31,6 +33,7 @@ TEST_CASE("ProjectSettings round-trips through JSON", "[core][project_settings]"
     original.binCount = 256;
     original.minFrequencyHz = 30.0f;
     original.maxFrequencyHz = 18000.0f;
+    original.principalMode = PrincipalMode::Image;
 
     const nlohmann::json json = original;
     const ProjectSettings restored = json.get<ProjectSettings>();
@@ -45,6 +48,7 @@ TEST_CASE("ProjectSettings round-trips through JSON", "[core][project_settings]"
     REQUIRE(restored.binCount == original.binCount);
     REQUIRE(restored.minFrequencyHz == original.minFrequencyHz);
     REQUIRE(restored.maxFrequencyHz == original.maxFrequencyHz);
+    REQUIRE(restored.principalMode == original.principalMode);
 }
 
 TEST_CASE("streamCodecConfigFor carries sample rate, bin count, and frequency range through unchanged",
@@ -102,9 +106,27 @@ TEST_CASE("ProjectSettings loads from JSON missing binCount/minFrequencyHz/maxFr
     REQUIRE(restored.maxFrequencyHz == ProjectSettings{}.maxFrequencyHz);
 }
 
+TEST_CASE("ProjectSettings loads from JSON missing principalMode (a project saved before v0.Y.47.1) as Sound",
+          "[core][project_settings]") {
+    nlohmann::json json{
+        {"sampleRateHz", 44100},   {"frequencyScale", "log"}, {"timestepMs", 10.0},
+        {"canvasWidth", 1024},     {"canvasHeight", 512},     {"referenceHz", 440.0},
+        {"defaultTempoBpm", 120.0},
+    };
+
+    const ProjectSettings restored = json.get<ProjectSettings>();
+
+    REQUIRE(restored.principalMode == PrincipalMode::Sound);
+}
+
 TEST_CASE("FrequencyScale serializes to a readable string", "[core][project_settings]") {
     const nlohmann::json json = FrequencyScale::Log;
     REQUIRE(json == "log");
+}
+
+TEST_CASE("PrincipalMode serializes to a readable string", "[core][project_settings]") {
+    REQUIRE(nlohmann::json(PrincipalMode::Sound) == "sound");
+    REQUIRE(nlohmann::json(PrincipalMode::Image) == "image");
 }
 
 TEST_CASE("silentContentFor produces a StreamImage sized to the project's own canvas", "[core][project_settings]") {

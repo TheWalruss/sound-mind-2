@@ -40,6 +40,7 @@ using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
+using sound_mind::core::PrincipalMode;
 using sound_mind::core::NoteEvent;
 using sound_mind::core::rebuildPaintedContent;
 using sound_mind::core::SequenceOperation;
@@ -247,6 +248,20 @@ std::unique_ptr<OrderChaosConfiguration> makeOrderChaosTool(double size, double 
 
 std::size_t pixelIndex(const StreamImage& content, int frame, int bin) {
     return static_cast<std::size_t>(bin) * content.frameCount + static_cast<std::size_t>(frame);
+}
+
+/// @brief How many bins in `frame`'s own column are non-zero (painted) -
+/// `v0.Y.47.1` (Principal Modes)'s own way of measuring a stamp's actual
+/// bin-radius from the outside, through the public `applyPaintOperation()`
+/// API only (no direct access to the private `localBinRadius()` helper).
+int countAffectedBinsInColumn(const StreamImage& content, int frame) {
+    int count = 0;
+    for (int bin = 0; bin < static_cast<int>(content.config.binCount); ++bin) {
+        if (content.leftMagnitudeDb[pixelIndex(content, frame, bin)] != 0.0f) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 /// @brief A minimal Operation that isn't a PaintOperation or a
@@ -1466,4 +1481,62 @@ TEST_CASE("rebuildPaintedContent with no operations returns an unchanged copy of
     const StreamImage rebuilt = rebuildPaintedContent(base, {}, 2000.0);
 
     REQUIRE(rebuilt.leftMagnitudeDb[42] == -33.0f);
+}
+
+TEST_CASE("applyPaintOperation's Procedural circle stamp keeps an equal bin-radius regardless of its own "
+          "center frequency under Image mode",
+          "[core][paint_application][principal_modes]") {
+    // v0.Y.47.1 (Principal Modes). Under Sound-mode (see the next test
+    // below), the same fixed-Hz-radius stamp affects a different number of
+    // bins depending on where it's centered (an oval near the top of the
+    // frequency range, an egg near the bottom); Image-mode instead sets
+    // the bin-radius equal to the frame-radius directly, so the affected
+    // bin-count at the stamp's own center column doesn't depend on where
+    // it's centered.
+    const auto config = makeTestConfig();
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.5, config)));
+
+    const PaintOperation highStamp(1, LayerId{1}, makeSingleTapPath(0.5, 15000.0, -10.0f, 1.0f),
+                                    makeCircleTool(0.05, 0.0f));
+    StreamImage highContent = makeBlankContent(config, 100);
+    applyPaintOperation(highStamp, 2000.0, highContent, {}, {}, PrincipalMode::Image);
+
+    const PaintOperation lowStamp(1, LayerId{1}, makeSingleTapPath(0.5, 100.0, -10.0f, 1.0f),
+                                   makeCircleTool(0.05, 0.0f));
+    StreamImage lowContent = makeBlankContent(config, 100);
+    applyPaintOperation(lowStamp, 2000.0, lowContent, {}, {}, PrincipalMode::Image);
+
+    const int highAffected = countAffectedBinsInColumn(highContent, centerFrame);
+    const int lowAffected = countAffectedBinsInColumn(lowContent, centerFrame);
+    CHECK(highAffected > 0);
+    CHECK(highAffected == lowAffected);
+}
+
+TEST_CASE("applyPaintOperation's Procedural circle stamp still varies its own bin-radius by center "
+          "frequency under Sound mode (the only behavior before v0.Y.47.1, unchanged)",
+          "[core][paint_application][principal_modes]") {
+    const auto config = makeTestConfig();
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.5, config)));
+
+    // A larger frequencyToTimeScale than the Image-mode test above needs -
+    // Sound-mode's own bin-radius shrinks the higher the stamp's center
+    // frequency (see localBinRadius()'s own docs), and 15000Hz is close
+    // enough to this config's own 20000Hz ceiling that a smaller scale
+    // would locally linearize to well under one bin, vanishing the stamp
+    // entirely - a real, pre-existing edge case of the unchanged Sound-
+    // mode formula itself, not something to paper over here.
+    const PaintOperation highStamp(1, LayerId{1}, makeSingleTapPath(0.5, 15000.0, -10.0f, 1.0f),
+                                    makeCircleTool(0.05, 0.0f));
+    StreamImage highContent = makeBlankContent(config, 100);
+    applyPaintOperation(highStamp, 50000.0, highContent);  // PrincipalMode defaults to Sound.
+
+    const PaintOperation lowStamp(1, LayerId{1}, makeSingleTapPath(0.5, 100.0, -10.0f, 1.0f),
+                                   makeCircleTool(0.05, 0.0f));
+    StreamImage lowContent = makeBlankContent(config, 100);
+    applyPaintOperation(lowStamp, 50000.0, lowContent, {}, {}, PrincipalMode::Sound);
+
+    const int highAffected = countAffectedBinsInColumn(highContent, centerFrame);
+    const int lowAffected = countAffectedBinsInColumn(lowContent, centerFrame);
+    CHECK(highAffected > 0);
+    CHECK(highAffected != lowAffected);
 }

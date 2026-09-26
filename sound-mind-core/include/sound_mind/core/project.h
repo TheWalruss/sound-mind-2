@@ -244,6 +244,18 @@ public:
     /// @return The settings this project currently holds.
     [[nodiscard]] const ProjectSettings& settings() const noexcept { return settings_; }
 
+    /// @brief Sets which Principal Mode (`v0.Y.47.1`) new geometry is
+    ///        authored under - see `PrincipalMode`'s own docs.
+    ///
+    /// The first, and so far only, post-construction mutator for any
+    /// `ProjectSettings` field - every other field is fixed at Create
+    /// Project Wizard time and never changes again, so this doesn't
+    /// generalize into a broader `mutableSettings()`; it's scoped
+    /// narrowly to the one field a user can actually toggle mid-project.
+    ///
+    /// @param mode The mode to switch to.
+    void setPrincipalMode(PrincipalMode mode) noexcept { settings_.principalMode = mode; }
+
     /// @brief This project's layer stack, in bottom-to-top order.
     /// @return The layers this project currently holds.
     [[nodiscard]] const std::vector<Layer>& layers() const noexcept { return layers_; }

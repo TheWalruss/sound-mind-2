@@ -1358,6 +1358,26 @@ public slots:
     void applyFilterToSelection();
 
     /**
+     * @brief Switches the current project's own Principal Mode
+     *        (`docs/sound-mind-design.md`'s "Principal modes", `v0.Y.47.1`)
+     *        between Sound-mode and Image-mode.
+     *
+     * Persisted on the project itself (`Project::setPrincipalMode()`), not
+     * app-wide `QSettings` (unlike Hardware Acceleration's own toggle) -
+     * this is a property of how a project's *content* is authored, not a
+     * diagnostic/display preference. Only affects new geometry synthesized
+     * from here on (currently: Procedural/Heal/Soften/Smudge/OrderChaos
+     * brush-stamp radius) - already-painted content is completely
+     * unaffected until repainted.
+     *
+     * @param imageModeEnabled `true` for Image-mode (a stamp's on-screen
+     *        pixel footprint stays fixed regardless of frequency
+     *        register); `false` for Sound-mode (the default, and the only
+     *        behavior before this milestone).
+     */
+    void setPrincipalMode(bool imageModeEnabled);
+
+    /**
      * @brief Captures the currently Picked object's own `Path` as the
      *        MindWaves panel's own currently-selected library entry's drawn
      *        shape - `docs/sound-mind-design.md`'s "MindWave Functions"
@@ -2682,6 +2702,15 @@ private:
     /// `PathController::setDefaultNodeType()`'s own docs), independent of
     /// (and not reset by) which tool mode is currently active.
     QAction* smoothNodesAction_ = nullptr;
+
+    /// @brief The Edit menu's Image Mode checkable toggle (`v0.Y.47.1`,
+    /// Principal Modes) - checked while the current project's own
+    /// `PrincipalMode` is `Image`. Kept as a member since, unlike Hardware
+    /// Acceleration's own app-wide toggle, this reflects *per-project*
+    /// state and must be re-synced (via a `QSignalBlocker`-guarded
+    /// `setChecked()`, the same pattern its own initial-state application
+    /// already uses) every time `setProject()` loads a different project.
+    QAction* principalModeAction_ = nullptr;
 
     /// @brief The dockable panel exposing the current paint tool's own
     /// parameters - see its own class docs for what's deliberately not

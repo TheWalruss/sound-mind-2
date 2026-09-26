@@ -728,6 +728,22 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* applyFilterToSelectionAction = editMenu->addAction(tr("Apply &Filter to Selection"));
     connect(applyFilterToSelectionAction, &QAction::triggered, this, &MainWindow::applyFilterToSelection);
 
+    // Principal Modes (v0.Y.47.1) - docs/sound-mind-design.md's own
+    // "Principal modes". An editing-behavior toggle, not a view/display
+    // setting, hence Edit menu (not View, unlike Hardware Acceleration)
+    // and persisted per-project (not app-wide QSettings) - see
+    // setPrincipalMode()'s own docs. Initial state applied directly
+    // (matching Hardware Acceleration's own QSignalBlocker pattern above)
+    // once a project is actually set, in setProject() below - a
+    // freshly-constructed MainWindow has no project yet to reflect.
+    principalModeAction_ = editMenu->addAction(tr("&Image Mode"));
+    principalModeAction_->setCheckable(true);
+    principalModeAction_->setToolTip(
+        tr("When checked, brush strokes keep a fixed pixel footprint regardless of frequency register "
+           "(Image-mode). When unchecked (default), strokes keep a fixed frequency span instead, appearing "
+           "as an oval near the top of the frequency range and an egg shape near the bottom (Sound-mode)."));
+    connect(principalModeAction_, &QAction::toggled, this, &MainWindow::setPrincipalMode);
+
     editMenu->addSeparator();
 
     // Cut/Copy/Paste (v0.Y.25.2): the standard shortcuts every other
@@ -1305,6 +1321,15 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // v0.Y.12.1 note for why this replaced a fixed, always-default-
     // constructed member.
     const sound_mind::core::ProjectSettings& settings = project_->settings();
+    // Re-synced per-project (v0.Y.47.1, Principal Modes) - unlike Hardware
+    // Acceleration's own app-wide toggle, this reflects state that's
+    // different for every project; the QSignalBlocker keeps this from
+    // re-triggering setPrincipalMode() and needlessly marking
+    // hasUnsavedChanges_ (already reset to false a few lines below).
+    {
+        const QSignalBlocker blocker(principalModeAction_);
+        principalModeAction_->setChecked(settings.principalMode == sound_mind::core::PrincipalMode::Image);
+    }
     const auto config = sound_mind::core::streamCodecConfigFor(settings);
     const auto loopLengthSamples = static_cast<std::size_t>(settings.canvasWidth) * config.hopLength;
     loopEngine_ = std::make_unique<sound_mind::core::LoopEngine>(config, loopLengthSamples, audioDeviceMode_);
@@ -2371,6 +2396,15 @@ void MainWindow::applyFilterToSelection() {
         return;
     }
     toolPaletteController_->applyFilterToSelection(filterConfigurationPanel_->filterConfiguration());
+}
+
+void MainWindow::setPrincipalMode(bool imageModeEnabled) {
+    if (!project_) {
+        return;
+    }
+    project_->setPrincipalMode(imageModeEnabled ? sound_mind::core::PrincipalMode::Image
+                                                 : sound_mind::core::PrincipalMode::Sound);
+    hasUnsavedChanges_ = true;
 }
 
 void MainWindow::usePickedPathAsMindWaveShape() {

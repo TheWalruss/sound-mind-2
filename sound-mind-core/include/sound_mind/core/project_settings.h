@@ -28,6 +28,39 @@ NLOHMANN_JSON_SERIALIZE_ENUM(FrequencyScale, {
 // clang-format on
 
 /**
+ * @brief Which of the two "Principal Modes" (`docs/sound-mind-design.md`'s
+ *        "Principal modes") new geometry is authored under - `v0.Y.47.1`.
+ *
+ * Only affects *new* geometry synthesis (currently: procedural/Heal/
+ * Soften/Smudge/OrderChaos brush-stamp radius) - already-painted content
+ * stores concrete frame/bin geometry directly and is completely unaffected
+ * by a later mode switch, per the design doc's own "switch modes and
+ * confirm existing, already-painted strokes are unaffected until
+ * repainted."
+ */
+enum class PrincipalMode {
+    /// @brief Time-frequency invariant (the only behavior before
+    ///        `v0.Y.47.1`): a stamp's radius is a fixed Hz-equivalent span,
+    ///        locally linearized to bins at its own center frequency - a
+    ///        circular stamp reads as a horizontal oval near the top of
+    ///        the frequency range and a vertical egg near the bottom.
+    Sound,
+    /// @brief Pixel-space invariant, closer to the legacy Studio: a
+    ///        stamp's bin-radius is set equal to its own frame-radius
+    ///        directly (a bin is already a canvas-native pixel - see
+    ///        `ProjectSettings::binCount`'s own docs), so a circular stamp
+    ///        reads as a circle regardless of where it's centered.
+    Image,
+};
+
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(PrincipalMode, {
+    {PrincipalMode::Sound, "sound"},
+    {PrincipalMode::Image, "image"},
+})
+// clang-format on
+
+/**
  * @brief The codec defaults and project-wide preferences every new layer
  *        inherits, per `docs/sound-mind-architecture.md`'s "Project File &
  *        Folder".
@@ -82,6 +115,12 @@ struct ProjectSettings {
     /// @brief Upper edge of the encoded frequency range, in Hz - see
     /// `sound_mind::codec::StreamCodecConfig::maxFrequencyHz`.
     float maxFrequencyHz = 16000.0f;
+
+    /// @brief Which Principal Mode new geometry is authored under - see
+    /// `PrincipalMode`'s own docs. Defaults to `Sound`, the only behavior
+    /// that existed before `v0.Y.47.1` - a project file saved before this
+    /// milestone loads as `Sound`, exactly matching what it always did.
+    PrincipalMode principalMode = PrincipalMode::Sound;
 };
 
 /// @brief Serializes settings to their JSON representation.

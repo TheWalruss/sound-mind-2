@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.2.1] - 2026-09-26
+
+Principal Modes, Installment A: **brush-stamp radius synthesis, and the new mode toggle.**
+
+### Added
+
+- **A new "Image Mode" toggle in the Edit menu.** Unchecked (the default, "Sound-mode"), a brush's circular footprint keeps a fixed frequency span - it reads as a wide oval near the top of the frequency range and a tall egg shape near the bottom, exactly as it always has. Checked ("Image-mode"), a brush stamp instead keeps a fixed *pixel* footprint - a circle looks like a circle no matter where on the canvas you paint it. Saved with the project, so it stays set the way you left it next time you open it.
+- Applies to the Procedural, Heal, Soften, Smudge, and Order/Chaos tools' own brush-tip footprint. Already-painted content is completely unaffected by switching modes - only new strokes painted from here on reflect the change.
+
+### Notes
+
+- Filters (blur, median, etc.) and MindWave-bound size parameters aren't mode-aware yet - that's future work, tracked in the roadmap.
+
+Full regression: `sound-mind-core` 876/876 (5 new), `sound-mind-studio` full suite unaffected (still 0 failures). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #160.
+
 ## [0.1.1.6] - 2026-09-26
 
 Test-only fix: roadmap finding #25.

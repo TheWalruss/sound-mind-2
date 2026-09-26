@@ -76,6 +76,15 @@ TEST_CASE("A new Project carries the settings it was created with", "[core][proj
     REQUIRE(project.settings().canvasHeight == 480);
 }
 
+TEST_CASE("setPrincipalMode changes settings().principalMode", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.settings().principalMode == sound_mind::core::PrincipalMode::Sound);
+
+    project.setPrincipalMode(sound_mind::core::PrincipalMode::Image);
+
+    REQUIRE(project.settings().principalMode == sound_mind::core::PrincipalMode::Image);
+}
+
 TEST_CASE("A Project round-trips through JSON", "[core][project]") {
     ProjectSettings settings;
     settings.canvasWidth = 800;

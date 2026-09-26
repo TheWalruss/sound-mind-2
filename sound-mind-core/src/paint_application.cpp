@@ -261,12 +261,55 @@ float falloffWeight(double normalizedDistance, float falloff) {
     return static_cast<float>(1.0 - (normalizedDistance - softEdgeStart) / softEdgeWidth);
 }
 
+/// @brief A footprint stamp's own bin-radius at `frequencyHz`, under
+/// `mode` (`v0.Y.47.1`, Principal Modes) - shared by every stamp function
+/// that synthesizes a 2D circular/square/diamond footprint
+/// (Procedural/Heal/Soften/Smudge/OrderChaos); factored out of what used
+/// to be five independent copies of the same four lines.
+///
+/// `Sound` (the only behavior before this parameter existed): `size`'s own
+/// fixed Hz-equivalent radius, locally linearized into a bin-radius at
+/// `frequencyHz`'s own position - the existing technique (average of the
+/// bin-distance to `frequencyHz + radius` and to `frequencyHz - radius`),
+/// which is why a circular stamp reads as an oval near the top of the
+/// frequency range and an egg near the bottom.
+///
+/// `Image`: `frameRadius` directly, with no Hz/bin conversion at all - a
+/// bin is already a canvas-native pixel (`ProjectSettings::binCount`'s own
+/// docs), so giving a stamp an equal bin-radius and frame-radius makes it
+/// undistorted in canvas-pixel terms regardless of where it's centered.
+///
+/// @param mode Which Principal Mode governs the conversion.
+/// @param frameRadius The stamp's own frame-radius (always linear/mode-
+///        agnostic - see `applyProceduralPaintOperation()`'s own docs).
+/// @param binCenter The stamp's own center, in bins.
+/// @param frequencyHz The stamp's own center, in Hz - the same point
+///        `binCenter` was computed from.
+/// @param size `ToolConfiguration::size()` - the seconds-equivalent
+///        normalized radius `frequencyToTimeScale` converts to Hz.
+/// @param frequencyToTimeScale The per-project scale converting `size`
+///        into an Hz-equivalent radius - see `frequencyToTimeScaleFor()`'s
+///        own docs. Ignored entirely in `Image` mode.
+/// @param config The codec configuration to convert Hz to bins with.
+/// @return The bin-radius, always positive (clamped to a small epsilon so
+///         a caller never divides by exactly zero).
+double localBinRadius(PrincipalMode mode, double frameRadius, float binCenter, float frequencyHz, float size,
+                       double frequencyToTimeScale, const sound_mind::codec::StreamCodecConfig& config) {
+    if (mode == PrincipalMode::Image) {
+        return std::max(1e-6, frameRadius);
+    }
+    const float frequencyRadiusHz = static_cast<float>(size * frequencyToTimeScale);
+    const float binAbove = frequencyToBinIndex(frequencyHz + frequencyRadiusHz, config);
+    const float binBelow = frequencyToBinIndex(frequencyHz - frequencyRadiusHz, config);
+    return std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+}
+
 /// @brief `ProceduralConfiguration`'s own stamp: the existing 2D
 /// footprint-blend algorithm, unchanged since before `ToolConfiguration`
 /// became polymorphic - see applyPaintOperation()'s own docs.
 void applyProceduralPaintOperation(const PaintOperation& operation, const ProceduralConfiguration& toolConfig,
                                     const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
-                                    sound_mind::codec::StreamImage& content) {
+                                    sound_mind::codec::StreamImage& content, PrincipalMode principalMode) {
     const double frameRadius =
         timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
     if (frameRadius <= 0.0) {
@@ -279,16 +322,9 @@ void applyProceduralPaintOperation(const PaintOperation& operation, const Proced
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
 
-        // Local bin-radius: the bin index of the same Hz-radius above and
-        // below this stamp's own center frequency, averaged - a cheap
-        // linearization of the log-scale mapping, accurate enough over
-        // one brush stamp's own small span.
-        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
-        const float binAbove = frequencyToBinIndex(
-            static_cast<float>(sample.point.frequencyHz) + frequencyRadiusHz, content.config);
-        const float binBelow = frequencyToBinIndex(
-            static_cast<float>(sample.point.frequencyHz) - frequencyRadiusHz, content.config);
-        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+        const double binRadius =
+            localBinRadius(principalMode, frameRadius, binCenter, static_cast<float>(sample.point.frequencyHz),
+                            toolConfig.size(), frequencyToTimeScale, content.config);
 
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
         const auto frameHigh =
@@ -645,7 +681,7 @@ GradientStop blurredNeighborhoodStop(const LocalMagnitudeSnapshot& snapshot, int
 /// fresh per-stamp snapshot rather than the live, mutating `content`.
 void applyHealPaintOperation(const PaintOperation& operation, const HealConfiguration& toolConfig,
                               const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
-                              sound_mind::codec::StreamImage& content) {
+                              sound_mind::codec::StreamImage& content, PrincipalMode principalMode) {
     const double frameRadius =
         timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
     if (frameRadius <= 0.0) {
@@ -659,12 +695,9 @@ void applyHealPaintOperation(const PaintOperation& operation, const HealConfigur
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
 
-        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
-        const float binAbove =
-            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) + frequencyRadiusHz, content.config);
-        const float binBelow =
-            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) - frequencyRadiusHz, content.config);
-        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+        const double binRadius =
+            localBinRadius(principalMode, frameRadius, binCenter, static_cast<float>(sample.point.frequencyHz),
+                            toolConfig.size(), frequencyToTimeScale, content.config);
 
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
         const auto frameHigh =
@@ -704,7 +737,7 @@ void applyHealPaintOperation(const PaintOperation& operation, const HealConfigur
 /// `SoftenConfiguration`'s own docs.
 void applySoftenPaintOperation(const PaintOperation& operation, const SoftenConfiguration& toolConfig,
                                 const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
-                                sound_mind::codec::StreamImage& content) {
+                                sound_mind::codec::StreamImage& content, PrincipalMode principalMode) {
     const double frameRadius =
         timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
     if (frameRadius <= 0.0) {
@@ -718,12 +751,9 @@ void applySoftenPaintOperation(const PaintOperation& operation, const SoftenConf
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
 
-        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
-        const float binAbove =
-            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) + frequencyRadiusHz, content.config);
-        const float binBelow =
-            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) - frequencyRadiusHz, content.config);
-        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+        const double binRadius =
+            localBinRadius(principalMode, frameRadius, binCenter, static_cast<float>(sample.point.frequencyHz),
+                            toolConfig.size(), frequencyToTimeScale, content.config);
         const int blurBinWindow = std::max(1, static_cast<int>(std::lround(binRadius)));
 
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
@@ -810,7 +840,7 @@ GradientStop lineAverageStop(const LocalMagnitudeSnapshot& snapshot, int frame, 
 /// `blurredNeighborhoodStop()` already established).
 void applySmudgePaintOperation(const PaintOperation& operation, const SmudgeConfiguration& toolConfig,
                                 const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
-                                sound_mind::codec::StreamImage& content) {
+                                sound_mind::codec::StreamImage& content, PrincipalMode principalMode) {
     if (samples.size() < 2) {
         return;  // No neighboring sample to smear toward - see this tool's own docs.
     }
@@ -841,12 +871,9 @@ void applySmudgePaintOperation(const PaintOperation& operation, const SmudgeConf
         const double frameCenter = frameCenters[i];
         const float binCenter = static_cast<float>(binCenters[i]);
 
-        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
-        const float binAbove =
-            frequencyToBinIndex(static_cast<float>(samples[i].point.frequencyHz) + frequencyRadiusHz, content.config);
-        const float binBelow =
-            frequencyToBinIndex(static_cast<float>(samples[i].point.frequencyHz) - frequencyRadiusHz, content.config);
-        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+        const double binRadius =
+            localBinRadius(principalMode, frameRadius, binCenter, static_cast<float>(samples[i].point.frequencyHz),
+                            toolConfig.size(), frequencyToTimeScale, content.config);
 
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
         const auto frameHigh =
@@ -1044,7 +1071,7 @@ void applyOrder(const std::vector<OrderChaosPoolEntry>& pool, double fraction, c
 /// blur/rearrange tool type already establishes.
 void applyOrderChaosPaintOperation(const PaintOperation& operation, const OrderChaosConfiguration& toolConfig,
                                     const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
-                                    sound_mind::codec::StreamImage& content) {
+                                    sound_mind::codec::StreamImage& content, PrincipalMode principalMode) {
     if (toolConfig.amount() == 0.0) {
         return;
     }
@@ -1066,12 +1093,9 @@ void applyOrderChaosPaintOperation(const PaintOperation& operation, const OrderC
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
 
-        const float frequencyRadiusHz = static_cast<float>(toolConfig.size() * frequencyToTimeScale);
-        const float binAbove =
-            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) + frequencyRadiusHz, content.config);
-        const float binBelow =
-            frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz) - frequencyRadiusHz, content.config);
-        const double binRadius = std::max(1e-6, (std::abs(binAbove - binCenter) + std::abs(binCenter - binBelow)) / 2.0);
+        const double binRadius =
+            localBinRadius(principalMode, frameRadius, binCenter, static_cast<float>(sample.point.frequencyHz),
+                            toolConfig.size(), frequencyToTimeScale, content.config);
 
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
         const auto frameHigh =
@@ -1189,7 +1213,7 @@ FrameBinRange rangeFor(const TimeFrequencyRect& bounds, const sound_mind::codec:
 
 void applyPaintOperation(const PaintOperation& operation, double frequencyToTimeScale,
                           sound_mind::codec::StreamImage& content, const LayerContentResolver& resolveLayerContent,
-                          const MindWaveResolver& resolveMindWave) {
+                          const MindWaveResolver& resolveMindWave, PrincipalMode principalMode) {
     if (frequencyToTimeScale <= 0.0 || content.frameCount == 0 || content.config.binCount == 0) {
         return;
     }
@@ -1207,7 +1231,7 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
     // rebuildPaintedContent() below) - revisit if a third real tool type
     // makes this unwieldy.
     if (const auto* procedural = dynamic_cast<const ProceduralConfiguration*>(&toolConfig)) {
-        applyProceduralPaintOperation(operation, *procedural, samples, frequencyToTimeScale, content);
+        applyProceduralPaintOperation(operation, *procedural, samples, frequencyToTimeScale, content, principalMode);
     } else if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(&toolConfig)) {
         applyInstrumentPaintOperation(operation, *instrument, samples, content, resolveMindWave);
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(&toolConfig)) {
@@ -1215,13 +1239,13 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
     } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(&toolConfig)) {
         applyMindGrainPaintOperation(*mindGrain, samples, resolveLayerContent, content);
     } else if (const auto* heal = dynamic_cast<const HealConfiguration*>(&toolConfig)) {
-        applyHealPaintOperation(operation, *heal, samples, frequencyToTimeScale, content);
+        applyHealPaintOperation(operation, *heal, samples, frequencyToTimeScale, content, principalMode);
     } else if (const auto* soften = dynamic_cast<const SoftenConfiguration*>(&toolConfig)) {
-        applySoftenPaintOperation(operation, *soften, samples, frequencyToTimeScale, content);
+        applySoftenPaintOperation(operation, *soften, samples, frequencyToTimeScale, content, principalMode);
     } else if (const auto* smudge = dynamic_cast<const SmudgeConfiguration*>(&toolConfig)) {
-        applySmudgePaintOperation(operation, *smudge, samples, frequencyToTimeScale, content);
+        applySmudgePaintOperation(operation, *smudge, samples, frequencyToTimeScale, content, principalMode);
     } else if (const auto* orderChaos = dynamic_cast<const OrderChaosConfiguration*>(&toolConfig)) {
-        applyOrderChaosPaintOperation(operation, *orderChaos, samples, frequencyToTimeScale, content);
+        applyOrderChaosPaintOperation(operation, *orderChaos, samples, frequencyToTimeScale, content, principalMode);
     }
     // Any other/future ToolType (Clone) paints nothing yet - the same
     // "groundwork, not yet functional" state ToolConfiguration's own docs
@@ -1234,16 +1258,19 @@ sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::St
                                                        const LayerContentResolver& resolveLayerContent,
                                                        const MindWaveResolver& resolveMindWave,
                                                        const ProjectSettings* settings) {
+    const PrincipalMode principalMode = settings != nullptr ? settings->principalMode : PrincipalMode::Sound;
     sound_mind::codec::StreamImage result = base;
     for (const Operation* operation : operations) {
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation)) {
-            applyPaintOperation(*paint, frequencyToTimeScale, result, resolveLayerContent, resolveMindWave);
+            applyPaintOperation(*paint, frequencyToTimeScale, result, resolveLayerContent, resolveMindWave,
+                                 principalMode);
         } else if (const auto* fill = dynamic_cast<const FillOperation*>(operation)) {
             applyFillOperation(*fill, result);
         } else if (const auto* paste = dynamic_cast<const PasteOperation*>(operation)) {
             applyPasteOperation(*paste, result);
         } else if (const auto* sequence = dynamic_cast<const SequenceOperation*>(operation)) {
-            applySequenceOperation(*sequence, frequencyToTimeScale, result, resolveLayerContent, resolveMindWave);
+            applySequenceOperation(*sequence, frequencyToTimeScale, result, resolveLayerContent, resolveMindWave,
+                                    principalMode);
         } else if (const auto* filter = dynamic_cast<const FilterOperation*>(operation)) {
             if (settings != nullptr) {
                 applyFilterOperation(*filter, result, *settings,

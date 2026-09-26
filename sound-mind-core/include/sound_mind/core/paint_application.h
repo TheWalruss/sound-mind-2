@@ -429,11 +429,21 @@ struct FrameBinRange {
  *        resolver, meaning "no vibrato/tremolo at all" - the correct
  *        behavior for every call site with no Project to resolve against
  *        (nearly all of the existing test suite).
+ * @param principalMode Which Principal Mode (`v0.Y.47.1`) governs how the
+ *        Procedural/Heal/Soften/Smudge/OrderChaos stamps below convert
+ *        `ToolConfiguration::size()` into a bin-radius - see
+ *        `PrincipalMode`'s own docs. `InstrumentConfiguration`'s own stamp
+ *        places exact harmonic frequencies rather than a footprint, so it
+ *        has no bin-radius concept to begin with and ignores this
+ *        entirely. Defaults to `Sound`, the only behavior that existed
+ *        before this parameter - every pre-existing call site keeps its
+ *        exact prior behavior unchanged.
  */
 void applyPaintOperation(const PaintOperation& operation, double frequencyToTimeScale,
                           sound_mind::codec::StreamImage& content,
                           const LayerContentResolver& resolveLayerContent = {},
-                          const MindWaveResolver& resolveMindWave = {});
+                          const MindWaveResolver& resolveMindWave = {},
+                          PrincipalMode principalMode = PrincipalMode::Sound);
 
 /**
  * @brief Rebuilds a layer's own painted content from scratch: a copy of

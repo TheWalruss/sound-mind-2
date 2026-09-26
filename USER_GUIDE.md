@@ -657,6 +657,19 @@ it's a real, paintable canvas like any other, not just a fixed floor to
 import onto (never the locked Equalizer layer at the top, which has
 nothing to paint onto in the first place).
 
+**Sound-mode vs. Image-mode**: **Edit → Image Mode** toggles how a brush
+stamp's own shape is measured on the frequency axis, for the Procedural,
+Heal, Soften, Smudge, and Order/Chaos tools. Unchecked (Sound-mode, the
+default), a stroke's frequency-axis extent is fixed in Hz - since the
+canvas's vertical axis is logarithmic, a circular stamp actually reads as
+a wide oval near the top of the frequency range and a tall egg shape near
+the bottom. Checked (Image-mode), a stamp instead keeps a fixed *pixel*
+footprint on the canvas - a circle looks like a circle no matter where you
+paint it, at the cost of a moved/painted sound's own pitch relationships
+no longer lining up the way they would in Sound-mode. This is saved with
+the project, so it stays set the way you left it. Switching modes never
+changes anything you've already painted - only new strokes reflect it.
+
 The **Tool Configuration** toolbar button opens a dockable panel (off by
 default, alongside Layers/Playback/Record/Loop) with the brush's own
 settings:
@@ -786,9 +799,11 @@ settings:
   the equivalent frequency span on the frequency axis (using this
   project's own Hz-per-second scale, so the same number always describes
   the same *shape*, not the same pixel size, regardless of canvas
-  resolution). The panel's own default (`0.2`) is a comfortably visible
-  stroke on a typical project without covering too much of it at once.
-  Hidden for Mind Shot/Mind Grain, which don't use it.
+  resolution) - unless **Edit → Image Mode** is checked (see below), which
+  changes what that frequency-axis shape actually looks like. The panel's
+  own default (`0.2`) is a comfortably visible stroke on a typical project
+  without covering too much of it at once. Hidden for Mind Shot/Mind
+  Grain, which don't use it.
 - **Stamp Mode** - how densely the brush's tip is stamped along a stroke's
   path, from a drop-down. **Hidden for Heal, Soften, Smudge, and
   Order/Chaos**, where it's fixed to Along Curve instead - manual testing
