@@ -15,9 +15,11 @@ extern "C" {
 #include "sound_mind/codec/video_export.h"
 
 using sound_mind::codec::AudioBuffer;
+using sound_mind::codec::exportSegmentedVideo;
 using sound_mind::codec::exportVideo;
 using sound_mind::codec::ExportCancelled;
 using sound_mind::codec::RgbImage;
+using sound_mind::codec::VideoSegment;
 
 namespace {
 
@@ -171,4 +173,59 @@ TEST_CASE("exportVideo with a shouldCancel that never returns true behaves exact
 
     CHECK(info.hasMpeg4Video);
     CHECK(callCount > 0);  // the callback really was consulted, not just accepted and ignored.
+}
+
+TEST_CASE("exportSegmentedVideo writes an MP4 spanning every segment's own duration", "[video_export]") {
+    const std::vector<VideoSegment> segments = {
+        VideoSegment{makeTestCanvas(16, 16), 0.0},
+        VideoSegment{makeTestCanvas(16, 16), 0.5},
+    };
+    const AudioBuffer audio = makeSineTone(440.0f, 1.0f, 44100);
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export-segmented.mp4";
+
+    exportSegmentedVideo(path, segments, audio, /*frameRate=*/24);
+    const VideoInfo info = readBackVideoInfo(path);
+    std::filesystem::remove(path);
+
+    CHECK(info.hasMpeg4Video);
+    CHECK(info.hasAacAudio);
+    CHECK(info.durationSeconds > 0.8);
+    CHECK(info.durationSeconds < 1.2);
+}
+
+TEST_CASE("exportSegmentedVideo throws for an empty segment list", "[video_export]") {
+    const AudioBuffer audio = makeSineTone(440.0f, 0.1f, 44100);
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export-nosegments.mp4";
+
+    CHECK_THROWS_AS(exportSegmentedVideo(path, {}, audio), std::runtime_error);
+}
+
+TEST_CASE("exportSegmentedVideo throws when segments' own canvas dimensions disagree", "[video_export]") {
+    const std::vector<VideoSegment> segments = {
+        VideoSegment{makeTestCanvas(16, 16), 0.0},
+        VideoSegment{makeTestCanvas(32, 16), 0.5},
+    };
+    const AudioBuffer audio = makeSineTone(440.0f, 1.0f, 44100);
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export-mismatched.mp4";
+
+    CHECK_THROWS_AS(exportSegmentedVideo(path, segments, audio), std::runtime_error);
+}
+
+TEST_CASE("exportVideo is exactly exportSegmentedVideo with one segment starting at 0", "[video_export]") {
+    const RgbImage canvas = makeTestCanvas(16, 16);
+    const AudioBuffer audio = makeSineTone(440.0f, 0.3f, 44100);
+    const auto singlePath = std::filesystem::temp_directory_path() / "sound-mind-test-export-single.mp4";
+    const auto segmentedPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-single-seg.mp4";
+
+    exportVideo(singlePath, canvas, audio, /*frameRate=*/10);
+    exportSegmentedVideo(segmentedPath, {VideoSegment{canvas, 0.0}}, audio, /*frameRate=*/10);
+    const VideoInfo singleInfo = readBackVideoInfo(singlePath);
+    const VideoInfo segmentedInfo = readBackVideoInfo(segmentedPath);
+    std::filesystem::remove(singlePath);
+    std::filesystem::remove(segmentedPath);
+
+    CHECK(singleInfo.videoWidth == segmentedInfo.videoWidth);
+    CHECK(singleInfo.videoHeight == segmentedInfo.videoHeight);
+    CHECK(singleInfo.hasMpeg4Video == segmentedInfo.hasMpeg4Video);
+    CHECK(singleInfo.hasAacAudio == segmentedInfo.hasAacAudio);
 }

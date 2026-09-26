@@ -2,12 +2,35 @@
 
 #include <filesystem>
 #include <functional>
+#include <vector>
 
 #include "sound_mind/codec/audio_buffer.h"
 #include "sound_mind/codec/export_cancelled.h"
 #include "sound_mind/codec/rgb_image.h"
 
 namespace sound_mind::codec {
+
+/**
+ * @brief One span of a segmented video export - `exportSegmentedVideo()`'s
+ *        own building block, `docs/sound-mind-roadmap.md`'s `v0.Y.49.1`
+ *        (Macro Mode) Installment C.
+ *
+ * The moving playhead line (see `exportVideo()`'s own docs) sweeps
+ * continuously across the *whole* exported video's own duration,
+ * unaffected by segment boundaries - only the static canvas image
+ * underneath it cuts to a new one at each segment's own `startTimeSeconds`,
+ * matching a scripted macro's own "the project's state changed at this
+ * exact moment" semantics.
+ */
+struct VideoSegment {
+    /// @brief The canvas this segment's own frames render, from
+    ///        `startTimeSeconds` up to the next segment's own (or the
+    ///        video's own end, for the last segment).
+    RgbImage canvas;
+    /// @brief When this segment begins, in the exported video's own
+    ///        timeline - the first segment's own must be `0.0`.
+    double startTimeSeconds = 0.0;
+};
 
 /**
  * @brief Exports an MP4 video of a spectrogram canvas, synced to its audio.
@@ -57,5 +80,35 @@ namespace sound_mind::codec {
  */
 void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, const AudioBuffer& audio,
                   int frameRate = 30, const std::function<bool()>& shouldCancel = nullptr);
+
+/**
+ * @brief Exports an MP4 video whose own canvas image cuts to a new one at
+ *        each `VideoSegment`'s own `startTimeSeconds`, synced to one
+ *        continuous audio track spanning the whole thing -
+ *        `docs/sound-mind-roadmap.md`'s `v0.Y.49.1` (Macro Mode)
+ *        Installment C, exporting a recorded macro as a video.
+ *        `exportVideo()` itself is exactly the single-segment case of
+ *        this (and is implemented as a thin wrapper over it).
+ *
+ * @param path Destination path.
+ * @param segments Every canvas segment, in order - `segments.front()`'s
+ *        own `startTimeSeconds` must be `0.0`; every other segment's own
+ *        must be strictly increasing. All segments must share the same
+ *        `canvas.width`/`canvas.height` (the same project's own canvas,
+ *        re-rendered at each state change - not independently sized
+ *        images).
+ * @param audio The full, already-concatenated audio to mux alongside the
+ *        video, and to derive the video's total duration and playhead
+ *        speed from - see `exportVideo()`'s own docs.
+ * @param frameRate Video frame rate, in frames per second.
+ * @param shouldCancel See `exportVideo()`'s own docs.
+ * @throws std::runtime_error if `segments` is empty, its own canvas
+ *         dimensions are inconsistent, the file can't be written, or
+ *         ffmpeg couldn't create/open an encoder or muxer for it.
+ * @throws ExportCancelled if `shouldCancel` returns `true`.
+ */
+void exportSegmentedVideo(const std::filesystem::path& path, const std::vector<VideoSegment>& segments,
+                          const AudioBuffer& audio, int frameRate = 30,
+                          const std::function<bool()>& shouldCancel = nullptr);
 
 }  // namespace sound_mind::codec

@@ -118,8 +118,11 @@ void drawPlayheadLine(std::vector<std::uint8_t>& frameRgb24, std::uint32_t width
 }
 
 /// @brief Renders every video frame (static canvas + moving playhead line,
-/// see exportVideo()'s docs) through `sws`, encoding+writing each one.
-void encodeVideoTrack(AVFormatContext& formatCtx, VideoEncoder& encoder, const RgbImage& canvas,
+/// see exportVideo()'s docs) through `sws`, encoding+writing each one. The
+/// canvas cuts to `segments[i + 1]`'s own once `playheadSeconds` reaches
+/// its `startTimeSeconds` - see exportSegmentedVideo()'s own docs. A plain
+/// `exportVideo()` call arrives here as a single-element segment list.
+void encodeVideoTrack(AVFormatContext& formatCtx, VideoEncoder& encoder, const std::vector<VideoSegment>& segments,
                        std::uint32_t paddedWidth, std::uint32_t paddedHeight, double durationSeconds, int frameRate,
                        const std::function<bool()>& shouldCancel) {
     AVCodecContext& ctx = *encoder.codecCtx;
@@ -132,17 +135,39 @@ void encodeVideoTrack(AVFormatContext& formatCtx, VideoEncoder& encoder, const R
         throw std::runtime_error("could not create an RGB24->YUV converter");
     }
 
-    const std::vector<std::uint8_t> baseFrame = padCanvasToRgb24(canvas, paddedWidth, paddedHeight);
+    // Every segment's own base frame, padded once up front rather than
+    // per-video-frame - the same "pad once, reuse" optimization the
+    // original single-canvas version already made.
+    std::vector<std::vector<std::uint8_t>> baseFrames;
+    baseFrames.reserve(segments.size());
+    for (const VideoSegment& segment : segments) {
+        baseFrames.push_back(padCanvasToRgb24(segment.canvas, paddedWidth, paddedHeight));
+    }
+
     const auto totalFrames = static_cast<std::int64_t>(std::ceil(durationSeconds * frameRate));
+    std::size_t activeSegment = 0;
 
     for (std::int64_t frameIndex = 0; frameIndex < totalFrames; ++frameIndex) {
         if (shouldCancel && shouldCancel()) {
             throw ExportCancelled{};
         }
 
-        std::vector<std::uint8_t> frameRgb24 = baseFrame;
-
         const double playheadSeconds = static_cast<double>(frameIndex) / frameRate;
+
+        // Forward-only scan (never resets to 0) - segments are ordered by
+        // their own strictly-increasing startTimeSeconds, so this whole
+        // pass stays O(totalFrames + segments.size()), not O(totalFrames *
+        // segments.size()).
+        while (activeSegment + 1 < segments.size() &&
+               segments[activeSegment + 1].startTimeSeconds <= playheadSeconds) {
+            ++activeSegment;
+        }
+
+        std::vector<std::uint8_t> frameRgb24 = baseFrames[activeSegment];
+
+        // The playhead's own sweep is always relative to the *whole*
+        // video's duration, never reset at a segment boundary - see
+        // exportSegmentedVideo()'s/VideoSegment's own docs.
         const double playheadFraction =
             durationSeconds > 0.0 ? std::clamp(playheadSeconds / durationSeconds, 0.0, 1.0) : 0.0;
         const auto playheadX = static_cast<std::uint32_t>(playheadFraction * paddedWidth);
@@ -174,15 +199,29 @@ void encodeVideoTrack(AVFormatContext& formatCtx, VideoEncoder& encoder, const R
 
 void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, const AudioBuffer& audio, int frameRate,
                   const std::function<bool()>& shouldCancel) {
-    if (canvas.width == 0 || canvas.height == 0) {
+    exportSegmentedVideo(path, {VideoSegment{canvas, 0.0}}, audio, frameRate, shouldCancel);
+}
+
+void exportSegmentedVideo(const std::filesystem::path& path, const std::vector<VideoSegment>& segments,
+                           const AudioBuffer& audio, int frameRate, const std::function<bool()>& shouldCancel) {
+    if (segments.empty()) {
+        throw std::runtime_error("cannot export video with no segments");
+    }
+    const RgbImage& firstCanvas = segments.front().canvas;
+    if (firstCanvas.width == 0 || firstCanvas.height == 0) {
         throw std::runtime_error("cannot export video for an empty canvas");
+    }
+    for (const VideoSegment& segment : segments) {
+        if (segment.canvas.width != firstCanvas.width || segment.canvas.height != firstCanvas.height) {
+            throw std::runtime_error("every segment's own canvas must share the same dimensions");
+        }
     }
     if (frameRate <= 0) {
         throw std::runtime_error("frameRate must be positive");
     }
 
-    const std::uint32_t paddedWidth = roundUpToEven(canvas.width);
-    const std::uint32_t paddedHeight = roundUpToEven(canvas.height);
+    const std::uint32_t paddedWidth = roundUpToEven(firstCanvas.width);
+    const std::uint32_t paddedHeight = roundUpToEven(firstCanvas.height);
     const double durationSeconds =
         audio.sampleRateHz > 0 ? static_cast<double>(audio.frameCount()) / audio.sampleRateHz : 0.0;
 
@@ -202,7 +241,7 @@ void exportVideo(const std::filesystem::path& path, const RgbImage& canvas, cons
     // (used by both encode*Track() helpers) buffers and reorders packets across
     // streams by dts as needed, so encoding the whole video track and then the
     // whole audio track is just as correct as interleaving them here, and simpler.
-    encodeVideoTrack(*formatCtx, videoEncoder, canvas, paddedWidth, paddedHeight, durationSeconds, frameRate,
+    encodeVideoTrack(*formatCtx, videoEncoder, segments, paddedWidth, paddedHeight, durationSeconds, frameRate,
                       shouldCancel);
     encodeAudioTrack(*formatCtx, audioEncoder, audio, shouldCancel);
 

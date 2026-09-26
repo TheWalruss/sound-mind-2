@@ -13,6 +13,7 @@
 #include <QUrl>
 
 #include "sound_mind/codec/audio_export.h"
+#include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/background_task.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/device_test_tone_player.h"
@@ -700,6 +701,19 @@ public slots:
      * poolTopmostLayer()'s docs for why only failure shows a modal.
      */
     void exportVideo();
+
+    /**
+     * @brief Prompts for a destination file and exports the most recently
+     *        recorded macro as an MP4 video - `v0.Y.49.1` (Macro Mode)
+     *        Installment C. See `exportMacroVideoAsync()`'s own docs for
+     *        the actual export mechanism.
+     *
+     * Does nothing if the file dialog is cancelled. Progress and
+     * completion are reported via the status bar (non-modal), matching
+     * exportVideo()'s own convention - only a genuine failure shows a
+     * modal.
+     */
+    void exportMacroVideo();
 
     /**
      * @brief Cycles the layer with the given id through its own 3-way
@@ -2180,10 +2194,48 @@ public:
      */
     void exportTopmostLayerAudioAsync(const std::filesystem::path& path, sound_mind::codec::CompressedAudioFormat format);
 
+    /**
+     * @brief Starts an asynchronous video export of the most recently
+     *        recorded macro - `v0.Y.49.1` (Macro Mode) Installment C.
+     *
+     * Two phases, deliberately not both backgrounded (confirmed with the
+     * user): (1) a **synchronous** extraction phase, right here, on the UI
+     * thread - walks the macro's own events exactly like playMacro() does
+     * (`undoStack_.jumpTo()` per event), capturing each segment's own
+     * `sound_mind::codec::VideoSegment` (a `toRgbImage()`-rendered
+     * composite) and its own slice of decoded audio as independent,
+     * owned copies, then restores `undoStack_` to exactly the index it
+     * was at before this method was ever called - so this method has zero
+     * visible effect on the live project no matter how it ends. (2) the
+     * genuinely slow part - `sound_mind::codec::exportSegmentedVideo()`'s
+     * own frame-by-frame encode - runs backgrounded via `exportTask_`,
+     * exactly like exportTopmostLayerVideoAsync()'s own shape, sharing the
+     * same cancel button/progress poll/`ExportKind` distinction.
+     *
+     * Unlike playMacro(), every event (including `PlaybackStarted`/
+     * `PlaybackStopped`) contributes to establishing the exported video's
+     * own timeline: the first recorded event's own `timestampSeconds`
+     * becomes the video's `t = 0`, and the last one's own becomes its
+     * total duration - `PlaybackStarted`/`PlaybackStopped` themselves
+     * still never get their own `VideoSegment` (nothing about the canvas
+     * changes at either), but they still anchor where the timeline starts
+     * and ends.
+     *
+     * Shows `QMessageBox::critical()` immediately, without starting
+     * anything, if there's no project, nothing recorded, or the recorded
+     * macro's own indices no longer resolve against the current
+     * `undoStack_` (the same staleness guard playMacro() itself makes) -
+     * all knowable synchronously, before either phase begins.
+     *
+     * @param path Destination path.
+     */
+    void exportMacroVideoAsync(const std::filesystem::path& path);
+
     /// @brief Whether an exportTopmostLayerVideoAsync()/
-    /// exportTopmostLayerAudioAsync() export - either kind - is still
-    /// running. Only one export (of either kind) runs at a time - see
-    /// exportTopmostLayerAudioAsync()'s own docs on why they share one slot.
+    /// exportTopmostLayerAudioAsync()/exportMacroVideoAsync() export - any
+    /// kind - is still running. Only one export (of any kind) runs at a
+    /// time - see exportTopmostLayerAudioAsync()'s own docs on why they
+    /// share one slot.
     /// @return `true` from either async export method (once it actually
     ///         started a background task - not for its own synchronous
     ///         "nothing to export" early-out) until the background encode
@@ -2854,6 +2906,11 @@ private:
     /// own docs describe, rather than tracking an enabled/disabled state.
     QAction* macroPlayAction_ = nullptr;
 
+    /// @brief The transport toolbar's "Export Macro Video..." momentary
+    /// action - `v0.Y.49.1` (Macro Mode) Installment C. Not checkable,
+    /// same reasoning as macroPlayAction_ above.
+    QAction* macroExportVideoAction_ = nullptr;
+
     /// @brief The dockable panel exposing the current paint tool's own
     /// parameters - see its own class docs for what's deliberately not
     /// built yet (the Wizard button, the Tool Preset drop-down). Hidden
@@ -3045,8 +3102,8 @@ private:
 
     /// @brief Which kind of export exportTask_ actually is - purely so
     /// pollExportProgress() can phrase its own status bar message
-    /// correctly ("audio"/"video").
-    enum class ExportKind { Video, Audio };
+    /// correctly ("audio"/"video"/"macro video").
+    enum class ExportKind { Video, Audio, MacroVideo };
     ExportKind exportKind_ = ExportKind::Video;
 
     /// @brief Where the currently (or most recently) running export is/was

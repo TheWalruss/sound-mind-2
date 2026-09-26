@@ -1089,6 +1089,16 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
            "began, then re-applies each captured action as playback reaches it"));
     connect(macroPlayAction_, &QAction::triggered, this, &MainWindow::playMacro);
 
+    // Export Macro Video (v0.Y.49.1 Installment C) - no standard
+    // shortcut, matching macroRecordAction_'s/macroPlayAction_'s own
+    // no-shortcut choice; a no-op (shows a modal, per exportMacroVideoAsync()'s
+    // own docs) with nothing recorded.
+    macroExportVideoAction_ = transportToolBar->addAction(tr("E&xport Macro Video..."));
+    macroExportVideoAction_->setToolTip(
+        tr("Renders the most recently recorded macro as an MP4 video, re-compositing the project at each captured "
+           "moment"));
+    connect(macroExportVideoAction_, &QAction::triggered, this, &MainWindow::exportMacroVideo);
+
     // Zoom's own toolbar, added after transportToolBar (not before) so
     // findChild<QToolBar*>()'s own singular/first-match behavior - already
     // relied on by existing tests to reach transportToolBar specifically -
@@ -1907,6 +1917,15 @@ void MainWindow::exportVideo() {
     exportTopmostLayerVideoAsync(std::filesystem::path(fileName.toStdString()));
 }
 
+void MainWindow::exportMacroVideo() {
+    const QString fileName =
+        QFileDialog::getSaveFileName(this, tr("Export Macro Video"), QString(), tr(kExportVideoFileFilter));
+    if (fileName.isEmpty()) {
+        return;
+    }
+    exportMacroVideoAsync(std::filesystem::path(fileName.toStdString()));
+}
+
 bool MainWindow::exportTopmostLayerAudioNow(const std::filesystem::path& path, QString* errorMessage) {
     sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
     if (layer == nullptr) {
@@ -2031,6 +2050,150 @@ void MainWindow::exportTopmostLayerAudioAsync(const std::filesystem::path& path,
     exportProgressTimer_->start();
 }
 
+void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path) {
+    if (isExportRunning()) {
+        statusBar()->showMessage(tr("Already exporting - wait for it to finish, or cancel it, first."), 5000);
+        return;
+    }
+    if (!project_ || macroRecorder_.events().empty()) {
+        QMessageBox::critical(this, tr("Export Macro Video Failed"), tr("No macro recorded to export."));
+        return;
+    }
+
+    // The same staleness guard playMacro() itself makes - see its own
+    // docs.
+    const std::size_t startIndex = macroRecorder_.startUndoIndex();
+    bool stale = startIndex > undoStack_.count();
+    for (const MacroEvent& event : macroRecorder_.events()) {
+        if (event.undoStackIndexAfter > undoStack_.count()) {
+            stale = true;
+        }
+    }
+    if (stale) {
+        QMessageBox::critical(this, tr("Export Macro Video Failed"), tr("Can't export this macro - record a new one first."));
+        return;
+    }
+
+    // The exported video's own timeline: t=0 is the earliest recorded
+    // event's own timestamp (typically PlaybackStarted), and its total
+    // duration is the span up to the latest one's own (typically
+    // PlaybackStopped) - both are project-timeline positions, not yet
+    // normalized to the video's own t=0.
+    const double firstTimestamp = macroRecorder_.events().front().timestampSeconds;
+    const double lastTimestamp = macroRecorder_.events().back().timestampSeconds;
+    if (lastTimestamp <= firstTimestamp) {
+        QMessageBox::critical(this, tr("Export Macro Video Failed"),
+                               tr("This macro doesn't span any real duration to export."));
+        return;
+    }
+
+    // Every real (canvas-changing) event, in order - the same filtering
+    // playMacro() itself uses for macroPlaybackEvents_ (see its own
+    // docs); PlaybackStarted/PlaybackStopped only anchor the timeline
+    // above, they don't get their own segment.
+    std::vector<const MacroEvent*> realEvents;
+    for (const MacroEvent& event : macroRecorder_.events()) {
+        if (event.type != MacroEventType::PlaybackStarted && event.type != MacroEventType::PlaybackStopped) {
+            realEvents.push_back(&event);
+        }
+    }
+
+    // Every segment's own boundary, in project-timeline (not yet
+    // video-relative) seconds: the initial checkpoint, then each real
+    // event's own timestamp.
+    std::vector<double> boundaries;
+    boundaries.push_back(firstTimestamp);
+    for (const MacroEvent* event : realEvents) {
+        boundaries.push_back(event->timestampSeconds);
+    }
+
+    // Synchronous extraction phase - deliberately not backgrounded (see
+    // exportMacroVideoAsync()'s own docs on why). undoStack_.jumpTo(
+    // originalIndex) below restores the live project to exactly where it
+    // was, no matter how this phase ends, so this method has zero visible
+    // effect on the user's own current editing session.
+    const std::size_t originalIndex = undoStack_.currentIndex();
+    std::vector<sound_mind::codec::VideoSegment> segments;
+    sound_mind::codec::AudioBuffer concatenatedAudio;
+    bool renderedEveryComposite = true;
+
+    undoStack_.jumpTo(startIndex);
+    for (std::size_t i = 0; i < boundaries.size(); ++i) {
+        if (i > 0) {
+            undoStack_.jumpTo(realEvents[i - 1]->undoStackIndexAfter);
+        }
+        const auto composite = sound_mind::core::compositeProject(*project_, /*shouldCancel=*/nullptr,
+                                                                    /*respectMute=*/true);
+        if (!composite.has_value()) {
+            renderedEveryComposite = false;
+            break;
+        }
+
+        sound_mind::codec::VideoSegment segment;
+        segment.canvas = sound_mind::codec::toRgbImage(*composite);
+        segment.startTimeSeconds = boundaries[i] - firstTimestamp;
+        segments.push_back(std::move(segment));
+
+        // This segment's own slice of its (whole-project-duration)
+        // decoded audio - concatenatedAudio ends up exactly
+        // (lastTimestamp - firstTimestamp) seconds long once every
+        // segment's own slice is appended, matching the video's own
+        // computed duration exactly.
+        const sound_mind::codec::AudioBuffer segmentAudio = sound_mind::codec::decode(*composite);
+        const double spanStart = boundaries[i];
+        const double spanEnd = (i + 1 < boundaries.size()) ? boundaries[i + 1] : lastTimestamp;
+        if (segmentAudio.sampleRateHz > 0 && spanEnd > spanStart) {
+            concatenatedAudio.sampleRateHz = segmentAudio.sampleRateHz;
+            const auto startSample =
+                static_cast<std::size_t>(std::llround(spanStart * segmentAudio.sampleRateHz));
+            const auto endSample = std::min(
+                segmentAudio.frameCount(),
+                static_cast<std::size_t>(std::llround(spanEnd * segmentAudio.sampleRateHz)));
+            if (endSample > startSample) {
+                concatenatedAudio.left.insert(concatenatedAudio.left.end(), segmentAudio.left.begin() + startSample,
+                                               segmentAudio.left.begin() + endSample);
+                concatenatedAudio.right.insert(concatenatedAudio.right.end(),
+                                                segmentAudio.right.begin() + startSample,
+                                                segmentAudio.right.begin() + endSample);
+            }
+        }
+    }
+    undoStack_.jumpTo(originalIndex);
+
+    if (!renderedEveryComposite || segments.empty()) {
+        QMessageBox::critical(this, tr("Export Macro Video Failed"),
+                               tr("Could not render this macro's own content."));
+        return;
+    }
+
+    exportKind_ = ExportKind::MacroVideo;
+    exportPath_ = path;
+    exportOutcome_ = ExportOutcome::Success;
+    exportErrorMessage_.clear();
+
+    // segments/concatenatedAudio captured by value - independent, owned
+    // copies the background thread can safely touch, the same reasoning
+    // exportTopmostLayerVideoAsync()'s own docs give (nothing here
+    // touches project_/undoStack_ again once this point is reached).
+    exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, path, segments, audio = concatenatedAudio](sound_mind::core::CancellationToken& token) {
+            try {
+                sound_mind::codec::exportSegmentedVideo(path, segments, audio, /*frameRate=*/30,
+                                                         [&token]() { return token.cancellationRequested(); });
+            } catch (const sound_mind::codec::ExportCancelled&) {
+                exportOutcome_ = ExportOutcome::Cancelled;
+            } catch (const std::exception& e) {
+                exportOutcome_ = ExportOutcome::Failed;
+                exportErrorMessage_ = QString::fromStdString(e.what());
+            }
+        });
+    exportTask_->start();
+
+    statusBar()->showMessage(tr("Exporting macro video..."));
+    exportCancelButton_->show();
+    exportProgressTimer_->start();
+}
+
 bool MainWindow::isExportRunning() const noexcept { return exportTask_ != nullptr && exportTask_->isRunning(); }
 
 void MainWindow::cancelExport() {
@@ -2046,7 +2209,9 @@ void MainWindow::pollExportProgress() {
     exportProgressTimer_->stop();
     exportCancelButton_->hide();
 
-    const QString kindLabel = exportKind_ == ExportKind::Video ? tr("video") : tr("audio");
+    const QString kindLabel = exportKind_ == ExportKind::Video     ? tr("video")
+                               : exportKind_ == ExportKind::Audio  ? tr("audio")
+                                                                    : tr("macro video");
     switch (exportOutcome_) {
         case ExportOutcome::Success:
             statusBar()->showMessage(
@@ -2060,17 +2225,20 @@ void MainWindow::pollExportProgress() {
             // than leaving a broken, unplayable file at the path the user
             // chose.
             std::filesystem::remove(exportPath_);
-            statusBar()->showMessage(tr("%1 export cancelled.").arg(exportKind_ == ExportKind::Video
-                                                                          ? tr("Video")
-                                                                          : tr("Audio")),
+            statusBar()->showMessage(tr("%1 export cancelled.").arg(exportKind_ == ExportKind::Video ? tr("Video")
+                                                                      : exportKind_ == ExportKind::Audio
+                                                                          ? tr("Audio")
+                                                                          : tr("Macro video")),
                                       5000);
             break;
-        case ExportOutcome::Failed:
+        case ExportOutcome::Failed: {
             statusBar()->clearMessage();
-            QMessageBox::critical(
-                this, exportKind_ == ExportKind::Video ? tr("Export Video Failed") : tr("Export Audio Failed"),
-                exportErrorMessage_);
+            const QString title = exportKind_ == ExportKind::Video     ? tr("Export Video Failed")
+                                   : exportKind_ == ExportKind::Audio  ? tr("Export Audio Failed")
+                                                                        : tr("Export Macro Video Failed");
+            QMessageBox::critical(this, title, exportErrorMessage_);
             break;
+        }
     }
     exportTask_.reset();
 }

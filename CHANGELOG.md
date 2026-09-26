@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.2.5] - 2026-09-26
+
+Macro Mode, Installment C (final): **video export.**
+
+### Added
+
+- **A new "Export Macro Video..." toolbar action** - renders the most recently recorded macro as an MP4, re-compositing the project at each captured moment (playback start, layer visibility, painting, filter changes, MindWave edits) and cutting to the new result instantly, with one continuous audio track underneath. Unlike live playback, there's no audible restart in the exported file - each change is already the settled result by the time its frame appears.
+
+### Notes
+
+- This completes Macro Mode's three original goals: recording, in-app playback, and now export. There's still no panel to inspect a macro's own contents, and a macro isn't saved with the project - both remain future work.
+
+Full regression: `sound-mind-core` 879/879 (unaffected), `sound-mind-codec` 61/61 (4 new), `sound-mind-studio` full suite unaffected (still 0 failures). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #164.
+
 ## [0.1.2.4] - 2026-09-26
 
 Macro Mode, Installment B: **playback.**
