@@ -202,7 +202,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     layersPanel_ = new LayersPanel(this);
     layersPanel_->hide();  // nothing to show until setProject() - see refreshLayersPanel()'s docs.
     addDockWidget(Qt::RightDockWidgetArea, layersPanel_);
-    connect(layersPanel_, &LayersPanel::visibilityToggled, this, &MainWindow::toggleLayerVisibility);
+    connect(layersPanel_, &LayersPanel::visibilityCycleRequested, this, &MainWindow::cycleLayerVisibilityState);
     connect(layersPanel_, &LayersPanel::opacityChanged, this, &MainWindow::setLayerOpacity);
     connect(layersPanel_, &LayersPanel::translationChanged, this, &MainWindow::setLayerTranslation);
     connect(layersPanel_, &LayersPanel::rescaleChanged, this, &MainWindow::setLayerRescale);
@@ -1991,8 +1991,8 @@ void MainWindow::updateWindowTitle() {
     setWindowTitle(title);
 }
 
-void MainWindow::toggleLayerVisibility(sound_mind::core::LayerId id, bool visible) {
-    layerController_->toggleLayerVisibility(id, visible);
+void MainWindow::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
+    layerController_->cycleLayerVisibilityState(id);
 }
 
 void MainWindow::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
@@ -2415,7 +2415,7 @@ void MainWindow::startPlayback() {
         const auto& layers = project_->layers();
         const bool anyContributor =
             std::any_of(layers.begin(), layers.end(), [](const sound_mind::core::Layer& layer) {
-                return layer.visible() && layer.content().has_value() &&
+                return layer.visible() && !layer.muted() && layer.content().has_value() &&
                        !sound_mind::core::isFilterLayerType(layer.type());
             });
         if (!anyContributor) {
@@ -2434,7 +2434,7 @@ void MainWindow::startPlayback() {
             [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
                 try {
                     compositedResult_ = sound_mind::core::compositeProject(
-                        projectCopy, [&token]() { return token.cancellationRequested(); });
+                        projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
                 } catch (const sound_mind::core::CompositeCancelled&) {
                     compositeOutcome_ = CompositeOutcome::Cancelled;
                 } catch (const std::exception& e) {
@@ -2817,7 +2817,7 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
         return;
     }
 
-    const auto composite = sound_mind::core::compositeProject(*project_);
+    const auto composite = sound_mind::core::compositeProject(*project_, /*shouldCancel=*/nullptr, /*respectMute=*/true);
     if (!composite.has_value()) {
         return;
     }

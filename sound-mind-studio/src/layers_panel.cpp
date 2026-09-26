@@ -67,6 +67,32 @@ QString typeTagText(LayerType type) {
     return QString();
 }
 
+/// @brief The visibility button's own glyph for the current (`visible`,
+/// `muted`) pair - `v0.Y.46.1` Installment B ("Layers Panel & Editing
+/// Enhancements v2"). "Visible"/"Invisible" reuse the exact glyphs the
+/// pre-Installment-B binary toggle already used; "Muted" (a new middle
+/// state - still shown on the canvas, excluded from audio playback) gets
+/// its own, distinct half-filled glyph.
+QString visibilityGlyphFor(bool visible, bool muted) {
+    if (!visible) {
+        return QStringLiteral("○");
+    }
+    return muted ? QStringLiteral("◐") : QStringLiteral("●");
+}
+
+/// @brief The visibility button's own tooltip for the current (`visible`,
+/// `muted`) pair - describes what the *next* click does, matching this
+/// button's own cycling behavior.
+QString visibilityTooltipFor(bool visible, bool muted) {
+    if (!visible) {
+        return QObject::tr("Hidden - click to show (visible and audible again)");
+    }
+    if (muted) {
+        return QObject::tr("Muted - shown on the canvas, silent in playback - click to hide");
+    }
+    return QObject::tr("Visible and audible - click to mute (still shown, silent in playback)");
+}
+
 /// @brief The row header's own fixed height, in pixels - tall enough for a
 /// legible thumbnail strip (`v0.Y.44.1`, Layers Panel Redesign) while
 /// staying compact; up from the pre-redesign row's own flat 32px.
@@ -228,23 +254,27 @@ public:
             header->addWidget(disallowedMark);
         }
 
-        auto* visibilityButton = new QPushButton(data.visible ? QStringLiteral("●") : QStringLiteral("○"));
+        // A 3-way cycle (Visible -> Muted -> Invisible), not a plain
+        // on/off toggle - v0.Y.46.1 Installment B ("Layers Panel & Editing
+        // Enhancements v2"). Plain (non-checkable) and click-driven, since
+        // QPushButton's own checkable/toggled machinery is inherently
+        // binary; the button's own glyph/tooltip are derived fresh from
+        // data.visible/data.muted on every rebuild (LayersPanel::
+        // rebuildRows() already reconstructs every row on any state
+        // change), so nothing here needs to track or compute the next
+        // state itself.
+        auto* visibilityButton = new QPushButton(visibilityGlyphFor(data.visible, data.muted));
         visibilityButton->setObjectName(QStringLiteral("visibilityButton"));
         visibilityButton->setFlat(true);
-        visibilityButton->setCheckable(true);
-        visibilityButton->setChecked(data.visible);
         visibilityButton->setFixedWidth(22);
-        visibilityButton->setToolTip(tr("Toggle layer visibility"));
+        visibilityButton->setToolTip(visibilityTooltipFor(data.visible, data.muted));
         if (data.type == LayerType::Background) {
             // Matches the legacy panel: the Background layer's visibility
             // can't be turned off - it's always the floor of the stack.
             visibilityButton->setEnabled(false);
             visibilityButton->setToolTip(tr("Background layer is always visible"));
         } else {
-            connect(visibilityButton, &QPushButton::toggled, this, [this, visibilityButton](bool checked) {
-                visibilityButton->setText(checked ? QStringLiteral("●") : QStringLiteral("○"));
-                emit visibilityToggled(id_, checked);
-            });
+            connect(visibilityButton, &QPushButton::clicked, this, [this]() { emit visibilityCycleRequested(id_); });
         }
         header->addWidget(visibilityButton);
 
@@ -441,7 +471,7 @@ public:
     }
 
 signals:
-    void visibilityToggled(sound_mind::core::LayerId id, bool visible);
+    void visibilityCycleRequested(sound_mind::core::LayerId id);
     void opacityChanged(sound_mind::core::LayerId id, float opacity);
     void translationChanged(sound_mind::core::LayerId id, std::int64_t translationColumns);
     void rescaleChanged(sound_mind::core::LayerId id, double rescaleFactor);
@@ -650,7 +680,7 @@ void LayersPanel::rebuildRows() {
         item->setSizeHint(row->sizeHint());
         list_->setItemWidget(item, row);
 
-        connect(row, &LayerRowWidget::visibilityToggled, this, &LayersPanel::visibilityToggled);
+        connect(row, &LayerRowWidget::visibilityCycleRequested, this, &LayersPanel::visibilityCycleRequested);
         connect(row, &LayerRowWidget::opacityChanged, this, &LayersPanel::opacityChanged);
         connect(row, &LayerRowWidget::translationChanged, this, &LayersPanel::translationChanged);
         connect(row, &LayerRowWidget::rescaleChanged, this, &LayersPanel::rescaleChanged);

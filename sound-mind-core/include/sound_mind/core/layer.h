@@ -165,6 +165,23 @@ public:
     [[nodiscard]] bool visible() const noexcept { return visible_; }
 
     /**
+     * @brief Whether this layer is currently muted - real-world testing
+     *        pass "Layers Panel & Editing Enhancements v2" (`v0.Y.46.1`
+     *        Installment B), distinct from visible().
+     *
+     * A muted layer still contributes to the visual canvas exactly as any
+     * other visible layer does (`visible()` alone still governs that) -
+     * only whatever composite drives *audio* playback excludes it (see
+     * `sound_mind::core::compositeProject()`'s own `respectMute`
+     * parameter). Meaningless (never consulted) while `visible()` is
+     * `false` - an invisible layer is already excluded from every
+     * composite, audio included, regardless of this flag.
+     *
+     * @return `true` if muted; `false` (the default) otherwise.
+     */
+    [[nodiscard]] bool muted() const noexcept { return muted_; }
+
+    /**
      * @brief This layer's horizontal time-axis shift, in spectrogram
      *        columns - see `docs/sound-mind-roadmap.md`'s Layer Time
      *        Alignment milestone (`v0.Y.21.1`).
@@ -235,6 +252,11 @@ public:
      *        it), not a `Layer`-level invariant.
      */
     void setVisible(bool visible) noexcept { visible_ = visible; }
+
+    /// @brief Sets whether this layer is currently muted - see muted()'s
+    ///        own docs.
+    /// @param muted The new muted state.
+    void setMuted(bool muted) noexcept { muted_ = muted; }
 
     /// @brief Sets this layer's horizontal time-axis shift.
     /// @param columns The new shift, in spectrogram columns - see
@@ -339,6 +361,7 @@ private:
     float opacity_ = 1.0f;
     std::optional<MindWaveId> opacityMindWave_;
     bool visible_ = true;
+    bool muted_ = false;
     std::int64_t translationColumns_ = 0;
     double rescaleFactor_ = 1.0;
     std::optional<sound_mind::codec::StreamImage> content_;

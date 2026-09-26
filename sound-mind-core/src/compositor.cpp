@@ -497,7 +497,8 @@ std::optional<sound_mind::codec::RgbImage> renderLayerThumbnail(const Layer& lay
     return sound_mind::codec::downsampleAveraged(base, width, height);
 }
 
-std::optional<StreamImage> compositeProject(const Project& project, const std::function<bool()>& shouldCancel) {
+std::optional<StreamImage> compositeProject(const Project& project, const std::function<bool()>& shouldCancel,
+                                             bool respectMute) {
     const auto& layers = project.layers();
 
     // Pre-pass: which Normal/Background layers actually contribute their
@@ -511,7 +512,7 @@ std::optional<StreamImage> compositeProject(const Project& project, const std::f
     std::vector<const Layer*> normalContributors;
     bool anyFilterLayer = false;
     for (const Layer& layer : layers) {
-        if (!layer.visible()) {
+        if (!layer.visible() || (respectMute && layer.muted())) {
             continue;
         }
         if (isFilterLayerType(layer.type())) {
@@ -599,7 +600,7 @@ std::optional<StreamImage> compositeProject(const Project& project, const std::f
         if (shouldCancel && shouldCancel()) {
             throw CompositeCancelled{};
         }
-        if (!layer.visible()) {
+        if (!layer.visible() || (respectMute && layer.muted())) {
             continue;
         }
         if (isFilterLayerType(layer.type())) {

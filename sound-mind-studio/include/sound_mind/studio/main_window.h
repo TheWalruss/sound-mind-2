@@ -114,7 +114,7 @@ class RecordPanel;
  * "nothing to show yet" treatment) and refreshed via refreshLayersPanel()
  * after any action that adds, removes, reorders, renames, or changes a
  * layer's visibility/opacity - including the panel's own signals, wired
- * to toggleLayerVisibility()/setLayerOpacity()/renameLayer()/
+ * to cycleLayerVisibilityState()/setLayerOpacity()/renameLayer()/
  * deleteLayer()/reorderLayers(). topmostLayerWithContent() now also
  * skips hidden layers - see its own docs.
  *
@@ -190,7 +190,7 @@ class RecordPanel;
  * **As of `v0.Y.29.1` (Refactor & Clean Up, Installment D):**
  * `layerController_` now owns layer-stack lookup (`layerById()`,
  * `topmostLayerWithContent()`, `paintTargetLayerId()`), mutation
- * (`toggleLayerVisibility()`, `setLayerOpacity()`, ... `reorderLayers()`),
+ * (`cycleLayerVisibilityState()`, `setLayerOpacity()`, ... `reorderLayers()`),
  * and Layers Panel/Filter Configuration Panel refresh - see its own class
  * docs. `paintTargetLayerId()` - the "which layer" resolution the
  * previous paragraph names - now lives there too, called via
@@ -698,17 +698,19 @@ public slots:
     void exportVideo();
 
     /**
-     * @brief Sets whether the layer with the given id contributes to the
-     *        project - the actual work behind `LayersPanel`'s visibility
-     *        toggle.
+     * @brief Cycles the layer with the given id through its own 3-way
+     *        visibility state (Visible -> Muted -> Invisible) - the actual
+     *        work behind `LayersPanel`'s visibility button, `v0.Y.46.1`
+     *        Installment B ("Layers Panel & Editing Enhancements v2"). See
+     *        `LayerController::cycleLayerVisibilityState()`'s own docs for
+     *        the exact states.
      *
      * Marks hasUnsavedChanges() and refreshes both the canvas and the
      * Layers Panel. Does nothing if no layer with this id exists.
      *
-     * @param id The layer to change.
-     * @param visible The new visibility.
+     * @param id The layer to cycle.
      */
-    void toggleLayerVisibility(sound_mind::core::LayerId id, bool visible);
+    void cycleLayerVisibilityState(sound_mind::core::LayerId id);
 
     /**
      * @brief Sets the opacity of the layer with the given id - the actual

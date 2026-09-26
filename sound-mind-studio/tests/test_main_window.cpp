@@ -1667,7 +1667,9 @@ void MainWindowTest::refreshLayersPanelReflectsTheCurrentLayers() {
     QCOMPARE(panel->findChildren<QLabel*>(QStringLiteral("nameLabel")).size(), 3);  // Background + Equalizer + imported.
 }
 
-void MainWindowTest::toggleLayerVisibilityHidesALayerFromTopmostLookup() {
+void MainWindowTest::cycleLayerVisibilityStateEventuallyHidesALayerFromTopmostLookup() {
+    // v0.Y.46.1 Installment B - cycleLayerVisibilityState() replaced the
+    // old plain on/off toggleLayerVisibility()/visibilityToggled() pair.
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-layers-visibility.wav";
     writeTestWavFile(path);
 
@@ -1682,18 +1684,20 @@ void MainWindowTest::toggleLayerVisibilityHidesALayerFromTopmostLookup() {
     // (private) skipping a hidden layer without exposing it directly.
     QVERIFY(window.poolTopmostLayerNow());
 
-    window.toggleLayerVisibility(layerId, false);
+    window.cycleLayerVisibilityState(layerId);  // Visible -> Muted - still has content, still poolable.
+    QVERIFY(window.poolTopmostLayerNow());
 
+    window.cycleLayerVisibilityState(layerId);  // Muted -> Invisible - now skipped.
     QVERIFY(!window.poolTopmostLayerNow());
 }
 
-void MainWindowTest::toggleLayerVisibilityMarksUnsavedChanges() {
+void MainWindowTest::cycleLayerVisibilityStateMarksUnsavedChanges() {
     TestMainWindow window;
     createFreshTestProject(window);
     const auto backgroundId = window.project()->layers().front().id();
     QVERIFY(!window.hasUnsavedChanges());
 
-    window.toggleLayerVisibility(backgroundId, false);
+    window.cycleLayerVisibilityState(backgroundId);
 
     QVERIFY(window.hasUnsavedChanges());
 }

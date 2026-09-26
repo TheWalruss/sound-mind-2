@@ -247,7 +247,10 @@ taken appends `" (2)"`, `" (3)"`, and so on.
 Each row's name is shown overlaid on a small preview of that layer's own
 content (a plain background for a layer type with nothing to preview -
 Filter/Background/Equalizer). An unselected row shows only that preview
-and a **visibility toggle** (●/○); **click a row's name to select it**
+and a **visibility button** (●/◐/○) - click it to cycle the layer through
+**Visible** (seen and heard), **Muted** (still shown on the canvas, but
+silent during playback), and **Invisible** (excluded from both, same as
+turning visibility off always worked); **click a row's name to select it**
 (see [Painting](#painting) below - the selected layer is the one a brush
 stroke paints into) to reveal its full set of controls:
 

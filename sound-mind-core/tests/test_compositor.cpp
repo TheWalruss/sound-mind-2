@@ -595,6 +595,72 @@ TEST_CASE("compositeProject skips a hidden layer's own contribution", "[core][co
     CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-10.0f).margin(0.01));
 }
 
+TEST_CASE("compositeProject includes a muted layer when respectMute is left at its default (false)",
+          "[core][compositor]") {
+    // v0.Y.46.1 Installment B ("Layers Panel & Editing Enhancements v2") -
+    // the live canvas render passes respectMute=false, so a muted layer
+    // must still be seen exactly like any other visible one.
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
+    Layer loud(0, "Loud", LayerType::Normal);
+    loud.setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    loud.setMuted(true);
+    project.addLayer(std::move(loud));
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    // Normal compositing sums linear amplitudes (see compositeProject()'s
+    // own docs) - two real contributors summed is louder than either
+    // alone, so this doesn't check an exact value, just that "Loud" (0dB)
+    // clearly pulled the result up from Background's own -10dB.
+    CHECK(composite->leftMagnitudeDb[0] > -5.0f);
+}
+
+TEST_CASE("compositeProject skips a muted layer's own contribution when respectMute is true",
+          "[core][compositor]") {
+    // Every composite that actually drives audio playback passes
+    // respectMute=true, so a muted layer is silent there.
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
+    Layer loud(0, "Loud", LayerType::Normal);
+    loud.setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    loud.setMuted(true);
+    project.addLayer(std::move(loud));
+
+    const auto composite = compositeProject(project, /*shouldCancel=*/nullptr, /*respectMute=*/true);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-10.0f).margin(0.01));  // "Loud" excluded.
+}
+
+TEST_CASE("compositeProject returns nullopt when the sole contributor is muted and respectMute is true "
+          "(the single-layer fast path's own pre-pass)",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());  // Background/Equalizer both start with no content.
+    project.layers()[0].setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    project.layers()[0].setMuted(true);
+
+    const auto composite = compositeProject(project, /*shouldCancel=*/nullptr, /*respectMute=*/true);
+
+    CHECK_FALSE(composite.has_value());
+}
+
+TEST_CASE("compositeProject with respectMute true still excludes an invisible (not just muted) layer",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
+    Layer loud(0, "Loud", LayerType::Normal);
+    loud.setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    loud.setVisible(false);
+    project.addLayer(std::move(loud));
+
+    const auto composite = compositeProject(project, /*shouldCancel=*/nullptr, /*respectMute=*/true);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-10.0f).margin(0.01));
+}
+
 TEST_CASE("compositeProject skips a layer with no content, without crashing", "[core][compositor]") {
     Project project = Project::createNew(testSettings());
     project.layers()[0].setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));

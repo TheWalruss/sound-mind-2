@@ -8,12 +8,12 @@ class LayerControllerTest : public QObject {
 private slots:
     void withNoProjectLookupsReturnNulloptOrNullptr();
     void setProjectMakesLookupsWork();
-    void toggleLayerVisibilityChangesVisibilityAndEmitsLayersChanged();
+    void cycleLayerVisibilityStateCyclesVisibleMutedInvisibleAndEmitsLayersChanged();
     void setLayerOpacityChangesOpacity();
     void setLayerOpacityMindWaveChangesBindingAndTheRowDataReflectsIt();
     void setLayerTranslationChangesTranslation();
     void setLayerRescaleChangesRescale();
-    void toggleLayerVisibilityIsUndoableAndRedoable();
+    void cycleLayerVisibilityStateIsUndoableAndRedoable();
     void setLayerOpacityIsUndoableAndRedoable();
     void setLayerOpacityMindWaveIsUndoableAndRedoable();
     void setLayerTranslationIsUndoableAndRedoable();

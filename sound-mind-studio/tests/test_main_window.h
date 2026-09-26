@@ -81,8 +81,8 @@ private slots:
     // Layers Panel (v0.Y.13.1)
     void layersPanelIsHiddenUntilAProjectExists();
     void refreshLayersPanelReflectsTheCurrentLayers();
-    void toggleLayerVisibilityHidesALayerFromTopmostLookup();
-    void toggleLayerVisibilityMarksUnsavedChanges();
+    void cycleLayerVisibilityStateEventuallyHidesALayerFromTopmostLookup();
+    void cycleLayerVisibilityStateMarksUnsavedChanges();
     void setLayerOpacityChangesTheLayersOpacity();
     void renameLayerToRenamesTheLayer();
     void renameLayerToFailsForAnEmptyName();

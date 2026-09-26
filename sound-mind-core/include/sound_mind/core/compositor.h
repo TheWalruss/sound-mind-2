@@ -167,12 +167,22 @@ public:
  *        case cheap enough not to need cancelling. `nullptr` (the
  *        default) never cancels - the exact prior behavior, unchanged for
  *        every existing caller.
+ * @param respectMute Whether a muted layer (`Layer::muted()`) is also
+ *        skipped, on top of the existing visible-only skip - "Layers
+ *        Panel & Editing Enhancements v2" (`v0.Y.46.1` Installment B).
+ *        `false` (the default, and every prior caller's exact behavior)
+ *        includes a muted layer exactly like any other visible one - the
+ *        live canvas render passes `false`, since a muted layer still
+ *        needs to be *seen*. `true` additionally excludes it - every
+ *        composite that actually drives audio playback (not just the
+ *        canvas) passes `true`, so a muted layer is heard by neither.
  * @return The combined `StreamImage`, or `std::nullopt` if no layer in
- *         `project` is both visible and has any cached content at all.
+ *         `project` contributes at all (every layer is invisible, muted
+ *         with `respectMute` set, or has no cached content).
  * @throws CompositeCancelled if `shouldCancel` returns `true` - see its
  *         own docs.
  */
 [[nodiscard]] std::optional<sound_mind::codec::StreamImage> compositeProject(
-    const Project& project, const std::function<bool()>& shouldCancel = nullptr);
+    const Project& project, const std::function<bool()>& shouldCancel = nullptr, bool respectMute = false);
 
 }  // namespace sound_mind::core

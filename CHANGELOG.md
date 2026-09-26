@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.1.2] - 2026-09-26
+
+Layers Panel & Editing Enhancements v2, Installment B: **Mute.**
+
+### Added
+
+- **The Layers panel's visibility button now cycles through three states**: Visible, Muted (still shown on the canvas, silent during playback), and Invisible (hidden and silent, as visibility alone always worked before). Click through to cycle; undoable.
+
+### Changed
+
+- The old plain visibility on/off toggle is replaced by the 3-state cycle above - existing projects are unaffected (every layer loads as Visible, not Muted).
+
+Full regression: `sound-mind-core` 847/847 (7 new), `sound-mind-studio` `LayerControllerTest`/`LayersPanelTest`/`MainWindowTest` all otherwise unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #155.
+
 ## [0.1.1.1] - 2026-09-26
 
 Layers Panel & Editing Enhancements v2, Installment A: **Keyboard shortcuts for layer navigation.**

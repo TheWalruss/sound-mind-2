@@ -124,6 +124,7 @@ void LayerController::refreshLayersPanel(std::optional<sound_mind::core::LayerId
             row.type = layer.type();
             row.opacity = layer.opacity();
             row.visible = layer.visible();
+            row.muted = layer.muted();
             row.translationColumns = layer.translationColumns();
             row.rescaleFactor = layer.rescaleFactor();
             // Bug fix: this was previously left at RowData's own default
@@ -142,29 +143,44 @@ void LayerController::refreshLayersPanel(std::optional<sound_mind::core::LayerId
     layersPanel_->setLayers(rows);
 }
 
-void LayerController::applyVisibility(sound_mind::core::LayerId id, bool visible) {
+void LayerController::applyVisibilityAndMute(sound_mind::core::LayerId id, bool visible, bool muted) {
     sound_mind::core::Layer* layer = layerById(id);
     if (layer == nullptr) {
         return;
     }
     layer->setVisible(visible);
+    layer->setMuted(muted);
     emit layersChanged();
     playbackController_->invalidate();  // "topmost layer with content" may have changed.
     canvas_->update();
     refreshLayersPanel();
 }
 
-void LayerController::toggleLayerVisibility(sound_mind::core::LayerId id, bool visible) {
+void LayerController::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
     sound_mind::core::Layer* layer = layerById(id);
     if (layer == nullptr) {
         return;
     }
     const bool oldVisible = layer->visible();
-    applyVisibility(id, visible);
-    if (oldVisible != visible) {
-        undoStack_->push({/*undo=*/[this, id, oldVisible]() { applyVisibility(id, oldVisible); },
-                           /*redo=*/[this, id, visible]() { applyVisibility(id, visible); }});
+    const bool oldMuted = layer->muted();
+
+    bool newVisible;
+    bool newMuted;
+    if (oldVisible && !oldMuted) {
+        newVisible = true;
+        newMuted = true;  // Visible -> Muted.
+    } else if (oldVisible && oldMuted) {
+        newVisible = false;
+        newMuted = false;  // Muted -> Invisible.
+    } else {
+        newVisible = true;
+        newMuted = false;  // Invisible -> Visible.
     }
+
+    applyVisibilityAndMute(id, newVisible, newMuted);
+    undoStack_->push(
+        {/*undo=*/[this, id, oldVisible, oldMuted]() { applyVisibilityAndMute(id, oldVisible, oldMuted); },
+         /*redo=*/[this, id, newVisible, newMuted]() { applyVisibilityAndMute(id, newVisible, newMuted); }});
 }
 
 void LayerController::applyOpacity(sound_mind::core::LayerId id, float opacity) {

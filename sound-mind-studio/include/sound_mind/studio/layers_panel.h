@@ -113,6 +113,10 @@ public:
         /// @brief Mirrors `sound_mind::core::Layer::visible()`.
         bool visible = true;
 
+        /// @brief Mirrors `sound_mind::core::Layer::muted()` - `v0.Y.46.1`
+        /// Installment B ("Layers Panel & Editing Enhancements v2").
+        bool muted = false;
+
         /// @brief Mirrors `sound_mind::core::Layer::translationColumns()`.
         std::int64_t translationColumns = 0;
 
@@ -240,8 +244,14 @@ signals:
     void selectionChanged(std::optional<sound_mind::core::LayerId> id);
 
 
-    /// @brief A row's visibility toggle was clicked.
-    void visibilityToggled(sound_mind::core::LayerId id, bool visible);
+    /// @brief A row's visibility button was clicked - `v0.Y.46.1`
+    /// Installment B ("Layers Panel & Editing Enhancements v2") replaced
+    /// the previous plain on/off toggle with a 3-way cycle (Visible ->
+    /// Muted -> Invisible), so this carries only the row's id - the
+    /// button doesn't compute (or need to know) the next state itself;
+    /// `LayerController::cycleLayerVisibilityState()` does, reading the
+    /// layer's own current state directly.
+    void visibilityCycleRequested(sound_mind::core::LayerId id);
 
     /// @brief A row's opacity slider changed.
     void opacityChanged(sound_mind::core::LayerId id, float opacity);

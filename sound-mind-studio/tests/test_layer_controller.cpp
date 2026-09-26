@@ -75,17 +75,31 @@ void LayerControllerTest::setProjectMakesLookupsWork() {
     QCOMPARE(fixture.controller.paintTargetLayerId().value(), backgroundId);
 }
 
-void LayerControllerTest::toggleLayerVisibilityChangesVisibilityAndEmitsLayersChanged() {
+void LayerControllerTest::cycleLayerVisibilityStateCyclesVisibleMutedInvisibleAndEmitsLayersChanged() {
+    // v0.Y.46.1 Installment B ("Layers Panel & Editing Enhancements v2") -
+    // replaced the old plain on/off toggleLayerVisibility().
     Fixture fixture;
     Project project = Project::createNew(testSettings());
     const LayerId backgroundId = project.layers().front().id();
     fixture.controller.setProject(&project);
     QSignalSpy spy(&fixture.controller, &LayerController::layersChanged);
+    QVERIFY(project.layers().front().visible());
+    QVERIFY(!project.layers().front().muted());
 
-    fixture.controller.toggleLayerVisibility(backgroundId, false);
-
-    QVERIFY(!project.layers().front().visible());
+    fixture.controller.cycleLayerVisibilityState(backgroundId);  // Visible -> Muted.
+    QVERIFY(project.layers().front().visible());
+    QVERIFY(project.layers().front().muted());
     QCOMPARE(spy.count(), 1);
+
+    fixture.controller.cycleLayerVisibilityState(backgroundId);  // Muted -> Invisible.
+    QVERIFY(!project.layers().front().visible());
+    QVERIFY(!project.layers().front().muted());
+    QCOMPARE(spy.count(), 2);
+
+    fixture.controller.cycleLayerVisibilityState(backgroundId);  // Invisible -> Visible.
+    QVERIFY(project.layers().front().visible());
+    QVERIFY(!project.layers().front().muted());
+    QCOMPARE(spy.count(), 3);
 }
 
 void LayerControllerTest::setLayerOpacityChangesOpacity() {
@@ -156,23 +170,27 @@ void LayerControllerTest::setLayerRescaleChangesRescale() {
     QCOMPARE(project.layers().front().rescaleFactor(), 2.0);
 }
 
-void LayerControllerTest::toggleLayerVisibilityIsUndoableAndRedoable() {
+void LayerControllerTest::cycleLayerVisibilityStateIsUndoableAndRedoable() {
     Fixture fixture;
     Project project = Project::createNew(testSettings());
     const LayerId backgroundId = project.layers().front().id();
     fixture.controller.setProject(&project);
     QVERIFY(project.layers().front().visible());  // The default, undone-to value.
+    QVERIFY(!project.layers().front().muted());
 
-    fixture.controller.toggleLayerVisibility(backgroundId, false);
-    QVERIFY(!project.layers().front().visible());
+    fixture.controller.cycleLayerVisibilityState(backgroundId);  // Visible -> Muted.
+    QVERIFY(project.layers().front().visible());
+    QVERIFY(project.layers().front().muted());
     QVERIFY(fixture.undoStack.canUndo());
 
     fixture.undoStack.undo();
     QVERIFY(project.layers().front().visible());
+    QVERIFY(!project.layers().front().muted());
     QVERIFY(fixture.undoStack.canRedo());
 
     fixture.undoStack.redo();
-    QVERIFY(!project.layers().front().visible());
+    QVERIFY(project.layers().front().visible());
+    QVERIFY(project.layers().front().muted());
 }
 
 void LayerControllerTest::setLayerOpacityIsUndoableAndRedoable() {

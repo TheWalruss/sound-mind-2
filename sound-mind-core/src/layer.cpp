@@ -9,6 +9,7 @@ void to_json(nlohmann::json& json, const Layer& layer) {
         {"type", layer.type_},
         {"opacity", layer.opacity_},
         {"visible", layer.visible_},
+        {"muted", layer.muted_},
         {"translationColumns", layer.translationColumns_},
         {"rescaleFactor", layer.rescaleFactor_},
         {"filterConfiguration", layer.filterConfiguration_},
@@ -32,6 +33,10 @@ void from_json(const nlohmann::json& json, Layer& layer) {
     // ProjectSettings' own new fields used in v0.Y.11.1 - a layer saved
     // before this milestone was implicitly always visible anyway.
     layer.visible_ = json.value("visible", true);
+    // Lenient (defaults to unmuted if absent), same reasoning as visible_
+    // above - didn't exist before v0.Y.46.1 Installment B (Mute); a layer
+    // saved before this milestone was implicitly always unmuted anyway.
+    layer.muted_ = json.value("muted", false);
     // Lenient (defaults to untranslated/unrescaled if absent), same
     // reasoning as visible_ above - didn't exist before v0.Y.21.1 (Layer
     // Time Alignment); a layer saved before this milestone was implicitly

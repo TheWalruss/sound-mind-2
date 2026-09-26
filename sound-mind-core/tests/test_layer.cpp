@@ -64,6 +64,17 @@ TEST_CASE("A Layer's visibility can be changed", "[core][layer]") {
     REQUIRE_FALSE(layer.visible());
 }
 
+TEST_CASE("A Layer defaults to unmuted", "[core][layer]") {
+    const Layer layer(1, "Untitled", LayerType::Normal);
+    REQUIRE_FALSE(layer.muted());
+}
+
+TEST_CASE("A Layer's muted state can be changed", "[core][layer]") {
+    Layer layer(1, "Untitled", LayerType::Normal);
+    layer.setMuted(true);
+    REQUIRE(layer.muted());
+}
+
 TEST_CASE("A Layer defaults to no horizontal translation", "[core][layer]") {
     const Layer layer(1, "Untitled", LayerType::Normal);
     REQUIRE(layer.translationColumns() == 0);
@@ -102,6 +113,7 @@ TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     original.setOpacity(0.75f);
     original.setOpacityMindWave(sound_mind::core::MindWaveId{9});
     original.setVisible(false);
+    original.setMuted(true);
     original.setTranslationColumns(120);
     original.setRescaleFactor(1.5);
     original.filterConfiguration().setType(FilterType::Sharpen);
@@ -117,6 +129,7 @@ TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     REQUIRE(restored.opacity() == original.opacity());
     REQUIRE(restored.opacityMindWave() == original.opacityMindWave());
     REQUIRE(restored.visible() == original.visible());
+    REQUIRE(restored.muted() == original.muted());
     REQUIRE(restored.translationColumns() == original.translationColumns());
     REQUIRE(restored.rescaleFactor() == original.rescaleFactor());
     REQUIRE(restored.filterConfiguration().type() == FilterType::Sharpen);
@@ -156,6 +169,17 @@ TEST_CASE("A Layer loads from JSON missing visible (a layer saved before v0.Y.13
     const Layer restored = json.get<Layer>();
 
     REQUIRE(restored.visible());
+}
+
+TEST_CASE("A Layer loads from JSON missing muted (a layer saved before v0.Y.46.1 Installment B) as unmuted",
+          "[core][layer]") {
+    const nlohmann::json json{
+        {"id", 1}, {"name", "Untitled"}, {"type", "normal"}, {"opacity", 1.0f}, {"visible", true},
+    };
+
+    const Layer restored = json.get<Layer>();
+
+    REQUIRE_FALSE(restored.muted());
 }
 
 TEST_CASE("A Layer loads from JSON missing translationColumns/rescaleFactor "

@@ -8,7 +8,7 @@ class LayersPanelTest : public QObject {
 private slots:
     void setLayersCreatesOneRowPerLayerTopFirst();
     void setLayersReplacesThePreviousRows();
-    void visibilityButtonEmitsVisibilityToggled();
+    void visibilityButtonEmitsVisibilityCycleRequestedAndShowsTheCorrectGlyphPerState();
     void backgroundVisibilityButtonIsDisabled();
     void backgroundLayerHasNoOpacityOrTransformControls();
     void opacitySliderEmitsOpacityChanged();

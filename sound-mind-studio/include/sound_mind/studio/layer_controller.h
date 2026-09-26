@@ -48,7 +48,7 @@ class UndoStack;
  * `MainWindow` holds the current project's `LoopEngine` (and only it needs
  * to, for Loop Mode's own reasons).
  *
- * **Six property setters are undoable** - `toggleLayerVisibility()`,
+ * **Six property setters are undoable** - `cycleLayerVisibilityState()`,
  * `setLayerOpacity()`, `setLayerOpacityMindWave()`, `setLayerTranslation()`,
  * `setLayerRescale()`, `setLayerBlendMode()` each push a matching
  * `UndoCommand` onto the shared
@@ -152,21 +152,36 @@ public:
      */
     void refreshLayersPanel(std::optional<sound_mind::core::LayerId> changedContentLayer = std::nullopt);
 
-    /// @brief Sets whether the layer with the given id contributes to the
-    ///        project. Repaints the canvas and invalidates cached
-    ///        playback audio ("topmost layer with content" may have
-    ///        changed), then refreshes the Layers Panel. Does nothing if
-    ///        no layer with this id exists. **Undoable** - a no-op call
-    ///        (the same visibility it already had) still applies but
-    ///        pushes no undo entry (see the class's own docs).
-    /// @param id The layer to change.
-    /// @param visible The new visibility.
-    void toggleLayerVisibility(sound_mind::core::LayerId id, bool visible);
+    /**
+     * @brief Cycles the layer with the given id through its own 3-way
+     *        visibility state - "Layers Panel & Editing Enhancements v2"
+     *        (`v0.Y.46.1` Installment B), the actual work behind the
+     *        Layers Panel's own visibility button.
+     *
+     * **Visible** (`visible() == true`, `muted() == false`) -> **Muted**
+     * (`visible() == true`, `muted() == true` - still shown on the canvas,
+     * excluded from whatever composite drives audio playback, see
+     * `sound_mind::core::compositeProject()`'s own `respectMute`
+     * parameter) -> **Invisible** (`visible() == false` - excluded from
+     * every composite, audio included, exactly as `visible()` alone always
+     * meant before this installment) -> back to **Visible**. Always
+     * transitions to a genuinely different state (there's no "already at
+     * this state" no-op case, unlike every other undoable setter here),
+     * so always pushes an undo entry.
+     *
+     * Repaints the canvas and invalidates cached playback audio ("topmost
+     * layer with content" may have changed), then refreshes the Layers
+     * Panel. Does nothing if no layer with this id exists. **Undoable**.
+     *
+     * @param id The layer to cycle.
+     */
+    void cycleLayerVisibilityState(sound_mind::core::LayerId id);
 
     /// @brief Sets the opacity of the layer with the given id. Repaints
     ///        the canvas, then refreshes the Layers Panel. Does nothing if
-    ///        no layer with this id exists. **Undoable** - see
-    ///        toggleLayerVisibility()'s own docs on no-op calls.
+    ///        no layer with this id exists. **Undoable** - a no-op call
+    ///        (the same opacity it already had) still applies but pushes
+    ///        no undo entry.
     /// @param id The layer to change.
     /// @param opacity The new opacity, intended to be in `[0, 1]`.
     void setLayerOpacity(sound_mind::core::LayerId id, float opacity);
@@ -177,7 +192,7 @@ public:
     ///        binding changes what the composite actually looks like),
     ///        then refreshes the Layers Panel. Does nothing if no layer
     ///        with this id exists. **Undoable** - see
-    ///        toggleLayerVisibility()'s own docs on no-op calls.
+    ///        setLayerOpacity()'s own docs on no-op calls.
     /// @param id The layer to change.
     /// @param mindWaveId The new binding, or `std::nullopt` to unbind.
     void setLayerOpacityMindWave(sound_mind::core::LayerId id,
@@ -186,7 +201,7 @@ public:
     /// @brief Sets the horizontal translation of the layer with the given
     ///        id. Repaints the canvas, then refreshes the Layers Panel.
     ///        Does nothing if no layer with this id exists. **Undoable** -
-    ///        see toggleLayerVisibility()'s own docs on no-op calls.
+    ///        see setLayerOpacity()'s own docs on no-op calls.
     /// @param id The layer to change.
     /// @param translationColumns The new shift, in spectrogram columns.
     void setLayerTranslation(sound_mind::core::LayerId id, std::int64_t translationColumns);
@@ -194,7 +209,7 @@ public:
     /// @brief Sets the horizontal rescale of the layer with the given id.
     ///        Repaints the canvas, then refreshes the Layers Panel. Does
     ///        nothing if no layer with this id exists. **Undoable** - see
-    ///        toggleLayerVisibility()'s own docs on no-op calls.
+    ///        setLayerOpacity()'s own docs on no-op calls.
     /// @param id The layer to change.
     /// @param rescaleFactor The new ratio.
     void setLayerRescale(sound_mind::core::LayerId id, double rescaleFactor);
@@ -205,7 +220,7 @@ public:
     ///        blend mode changes what the composite actually looks like),
     ///        then refreshes the Layers Panel. Does nothing if no layer
     ///        with this id exists. **Undoable** - see
-    ///        toggleLayerVisibility()'s own docs on no-op calls.
+    ///        setLayerOpacity()'s own docs on no-op calls.
     /// @param id The layer to change.
     /// @param mode The new blend mode.
     void setLayerBlendMode(sound_mind::core::LayerId id, sound_mind::core::BlendMode mode);
@@ -338,7 +353,7 @@ public:
      * **Undoable** - reuses setLayerOpacity()'s own undo mechanism
      * directly, so a no-op call (already at the clamped extreme) still
      * applies but pushes no undo entry, the same as every other undoable
-     * setter (see toggleLayerVisibility()'s own docs).
+     * setter (see setLayerOpacity()'s own docs).
      *
      * @param delta The opacity change to apply, before clamping.
      */
@@ -431,10 +446,11 @@ private:
     ///         `layersPanel_`, or the selected id no longer exists.
     [[nodiscard]] std::optional<std::size_t> selectedLayerIndex() const;
 
-    /// @brief The actual visibility mutation + side effects, shared by
-    ///        toggleLayerVisibility() and its own pushed UndoCommand's
-    ///        undo()/redo() callbacks - see the class's own docs.
-    void applyVisibility(sound_mind::core::LayerId id, bool visible);
+    /// @brief The actual visibility+mute mutation + side effects, shared
+    ///        by cycleLayerVisibilityState() and its own pushed
+    ///        UndoCommand's undo()/redo() callbacks - see the class's own
+    ///        docs.
+    void applyVisibilityAndMute(sound_mind::core::LayerId id, bool visible, bool muted);
 
     /// @brief The actual opacity mutation + side effects, shared by
     ///        setLayerOpacity() and its own pushed UndoCommand's

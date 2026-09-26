@@ -75,18 +75,45 @@ void LayersPanelTest::setLayersReplacesThePreviousRows() {
     QCOMPARE(nameLabels.at(0)->text(), QStringLiteral("Only"));
 }
 
-void LayersPanelTest::visibilityButtonEmitsVisibilityToggled() {
-    LayersPanel panel;
-    panel.setLayers(twoNormalLayers());
-    QSignalSpy spy(&panel, &LayersPanel::visibilityToggled);
+void LayersPanelTest::visibilityButtonEmitsVisibilityCycleRequestedAndShowsTheCorrectGlyphPerState() {
+    // v0.Y.46.1 Installment B ("Layers Panel & Editing Enhancements v2") -
+    // replaced the old plain on/off visibilityToggled() signal with a
+    // 3-way cycle (Visible -> Muted -> Invisible); the button itself
+    // doesn't compute the next state (LayerController does) - it just
+    // requests a cycle and displays whatever RowData it's next given.
+    // A single, purpose-built row - twoNormalLayers()'s own "Top" starts
+    // invisible, which would make the first assertion below misleading.
+    LayersPanel::RowData row;
+    row.id = 1;
+    row.name = QStringLiteral("Layer");
+    row.type = LayerType::Normal;
+    row.visible = true;
+    row.muted = false;
 
-    const auto buttons = panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton"));
-    QCOMPARE(buttons.size(), 2);
-    buttons.at(0)->click();  // "Top" (id 2), currently invisible - toggling on.
+    LayersPanel panel;
+    panel.setLayers({row});
+    QSignalSpy spy(&panel, &LayersPanel::visibilityCycleRequested);
+
+    auto buttons = panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton"));
+    QCOMPARE(buttons.size(), 1);
+    QCOMPARE(buttons.at(0)->text(), QStringLiteral("●"));  // Visible, unmuted.
+    buttons.at(0)->click();
 
     QCOMPARE(spy.count(), 1);
-    QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(2));
-    QCOMPARE(spy.at(0).at(1).toBool(), true);
+    QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(1));
+
+    row.muted = true;  // Simulates the controller's own Visible -> Muted transition.
+    panel.setLayers({row});
+    QTest::qWait(0);  // rebuildRows() rebuilds via deleteLater() - see setLayersReplacesThePreviousRows().
+    buttons = panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton"));
+    QCOMPARE(buttons.at(0)->text(), QStringLiteral("◐"));
+
+    row.visible = false;
+    row.muted = false;  // Simulates Muted -> Invisible.
+    panel.setLayers({row});
+    QTest::qWait(0);
+    buttons = panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton"));
+    QCOMPARE(buttons.at(0)->text(), QStringLiteral("○"));
 }
 
 void LayersPanelTest::backgroundVisibilityButtonIsDisabled() {
