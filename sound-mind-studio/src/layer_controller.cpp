@@ -5,6 +5,7 @@
 #include <QMessageBox>
 
 #include "sound_mind/core/compositor.h"
+#include "sound_mind/core/generator.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/phase_cleanup.h"
@@ -567,6 +568,23 @@ void LayerController::addFilterLayer() {
     // Selected immediately - ready to configure in FilterConfigurationPanel
     // without an extra click, the same reasoning addEmptyLayer()'s own
     // docs give for painting.
+    layersPanel_->selectLayer(id);
+}
+
+void LayerController::addGeneratedLayer(const sound_mind::core::GeneratorConfiguration& config) {
+    if (project_ == nullptr) {
+        return;
+    }
+    sound_mind::core::Layer layer(0, tr("New Generated Layer").toStdString(), sound_mind::core::LayerType::Normal);
+    layer.setContent(sound_mind::core::generateContent(config, project_->settings()));
+    const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
+    emit layersChanged();
+    playbackController_->invalidate();
+    canvas_->update();
+    refreshLayersPanel();
+    // Selected immediately - the same "ready to work with, no extra
+    // click" reasoning addEmptyLayer()'s/addFilterLayer()'s own docs
+    // give.
     layersPanel_->selectLayer(id);
 }
 

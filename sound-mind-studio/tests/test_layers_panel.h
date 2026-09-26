@@ -29,6 +29,7 @@ private slots:
     void clearSelectionDropsTheSelectionAndItsHighlight();
     void addLayerButtonEmitsAddLayerRequested();
     void addFilterLayerButtonEmitsAddFilterLayerRequested();
+    void generateLayerButtonEmitsGenerateLayerRequested();
     void selectLayerSelectsAMatchingRow();
     void selectLayerIsANoOpForAnUnknownId();
     void selectLayerEmitsSelectionChanged();

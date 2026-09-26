@@ -39,6 +39,7 @@ add_library(sound-mind-studio-lib
     src/device_combo_helpers.cpp
     src/fill_gradient_dialog.cpp
     src/filter_configuration_panel.cpp
+    src/generator_dialog.cpp
     src/gradient_bar_widget.cpp
     src/gradient_editor_widget.cpp
     src/grid_config.cpp
@@ -84,6 +85,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/device_combo_helpers.h
     include/sound_mind/studio/fill_gradient_dialog.h
     include/sound_mind/studio/filter_configuration_panel.h
+    include/sound_mind/studio/generator_dialog.h
     include/sound_mind/studio/gradient_bar_widget.h
     include/sound_mind/studio/gradient_editor_widget.h
     include/sound_mind/studio/grid_panel.h

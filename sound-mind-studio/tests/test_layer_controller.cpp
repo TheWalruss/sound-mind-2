@@ -635,6 +635,25 @@ void LayerControllerTest::addFilterLayerAddsAndSelectsAFilterLayer() {
     QCOMPARE(fixture.controller.layerById(*selectedId)->type(), LayerType::Filter);
 }
 
+void LayerControllerTest::addGeneratedLayerAddsAndSelectsAGeneratedLayer() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    const std::size_t countBefore = project.layers().size();
+
+    sound_mind::core::GeneratorConfiguration config;
+    config.family = sound_mind::core::GeneratorFamily::Lattice;
+    config.seed = 5;
+    fixture.controller.addGeneratedLayer(config);
+
+    QCOMPARE(project.layers().size(), countBefore + 1);
+    const auto selectedId = fixture.layersPanel.selectedLayerId();
+    QVERIFY(selectedId.has_value());
+    const sound_mind::core::Layer* layer = fixture.controller.layerById(*selectedId);
+    QCOMPARE(layer->type(), LayerType::Normal);
+    QVERIFY(layer->content().has_value());
+}
+
 void LayerControllerTest::handleLayerSelectionChangedSyncsFilterConfigurationPanel() {
     Fixture fixture;
     Project project = Project::createNew(testSettings());

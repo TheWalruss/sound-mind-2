@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.1] - 2026-09-26
+
+Generators, Installment A: **the Lattice family.**
+
+### Added
+
+- **A new "+ Generate Layer" button** in the Layers panel (alongside + Add Layer/+ Add Filter Layer) - opens a small dialog to pick where the result sits on the Chaos/Order continuum and a seed, then adds a new, ordinary layer filled with an organic, self-similar generated texture. The same seed always reproduces the exact same result.
+
+### Notes
+
+- Only the "Lattice" generator family is implemented so far - the Fractal and Streaming families described in the design document are still future work.
+
+Full regression: `sound-mind-core` 885/885 (6 new), `sound-mind-studio` full suite unaffected (5 new tests, still 0 failures). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #165.
+
 ## [0.1.2.5] - 2026-09-26
 
 Macro Mode, Installment C (final): **video export.**

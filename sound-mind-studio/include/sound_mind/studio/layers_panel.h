@@ -318,6 +318,13 @@ signals:
     ///        `FilterConfigurationPanel` immediately.
     void addFilterLayerRequested();
 
+    /// @brief The "+ Generate Layer" button was clicked - `MainWindow`
+    ///        responds by opening `GeneratorDialog` and, if accepted,
+    ///        adding a new generated `Normal`-type layer (see
+    ///        `MainWindow::generateLayer()`'s own docs) and selecting it
+    ///        via selectLayer() - `v0.Y.51.1` (Generators).
+    void generateLayerRequested();
+
     /**
      * @brief A drag-reorder finished with a valid result (a locked
      *        layer's position wasn't disturbed - see the class docs).

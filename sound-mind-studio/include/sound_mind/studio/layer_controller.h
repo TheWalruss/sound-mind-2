@@ -11,6 +11,7 @@
 
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/generator_configuration.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/project.h"
 
@@ -387,6 +388,18 @@ public:
     ///        invalidates cached playback audio, then refreshes the
     ///        Layers Panel. A no-op if no project is set.
     void addFilterLayer();
+
+    /// @brief Adds a new `Normal`-type layer to the current project,
+    ///        whose content is `sound_mind::core::generateContent(config,
+    ///        project's own settings)` - `docs/sound-mind-design.md`'s
+    ///        "Generators", `v0.Y.51.1`. Selects it immediately in the
+    ///        Layers Panel, the same "ready to work with, no extra click"
+    ///        reasoning `addEmptyLayer()`'s own docs give. A generated
+    ///        layer is an ordinary layer afterward - fully paintable and
+    ///        filterable, nothing about it is special-cased once created.
+    ///        A no-op if no project is set.
+    /// @param config What to generate.
+    void addGeneratedLayer(const sound_mind::core::GeneratorConfiguration& config);
 
     /// @brief Reacts to the Layers Panel's own selection changing -
     ///        keeps `FilterConfigurationPanel` in sync. Loads the newly

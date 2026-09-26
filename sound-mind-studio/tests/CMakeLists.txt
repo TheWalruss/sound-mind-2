@@ -12,6 +12,7 @@ add_executable(sound-mind-studio-tests
     test_create_project_wizard.cpp
     test_device_combo_helpers.cpp
     test_filter_configuration_panel.cpp
+    test_generator_dialog.cpp
     test_gradient_bar_widget.cpp
     test_gradient_editor_widget.cpp
     test_grid_config.cpp

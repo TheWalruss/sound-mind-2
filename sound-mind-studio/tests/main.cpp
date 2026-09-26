@@ -23,6 +23,7 @@
 #include "test_create_project_wizard.h"
 #include "test_device_combo_helpers.h"
 #include "test_filter_configuration_panel.h"
+#include "test_generator_dialog.h"
 #include "test_gradient_bar_widget.h"
 #include "test_gradient_editor_widget.h"
 #include "test_grid_config.h"
@@ -174,6 +175,9 @@ int main(int argc, char** argv) {
 
     FilterConfigurationPanelTest filterConfigurationPanelTest;
     status |= QTest::qExec(&filterConfigurationPanelTest, argc, argv);
+
+    GeneratorDialogTest generatorDialogTest;
+    status |= QTest::qExec(&generatorDialogTest, argc, argv);
 
     GradientBarWidgetTest gradientBarWidgetTest;
     status |= QTest::qExec(&gradientBarWidgetTest, argc, argv);

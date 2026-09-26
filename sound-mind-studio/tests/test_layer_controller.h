@@ -31,6 +31,7 @@ private slots:
     void nudgeSelectedLayerOpacityClampsAndIsUndoable();
     void addEmptyLayerAddsAndSelectsANormalLayer();
     void addFilterLayerAddsAndSelectsAFilterLayer();
+    void addGeneratedLayerAddsAndSelectsAGeneratedLayer();
     void handleLayerSelectionChangedSyncsFilterConfigurationPanel();
     void applyFilterConfigurationAppliesOnlyToAFilterLayer();
     void applyFilterConfigurationIsUndoableAndRedoable();

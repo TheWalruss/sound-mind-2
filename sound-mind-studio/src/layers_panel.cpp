@@ -591,6 +591,12 @@ LayersPanel::LayersPanel(QWidget* parent) : QDockWidget(tr("Layers"), parent) {
     addFilterLayerButton->setToolTip(tr("Add a new Filter layer, configured in the Filter Configuration panel"));
     connect(addFilterLayerButton, &QPushButton::clicked, this, &LayersPanel::addFilterLayerRequested);
     addButtonRow->addWidget(addFilterLayerButton);
+
+    auto* generateLayerButton = new QPushButton(tr("+ Generate Layer"));
+    generateLayerButton->setObjectName(QStringLiteral("generateLayerButton"));
+    generateLayerButton->setToolTip(tr("Generate a new layer's own content algorithmically"));
+    connect(generateLayerButton, &QPushButton::clicked, this, &LayersPanel::generateLayerRequested);
+    addButtonRow->addWidget(generateLayerButton);
     layout->addLayout(addButtonRow);
 
     list_ = new QListWidget();

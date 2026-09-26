@@ -55,6 +55,7 @@ add_library(sound-mind-core
     src/layer_export.cpp
     src/gpu_compute_access.cpp
     src/background_task.cpp
+    src/generator.cpp
 )
 
 target_include_directories(sound-mind-core

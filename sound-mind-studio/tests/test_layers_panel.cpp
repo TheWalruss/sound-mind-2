@@ -467,6 +467,18 @@ void LayersPanelTest::addFilterLayerButtonEmitsAddFilterLayerRequested() {
     QCOMPARE(spy.count(), 1);
 }
 
+void LayersPanelTest::generateLayerButtonEmitsGenerateLayerRequested() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    QSignalSpy spy(&panel, &LayersPanel::generateLayerRequested);
+
+    auto* button = panel.findChild<QPushButton*>(QStringLiteral("generateLayerButton"));
+    QVERIFY(button != nullptr);
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+}
+
 void LayersPanelTest::selectLayerSelectsAMatchingRow() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());

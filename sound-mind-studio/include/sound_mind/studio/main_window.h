@@ -947,6 +947,14 @@ public slots:
     void addFilterLayer();
 
     /**
+     * @brief Opens `GeneratorDialog` and, if accepted, adds a new
+     *        generated layer via `LayerController::addGeneratedLayer()`
+     *        - `docs/sound-mind-design.md`'s "Generators", `v0.Y.51.1`.
+     *        A no-op (dialog never shown) if no project is open.
+     */
+    void generateLayer();
+
+    /**
      * @brief Reacts to `LayersPanel`'s own selection changing - the
      *        actual work keeping `FilterConfigurationPanel` in sync.
      *

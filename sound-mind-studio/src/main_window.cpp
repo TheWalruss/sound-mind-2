@@ -61,6 +61,7 @@
 #include "sound_mind/studio/composer_panel.h"
 #include "sound_mind/studio/create_project_wizard.h"
 #include "sound_mind/studio/fill_gradient_dialog.h"
+#include "sound_mind/studio/generator_dialog.h"
 #include "sound_mind/studio/history_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/import_export.h"
@@ -219,6 +220,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
     connect(layersPanel_, &LayersPanel::addLayerRequested, this, &MainWindow::addEmptyLayer);
     connect(layersPanel_, &LayersPanel::addFilterLayerRequested, this, &MainWindow::addFilterLayer);
+    connect(layersPanel_, &LayersPanel::generateLayerRequested, this, &MainWindow::generateLayer);
 
     // The MindWave library management panel (v0.Y.31.1 Installment C2) -
     // hidden by default, the same "off until shown" convention
@@ -2357,6 +2359,17 @@ void MainWindow::addEmptyLayer() {
 }
 
 void MainWindow::addFilterLayer() { layerController_->addFilterLayer(); }
+
+void MainWindow::generateLayer() {
+    if (!project_) {
+        return;
+    }
+    GeneratorDialog dialog(this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    layerController_->addGeneratedLayer(dialog.configuration());
+}
 
 void MainWindow::handleLayerSelectionChanged(std::optional<sound_mind::core::LayerId> id) {
     layerController_->handleLayerSelectionChanged(id);

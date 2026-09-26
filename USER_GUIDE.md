@@ -1374,9 +1374,9 @@ while you have unsaved changes prompts you to save first.
 ## What's Not Here Yet
 
 The [design document](docs/sound-mind-design.md) describes the Studio's
-full intended scope - generators, analysis tools, Sound Flower's polar
-view, MIDI import, chord/sequence generation, and a Sound Mind VST
-plugin, among others none of which exist in the Studio yet. MindWave-
+full intended scope - analysis tools, Sound Flower's polar view, MIDI
+import, chord/sequence generation, and a Sound Mind VST plugin, among
+others none of which exist in the Studio yet. MindWave-
 driven modulation (see [MindWaves](#mindwaves) above) has made a real
 start - layer opacity binding works - but it's far from its own full
 scope either; see the note further down. Filter layers (see
@@ -1409,6 +1409,15 @@ captured moment and cutting to the new result instantly, with one
 continuous audio track underneath and no audible restarts in the
 exported file. There's still no panel to inspect what a recorded macro
 actually contains, and it isn't saved with the project.
+
+**Generators** have taken their first step: a **+ Generate Layer** button
+(in the Layers panel, alongside + Add Layer/+ Add Filter Layer) opens a
+small dialog with a Chaos/Order slider and a seed, then adds a new,
+ordinary, fully paintable and filterable layer filled with an organic,
+generated texture - the same seed always reproduces the exact same
+result. Only the "Lattice" family described in the design document
+actually works so far; the "Fractal" and "Streaming" families are still
+future work.
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:
