@@ -106,7 +106,7 @@ void PaintController::endStroke() {
     const sound_mind::core::OperationId id = log.reserveId();
     log.append(std::make_unique<sound_mind::core::PaintOperation>(id, strokeTargetLayer_, std::move(finalPath),
                                                                     toolConfig_->clone()));
-    notifyOperationCommitted();
+    notifyOperationCommitted(tr("Painted stroke"));
 
     const sound_mind::core::LayerId paintedLayer = strokeTargetLayer_;
     strokePoints_.clear();
@@ -150,11 +150,11 @@ void PaintController::redo() {
     }
 }
 
-void PaintController::notifyOperationCommitted() {
+void PaintController::notifyOperationCommitted(const QString& description) {
     if (undoStack_ == nullptr) {
         return;
     }
-    undoStack_->push({/*undo=*/[this]() { undo(); }, /*redo=*/[this]() { redo(); }});
+    undoStack_->push({/*undo=*/[this]() { undo(); }, /*redo=*/[this]() { redo(); }, /*description=*/description});
 }
 
 void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {

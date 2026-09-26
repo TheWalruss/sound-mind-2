@@ -16,7 +16,7 @@ namespace {
 /// caller applies its own change before push()ing) and removes it again
 /// on undo() - a small, order-observable stand-in for a real property/
 /// content mutation, shared by every test below.
-void pushLabeledCommand(UndoStack& stack, std::vector<int>& log, int label) {
+void pushLabeledCommand(UndoStack& stack, std::vector<int>& log, int label, const QString& description = QString()) {
     log.push_back(label);
     stack.push(UndoCommand{/*undo=*/[&log, label]() {
                                 // The most recently applied label is always
@@ -25,7 +25,8 @@ void pushLabeledCommand(UndoStack& stack, std::vector<int>& log, int label) {
                                 Q_ASSERT(!log.empty() && log.back() == label);
                                 log.pop_back();
                             },
-                            /*redo=*/[&log, label]() { log.push_back(label); }});
+                            /*redo=*/[&log, label]() { log.push_back(label); },
+                            /*description=*/description});
 }
 
 }  // namespace
@@ -144,4 +145,52 @@ void UndoStackTest::clearDiscardsEveryCommandAndResetsAvailability() {
     // clear() only forgets the history - it never itself invokes any
     // callback, so log (already at {1} from the undo() above) is untouched.
     QCOMPARE(log, std::vector<int>({1}));
+}
+
+void UndoStackTest::countCurrentIndexAndDescriptionAtReflectPushedCommands() {
+    // v0.Y.46.1 Installment D ("History Panel").
+    UndoStack stack;
+    std::vector<int> log;
+    QCOMPARE(stack.count(), std::size_t{0});
+    QCOMPARE(stack.currentIndex(), std::size_t{0});
+
+    pushLabeledCommand(stack, log, 1, QStringLiteral("First"));
+    pushLabeledCommand(stack, log, 2, QStringLiteral("Second"));
+
+    QCOMPARE(stack.count(), std::size_t{2});
+    QCOMPARE(stack.currentIndex(), std::size_t{2});
+    QCOMPARE(stack.descriptionAt(0), QStringLiteral("First"));
+    QCOMPARE(stack.descriptionAt(1), QStringLiteral("Second"));
+
+    stack.undo();
+    QCOMPARE(stack.currentIndex(), std::size_t{1});
+    // count() and each entry's own description are unaffected by undo() -
+    // only currentIndex() (the high-water mark) moves.
+    QCOMPARE(stack.count(), std::size_t{2});
+    QCOMPARE(stack.descriptionAt(1), QStringLiteral("Second"));
+}
+
+void UndoStackTest::jumpToMovesDirectlyInvokingEveryInBetweenCallback() {
+    UndoStack stack;
+    std::vector<int> log;
+    pushLabeledCommand(stack, log, 1);
+    pushLabeledCommand(stack, log, 2);
+    pushLabeledCommand(stack, log, 3);
+    QCOMPARE(log, std::vector<int>({1, 2, 3}));
+
+    stack.jumpTo(0);  // back to the very start - every undo() callback runs.
+    QCOMPARE(log, std::vector<int>({}));
+    QCOMPARE(stack.currentIndex(), std::size_t{0});
+    QVERIFY(!stack.canUndo());
+
+    stack.jumpTo(2);  // forward again, but not all the way - two redo() callbacks run.
+    QCOMPARE(log, std::vector<int>({1, 2}));
+    QCOMPARE(stack.currentIndex(), std::size_t{2});
+
+    stack.jumpTo(2);  // already there - a no-op.
+    QCOMPARE(log, std::vector<int>({1, 2}));
+
+    stack.jumpTo(3);  // all the way forward again.
+    QCOMPARE(log, std::vector<int>({1, 2, 3}));
+    QVERIFY(!stack.canRedo());
 }

@@ -29,6 +29,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QStringList>
 #include <QMimeData>
 #include <QPushButton>
 #include <QScrollArea>
@@ -59,6 +60,7 @@
 #include "sound_mind/studio/color_conversion.h"
 #include "sound_mind/studio/create_project_wizard.h"
 #include "sound_mind/studio/fill_gradient_dialog.h"
+#include "sound_mind/studio/history_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/import_export.h"
 #include "sound_mind/studio/import_helpers.h"
@@ -230,6 +232,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(mindWavesPanel_, &MindWavesPanel::deleteRequested, this, &MainWindow::removeMindWave);
     connect(mindWavesPanel_, &MindWavesPanel::renameRequested, this, &MainWindow::renameMindWave);
     connect(mindWavesPanel_, &MindWavesPanel::mindWaveChanged, this, &MainWindow::updateMindWave);
+
+    // The History Panel (v0.Y.46.1 Installment D, "Layers Panel & Editing
+    // Enhancements v2") - hidden by default, the same reasoning
+    // mindWavesPanel_ above already gives.
+    historyPanel_ = new HistoryPanel(this);
+    historyPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, historyPanel_);
+    connect(historyPanel_, &HistoryPanel::jumpRequested, this, &MainWindow::jumpToHistoryIndex);
 
     // Playback/Record/Loop each get their own dockable panel (v0.Y.16.1) -
     // hidden until setProject(), matching layersPanel_'s own "nothing to
@@ -513,6 +523,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
                 // this fires after nearly every canvas edit).
                 layerController_->refreshLayersPanel(layer);
                 handleContentChangedForPlayback(layer);
+                refreshHistoryPanel();
             });
 
     gridPanel_ = new GridPanel(this);
@@ -554,7 +565,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // v0.Y.29.1, Installment D); see its own docs.
     layerController_ =
         new LayerController(canvas_, playbackController_, layersPanel_, filterConfigurationPanel_, &undoStack_, this);
-    connect(layerController_, &LayerController::layersChanged, this, [this]() { hasUnsavedChanges_ = true; });
+    connect(layerController_, &LayerController::layersChanged, this, [this]() {
+        hasUnsavedChanges_ = true;
+        refreshHistoryPanel();
+    });
 
     // The MindWave library itself - add/remove/rename/edit - and keeping
     // mindWavesPanel_/layersPanel_'s own opacity-binding combo in sync
@@ -995,6 +1009,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     transportToolBar->addAction(filterConfigurationPanel_->toggleViewAction());
     // Off by default, same reasoning - see mindWavesPanel_'s own docs.
     transportToolBar->addAction(mindWavesPanel_->toggleViewAction());
+    // Off by default, same reasoning - see historyPanel_'s own docs.
+    transportToolBar->addAction(historyPanel_->toggleViewAction());
 
     // Zoom's own toolbar, added after transportToolBar (not before) so
     // findChild<QToolBar*>()'s own singular/first-match behavior - already
@@ -1271,6 +1287,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // the new project's own, the same risk layersPanel_->clearSelection()
     // just guarded against above.
     undoStack_.clear();
+    refreshHistoryPanel();
 
     project_ = std::move(project);
 
@@ -2238,6 +2255,20 @@ void MainWindow::updateConfiguredDeviceLockState() {
 void MainWindow::undo() { undoStack_.undo(); }
 
 void MainWindow::redo() { undoStack_.redo(); }
+
+void MainWindow::refreshHistoryPanel() {
+    QStringList descriptions;
+    descriptions.reserve(static_cast<int>(undoStack_.count()));
+    for (std::size_t i = 0; i < undoStack_.count(); ++i) {
+        descriptions.append(undoStack_.descriptionAt(i));
+    }
+    historyPanel_->setHistory(descriptions, undoStack_.currentIndex());
+}
+
+void MainWindow::jumpToHistoryIndex(std::size_t index) {
+    undoStack_.jumpTo(index);
+    refreshHistoryPanel();
+}
 
 void MainWindow::zoomIn() { canvas_->zoomIn(); }
 

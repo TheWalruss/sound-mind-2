@@ -42,6 +42,7 @@ add_library(sound-mind-studio-lib
     src/gradient_editor_widget.cpp
     src/grid_config.cpp
     src/grid_panel.cpp
+    src/history_panel.cpp
     src/image_scale_picker_dialog.cpp
     src/import_export.cpp
     src/import_helpers.cpp
@@ -83,6 +84,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/gradient_bar_widget.h
     include/sound_mind/studio/gradient_editor_widget.h
     include/sound_mind/studio/grid_panel.h
+    include/sound_mind/studio/history_panel.h
     include/sound_mind/studio/image_scale_picker_dialog.h
     include/sound_mind/studio/import_export.h
     include/sound_mind/studio/import_helpers.h

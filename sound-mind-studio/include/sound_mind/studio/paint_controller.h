@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <QObject>
+#include <QString>
 
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/path.h"
@@ -258,8 +259,12 @@ public:
      * (which also call rebuildLayerContent()) - only a *fresh* append
      * should ever record a new command; replaying an already-recorded one
      * must not record it again.
+     *
+     * @param description A short, human-readable label for the just-
+     *        appended operation (e.g. "Painted stroke") - the History
+     *        Panel's own row text for it (`v0.Y.46.1` Installment D).
      */
-    void notifyOperationCommitted();
+    void notifyOperationCommitted(const QString& description);
 
 signals:
     /// @brief Emitted whenever the in-progress stroke's own live preview

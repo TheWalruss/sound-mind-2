@@ -181,7 +181,8 @@ void LayerController::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
     applyVisibilityAndMute(id, newVisible, newMuted);
     undoStack_->push(
         {/*undo=*/[this, id, oldVisible, oldMuted]() { applyVisibilityAndMute(id, oldVisible, oldMuted); },
-         /*redo=*/[this, id, newVisible, newMuted]() { applyVisibilityAndMute(id, newVisible, newMuted); }});
+         /*redo=*/[this, id, newVisible, newMuted]() { applyVisibilityAndMute(id, newVisible, newMuted); },
+         /*description=*/tr("Changed layer visibility")});
 }
 
 void LayerController::applyOpacity(sound_mind::core::LayerId id, float opacity) {
@@ -204,7 +205,8 @@ void LayerController::setLayerOpacity(sound_mind::core::LayerId id, float opacit
     applyOpacity(id, opacity);
     if (oldOpacity != opacity) {
         undoStack_->push({/*undo=*/[this, id, oldOpacity]() { applyOpacity(id, oldOpacity); },
-                           /*redo=*/[this, id, opacity]() { applyOpacity(id, opacity); }});
+                           /*redo=*/[this, id, opacity]() { applyOpacity(id, opacity); },
+                           /*description=*/tr("Changed layer opacity")});
     }
 }
 
@@ -228,7 +230,8 @@ void LayerController::setLayerBalance(sound_mind::core::LayerId id, float balanc
     applyBalance(id, balance);
     if (oldBalance != balance) {
         undoStack_->push({/*undo=*/[this, id, oldBalance]() { applyBalance(id, oldBalance); },
-                           /*redo=*/[this, id, balance]() { applyBalance(id, balance); }});
+                           /*redo=*/[this, id, balance]() { applyBalance(id, balance); },
+                           /*description=*/tr("Changed layer balance")});
     }
 }
 
@@ -255,7 +258,8 @@ void LayerController::setLayerOpacityMindWave(sound_mind::core::LayerId id,
     if (oldMindWaveId != mindWaveId) {
         undoStack_->push(
             {/*undo=*/[this, id, oldMindWaveId]() { applyOpacityMindWave(id, oldMindWaveId); },
-             /*redo=*/[this, id, mindWaveId]() { applyOpacityMindWave(id, mindWaveId); }});
+             /*redo=*/[this, id, mindWaveId]() { applyOpacityMindWave(id, mindWaveId); },
+             /*description=*/tr("Changed layer opacity MindWave binding")});
     }
 }
 
@@ -280,7 +284,8 @@ void LayerController::setLayerTranslation(sound_mind::core::LayerId id, std::int
     if (oldTranslationColumns != translationColumns) {
         undoStack_->push(
             {/*undo=*/[this, id, oldTranslationColumns]() { applyTranslation(id, oldTranslationColumns); },
-             /*redo=*/[this, id, translationColumns]() { applyTranslation(id, translationColumns); }});
+             /*redo=*/[this, id, translationColumns]() { applyTranslation(id, translationColumns); },
+             /*description=*/tr("Changed layer translation")});
     }
 }
 
@@ -304,7 +309,8 @@ void LayerController::setLayerRescale(sound_mind::core::LayerId id, double resca
     applyRescale(id, rescaleFactor);
     if (oldRescaleFactor != rescaleFactor) {
         undoStack_->push({/*undo=*/[this, id, oldRescaleFactor]() { applyRescale(id, oldRescaleFactor); },
-                           /*redo=*/[this, id, rescaleFactor]() { applyRescale(id, rescaleFactor); }});
+                           /*redo=*/[this, id, rescaleFactor]() { applyRescale(id, rescaleFactor); },
+                           /*description=*/tr("Changed layer rescale")});
     }
 }
 
@@ -328,7 +334,8 @@ void LayerController::setLayerBlendMode(sound_mind::core::LayerId id, sound_mind
     applyBlendMode(id, mode);
     if (oldMode != mode) {
         undoStack_->push({/*undo=*/[this, id, oldMode]() { applyBlendMode(id, oldMode); },
-                           /*redo=*/[this, id, mode]() { applyBlendMode(id, mode); }});
+                           /*redo=*/[this, id, mode]() { applyBlendMode(id, mode); },
+                           /*description=*/tr("Changed layer blend mode")});
     }
 }
 

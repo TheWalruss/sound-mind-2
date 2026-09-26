@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.1.4] - 2026-09-26
+
+Layers Panel & Editing Enhancements v2, Installment D: **History Panel.**
+
+### Added
+
+- **A new History panel**, listing every undoable action taken this session (layer edits and property changes alike) in order, with the current position highlighted. Double-click any entry to jump straight to that point - equivalent to pressing Undo/Redo repeatedly, just faster.
+
+Full regression: `sound-mind-core` 854/854 (unaffected), `sound-mind-studio` `UndoStackTest` (2 new), `HistoryPanelTest` (new file, 4 cases), full suite otherwise unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #157.
+
 ## [0.1.1.3] - 2026-09-26
 
 Layers Panel & Editing Enhancements v2, Installment C: **Per-layer balance.**

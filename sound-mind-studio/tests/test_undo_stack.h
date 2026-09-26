@@ -15,4 +15,6 @@ private slots:
     void redoWhenNothingUndoneIsANoOp();
     void pushingAfterAnUndoDiscardsTheRedoTail();
     void clearDiscardsEveryCommandAndResetsAvailability();
+    void countCurrentIndexAndDescriptionAtReflectPushedCommands();
+    void jumpToMovesDirectlyInvokingEveryInBetweenCallback();
 };

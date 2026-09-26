@@ -305,7 +305,8 @@ void PickController::endMove() {
 
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId newId = log.reserveId();
-    commitReplacement(pickedOperation_->translatedCopy(newId, deltaTimeSeconds, deltaFrequencyBins, config));
+    commitReplacement(pickedOperation_->translatedCopy(newId, deltaTimeSeconds, deltaFrequencyBins, config),
+                       tr("Moved picked object"));
 
     dragMoved_ = false;
     previewPath_ = sound_mind::core::Path{};
@@ -330,7 +331,8 @@ void PickController::applyToolConfiguration(const sound_mind::core::ToolConfigur
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId newId = log.reserveId();
     commitReplacement(std::make_unique<sound_mind::core::PaintOperation>(newId, pickedLayer_, std::move(newPath),
-                                                                            config.clone(), pickedOperationId_));
+                                                                            config.clone(), pickedOperationId_),
+                       tr("Modified picked object"));
 }
 
 void PickController::applyPasteBlendMode(sound_mind::core::BlendMode mode) {
@@ -345,7 +347,8 @@ void PickController::applyPasteBlendMode(sound_mind::core::BlendMode mode) {
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId newId = log.reserveId();
     commitReplacement(std::make_unique<sound_mind::core::PasteOperation>(
-        newId, pickedLayer_, paste->bounds(), paste->clip(), pickedOperationId_, paste->boundary(), mode));
+                           newId, pickedLayer_, paste->bounds(), paste->clip(), pickedOperationId_, paste->boundary(), mode),
+                       tr("Changed picked object's blend mode"));
 }
 
 void PickController::deleteSelection() {
@@ -371,7 +374,7 @@ void PickController::deleteSelection() {
             newId, pickedLayer_, pickedOperation_->bounds(), sound_mind::core::silenceGradient(), pickedOperationId_);
     }
 
-    commitReplacement(std::move(tombstone));
+    commitReplacement(std::move(tombstone), tr("Deleted picked object"));
     clearSelection();
 }
 
@@ -446,7 +449,8 @@ void PickController::commitPathEdit() {
     pathEditSession_.end();
 
     commitReplacement(std::make_unique<sound_mind::core::PaintOperation>(
-        newId, pickedLayer_, std::move(editedPath), std::move(config), pickedOperationId_));
+                           newId, pickedLayer_, std::move(editedPath), std::move(config), pickedOperationId_),
+                       tr("Edited picked path"));
     previewPath_ = sound_mind::core::Path{};
     emit pathChanged();
 }
@@ -461,11 +465,11 @@ void PickController::cancelPathEdit() {
 }
 
 sound_mind::core::OperationId PickController::commitReplacement(
-    std::unique_ptr<sound_mind::core::Operation> replacement) {
+    std::unique_ptr<sound_mind::core::Operation> replacement, const QString& description) {
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId newId = replacement->id();
     log.append(std::move(replacement));
-    paintController_->notifyOperationCommitted();
+    paintController_->notifyOperationCommitted(description);
 
     // The just-appended entry is always the log's own new last element -
     // re-resolved from there rather than kept from the moved-from local,

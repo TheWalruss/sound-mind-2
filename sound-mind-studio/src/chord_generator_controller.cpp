@@ -74,7 +74,7 @@ void ChordGeneratorController::stampAt(sound_mind::core::LayerId targetLayer, do
     log.append(std::make_unique<sound_mind::core::SequenceOperation>(
         newId, targetLayer, std::move(notes), paintController_->toolConfiguration().clone()));
 
-    paintController_->notifyOperationCommitted();
+    paintController_->notifyOperationCommitted(tr("Stamped chord"));
     paintController_->rebuildLayerContent(targetLayer);
     emit contentChanged(targetLayer);
 }

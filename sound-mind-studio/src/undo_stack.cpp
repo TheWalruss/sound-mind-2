@@ -34,4 +34,13 @@ void UndoStack::clear() {
     index_ = 0;
 }
 
+void UndoStack::jumpTo(std::size_t index) {
+    while (index_ > index && canUndo()) {
+        undo();
+    }
+    while (index_ < index && canRedo()) {
+        redo();
+    }
+}
+
 }  // namespace sound_mind::studio

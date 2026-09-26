@@ -4,6 +4,7 @@
 #include <optional>
 
 #include <QObject>
+#include <QString>
 
 #include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/operation.h"
@@ -584,8 +585,13 @@ private:
     ///        log, rebuilds the affected layer via `paintController_`,
     ///        emits contentChanged(), and updates `pickedOperationId_`/
     ///        `pickedOperation_` to the newly-appended entry.
+    /// @param replacement The new operation to append.
+    /// @param description A short, human-readable label for this specific
+    ///        commit (e.g. "Moved picked object") - the History Panel's
+    ///        own row text for it (`v0.Y.46.1` Installment D).
     /// @return The new operation's own id.
-    sound_mind::core::OperationId commitReplacement(std::unique_ptr<sound_mind::core::Operation> replacement);
+    sound_mind::core::OperationId commitReplacement(std::unique_ptr<sound_mind::core::Operation> replacement,
+                                                      const QString& description);
 
     /// @brief The shared implementation behind bringToFront()/
     ///        sendToBack()/bringForward()/sendBackward(): a no-op if

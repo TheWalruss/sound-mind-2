@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -51,6 +52,7 @@ class QTimer;
 namespace sound_mind::studio {
 
 class CreateProjectWizard;
+class HistoryPanel;
 class LandingPage;
 class LayersPanel;
 class LoopPanel;
@@ -1162,6 +1164,23 @@ public slots:
     ///        work behind the Edit menu's Redo action. Delegates to
     ///        `undoStack_`; a no-op if nothing is redoable.
     void redo();
+
+    /**
+     * @brief Jumps directly to an arbitrary point in `undoStack_`'s own
+     *        history - the actual work behind `HistoryPanel`'s own
+     *        double-click gesture, `v0.Y.46.1` Installment D ("History
+     *        Panel").
+     *
+     * Delegates to `UndoStack::jumpTo()` (see its own docs - every
+     * intermediate command's own callback still actually runs, in order),
+     * then refreshes the History Panel to reflect the new position - every
+     * other affected refresh (canvas, Layers Panel, `hasUnsavedChanges()`)
+     * already happens as a side effect of those same callbacks running,
+     * the same as a plain undo()/redo() already triggers them.
+     *
+     * @param index The target index - see `UndoStack::jumpTo()`'s own docs.
+     */
+    void jumpToHistoryIndex(std::size_t index);
 
     /// @brief Zooms in proportionally - the actual work behind the View >
     ///        Zoom menu's "Zoom In" action (`]`). Delegates to
@@ -2294,6 +2313,16 @@ private:
      */
     void updateConfiguredDeviceLockState();
 
+    /// @brief Pushes `undoStack_`'s own current descriptions/position into
+    ///        `historyPanel_` - `v0.Y.46.1` Installment D ("History
+    ///        Panel"). Called wherever `undoStack_` might just have
+    ///        changed: after any `LayerController::layersChanged()` (every
+    ///        property mutation already pushes there) and after any
+    ///        `ToolPaletteController::contentChanged()` (every content
+    ///        commit, undo, or redo already emits it - see `PaintController::
+    ///        rebuildLayerContentAndCascade()`'s own docs).
+    void refreshHistoryPanel();
+
     /**
      * @brief If hasUnsavedChanges() is `false`, returns `true` immediately
      *        (nothing to guard). Otherwise, prompts (Save/Discard/Cancel)
@@ -2687,6 +2716,11 @@ private:
     /// Hidden by default, the same "off until shown" convention
     /// filterConfigurationPanel_ already follows.
     MindWavesPanel* mindWavesPanel_ = nullptr;
+
+    /// @brief The dockable read-only history panel - see its own class
+    /// docs (`v0.Y.46.1` Installment D). Hidden by default, the same
+    /// reasoning mindWavesPanel_ above already gives.
+    HistoryPanel* historyPanel_ = nullptr;
 
     /// @brief Owns MindWave-library add/remove/rename/edit and
     /// MindWavesPanel/LayersPanel refresh - see its own class docs

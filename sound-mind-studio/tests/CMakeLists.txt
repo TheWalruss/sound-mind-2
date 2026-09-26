@@ -16,6 +16,7 @@ add_executable(sound-mind-studio-tests
     test_gradient_editor_widget.cpp
     test_grid_config.cpp
     test_grid_panel.cpp
+    test_history_panel.cpp
     test_image_scale_picker_dialog.cpp
     test_import_export.cpp
     test_import_helpers.cpp

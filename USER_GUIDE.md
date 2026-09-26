@@ -853,11 +853,16 @@ Two checkboxes at the top of the panel, both off by default:
   this checkbox.
 
 **Undo** (Ctrl+Z) and **Redo** (Ctrl+Y), in the **Edit** menu, apply to
-paint strokes and to a layer's own opacity, opacity-MindWave binding,
-visibility, translation, rescale, and blend mode (see
+paint strokes and to a layer's own opacity, balance, opacity-MindWave
+binding, visibility, translation, rescale, and blend mode (see
 [Working with Layers](#working-with-layers)) - both kinds share the same
 single history, undoing/redoing whichever one actually happened most
 recently, in either order.
+
+The **History** panel (toggle it from the toolbar) shows that same shared
+history as a plain list, in the order things actually happened, with your
+current position highlighted. Double-click any entry to jump straight to
+it - the same as clicking Undo or Redo repeatedly, just in one step.
 
 Only **Procedural**, **Instrument** (harmonic series + inharmonicity only so
 far - no noise, body resonance, or envelope yet), **Mind Shot**
