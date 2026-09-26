@@ -144,6 +144,7 @@ void LayersPanelTest::backgroundLayerHasNoOpacityOrTransformControls() {
     panel.setLayers({background});
 
     QVERIFY(panel.findChild<QSlider*>(QStringLiteral("opacitySlider")) == nullptr);
+    QVERIFY(panel.findChild<QSlider*>(QStringLiteral("balanceSlider")) == nullptr);
     QVERIFY(panel.findChild<QSpinBox*>(QStringLiteral("translationSpinBox")) == nullptr);
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")) == nullptr);
 }
@@ -157,6 +158,22 @@ void LayersPanelTest::opacitySliderEmitsOpacityChanged() {
 
     const auto sliders = panel.findChildren<QSlider*>(QStringLiteral("opacitySlider"));
     QCOMPARE(sliders.size(), 1);  // only the selected row's own.
+    sliders.at(0)->setValue(25);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(1));
+    QCOMPARE(spy.at(0).at(1).toFloat(), 0.25f);
+}
+
+void LayersPanelTest::balanceSliderEmitsBalanceChanged() {
+    // v0.Y.46.1 Installment C ("Per-layer balance").
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom".
+    QSignalSpy spy(&panel, &LayersPanel::balanceChanged);
+
+    const auto sliders = panel.findChildren<QSlider*>(QStringLiteral("balanceSlider"));
+    QCOMPARE(sliders.size(), 1);
     sliders.at(0)->setValue(25);
 
     QCOMPARE(spy.count(), 1);
@@ -203,6 +220,7 @@ void LayersPanelTest::unselectedRowsShowNoOpacityOrTransformOrBlendModeOrDeleteC
     panel.setLayers(twoNormalLayers());  // nothing selected.
 
     QVERIFY(panel.findChild<QSlider*>(QStringLiteral("opacitySlider")) == nullptr);
+    QVERIFY(panel.findChild<QSlider*>(QStringLiteral("balanceSlider")) == nullptr);
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("opacityMindWaveCombo")) == nullptr);
     QVERIFY(panel.findChild<QSpinBox*>(QStringLiteral("translationSpinBox")) == nullptr);
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")) == nullptr);
@@ -221,6 +239,7 @@ void LayersPanelTest::selectingARowRevealsItsOwnControlsAndDeselectingHidesThemA
 
     panel.selectLayer(static_cast<LayerId>(1));  // "Bottom".
     QCOMPARE(panel.findChildren<QSlider*>(QStringLiteral("opacitySlider")).size(), 1);
+    QCOMPARE(panel.findChildren<QSlider*>(QStringLiteral("balanceSlider")).size(), 1);
     QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo")).size(), 1);
     QCOMPARE(panel.findChildren<QSpinBox*>(QStringLiteral("translationSpinBox")).size(), 1);
     QCOMPARE(panel.findChildren<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")).size(), 1);
@@ -238,6 +257,7 @@ void LayersPanelTest::selectingARowRevealsItsOwnControlsAndDeselectingHidesThemA
     QTest::qWait(0);  // rebuildRows() rebuilds via deleteLater() - see setLayersReplacesThePreviousRows().
 
     QVERIFY(panel.findChild<QSlider*>(QStringLiteral("opacitySlider")) == nullptr);
+    QVERIFY(panel.findChild<QSlider*>(QStringLiteral("balanceSlider")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("deleteButton")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("duplicateButton")) == nullptr);
 }

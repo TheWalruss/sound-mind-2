@@ -8,6 +8,7 @@ void to_json(nlohmann::json& json, const Layer& layer) {
         {"name", layer.name_},
         {"type", layer.type_},
         {"opacity", layer.opacity_},
+        {"balance", layer.balance_},
         {"visible", layer.visible_},
         {"muted", layer.muted_},
         {"translationColumns", layer.translationColumns_},
@@ -27,6 +28,11 @@ void from_json(const nlohmann::json& json, Layer& layer) {
     json.at("name").get_to(layer.name_);
     json.at("type").get_to(layer.type_);
     json.at("opacity").get_to(layer.opacity_);
+    // Lenient (defaults to centered/unchanged if absent), same reasoning
+    // as visible_ below - didn't exist before v0.Y.46.1 Installment C
+    // (Per-layer balance); a layer saved before this milestone was
+    // implicitly always centered anyway.
+    layer.balance_ = json.value("balance", 0.5f);
     // Lenient (defaults to true if absent) - didn't exist before v0.Y.13.1
     // (Layers Panel); requiring it here would make it a breaking change
     // to an already-established format, per the same reasoning

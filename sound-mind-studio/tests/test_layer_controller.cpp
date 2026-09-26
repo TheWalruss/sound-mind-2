@@ -113,6 +113,18 @@ void LayerControllerTest::setLayerOpacityChangesOpacity() {
     QCOMPARE(project.layers().front().opacity(), 0.5f);
 }
 
+void LayerControllerTest::setLayerBalanceChangesBalance() {
+    // v0.Y.46.1 Installment C ("Per-layer balance").
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    fixture.controller.setProject(&project);
+
+    fixture.controller.setLayerBalance(backgroundId, 0.25f);
+
+    QCOMPARE(project.layers().front().balance(), 0.25f);
+}
+
 void LayerControllerTest::setLayerOpacityMindWaveChangesBindingAndTheRowDataReflectsIt() {
     // Regression test for a real bug: refreshLayersPanel() built each
     // row's RowData without ever setting opacityMindWaveId, so a bound
@@ -209,6 +221,24 @@ void LayerControllerTest::setLayerOpacityIsUndoableAndRedoable() {
 
     fixture.undoStack.redo();
     QCOMPARE(project.layers().front().opacity(), 0.5f);
+}
+
+void LayerControllerTest::setLayerBalanceIsUndoableAndRedoable() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    fixture.controller.setProject(&project);
+    const float oldBalance = project.layers().front().balance();
+
+    fixture.controller.setLayerBalance(backgroundId, 0.25f);
+    QCOMPARE(project.layers().front().balance(), 0.25f);
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QCOMPARE(project.layers().front().balance(), oldBalance);
+
+    fixture.undoStack.redo();
+    QCOMPARE(project.layers().front().balance(), 0.25f);
 }
 
 void LayerControllerTest::setLayerOpacityMindWaveIsUndoableAndRedoable() {

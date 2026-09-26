@@ -48,10 +48,10 @@ class UndoStack;
  * `MainWindow` holds the current project's `LoopEngine` (and only it needs
  * to, for Loop Mode's own reasons).
  *
- * **Six property setters are undoable** - `cycleLayerVisibilityState()`,
- * `setLayerOpacity()`, `setLayerOpacityMindWave()`, `setLayerTranslation()`,
- * `setLayerRescale()`, `setLayerBlendMode()` each push a matching
- * `UndoCommand` onto the shared
+ * **Seven property setters are undoable** - `cycleLayerVisibilityState()`,
+ * `setLayerOpacity()`, `setLayerBalance()`, `setLayerOpacityMindWave()`,
+ * `setLayerTranslation()`, `setLayerRescale()`, `setLayerBlendMode()` each
+ * push a matching `UndoCommand` onto the shared
  * `UndoStack` after applying the change, so `MainWindow`'s Edit > Undo/Redo
  * covers them - see `UndoStack`'s own class docs for why this is a
  * separate mechanism from `sound_mind::core::OperationLog`. The other
@@ -185,6 +185,17 @@ public:
     /// @param id The layer to change.
     /// @param opacity The new opacity, intended to be in `[0, 1]`.
     void setLayerOpacity(sound_mind::core::LayerId id, float opacity);
+
+    /// @brief Sets the stereo balance of the layer with the given id - see
+    ///        `sound_mind::core::Layer::balance()`'s own docs. `v0.Y.46.1`
+    ///        Installment C ("Per-layer balance"). Repaints the canvas
+    ///        (balance changes what the composite actually sounds like),
+    ///        then refreshes the Layers Panel. Does nothing if no layer
+    ///        with this id exists. **Undoable** - see setLayerOpacity()'s
+    ///        own docs on no-op calls.
+    /// @param id The layer to change.
+    /// @param balance The new balance, intended to be in `[0, 1]`.
+    void setLayerBalance(sound_mind::core::LayerId id, float balance);
 
     /// @brief Sets (or clears) which MindWave the layer with the given id's
     ///        own opacity is bound to - see `sound_mind::core::Layer::
@@ -456,6 +467,11 @@ private:
     ///        setLayerOpacity() and its own pushed UndoCommand's
     ///        undo()/redo() callbacks - see the class's own docs.
     void applyOpacity(sound_mind::core::LayerId id, float opacity);
+
+    /// @brief The actual balance mutation + side effects, shared by
+    ///        setLayerBalance() and its own pushed UndoCommand's
+    ///        undo()/redo() callbacks - see the class's own docs.
+    void applyBalance(sound_mind::core::LayerId id, float balance);
 
     /// @brief The actual opacity-MindWave-binding mutation + side effects,
     ///        shared by setLayerOpacityMindWave() and its own pushed

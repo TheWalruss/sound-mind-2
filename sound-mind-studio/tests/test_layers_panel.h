@@ -12,6 +12,7 @@ private slots:
     void backgroundVisibilityButtonIsDisabled();
     void backgroundLayerHasNoOpacityOrTransformControls();
     void opacitySliderEmitsOpacityChanged();
+    void balanceSliderEmitsBalanceChanged();
     void translationSpinBoxEmitsTranslationChanged();
     void rescaleSpinBoxEmitsRescaleChanged();
     void doubleClickingNameEmitsRenameRequested();

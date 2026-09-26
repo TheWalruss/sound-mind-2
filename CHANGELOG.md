@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.1.3] - 2026-09-26
+
+Layers Panel & Editing Enhancements v2, Installment C: **Per-layer balance.**
+
+### Added
+
+- **A Balance slider in the Layers panel**, alongside Opacity - pans a layer's own contribution between left and right. Centered (the default) leaves the sound completely unchanged; panning either way holds the channel you're panning toward at full strength and fades out only the other one.
+
+Full regression: `sound-mind-core` 854/854 (7 new), `sound-mind-studio` `LayerControllerTest`/`LayersPanelTest` (3 new between them), full suite otherwise unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #156.
+
 ## [0.1.1.2] - 2026-09-26
 
 Layers Panel & Editing Enhancements v2, Installment B: **Mute.**

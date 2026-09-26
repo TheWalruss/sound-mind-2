@@ -204,6 +204,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     addDockWidget(Qt::RightDockWidgetArea, layersPanel_);
     connect(layersPanel_, &LayersPanel::visibilityCycleRequested, this, &MainWindow::cycleLayerVisibilityState);
     connect(layersPanel_, &LayersPanel::opacityChanged, this, &MainWindow::setLayerOpacity);
+    connect(layersPanel_, &LayersPanel::balanceChanged, this, &MainWindow::setLayerBalance);
     connect(layersPanel_, &LayersPanel::translationChanged, this, &MainWindow::setLayerTranslation);
     connect(layersPanel_, &LayersPanel::rescaleChanged, this, &MainWindow::setLayerRescale);
     connect(layersPanel_, &LayersPanel::opacityMindWaveChanged, this, &MainWindow::setLayerOpacityMindWave);
@@ -1997,6 +1998,10 @@ void MainWindow::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
 
 void MainWindow::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
     layerController_->setLayerOpacity(id, opacity);
+}
+
+void MainWindow::setLayerBalance(sound_mind::core::LayerId id, float balance) {
+    layerController_->setLayerBalance(id, balance);
 }
 
 void MainWindow::setLayerOpacityMindWave(sound_mind::core::LayerId id,

@@ -261,12 +261,16 @@ stroke paints into) to reveal its full set of controls:
   locked, and show their lock icon whether selected or not.
 - A **type tag**, for any layer type other than the ordinary kind you get
   from importing.
-- An **opacity slider**, an **opacity-MindWave combo** (see
-  [MindWaves](#mindwaves) below), **translation**/**rescale** spin
-  boxes (see [Layer Timing](#layer-timing) below), and a **Blend Mode**
-  combo (see [Compositing](#compositing) below) - except on the
-  **Background** layer's row, which has none of these: it's always fully
-  opaque and always first in time, so none of them apply to it.
+- An **opacity slider**, a **balance slider** (pans this layer's own
+  contribution between left and right - centered leaves it completely
+  unchanged; panning either way holds the channel you're panning toward
+  at full strength and fades out only the other one), an
+  **opacity-MindWave combo** (see [MindWaves](#mindwaves) below),
+  **translation**/**rescale** spin boxes (see
+  [Layer Timing](#layer-timing) below), and a **Blend Mode** combo (see
+  [Compositing](#compositing) below) - except on the **Background**
+  layer's row, which has none of these: it's always fully opaque and
+  always first in time, so none of them apply to it.
 - A **duplicate** button (⧉), for any layer except the locked one(s) -
   copies it, and everything about it (content, opacity and its own bound
   MindWave, blend mode, translation/rescale, filter configuration), into

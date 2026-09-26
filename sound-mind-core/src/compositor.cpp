@@ -94,6 +94,25 @@ constexpr float kMinLinearAmplitude = 1e-7f;
     return 20.0f * std::log10(std::max(amplitude, kMinLinearAmplitude));
 }
 
+/// @brief The per-channel dB gain a layer's own `balance()` implies - see
+/// `Layer::balance()`'s own docs for the exact linear pan law. Computed
+/// once per layer (`balance()` isn't MindWave-bindable, unlike opacity -
+/// deliberately out of scope for this installment, see
+/// `docs/sound-mind-architecture.md`'s own Decision on this), then added
+/// as a plain per-cell dB offset everywhere a layer's own placed content
+/// gets read - the same "gain as dB addition" shortcut `compositeSingleLayer()`'s
+/// own `gainDb` already uses for opacity.
+struct BalanceGainsDb {
+    float left;
+    float right;
+};
+
+[[nodiscard]] BalanceGainsDb balanceGainsDbFor(float balance) noexcept {
+    const float leftLinear = std::min(1.0f, 2.0f * (1.0f - balance));
+    const float rightLinear = std::min(1.0f, 2.0f * balance);
+    return {linearAmplitudeToDb(leftLinear), linearAmplitudeToDb(rightLinear)};
+}
+
 /// @brief `layer`'s own bound opacity MindWave, resolved against
 /// `project`'s own library - `v0.Y.31.1` Installment C1's own opacity-
 /// binding entry point. A `layer.opacityMindWave()` id that no longer
@@ -303,7 +322,10 @@ void forEachPlacedCell(const Layer& layer, const sound_mind::codec::StreamCodecC
 /// through `applyBlendedCell()` per `layer.blendMode()`, writing the result
 /// back - see compositeProject()'s own docs for why this per-layer
 /// incremental approach (rather than one N-way sum) is what lets a Filter
-/// layer transform an in-progress composite mid-stack.
+/// layer transform an in-progress composite mid-stack. `layer.balance()`'s
+/// own per-channel dB gain (see `balanceGainsDbFor()`'s own docs) is added
+/// straight into the `overlay` cell before blending - `v0.Y.46.1`
+/// Installment C (Per-layer balance).
 ///
 /// As of `v0.Y.37.1` (Deferred Blend Modes), this is the single shared path
 /// for every blend mode, `BlendMode::Normal` included - `applyBlendedCell()`'s
@@ -321,13 +343,15 @@ void forEachPlacedCell(const Layer& layer, const sound_mind::codec::StreamCodecC
 void mixLayerInto(StreamImage& running, const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
                     std::uint32_t canvasWidth, const MindWave* opacityMindWave) {
     const StreamImage& content = *layer.content();
+    const BalanceGainsDb balanceGainsDb = balanceGainsDbFor(layer.balance());
     forEachPlacedCell(
         layer, config, canvasWidth,
         [&](std::uint32_t bin, std::uint32_t outputColumn, std::size_t sourceCell, std::size_t outputCell) {
             const float gain = layer.opacity() * mindWaveGainAt(opacityMindWave, bin, outputColumn, config);
             const BlendedCell base{running.leftMagnitudeDb[outputCell], running.rightMagnitudeDb[outputCell],
                                     running.sharedPhaseRadians[outputCell]};
-            const BlendedCell overlay{content.leftMagnitudeDb[sourceCell], content.rightMagnitudeDb[sourceCell],
+            const BlendedCell overlay{content.leftMagnitudeDb[sourceCell] + balanceGainsDb.left,
+                                       content.rightMagnitudeDb[sourceCell] + balanceGainsDb.right,
                                        content.sharedPhaseRadians[sourceCell]};
             const BlendedCell blended = applyBlendedCell(layer.blendMode(), base, overlay, gain);
 
@@ -352,10 +376,18 @@ void mixLayerInto(StreamImage& running, const Layer& layer, const sound_mind::co
 /// Opacity is deliberately *not* baked in here - `mixLayerIntoGpuOrCpu()`
 /// passes it separately as `mixAmplitudePhaseSignal()`'s own `layerGain`,
 /// matching the CPU path's own separation of placement from gain.
+/// `balance()`'s own per-channel gain, by contrast, *is* baked in here
+/// (added as a plain per-cell dB offset, same as `mixLayerInto()`'s own
+/// CPU-path `overlay` construction) - `v0.Y.46.1` Installment C (Per-layer
+/// balance), confirmed as the simpler choice over threading a second
+/// gain pair through the GPU kernel itself, since balance isn't
+/// MindWave-bindable (unlike opacity) and needs no per-cell evaluation
+/// beyond this one placement pass.
 sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
                                                            const sound_mind::codec::StreamCodecConfig& config,
                                                            std::uint32_t canvasWidth, float silenceFloorDb) {
     const StreamImage& content = *layer.content();
+    const BalanceGainsDb balanceGainsDb = balanceGainsDbFor(layer.balance());
     sound_mind::gpu::AmplitudePhaseSignal placed;
     const std::size_t cellCount = std::size_t{config.binCount} * canvasWidth;
     placed.leftMagnitudeDb.assign(cellCount, silenceFloorDb);
@@ -364,8 +396,9 @@ sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
     forEachPlacedCell(layer, config, canvasWidth,
                        [&](std::uint32_t /*bin*/, std::uint32_t /*outputColumn*/, std::size_t sourceCell,
                            std::size_t outputCell) {
-                           placed.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell];
-                           placed.rightMagnitudeDb[outputCell] = content.rightMagnitudeDb[sourceCell];
+                           placed.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell] + balanceGainsDb.left;
+                           placed.rightMagnitudeDb[outputCell] =
+                               content.rightMagnitudeDb[sourceCell] + balanceGainsDb.right;
                            placed.phaseRadians[outputCell] = content.sharedPhaseRadians[sourceCell];
                        });
     return placed;
@@ -451,16 +484,18 @@ StreamImage compositeSingleLayer(const Layer& layer, const sound_mind::codec::St
 
     const StreamImage& content = *layer.content();
     const float gainDb = 20.0f * std::log10(std::max(layer.opacity(), kMinLinearAmplitude));
+    const BalanceGainsDb balanceGainsDb = balanceGainsDbFor(layer.balance());
     forEachPlacedCell(
         layer, config, canvasWidth,
         [&](std::uint32_t /*bin*/, std::uint32_t /*outputColumn*/, std::size_t sourceCell, std::size_t outputCell) {
             // dB(linear * gain) == dB(linear) + dB(gain) - the same
             // identity dbToLinearAmplitude()/linearAmplitudeToDb() round-
             // trips exactly for any value clear of the silence floor,
-            // letting opacity apply as a plain addition instead of a
-            // full linear round-trip.
-            result.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell] + gainDb;
-            result.rightMagnitudeDb[outputCell] = content.rightMagnitudeDb[sourceCell] + gainDb;
+            // letting opacity/balance apply as a plain addition instead of
+            // a full linear round-trip.
+            result.leftMagnitudeDb[outputCell] = content.leftMagnitudeDb[sourceCell] + gainDb + balanceGainsDb.left;
+            result.rightMagnitudeDb[outputCell] =
+                content.rightMagnitudeDb[sourceCell] + gainDb + balanceGainsDb.right;
             result.sharedPhaseRadians[outputCell] = content.sharedPhaseRadians[sourceCell];
         },
         [&](std::uint32_t /*bin*/, std::uint32_t /*outputColumn*/, std::size_t outputCell) {

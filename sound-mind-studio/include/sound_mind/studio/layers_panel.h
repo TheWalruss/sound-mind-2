@@ -82,8 +82,9 @@ namespace sound_mind::studio {
  * background for a Filter/Background/Equalizer row with nothing to
  * thumbnail) - per `docs/sound-mind-design.md`'s "Layer panel styling".
  * Selecting a row (selectLayer()/a click/selectionChanged()) reveals the
- * rest - drag handle, opacity slider, MindWave combo, the pre-existing
- * Time Alignment translation/rescale controls, Blend Mode combo, delete -
+ * rest - drag handle, opacity slider, balance slider (`v0.Y.46.1`
+ * Installment C), MindWave combo, the pre-existing Time Alignment
+ * translation/rescale controls, Blend Mode combo, delete -
  * so selectLayer()/clearSelection() now call rebuildRows() too, not just
  * move the list's own native highlight, since which controls a row's own
  * widget contains now depends on whether it's the selected one. A layer
@@ -109,6 +110,10 @@ public:
 
         /// @brief Mirrors `sound_mind::core::Layer::opacity()`.
         float opacity = 1.0f;
+
+        /// @brief Mirrors `sound_mind::core::Layer::balance()` - `v0.Y.46.1`
+        /// Installment C ("Per-layer balance").
+        float balance = 0.5f;
 
         /// @brief Mirrors `sound_mind::core::Layer::visible()`.
         bool visible = true;
@@ -255,6 +260,10 @@ signals:
 
     /// @brief A row's opacity slider changed.
     void opacityChanged(sound_mind::core::LayerId id, float opacity);
+
+    /// @brief A row's balance slider changed - `v0.Y.46.1` Installment C
+    /// ("Per-layer balance").
+    void balanceChanged(sound_mind::core::LayerId id, float balance);
 
     /// @brief A row's translation spin box changed - see
     /// `sound_mind::core::Layer::translationColumns()`'s docs.

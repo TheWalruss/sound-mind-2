@@ -123,6 +123,7 @@ void LayerController::refreshLayersPanel(std::optional<sound_mind::core::LayerId
             row.name = QString::fromStdString(layer.name());
             row.type = layer.type();
             row.opacity = layer.opacity();
+            row.balance = layer.balance();
             row.visible = layer.visible();
             row.muted = layer.muted();
             row.translationColumns = layer.translationColumns();
@@ -204,6 +205,30 @@ void LayerController::setLayerOpacity(sound_mind::core::LayerId id, float opacit
     if (oldOpacity != opacity) {
         undoStack_->push({/*undo=*/[this, id, oldOpacity]() { applyOpacity(id, oldOpacity); },
                            /*redo=*/[this, id, opacity]() { applyOpacity(id, opacity); }});
+    }
+}
+
+void LayerController::applyBalance(sound_mind::core::LayerId id, float balance) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    layer->setBalance(balance);
+    emit layersChanged();
+    canvas_->update();
+    refreshLayersPanel();
+}
+
+void LayerController::setLayerBalance(sound_mind::core::LayerId id, float balance) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    const float oldBalance = layer->balance();
+    applyBalance(id, balance);
+    if (oldBalance != balance) {
+        undoStack_->push({/*undo=*/[this, id, oldBalance]() { applyBalance(id, oldBalance); },
+                           /*redo=*/[this, id, balance]() { applyBalance(id, balance); }});
     }
 }
 

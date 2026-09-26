@@ -725,6 +725,20 @@ public slots:
     void setLayerOpacity(sound_mind::core::LayerId id, float opacity);
 
     /**
+     * @brief Sets the stereo balance of the layer with the given id - the
+     *        actual work behind `LayersPanel`'s balance slider, `v0.Y.46.1`
+     *        Installment C ("Per-layer balance").
+     *
+     * Marks hasUnsavedChanges() and refreshes both the canvas and the
+     * Layers Panel, the same as setLayerOpacity(). Does nothing if no
+     * layer with this id exists.
+     *
+     * @param id The layer to change.
+     * @param balance The new balance, intended to be in [0, 1].
+     */
+    void setLayerBalance(sound_mind::core::LayerId id, float balance);
+
+    /**
      * @brief Sets (or clears) which MindWave the layer with the given id's
      *        own opacity is bound to - the actual work behind
      *        `LayersPanel`'s per-row opacity-MindWave combo

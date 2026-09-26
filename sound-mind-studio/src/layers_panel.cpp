@@ -390,6 +390,21 @@ public:
                     [this](int value) { emit opacityChanged(id_, static_cast<float>(value) / 100.0f); });
             controlsRowOne->addWidget(opacitySlider, 1);
 
+            // Per-layer balance (v0.Y.46.1 Installment C, "Layers Panel &
+            // Editing Enhancements v2") - alongside opacity: opacity
+            // attenuates this layer's overall contribution, balance
+            // controls how that contribution splits between channels.
+            // `50` (the slider's own midpoint) is a true no-op, matching
+            // Layer::balance()'s own default/no-op value of `0.5`.
+            auto* balanceSlider = new QSlider(Qt::Horizontal);
+            balanceSlider->setObjectName(QStringLiteral("balanceSlider"));
+            balanceSlider->setRange(0, 100);
+            balanceSlider->setValue(static_cast<int>(data.balance * 100.0f));
+            balanceSlider->setToolTip(tr("Layer stereo balance (left/right)"));
+            connect(balanceSlider, &QSlider::valueChanged, this,
+                    [this](int value) { emit balanceChanged(id_, static_cast<float>(value) / 100.0f); });
+            controlsRowOne->addWidget(balanceSlider, 1);
+
             // MindWave opacity binding (v0.Y.31.1 Installment C2) - "None"
             // (a plain scalar opacity, the default) always first, then
             // every library entry MindWaveController currently knows
@@ -473,6 +488,7 @@ public:
 signals:
     void visibilityCycleRequested(sound_mind::core::LayerId id);
     void opacityChanged(sound_mind::core::LayerId id, float opacity);
+    void balanceChanged(sound_mind::core::LayerId id, float balance);
     void translationChanged(sound_mind::core::LayerId id, std::int64_t translationColumns);
     void rescaleChanged(sound_mind::core::LayerId id, double rescaleFactor);
     void opacityMindWaveChanged(sound_mind::core::LayerId id, std::optional<MindWaveId> mindWaveId);
@@ -682,6 +698,7 @@ void LayersPanel::rebuildRows() {
 
         connect(row, &LayerRowWidget::visibilityCycleRequested, this, &LayersPanel::visibilityCycleRequested);
         connect(row, &LayerRowWidget::opacityChanged, this, &LayersPanel::opacityChanged);
+        connect(row, &LayerRowWidget::balanceChanged, this, &LayersPanel::balanceChanged);
         connect(row, &LayerRowWidget::translationChanged, this, &LayersPanel::translationChanged);
         connect(row, &LayerRowWidget::rescaleChanged, this, &LayersPanel::rescaleChanged);
         connect(row, &LayerRowWidget::opacityMindWaveChanged, this, &LayersPanel::opacityMindWaveChanged);

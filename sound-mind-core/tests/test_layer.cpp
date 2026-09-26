@@ -53,6 +53,17 @@ TEST_CASE("A Layer's opacity can be bound to (and unbound from) a MindWave", "[c
     REQUIRE_FALSE(layer.opacityMindWave().has_value());
 }
 
+TEST_CASE("A Layer defaults to centered balance", "[core][layer]") {
+    const Layer layer(1, "Untitled", LayerType::Normal);
+    REQUIRE(layer.balance() == 0.5f);
+}
+
+TEST_CASE("A Layer's balance can be changed", "[core][layer]") {
+    Layer layer(1, "Untitled", LayerType::Normal);
+    layer.setBalance(0.25f);
+    REQUIRE(layer.balance() == 0.25f);
+}
+
 TEST_CASE("A Layer defaults to visible", "[core][layer]") {
     const Layer layer(1, "Untitled", LayerType::Normal);
     REQUIRE(layer.visible());
@@ -112,6 +123,7 @@ TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     Layer original(42, "Vocals", LayerType::Background);
     original.setOpacity(0.75f);
     original.setOpacityMindWave(sound_mind::core::MindWaveId{9});
+    original.setBalance(0.25f);
     original.setVisible(false);
     original.setMuted(true);
     original.setTranslationColumns(120);
@@ -128,6 +140,7 @@ TEST_CASE("A Layer round-trips through JSON", "[core][layer]") {
     REQUIRE(restored.type() == original.type());
     REQUIRE(restored.opacity() == original.opacity());
     REQUIRE(restored.opacityMindWave() == original.opacityMindWave());
+    REQUIRE(restored.balance() == original.balance());
     REQUIRE(restored.visible() == original.visible());
     REQUIRE(restored.muted() == original.muted());
     REQUIRE(restored.translationColumns() == original.translationColumns());
@@ -146,6 +159,17 @@ TEST_CASE("A Layer loads from JSON missing blendMode (a layer saved before v0.Y.
     const Layer restored = json.get<Layer>();
 
     REQUIRE(restored.blendMode() == BlendMode::Normal);
+}
+
+TEST_CASE("A Layer loads from JSON missing balance (a layer saved before v0.Y.46.1 Installment C) as centered",
+          "[core][layer]") {
+    const nlohmann::json json{
+        {"id", 1}, {"name", "Untitled"}, {"type", "normal"}, {"opacity", 1.0f}, {"visible", true},
+    };
+
+    const Layer restored = json.get<Layer>();
+
+    REQUIRE(restored.balance() == 0.5f);
 }
 
 TEST_CASE("A Layer loads from JSON missing opacityMindWaveId (a layer saved before "

@@ -151,6 +151,32 @@ public:
     [[nodiscard]] std::optional<MindWaveId> opacityMindWave() const noexcept { return opacityMindWave_; }
 
     /**
+     * @brief This layer's own stereo balance - "Layers Panel & Editing
+     *        Enhancements v2" (`v0.Y.46.1` Installment C), alongside
+     *        opacity(): opacity attenuates this layer's overall
+     *        contribution; balance controls how that contribution splits
+     *        between channels.
+     *
+     * A linear pan law where the panned-*toward* channel is always held
+     * at its own original, full gain and only the *opposite* channel is
+     * attenuated: `0.0` silences the right channel entirely (left
+     * unchanged); `1.0` silences the left channel entirely (right
+     * unchanged); `0.5` (the default) leaves both channels completely
+     * unchanged - a true no-op. Deliberately **not**
+     * `FilterConfiguration::channelBalance()`'s own energy-redistribution
+     * formula (`total = left + right`, then re-split by balance) - that
+     * formula is not, in general, a no-op at its own `0.5` default either
+     * (only for an already-centered signal), which is fine for an
+     * intentionally-added Filter effect but wrong for an always-present
+     * per-layer property, which needs a genuinely inert default so every
+     * existing project's own recorded stereo image survives unchanged.
+     *
+     * @return The current balance; `0.5` (the default) means centered/
+     *         unchanged. Not clamped or validated here, same as opacity().
+     */
+    [[nodiscard]] float balance() const noexcept { return balance_; }
+
+    /**
      * @brief Whether this layer currently contributes to the project at
      *        all - see `docs/sound-mind-roadmap.md`'s Layers Panel
      *        milestone (`v0.Y.13.1`).
@@ -243,6 +269,11 @@ public:
      *        own docs on a non-resolving id being harmless.
      */
     void setOpacityMindWave(std::optional<MindWaveId> mindWaveId) noexcept { opacityMindWave_ = mindWaveId; }
+
+    /// @brief Sets this layer's own stereo balance.
+    /// @param balance The new balance, intended to be in `[0, 1]` - see
+    ///        balance()'s own docs.
+    void setBalance(float balance) noexcept { balance_ = balance; }
 
     /**
      * @brief Sets whether this layer currently contributes to the project.
@@ -360,6 +391,7 @@ private:
     LayerType type_ = LayerType::Normal;
     float opacity_ = 1.0f;
     std::optional<MindWaveId> opacityMindWave_;
+    float balance_ = 0.5f;
     bool visible_ = true;
     bool muted_ = false;
     std::int64_t translationColumns_ = 0;

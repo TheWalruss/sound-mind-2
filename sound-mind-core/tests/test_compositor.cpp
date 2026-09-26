@@ -557,9 +557,11 @@ TEST_CASE("compositeProject agrees with itself whether or not the GPU is availab
         project.layers()[0].setContent(
             makeContent({-6.0f, -14.0f, -30.0f}, {-9.0f, -18.0f, -40.0f}, {0.3f, -0.6f, 1.1f}));
         project.layers()[0].setOpacity(0.8f);
+        project.layers()[0].setBalance(0.3f);  // v0.Y.46.1 Installment C - GPU/CPU parity for balance too.
         Layer second(0, "Second", LayerType::Normal);
         second.setContent(makeContent({-3.0f, -50.0f}, {-5.0f, -60.0f}, {-1.2f, 0.9f}));
         second.setOpacity(0.5f);
+        second.setBalance(0.7f);
         second.setTranslationColumns(1);
         project.addLayer(std::move(second));
         return project;
@@ -699,6 +701,69 @@ TEST_CASE("compositeProject respects a layer's own rescaleFactor when placing it
     CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
     CHECK(composite->leftMagnitudeDb[1] == Catch::Approx(0.0f).margin(0.01));
     CHECK(composite->leftMagnitudeDb[2] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject leaves left/right unchanged at the default, centered balance",
+          "[core][compositor]") {
+    // v0.Y.46.1 Installment C ("Per-layer balance") - 0.5 must be a true
+    // no-op, unlike FilterConfiguration::channelBalance()'s own formula.
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({0.0f, -20.0f, -5.0f}, {-3.0f, -15.0f, -8.0f}, {0.0f, 0.0f, 0.0f}));
+
+    const auto composite = compositeProject(project);  // single contributor - the fast path.
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(-3.0f).margin(0.01));
+    CHECK(composite->leftMagnitudeDb[1] == Catch::Approx(-20.0f).margin(0.01));
+    CHECK(composite->rightMagnitudeDb[1] == Catch::Approx(-15.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject's balance of 0 holds the left channel unchanged and silences the right",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({0.0f, -20.0f}, {-3.0f, -15.0f}, {0.0f, 0.0f}));
+    project.layers()[0].setBalance(0.0f);
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));  // unchanged.
+    CHECK(composite->rightMagnitudeDb[0] < -100.0f);                          // silenced.
+    CHECK(composite->leftMagnitudeDb[1] == Catch::Approx(-20.0f).margin(0.01));
+    CHECK(composite->rightMagnitudeDb[1] < -100.0f);
+}
+
+TEST_CASE("compositeProject's balance of 1 holds the right channel unchanged and silences the left",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({0.0f, -20.0f}, {-3.0f, -15.0f}, {0.0f, 0.0f}));
+    project.layers()[0].setBalance(1.0f);
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] < -100.0f);  // silenced.
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(-3.0f).margin(0.01));  // unchanged.
+    CHECK(composite->leftMagnitudeDb[1] < -100.0f);
+    CHECK(composite->rightMagnitudeDb[1] == Catch::Approx(-15.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject applies a layer's own balance per layer in the general (multi-contributor) path too",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(
+        makeContent({-96.0f, -96.0f, -96.0f}, {-96.0f, -96.0f, -96.0f}, {0.0f, 0.0f, 0.0f}));
+    Layer panned(0, "Panned", LayerType::Normal);
+    panned.setContent(makeContent({0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}));
+    panned.setBalance(1.0f);  // full right.
+    project.addLayer(std::move(panned));
+
+    const auto composite = compositeProject(project);  // 2 contributors - the general path, not the fast path.
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] < -50.0f);                                 // silenced by "Panned"'s own balance.
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.5));      // "Panned"'s own right, unchanged.
 }
 
 TEST_CASE("compositeProject always produces exactly canvasWidth columns, regardless of layer width",
