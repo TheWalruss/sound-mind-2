@@ -14,4 +14,6 @@ private slots:
     void startRecordingWhileAlreadyRecordingDoesNotClearEvents();
     void stopRecordingWhileNotRecordingIsANoOp();
     void recordingStateChangedEmitsOnStartAndStop();
+    void discardEventsClearsEventsAndStartUndoIndex();
+    void discardEventsWhileRecordingAlsoStopsRecording();
 };

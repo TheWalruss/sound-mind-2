@@ -868,11 +868,12 @@ Two checkboxes at the top of the panel, both off by default:
   this checkbox.
 
 **Undo** (Ctrl+Z) and **Redo** (Ctrl+Y), in the **Edit** menu, apply to
-paint strokes and to a layer's own opacity, balance, opacity-MindWave
+paint strokes; to a layer's own opacity, balance, opacity-MindWave
 binding, visibility, translation, rescale, and blend mode (see
-[Working with Layers](#working-with-layers)) - both kinds share the same
-single history, undoing/redoing whichever one actually happened most
-recently, in either order.
+[Working with Layers](#working-with-layers)); to a Filter/Equalizer
+layer's own configuration; and to a MindWave's own edited settings - all
+of these share the same single history, undoing/redoing whichever one
+actually happened most recently, in either order.
 
 The **History** panel (toggle it from the toolbar) shows that same shared
 history as a plain list, in the order things actually happened, with your
@@ -1392,13 +1393,17 @@ It's read-only for now: you can't yet drag a box to retime it, move it to
 a different track, or edit an object's/track's own settings from there -
 those are all still to come.
 
-**Macro Mode** has taken its very first step: a **Record Macro** toggle
-(also on the transport toolbar) captures a timestamped log of playback
+**Macro Mode** has taken its first two steps. A **Record Macro** toggle
+(on the transport toolbar) captures a timestamped log of playback
 start/stop, layer visibility changes, painting, filter configuration
 changes, and MindWave edits - stopping it reports how many events were
-captured, in the status bar. That's the whole feature so far - nothing
-plays a recorded macro back yet, there's no way to export one as a video,
-and there's no panel to inspect what it actually contains.
+captured, in the status bar. A **Play Macro** action, next to it, replays
+the most recently recorded one: it jumps the project back to how it
+looked right before recording began, then re-applies each captured
+action at the same relative moment it originally happened. Each replayed
+action causes a brief, audible restart of playback rather than a
+seamless transition - that's expected. There's still no way to export a
+macro as a video, and no panel to inspect what one actually contains.
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:

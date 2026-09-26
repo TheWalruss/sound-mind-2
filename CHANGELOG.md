@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.2.4] - 2026-09-26
+
+Macro Mode, Installment B: **playback.**
+
+### Added
+
+- **A new "Play Macro" toolbar action** - replays the most recently recorded macro. It jumps the project back to how it looked right before you started recording, then re-applies each captured action (playback start, layer visibility, painting, filter changes, MindWave edits) at the same relative moment it originally happened.
+- **Filter configuration and MindWave edits are now undoable (Ctrl+Z)** - a real, independent improvement found and fixed as part of making them macro-replayable.
+
+### Notes
+
+- Each replayed action causes a brief, audible restart of playback rather than a seamless transition - expected, and the same trade-off this app's Delta/Review playback already makes for a live edit. There's still no way to export a macro as a video, and no panel to inspect what one actually contains.
+
+Full regression: `sound-mind-core` 879/879 (unaffected), `sound-mind-studio` full suite unaffected (4 new/updated tests, still 0 failures). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #163.
+
 ## [0.1.2.3] - 2026-09-26
 
 Macro Mode, Installment A: **recording only.**

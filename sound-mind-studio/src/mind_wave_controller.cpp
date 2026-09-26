@@ -16,6 +16,7 @@
 #include "sound_mind/studio/mind_waves_panel.h"
 #include "sound_mind/studio/qt_image_conversion.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
+#include "sound_mind/studio/undo_stack.h"
 
 namespace {
 
@@ -67,13 +68,14 @@ QString nextDefaultName(const std::vector<NamedMindWave>& entries) {
 MindWaveController::MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel,
                                         FilterConfigurationPanel* filterConfigurationPanel,
                                         ToolConfigurationPanel* toolConfigurationPanel, CanvasWidget* canvas,
-                                        QObject* parent)
+                                        UndoStack* undoStack, QObject* parent)
     : QObject(parent),
       mindWavesPanel_(mindWavesPanel),
       layersPanel_(layersPanel),
       filterConfigurationPanel_(filterConfigurationPanel),
       toolConfigurationPanel_(toolConfigurationPanel),
-      canvas_(canvas) {
+      canvas_(canvas),
+      undoStack_(undoStack) {
     connect(mindWavesPanel_, &MindWavesPanel::previewToggled, this, &MindWaveController::updateMindWavePreview);
     connect(mindWavesPanel_, &MindWavesPanel::selectionChanged, this, &MindWaveController::updateMindWavePreview);
     connect(mindWavesPanel_, &MindWavesPanel::mindWaveChanged, this,
@@ -196,7 +198,19 @@ void MindWaveController::updateMindWave(MindWaveId id, const MindWave& wave) {
     if (project_ == nullptr) {
         return;
     }
-    NamedMindWave* entry = project_->mindWaveById(id);
+    const NamedMindWave* entry = project_->mindWaveById(id);
+    if (entry == nullptr) {
+        return;
+    }
+    const MindWave oldWave = entry->wave;
+    applyMindWaveTo(id, wave);
+    undoStack_->push({/*undo=*/[this, id, oldWave]() { applyMindWaveTo(id, oldWave); },
+                       /*redo=*/[this, id, wave]() { applyMindWaveTo(id, wave); },
+                       /*description=*/tr("Changed MindWave configuration")});
+}
+
+void MindWaveController::applyMindWaveTo(MindWaveId id, const MindWave& wave) {
+    NamedMindWave* entry = project_ != nullptr ? project_->mindWaveById(id) : nullptr;
     if (entry == nullptr) {
         return;
     }

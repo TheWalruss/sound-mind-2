@@ -1394,6 +1394,42 @@ public slots:
     void setMacroRecordingEnabled(bool enabled);
 
     /**
+     * @brief Replays macroRecorder_'s own most recently recorded macro -
+     *        `v0.Y.49.1` (Macro Mode) Installment B.
+     *
+     * Reuses `UndoStack::jumpTo()` (built for the History Panel,
+     * `v0.Y.46.1` Installment D) rather than a separate snapshot/copy
+     * mechanism: jumps the project back to `macroRecorder_.
+     * startUndoIndex()` (the checkpoint taken when recording began), then
+     * starts playback - from there, the `positionChanged()` handler
+     * itself steps forward through each recorded event's own
+     * `undoStackIndexAfter` as playback reaches its `timestampSeconds`.
+     * `PlaybackStarted`/`PlaybackStopped` events are skipped entirely
+     * (neither was ever pushed to `UndoStack`, so neither has a
+     * meaningful index to jump to - starting/stopping playback here
+     * already represents them).
+     *
+     * Each jump re-composites and reloads playback audio immediately (the
+     * same synchronous "restart, don't try to update seamlessly"
+     * technique `handleContentChangedForPlayback()`'s own Delta/Review
+     * scope already uses for a live edit) - a real, audible restart at
+     * each scripted moment, not a seamless cut. Matches the roadmap's own
+     * "what may be a 1-second delay for a heavy filter change during live
+     * recording is seamless in the output video" framing: video export
+     * (still future work) can afford to be seamless because it's
+     * pre-rendered frame by frame; live in-app playback, replaying the
+     * same recorded actions in real time, genuinely can't be, and isn't
+     * expected to be.
+     *
+     * A no-op with no project, no recorded events, or if any recorded
+     * event's own index no longer resolves against the current
+     * `undoStack_` (stale data left over despite `discardEvents()`'s own
+     * project-switch guard - defensive, not expected to trigger in
+     * practice).
+     */
+    void playMacro();
+
+    /**
      * @brief Captures the currently Picked object's own `Path` as the
      *        MindWaves panel's own currently-selected library entry's drawn
      *        shape - `docs/sound-mind-design.md`'s "MindWave Functions"
@@ -2585,6 +2621,26 @@ private:
     void checkRepeatPlaybackRange(double positionSeconds);
 
     /**
+     * @brief Fires every macroPlaybackEvents_ entry whose own
+     *        `timestampSeconds` has now been reached - `v0.Y.49.1`
+     *        (Macro Mode) Installment B, `playMacro()`'s own tick,
+     *        connected to `PlaybackController::positionChanged()`
+     *        alongside `checkRepeatPlaybackRange()`.
+     *
+     * Each fired event calls `undoStack_.jumpTo(event.undoStackIndexAfter)`
+     * then, since that alone doesn't guarantee `playbackController_` picks
+     * up whatever it just changed (see `playMacro()`'s own docs on why
+     * `handleContentChangedForPlayback()`'s existing gate doesn't cover
+     * every case), re-composites and reloads audio immediately, seeking
+     * back to `positionSeconds` and resuming - a real, audible restart at
+     * each scripted moment. A no-op whenever macroPlaybackActive_ is
+     * `false`, or no event's own timestamp has been reached yet.
+     *
+     * @param positionSeconds The current playback position, in seconds.
+     */
+    void advanceMacroPlayback(double positionSeconds);
+
+    /**
      * @brief openUserDocIfBundled(), plus a `QMessageBox::information()`
      *        fallback (mentioning this project's own GitHub repository) if
      *        the doc isn't bundled - the actual interactive behavior behind
@@ -2693,19 +2749,32 @@ private:
     UndoStack undoStack_;
 
     /// @brief Records a timestamped macro while active - `v0.Y.49.1`
-    ///        (Macro Mode) Installment A. Owned by value, the same
-    ///        reasoning undoStack_ above already gives - nothing else
-    ///        needs to own it. Not clear()ed in setProject(), unlike
-    ///        undoStack_ - a macro is a deliberately independent, opt-in
-    ///        recording a user starts/stops explicitly, not implicitly
-    ///        invalidated by switching projects (though `layerId`/
-    ///        `mindWaveId` references inside an already-recorded macro
-    ///        would no longer resolve against a different project's own
-    ///        ids - a real limitation, acceptable for this installment's
-    ///        own recording-only scope, and something a future replay
-    ///        installment will need to address directly rather than
-    ///        silently ignore).
+    ///        (Macro Mode). Owned by value, the same reasoning undoStack_
+    ///        above already gives - nothing else needs to own it.
+    ///        discardEvents()'d in setProject() (as of Installment B) -
+    ///        every recorded event's own `undoStackIndexAfter` only means
+    ///        anything against `undoStack_` as it stood at record time,
+    ///        which a project switch clears out from under it.
     MacroRecorder macroRecorder_;
+
+    /// @brief Every non-playback event from macroRecorder_.events(), in
+    ///        order - built fresh by playMacro() each time it's called
+    ///        (`v0.Y.49.1` Installment B). `PlaybackStarted`/
+    ///        `PlaybackStopped` are filtered out here, not during
+    ///        recording, since MacroRecorder itself has no opinion on
+    ///        which event types are replayable - that's this class's own
+    ///        concern.
+    std::vector<MacroEvent> macroPlaybackEvents_;
+
+    /// @brief The index into macroPlaybackEvents_ of the next event still
+    ///        waiting to fire, while macroPlaybackActive_ is `true`.
+    std::size_t macroPlaybackNextEventIndex_ = 0;
+
+    /// @brief Whether a "Play Macro" replay is currently in progress - see
+    ///        playMacro()'s own docs. Cleared the moment every recorded
+    ///        event has fired, or playback stops for any reason
+    ///        (stopPlayback()).
+    bool macroPlaybackActive_ = false;
 
     /// @brief Owns the four Paint/Pick/Select/Path tool controllers and
     /// all of their wiring to `canvas_`/`toolConfigurationPanel_` - see its
@@ -2777,6 +2846,13 @@ private:
     /// the same "unrelated event, start clean" reasoning setProject()'s
     /// own paintAction_/pickAction_ reset already uses).
     QAction* macroRecordAction_ = nullptr;
+
+    /// @brief The transport toolbar's "Play Macro" momentary action -
+    /// `v0.Y.49.1` (Macro Mode) Installment B. Not checkable, unlike
+    /// macroRecordAction_ - triggers playMacro() once per click, the same
+    /// "always present, no-op when inapplicable" shape deleteAction_'s
+    /// own docs describe, rather than tracking an enabled/disabled state.
+    QAction* macroPlayAction_ = nullptr;
 
     /// @brief The dockable panel exposing the current paint tool's own
     /// parameters - see its own class docs for what's deliberately not

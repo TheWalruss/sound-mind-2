@@ -595,16 +595,31 @@ void LayerController::applyFilterConfiguration(const sound_mind::core::FilterCon
     const auto id = layersPanel_->selectedLayerId();
     sound_mind::core::Layer* layer = id.has_value() ? layerById(*id) : nullptr;
     if (layer != nullptr && sound_mind::core::isFilterLayerType(layer->type())) {
-        layer->setFilterConfiguration(config);
-        emit layersChanged();
-        playbackController_->invalidate();
-        canvas_->update();
+        const sound_mind::core::FilterConfiguration oldConfig = layer->filterConfiguration();
+        applyFilterConfigurationTo(*id, config);
+        undoStack_->push(
+            {/*undo=*/[this, layerId = *id, oldConfig]() { applyFilterConfigurationTo(layerId, oldConfig); },
+             /*redo=*/[this, layerId = *id, config]() { applyFilterConfigurationTo(layerId, config); },
+             /*description=*/tr("Changed filter configuration")});
         return;
     }
     // Finding #13: nothing (or a non-Filter layer) is selected - the edit
     // isn't discarded, it seeds whatever Filter layer addFilterLayer()
-    // adds next.
+    // adds next. Not undoable, same reasoning as every other pending seed
+    // value in this class - nothing real has changed yet.
     pendingFilterConfiguration_ = config;
+}
+
+void LayerController::applyFilterConfigurationTo(sound_mind::core::LayerId id,
+                                                   const sound_mind::core::FilterConfiguration& config) {
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr) {
+        return;
+    }
+    layer->setFilterConfiguration(config);
+    emit layersChanged();
+    playbackController_->invalidate();
+    canvas_->update();
 }
 
 void LayerController::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {

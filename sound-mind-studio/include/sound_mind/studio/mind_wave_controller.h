@@ -13,6 +13,7 @@ class FilterConfigurationPanel;
 class LayersPanel;
 class MindWavesPanel;
 class ToolConfigurationPanel;
+class UndoStack;
 
 /**
  * @brief Owns the current project's MindWave library - add/remove/rename/
@@ -70,12 +71,17 @@ public:
      *        `filterConfigurationPanel`. Must outlive this controller.
      * @param canvas Non-owning; receives the live Preview overlay (see the
      *        class's own docs). Must outlive this controller.
+     * @param undoStack Non-owning; `updateMindWave()` pushes an undo entry
+     *        onto it (`v0.Y.49.1`, Macro Mode Installment B - the
+     *        prerequisite for replaying a `MacroEventType::
+     *        MindWaveConfigurationChanged` event via `UndoStack::
+     *        jumpTo()`). Must outlive this controller.
      * @param parent The owning object, per Qt's normal parent-ownership
      *        convention; may be `nullptr`.
      */
     MindWaveController(MindWavesPanel* mindWavesPanel, LayersPanel* layersPanel,
                         FilterConfigurationPanel* filterConfigurationPanel,
-                        ToolConfigurationPanel* toolConfigurationPanel, CanvasWidget* canvas,
+                        ToolConfigurationPanel* toolConfigurationPanel, CanvasWidget* canvas, UndoStack* undoStack,
                         QObject* parent = nullptr);
 
     /// @brief Sets which project this controller looks up/mutates
@@ -132,8 +138,10 @@ public:
     bool renameMindWaveTo(sound_mind::core::MindWaveId id, const QString& newName);
 
     /// @brief Applies `MindWavesPanel`'s own edited MindWave back onto the
-    ///        library entry it belongs to. A no-op if no project is set or
-    ///        no MindWave with this id exists.
+    ///        library entry it belongs to, and pushes an undo entry
+    ///        (`v0.Y.49.1`, Macro Mode Installment B - MindWave edits
+    ///        weren't undoable at all before this). A no-op if no project
+    ///        is set or no MindWave with this id exists.
     /// @param id The entry that changed.
     /// @param wave Its own new, complete MindWave.
     void updateMindWave(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave);
@@ -219,11 +227,20 @@ private:
      */
     void handleMindWavesPanelVisibilityChanged(bool visible);
 
+    /// @brief The actual MindWave mutation + side effects, shared by
+    ///        updateMindWave() and its own pushed UndoCommand's
+    ///        undo()/redo() callbacks - the same "target by id, not by
+    ///        re-reading current state" reasoning `LayerController::
+    ///        applyVisibilityAndMute()`'s own docs give. A no-op if `id`
+    ///        no longer resolves to a real library entry.
+    void applyMindWaveTo(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave);
+
     MindWavesPanel* mindWavesPanel_;
     LayersPanel* layersPanel_;
     FilterConfigurationPanel* filterConfigurationPanel_;
     ToolConfigurationPanel* toolConfigurationPanel_;
     CanvasWidget* canvas_;
+    UndoStack* undoStack_;
     sound_mind::core::Project* project_ = nullptr;
 };
 

@@ -17,6 +17,7 @@
 #include "sound_mind/studio/mind_wave_editor.h"
 #include "sound_mind/studio/mind_waves_panel.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
+#include "sound_mind/studio/undo_stack.h"
 
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
@@ -32,6 +33,7 @@ using sound_mind::studio::MindWaveController;
 using sound_mind::studio::MindWaveEditor;
 using sound_mind::studio::MindWavesPanel;
 using sound_mind::studio::ToolConfigurationPanel;
+using sound_mind::studio::UndoStack;
 
 namespace {
 
@@ -54,8 +56,9 @@ struct Fixture {
     FilterConfigurationPanel filterConfigurationPanel;
     ToolConfigurationPanel toolConfigurationPanel;
     CanvasWidget canvas;
-    MindWaveController controller{&mindWavesPanel, &layersPanel, &filterConfigurationPanel, &toolConfigurationPanel,
-                                   &canvas};
+    UndoStack undoStack;
+    MindWaveController controller{&mindWavesPanel,     &layersPanel, &filterConfigurationPanel,
+                                   &toolConfigurationPanel, &canvas,  &undoStack};
 };
 
 }  // namespace
@@ -145,6 +148,31 @@ void MindWaveControllerTest::updateMindWaveWritesBackTheGivenWave() {
     edited.setPeriod(5.0);
     fixture.controller.updateMindWave(id, edited);
 
+    QCOMPARE(project.mindWaves().front().wave.period(), 5.0);
+}
+
+void MindWaveControllerTest::updateMindWaveIsUndoableAndRedoable() {
+    // v0.Y.49.1 (Macro Mode) Installment B - a prerequisite for replaying
+    // a MacroEventType::MindWaveConfigurationChanged event via
+    // UndoStack::jumpTo(); MindWave edits weren't undoable at all before
+    // this.
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    fixture.controller.addMindWave();
+    const MindWaveId id = project.mindWaves().front().id;
+    const double oldPeriod = project.mindWaves().front().wave.period();
+
+    MindWave edited;
+    edited.setPeriod(5.0);
+    fixture.controller.updateMindWave(id, edited);
+    QCOMPARE(project.mindWaves().front().wave.period(), 5.0);
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QCOMPARE(project.mindWaves().front().wave.period(), oldPeriod);
+
+    fixture.undoStack.redo();
     QCOMPARE(project.mindWaves().front().wave.period(), 5.0);
 }
 

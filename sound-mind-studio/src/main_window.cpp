@@ -276,6 +276,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         const double total = playbackController_->totalSeconds();
         canvas_->setPlayheadFraction(total > 0.0 ? std::optional<double>(positionSeconds / total) : std::nullopt);
         checkRepeatPlaybackRange(positionSeconds);
+        advanceMacroPlayback(positionSeconds);
     });
     connect(playbackPanel_, &PlaybackPanel::repeatChanged, this, &MainWindow::setPlaybackRepeat);
     connect(playbackPanel_, &PlaybackPanel::scopeChanged, this, &MainWindow::setPlaybackScope);
@@ -543,7 +544,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
                 // caveat applyFilterConfiguration()'s/updateMindWave()'s
                 // own recordEvent() calls already accept.
                 macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PaintCommitted,
-                                            tr("Painted content"), layer);
+                                            tr("Painted content"), undoStack_.currentIndex(), layer);
             });
 
     gridPanel_ = new GridPanel(this);
@@ -595,8 +596,15 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // mindWavesPanel_/layersPanel_'s own opacity-binding combo in sync
     // with it (v0.Y.31.1 Installment C2); see its own class docs.
     mindWaveController_ = new MindWaveController(mindWavesPanel_, layersPanel_, filterConfigurationPanel_,
-                                                  toolConfigurationPanel_, canvas_, this);
-    connect(mindWaveController_, &MindWaveController::mindWavesChanged, this, [this]() { hasUnsavedChanges_ = true; });
+                                                  toolConfigurationPanel_, canvas_, &undoStack_, this);
+    connect(mindWaveController_, &MindWaveController::mindWavesChanged, this, [this]() {
+        hasUnsavedChanges_ = true;
+        // v0.Y.49.1 (Macro Mode) Installment B - updateMindWave() now
+        // pushes a real UndoStack entry, so the History Panel needs to
+        // reflect it too, the same reasoning layerController_'s own
+        // layersChanged() connection already gives.
+        refreshHistoryPanel();
+    });
 
     // A permanent (not showMessage()'s own temporary-message) label in the
     // status bar's normal (left-hand) area - see cursorPositionLabel_'s
@@ -1068,8 +1076,18 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     macroRecordAction_->setCheckable(true);
     macroRecordAction_->setToolTip(
         tr("Records a timestamped log of playback start/stop, layer visibility, painting, filter, and MindWave "
-           "changes - recording only for now, nothing plays it back or exports it yet"));
+           "changes - nothing exports it yet"));
     connect(macroRecordAction_, &QAction::toggled, this, &MainWindow::setMacroRecordingEnabled);
+
+    // Play Macro (v0.Y.49.1 Installment B) - no standard shortcut,
+    // matching macroRecordAction_'s own no-shortcut choice; a no-op with
+    // nothing recorded, the same "always present" choice deleteAction_
+    // makes.
+    macroPlayAction_ = transportToolBar->addAction(tr("&Play Macro"));
+    macroPlayAction_->setToolTip(
+        tr("Replays the most recently recorded macro - jumps back to the project state right before recording "
+           "began, then re-applies each captured action as playback reaches it"));
+    connect(macroPlayAction_, &QAction::triggered, this, &MainWindow::playMacro);
 
     // Zoom's own toolbar, added after transportToolBar (not before) so
     // findChild<QToolBar*>()'s own singular/first-match behavior - already
@@ -1336,6 +1354,12 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // macroRecordAction_'s own docs. A no-op (does nothing, triggers no
     // toggled()) when nothing was recording.
     macroRecordAction_->setChecked(false);
+    // Every recorded event's own undoStackIndexAfter only means anything
+    // against undoStack_ as it stands right now - about to be clear()ed a
+    // few lines below, which would make any already-recorded macro unsafe
+    // to jumpTo() against. See MacroRecorder::discardEvents()'s own docs.
+    macroRecorder_.discardEvents();
+    macroPlaybackActive_ = false;
     canvas_->setToolMode(CanvasWidget::ToolMode::None);
     canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     canvas_->setPickSelectionBounds(std::nullopt);
@@ -2086,7 +2110,7 @@ void MainWindow::updateWindowTitle() {
 void MainWindow::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
     layerController_->cycleLayerVisibilityState(id);
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::LayerVisibilityChanged,
-                                tr("Changed layer visibility"), id);
+                                tr("Changed layer visibility"), undoStack_.currentIndex(), id);
 }
 
 void MainWindow::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
@@ -2183,7 +2207,8 @@ void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfigur
     // just used - is std::nullopt when nothing's selected (the edit only
     // seeded the pending configuration, not any real layer yet).
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::FilterConfigurationChanged,
-                                tr("Changed filter configuration"), layersPanel_->selectedLayerId());
+                                tr("Changed filter configuration"), undoStack_.currentIndex(),
+                                layersPanel_->selectedLayerId());
 }
 
 void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {
@@ -2216,7 +2241,7 @@ void MainWindow::updateMindWave(sound_mind::core::MindWaveId id, const sound_min
     // Fires on every parameter change while editing, the same coarseness
     // applyFilterConfiguration()'s own recordEvent() call above accepts.
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::MindWaveConfigurationChanged,
-                                tr("Changed MindWave configuration"), std::nullopt, id);
+                                tr("Changed MindWave configuration"), undoStack_.currentIndex(), std::nullopt, id);
 }
 
 void MainWindow::setPaintModeEnabled(bool enabled) {
@@ -2515,13 +2540,63 @@ void MainWindow::setMacroRecordingEnabled(bool enabled) {
         return;
     }
     if (enabled) {
-        macroRecorder_.startRecording();
+        macroRecorder_.startRecording(undoStack_.currentIndex());
         statusBar()->showMessage(tr("Recording macro..."));
     } else {
         macroRecorder_.stopRecording();
         statusBar()->showMessage(
             tr("Macro recording stopped - %1 event(s) captured.").arg(macroRecorder_.events().size()), 5000);
     }
+}
+
+void MainWindow::playMacro() {
+    if (!project_ || macroRecorder_.events().empty()) {
+        return;
+    }
+
+    // Every recorded index must still resolve against the current
+    // undoStack_ - see playMacro()'s own docs on why this is defensive
+    // rather than expected to trigger (discardEvents()'s own setProject()
+    // guard already prevents a stale macro from surviving a project
+    // switch in the first place).
+    const std::size_t startIndex = macroRecorder_.startUndoIndex();
+    if (startIndex > undoStack_.count()) {
+        statusBar()->showMessage(tr("Can't play this macro - record a new one first."), 5000);
+        return;
+    }
+    for (const MacroEvent& event : macroRecorder_.events()) {
+        if (event.undoStackIndexAfter > undoStack_.count()) {
+            statusBar()->showMessage(tr("Can't play this macro - record a new one first."), 5000);
+            return;
+        }
+    }
+
+    undoStack_.jumpTo(startIndex);
+    // jumpTo()'s own undo()/redo() callbacks already invalidate
+    // playbackController_ for every event type that changes what's
+    // audible (LayerController's/MindWaveController's mutators all do) -
+    // this covers the one case that doesn't (a pure content-operation
+    // undo/redo via PaintController, which only rebuilds layer content
+    // and doesn't touch playbackController_ itself), so startPlayback()
+    // below always recomposites fresh from the rolled-back state rather
+    // than possibly resuming a stale cached composite.
+    playbackController_->invalidate();
+
+    macroPlaybackEvents_.clear();
+    for (const MacroEvent& event : macroRecorder_.events()) {
+        // PlaybackStarted/PlaybackStopped were never pushed to
+        // undoStack_ (see MacroEvent::undoStackIndexAfter's own docs) -
+        // starting playback right below already represents the former;
+        // there is nothing to jump to for either.
+        if (event.type == MacroEventType::PlaybackStarted || event.type == MacroEventType::PlaybackStopped) {
+            continue;
+        }
+        macroPlaybackEvents_.push_back(event);
+    }
+    macroPlaybackNextEventIndex_ = 0;
+    macroPlaybackActive_ = !macroPlaybackEvents_.empty();
+
+    startPlayback();
 }
 
 void MainWindow::usePickedPathAsMindWaveShape() {
@@ -2654,7 +2729,7 @@ void MainWindow::startPlayback() {
 
     playbackController_->play();
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStarted,
-                                tr("Started playback"));
+                                tr("Started playback"), undoStack_.currentIndex());
 }
 
 void MainWindow::pausePlayback() {
@@ -2667,9 +2742,13 @@ void MainWindow::pausePlayback() {
 void MainWindow::stopPlayback() {
     playbackController_->stop();
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStopped,
-                                tr("Stopped playback"));
+                                tr("Stopped playback"), undoStack_.currentIndex());
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
+    // Replaying a macro (v0.Y.49.1 Installment B) is complete once
+    // playback stops, whether that's the user manually stopping or a
+    // natural end-of-track - see playMacro()'s own docs.
+    macroPlaybackActive_ = false;
 }
 
 void MainWindow::seekPlayback(double positionSeconds) {
@@ -3111,6 +3190,42 @@ void MainWindow::checkRepeatPlaybackRange(double positionSeconds) {
     }
 }
 
+void MainWindow::advanceMacroPlayback(double positionSeconds) {
+    if (!macroPlaybackActive_) {
+        return;
+    }
+    bool firedAny = false;
+    while (macroPlaybackNextEventIndex_ < macroPlaybackEvents_.size() &&
+           macroPlaybackEvents_[macroPlaybackNextEventIndex_].timestampSeconds <= positionSeconds) {
+        undoStack_.jumpTo(macroPlaybackEvents_[macroPlaybackNextEventIndex_].undoStackIndexAfter);
+        ++macroPlaybackNextEventIndex_;
+        firedAny = true;
+    }
+    if (macroPlaybackNextEventIndex_ >= macroPlaybackEvents_.size()) {
+        macroPlaybackActive_ = false;
+    }
+    if (!firedAny || !project_) {
+        return;
+    }
+    // jumpTo() alone doesn't guarantee playbackController_ reflects
+    // whatever it just changed (see playMacro()'s own docs) - reload and
+    // resume immediately, the same synchronous restart
+    // handleContentChangedForPlayback()'s own Delta/Review scope already
+    // uses for a live edit. seek() below emits positionChanged()
+    // synchronously, re-entering this same method - safe, not unbounded
+    // recursion, since macroPlaybackNextEventIndex_ was already advanced
+    // above, so the re-entrant call's own while loop is a no-op unless a
+    // later event happens to share this exact same timestamp.
+    const auto composite = sound_mind::core::compositeProject(*project_, /*shouldCancel=*/nullptr,
+                                                                /*respectMute=*/true);
+    if (!composite.has_value()) {
+        return;
+    }
+    playbackController_->load(sound_mind::codec::decode(*composite));
+    playbackController_->seek(positionSeconds);
+    playbackController_->play();
+}
+
 void MainWindow::poolTopmostLayer() { poolTopmostLayerAsync(); }
 
 bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPath, QString* poolPngPath) {
@@ -3301,7 +3416,7 @@ void MainWindow::pollCompositeProgress() {
                 repeatLoopBackSeconds_ = 0.0;
                 playbackController_->play();
                 macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStarted,
-                                            tr("Started playback"));
+                                            tr("Started playback"), undoStack_.currentIndex());
                 statusBar()->clearMessage();
             } else {
                 // Shouldn't happen given startPlayback()'s own pre-check

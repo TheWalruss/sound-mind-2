@@ -33,6 +33,7 @@ private slots:
     void addFilterLayerAddsAndSelectsAFilterLayer();
     void handleLayerSelectionChangedSyncsFilterConfigurationPanel();
     void applyFilterConfigurationAppliesOnlyToAFilterLayer();
+    void applyFilterConfigurationIsUndoableAndRedoable();
     void applyFilterConfigurationWithNoFilterLayerSelectedUpdatesThePendingConfiguration();
     void addFilterLayerSeedsFromThePendingFilterConfiguration();
     void setProjectResetsThePendingFilterConfiguration();

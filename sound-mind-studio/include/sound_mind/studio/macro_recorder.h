@@ -48,6 +48,15 @@ struct MacroEvent {
     QString description;
     std::optional<sound_mind::core::LayerId> layerId;
     std::optional<sound_mind::core::MindWaveId> mindWaveId;
+    /// @brief `UndoStack::currentIndex()` immediately after this event's
+    ///        own mutation was pushed - `v0.Y.49.1` Installment B's own
+    ///        replay mechanism (`MainWindow::playMacro()`) jumps to this
+    ///        index (via `UndoStack::jumpTo()`) once playback reaches
+    ///        `timestampSeconds`. Meaningless for `PlaybackStarted`/
+    ///        `PlaybackStopped` (neither is ever pushed to `UndoStack`) -
+    ///        `playMacro()` skips both event types entirely rather than
+    ///        jumping to this field for them.
+    std::size_t undoStackIndexAfter = 0;
 };
 
 /**
@@ -75,17 +84,25 @@ public:
     explicit MacroRecorder(QObject* parent = nullptr);
 
     /// @brief Starts a new recording, discarding whatever the previous
-    ///        one captured. A no-op (does not restart/clear) if already
-    ///        recording.
-    void startRecording();
+    ///        one captured. A no-op (does not restart/clear, does not
+    ///        update startUndoIndex()) if already recording.
+    /// @param startUndoIndex `UndoStack::currentIndex()` at the moment
+    ///        recording begins - `playMacro()`'s own checkpoint to jump
+    ///        back to before replaying anything.
+    void startRecording(std::size_t startUndoIndex);
 
     /// @brief Stops recording. The already-captured events() remain
-    ///        available for inspection until the next startRecording()
-    ///        call. A no-op if not currently recording.
+    ///        available for inspection/replay until the next
+    ///        startRecording() call. A no-op if not currently recording.
     void stopRecording();
 
     /// @return Whether a recording is currently in progress.
     [[nodiscard]] bool isRecording() const noexcept { return recording_; }
+
+    /// @return The `UndoStack` index `startRecording()` was last called
+    ///         with - meaningless (`0`) if nothing has ever been
+    ///         recorded.
+    [[nodiscard]] std::size_t startUndoIndex() const noexcept { return startUndoIndex_; }
 
     /**
      * @brief Appends one event, if (and only if) currently recording.
@@ -98,16 +115,27 @@ public:
      *        real-world seconds after I pressed record."
      * @param type Which kind of action this is.
      * @param description A human-readable label for this event.
+     * @param undoStackIndexAfter See `MacroEvent::undoStackIndexAfter`'s
+     *        own docs.
      * @param layerId The affected layer, if this event type has one.
      * @param mindWaveId The affected MindWave, if this event type has one.
      */
     void recordEvent(double timestampSeconds, MacroEventType type, const QString& description,
-                      std::optional<sound_mind::core::LayerId> layerId = std::nullopt,
+                      std::size_t undoStackIndexAfter, std::optional<sound_mind::core::LayerId> layerId = std::nullopt,
                       std::optional<sound_mind::core::MindWaveId> mindWaveId = std::nullopt);
 
     /// @return Every event captured by the current (or most recently
     ///         stopped) recording, in the order they were recorded.
     [[nodiscard]] const std::vector<MacroEvent>& events() const noexcept { return events_; }
+
+    /// @brief Discards whatever the current (or most recently stopped)
+    ///        recording captured, and stops recording if one is in
+    ///        progress - `MainWindow::setProject()`'s own "a project
+    ///        switch invalidates a recorded macro outright" guard
+    ///        (`v0.Y.49.1` Installment B): every `undoStackIndexAfter`
+    ///        only means anything against the `UndoStack` it was recorded
+    ///        from, which `setProject()` itself clears on every switch.
+    void discardEvents();
 
 signals:
     /// @brief Emitted whenever isRecording() changes.
@@ -115,6 +143,7 @@ signals:
 
 private:
     bool recording_ = false;
+    std::size_t startUndoIndex_ = 0;
     std::vector<MacroEvent> events_;
 };
 

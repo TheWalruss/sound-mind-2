@@ -405,12 +405,20 @@ public:
     ///        configuration. If the panel is currently editing a real,
     ///        still-selected Filter/Equalizer layer, writes onto that
     ///        layer directly (repainting the canvas and invalidating
-    ///        cached playback audio, as before). Otherwise (real-world
-    ///        testing pass, 2026-09-20, finding #13) updates
-    ///        `pendingFilterConfiguration()` instead, so an edit made with
-    ///        nothing (or a non-Filter layer) selected isn't simply
-    ///        discarded - it seeds whatever Filter layer gets added next.
-    ///        A no-op only if no project is set at all.
+    ///        cached playback audio, as before) and pushes an undo entry -
+    ///        `v0.Y.49.1` (Macro Mode) Installment B: filter configuration
+    ///        edits weren't undoable at all before this, a real,
+    ///        independently-useful gap this installment closes as the
+    ///        prerequisite for replaying a `MacroEventType::
+    ///        FilterConfigurationChanged` event via `UndoStack::jumpTo()`.
+    ///        Otherwise (real-world testing pass, 2026-09-20, finding #13)
+    ///        updates `pendingFilterConfiguration()` instead, so an edit
+    ///        made with nothing (or a non-Filter layer) selected isn't
+    ///        simply discarded - it seeds whatever Filter layer gets added
+    ///        next; this path stays non-undoable, matching every other
+    ///        "pending" seed value in this class (none of which are
+    ///        undoable either, since nothing real has changed yet). A
+    ///        no-op only if no project is set at all.
     /// @param config The panel's own new, complete configuration.
     void applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config);
 
@@ -462,6 +470,16 @@ private:
     ///        UndoCommand's undo()/redo() callbacks - see the class's own
     ///        docs.
     void applyVisibilityAndMute(sound_mind::core::LayerId id, bool visible, bool muted);
+
+    /// @brief The actual filter-configuration mutation + side effects,
+    ///        shared by applyFilterConfiguration() and its own pushed
+    ///        UndoCommand's undo()/redo() callbacks - the same
+    ///        "target the layer by id, not by re-reading the current
+    ///        selection" reasoning applyVisibilityAndMute() above already
+    ///        gives, since an undo/redo callback may fire long after the
+    ///        selection has moved on. A no-op if `id` no longer resolves
+    ///        to a real layer.
+    void applyFilterConfigurationTo(sound_mind::core::LayerId id, const sound_mind::core::FilterConfiguration& config);
 
     /// @brief The actual opacity mutation + side effects, shared by
     ///        setLayerOpacity() and its own pushed UndoCommand's

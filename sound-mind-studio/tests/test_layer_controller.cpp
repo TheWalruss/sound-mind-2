@@ -685,6 +685,32 @@ void LayerControllerTest::applyFilterConfigurationAppliesOnlyToAFilterLayer() {
     QVERIFY(backgroundId != *filterId);
 }
 
+void LayerControllerTest::applyFilterConfigurationIsUndoableAndRedoable() {
+    // v0.Y.49.1 (Macro Mode) Installment B - a prerequisite for replaying
+    // a MacroEventType::FilterConfigurationChanged event via UndoStack::
+    // jumpTo(); filter configuration edits weren't undoable at all before
+    // this.
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    fixture.controller.addFilterLayer();
+    const auto filterId = fixture.layersPanel.selectedLayerId();
+    QVERIFY(filterId.has_value());
+    const float oldBlurSigma = fixture.controller.layerById(*filterId)->filterConfiguration().blurSigma();
+
+    sound_mind::core::FilterConfiguration config;
+    config.setBlurSigma(3.0f);
+    fixture.controller.applyFilterConfiguration(config);
+    QCOMPARE(fixture.controller.layerById(*filterId)->filterConfiguration().blurSigma(), 3.0f);
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QCOMPARE(fixture.controller.layerById(*filterId)->filterConfiguration().blurSigma(), oldBlurSigma);
+
+    fixture.undoStack.redo();
+    QCOMPARE(fixture.controller.layerById(*filterId)->filterConfiguration().blurSigma(), 3.0f);
+}
+
 void LayerControllerTest::applyFilterConfigurationWithNoFilterLayerSelectedUpdatesThePendingConfiguration() {
     Fixture fixture;
     Project project = Project::createNew(testSettings());
