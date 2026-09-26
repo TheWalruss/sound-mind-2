@@ -265,6 +265,31 @@ public:
      */
     void duplicateLayer(sound_mind::core::LayerId id);
 
+    /**
+     * @brief Zeroes out junk phase data in already-silent cells of the
+     *        layer with the given id's own content - real-world testing
+     *        pass finding #24. A no-op if no project is set, no layer with
+     *        this id exists, or that layer has no content at all (a
+     *        brand-new empty layer, or a `Filter`/`Equalizer` layer, which
+     *        never has stored content - see `LayersPanel::RowData::
+     *        thumbnail`'s own docs for why a null thumbnail is exactly
+     *        this same "no content" signal).
+     *
+     * A one-shot, in-place data-hygiene pass (see
+     * `sound_mind::core::applyPhaseCleanup()`'s own docs for the full
+     * rationale) - not undoable, matching rename/delete/add/reorder/Filter-
+     * configuration edits (see the class's own docs on undo scope).
+     *
+     * Repaints the canvas and invalidates cached playback audio (silent
+     * cells contribute nothing audible, so decoded audio is unaffected in
+     * practice, but this matches every other content mutation's own
+     * sequence), then refreshes the Layers Panel with a fresh thumbnail for
+     * this layer.
+     *
+     * @param id The layer to clean up.
+     */
+    void cleanUpLayerPhase(sound_mind::core::LayerId id);
+
     /// @brief Adds a new, empty `Normal` layer to the current project,
     ///        selecting it immediately in the Layers Panel. Repaints the
     ///        canvas and invalidates cached playback audio, then

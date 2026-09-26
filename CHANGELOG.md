@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.0.4] - 2026-09-26
+
+Real-world testing pass finding #24: **Phase Cleanup.**
+
+### Added
+
+- **A "Clean up phase" button in the Layers panel**, shown for a selected layer with real content. Zeroes out the layer's own phase data anywhere both left and right magnitude are already silent - imported audio's own silent stretches often decode with random, meaningless phase that reads as visual noise on the canvas despite being completely inaudible. Never touches a cell with any real, audible content.
+
+Full regression: `sound-mind-core` full suite (840 test cases, 4 new), `sound-mind-studio` `LayerControllerTest` (1 new), `LayersPanelTest` (1 new), full suite otherwise unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #153.
+
 ## [0.1.0.3] - 2026-09-25
 
 Real-world testing pass finding #23: **Snippet offsets.**

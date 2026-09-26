@@ -5,6 +5,7 @@
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
+#include "sound_mind/core/phase_cleanup.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/layers_panel.h"
@@ -363,6 +364,28 @@ void LayerController::duplicateLayer(sound_mind::core::LayerId id) {
     canvas_->update();
     refreshLayersPanel();
     layersPanel_->selectLayer(newId);
+}
+
+void LayerController::cleanUpLayerPhase(sound_mind::core::LayerId id) {
+    if (project_ == nullptr) {
+        return;
+    }
+    sound_mind::core::Layer* layer = layerById(id);
+    if (layer == nullptr || !layer->content().has_value()) {
+        // Defense in depth - LayersPanel doesn't even show this button for
+        // a layer with no content (see the header's own docs), but refuse
+        // here too regardless of caller.
+        return;
+    }
+
+    sound_mind::codec::StreamImage content = *layer->content();
+    sound_mind::core::applyPhaseCleanup(content);
+    layer->setContent(std::move(content));
+
+    emit layersChanged();
+    playbackController_->invalidate();
+    canvas_->update();
+    refreshLayersPanel(id);
 }
 
 void LayerController::addEmptyLayer(sound_mind::codec::StreamImage placeholderContent) {

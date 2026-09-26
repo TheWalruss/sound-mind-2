@@ -268,6 +268,14 @@ stroke paints into) to reveal its full set of controls:
   copies it, and everything about it (content, opacity and its own bound
   MindWave, blend mode, translation/rescale, filter configuration), into
   a new layer, named uniquely and selected immediately.
+- A **clean up phase** button (✦), for any selected layer that actually
+  has content - zeroes out phase data anywhere the layer is already
+  silent (both left and right channels below the display floor).
+  Imported audio's own silent stretches often decode with random,
+  meaningless phase that shows up as visual noise on the canvas despite
+  being completely inaudible; this clears it without touching any cell
+  that actually carries sound. A one-time cleanup, not an ongoing effect
+  - it doesn't undo.
 - A **delete** button (×), for any layer except the locked one(s).
 
 Double-clicking a row's name renames it, whether the row is currently

@@ -828,6 +828,20 @@ public slots:
     void duplicateLayer(sound_mind::core::LayerId id);
 
     /**
+     * @brief Cleans up junk phase data in the layer with the given id's
+     *        own already-silent cells - the actual work behind
+     *        `LayersPanel`'s phase-cleanup button, real-world testing pass
+     *        finding #24. See `LayerController::cleanUpLayerPhase()`'s own
+     *        docs for the exact mechanism. Refuses (no-op) for a layer
+     *        with no content at all, or if no layer with this id exists.
+     *        Marks hasUnsavedChanges() and refreshes the canvas and Layers
+     *        Panel on success.
+     *
+     * @param id The layer to clean up.
+     */
+    void cleanUpLayerPhase(sound_mind::core::LayerId id);
+
+    /**
      * @brief Adds a new, empty `Normal` layer to the current project - the
      *        actual work behind `LayersPanel`'s "+ Add Layer" button.
      *

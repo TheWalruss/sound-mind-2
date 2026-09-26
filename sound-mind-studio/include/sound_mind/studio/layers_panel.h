@@ -279,6 +279,13 @@ signals:
     ///        pass finding #22.
     void duplicateRequested(sound_mind::core::LayerId id);
 
+    /// @brief A row's phase-cleanup button was clicked - real-world
+    ///        testing pass finding #24. Only shown for a row with real
+    ///        content (see `RowData::thumbnail`'s own docs on what a null
+    ///        thumbnail means) - `Filter`/`Equalizer` rows and a brand-new
+    ///        empty layer's row never show this button at all.
+    void cleanUpPhaseRequested(sound_mind::core::LayerId id);
+
     /// @brief The "+ Add Layer" button was clicked - `MainWindow` responds
     ///        by adding a new, silent, project-sized `Normal` layer (see
     ///        `MainWindow::addEmptyLayer()`'s own docs) and selecting it

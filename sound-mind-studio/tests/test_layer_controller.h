@@ -23,6 +23,7 @@ private slots:
     void deleteLayerRemovesALayerButRefusesALockedOne();
     void duplicateLayerCopiesContentAndPropertiesButRefusesALockedOne();
     void duplicateLayerNamesTheCopyUniquelyAndSelectsIt();
+    void cleanUpLayerPhaseZeroesPhaseInSilentCellsOnlyButRefusesALayerWithNoContent();
     void addEmptyLayerAddsAndSelectsANormalLayer();
     void addFilterLayerAddsAndSelectsAFilterLayer();
     void handleLayerSelectionChangedSyncsFilterConfigurationPanel();

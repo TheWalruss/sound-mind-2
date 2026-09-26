@@ -17,6 +17,7 @@ private slots:
     void doubleClickingNameEmitsRenameRequested();
     void deleteButtonEmitsDeleteRequestedForNormalLayers();
     void duplicateButtonEmitsDuplicateRequestedForNormalLayers();
+    void cleanUpPhaseButtonOnlyAppearsForASelectedRowWithContentAndEmitsCleanUpPhaseRequested();
     void lockedLayersHaveNoDeleteButton();
     void lockedLayersHaveALockIconInsteadOfADragHandle();
     void nonNormalLayersShowATypeTag();

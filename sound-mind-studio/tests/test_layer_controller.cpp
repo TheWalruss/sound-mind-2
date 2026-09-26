@@ -393,6 +393,45 @@ void LayerControllerTest::duplicateLayerNamesTheCopyUniquelyAndSelectsIt() {
     QCOMPARE(QString::fromStdString(duplicate->name()), QStringLiteral("My Layer (2)"));
 }
 
+void LayerControllerTest::cleanUpLayerPhaseZeroesPhaseInSilentCellsOnlyButRefusesALayerWithNoContent() {
+    // Real-world testing pass finding #24.
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    Layer empty(0, "Empty", LayerType::Normal);
+    const LayerId emptyId = project.addLayer(std::move(empty));
+
+    Layer normal(0, "Normal", LayerType::Normal);
+    sound_mind::codec::StreamImage content;
+    content.config = sound_mind::core::streamCodecConfigFor(project.settings());
+    content.frameCount = project.settings().canvasWidth;
+    const std::size_t pixelCount = std::size_t{content.config.binCount} * content.frameCount;
+    content.leftMagnitudeDb.assign(pixelCount, -10.0f);   // audible.
+    content.rightMagnitudeDb.assign(pixelCount, -10.0f);  // audible.
+    content.sharedPhaseRadians.assign(pixelCount, 1.0f);
+    // One silent cell, with junk phase that should get zeroed.
+    content.leftMagnitudeDb[0] = -96.0f;
+    content.rightMagnitudeDb[0] = -96.0f;
+    normal.setContent(content);
+    const LayerId normalId = project.addLayer(std::move(normal));
+
+    fixture.controller.setProject(&project);
+    QSignalSpy spy(&fixture.controller, &LayerController::layersChanged);
+
+    fixture.controller.cleanUpLayerPhase(emptyId);  // no content - refused.
+    QCOMPARE(spy.count(), 0);
+
+    fixture.controller.cleanUpLayerPhase(normalId);  // has content - cleaned up.
+    QCOMPARE(spy.count(), 1);
+
+    const Layer* cleaned = fixture.controller.layerById(normalId);
+    QVERIFY(cleaned != nullptr);
+    QVERIFY(cleaned->content().has_value());
+    QCOMPARE(cleaned->content()->sharedPhaseRadians[0], 0.0f);   // silent cell - zeroed.
+    QCOMPARE(cleaned->content()->sharedPhaseRadians[1], 1.0f);   // audible cell - untouched.
+    QCOMPARE(cleaned->content()->leftMagnitudeDb[0], -96.0f);    // magnitudes never rewritten.
+    QCOMPARE(cleaned->content()->rightMagnitudeDb[0], -96.0f);
+}
+
 void LayerControllerTest::addEmptyLayerAddsAndSelectsANormalLayer() {
     Fixture fixture;
     Project project = Project::createNew(testSettings());

@@ -27,6 +27,7 @@ add_executable(sound-mind-core-tests
     test_paint_application.cpp
     test_fill_application.cpp
     test_paste_application.cpp
+    test_phase_cleanup.cpp
     test_layer.cpp
     test_project_settings.cpp
     test_project.cpp

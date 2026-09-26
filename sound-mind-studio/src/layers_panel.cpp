@@ -316,6 +316,22 @@ public:
             connect(duplicateButton, &QPushButton::clicked, this, [this]() { emit duplicateRequested(id_); });
             header->addWidget(duplicateButton);
 
+            if (!data.thumbnail.isNull()) {
+                // Phase Cleanup only makes sense for a row with real content
+                // (a null thumbnail means "no content yet", or a Filter/
+                // Equalizer row, which never has stored content at all -
+                // see RowData::thumbnail's own docs) - real-world testing
+                // pass finding #24.
+                auto* cleanUpPhaseButton = new QPushButton(QStringLiteral("✦"));
+                cleanUpPhaseButton->setObjectName(QStringLiteral("cleanUpPhaseButton"));
+                cleanUpPhaseButton->setFlat(true);
+                cleanUpPhaseButton->setFixedWidth(22);
+                cleanUpPhaseButton->setToolTip(tr("Clean up phase noise in silent areas"));
+                connect(cleanUpPhaseButton, &QPushButton::clicked, this,
+                        [this]() { emit cleanUpPhaseRequested(id_); });
+                header->addWidget(cleanUpPhaseButton);
+            }
+
             auto* deleteButton = new QPushButton(QStringLiteral("×"));
             deleteButton->setObjectName(QStringLiteral("deleteButton"));
             deleteButton->setFlat(true);
@@ -434,6 +450,7 @@ signals:
     void renameRequested(sound_mind::core::LayerId id);
     void deleteRequested(sound_mind::core::LayerId id);
     void duplicateRequested(sound_mind::core::LayerId id);
+    void cleanUpPhaseRequested(sound_mind::core::LayerId id);
     void selected(sound_mind::core::LayerId id);
 
 private:
@@ -642,6 +659,7 @@ void LayersPanel::rebuildRows() {
         connect(row, &LayerRowWidget::renameRequested, this, &LayersPanel::renameRequested);
         connect(row, &LayerRowWidget::deleteRequested, this, &LayersPanel::deleteRequested);
         connect(row, &LayerRowWidget::duplicateRequested, this, &LayersPanel::duplicateRequested);
+        connect(row, &LayerRowWidget::cleanUpPhaseRequested, this, &LayersPanel::cleanUpPhaseRequested);
         connect(row, &LayerRowWidget::selected, this, &LayersPanel::selectLayer);
 
         // Restores the selection highlight across this refresh, for the

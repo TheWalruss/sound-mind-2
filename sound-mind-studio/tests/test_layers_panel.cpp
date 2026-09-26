@@ -182,6 +182,7 @@ void LayersPanelTest::unselectedRowsShowNoOpacityOrTransformOrBlendModeOrDeleteC
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("deleteButton")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("duplicateButton")) == nullptr);
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("cleanUpPhaseButton")) == nullptr);
     QVERIFY(panel.findChild<QWidget*>(QStringLiteral("dragHandle")) == nullptr);
     // The visibility eye is the one named exception - always present.
     QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton")).size(), 2);
@@ -200,6 +201,11 @@ void LayersPanelTest::selectingARowRevealsItsOwnControlsAndDeselectingHidesThemA
     QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("deleteButton")).size(), 1);
     QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("duplicateButton")).size(), 1);
     QCOMPARE(panel.findChildren<QWidget*>(QStringLiteral("dragHandle")).size(), 1);
+    // twoNormalLayers() rows have no thumbnail (no content yet) - the
+    // phase-cleanup button stays absent even once selected, unlike
+    // duplicate/delete, which only gate on selection - real-world testing
+    // pass finding #24.
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("cleanUpPhaseButton")) == nullptr);
 
     panel.clearSelection();
     QTest::qWait(0);  // rebuildRows() rebuilds via deleteLater() - see setLayersReplacesThePreviousRows().
@@ -246,12 +252,14 @@ void LayersPanelTest::lockedLayersHaveNoDeleteButton() {
     panel.setLayers({background});
     QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("deleteButton")).isEmpty());
     QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("duplicateButton")).isEmpty());
+    QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("cleanUpPhaseButton")).isEmpty());
 
     // Still none once selected - locked stays locked regardless of the
     // redesign's own selection-gated controls.
     panel.selectLayer(static_cast<LayerId>(1));
     QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("deleteButton")).isEmpty());
     QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("duplicateButton")).isEmpty());
+    QVERIFY(panel.findChildren<QPushButton*>(QStringLiteral("cleanUpPhaseButton")).isEmpty());
 }
 
 void LayersPanelTest::duplicateButtonEmitsDuplicateRequestedForNormalLayers() {
@@ -268,6 +276,30 @@ void LayersPanelTest::duplicateButtonEmitsDuplicateRequestedForNormalLayers() {
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(2));
+}
+
+void LayersPanelTest::cleanUpPhaseButtonOnlyAppearsForASelectedRowWithContentAndEmitsCleanUpPhaseRequested() {
+    // Real-world testing pass finding #24 - unlike duplicate/delete, this
+    // button also requires the row to actually have content (a non-null
+    // thumbnail - see RowData::thumbnail's own docs).
+    auto rows = twoNormalLayers();
+    rows[1].thumbnail = QImage(4, 4, QImage::Format_RGB32);  // "Top" (id 2) has content.
+
+    LayersPanel panel;
+    panel.setLayers(rows);
+    panel.selectLayer(static_cast<LayerId>(2));
+    QSignalSpy spy(&panel, &LayersPanel::cleanUpPhaseRequested);
+
+    const auto buttons = panel.findChildren<QPushButton*>(QStringLiteral("cleanUpPhaseButton"));
+    QCOMPARE(buttons.size(), 1);
+    buttons.at(0)->click();
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(2));
+
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom" - no thumbnail, no button.
+    QTest::qWait(0);  // rebuildRows() rebuilds via deleteLater() - see setLayersReplacesThePreviousRows().
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("cleanUpPhaseButton")) == nullptr);
 }
 
 void LayersPanelTest::lockedLayersHaveALockIconInsteadOfADragHandle() {
