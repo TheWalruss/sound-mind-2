@@ -733,7 +733,7 @@ A dedicated pass over everything Phase 4 (Expressive Tools - MindWaves v1/v2, So
 
 **A real-world testing pass (2026-09-20), against a build with Installments A/B settled, surfaced a substantial batch of further findings - confirmed with the user to take priority over finishing this milestone's own remaining Installments C/D**, since several are outright regressions or broken core workflows, not polish. Originally recorded as 35 findings in one flat list; triaged with the user (2026-09-24) into the 24 below (bugs, regressions, and small workflow fixes worth doing now) and 11 moved out to their own later milestones - too substantial, or too clearly a distinct future feature, to fold into finishing this one:
 
-- **22** (layer-navigation keyboard shortcuts), **23** (history view panel), **24** (mute-layer toggle), **26** (per-layer balance), and **33** (Apply Filter to Selection) moved to a new milestone, `v0.Y.49.1` - Layers Panel & Editing Enhancements v2.
+- **22** (layer-navigation keyboard shortcuts), **23** (history view panel), **24** (mute-layer toggle), **26** (per-layer balance), and **33** (Apply Filter to Selection) moved to a new milestone, `v0.Y.46.1` - Layers Panel & Editing Enhancements v2 (renumbered from `v0.Y.49.1` once this milestone list was fully settled - see that milestone's own entry below for why it was moved up).
 - **25** (per-layer loudness indicator) and **28** (output audio normalization) moved into `v0.Y.52.1` - Analysis Tools v1's own scope, both being loudness/mastering-category additions that milestone already names.
 - **29** (non-uniform path timing) and **30** (Paint Operation MindWave bindings) moved to a new milestone, `v0.Y.54.1` - Paint Tool Enhancements.
 - **31** (MindShot/MindGrain definition enrichment) moved to `v0.Y.55.1` - MIDI track import, as that milestone's own stated prerequisite.
@@ -782,33 +782,9 @@ Still triaged as worth doing now, not yet scoped into their own installment plan
 
 Inserted after the fact (following `v0.Y.45.1`), the same reasoning `Phase 2.5`'s own intro and `Phase 3.5`'s own intro already establish for a `.5` phase - added 2026-09-17, from a fresh design-doc pass (`docs/sound-mind-design.md`'s "Additional design principles (2026-09-17)") that surfaced a batch of workflow/device/UI gaps against systems already built: `docs/sound-mind-design.md`'s new "Principal modes", a real open question about how painting's own geometry should behave. (The pass's other two gaps - the Layers Panel's own scope frozen at `v0.Y.15.1`'s deliberately minimal first pass, and device pickers scattered one-per-panel since `v0.Y.18.1` - were each pulled forward into Phase 4 proper instead, confirmed with the user: device pickers as `v0.Y.42.1` on 2026-09-19, and the Layers Panel Redesign as `v0.0.44.1` on 2026-09-20, since neither actually depended on this phase's own remaining scope.) None of this phase's own content depends on anything Phase 4's remaining milestones (Mind Shots & Mind Grains onward) build - it's sequenced here, at the phase boundary, matching every other `.5` phase's own placement, rather than interrupting Phase 4's own in-progress feature work partway through.
 
-### v0.Y.46.1 - Principal Modes
+### v0.Y.46.1 - Layers Panel & Editing Enhancements v2
 
-Per `docs/sound-mind-design.md`'s new "Principal modes": a **Sound-mode** vs. **Image-mode** toggle. Sound-mode is every geometric operation's own behavior today (implicit, never named as a "mode" until now) - a circle-shaped brush stamp, or a translated selection, keeps a fixed extent in time-seconds and log-frequency-space, so it reads as an oval in a high-frequency region and a narrower vertical shape lower down, but a one-octave selection covers one octave at any frequency, preserving time-frequency invariance rather than pixel-shape invariance. Image-mode, closer to the legacy Studio, keeps a shape's *on-screen pixel footprint* fixed instead - a circle stays a circle anywhere on the canvas, and a translated shape keeps its exact pixel dimensions - trading time-frequency invariance for pixel-space invariance (an embedded image or face stays visually undistorted under translation/rotation, at the cost of a translated *sound* shifting in perceived timbre, not just pitch, since its harmonics no longer land where they did).
-
-**Real cross-cutting scope, needing its own dedicated planning pass before implementation** (the same "scoped in a dedicated planning pass" pattern Filter Layers/MindWaves v1/GPU Compute Enablement/Sound Mind Instruments each got, not pre-committed here in detail): the design note itself names "primarily procedural brush tips, translation/movement of selections or painted objects" as certain, and "perhaps mindwaves and/or filters" as an open question - resolving exactly which systems the toggle actually touches, and how a toggle mid-project affects already-painted content stamped under the other mode, are both real open questions for that pass, not assumed here.
-
-**Demo:** paint the same circular Procedural stroke in a high- and a low-frequency region under Sound-mode (an oval, then an egg-shape) and under Image-mode (a circle both times); switch modes and confirm existing, already-painted strokes are unaffected until repainted.
-
-**Likely Y bump candidate, flagged not decided**: if a per-stroke or per-object record of which mode it was painted under turns out to be needed (so old content keeps rendering under the mode it was actually painted in, rather than being silently reinterpreted), that's a new field on `PaintOperation`'s own `ToolConfiguration` snapshot - additive, unless an existing project's own already-painted geometry needs reinterpreting under the new toggle, which the dedicated planning pass above should settle either way.
-
-### v0.Y.47.1 - Composer Mode
-
-The DAW-style track view: each layer as a track, operations drawn as boxes via `Operation::bounds()`, retiming/moving an operation between layers via the `supersedes` mechanism, the three track background styles.
-
-Moved here, to the end of Phase 4.5, rather than staying among Phase 4's own Expressive Tools milestones (its original slot, `v0.Y.38.1` at the time it was moved - since renumbered again by `v0.Y.38.1`'s own later, unrelated Filter Parameter Binding insertion) - track view naturally reads best once the Layers Panel Redesign (`v0.0.44.1`, shipped ahead of Phase 4's own closing cleanup, above) has already reshaped how a layer presents itself, rather than being built against the panel's own pre-redesign shape and then needing rework.
-
-**Demo:** arrange a multi-layer piece in the track view; move a stamped note to a different layer without repainting it.
-
-### v0.Y.48.1 - Macro Mode
-
-**`v0.Y.47.1` was a duplicate, not a renumbering** - both Composer Mode (above) and this milestone were accidentally given the same number when this one was added; fixed here (confirmed with the user, 2026-09-24) by giving Macro Mode the next free number and cascading everything after it.
-
-**A "record macro" function that records project operations along with a timestamp** - the purpose is that a song or performance can be recorded/scripted by starting Playback, then activating/hiding layers, painting, modifying filter settings, changing MindWave configurations, etc. The macro can then be exported as a music video or played back in the Studio as part of a live performance. When exported as a music video, the Studio re-renders everything frame by frame, so what may be a 1-second delay for a heavy filter change during live recording is seamless in the output video. This would require an additional timeline-editing interface as well.
-
-**Demo:** record, replay, and export a macro performance.
-
-### v0.Y.49.1 - Layers Panel & Editing Enhancements v2
+**Renumbered from `v0.Y.49.1` (confirmed with the user, 2026-09-26)**, once every finding from `v0.Y.45.1`'s own real-world testing pass list was settled - promoted to the next milestone in sequence rather than staying behind Principal Modes/Composer Mode/Macro Mode, cascading each of those three milestones' own numbers up by one (`v0.Y.46.1`->`v0.Y.47.1`, `v0.Y.47.1`->`v0.Y.48.1`, `v0.Y.48.1`->`v0.Y.49.1`), the same "renumber the whole tail" pattern Macro Mode's own entry below already used once for its duplicate-numbering fix.
 
 A second round of Layers-panel and editing-workflow additions, surfaced by the same real-world testing pass (2026-09-20) as `v0.Y.45.1`'s own findings list, above - grouped here as their own milestone rather than reopening the already-shipped Layers Panel Redesign (`v0.0.44.1`) or diluting Composer Mode's own, already-committed track-view scope:
 
@@ -820,9 +796,37 @@ A second round of Layers-panel and editing-workflow additions, surfaced by the s
 
 **Demo:** jump to an earlier point in a project via the history view; mute a layer and confirm it's silent but still visible; pan a layer's own contribution toward one channel; apply a filter to a selected region only, leaving the rest of the layer untouched.
 
+### v0.Y.47.1 - Principal Modes
+
+Per `docs/sound-mind-design.md`'s new "Principal modes": a **Sound-mode** vs. **Image-mode** toggle. Sound-mode is every geometric operation's own behavior today (implicit, never named as a "mode" until now) - a circle-shaped brush stamp, or a translated selection, keeps a fixed extent in time-seconds and log-frequency-space, so it reads as an oval in a high-frequency region and a narrower vertical shape lower down, but a one-octave selection covers one octave at any frequency, preserving time-frequency invariance rather than pixel-shape invariance. Image-mode, closer to the legacy Studio, keeps a shape's *on-screen pixel footprint* fixed instead - a circle stays a circle anywhere on the canvas, and a translated shape keeps its exact pixel dimensions - trading time-frequency invariance for pixel-space invariance (an embedded image or face stays visually undistorted under translation/rotation, at the cost of a translated *sound* shifting in perceived timbre, not just pitch, since its harmonics no longer land where they did).
+
+**Real cross-cutting scope, needing its own dedicated planning pass before implementation** (the same "scoped in a dedicated planning pass" pattern Filter Layers/MindWaves v1/GPU Compute Enablement/Sound Mind Instruments each got, not pre-committed here in detail): the design note itself names "primarily procedural brush tips, translation/movement of selections or painted objects" as certain, and "perhaps mindwaves and/or filters" as an open question - resolving exactly which systems the toggle actually touches, and how a toggle mid-project affects already-painted content stamped under the other mode, are both real open questions for that pass, not assumed here.
+
+**Demo:** paint the same circular Procedural stroke in a high- and a low-frequency region under Sound-mode (an oval, then an egg-shape) and under Image-mode (a circle both times); switch modes and confirm existing, already-painted strokes are unaffected until repainted.
+
+**Likely Y bump candidate, flagged not decided**: if a per-stroke or per-object record of which mode it was painted under turns out to be needed (so old content keeps rendering under the mode it was actually painted in, rather than being silently reinterpreted), that's a new field on `PaintOperation`'s own `ToolConfiguration` snapshot - additive, unless an existing project's own already-painted geometry needs reinterpreting under the new toggle, which the dedicated planning pass above should settle either way.
+
+### v0.Y.48.1 - Composer Mode
+
+The DAW-style track view: each layer as a track, operations drawn as boxes via `Operation::bounds()`, retiming/moving an operation between layers via the `supersedes` mechanism, the three track background styles.
+
+Moved here, to the end of Phase 4.5, rather than staying among Phase 4's own Expressive Tools milestones (its original slot, `v0.Y.38.1` at the time it was moved - since renumbered again by `v0.Y.38.1`'s own later, unrelated Filter Parameter Binding insertion) - track view naturally reads best once the Layers Panel Redesign (`v0.0.44.1`, shipped ahead of Phase 4's own closing cleanup, above) has already reshaped how a layer presents itself, rather than being built against the panel's own pre-redesign shape and then needing rework.
+
+**Renumbered from `v0.Y.47.1` (confirmed with the user, 2026-09-26)**, cascaded up by one when Layers Panel & Editing Enhancements v2 (above) was promoted ahead of Principal Modes/Composer Mode/Macro Mode - see that milestone's own entry for why.
+
+**Demo:** arrange a multi-layer piece in the track view; move a stamped note to a different layer without repainting it.
+
+### v0.Y.49.1 - Macro Mode
+
+**`v0.Y.47.1` was a duplicate, not a renumbering** - both Composer Mode (above) and this milestone were accidentally given the same number when this one was added; fixed here (confirmed with the user, 2026-09-24) by giving Macro Mode the next free number and cascading everything after it. **Renumbered again from `v0.Y.48.1` (confirmed with the user, 2026-09-26)**, the same cascade Composer Mode's own entry above describes, when Layers Panel & Editing Enhancements v2 was promoted ahead of this milestone.
+
+**A "record macro" function that records project operations along with a timestamp** - the purpose is that a song or performance can be recorded/scripted by starting Playback, then activating/hiding layers, painting, modifying filter settings, changing MindWave configurations, etc. The macro can then be exported as a music video or played back in the Studio as part of a live performance. When exported as a music video, the Studio re-renders everything frame by frame, so what may be a 1-second delay for a heavy filter change during live recording is seamless in the output video. This would require an additional timeline-editing interface as well.
+
+**Demo:** record, replay, and export a macro performance.
+
 ### v0.Y.50.1 - Refactor & Clean Up
 
-A dedicated pass over everything Phase 4.5 (Principal Modes, Composer Mode, Macro Mode, Layers Panel & Editing Enhancements v2) added, same purpose and scope as `v0.Y.5.1`'s entry - Workflow & Device Polish and the Layers Panel Redesign were both moved to Phase 4 proper (`v0.Y.42.1`/`v0.0.44.1`), so `v0.Y.45.1`'s own cleanup already swept up both. Composer Mode's own operation-to-track bookkeeping is this pass's own likely biggest structural payoff, the same role it would have played in Phase 4's own cleanup had it stayed there.
+A dedicated pass over everything Phase 4.5 (Layers Panel & Editing Enhancements v2, Principal Modes, Composer Mode, Macro Mode) added, same purpose and scope as `v0.Y.5.1`'s entry - Workflow & Device Polish and the Layers Panel Redesign were both moved to Phase 4 proper (`v0.Y.42.1`/`v0.0.44.1`), so `v0.Y.45.1`'s own cleanup already swept up both. Composer Mode's own operation-to-track bookkeeping is this pass's own likely biggest structural payoff, the same role it would have played in Phase 4's own cleanup had it stayed there.
 
 **Demo:** the full regression suite still passes, unchanged in behavior.
 
