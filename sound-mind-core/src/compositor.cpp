@@ -514,6 +514,42 @@ std::optional<sound_mind::codec::RgbImage> renderLayerThumbnail(const Layer& lay
     return sound_mind::codec::downsampleAveraged(base, width, height);
 }
 
+std::optional<sound_mind::codec::RgbImage> renderLayerAmplitudeSummary(const Layer& layer, std::uint32_t width,
+                                                                        std::uint32_t height) {
+    if (!layer.content().has_value()) {
+        return std::nullopt;
+    }
+    const StreamImage& content = *layer.content();
+    if (content.frameCount == 0 || content.config.binCount == 0) {
+        return std::nullopt;
+    }
+
+    StreamImage summary;
+    summary.config = content.config;
+    summary.config.binCount = 1;
+    summary.frameCount = content.frameCount;
+    summary.leftMagnitudeDb.resize(content.frameCount);
+    summary.rightMagnitudeDb.resize(content.frameCount);
+    summary.sharedPhaseRadians.assign(content.frameCount, 0.0f);
+
+    for (std::uint32_t frame = 0; frame < content.frameCount; ++frame) {
+        double leftLinearSum = 0.0;
+        double rightLinearSum = 0.0;
+        for (std::uint32_t bin = 0; bin < content.config.binCount; ++bin) {
+            const std::size_t index = cellIndex(bin, frame, content.frameCount);
+            leftLinearSum += dbToLinearAmplitude(content.leftMagnitudeDb[index]);
+            rightLinearSum += dbToLinearAmplitude(content.rightMagnitudeDb[index]);
+        }
+        const float leftAverage = static_cast<float>(leftLinearSum / content.config.binCount);
+        const float rightAverage = static_cast<float>(rightLinearSum / content.config.binCount);
+        summary.leftMagnitudeDb[frame] = linearAmplitudeToDb(leftAverage);
+        summary.rightMagnitudeDb[frame] = linearAmplitudeToDb(rightAverage);
+    }
+
+    const RgbImage base = sound_mind::codec::toRgbImage(summary);
+    return sound_mind::codec::downsampleAveraged(base, width, height);
+}
+
 std::optional<StreamImage> compositeProject(const Project& project, const std::function<bool()>& shouldCancel,
                                              bool respectMute) {
     const auto& layers = project.layers();

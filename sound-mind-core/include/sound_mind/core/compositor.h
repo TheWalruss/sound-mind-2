@@ -86,6 +86,35 @@ public:
                                                                                std::uint32_t height);
 
 /**
+ * @brief Renders a layer's own total-amplitude-across-all-frequencies
+ *        summary, as a grayscale strip - Composer Mode's "Amplitude" track
+ *        background (`docs/sound-mind-design.md`'s "Composer Mode",
+ *        `v0.Y.48.1` Installment A).
+ *
+ * Each output column's own brightness reflects that column's own average
+ * amplitude across every encoded bin, converted to linear before
+ * averaging (dB values themselves aren't meaningfully additive) and back
+ * to dB afterward. The result is a synthetic, single-bin-tall `StreamImage`
+ * of those per-column averages, rendered through the exact same
+ * `sound_mind::codec::toRgbImage()` every other spectrogram view already
+ * uses - reusing its own established dB-to-brightness mapping rather than
+ * inventing a second one - then stretched to `width` x `height` via
+ * `sound_mind::codec::downsampleAveraged()`, the same "squash cleanly,
+ * don't alias" technique `renderLayerThumbnail()` already uses.
+ *
+ * @param layer The layer to summarize.
+ * @param width The summary's own width, in pixels.
+ * @param height The summary's own height, in pixels.
+ * @return The rendered summary, exactly `width` x `height`, or
+ *         `std::nullopt` if the layer has no cached content yet, or that
+ *         content has no bins/frames to summarize - the same conditions
+ *         `renderLayerThumbnail()` itself returns `std::nullopt` for.
+ */
+[[nodiscard]] std::optional<sound_mind::codec::RgbImage> renderLayerAmplitudeSummary(const Layer& layer,
+                                                                                       std::uint32_t width,
+                                                                                       std::uint32_t height);
+
+/**
  * @brief Composites every visible, contentful layer in `project` into one
  *        combined `StreamImage`, per `docs/sound-mind-design.md`'s new
  *        "Compositing" subsection and `docs/sound-mind-roadmap.md`'s

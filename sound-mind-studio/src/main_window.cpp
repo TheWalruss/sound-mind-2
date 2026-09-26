@@ -58,6 +58,7 @@
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/color_conversion.h"
+#include "sound_mind/studio/composer_panel.h"
 #include "sound_mind/studio/create_project_wizard.h"
 #include "sound_mind/studio/fill_gradient_dialog.h"
 #include "sound_mind/studio/history_panel.h"
@@ -240,6 +241,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     historyPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, historyPanel_);
     connect(historyPanel_, &HistoryPanel::jumpRequested, this, &MainWindow::jumpToHistoryIndex);
+
+    // Composer Mode (v0.Y.48.1 Installment A) - bottom-docked, not
+    // right-docked, confirmed with the user (see composerPanel_'s own
+    // docs); hidden by default, the same reasoning historyPanel_ above
+    // already gives.
+    composerPanel_ = new ComposerPanel(this);
+    composerPanel_->hide();
+    addDockWidget(Qt::BottomDockWidgetArea, composerPanel_);
 
     // Playback/Record/Loop each get their own dockable panel (v0.Y.16.1) -
     // hidden until setProject(), matching layersPanel_'s own "nothing to
@@ -524,6 +533,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
                 layerController_->refreshLayersPanel(layer);
                 handleContentChangedForPlayback(layer);
                 refreshHistoryPanel();
+                refreshComposerPanel();
             });
 
     gridPanel_ = new GridPanel(this);
@@ -568,6 +578,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layerController_, &LayerController::layersChanged, this, [this]() {
         hasUnsavedChanges_ = true;
         refreshHistoryPanel();
+        refreshComposerPanel();
     });
 
     // The MindWave library itself - add/remove/rename/edit - and keeping
@@ -1035,6 +1046,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     transportToolBar->addAction(mindWavesPanel_->toggleViewAction());
     // Off by default, same reasoning - see historyPanel_'s own docs.
     transportToolBar->addAction(historyPanel_->toggleViewAction());
+    // Off by default, same reasoning - see composerPanel_'s own docs.
+    transportToolBar->addAction(composerPanel_->toggleViewAction());
 
     // Zoom's own toolbar, added after transportToolBar (not before) so
     // findChild<QToolBar*>()'s own singular/first-match behavior - already
@@ -1347,6 +1360,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     toolPaletteController_->setProject(&*project_);
     layerController_->setProject(&*project_);
     mindWaveController_->setProject(&*project_);
+    refreshComposerPanel();
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvasScrollArea_);
     // Layers is shown automatically the *first* time any project exists in
@@ -2301,6 +2315,53 @@ void MainWindow::refreshHistoryPanel() {
 void MainWindow::jumpToHistoryIndex(std::size_t index) {
     undoStack_.jumpTo(index);
     refreshHistoryPanel();
+}
+
+void MainWindow::refreshComposerPanel() {
+    if (!project_) {
+        composerPanel_->setTracks({});
+        return;
+    }
+
+    const sound_mind::core::ProjectSettings& settings = project_->settings();
+    const double totalDurationSeconds = static_cast<double>(settings.canvasWidth) * settings.timestepMs / 1000.0;
+
+    std::vector<ComposerPanel::TrackData> tracks;
+    // Topmost layer first - matching layersPanel_'s own display
+    // convention (see LayersPanel's own class docs).
+    const auto& layers = project_->layers();
+    for (auto it = layers.rbegin(); it != layers.rend(); ++it) {
+        const sound_mind::core::Layer& layer = *it;
+        if (!layer.visible()) {
+            continue;
+        }
+
+        ComposerPanel::TrackData track;
+        track.id = layer.id();
+        track.name = QString::fromStdString(layer.name());
+
+        if (const auto amplitude = sound_mind::core::renderLayerAmplitudeSummary(layer, 400, 64)) {
+            track.amplitudeImage = sound_mind::studio::toQImageView(*amplitude).copy();
+        }
+        if (const auto thumbnail = sound_mind::core::renderLayerThumbnail(layer, 400, 64)) {
+            track.thumbnailImage = sound_mind::studio::toQImageView(*thumbnail).copy();
+        }
+
+        if (totalDurationSeconds > 0.0) {
+            for (const sound_mind::core::Operation* operation :
+                 project_->operationLog().activeOperationsTargeting(layer.id())) {
+                const sound_mind::core::TimeFrequencyRect bounds = operation->bounds();
+                ComposerPanel::OperationBox box;
+                box.startFraction = std::clamp(bounds.startTimeSeconds / totalDurationSeconds, 0.0, 1.0);
+                box.endFraction = std::clamp(bounds.endTimeSeconds / totalDurationSeconds, 0.0, 1.0);
+                track.operations.push_back(box);
+            }
+        }
+
+        tracks.push_back(std::move(track));
+    }
+
+    composerPanel_->setTracks(tracks);
 }
 
 void MainWindow::zoomIn() { canvas_->zoomIn(); }

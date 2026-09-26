@@ -818,6 +818,11 @@ Moved here, to the end of Phase 4.5, rather than staying among Phase 4's own Exp
 
 **Renumbered from `v0.Y.47.1` (confirmed with the user, 2026-09-26)**, cascaded up by one when Layers Panel & Editing Enhancements v2 (above) was promoted ahead of Principal Modes/Composer Mode/Macro Mode - see that milestone's own entry for why.
 
+**A real planning pass happened before implementation** (the same pattern Principal Modes just went through) - see `docs/sound-mind-architecture.md`'s Decision #161 for the full account, including a genuine architecture gap (no existing panel/view precedent for showing the track view "alongside" the canvas) resolved by asking the user directly.
+
+- ✅ **Installment A: the track view itself, all three background styles, and read-only operation boxes.** Fixed in `v0.1.2.2`. A new bottom-docked **Composer Mode** panel, one track per visible layer (topmost first), each with its own **Clean**/**Amplitude**/**Thumbnail** background selector (a local, session-only display choice, not saved with the project) and every operation currently targeting that layer drawn as a read-only box. Amplitude renders as grayscale only for now (the design doc's own "or as vertical stacks" alternative is deferred).
+- **Retiming/reordering an operation within a track, moving an operation between tracks, and per-object/track/section gain/EQ editing** - deferred to their own later installments. Moving an operation between layers in particular needs a new `Core` capability that doesn't exist yet (every `Operation::translatedCopy()` today keeps its own fixed target layer unchanged) - confirmed with the user as real, not-yet-built scope, not incidental plumbing.
+
 **Demo:** arrange a multi-layer piece in the track view; move a stamped note to a different layer without repainting it.
 
 ### v0.Y.49.1 - Macro Mode

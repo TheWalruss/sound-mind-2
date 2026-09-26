@@ -1373,17 +1373,24 @@ while you have unsaved changes prompts you to save first.
 ## What's Not Here Yet
 
 The [design document](docs/sound-mind-design.md) describes the Studio's
-full intended scope - generators, analysis tools, a Composer Mode track
-view, Sound Flower's polar view, MIDI import, chord/sequence generation,
-and a Sound Mind VST plugin, among others none of which exist in the
-Studio yet. MindWave-driven modulation (see [MindWaves](#mindwaves)
-above) has made a real start - layer opacity binding works - but it's
-far from its own full scope either; see the note further down. Filter
-layers (see
+full intended scope - generators, analysis tools, Sound Flower's polar
+view, MIDI import, chord/sequence generation, and a Sound Mind VST
+plugin, among others none of which exist in the Studio yet. MindWave-
+driven modulation (see [MindWaves](#mindwaves) above) has made a real
+start - layer opacity binding works - but it's far from its own full
+scope either; see the note further down. Filter layers (see
 [Filter Layers](#filter-layers) above) have finished their own milestone -
 all twenty designed filter types work now, the Equalizer layer included.
 `docs/sound-mind-roadmap.md` tracks what's actually being built next, in
 order; this guide will grow alongside it.
+
+**Composer Mode** (toggle it from the transport toolbar) has also made a
+real start - each visible layer shows as its own track along the bottom
+of the window, alongside the canvas, with a per-track background choice
+(Clean/Amplitude/Thumbnail) and every paint stroke/fill drawn as a box.
+It's read-only for now: you can't yet drag a box to retime it, move it to
+a different track, or edit an object's/track's own settings from there -
+those are all still to come.
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:

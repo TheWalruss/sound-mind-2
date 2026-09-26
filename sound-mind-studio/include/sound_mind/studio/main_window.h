@@ -51,6 +51,7 @@ class QTimer;
 
 namespace sound_mind::studio {
 
+class ComposerPanel;
 class CreateProjectWizard;
 class HistoryPanel;
 class LandingPage;
@@ -2364,6 +2365,32 @@ private:
     void refreshHistoryPanel();
 
     /**
+     * @brief Rebuilds `composerPanel_`'s own track list from the current
+     *        project - Composer Mode, `v0.Y.48.1` Installment A.
+     *
+     * One track per visible layer, topmost first, each carrying its own
+     * freshly-rendered `sound_mind::core::renderLayerAmplitudeSummary()`/
+     * `renderLayerThumbnail()` images and every operation currently
+     * targeting it (`OperationLog::activeOperationsTargeting()`, each
+     * normalized to a `[0, 1]` fraction of the project's own total canvas
+     * duration). Called wherever `refreshHistoryPanel()` already is
+     * (the same `layersChanged()`/`contentChanged()` signals cover every
+     * case that could change what a track ought to show), plus in
+     * `setProject()`.
+     *
+     * A deliberate, acknowledged inefficiency for this first, view-only
+     * installment: both images are always recomputed for every track on
+     * every refresh, even for a track whose currently-selected background
+     * style doesn't need one - `composerPanel_` itself owns which style
+     * each track is showing (session-only UI state, never round-tripped
+     * back here), so there's no way to skip computing the one it doesn't
+     * currently need without threading that state back out of the panel,
+     * which would cost more than it saves for this installment's own
+     * modest scope.
+     */
+    void refreshComposerPanel();
+
+    /**
      * @brief If hasUnsavedChanges() is `false`, returns `true` immediately
      *        (nothing to guard). Otherwise, prompts (Save/Discard/Cancel)
      *        and returns whether the caller should proceed with whatever
@@ -2770,6 +2797,16 @@ private:
     /// docs (`v0.Y.46.1` Installment D). Hidden by default, the same
     /// reasoning mindWavesPanel_ above already gives.
     HistoryPanel* historyPanel_ = nullptr;
+
+    /// @brief The dockable, read-only Composer Mode track view - see its
+    /// own class docs (`v0.Y.48.1` Installment A). Hidden by default, the
+    /// same reasoning mindWavesPanel_ above already gives. Bottom-docked,
+    /// not right-docked like every other panel here - confirmed with the
+    /// user, matching the design doc's own "alongside the direct
+    /// spectrogram canvas" framing (a bottom timeline sits beneath the
+    /// canvas rather than competing with it for the same side strip every
+    /// narrow property panel already shares).
+    ComposerPanel* composerPanel_ = nullptr;
 
     /// @brief Owns MindWave-library add/remove/rename/edit and
     /// MindWavesPanel/LayersPanel refresh - see its own class docs

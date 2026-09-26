@@ -6,6 +6,22 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.2.2] - 2026-09-26
+
+Composer Mode, Installment A: **the new track view.**
+
+### Added
+
+- **A new "Composer Mode" panel** (toggle it from the transport toolbar), docked along the bottom of the window - each visible layer appears as its own track, alongside the direct spectrogram canvas above.
+- **Three background styles per track**, picked from a small drop-down on each track's own row: **Clean** (blank), **Amplitude** (a grayscale strip showing that layer's own overall loudness over time), and **Thumbnail** (the layer's actual painted content, squashed to fit). This choice is local to your current session - it isn't saved with the project.
+- **Every paint stroke/fill/etc. on a track's own layer is drawn as a box**, so you can see at a glance where and how long each one is.
+
+### Notes
+
+- This is a read-only view for now - dragging a box to retime or move it to a different track, and editing an object's settings from here, are both future work.
+
+Full regression: `sound-mind-core` 879/879 (2 new), `sound-mind-studio` full suite unaffected (still 0 failures). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #161.
+
 ## [0.1.2.1] - 2026-09-26
 
 Principal Modes, Installment A: **brush-stamp radius synthesis, and the new mode toggle.**

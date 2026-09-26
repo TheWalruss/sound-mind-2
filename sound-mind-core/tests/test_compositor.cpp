@@ -92,6 +92,63 @@ TEST_CASE("renderLayerThumbnail renders at exactly the requested size, ignoring 
     CHECK(thumbnail->pixels.size() == std::size_t{16} * 8 * 3);
 }
 
+TEST_CASE("renderLayerAmplitudeSummary returns nullopt for a layer with no content", "[core][compositor]") {
+    const Layer layer(1, "Untitled", LayerType::Normal);
+    CHECK_FALSE(renderLayerAmplitudeSummary(layer, 40, 24).has_value());
+}
+
+TEST_CASE("renderLayerAmplitudeSummary renders at exactly the requested size", "[core][compositor]") {
+    StreamImage content;
+    content.config.binCount = 10;
+    content.frameCount = 50;
+    content.leftMagnitudeDb.assign(500, -20.0f);
+    content.rightMagnitudeDb.assign(500, -20.0f);
+    content.sharedPhaseRadians.assign(500, 0.0f);
+
+    Layer layer(1, "Untitled", LayerType::Normal);
+    layer.setContent(content);
+
+    const auto summary = renderLayerAmplitudeSummary(layer, /*width=*/16, /*height=*/8);
+
+    REQUIRE(summary.has_value());
+    CHECK(summary->width == 16);
+    CHECK(summary->height == 8);
+    CHECK(summary->pixels.size() == std::size_t{16} * 8 * 3);
+}
+
+TEST_CASE("renderLayerAmplitudeSummary's own per-column brightness reflects that column's real average "
+          "amplitude across every bin, not just its first/last one",
+          "[core][compositor]") {
+    // Two columns (frames), two bins each - column 0 is loud in both bins,
+    // column 1 is loud in one bin and silent in the other. A summary that
+    // only sampled a single bin per column (rather than truly averaging
+    // across all of them) couldn't produce this exact pattern.
+    StreamImage content;
+    content.config.binCount = 2;
+    content.frameCount = 2;
+    // Row-major, bin-major (cellIndex()'s own convention): [bin][frame].
+    content.leftMagnitudeDb = {0.0f, 0.0f, 0.0f, -96.0f};
+    content.rightMagnitudeDb = content.leftMagnitudeDb;
+    content.sharedPhaseRadians.assign(4, 0.0f);
+
+    Layer layer(1, "Untitled", LayerType::Normal);
+    layer.setContent(content);
+
+    // No resampling - width/height match the source exactly, so each
+    // output column corresponds to exactly one input frame.
+    const auto summary = renderLayerAmplitudeSummary(layer, /*width=*/2, /*height=*/1);
+
+    REQUIRE(summary.has_value());
+    // Column 0 (both bins loud) should render brighter than column 1 (one
+    // bin loud, one silent) - toRgbImage()'s own dB-to-brightness mapping
+    // is monotonic, so a real difference in average amplitude must show up
+    // as a real difference in pixel brightness.
+    const auto pixelAt = [&](std::uint32_t column) {
+        return summary->pixels[static_cast<std::size_t>(column) * 3];
+    };
+    CHECK(pixelAt(0) > pixelAt(1));
+}
+
 namespace {
 
 /// @brief A single-bin, per-column-distinctive StreamImage: column `i`
