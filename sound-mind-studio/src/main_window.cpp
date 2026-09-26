@@ -720,6 +720,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* fillAction = editMenu->addAction(tr("&Fill Selection..."));
     connect(fillAction, &QAction::triggered, this, &MainWindow::fillSelection);
 
+    // Apply Filter to Selection (v0.Y.46.1 Installment E, "Layers Panel &
+    // Editing Enhancements v2") - no standard shortcut (matching Fill
+    // Selection's own no-shortcut choice above); a no-op with no
+    // committed selection, the same "always present" choice deleteAction
+    // makes.
+    QAction* applyFilterToSelectionAction = editMenu->addAction(tr("Apply &Filter to Selection"));
+    connect(applyFilterToSelectionAction, &QAction::triggered, this, &MainWindow::applyFilterToSelection);
+
     editMenu->addSeparator();
 
     // Cut/Copy/Paste (v0.Y.25.2): the standard shortcuts every other
@@ -2356,6 +2364,13 @@ void MainWindow::fillSelection() {
     if (dialog.exec() == QDialog::Accepted) {
         fillSelectionWithGradient(dialog.gradient());
     }
+}
+
+void MainWindow::applyFilterToSelection() {
+    if (!toolPaletteController_->hasSelection()) {
+        return;
+    }
+    toolPaletteController_->applyFilterToSelection(filterConfigurationPanel_->filterConfiguration());
 }
 
 void MainWindow::usePickedPathAsMindWaveShape() {

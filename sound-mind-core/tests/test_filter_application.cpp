@@ -10,20 +10,28 @@
 
 #include "sound_mind/core/filter_application.h"
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/filter_operation.h"
 #include "sound_mind/core/gpu_compute_availability.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/project_settings.h"
 
 using sound_mind::codec::StreamImage;
 using sound_mind::core::applyFilter;
+using sound_mind::core::applyFilterOperation;
 using sound_mind::core::DownsampleMode;
 using sound_mind::core::FilterConfiguration;
+using sound_mind::core::FilterOperation;
 using sound_mind::core::FilterParameterMindWaves;
 using sound_mind::core::FilterType;
+using sound_mind::core::frameIndexToTime;
+using sound_mind::core::LayerId;
 using sound_mind::core::MindWave;
+using sound_mind::core::MindWaveId;
 using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::ProjectSettings;
+using sound_mind::core::resolveFilterParameterMindWaves;
 using sound_mind::core::setGpuComputeForcedOffForTesting;
+using sound_mind::core::TimeFrequencyRect;
 
 namespace {
 
@@ -2362,4 +2370,99 @@ TEST_CASE("applyFilter's Downsample, bound to a MindWave always at baseline on d
                                     FilterParameterMindWaves{.downsampleBlockSize = &baselineWave});
 
     CHECK(bound.leftMagnitudeDb == composite.leftMagnitudeDb);
+}
+
+TEST_CASE("resolveFilterParameterMindWaves (generic resolver) resolves bound parameters and leaves others null",
+          "[core][filter_application]") {
+    // v0.Y.46.1 Installment E - the shared building block behind both
+    // compositeProject()'s own Project-based resolution and
+    // FilterOperation's own replay, which only has a generic resolver.
+    FilterConfiguration config;
+    config.setBlurSigmaMindWave(MindWaveId{7});
+    const MindWave wave;
+    const auto resolver = [&](MindWaveId id) -> const MindWave* { return id == MindWaveId{7} ? &wave : nullptr; };
+
+    const auto resolved = resolveFilterParameterMindWaves(config, resolver);
+
+    CHECK(resolved.blurSigma == &wave);
+    CHECK(resolved.medianSize == nullptr);
+    CHECK(resolved.sharpenAmount == nullptr);
+}
+
+TEST_CASE("resolveFilterParameterMindWaves (generic resolver) returns every field null with an empty resolver",
+          "[core][filter_application]") {
+    FilterConfiguration config;
+    config.setBlurSigmaMindWave(MindWaveId{7});
+
+    const auto resolved = resolveFilterParameterMindWaves(config, sound_mind::core::MindWaveResolver{});
+
+    CHECK(resolved.blurSigma == nullptr);
+}
+
+TEST_CASE("applyFilterOperation confines the filtered result to bounds(), leaving cells outside it exactly unchanged",
+          "[core][filter_application]") {
+    // v0.Y.46.1 Installment E ("Apply Filter to Selection").
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(2.0f);
+    const auto composite = makeIndexedGridComposite(4, 4);
+
+    TimeFrequencyRect bounds;  // columns 1-2 only, every bin.
+    bounds.startTimeSeconds = frameIndexToTime(1.0, composite.config);
+    bounds.endTimeSeconds = frameIndexToTime(2.0, composite.config);
+    bounds.lowFrequencyHz = 0.0;
+    bounds.highFrequencyHz = 1000000.0;
+    const FilterOperation operation(1, LayerId{1}, bounds, config);
+
+    StreamImage content = composite;
+    applyFilterOperation(operation, content, ProjectSettings{});
+
+    // Columns 0 and 3 (outside bounds) - exactly the original values.
+    for (std::uint32_t row = 0; row < 4; ++row) {
+        CHECK(content.leftMagnitudeDb[row * 4 + 0] == composite.leftMagnitudeDb[row * 4 + 0]);
+        CHECK(content.leftMagnitudeDb[row * 4 + 3] == composite.leftMagnitudeDb[row * 4 + 3]);
+    }
+    // Columns 1-2 (inside bounds) - the blur actually changed something.
+    bool anyChangedInsideBounds = false;
+    for (std::uint32_t row = 0; row < 4; ++row) {
+        for (std::uint32_t col = 1; col <= 2; ++col) {
+            if (content.leftMagnitudeDb[row * 4 + col] != composite.leftMagnitudeDb[row * 4 + col]) {
+                anyChangedInsideBounds = true;
+            }
+        }
+    }
+    CHECK(anyChangedInsideBounds);
+}
+
+TEST_CASE("applyFilterOperation reads real neighboring cells outside the selection for a spatially-aware filter",
+          "[core][filter_application]") {
+    // Confirms the filter runs over the *whole* layer first (so a blur
+    // pulls in a real neighbor's own value), rather than being computed
+    // only over the cropped selection (which would see silence past its
+    // own edge instead).
+    StreamImage composite;
+    composite.config.binCount = 1;
+    composite.frameCount = 4;
+    composite.leftMagnitudeDb = {0.0f, -96.0f, -96.0f, -96.0f};  // A loud spike at column 0 only.
+    composite.rightMagnitudeDb = composite.leftMagnitudeDb;
+    composite.sharedPhaseRadians.assign(4, 0.0f);
+
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(3.0f);  // Wide enough to reach from column 0 into column 1.
+
+    TimeFrequencyRect bounds;  // Column 1 only - adjacent to the spike, not including it.
+    bounds.startTimeSeconds = frameIndexToTime(1.0, composite.config);
+    bounds.endTimeSeconds = frameIndexToTime(1.0, composite.config);
+    bounds.lowFrequencyHz = 0.0;
+    bounds.highFrequencyHz = 1000000.0;
+    const FilterOperation operation(1, LayerId{1}, bounds, config);
+
+    StreamImage content = composite;
+    applyFilterOperation(operation, content, ProjectSettings{});
+
+    // Column 1, having read column 0's own real spike as a neighbor,
+    // should be pulled well above the -96dB floor it started at - a
+    // zero/silence-padded crop would leave it much closer to -96dB.
+    CHECK(content.leftMagnitudeDb[1] > -90.0f);
 }

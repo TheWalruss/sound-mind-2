@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.1.5] - 2026-09-26
+
+Layers Panel & Editing Enhancements v2, Installment E: **Apply Filter to Selection** (closes out this milestone).
+
+### Added
+
+- **A new "Apply Filter to Selection" Edit menu action**, next to Fill Selection - bakes the Filter Configuration Panel's currently-configured filter over the active selection only, leaving the rest of the layer untouched. Undoable, like every other selection-based edit.
+
+Full regression: `sound-mind-core` 871/871 (17 new), `sound-mind-studio` `SelectionControllerTest`/`ToolPaletteControllerTest`/`MainWindowTest` (5 new between them), full suite otherwise unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #158.
+
 ## [0.1.1.4] - 2026-09-26
 
 Layers Panel & Editing Enhancements v2, Installment D: **History Panel.**

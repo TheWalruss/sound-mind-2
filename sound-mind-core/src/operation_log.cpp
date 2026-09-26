@@ -6,6 +6,7 @@
 #include <unordered_set>
 
 #include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/filter_operation.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/sequence_operation.h"
@@ -178,6 +179,7 @@ constexpr const char* kPaintOperationKind = "paint";
 constexpr const char* kFillOperationKind = "fill";
 constexpr const char* kPasteOperationKind = "paste";
 constexpr const char* kSequenceOperationKind = "sequence";
+constexpr const char* kFilterOperationKind = "filter";
 
 /// @brief Writes `operation`'s own `id`/`supersedes`/`targetLayer` fields
 /// into `entry` - the three keys every concrete `LayerContentOperation`
@@ -216,12 +218,12 @@ CommonOperationFields readCommonOperationFields(const nlohmann::json& entry) {
 void to_json(nlohmann::json& json, const OperationLog& log) {
     nlohmann::json operations = nlohmann::json::array();
     for (const auto& operation : log.operations_) {
-        // A plain if/else-if dispatch, not a visitor - four concrete
+        // A plain if/else-if dispatch, not a visitor - five concrete
         // subtypes (PaintOperation, FillOperation, PasteOperation,
-        // SequenceOperation) is still few enough that a real dispatch
-        // mechanism would be speculative machinery for a problem this
-        // doesn't have yet; revisit if a fifth subtype makes the chain
-        // unwieldy.
+        // SequenceOperation, FilterOperation) is still few enough that a
+        // real dispatch mechanism would be speculative machinery for a
+        // problem this doesn't have yet; revisit if a sixth subtype makes
+        // the chain unwieldy.
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation.get())) {
             nlohmann::json entry;
             entry["kind"] = kPaintOperationKind;
@@ -256,6 +258,16 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
             writeCommonOperationFields(entry, *sequence);
             entry["notes"] = sequence->notes();
             entry["config"] = sequence->config();
+            operations.push_back(std::move(entry));
+        } else if (const auto* filter = dynamic_cast<const FilterOperation*>(operation.get())) {
+            nlohmann::json entry;
+            entry["kind"] = kFilterOperationKind;
+            writeCommonOperationFields(entry, *filter);
+            entry["bounds"] = filter->bounds();
+            entry["config"] = filter->config();
+            if (filter->boundary()) {
+                entry["boundary"] = *filter->boundary();
+            }
             operations.push_back(std::move(entry));
         }
     }
@@ -308,6 +320,15 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
                 std::unique_ptr<ToolConfiguration> config = toolConfigurationFromJson(entry.at("config"));
                 log.operations_.push_back(std::make_unique<SequenceOperation>(
                     fields.id, fields.targetLayer, std::move(notes), std::move(config), fields.supersedes));
+            } else if (kind == kFilterOperationKind) {
+                const CommonOperationFields fields = readCommonOperationFields(entry);
+                TimeFrequencyRect bounds = entry.at("bounds").get<TimeFrequencyRect>();
+                FilterConfiguration config = entry.at("config").get<FilterConfiguration>();
+                std::optional<SelectionRegion> boundary =
+                    entry.contains("boundary") ? std::optional(entry.at("boundary").get<SelectionRegion>()) : std::nullopt;
+                log.operations_.push_back(std::make_unique<FilterOperation>(
+                    fields.id, fields.targetLayer, bounds, std::move(config), fields.supersedes,
+                    std::move(boundary)));
             } else {
                 throw std::invalid_argument("OperationLog: unrecognized operation kind \"" + kind + "\"");
             }

@@ -1338,6 +1338,26 @@ public slots:
     void fillSelection();
 
     /**
+     * @brief Applies whatever `FilterConfiguration` the Filter
+     *        Configuration Panel currently shows to the current
+     *        selection - the actual work behind the Edit menu's Apply
+     *        Filter to Selection action, real-world testing pass finding
+     *        #33 ("Layers Panel & Editing Enhancements v2" Installment E,
+     *        `v0.Y.46.1`).
+     *
+     * Reads `filterConfigurationPanel_->filterConfiguration()` directly -
+     * whichever configuration the panel is showing right now, whether
+     * that's a real Filter/Equalizer layer's own or the "pending" one
+     * `addFilterLayer()` seeds a new layer from (see
+     * `LayerController::pendingFilterConfiguration()`'s own docs) - the
+     * same "whatever's currently configured" a user would expect, without
+     * needing to add a Filter layer first just to configure one. A no-op
+     * if there's no committed selection (delegates to
+     * `SelectionController::applyFilterToSelection()`).
+     */
+    void applyFilterToSelection();
+
+    /**
      * @brief Captures the currently Picked object's own `Path` as the
      *        MindWaves panel's own currently-selected library entry's drawn
      *        shape - `docs/sound-mind-design.md`'s "MindWave Functions"

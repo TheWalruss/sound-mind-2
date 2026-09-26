@@ -150,6 +150,17 @@ void ToolPaletteControllerTest::fillWithNoSelectionDoesNotCrash() {
     controller.fill(sound_mind::core::Gradient{});
 }
 
+void ToolPaletteControllerTest::applyFilterToSelectionWithNoSelectionDoesNotCrash() {
+    // v0.Y.46.1 Installment E ("Apply Filter to Selection").
+    CanvasWidget canvas;
+    ToolConfigurationPanel panel;
+    ToolPaletteController controller(&canvas, &panel);
+    Project project = Project::createNew(testSettings());
+    controller.setProject(&project);
+
+    controller.applyFilterToSelection(sound_mind::core::FilterConfiguration{});
+}
+
 void ToolPaletteControllerTest::contentChangedAggregatesAPaintStroke() {
     CanvasWidget canvas;
     ToolConfigurationPanel panel;

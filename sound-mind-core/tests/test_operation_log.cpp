@@ -8,6 +8,7 @@
 
 #include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/filter_operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/paste_operation.h"
@@ -16,6 +17,9 @@
 using sound_mind::core::BlendMode;
 using sound_mind::core::Clip;
 using sound_mind::core::FillOperation;
+using sound_mind::core::FilterConfiguration;
+using sound_mind::core::FilterOperation;
+using sound_mind::core::FilterType;
 using sound_mind::core::Gradient;
 using sound_mind::core::LayerId;
 using sound_mind::core::NoteEvent;
@@ -407,6 +411,45 @@ TEST_CASE("An OperationLog with a plain Rectangle-shaped FillOperation round-tri
     const auto* restoredFill = dynamic_cast<const FillOperation*>(roundTripped.activeOperationsTargeting(LayerId{1})[0]);
     REQUIRE(restoredFill != nullptr);
     REQUIRE_FALSE(restoredFill->boundary().has_value());
+}
+
+TEST_CASE("An OperationLog with a FilterOperation round-trips through JSON", "[core][operation_log]") {
+    // v0.Y.46.1 Installment E ("Apply Filter to Selection").
+    OperationLog log;
+    const OperationId filterId = log.reserveId();
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(3.5f);
+    log.append(std::make_unique<FilterOperation>(filterId, LayerId{1}, TimeFrequencyRect{}, config));
+
+    const nlohmann::json json = log;
+    const OperationLog roundTripped = json.get<OperationLog>();
+
+    const auto active = roundTripped.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 1);
+    const auto* restoredFilter = dynamic_cast<const FilterOperation*>(active[0]);
+    REQUIRE(restoredFilter != nullptr);
+    REQUIRE(restoredFilter->config().type() == FilterType::UniformBlur);
+    REQUIRE(restoredFilter->config().blurSigma() == 3.5f);
+    REQUIRE_FALSE(restoredFilter->boundary().has_value());
+}
+
+TEST_CASE("An OperationLog with a Lasso-shaped FilterOperation round-trips its own boundary through JSON",
+          "[core][operation_log]") {
+    OperationLog log;
+    const OperationId filterId = log.reserveId();
+    log.append(std::make_unique<FilterOperation>(filterId, LayerId{1}, TimeFrequencyRect{}, FilterConfiguration{},
+                                                  std::nullopt, SelectionRegion(makeTestPath(0.0, 1.0))));
+
+    const nlohmann::json json = log;
+    const OperationLog roundTripped = json.get<OperationLog>();
+
+    const auto active = roundTripped.activeOperationsTargeting(LayerId{1});
+    REQUIRE(active.size() == 1);
+    const auto* restoredFilter = dynamic_cast<const FilterOperation*>(active[0]);
+    REQUIRE(restoredFilter != nullptr);
+    REQUIRE(restoredFilter->boundary().has_value());
+    REQUIRE(restoredFilter->boundary()->path().nodes().size() == 2);
 }
 
 TEST_CASE("An OperationLog with a PasteOperation round-trips with a Lasso-shaped boundary too", "[core][operation_log]") {

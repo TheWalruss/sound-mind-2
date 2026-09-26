@@ -10,6 +10,7 @@
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/paint_operation.h"
+#include "sound_mind/core/project_settings.h"
 
 namespace sound_mind::core {
 
@@ -477,9 +478,21 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
  *        the resolver says right now" is already correct regardless of
  *        what prompted the call).
  * @param resolveMindWave Passed through to applyPaintOperation() for each
- *        `PaintOperation` replayed - see its own docs. Defaults to an empty
- *        resolver, meaning every `InstrumentConfiguration` stroke replayed
- *        plays without vibrato/tremolo unless the caller supplies one.
+ *        `PaintOperation` replayed - see its own docs. Also passed through
+ *        to `resolveFilterParameterMindWaves()` for each `FilterOperation`
+ *        replayed (`v0.Y.46.1` Installment E) - the same generic resolver
+ *        serves both, since it's just "a `MindWaveId` resolved to a
+ *        `MindWave`" either way. Defaults to an empty resolver, meaning
+ *        every `InstrumentConfiguration` stroke replayed plays without
+ *        vibrato/tremolo, and every `FilterOperation` replayed with every
+ *        parameter unbound, unless the caller supplies one.
+ * @param settings Passed through to `applyFilter()` for each
+ *        `FilterOperation` replayed (`v0.Y.46.1` Installment E) - see its
+ *        own docs. `nullptr` (the default) means "no `FilterOperation`
+ *        support": any such entry in `operations` is skipped entirely
+ *        rather than applied, the same forward-tolerant handling any
+ *        other unrecognized `Operation` subtype already gets. Every
+ *        other operation type here has no need for it at all.
  * @return A fresh `StreamImage`: `base`, with every operation in
  *         `operations` applied on top, in order.
  */
@@ -487,6 +500,7 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
                                                                      const std::vector<const Operation*>& operations,
                                                                      double frequencyToTimeScale,
                                                                      const LayerContentResolver& resolveLayerContent = {},
-                                                                     const MindWaveResolver& resolveMindWave = {});
+                                                                     const MindWaveResolver& resolveMindWave = {},
+                                                                     const ProjectSettings* settings = nullptr);
 
 }  // namespace sound_mind::core

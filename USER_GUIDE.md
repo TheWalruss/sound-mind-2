@@ -1007,6 +1007,13 @@ selection to a plain, axis-aligned rectangle.
   accepting fills the selection, confined exactly to its own boundary. A
   gradient with more than two stops varies continuously left-to-right
   across the selection, not just a single flat color.
+- **Apply a filter to** it - **Edit → Apply Filter to Selection** bakes
+  whatever filter is currently configured in the [Filter
+  Layers](#filter-layers) panel over the selection only, confined exactly
+  to its own boundary the same way Fill is - the rest of the layer is left
+  untouched. This is a one-time bake of the panel's current settings, not
+  a live filter that keeps reacting to further changes; undo it like any
+  other edit if the result isn't what you wanted.
 - **Copy** it - **Edit → Copy** (Ctrl+C) captures the selection's own
   pixels onto the clipboard, leaving them in place.
 - **Cut** it - **Edit → Cut** (Ctrl+X) does the same as Copy, then

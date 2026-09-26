@@ -260,6 +260,10 @@ void ToolPaletteController::clearSelection() { selectionController_->clearSelect
 
 void ToolPaletteController::fill(const sound_mind::core::Gradient& gradient) { selectionController_->fill(gradient); }
 
+void ToolPaletteController::applyFilterToSelection(const sound_mind::core::FilterConfiguration& config) {
+    selectionController_->applyFilterToSelection(config);
+}
+
 std::optional<sound_mind::core::Path> ToolPaletteController::selectedPath() const {
     return pickController_->selectedPath();
 }

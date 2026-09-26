@@ -6,6 +6,7 @@
 #include <QObject>
 
 #include "sound_mind/core/chord_generator.h"
+#include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -264,6 +265,13 @@ public:
     ///        `SelectionController::fill()`.
     /// @param gradient The color (or gradient) to fill with.
     void fill(const sound_mind::core::Gradient& gradient);
+
+    /// @brief Applies `config`'s own filter to the current selection -
+    ///        forwards to `SelectionController::applyFilterToSelection()`,
+    ///        `v0.Y.46.1` Installment E ("Layers Panel & Editing
+    ///        Enhancements v2").
+    /// @param config Which filter to apply, and its own parameters.
+    void applyFilterToSelection(const sound_mind::core::FilterConfiguration& config);
 
     /// @brief The currently Picked object's own `Path`, if any - forwards
     ///        to `PickController::selectedPath()`. The actual mechanism

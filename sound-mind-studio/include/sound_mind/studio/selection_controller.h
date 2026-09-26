@@ -6,6 +6,7 @@
 
 #include <QObject>
 
+#include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -433,6 +434,28 @@ public:
      * @param gradient The color (or gradient) to fill with.
      */
     void fill(const sound_mind::core::Gradient& gradient);
+
+    /**
+     * @brief Applies `config`'s own filter, confined to the current
+     *        committed selection - the actual work behind Edit → Apply
+     *        Filter to Selection, real-world testing pass finding #33
+     *        ("Layers Panel & Editing Enhancements v2" Installment E,
+     *        `v0.Y.46.1`). A no-op if there's no committed selection
+     *        (mid-drag doesn't count).
+     *
+     * A one-shot bake, not a live, ongoing effect (unlike a Filter-type
+     * layer) - appends a new `FilterOperation` (not superseding anything -
+     * the same "fresh, additive edit" precedent fill()'s own docs give)
+     * and rebuilds the target layer's content via `paintController_`,
+     * which resolves this operation's own bindable parameters against
+     * whatever MindWave(s) they're currently bound to, fresh, exactly the
+     * same as a live Filter layer already does.
+     *
+     * Emits contentChanged() for the affected layer.
+     *
+     * @param config Which filter to apply, and its own parameters.
+     */
+    void applyFilterToSelection(const sound_mind::core::FilterConfiguration& config);
 
     /// @brief Whether a clip is currently on the clipboard (from a prior
     ///        copySelection()/cutSelection()).

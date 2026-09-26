@@ -10,6 +10,7 @@
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/filter_operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paste_operation.h"
@@ -293,6 +294,47 @@ void SelectionControllerTest::fillIsANoOpWithNoCommittedSelection() {
     controller.setProject(&project);
 
     controller.fill(makeUniformGradient(-10.0f, 1.0f));
+
+    QCOMPARE(project.operationLog().size(), std::size_t{0});
+}
+
+void SelectionControllerTest::applyFilterToSelectionAppendsAFilterOperationOverTheCommittedSelection() {
+    // v0.Y.46.1 Installment E ("Apply Filter to Selection").
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    controller.beginSelectionDrag(layerId, TimeFrequencyPoint{0.2, 300.0});
+    controller.continueSelectionDrag(TimeFrequencyPoint{0.5, 700.0});
+    controller.endSelectionDrag();
+    QSignalSpy contentSpy(&controller, &SelectionController::contentChanged);
+
+    sound_mind::core::FilterConfiguration config;
+    config.setType(sound_mind::core::FilterType::UniformBlur);
+    config.setBlurSigma(2.0f);
+    controller.applyFilterToSelection(config);
+
+    QCOMPARE(project.operationLog().size(), std::size_t{1});
+    QCOMPARE(contentSpy.count(), 1);
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* filterOp = dynamic_cast<const sound_mind::core::FilterOperation*>(active.front());
+    QVERIFY(filterOp != nullptr);
+    QCOMPARE(filterOp->config().type(), sound_mind::core::FilterType::UniformBlur);
+}
+
+void SelectionControllerTest::applyFilterToSelectionIsANoOpWithNoCommittedSelection() {
+    Project project = Project::createNew(testSettings());
+    addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+
+    sound_mind::core::FilterConfiguration config;
+    controller.applyFilterToSelection(config);
 
     QCOMPARE(project.operationLog().size(), std::size_t{0});
 }

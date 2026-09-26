@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/filter_operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paste_application.h"
@@ -454,6 +455,19 @@ void SelectionController::fill(const sound_mind::core::Gradient& gradient) {
     log.append(std::make_unique<sound_mind::core::FillOperation>(id, selectionLayer_, *committedBounds_, gradient,
                                                                     std::nullopt, committedBoundary_));
     paintController_->notifyOperationCommitted(tr("Filled selection"));
+    paintController_->rebuildLayerContent(selectionLayer_);
+    emit contentChanged(selectionLayer_);
+}
+
+void SelectionController::applyFilterToSelection(const sound_mind::core::FilterConfiguration& config) {
+    if (!committedBounds_.has_value() || project_ == nullptr) {
+        return;
+    }
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    const sound_mind::core::OperationId id = log.reserveId();
+    log.append(std::make_unique<sound_mind::core::FilterOperation>(id, selectionLayer_, *committedBounds_, config,
+                                                                       std::nullopt, committedBoundary_));
+    paintController_->notifyOperationCommitted(tr("Applied filter to selection"));
     paintController_->rebuildLayerContent(selectionLayer_);
     emit contentChanged(selectionLayer_);
 }

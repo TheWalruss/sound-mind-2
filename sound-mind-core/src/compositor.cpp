@@ -146,32 +146,14 @@ struct BalanceGainsDb {
 /// `v0.Y.38.1` (Filter Parameter Binding Completion) to fifteen more, and
 /// by real-world testing pass finding #18 to a twenty-first
 /// (`downsampleBlockSize`) - the `FilterConfiguration`-level counterpart to
-/// `resolveOpacityMindWave()`.
+/// `resolveOpacityMindWave()`. A thin adapter over `filter_application.h`'s
+/// own generic-resolver `resolveFilterParameterMindWaves()` (`v0.Y.46.1`
+/// Installment E) - the field list itself lives there now, shared with
+/// `FilterOperation`'s own replay path instead of duplicated across both.
 [[nodiscard]] FilterParameterMindWaves resolveFilterParameterMindWaves(const FilterConfiguration& config,
                                                                         const Project& project) noexcept {
-    return FilterParameterMindWaves{
-        resolveMindWaveId(config.blurSigmaMindWave(), project),
-        resolveMindWaveId(config.medianSizeMindWave(), project),
-        resolveMindWaveId(config.directionalBlurLengthMindWave(), project),
-        resolveMindWaveId(config.directionalBlurAngleMindWave(), project),
-        resolveMindWaveId(config.sharpenAmountMindWave(), project),
-        resolveMindWaveId(config.speckleDensityMindWave(), project),
-        resolveMindWaveId(config.speckleIntensityMindWave(), project),
-        resolveMindWaveId(config.speckleThresholdMindWave(), project),
-        resolveMindWaveId(config.noiseFloorMindWave(), project),
-        resolveMindWaveId(config.reductionMindWave(), project),
-        resolveMindWaveId(config.crushAmountMindWave(), project),
-        resolveMindWaveId(config.grainAmountMindWave(), project),
-        resolveMindWaveId(config.feedbackAmountMindWave(), project),
-        resolveMindWaveId(config.foldGainMindWave(), project),
-        resolveMindWaveId(config.channelBalanceMindWave(), project),
-        resolveMindWaveId(config.convolveAmountMindWave(), project),
-        resolveMindWaveId(config.displaceDistanceMindWave(), project),
-        resolveMindWaveId(config.displaceAngleMindWave(), project),
-        resolveMindWaveId(config.channelCycleAngleMindWave(), project),
-        resolveMindWaveId(config.reverbMixMindWave(), project),
-        resolveMindWaveId(config.downsampleBlockSizeMindWave(), project),
-    };
+    return sound_mind::core::resolveFilterParameterMindWaves(
+        config, [&project](MindWaveId id) -> const MindWave* { return resolveMindWaveId(id, project); });
 }
 
 /// @brief The per-cell opacity multiplier `opacityMindWave` (if any)

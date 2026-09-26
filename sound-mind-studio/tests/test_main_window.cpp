@@ -28,6 +28,7 @@
 
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/filter_operation.h"
 #include "sound_mind/core/gpu_compute_availability.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/paint_operation.h"
@@ -4540,6 +4541,51 @@ void MainWindowTest::fillSelectionWithGradientIsANoOpWithNoSelection() {
     createFreshTestProject(window);
 
     window.fillSelectionWithGradient(Gradient{});
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}
+
+void MainWindowTest::applyFilterToSelectionAppliesTheCurrentlyConfiguredFilter() {
+    // v0.Y.46.1 Installment E ("Apply Filter to Selection").
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-apply-filter-selection.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    // Seeds the panel's own currently-displayed configuration directly -
+    // applyFilterToSelection() reads whatever the panel shows right now,
+    // exactly as a user would have configured it interactively.
+    auto* filterPanel = window.findChild<sound_mind::studio::FilterConfigurationPanel*>();
+    QVERIFY(filterPanel != nullptr);
+    sound_mind::core::FilterConfiguration config;
+    config.setType(sound_mind::core::FilterType::UniformBlur);
+    config.setBlurSigma(2.0f);
+    filterPanel->setFilterConfiguration(config);
+
+    window.applyFilterToSelection();
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    const auto active = window.project()->operationLog().activeOperationsTargeting(
+        topmostNonEqualizerLayer(*window.project()).id());
+    QCOMPARE(active.size(), std::size_t{1});
+    const auto* filterOp = dynamic_cast<const sound_mind::core::FilterOperation*>(active.front());
+    QVERIFY(filterOp != nullptr);
+    QCOMPARE(filterOp->config().type(), sound_mind::core::FilterType::UniformBlur);
+}
+
+void MainWindowTest::applyFilterToSelectionIsANoOpWithNoSelection() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.applyFilterToSelection();
 
     QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
 }

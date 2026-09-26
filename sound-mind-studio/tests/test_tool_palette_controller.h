@@ -15,5 +15,6 @@ private slots:
     void pasteIntoWithNothingCopiedReturnsNullopt();
     void copyAndCutWithNoSelectionDoNotCrash();
     void fillWithNoSelectionDoesNotCrash();
+    void applyFilterToSelectionWithNoSelectionDoesNotCrash();
     void contentChangedAggregatesAPaintStroke();
 };

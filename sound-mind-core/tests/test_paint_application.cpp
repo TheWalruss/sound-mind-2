@@ -8,6 +8,7 @@
 
 #include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/filter_operation.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paste_operation.h"
@@ -1400,6 +1401,60 @@ TEST_CASE("rebuildPaintedContent also applies a PasteOperation, mixed in with Pa
     // The clip's own [bin=0][frame=0] corner lands at the paste bounds' own low corner (frame 60, bin 10).
     REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, 60, 10)] == -1.0f);
     REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, 61, 11)] == -4.0f);
+}
+
+TEST_CASE("rebuildPaintedContent also applies a FilterOperation when settings is given",
+          "[core][paint_application]") {
+    // v0.Y.46.1 Installment E ("Apply Filter to Selection").
+    const auto config = makeTestConfig();
+    StreamImage base = makeBlankContent(config, 100);
+    // "Blank" content is 0.0f everywhere (see makeBlankContent()'s own docs
+    // above), so the spike needs a distinctly louder value to actually pull
+    // its blurred neighbor away from that shared baseline.
+    base.leftMagnitudeDb[pixelIndex(base, 50, 20)] = 40.0f;
+    base.rightMagnitudeDb[pixelIndex(base, 50, 20)] = 40.0f;
+
+    sound_mind::core::TimeFrequencyRect filterBounds;
+    filterBounds.startTimeSeconds = frameIndexToTime(48.0, config);
+    filterBounds.endTimeSeconds = frameIndexToTime(52.0, config);
+    filterBounds.lowFrequencyHz = binIndexToFrequency(0.0f, config);
+    filterBounds.highFrequencyHz = binIndexToFrequency(99.0f, config);
+    sound_mind::core::FilterConfiguration filterConfig;
+    filterConfig.setType(sound_mind::core::FilterType::UniformBlur);
+    filterConfig.setBlurSigma(2.0f);
+    const sound_mind::core::FilterOperation filter(1, LayerId{1}, filterBounds, filterConfig);
+
+    const std::vector<const Operation*> operations = {&filter};
+    const sound_mind::core::ProjectSettings settings;
+    const StreamImage rebuilt = rebuildPaintedContent(base, operations, 2000.0, {}, {}, &settings);
+
+    // The blur spread the spike's own energy into a neighboring cell that
+    // started completely silent.
+    REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, 51, 20)] > base.leftMagnitudeDb[pixelIndex(base, 51, 20)]);
+}
+
+TEST_CASE("rebuildPaintedContent skips a FilterOperation entirely when no settings is given",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage base = makeBlankContent(config, 100);
+    base.leftMagnitudeDb[pixelIndex(base, 50, 20)] = 0.0f;
+    base.rightMagnitudeDb[pixelIndex(base, 50, 20)] = 0.0f;
+
+    sound_mind::core::TimeFrequencyRect filterBounds;
+    filterBounds.startTimeSeconds = frameIndexToTime(48.0, config);
+    filterBounds.endTimeSeconds = frameIndexToTime(52.0, config);
+    filterBounds.lowFrequencyHz = binIndexToFrequency(0.0f, config);
+    filterBounds.highFrequencyHz = binIndexToFrequency(99.0f, config);
+    sound_mind::core::FilterConfiguration filterConfig;
+    filterConfig.setType(sound_mind::core::FilterType::UniformBlur);
+    filterConfig.setBlurSigma(2.0f);
+    const sound_mind::core::FilterOperation filter(1, LayerId{1}, filterBounds, filterConfig);
+
+    const std::vector<const Operation*> operations = {&filter};
+    const StreamImage rebuilt = rebuildPaintedContent(base, operations, 2000.0);  // settings defaults to nullptr.
+
+    // Untouched - the previously-silent neighbor is still exactly silent.
+    REQUIRE(rebuilt.leftMagnitudeDb[pixelIndex(rebuilt, 51, 20)] == base.leftMagnitudeDb[pixelIndex(base, 51, 20)]);
 }
 
 TEST_CASE("rebuildPaintedContent with no operations returns an unchanged copy of base",

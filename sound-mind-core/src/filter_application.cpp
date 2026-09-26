@@ -1971,4 +1971,75 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
     return composite;
 }
 
+namespace {
+
+/// @brief `mindWaveId`, resolved via `resolveMindWave` - the single-id
+/// building block `resolveFilterParameterMindWaves()` below calls once
+/// per bindable parameter. Same graceful-dangling-id contract every other
+/// MindWave-id resolution in this codebase already keeps.
+[[nodiscard]] const MindWave* resolveMindWaveIdVia(std::optional<MindWaveId> mindWaveId,
+                                                     const MindWaveResolver& resolveMindWave) {
+    if (!mindWaveId.has_value() || !resolveMindWave) {
+        return nullptr;
+    }
+    return resolveMindWave(*mindWaveId);
+}
+
+}  // namespace
+
+FilterParameterMindWaves resolveFilterParameterMindWaves(const FilterConfiguration& config,
+                                                            const MindWaveResolver& resolveMindWave) {
+    return FilterParameterMindWaves{
+        resolveMindWaveIdVia(config.blurSigmaMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.medianSizeMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.directionalBlurLengthMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.directionalBlurAngleMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.sharpenAmountMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.speckleDensityMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.speckleIntensityMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.speckleThresholdMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.noiseFloorMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.reductionMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.crushAmountMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.grainAmountMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.feedbackAmountMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.foldGainMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.channelBalanceMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.convolveAmountMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.displaceDistanceMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.displaceAngleMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.channelCycleAngleMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.reverbMixMindWave(), resolveMindWave),
+        resolveMindWaveIdVia(config.downsampleBlockSizeMindWave(), resolveMindWave),
+    };
+}
+
+void applyFilterOperation(const FilterOperation& operation, StreamImage& content, const ProjectSettings& settings,
+                           const FilterParameterMindWaves& mindWaves) {
+    if (content.frameCount == 0 || content.config.binCount == 0) {
+        return;
+    }
+
+    const StreamImage filtered = applyFilter(content, operation.config(), settings, mindWaves);
+
+    const FrameBinRange range = rangeFor(operation.bounds(), content.config, content.frameCount);
+    const std::optional<SelectionRegion>& boundary = operation.boundary();
+
+    for (int frame = range.frameLow; frame <= range.frameHigh; ++frame) {
+        for (int bin = range.binLow; bin <= range.binHigh; ++bin) {
+            // A non-rectangular selection narrows to cells actually
+            // inside its own boundary() - see FilterOperation's own docs.
+            // Absent, every cell in bounds() is touched.
+            if (boundary && !boundary->containsCell(bin, frame, content.config)) {
+                continue;
+            }
+
+            const std::size_t index = cellIndex(bin, frame, content.frameCount);
+            content.leftMagnitudeDb[index] = filtered.leftMagnitudeDb[index];
+            content.rightMagnitudeDb[index] = filtered.rightMagnitudeDb[index];
+            content.sharedPhaseRadians[index] = filtered.sharedPhaseRadians[index];
+        }
+    }
+}
+
 }  // namespace sound_mind::core

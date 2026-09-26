@@ -9,6 +9,7 @@
 #include "sound_mind/core/blend_mode_application.h"
 #include "sound_mind/core/fill_application.h"
 #include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/filter_application.h"
 #include "sound_mind/core/paste_application.h"
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/sequence_application.h"
@@ -1231,7 +1232,8 @@ sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::St
                                                        const std::vector<const Operation*>& operations,
                                                        double frequencyToTimeScale,
                                                        const LayerContentResolver& resolveLayerContent,
-                                                       const MindWaveResolver& resolveMindWave) {
+                                                       const MindWaveResolver& resolveMindWave,
+                                                       const ProjectSettings* settings) {
     sound_mind::codec::StreamImage result = base;
     for (const Operation* operation : operations) {
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation)) {
@@ -1242,6 +1244,11 @@ sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::St
             applyPasteOperation(*paste, result);
         } else if (const auto* sequence = dynamic_cast<const SequenceOperation*>(operation)) {
             applySequenceOperation(*sequence, frequencyToTimeScale, result, resolveLayerContent, resolveMindWave);
+        } else if (const auto* filter = dynamic_cast<const FilterOperation*>(operation)) {
+            if (settings != nullptr) {
+                applyFilterOperation(*filter, result, *settings,
+                                      resolveFilterParameterMindWaves(filter->config(), resolveMindWave));
+            }
         }
     }
     return result;

@@ -2,7 +2,9 @@
 
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/filter_operation.h"
 #include "sound_mind/core/mind_wave.h"
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/project_settings.h"
 
 namespace sound_mind::core {
@@ -369,5 +371,55 @@ struct FilterParameterMindWaves {
                                                              const FilterConfiguration& config,
                                                              const ProjectSettings& settings,
                                                              const FilterParameterMindWaves& mindWaves = {});
+
+/**
+ * @brief `config`'s own twenty-one bindable filter parameters, each
+ *        resolved via a generic per-id resolver - the shared building
+ *        block behind both `compositeProject()`'s own `Project`-based
+ *        resolution (a live Filter layer) and `rebuildPaintedContent()`'s
+ *        own `MindWaveResolver`-based resolution (`FilterOperation`'s own
+ *        replay, `v0.Y.46.1` Installment E) - each caller only differs in
+ *        how it happens to have a `MindWaveId` resolved to a `MindWave`,
+ *        not in which twenty-one fields need resolving, so this one
+ *        function is shared rather than that field list duplicated twice.
+ *
+ * @param config Whose bindable parameters to resolve.
+ * @param resolveMindWave Resolves a single `MindWaveId` against whatever
+ *        library the caller has in hand - see `MindWaveResolver`'s own
+ *        docs (`paint_application.h`) for the graceful-dangling-id and
+ *        empty-resolver contracts, both honored here identically.
+ * @return Every bindable parameter's own resolved `MindWave`, or `nullptr`
+ *         for one that's unbound (or whose id doesn't resolve).
+ */
+[[nodiscard]] FilterParameterMindWaves resolveFilterParameterMindWaves(const FilterConfiguration& config,
+                                                                          const MindWaveResolver& resolveMindWave);
+
+/**
+ * @brief Applies `operation`'s own filter, confined to its own boundary/
+ *        bounds, into `content` in place - the `FilterOperation` counterpart
+ *        to `applyFillOperation()`/`applyPasteOperation()`, `v0.Y.46.1`
+ *        Installment E ("Layers Panel & Editing Enhancements v2").
+ *
+ * Runs `applyFilter()` over `content`'s own *full* extent first (so a
+ * spatially-aware filter - blur, convolve - reads real neighboring cells,
+ * not silence past the selection's own edge), then keeps the filtered
+ * result only where `operation`'s own `boundary()->containsCell()` (or,
+ * absent a boundary, `bounds()`) actually places it - every other cell
+ * reverts to its own pre-filter value, completely untouched. Phase is
+ * overwritten right along with amplitude wherever `applyFilter()` itself
+ * changes it (most filter types don't; `Displace` does) - no separate
+ * "phase left untouched" carve-out here, unlike Fill/Paste, since a
+ * filter's own per-type contract already decides that either way.
+ *
+ * @param operation Which filter, and which selection, to apply.
+ * @param content The layer's own content to edit in place.
+ * @param settings Passed straight through to `applyFilter()` - see its
+ *        own docs.
+ * @param mindWaves `operation.config()`'s own bindable parameters,
+ *        already resolved (typically via `resolveFilterParameterMindWaves()`
+ *        above) - passed straight through to `applyFilter()`.
+ */
+void applyFilterOperation(const FilterOperation& operation, sound_mind::codec::StreamImage& content,
+                           const ProjectSettings& settings, const FilterParameterMindWaves& mindWaves = {});
 
 }  // namespace sound_mind::core

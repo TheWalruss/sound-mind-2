@@ -211,9 +211,10 @@ void PaintController::rebuildLayerContentAndCascade(sound_mind::core::LayerId la
     };
 
     const auto activeOperations = project_->operationLog().activeOperationsTargeting(layer);
+    const sound_mind::core::ProjectSettings settings = project_->settings();
     sound_mind::codec::StreamImage rebuilt = sound_mind::core::rebuildPaintedContent(
         baseContent_.at(layer), activeOperations, sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
-        resolveLayerContent, resolveMindWave);
+        resolveLayerContent, resolveMindWave, &settings);
     target->setContent(std::move(rebuilt));
 
     emit contentChanged(layer);

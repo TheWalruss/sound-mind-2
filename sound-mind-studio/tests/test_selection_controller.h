@@ -15,6 +15,8 @@ private slots:
     void clearSelectionIsANoOpWhenNothingIsSelected();
     void fillAppendsAFillOperationOverTheCommittedSelection();
     void fillIsANoOpWithNoCommittedSelection();
+    void applyFilterToSelectionAppendsAFilterOperationOverTheCommittedSelection();
+    void applyFilterToSelectionIsANoOpWithNoCommittedSelection();
     void setProjectClearsSelectionAndAnyInProgressDrag();
     void freshControllerHasNoClipboard();
     void copySelectionCapturesTheSelectionOntoTheClipboard();

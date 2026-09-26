@@ -219,6 +219,8 @@ private slots:
     void fillSelectionWithIsANoOpWithNoSelection();
     void fillSelectionWithGradientAppliesARealMultiStopGradientAcrossTheSelection();
     void fillSelectionWithGradientIsANoOpWithNoSelection();
+    void applyFilterToSelectionAppliesTheCurrentlyConfiguredFilter();
+    void applyFilterToSelectionIsANoOpWithNoSelection();
     void settingANewProjectResetsSelectModeToOff();
     void copyThenPasteOnTheSameLayerReproducesTheSelection();
     void pasteUsesTheSelectionConfigurationPanelsOwnBlendMode();
