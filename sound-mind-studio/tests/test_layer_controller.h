@@ -24,6 +24,9 @@ private slots:
     void duplicateLayerCopiesContentAndPropertiesButRefusesALockedOne();
     void duplicateLayerNamesTheCopyUniquelyAndSelectsIt();
     void cleanUpLayerPhaseZeroesPhaseInSilentCellsOnlyButRefusesALayerWithNoContent();
+    void selectLayerAboveAndBelowNavigateTheStackAndNoOpAtTheEnds();
+    void moveSelectedLayerUpAndDownReorderTheStackAndRefuseAtLockedBoundaries();
+    void nudgeSelectedLayerOpacityClampsAndIsUndoable();
     void addEmptyLayerAddsAndSelectsANormalLayer();
     void addFilterLayerAddsAndSelectsAFilterLayer();
     void handleLayerSelectionChangedSyncsFilterConfigurationPanel();

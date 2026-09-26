@@ -85,6 +85,12 @@ const char* kImageFileFilter = "Images (*.png *.jpg *.jpeg *.bmp *.tga *.webp)";
 const char* kExportAudioFileFilter = "FLAC Audio (*.flac);;Ogg Vorbis Audio (*.ogg);;MP3 Audio (*.mp3)";
 const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
 
+/// @brief The opacity step increaseSelectedLayerOpacity()/
+/// decreaseSelectedLayerOpacity() apply per keypress - `v0.Y.46.1`
+/// Installment A ("Layers Panel & Editing Enhancements v2"), confirmed
+/// with the user.
+constexpr float kLayerOpacityNudgeStep = 0.05f;
+
 /// @brief Converts a plain std::string device-name list (as the engines'
 /// availableXDeviceNames() methods return) into the QStringList a device
 /// picker combo box actually wants.
@@ -738,6 +744,43 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // deleteAction/Cut/Copy/Paste all make.
     QAction* usePickedPathAsMindWaveShapeAction = editMenu->addAction(tr("Use Picked Path as MindWave &Shape"));
     connect(usePickedPathAsMindWaveShapeAction, &QAction::triggered, this, &MainWindow::usePickedPathAsMindWaveShape);
+
+    editMenu->addSeparator();
+
+    // Layer navigation & manipulation (v0.Y.46.1 Installment A, "Layers
+    // Panel & Editing Enhancements v2") - keyboard shortcuts for the
+    // Layers Panel's own selection/reorder/opacity, so small adjustments
+    // don't need reaching for the mouse every time. Ctrl+Up/Down/
+    // Ctrl+Shift+Up/Down are already Bring Forward/Backward/to Front/to
+    // Back (above) - Page Up/Down (plus Shift/Ctrl) was chosen instead,
+    // confirmed with the user, to avoid that collision. Each is a no-op
+    // (the same "always present" choice deleteAction makes) with no layer
+    // selected, already at the relevant end of the stack, or blocked by a
+    // locked Background/Equalizer neighbor - see LayerController::
+    // selectLayerAbove()'s and its siblings' own docs.
+    QAction* selectLayerAboveAction = editMenu->addAction(tr("Select Layer &Above"));
+    selectLayerAboveAction->setShortcut(QKeySequence(Qt::Key_PageUp));
+    connect(selectLayerAboveAction, &QAction::triggered, this, &MainWindow::selectLayerAbove);
+
+    QAction* selectLayerBelowAction = editMenu->addAction(tr("Select Layer &Below"));
+    selectLayerBelowAction->setShortcut(QKeySequence(Qt::Key_PageDown));
+    connect(selectLayerBelowAction, &QAction::triggered, this, &MainWindow::selectLayerBelow);
+
+    QAction* moveLayerUpAction = editMenu->addAction(tr("&Move Layer Up"));
+    moveLayerUpAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_PageUp));
+    connect(moveLayerUpAction, &QAction::triggered, this, &MainWindow::moveSelectedLayerUp);
+
+    QAction* moveLayerDownAction = editMenu->addAction(tr("M&ove Layer Down"));
+    moveLayerDownAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_PageDown));
+    connect(moveLayerDownAction, &QAction::triggered, this, &MainWindow::moveSelectedLayerDown);
+
+    QAction* increaseLayerOpacityAction = editMenu->addAction(tr("&Increase Layer Opacity"));
+    increaseLayerOpacityAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_PageUp));
+    connect(increaseLayerOpacityAction, &QAction::triggered, this, &MainWindow::increaseSelectedLayerOpacity);
+
+    QAction* decreaseLayerOpacityAction = editMenu->addAction(tr("&Decrease Layer Opacity"));
+    decreaseLayerOpacityAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_PageDown));
+    connect(decreaseLayerOpacityAction, &QAction::triggered, this, &MainWindow::decreaseSelectedLayerOpacity);
 
     editMenu->addSeparator();
 
@@ -1996,6 +2039,20 @@ void MainWindow::deleteLayer(sound_mind::core::LayerId id) { layerController_->d
 void MainWindow::duplicateLayer(sound_mind::core::LayerId id) { layerController_->duplicateLayer(id); }
 
 void MainWindow::cleanUpLayerPhase(sound_mind::core::LayerId id) { layerController_->cleanUpLayerPhase(id); }
+
+void MainWindow::selectLayerAbove() { layerController_->selectLayerAbove(); }
+
+void MainWindow::selectLayerBelow() { layerController_->selectLayerBelow(); }
+
+void MainWindow::moveSelectedLayerUp() { layerController_->moveSelectedLayerUp(); }
+
+void MainWindow::moveSelectedLayerDown() { layerController_->moveSelectedLayerDown(); }
+
+void MainWindow::increaseSelectedLayerOpacity() { layerController_->nudgeSelectedLayerOpacity(kLayerOpacityNudgeStep); }
+
+void MainWindow::decreaseSelectedLayerOpacity() {
+    layerController_->nudgeSelectedLayerOpacity(-kLayerOpacityNudgeStep);
+}
 
 void MainWindow::addEmptyLayer() {
     if (!project_) {

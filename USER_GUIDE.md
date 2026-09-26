@@ -283,6 +283,14 @@ selected or not. A layer whose opacity is bound to a MindWave shows a
 smaller, indented row directly beneath it, with that MindWave's own
 grayscale preview.
 
+**Keyboard shortcuts** (Edit menu) work without touching the mouse:
+**Page Up**/**Page Down** select the layer above/below the currently
+selected one; **Shift+Page Up**/**Shift+Page Down** move the selected
+layer up/down one position in the stack; **Ctrl+Page Up**/**Ctrl+Page
+Down** nudge its opacity up/down by 5%. Each is a no-op where it doesn't
+apply - nothing selected, already at the top/bottom of the stack, or
+blocked by the locked Background/Equalizer layer.
+
 ### Compositing
 
 Every visible layer with content contributes to what the canvas shows

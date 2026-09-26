@@ -1,5 +1,7 @@
 #include "test_layer_controller.h"
 
+#include <cmath>
+
 #include <QComboBox>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
@@ -430,6 +432,124 @@ void LayerControllerTest::cleanUpLayerPhaseZeroesPhaseInSilentCellsOnlyButRefuse
     QCOMPARE(cleaned->content()->sharedPhaseRadians[1], 1.0f);   // audible cell - untouched.
     QCOMPARE(cleaned->content()->leftMagnitudeDb[0], -96.0f);    // magnitudes never rewritten.
     QCOMPARE(cleaned->content()->rightMagnitudeDb[0], -96.0f);
+}
+
+void LayerControllerTest::selectLayerAboveAndBelowNavigateTheStackAndNoOpAtTheEnds() {
+    // v0.Y.46.1 Installment A ("Layers Panel & Editing Enhancements v2").
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId backgroundId = project.layers().front().id();
+    const LayerId equalizerId = project.layers().back().id();
+    Layer normal(0, "Normal", LayerType::Normal);
+    const LayerId normalId = project.addLayer(std::move(normal));  // Background, Normal, Equalizer.
+    fixture.controller.setProject(&project);
+    fixture.controller.refreshLayersPanel();
+
+    // No-op with nothing selected.
+    fixture.controller.selectLayerAbove();
+    QVERIFY(!fixture.layersPanel.selectedLayerId().has_value());
+    fixture.controller.selectLayerBelow();
+    QVERIFY(!fixture.layersPanel.selectedLayerId().has_value());
+
+    fixture.layersPanel.selectLayer(backgroundId);
+
+    fixture.controller.selectLayerAbove();
+    QCOMPARE(*fixture.layersPanel.selectedLayerId(), normalId);
+
+    fixture.controller.selectLayerAbove();
+    QCOMPARE(*fixture.layersPanel.selectedLayerId(), equalizerId);
+
+    fixture.controller.selectLayerAbove();  // already topmost - no-op.
+    QCOMPARE(*fixture.layersPanel.selectedLayerId(), equalizerId);
+
+    fixture.controller.selectLayerBelow();
+    QCOMPARE(*fixture.layersPanel.selectedLayerId(), normalId);
+
+    fixture.controller.selectLayerBelow();
+    QCOMPARE(*fixture.layersPanel.selectedLayerId(), backgroundId);
+
+    fixture.controller.selectLayerBelow();  // already bottommost - no-op.
+    QCOMPARE(*fixture.layersPanel.selectedLayerId(), backgroundId);
+}
+
+void LayerControllerTest::moveSelectedLayerUpAndDownReorderTheStackAndRefuseAtLockedBoundaries() {
+    // v0.Y.46.1 Installment A.
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    Layer first(0, "First", LayerType::Normal);
+    const LayerId firstId = project.addLayer(std::move(first));
+    Layer second(0, "Second", LayerType::Normal);
+    const LayerId secondId = project.addLayer(std::move(second));
+    // Bottom-to-top: Background, First, Second, Equalizer.
+    fixture.controller.setProject(&project);
+    fixture.controller.refreshLayersPanel();
+
+    // No-op with nothing selected.
+    fixture.controller.moveSelectedLayerUp();
+    fixture.controller.moveSelectedLayerDown();
+    QCOMPARE(project.layers()[1].id(), firstId);
+    QCOMPARE(project.layers()[2].id(), secondId);
+
+    fixture.layersPanel.selectLayer(firstId);
+    fixture.controller.moveSelectedLayerUp();  // swaps First/Second.
+    QCOMPARE(project.layers()[1].id(), secondId);
+    QCOMPARE(project.layers()[2].id(), firstId);
+    QCOMPARE(*fixture.layersPanel.selectedLayerId(), firstId);  // selection follows by id.
+
+    fixture.controller.moveSelectedLayerUp();  // First is now just below the locked Equalizer - refused.
+    QCOMPARE(project.layers()[2].id(), firstId);
+
+    fixture.controller.moveSelectedLayerDown();  // back to Background, First, Second, Equalizer.
+    QCOMPARE(project.layers()[1].id(), firstId);
+    QCOMPARE(project.layers()[2].id(), secondId);
+
+    fixture.controller.moveSelectedLayerDown();  // First is now just above the locked Background - refused.
+    QCOMPARE(project.layers()[1].id(), firstId);
+
+    // Selecting a locked layer itself refuses either direction.
+    const LayerId backgroundId = project.layers().front().id();
+    const LayerId equalizerId = project.layers().back().id();
+    fixture.layersPanel.selectLayer(backgroundId);
+    fixture.controller.moveSelectedLayerUp();
+    QCOMPARE(project.layers().front().id(), backgroundId);  // unchanged.
+    fixture.layersPanel.selectLayer(equalizerId);
+    fixture.controller.moveSelectedLayerDown();
+    QCOMPARE(project.layers().back().id(), equalizerId);  // unchanged.
+}
+
+void LayerControllerTest::nudgeSelectedLayerOpacityClampsAndIsUndoable() {
+    // v0.Y.46.1 Installment A.
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    Layer normal(0, "Normal", LayerType::Normal);
+    normal.setOpacity(0.5f);
+    const LayerId normalId = project.addLayer(std::move(normal));
+    fixture.controller.setProject(&project);
+    fixture.controller.refreshLayersPanel();
+
+    // No-op with nothing selected.
+    QSignalSpy spy(&fixture.controller, &LayerController::layersChanged);
+    fixture.controller.nudgeSelectedLayerOpacity(0.1f);
+    QCOMPARE(spy.count(), 0);
+
+    fixture.layersPanel.selectLayer(normalId);
+
+    fixture.controller.nudgeSelectedLayerOpacity(0.05f);
+    QVERIFY(std::abs(fixture.controller.layerById(normalId)->opacity() - 0.55f) < 0.001f);
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QVERIFY(std::abs(fixture.controller.layerById(normalId)->opacity() - 0.5f) < 0.001f);
+
+    fixture.undoStack.redo();
+    QVERIFY(std::abs(fixture.controller.layerById(normalId)->opacity() - 0.55f) < 0.001f);
+
+    // Clamped at both extremes.
+    fixture.controller.nudgeSelectedLayerOpacity(10.0f);
+    QCOMPARE(fixture.controller.layerById(normalId)->opacity(), 1.0f);
+
+    fixture.controller.nudgeSelectedLayerOpacity(-10.0f);
+    QCOMPARE(fixture.controller.layerById(normalId)->opacity(), 0.0f);
 }
 
 void LayerControllerTest::addEmptyLayerAddsAndSelectsANormalLayer() {

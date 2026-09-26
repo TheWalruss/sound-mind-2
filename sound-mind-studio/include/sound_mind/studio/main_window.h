@@ -842,6 +842,47 @@ public slots:
     void cleanUpLayerPhase(sound_mind::core::LayerId id);
 
     /**
+     * @brief Selects the layer above the currently selected one - the
+     *        actual work behind the "Select Layer Above" Edit menu action
+     *        (Page Up), `v0.Y.46.1` Installment A ("Layers Panel & Editing
+     *        Enhancements v2"). See `LayerController::selectLayerAbove()`'s
+     *        own docs for the exact no-op conditions.
+     */
+    void selectLayerAbove();
+
+    /// @brief Selects the layer below the currently selected one - the
+    ///        actual work behind the "Select Layer Below" Edit menu action
+    ///        (Page Down). See `LayerController::selectLayerBelow()`'s own
+    ///        docs.
+    void selectLayerBelow();
+
+    /// @brief Moves the currently selected layer up one position in the
+    ///        stack - the actual work behind the "Move Layer Up" Edit menu
+    ///        action (Shift+Page Up). See `LayerController::
+    ///        moveSelectedLayerUp()`'s own docs for the exact no-op
+    ///        conditions. Marks hasUnsavedChanges() and refreshes the
+    ///        canvas and Layers Panel on success.
+    void moveSelectedLayerUp();
+
+    /// @brief Moves the currently selected layer down one position in the
+    ///        stack - the actual work behind the "Move Layer Down" Edit
+    ///        menu action (Shift+Page Down). See `LayerController::
+    ///        moveSelectedLayerDown()`'s own docs.
+    void moveSelectedLayerDown();
+
+    /// @brief Increases the currently selected layer's own opacity by a
+    ///        fixed step - the actual work behind the "Increase Layer
+    ///        Opacity" Edit menu action (Ctrl+Page Up). See
+    ///        `LayerController::nudgeSelectedLayerOpacity()`'s own docs.
+    void increaseSelectedLayerOpacity();
+
+    /// @brief Decreases the currently selected layer's own opacity by the
+    ///        same fixed step increaseSelectedLayerOpacity() applies -
+    ///        the actual work behind the "Decrease Layer Opacity" Edit
+    ///        menu action (Ctrl+Page Down).
+    void decreaseSelectedLayerOpacity();
+
+    /**
      * @brief Adds a new, empty `Normal` layer to the current project - the
      *        actual work behind `LayersPanel`'s "+ Add Layer" button.
      *

@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.1.1] - 2026-09-26
+
+Layers Panel & Editing Enhancements v2, Installment A: **Keyboard shortcuts for layer navigation.**
+
+### Added
+
+- **Page Up/Page Down** now select the layer above/below the currently selected one in the Layers panel.
+- **Shift+Page Up/Page Down** move the selected layer up/down one position in the stack.
+- **Ctrl+Page Up/Page Down** nudge the selected layer's opacity up/down by 5% (undoable).
+
+All six are no-ops where they don't apply (nothing selected, already at an end of the stack, or blocked by the locked Background/Equalizer layer).
+
+Full regression: `sound-mind-core` full suite unaffected (840 test cases), `sound-mind-studio` `LayerControllerTest` (3 new), full suite otherwise unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #154.
+
 ## [0.1.0.4] - 2026-09-26
 
 Real-world testing pass finding #24: **Phase Cleanup.**

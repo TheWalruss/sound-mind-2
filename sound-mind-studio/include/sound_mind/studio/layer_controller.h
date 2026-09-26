@@ -290,6 +290,60 @@ public:
      */
     void cleanUpLayerPhase(sound_mind::core::LayerId id);
 
+    /**
+     * @brief Selects the layer immediately above the currently selected
+     *        one in the stack (`LayersPanel::selectLayer()`) - keyboard
+     *        layer navigation, `v0.Y.46.1` Installment A ("Layers Panel &
+     *        Editing Enhancements v2"). A no-op if no project is set, no
+     *        layer is currently selected, or the selected layer is already
+     *        topmost.
+     */
+    void selectLayerAbove();
+
+    /// @brief Selects the layer immediately below the currently selected
+    ///        one - see selectLayerAbove()'s own docs, mirrored. A no-op
+    ///        if no project is set, no layer is currently selected, or the
+    ///        selected layer is already the bottommost (`Background`).
+    void selectLayerBelow();
+
+    /**
+     * @brief Moves the currently selected layer up one position in the
+     *        stack (swaps it with its own neighbor above) - keyboard layer
+     *        navigation, `v0.Y.46.1` Installment A.
+     *
+     * A no-op if no project is set, no layer is currently selected, the
+     * selected layer is already topmost, the selected layer is itself
+     * locked (`Background`/`Equalizer`), or its own neighbor above is
+     * locked (moving would displace that neighbor from its fixed position -
+     * the same invariant `LayersPanel`'s own drag-and-drop reorder already
+     * enforces). Not undoable, matching every other reorder (see the
+     * class's own docs on undo scope) - reuses reorderLayers() directly, so
+     * also refuses (with the same explanatory modal) if it would break an
+     * active Mind Grain stroke's own ordering requirement.
+     */
+    void moveSelectedLayerUp();
+
+    /// @brief Moves the currently selected layer down one position in the
+    ///        stack - see moveSelectedLayerUp()'s own docs, mirrored (its
+    ///        own neighbor below, instead of above; already-bottommost
+    ///        instead of already-topmost).
+    void moveSelectedLayerDown();
+
+    /**
+     * @brief Nudges the currently selected layer's own opacity by `delta`
+     *        (positive or negative), clamped to `[0, 1]` - keyboard layer
+     *        navigation, `v0.Y.46.1` Installment A.
+     *
+     * A no-op if no project is set or no layer is currently selected.
+     * **Undoable** - reuses setLayerOpacity()'s own undo mechanism
+     * directly, so a no-op call (already at the clamped extreme) still
+     * applies but pushes no undo entry, the same as every other undoable
+     * setter (see toggleLayerVisibility()'s own docs).
+     *
+     * @param delta The opacity change to apply, before clamping.
+     */
+    void nudgeSelectedLayerOpacity(float delta);
+
     /// @brief Adds a new, empty `Normal` layer to the current project,
     ///        selecting it immediately in the Layers Panel. Repaints the
     ///        canvas and invalidates cached playback audio, then
@@ -369,6 +423,14 @@ signals:
     void layersChanged();
 
 private:
+    /// @brief The currently selected layer's own index in `project_->
+    ///        layers()`'s bottom-to-top order - shared by
+    ///        selectLayerAbove()/selectLayerBelow()/moveSelectedLayerUp()/
+    ///        moveSelectedLayerDown()/nudgeSelectedLayerOpacity().
+    /// @return `std::nullopt` if no project is set, nothing is selected in
+    ///         `layersPanel_`, or the selected id no longer exists.
+    [[nodiscard]] std::optional<std::size_t> selectedLayerIndex() const;
+
     /// @brief The actual visibility mutation + side effects, shared by
     ///        toggleLayerVisibility() and its own pushed UndoCommand's
     ///        undo()/redo() callbacks - see the class's own docs.

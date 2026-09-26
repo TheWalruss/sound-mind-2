@@ -1,5 +1,7 @@
 #include "sound_mind/studio/layer_controller.h"
 
+#include <algorithm>
+
 #include <QMessageBox>
 
 #include "sound_mind/core/compositor.h"
@@ -386,6 +388,99 @@ void LayerController::cleanUpLayerPhase(sound_mind::core::LayerId id) {
     playbackController_->invalidate();
     canvas_->update();
     refreshLayersPanel(id);
+}
+
+std::optional<std::size_t> LayerController::selectedLayerIndex() const {
+    if (project_ == nullptr) {
+        return std::nullopt;
+    }
+    const auto selected = layersPanel_->selectedLayerId();
+    if (!selected.has_value()) {
+        return std::nullopt;
+    }
+    const auto& layers = project_->layers();
+    const auto it = std::find_if(layers.begin(), layers.end(),
+                                  [&](const sound_mind::core::Layer& layer) { return layer.id() == *selected; });
+    if (it == layers.end()) {
+        return std::nullopt;
+    }
+    return static_cast<std::size_t>(std::distance(layers.begin(), it));
+}
+
+void LayerController::selectLayerAbove() {
+    const auto index = selectedLayerIndex();
+    if (!index.has_value()) {
+        return;
+    }
+    const auto& layers = project_->layers();
+    if (*index + 1 >= layers.size()) {
+        return;  // Already topmost.
+    }
+    layersPanel_->selectLayer(layers[*index + 1].id());
+}
+
+void LayerController::selectLayerBelow() {
+    const auto index = selectedLayerIndex();
+    if (!index.has_value() || *index == 0) {
+        return;  // Nothing selected, or already bottommost.
+    }
+    layersPanel_->selectLayer(project_->layers()[*index - 1].id());
+}
+
+void LayerController::moveSelectedLayerUp() {
+    const auto index = selectedLayerIndex();
+    if (!index.has_value()) {
+        return;
+    }
+    const auto& layers = project_->layers();
+    if (*index + 1 >= layers.size()) {
+        return;  // Already topmost.
+    }
+    if (sound_mind::core::isLockedLayerType(layers[*index].type()) ||
+        sound_mind::core::isLockedLayerType(layers[*index + 1].type())) {
+        // Moving would displace a locked layer from its fixed position -
+        // the same invariant LayersPanel's own drag-and-drop reorder
+        // already enforces.
+        return;
+    }
+
+    std::vector<sound_mind::core::LayerId> newOrder;
+    newOrder.reserve(layers.size());
+    for (const auto& layer : layers) {
+        newOrder.push_back(layer.id());
+    }
+    std::swap(newOrder[*index], newOrder[*index + 1]);
+    reorderLayers(newOrder);
+}
+
+void LayerController::moveSelectedLayerDown() {
+    const auto index = selectedLayerIndex();
+    if (!index.has_value() || *index == 0) {
+        return;  // Nothing selected, or already bottommost.
+    }
+    const auto& layers = project_->layers();
+    if (sound_mind::core::isLockedLayerType(layers[*index].type()) ||
+        sound_mind::core::isLockedLayerType(layers[*index - 1].type())) {
+        return;  // Same locked-neighbor guard as moveSelectedLayerUp().
+    }
+
+    std::vector<sound_mind::core::LayerId> newOrder;
+    newOrder.reserve(layers.size());
+    for (const auto& layer : layers) {
+        newOrder.push_back(layer.id());
+    }
+    std::swap(newOrder[*index], newOrder[*index - 1]);
+    reorderLayers(newOrder);
+}
+
+void LayerController::nudgeSelectedLayerOpacity(float delta) {
+    const auto index = selectedLayerIndex();
+    if (!index.has_value()) {
+        return;
+    }
+    const sound_mind::core::Layer& layer = project_->layers()[*index];
+    const float newOpacity = std::clamp(layer.opacity() + delta, 0.0f, 1.0f);
+    setLayerOpacity(layer.id(), newOpacity);
 }
 
 void LayerController::addEmptyLayer(sound_mind::codec::StreamImage placeholderContent) {
