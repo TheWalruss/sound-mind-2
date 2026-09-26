@@ -19,6 +19,7 @@
 #include "sound_mind/studio/tool_configuration_panel.h"
 
 using sound_mind::core::Layer;
+using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
@@ -197,6 +198,12 @@ void MindWaveControllerTest::refreshMindWavesPanelPushesTheLibraryIntoBothPanels
     row.name = QStringLiteral("Test Layer");
     row.type = LayerType::Normal;
     fixture.layersPanel.setLayers({row});
+    // Real test bug fixed here (roadmap finding #25): this test never
+    // selected the row before inspecting its combo - since the Layers
+    // Panel Redesign (v0.Y.44.1), the opacity/MindWave combo is a
+    // selection-revealed control (see LayerRowWidget's own docs), so an
+    // unselected row never had one to find at all.
+    fixture.layersPanel.selectLayer(static_cast<LayerId>(42));
 
     fixture.controller.refreshMindWavesPanel();
     // rebuildRows()'s own row widgets are only scheduled via deleteLater()

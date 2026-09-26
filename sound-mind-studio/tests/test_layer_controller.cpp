@@ -136,10 +136,6 @@ void LayerControllerTest::setLayerOpacityMindWaveChangesBindingAndTheRowDataRefl
     fixture.controller.setProject(&project);
     // Not the Background layer - it has no opacity/MindWave combo at all
     // (see LayersPanelTest::backgroundLayerHasNoOpacityOrTransformControls).
-    // Project::createNew() also always carries an Equalizer layer (kept
-    // last via addLayer()'s own docs) - it *does* get a combo too (only
-    // Background is excluded), so this project ends up with two: the
-    // Equalizer's own (untouched, still "None") and this new layer's own.
     const LayerId layerId = project.addLayer(Layer{});
     fixture.layersPanel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
 
@@ -148,16 +144,19 @@ void LayerControllerTest::setLayerOpacityMindWaveChangesBindingAndTheRowDataRefl
     // rebuilds row widgets and schedules the *previous* pass's own combo
     // for deleteLater() - see test_mind_wave_controller.cpp's own
     // identical precedent for why qWait(0) is needed before inspecting it.
+    // Real test bug fixed here (roadmap finding #25): this test never
+    // selected the layer it just bound before inspecting its combo - since
+    // the Layers Panel Redesign (v0.Y.44.1), the opacity/MindWave combo is
+    // a selection-revealed control (see LayerRowWidget's own docs), so an
+    // unselected row never had one to find at all, regardless of this
+    // installment's own logic being correct.
+    fixture.layersPanel.selectLayer(layerId);
     QTest::qWait(0);
 
     QCOMPARE(project.layerById(layerId)->opacityMindWave(), std::optional<MindWaveId>(MindWaveId{5}));
-    // Rows display top-of-stack first: Equalizer (untouched), then this
-    // new layer, then Background (no combo at all) - see rebuildRows()'s
-    // own reverse-iteration docs.
     const auto combos = fixture.layersPanel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
-    QCOMPARE(combos.size(), 2);
-    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("None"));  // Equalizer - untouched.
-    QCOMPARE(combos.at(1)->currentText(), QStringLiteral("Slow Pulse"));  // This test's own layer.
+    QCOMPARE(combos.size(), 1);
+    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("Slow Pulse"));
 }
 
 void LayerControllerTest::setLayerTranslationChangesTranslation() {
@@ -320,15 +319,18 @@ void LayerControllerTest::setLayerBlendModeChangesBlendModeAndTheRowDataReflects
     const LayerId layerId = project.addLayer(Layer{});
 
     fixture.controller.setLayerBlendMode(layerId, sound_mind::core::BlendMode::Multiply);
+    // Real test bug fixed here (roadmap finding #25): this test never
+    // selected the layer it just changed before inspecting its combo -
+    // since the Layers Panel Redesign (v0.Y.44.1), the blend mode combo is
+    // a selection-revealed control (see LayerRowWidget's own docs), so an
+    // unselected row never had one to find at all.
+    fixture.layersPanel.selectLayer(layerId);
     QTest::qWait(0);  // Same reasoning as the opacityMindWave test's own qWait(0).
 
     QCOMPARE(project.layerById(layerId)->blendMode(), sound_mind::core::BlendMode::Multiply);
-    // Rows display top-of-stack first: Equalizer (untouched), then this
-    // new layer, then Background (no combo at all).
     const auto combos = fixture.layersPanel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo"));
-    QCOMPARE(combos.size(), 2);
-    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("Normal"));    // Equalizer - untouched.
-    QCOMPARE(combos.at(1)->currentText(), QStringLiteral("Multiply"));  // This test's own layer.
+    QCOMPARE(combos.size(), 1);
+    QCOMPARE(combos.at(0)->currentText(), QStringLiteral("Multiply"));
 }
 
 void LayerControllerTest::setLayerBlendModeIsUndoableAndRedoable() {

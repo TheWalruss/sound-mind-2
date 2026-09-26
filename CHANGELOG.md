@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.1.6] - 2026-09-26
+
+Test-only fix: roadmap finding #25.
+
+### Fixed
+
+- Three long-standing, pre-existing test failures (`LayerControllerTest`'s opacity-MindWave and blend-mode row-data tests, `MindWaveControllerTest`'s library-refresh test) - none had ever selected the layer row they were inspecting, and the Layers panel's own opacity/MindWave and blend-mode combos have been selection-revealed since the Layers Panel Redesign. No user-visible behavior changed; this only fixes the tests themselves.
+
+Full regression: `sound-mind-core` 871/871 (unaffected), `sound-mind-studio` full suite now genuinely 0 failures (previously 3 pre-existing, now fixed). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #159.
+
 ## [0.1.1.5] - 2026-09-26
 
 Layers Panel & Editing Enhancements v2, Installment E: **Apply Filter to Selection** (closes out this milestone).
