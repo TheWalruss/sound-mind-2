@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.2] - 2026-09-26
+
+Analysis Tools v1, Installment A: **the per-layer loudness indicator.**
+
+### Added
+
+- **A loudness indicator on every Layers panel row with content** - shows this layer's own average and peak loudness while playback is stopped, switches to a single live reading at the current position during Playback/Loop, and freezes at its last value while paused. Shown whether or not the row is selected.
+
+### Notes
+
+- Output audio normalization (Configure Devices) and meters for the other four analysis categories (pitch/vocal, stereo/phase, spectral health, criticality/pattern) are still future work.
+
+Full regression: `sound-mind-core` 900/900 (15 new), `sound-mind-studio` full suite unaffected (8 new tests, still 0 failures). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #166.
+
 ## [0.1.3.1] - 2026-09-26
 
 Generators, Installment A: **the Lattice family.**

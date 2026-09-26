@@ -56,6 +56,7 @@ add_library(sound-mind-core
     src/gpu_compute_access.cpp
     src/background_task.cpp
     src/generator.cpp
+    src/loudness_analysis.cpp
 )
 
 target_include_directories(sound-mind-core

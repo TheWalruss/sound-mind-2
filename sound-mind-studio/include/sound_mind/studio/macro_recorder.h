@@ -43,10 +43,19 @@ enum class MacroEventType {
  * reconstruct the action precisely.
  */
 struct MacroEvent {
+    /// @brief Playback position, in seconds, this event was recorded at -
+    ///        see this struct's own docs on why playback-position seconds,
+    ///        not wall-clock time.
     double timestampSeconds = 0.0;
+    /// @brief What kind of action this event records.
     MacroEventType type = MacroEventType::PlaybackStarted;
+    /// @brief A human-readable label for this event - the same precedent
+    ///        `UndoStack::UndoCommand` already established for its own
+    ///        History Panel.
     QString description;
+    /// @brief The layer this event affected, if applicable.
     std::optional<sound_mind::core::LayerId> layerId;
+    /// @brief The MindWave this event affected, if applicable.
     std::optional<sound_mind::core::MindWaveId> mindWaveId;
     /// @brief `UndoStack::currentIndex()` immediately after this event's
     ///        own mutation was pushed - `v0.Y.49.1` Installment B's own
@@ -81,6 +90,9 @@ class MacroRecorder : public QObject {
     Q_OBJECT
 
 public:
+    /// @brief Builds a recorder with nothing recorded yet.
+    /// @param parent The owning object, per Qt's normal parent-ownership
+    ///        convention; may be `nullptr`.
     explicit MacroRecorder(QObject* parent = nullptr);
 
     /// @brief Starts a new recording, discarding whatever the previous

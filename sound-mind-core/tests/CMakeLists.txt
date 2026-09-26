@@ -43,6 +43,7 @@ add_executable(sound-mind-core-tests
     test_layer_export.cpp
     test_background_task.cpp
     test_generator.cpp
+    test_loudness_analysis.cpp
 )
 
 target_link_libraries(sound-mind-core-tests

@@ -7,6 +7,7 @@
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/generator.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/loudness_analysis.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/phase_cleanup.h"
 #include "sound_mind/studio/canvas_widget.h"
@@ -110,9 +111,44 @@ QImage LayerController::thumbnailFor(const sound_mind::core::Layer& layer) {
     return thumbnail;
 }
 
+namespace {
+
+/// @brief One decimal place, `"-18.3 dB"` - the shared formatting both
+/// stoppedLoudnessTextFor() and updateLoudnessDisplays() use, so a live
+/// value updating at ~30fps and the "stopped" value it replaces read as
+/// the same kind of number, not two differently-rounded styles.
+QString formatLoudnessDb(float db) {
+    return QStringLiteral("%1 dB").arg(static_cast<double>(db), 0, 'f', 1);
+}
+
+}  // namespace
+
+const std::vector<float>& LayerController::loudnessProfileFor(const sound_mind::core::Layer& layer) {
+    const auto cached = loudnessProfileCache_.find(layer.id());
+    if (cached != loudnessProfileCache_.end()) {
+        return cached->second;
+    }
+    static const std::vector<float> kEmpty;
+    if (!layer.content().has_value()) {
+        return kEmpty;  // No content yet - never cached, see this method's own docs.
+    }
+    return loudnessProfileCache_[layer.id()] = sound_mind::core::computeLoudnessProfile(*layer.content());
+}
+
+QString LayerController::stoppedLoudnessTextFor(const sound_mind::core::Layer& layer) {
+    const std::vector<float>& profile = loudnessProfileFor(layer);
+    if (profile.empty()) {
+        return QString();
+    }
+    return tr("avg %1 / peak %2")
+        .arg(formatLoudnessDb(sound_mind::core::averageLoudnessDb(profile)))
+        .arg(formatLoudnessDb(sound_mind::core::peakLoudnessDb(profile)));
+}
+
 void LayerController::refreshLayersPanel(std::optional<sound_mind::core::LayerId> changedContentLayer) {
     if (changedContentLayer.has_value()) {
         thumbnailCache_.erase(*changedContentLayer);
+        loudnessProfileCache_.erase(*changedContentLayer);
     }
 
     std::vector<LayersPanel::RowData> rows;
@@ -139,6 +175,7 @@ void LayerController::refreshLayersPanel(std::optional<sound_mind::core::LayerId
             row.opacityMindWaveId = layer.opacityMindWave();
             row.blendMode = layer.blendMode();
             row.thumbnail = thumbnailFor(layer);
+            row.loudnessDisplayText = stoppedLoudnessTextFor(layer);
             rows.push_back(row);
         }
     }
@@ -387,6 +424,7 @@ void LayerController::deleteLayer(sound_mind::core::LayerId id) {
 
     if (project_->removeLayer(id)) {
         thumbnailCache_.erase(id);
+        loudnessProfileCache_.erase(id);
         emit layersChanged();
         playbackController_->invalidate();
         canvas_->update();
@@ -671,6 +709,34 @@ void LayerController::reorderLayers(const std::vector<sound_mind::core::LayerId>
     // Refreshed either way - even a rejected reorder needs the panel
     // snapped back to the authoritative order (see LayersPanel::
     // reorderRequested()'s docs).
+    refreshLayersPanel();
+}
+
+void LayerController::updateLoudnessDisplays(double playheadFraction) {
+    if (project_ == nullptr) {
+        return;
+    }
+    for (const auto& layer : project_->layers()) {
+        const std::vector<float>& profile = loudnessProfileFor(layer);
+        if (profile.empty()) {
+            continue;  // Nothing to measure - see loudnessProfileFor()'s own docs.
+        }
+        const auto value = sound_mind::core::loudnessAtProjectColumn(
+            profile, playheadFraction, project_->settings().canvasWidth, layer.rescaleFactor(),
+            layer.translationColumns());
+        // Nothing playing at this instant (translated out of reach, e.g.) -
+        // leave the label showing whatever it last showed, rather than
+        // blanking it every frame this layer happens not to reach.
+        if (value.has_value()) {
+            layersPanel_->setLiveLoudnessDisplay(layer.id(), formatLoudnessDb(*value));
+        }
+    }
+}
+
+void LayerController::resetLoudnessDisplaysToStoppedValue() {
+    if (project_ == nullptr) {
+        return;
+    }
     refreshLayersPanel();
 }
 

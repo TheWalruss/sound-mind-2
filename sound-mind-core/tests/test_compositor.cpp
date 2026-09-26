@@ -26,6 +26,7 @@ using sound_mind::core::FilterType;
 using sound_mind::core::frameIndexToTime;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
+using sound_mind::core::loudnessAtProjectColumn;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::PeriodicWaveform;
@@ -147,6 +148,69 @@ TEST_CASE("renderLayerAmplitudeSummary's own per-column brightness reflects that
         return summary->pixels[static_cast<std::size_t>(column) * 3];
     };
     CHECK(pixelAt(0) > pixelAt(1));
+}
+
+TEST_CASE("loudnessAtProjectColumn returns nullopt for an empty profile", "[core][compositor]") {
+    CHECK_FALSE(loudnessAtProjectColumn({}, 0.5, 100, 1.0, 0).has_value());
+}
+
+TEST_CASE("loudnessAtProjectColumn returns nullopt for a zero canvasWidth", "[core][compositor]") {
+    const std::vector<float> profile{-10.0f, -20.0f, -30.0f, -40.0f};
+    CHECK_FALSE(loudnessAtProjectColumn(profile, 0.5, 0, 1.0, 0).has_value());
+}
+
+TEST_CASE("loudnessAtProjectColumn with no rescale/translation reads the profile at the matching fraction",
+          "[core][compositor]") {
+    const std::vector<float> profile{-10.0f, -20.0f, -30.0f, -40.0f};
+
+    // canvasWidth == profile.size(), rescaleFactor == 1, translation == 0:
+    // project-space and the layer's own raw column space are identical, so
+    // the fraction should land on the exact same index either way.
+    CHECK(*loudnessAtProjectColumn(profile, 0.0, 4, 1.0, 0) == Catch::Approx(-10.0f));
+    CHECK(*loudnessAtProjectColumn(profile, 0.5, 4, 1.0, 0) == Catch::Approx(-30.0f));
+    CHECK(*loudnessAtProjectColumn(profile, 1.0, 4, 1.0, 0) == Catch::Approx(-40.0f));
+}
+
+TEST_CASE("loudnessAtProjectColumn clamps an out-of-range fraction rather than reading out of bounds",
+          "[core][compositor]") {
+    const std::vector<float> profile{-10.0f, -20.0f, -30.0f, -40.0f};
+
+    CHECK(*loudnessAtProjectColumn(profile, -0.5, 4, 1.0, 0) == Catch::Approx(-10.0f));
+    CHECK(*loudnessAtProjectColumn(profile, 1.5, 4, 1.0, 0) == Catch::Approx(-40.0f));
+}
+
+TEST_CASE("loudnessAtProjectColumn returns nullopt where a positive translation shifts the layer's own "
+          "content out of reach",
+          "[core][compositor]") {
+    const std::vector<float> profile{-10.0f, -20.0f, -30.0f, -40.0f};
+
+    // Shifted 10 columns later on a 4-wide canvas - nothing from this layer
+    // has arrived yet at column 0 (fraction 0.0), the same "nothing there"
+    // case renderLayer()'s own black-padding already covers.
+    CHECK_FALSE(loudnessAtProjectColumn(profile, 0.0, 4, 1.0, 10).has_value());
+}
+
+TEST_CASE("loudnessAtProjectColumn honors translationColumns, matching sourceColumnFor()'s own geometry",
+          "[core][compositor]") {
+    const std::vector<float> profile{-10.0f, -20.0f, -30.0f, -40.0f};
+
+    // Shifted 2 columns later on an 8-wide canvas: project column 2 should
+    // now read the layer's own raw column 0.
+    const auto value = loudnessAtProjectColumn(profile, 2.0 / 8.0, 8, 1.0, 2);
+    REQUIRE(value.has_value());
+    CHECK(*value == Catch::Approx(-10.0f));
+}
+
+TEST_CASE("loudnessAtProjectColumn honors rescaleFactor, matching sourceColumnFor()'s own geometry",
+          "[core][compositor]") {
+    const std::vector<float> profile{-10.0f, -20.0f, -30.0f, -40.0f};
+
+    // Stretched 2x (rescaleFactor == 2.0): the 4-wide profile now spans 8
+    // project columns, so project column 6 (fraction 6/8) should land on
+    // the same raw column as an unscaled profile's own column 3 would.
+    const auto value = loudnessAtProjectColumn(profile, 6.0 / 8.0, 8, 2.0, 0);
+    REQUIRE(value.has_value());
+    CHECK(*value == Catch::Approx(-40.0f));
 }
 
 namespace {

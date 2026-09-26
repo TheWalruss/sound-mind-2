@@ -246,8 +246,14 @@ taken appends `" (2)"`, `" (3)"`, and so on.
 
 Each row's name is shown overlaid on a small preview of that layer's own
 content (a plain background for a layer type with nothing to preview -
-Filter/Background/Equalizer). An unselected row shows only that preview
-and a **visibility button** (●/◐/○) - click it to cycle the layer through
+Filter/Background/Equalizer). Any row with real content also shows a
+small **loudness indicator** - `avg X dB / peak Y dB` over the whole
+layer while playback is stopped, switching to a single live `X dB`
+reading at the current position once Playback or Loop starts, and
+freezing at whatever it last showed while paused. This is shown whether
+or not the row is selected. An unselected row shows only that preview,
+the loudness indicator (if any), and a **visibility button** (●/◐/○) -
+click it to cycle the layer through
 **Visible** (seen and heard), **Muted** (still shown on the canvas, but
 silent during playback), and **Invisible** (excluded from both, same as
 turning visibility off always worked); **click a row's name to select it**
@@ -1418,6 +1424,14 @@ generated texture - the same seed always reproduces the exact same
 result. Only the "Lattice" family described in the design document
 actually works so far; the "Fractal" and "Streaming" families are still
 future work.
+
+**Analysis Tools** have taken their first step too: the Layers panel's own
+per-layer **loudness indicator** (see [Working with Layers](#working-with-layers)
+above) is live. The design document's own broader plan - a representative
+meter for each of loudness/mastering, pitch/vocal, stereo/phase, spectral
+health, and criticality/pattern, plus output audio normalization toward a
+configured target loudness in Configure Devices - is still future work;
+only the one loudness/mastering meter above actually exists so far.
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:

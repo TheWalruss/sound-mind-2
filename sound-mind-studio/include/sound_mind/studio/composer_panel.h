@@ -47,14 +47,20 @@ public:
     ///        canvas duration - see `setTracks()`'s own docs for how
     ///        `MainWindow` computes these from `Operation::bounds()`.
     struct OperationBox {
+        /// @brief Where this box starts, as a `[0, 1]` fraction of the
+        ///        project's own total canvas duration.
         double startFraction = 0.0;
+        /// @brief Where this box ends, as a `[0, 1]` fraction of the
+        ///        project's own total canvas duration.
         double endFraction = 0.0;
     };
 
     /// @brief One track's own displayed data - see `setTracks()`'s own
     ///        docs.
     struct TrackData {
+        /// @brief The layer this track represents.
         sound_mind::core::LayerId id{0};
+        /// @brief The layer's own display name.
         QString name;
         /// @brief `sound_mind::core::renderLayerAmplitudeSummary()`'s own
         ///        result, converted to a `QImage` - `std::nullopt` if the

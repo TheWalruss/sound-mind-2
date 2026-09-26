@@ -44,4 +44,10 @@ private slots:
     // Blend Mode (v0.Y.37.1).
     void setLayerBlendModeChangesBlendModeAndTheRowDataReflectsIt();
     void setLayerBlendModeIsUndoableAndRedoable();
+
+    // Per-layer loudness indicator (v0.Y.52.1, Analysis Tools v1).
+    void refreshLayersPanelShowsNoLoudnessLabelForLayersWithNoContent();
+    void refreshLayersPanelShowsAnAveragePeakLoudnessLabelForALayerWithContent();
+    void updateLoudnessDisplaysShowsALivePositionValue();
+    void resetLoudnessDisplaysToStoppedValueRestoresTheAveragePeakText();
 };

@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <stdexcept>
+#include <vector>
 
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
@@ -113,6 +114,44 @@ public:
 [[nodiscard]] std::optional<sound_mind::codec::RgbImage> renderLayerAmplitudeSummary(const Layer& layer,
                                                                                        std::uint32_t width,
                                                                                        std::uint32_t height);
+
+/**
+ * @brief A layer's own loudness, in dB, at one instant of the project's
+ *        own shared timeline - the Layers Panel's own per-layer loudness
+ *        indicator's live value during Playback/Loop, or the value shown
+ *        while paused (`docs/sound-mind-roadmap.md`'s `v0.Y.52.1`,
+ *        Analysis Tools v1).
+ *
+ * `profile` is a `computeLoudnessProfile()` result over the layer's own
+ * *raw* content (before translation/rescale) - a caller polling this every
+ * playback frame is expected to compute it once (and cache it, the same
+ * way `LayerController::thumbnailCache_` already caches thumbnails per
+ * layer id) rather than recomputing it on every call.
+ *
+ * `playheadFraction`/`canvasWidth` locate the requested instant on the
+ * project's own shared timeline, exactly as `CanvasWidget::
+ * setPlayheadFraction()` already does for the visible playhead line;
+ * `rescaleFactor`/`translationColumns` then map that project-space column
+ * back into `profile`'s own raw column space - the same geometry
+ * `compositeProject()` itself already applies per layer, reused here via
+ * `sourceColumnFor()` rather than re-derived.
+ *
+ * @param profile The layer's own loudness profile.
+ * @param playheadFraction The playback position, as a fraction of the
+ *        total loaded duration, in `[0, 1]` (clamped if outside it).
+ * @param canvasWidth The project's own canvas width, in columns - see
+ *        `ProjectSettings::canvasWidth`.
+ * @param rescaleFactor The layer's own `Layer::rescaleFactor()`.
+ * @param translationColumns The layer's own `Layer::translationColumns()`.
+ * @return That layer's own loudness at this instant, or `std::nullopt` if
+ *         `profile` is empty, `canvasWidth` is `0`, or this instant falls
+ *         outside the layer's own (rescaled, translated) content - nothing
+ *         playing there right now, matching `sourceColumnFor()`'s/
+ *         `renderLayer()`'s own "nothing there" case.
+ */
+[[nodiscard]] std::optional<float> loudnessAtProjectColumn(const std::vector<float>& profile,
+                                                            double playheadFraction, std::uint32_t canvasWidth,
+                                                            double rescaleFactor, std::int64_t translationColumns);
 
 /**
  * @brief Composites every visible, contentful layer in `project` into one

@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include <QComboBox>
+#include <QLabel>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
@@ -794,4 +795,95 @@ void LayerControllerTest::paintTargetLayerIdFallsBackToTheBottommostLayer() {
     // Nothing selected in the panel yet - falls back to the bottommost
     // (Background) layer, not the Equalizer (always .back()).
     QCOMPARE(fixture.controller.paintTargetLayerId().value(), backgroundId);
+}
+
+void LayerControllerTest::refreshLayersPanelShowsNoLoudnessLabelForLayersWithNoContent() {
+    Fixture fixture;
+    // A fresh project's own Background/Equalizer layers never get
+    // setContent() called - see Project::createNew()'s own docs.
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    fixture.controller.refreshLayersPanel();
+
+    QVERIFY(fixture.layersPanel.findChild<QLabel*>(QStringLiteral("loudnessLabel")) == nullptr);
+}
+
+void LayerControllerTest::refreshLayersPanelShowsAnAveragePeakLoudnessLabelForALayerWithContent() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+
+    sound_mind::codec::StreamImage content;
+    content.config.binCount = testSettings().binCount;
+    content.frameCount = testSettings().canvasWidth;
+    const std::size_t pixelCount = std::size_t{content.config.binCount} * content.frameCount;
+    content.leftMagnitudeDb.assign(pixelCount, -20.0f);
+    content.rightMagnitudeDb.assign(pixelCount, -20.0f);
+    content.sharedPhaseRadians.assign(pixelCount, 0.0f);
+    Layer normal(0, "Test", LayerType::Normal);
+    normal.setContent(content);
+    project.addLayer(std::move(normal));
+
+    fixture.controller.setProject(&project);
+    fixture.controller.refreshLayersPanel();
+
+    auto* label = fixture.layersPanel.findChild<QLabel*>(QStringLiteral("loudnessLabel"));
+    QVERIFY(label != nullptr);
+    // A uniform -20 dB layer's own average and peak are both exactly -20 dB.
+    QCOMPARE(label->text(), QStringLiteral("avg -20.0 dB / peak -20.0 dB"));
+}
+
+void LayerControllerTest::updateLoudnessDisplaysShowsALivePositionValue() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+
+    sound_mind::codec::StreamImage content;
+    content.config.binCount = testSettings().binCount;
+    content.frameCount = testSettings().canvasWidth;
+    const std::size_t pixelCount = std::size_t{content.config.binCount} * content.frameCount;
+    content.leftMagnitudeDb.assign(pixelCount, -20.0f);
+    content.rightMagnitudeDb.assign(pixelCount, -20.0f);
+    content.sharedPhaseRadians.assign(pixelCount, 0.0f);
+    Layer normal(0, "Test", LayerType::Normal);
+    normal.setContent(content);
+    project.addLayer(std::move(normal));
+
+    fixture.controller.setProject(&project);
+    fixture.controller.refreshLayersPanel();
+
+    fixture.controller.updateLoudnessDisplays(0.5);
+
+    auto* label = fixture.layersPanel.findChild<QLabel*>(QStringLiteral("loudnessLabel"));
+    QVERIFY(label != nullptr);
+    // Live text is the plain "X dB" format, not the "avg/peak" one - it
+    // proves updateLoudnessDisplays() actually reached the panel, whatever
+    // the exact value.
+    QCOMPARE(label->text(), QStringLiteral("-20.0 dB"));
+}
+
+void LayerControllerTest::resetLoudnessDisplaysToStoppedValueRestoresTheAveragePeakText() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+
+    sound_mind::codec::StreamImage content;
+    content.config.binCount = testSettings().binCount;
+    content.frameCount = testSettings().canvasWidth;
+    const std::size_t pixelCount = std::size_t{content.config.binCount} * content.frameCount;
+    content.leftMagnitudeDb.assign(pixelCount, -20.0f);
+    content.rightMagnitudeDb.assign(pixelCount, -20.0f);
+    content.sharedPhaseRadians.assign(pixelCount, 0.0f);
+    Layer normal(0, "Test", LayerType::Normal);
+    normal.setContent(content);
+    project.addLayer(std::move(normal));
+
+    fixture.controller.setProject(&project);
+    fixture.controller.refreshLayersPanel();
+    fixture.controller.updateLoudnessDisplays(0.5);
+    QTest::qWait(0);
+
+    fixture.controller.resetLoudnessDisplaysToStoppedValue();
+    QTest::qWait(0);  // resetLoudnessDisplaysToStoppedValue() rebuilds via setLayers() - see its own docs.
+
+    auto* label = fixture.layersPanel.findChild<QLabel*>(QStringLiteral("loudnessLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("avg -20.0 dB / peak -20.0 dB"));
 }

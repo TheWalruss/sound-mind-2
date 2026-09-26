@@ -14,6 +14,7 @@
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_wave.h"
 
+class QLabel;
 class QListWidget;
 
 namespace sound_mind::studio {
@@ -134,6 +135,18 @@ public:
         /// @brief Mirrors `sound_mind::core::Layer::blendMode()`.
         sound_mind::core::BlendMode blendMode = sound_mind::core::BlendMode::Normal;
 
+        /// @brief This row's own loudness indicator text (`v0.Y.52.1`,
+        /// Analysis Tools v1) - `LayerController::refreshLayersPanel()`'s
+        /// own "stopped" value (average/peak over the whole layer), shown
+        /// until/unless setLiveLoudnessDisplay() overrides it with a live,
+        /// playback-position value. Empty for a layer with no content at
+        /// all (a brand-new empty layer, or `Filter`/`Background`/
+        /// `Equalizer`, none of which have anything to measure) - the same
+        /// "no content" signal `thumbnail`'s own docs describe, so the row
+        /// simply omits the indicator entirely rather than showing a
+        /// meaningless floor value.
+        QString loudnessDisplayText;
+
         /// @brief A small, rescaled thumbnail of this layer's own visual
         /// content (`v0.Y.44.1`, Layers Panel Redesign) - shown as the
         /// row's own background, with the name overlaid on top in a
@@ -234,6 +247,31 @@ public:
      *        paint onto right now.
      */
     void setDisallowedLayers(const std::vector<sound_mind::core::LayerId>& disallowed);
+
+    /**
+     * @brief Overrides a single row's own loudness indicator text, without
+     *        rebuilding any row widget - `v0.Y.52.1` (Analysis Tools v1).
+     *
+     * `MainWindow` calls this at `PlaybackController::positionChanged()`'s
+     * own ~30fps cadence while Playback/Loop is active, once per layer with
+     * content - a full rebuildRows() at that rate would rebuild every row's
+     * own sliders/combos/buttons dozens of times a second for no reason;
+     * this instead reaches directly into the one label a previous
+     * rebuildRows() already built for `id`, the same "don't redo work nothing
+     * asked to change" reasoning refreshLayersPanel()'s own
+     * `changedContentLayer` parameter follows for thumbnails.
+     *
+     * A no-op if `id` has no row, or that row has no loudness indicator at
+     * all (see RowData::loudnessDisplayText's own docs on which rows don't).
+     * Overridden again by the next setLayers() call, whose own
+     * RowData::loudnessDisplayText - the "stopped" value - is what a caller
+     * should switch back to showing once playback actually stops (see
+     * RowData::loudnessDisplayText's own docs).
+     *
+     * @param id The layer whose row to update.
+     * @param text The new indicator text to show.
+     */
+    void setLiveLoudnessDisplay(sound_mind::core::LayerId id, const QString& text);
 
 signals:
     /// @brief The current selection changed - a row was clicked,
@@ -372,6 +410,17 @@ private:
 
     /// @brief See selectedLayerId()'s own docs.
     std::optional<sound_mind::core::LayerId> selectedLayerId_;
+
+    /// @brief Each row's own loudness indicator label, if it has one (see
+    /// RowData::loudnessDisplayText's own docs on which rows don't) -
+    /// rebuilt fresh every rebuildRows() call, so setLiveLoudnessDisplay()
+    /// can reach directly into the current row's own widget instead of
+    /// triggering a full rebuild. Raw, non-owning pointers - each label is
+    /// owned by its own row's `LayerRowWidget`, in turn owned by `list_`;
+    /// never dereferenced across a rebuildRows() call boundary, since that
+    /// call clears and repopulates this map itself before any later
+    /// setLiveLoudnessDisplay() call could observe a stale entry.
+    std::map<sound_mind::core::LayerId, QLabel*> loudnessLabels_;
 };
 
 }  // namespace sound_mind::studio

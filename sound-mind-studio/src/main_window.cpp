@@ -277,6 +277,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         currentPlaybackPositionSeconds_ = positionSeconds;
         const double total = playbackController_->totalSeconds();
         canvas_->setPlayheadFraction(total > 0.0 ? std::optional<double>(positionSeconds / total) : std::nullopt);
+        // Layers Panel's own per-layer loudness indicator (v0.Y.52.1,
+        // Analysis Tools v1) - "live during Playback/Loop, the value at the
+        // playback position when paused" (both share this one call - see
+        // updateLoudnessDisplays()'s own docs on why pausing needs nothing
+        // further here).
+        layerController_->updateLoudnessDisplays(total > 0.0 ? positionSeconds / total : 0.0);
         checkRepeatPlaybackRange(positionSeconds);
         advanceMacroPlayback(positionSeconds);
     });
@@ -2926,6 +2932,9 @@ void MainWindow::stopPlayback() {
                                 tr("Stopped playback"), undoStack_.currentIndex());
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
+    // Layers Panel's own per-layer loudness indicator switches back to its
+    // "stopped" value (average/peak over the whole layer) - v0.Y.52.1.
+    layerController_->resetLoudnessDisplaysToStoppedValue();
     // Replaying a macro (v0.Y.49.1 Installment B) is complete once
     // playback stops, whether that's the user manually stopping or a
     // natural end-of-track - see playMacro()'s own docs.

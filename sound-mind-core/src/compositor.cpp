@@ -11,6 +11,7 @@
 #include "sound_mind/codec/rgb_image_resample.h"
 #include "sound_mind/core/blend_mode_application.h"
 #include "sound_mind/core/filter_application.h"
+#include "sound_mind/core/loudness_analysis.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/project_settings.h"
@@ -524,30 +525,39 @@ std::optional<sound_mind::codec::RgbImage> renderLayerAmplitudeSummary(const Lay
         return std::nullopt;
     }
 
+    // The same per-column loudness computation the Layers Panel's own
+    // per-layer loudness indicator uses (v0.Y.52.1, Analysis Tools v1) -
+    // shared here rather than this function's own now-removed independent
+    // copy of the identical per-column averaging math.
+    const std::vector<float> profile = computeLoudnessProfile(content);
+
     StreamImage summary;
     summary.config = content.config;
     summary.config.binCount = 1;
     summary.frameCount = content.frameCount;
-    summary.leftMagnitudeDb.resize(content.frameCount);
-    summary.rightMagnitudeDb.resize(content.frameCount);
+    summary.leftMagnitudeDb = profile;
+    summary.rightMagnitudeDb = profile;
     summary.sharedPhaseRadians.assign(content.frameCount, 0.0f);
-
-    for (std::uint32_t frame = 0; frame < content.frameCount; ++frame) {
-        double leftLinearSum = 0.0;
-        double rightLinearSum = 0.0;
-        for (std::uint32_t bin = 0; bin < content.config.binCount; ++bin) {
-            const std::size_t index = cellIndex(bin, frame, content.frameCount);
-            leftLinearSum += dbToLinearAmplitude(content.leftMagnitudeDb[index]);
-            rightLinearSum += dbToLinearAmplitude(content.rightMagnitudeDb[index]);
-        }
-        const float leftAverage = static_cast<float>(leftLinearSum / content.config.binCount);
-        const float rightAverage = static_cast<float>(rightLinearSum / content.config.binCount);
-        summary.leftMagnitudeDb[frame] = linearAmplitudeToDb(leftAverage);
-        summary.rightMagnitudeDb[frame] = linearAmplitudeToDb(rightAverage);
-    }
 
     const RgbImage base = sound_mind::codec::toRgbImage(summary);
     return sound_mind::codec::downsampleAveraged(base, width, height);
+}
+
+std::optional<float> loudnessAtProjectColumn(const std::vector<float>& profile, double playheadFraction,
+                                              std::uint32_t canvasWidth, double rescaleFactor,
+                                              std::int64_t translationColumns) {
+    if (profile.empty() || canvasWidth == 0) {
+        return std::nullopt;
+    }
+    const double clampedFraction = std::clamp(playheadFraction, 0.0, 1.0);
+    const auto outputColumn = static_cast<std::uint32_t>(
+        std::min<std::uint64_t>(canvasWidth - 1, static_cast<std::uint64_t>(clampedFraction * canvasWidth)));
+    const auto sourceColumn =
+        sourceColumnFor(outputColumn, static_cast<std::uint32_t>(profile.size()), rescaleFactor, translationColumns);
+    if (!sourceColumn.has_value()) {
+        return std::nullopt;
+    }
+    return profile[*sourceColumn];
 }
 
 std::optional<StreamImage> compositeProject(const Project& project, const std::function<bool()>& shouldCancel,

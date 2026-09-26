@@ -334,6 +334,22 @@ public:
             header->addWidget(typeTag);
         }
 
+        // Per-layer loudness indicator (v0.Y.52.1, Analysis Tools v1) -
+        // shown regardless of selection (unlike the redesign's own
+        // selection-revealed controls below), so watching it move during
+        // playback doesn't require every layer to be selected first. Absent
+        // entirely for a row with nothing to measure (see RowData::
+        // loudnessDisplayText's own docs) - the same "no dead placeholder
+        // UI" precedent the lock icon/drag handle pair already follow.
+        if (!data.loudnessDisplayText.isEmpty()) {
+            loudnessLabel_ = new QLabel(data.loudnessDisplayText);
+            loudnessLabel_->setObjectName(QStringLiteral("loudnessLabel"));
+            loudnessLabel_->setStyleSheet(QStringLiteral("color: #a0a0a0; font-size: 9px;"));
+            loudnessLabel_->setToolTip(
+                tr("This layer's own loudness - live during Playback/Loop, average/peak while stopped"));
+            header->addWidget(loudnessLabel_);
+        }
+
         if (isSelected && !locked) {
             // Duplicate/Delete are two more of the redesign's own
             // "revealed once selected" controls - see the class docs.
@@ -499,8 +515,18 @@ signals:
     void cleanUpPhaseRequested(sound_mind::core::LayerId id);
     void selected(sound_mind::core::LayerId id);
 
+public:
+    /// @brief This row's own loudness indicator label, if it has one - see
+    ///        RowData::loudnessDisplayText's own docs on which rows don't.
+    ///        `LayersPanel::rebuildRows()` reads this right after
+    ///        construction to populate `loudnessLabels_`, so a later
+    ///        setLiveLoudnessDisplay() call can reach it directly.
+    /// @return That label, or `nullptr` if this row has none.
+    [[nodiscard]] QLabel* loudnessLabel() const { return loudnessLabel_; }
+
 private:
     sound_mind::core::LayerId id_;
+    QLabel* loudnessLabel_ = nullptr;
 };
 
 /// @brief A smaller, non-interactive, visually indented "child" row shown
@@ -657,6 +683,14 @@ void LayersPanel::setDisallowedLayers(const std::vector<sound_mind::core::LayerI
     rebuildRows();
 }
 
+void LayersPanel::setLiveLoudnessDisplay(sound_mind::core::LayerId id, const QString& text) {
+    const auto found = loudnessLabels_.find(id);
+    if (found == loudnessLabels_.end()) {
+        return;
+    }
+    found->second->setText(text);
+}
+
 void LayersPanel::rebuildRows() {
     // QListWidget::clear() deletes the QListWidgetItems but *not* the
     // LayerRowWidgets set via setItemWidget() on them (a real, easy-to-miss
@@ -683,6 +717,9 @@ void LayersPanel::rebuildRows() {
         }
     }
     list_->clear();
+    // Repopulated below as each row is (re)built - see setLiveLoudnessDisplay()'s
+    // own docs on why a stale entry here is never a real concern.
+    loudnessLabels_.clear();
     for (auto it = currentRows_.rbegin(); it != currentRows_.rend(); ++it) {
         const bool selected = selectedLayerId_.has_value() && *selectedLayerId_ == it->id;
 
@@ -701,6 +738,10 @@ void LayersPanel::rebuildRows() {
         // constant every row used before the redesign.
         item->setSizeHint(row->sizeHint());
         list_->setItemWidget(item, row);
+
+        if (QLabel* label = row->loudnessLabel()) {
+            loudnessLabels_[it->id] = label;
+        }
 
         connect(row, &LayerRowWidget::visibilityCycleRequested, this, &LayersPanel::visibilityCycleRequested);
         connect(row, &LayerRowWidget::opacityChanged, this, &LayersPanel::opacityChanged);

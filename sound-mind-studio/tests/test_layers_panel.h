@@ -58,4 +58,10 @@ private slots:
     void aRowsThumbnailIsShownWhenGivenAndAPlainBackgroundWhenNot();
     void mindWaveChildRowAppearsOnlyWhenBoundAndAPreviewImageExists();
     void mindWaveChildRowDisappearsWhenTheBindingIsCleared();
+
+    // Per-layer loudness indicator (v0.Y.52.1, Analysis Tools v1).
+    void aRowsLoudnessLabelShowsItsOwnLoudnessDisplayTextWhenNonEmpty();
+    void aRowWithNoLoudnessDisplayTextHasNoLoudnessLabelAtAll();
+    void setLiveLoudnessDisplayUpdatesOnlyTheGivenRowsLabelWithoutARebuild();
+    void setLiveLoudnessDisplayIsANoOpForAnUnknownId();
 };

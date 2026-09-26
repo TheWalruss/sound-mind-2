@@ -835,3 +835,61 @@ void LayersPanelTest::mindWaveChildRowDisappearsWhenTheBindingIsCleared() {
 
     QVERIFY(panel.findChild<QLabel*>(QStringLiteral("mindWaveNameLabel")) == nullptr);
 }
+
+void LayersPanelTest::aRowsLoudnessLabelShowsItsOwnLoudnessDisplayTextWhenNonEmpty() {
+    auto rows = twoNormalLayers();
+    rows[0].loudnessDisplayText = QStringLiteral("avg -18.0 dB / peak -6.0 dB");
+
+    LayersPanel panel;
+    panel.setLayers(rows);
+
+    auto* label = panel.findChild<QLabel*>(QStringLiteral("loudnessLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("avg -18.0 dB / peak -6.0 dB"));
+}
+
+void LayersPanelTest::aRowWithNoLoudnessDisplayTextHasNoLoudnessLabelAtAll() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());  // Neither row sets loudnessDisplayText - default-empty.
+
+    QVERIFY(panel.findChild<QLabel*>(QStringLiteral("loudnessLabel")) == nullptr);
+}
+
+void LayersPanelTest::setLiveLoudnessDisplayUpdatesOnlyTheGivenRowsLabelWithoutARebuild() {
+    auto rows = twoNormalLayers();
+    rows[0].loudnessDisplayText = QStringLiteral("avg -18.0 dB / peak -6.0 dB");  // "Bottom", id 1.
+    rows[1].loudnessDisplayText = QStringLiteral("avg -30.0 dB / peak -20.0 dB");  // "Top", id 2.
+
+    LayersPanel panel;
+    panel.setLayers(rows);
+    auto* nameLabelBefore = panel.findChildren<QLabel*>(QStringLiteral("nameLabel")).at(1);  // "Bottom"'s own row.
+
+    panel.setLiveLoudnessDisplay(LayerId{1}, QStringLiteral("-12.5 dB"));
+
+    const auto loudnessLabels = panel.findChildren<QLabel*>(QStringLiteral("loudnessLabel"));
+    QCOMPARE(loudnessLabels.size(), 2);
+    // "Bottom" (id 1, displayed second - see twoNormalLayers()' own docs)
+    // shows the live override; "Top" (id 2) is untouched.
+    QCOMPARE(loudnessLabels.at(1)->text(), QStringLiteral("-12.5 dB"));
+    QCOMPARE(loudnessLabels.at(0)->text(), QStringLiteral("avg -30.0 dB / peak -20.0 dB"));
+
+    // No rebuild happened - the exact same nameLabel widget instance is
+    // still there, not a fresh one from a rebuildRows() call setLiveLoudnessDisplay()'s
+    // own docs promise never happens.
+    auto* nameLabelAfter = panel.findChildren<QLabel*>(QStringLiteral("nameLabel")).at(1);
+    QCOMPARE(nameLabelAfter, nameLabelBefore);
+}
+
+void LayersPanelTest::setLiveLoudnessDisplayIsANoOpForAnUnknownId() {
+    auto rows = twoNormalLayers();
+    rows[0].loudnessDisplayText = QStringLiteral("avg -18.0 dB / peak -6.0 dB");
+
+    LayersPanel panel;
+    panel.setLayers(rows);
+
+    panel.setLiveLoudnessDisplay(LayerId{999}, QStringLiteral("-1.0 dB"));  // No such row - should do nothing.
+
+    auto* label = panel.findChild<QLabel*>(QStringLiteral("loudnessLabel"));
+    QVERIFY(label != nullptr);
+    QCOMPARE(label->text(), QStringLiteral("avg -18.0 dB / peak -6.0 dB"));
+}

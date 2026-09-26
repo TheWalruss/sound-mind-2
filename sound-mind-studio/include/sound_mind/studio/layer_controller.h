@@ -401,6 +401,51 @@ public:
     /// @param config What to generate.
     void addGeneratedLayer(const sound_mind::core::GeneratorConfiguration& config);
 
+    /**
+     * @brief Updates every layer's own live loudness display in the Layers
+     *        Panel - `docs/sound-mind-design.md`'s per-layer loudness
+     *        indicator (`v0.Y.52.1`, Analysis Tools v1). `MainWindow`'s own
+     *        `PlaybackController::positionChanged()` handler calls this at
+     *        that signal's own ~30fps cadence while Playback/Loop is
+     *        active - the "live per-layer dB during Playback/Loop" and "the
+     *        value at the playback position when paused" cases from the
+     *        roadmap's own wording share this one call, since a paused
+     *        transport simply stops calling it, leaving the label frozen at
+     *        its own last-shown value (matching how the playhead/position
+     *        bar already freeze the same way while paused).
+     *
+     * For each layer with content, reuses that layer's own cached
+     * loudness profile (see refreshLayersPanel()'s own docs on this cache)
+     * to look up its value at `playheadFraction` via
+     * `sound_mind::core::loudnessAtProjectColumn()`, and pushes the
+     * formatted result straight into `LayersPanel::setLiveLoudnessDisplay()` -
+     * which updates only that one row's own label, not a full rebuild (see
+     * its own docs on why that distinction matters at this call rate). A
+     * no-op if no project is set.
+     *
+     * @param playheadFraction The current playback position, as a fraction
+     *        of the total loaded duration, in `[0, 1]` - the same fraction
+     *        `CanvasWidget::setPlayheadFraction()` is given.
+     */
+    void updateLoudnessDisplays(double playheadFraction);
+
+    /**
+     * @brief Resets every layer's own loudness display in the Layers Panel
+     *        back to its "stopped" value (average/peak over the whole
+     *        layer) - `MainWindow::stopPlayback()`'s own cue that the
+     *        transport just stopped, per the roadmap's own "average/peak
+     *        over the whole layer when stopped" wording. A no-op if no
+     *        project is set.
+     *
+     * A thin call-through to refreshLayersPanel() - stop is a rare,
+     * one-off event (unlike updateLoudnessDisplays()'s own ~30fps call
+     * rate), so a full row rebuild here costs nothing worth avoiding, and
+     * this spares every call site from separately re-deriving the exact
+     * same "stopped" text refreshLayersPanel() already computes for every
+     * row's own RowData::loudnessDisplayText.
+     */
+    void resetLoudnessDisplaysToStoppedValue();
+
     /// @brief Reacts to the Layers Panel's own selection changing -
     ///        keeps `FilterConfigurationPanel` in sync. Loads the newly
     ///        selected layer's own configuration, in the right display
@@ -536,6 +581,28 @@ private:
     /// @return That layer's own thumbnail, or a null `QImage`.
     [[nodiscard]] QImage thumbnailFor(const sound_mind::core::Layer& layer);
 
+    /// @brief `layer`'s own loudness profile (`sound_mind::core::
+    ///        computeLoudnessProfile()`) - `loudnessProfileCache_`'s cached
+    ///        result if one exists, or a freshly computed one (cached for
+    ///        next time) otherwise. Empty for a layer with no content at
+    ///        all - never cached, mirroring thumbnailFor()'s own docs, so a
+    ///        later `setContent()` on the same layer id computes a real
+    ///        profile the next time this is asked for it.
+    /// @param layer The layer to get a loudness profile for.
+    /// @return That layer's own loudness profile, or empty.
+    [[nodiscard]] const std::vector<float>& loudnessProfileFor(const sound_mind::core::Layer& layer);
+
+    /// @brief `layer`'s own loudness indicator text for the current
+    ///        "stopped" state (average/peak over the whole layer) - shared
+    ///        by refreshLayersPanel() (every row's own
+    ///        RowData::loudnessDisplayText) and
+    ///        resetLoudnessDisplaysToStoppedValue() (by way of that same
+    ///        refresh). Empty for a layer with no content at all - see
+    ///        loudnessProfileFor()'s own docs.
+    /// @param layer The layer to describe.
+    /// @return The formatted indicator text, or empty.
+    [[nodiscard]] QString stoppedLoudnessTextFor(const sound_mind::core::Layer& layer);
+
     CanvasWidget* canvas_;
     PlaybackController* playbackController_;
     LayersPanel* layersPanel_;
@@ -552,6 +619,10 @@ private:
     ///        correctness - a stale entry for a since-deleted id is simply
     ///        never looked up again).
     std::unordered_map<sound_mind::core::LayerId, QImage> thumbnailCache_;
+
+    /// @brief See loudnessProfileFor()'s own docs - discarded per-id the
+    ///        same way, same call sites, as thumbnailCache_.
+    std::unordered_map<sound_mind::core::LayerId, std::vector<float>> loudnessProfileCache_;
 };
 
 }  // namespace sound_mind::studio
