@@ -78,4 +78,14 @@ private slots:
     void selectionHighlightShowsWithPickToolActive();
     void selectionHighlightHidesAgainOnceSwitchingAwayFromSelectOrPick();
     void selectionBoundaryHighlightAlsoHidesWhenNeitherPickNorSelectIsActive();
+
+    // Sound Flower (v0.Y.53.1).
+    void polarModeDefaultsToFalse();
+    void setPolarModeChangesPolarMode();
+    void polarModeCentrePointConvertsToTimeZeroAndTheLowestFrequency();
+    void polarModeTopEdgeConvertsToTimeZeroAndTheHighestFrequency();
+    void polarModeAQuarterTurnClockwiseConvertsToAQuarterOfTheWayThroughTime();
+    void polarModeOutsideTheDiskConvertsToNullopt();
+    void polarModePaintPressInsideTheDiskEmitsPaintStrokeStarted();
+    void polarModePaintPressOutsideTheDiskEmitsNothing();
 };

@@ -168,6 +168,31 @@ toolbar buttons):
   modifiers (Ctrl/Alt/Shift). An unmodified wheel scrolls the canvas
   instead, once it's larger than the visible area.
 
+### Sound Flower (Polar View)
+
+**View → Sound Flower** (`Ctrl+Alt+F`) is a checkable action that projects
+the canvas onto a circular disk instead of the familiar flat rectangle -
+time wraps around the ring (twelve o'clock = the very start, advancing
+clockwise) and frequency radiates outward from the centre (lowest at the
+centre, highest at the outer edge). It's purely a different way of looking
+at, and working with, the exact same data - toggling it never modifies
+your project, and it isn't saved with it (a project always opens back in
+flat view).
+
+Every paint tool, Pick, Selection, Path, and Chord Stamp still work while
+Sound Flower is active - clicks and drags are automatically translated
+between the disk and the same underlying canvas coordinates flat view
+uses, so a stroke painted on the flower lands in exactly the same place a
+stroke painted on the flat view would. The playback position indicator
+becomes a rotating ray from the centre instead of a moving vertical line.
+
+A few things are hidden while Sound Flower is active, rather than drawn
+incorrectly: Overlay Grids, the Chord Overlay, Axis Labels, Show bounding
+boxes/path geometry, the MindWave preview, and a Rectangle-shaped Pick or
+Selection's own highlight box (a Lasso selection's own curve still shows
+correctly). Snap to Grid is also suspended while it's active. All of this
+returns the moment you switch back to flat view.
+
 ## Importing Media
 
 ### Importing Audio
@@ -1432,6 +1457,15 @@ meter for each of loudness/mastering, pitch/vocal, stereo/phase, spectral
 health, and criticality/pattern, plus output audio normalization toward a
 configured target loudness in Configure Devices - is still future work;
 only the one loudness/mastering meter above actually exists so far.
+
+**Sound Flower** (see [Canvas Navigation](#canvas-navigation) above) now
+has its polar canvas view - toggle it, paint, pick, select, or place path
+nodes and chord stamps exactly as in flat view. Overlay Grids, the Chord
+Overlay, Axis Labels, bounding-box/path-geometry display, the MindWave
+preview, and a Rectangle-shaped Pick/Selection highlight are hidden while
+it's active rather than drawn incorrectly - their own polar-aware redraw
+is still future work, as is polar-form image import (unwarping an
+already-circular source image back to rectangular).
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:

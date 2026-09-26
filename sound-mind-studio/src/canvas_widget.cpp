@@ -1,6 +1,7 @@
 #include "sound_mind/studio/canvas_widget.h"
 
 #include <algorithm>
+#include <cmath>
 #include <optional>
 
 #include <QColor>
@@ -14,6 +15,7 @@
 #include <QWheelEvent>
 
 #include "sound_mind/codec/color_mapping.h"
+#include "sound_mind/codec/polar_projection.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
@@ -24,6 +26,9 @@ namespace sound_mind::studio {
 
 namespace {
 const QSize kFallbackSize(400, 300);
+
+// Sound Flower (v0.Y.53.1) - see CanvasWidget::setPolarMode()'s own docs.
+constexpr double kTwoPi = 6.283185307179586;
 
 // Canvas Navigation's own Zoom feature (docs/sound-mind-design.md) - see
 // CanvasWidget::enterManualZoom()'s own docs for how these are used.
@@ -96,6 +101,14 @@ void CanvasWidget::setProject(const sound_mind::core::Project* project) {
 
 void CanvasWidget::setPlayheadFraction(std::optional<double> fraction) {
     playheadFraction_ = fraction;
+    update();
+}
+
+void CanvasWidget::setPolarMode(bool enabled) {
+    if (polarMode_ == enabled) {
+        return;
+    }
+    polarMode_ = enabled;
     update();
 }
 
@@ -313,11 +326,22 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
 
     if (project_ != nullptr) {
         if (const auto rendered = renderComposite(*project_); rendered.has_value()) {
-            painter.drawImage(rect(), toQImageView(*rendered));
+            if (polarMode_) {
+                // Sound Flower (v0.Y.53.1) - see setPolarMode()'s own docs.
+                const QRectF disk = polarDiskRect();
+                const auto diameter = static_cast<std::uint32_t>(disk.width());
+                const auto polarImage = sound_mind::codec::rectToPolar(*rendered, diameter);
+                painter.drawImage(disk, toQImageView(polarImage));
+            } else {
+                painter.drawImage(rect(), toQImageView(*rendered));
+            }
         } else {
             // No layer has any content at all yet - fall back to the
             // placeholder that stood in for the whole canvas before
-            // Import existed.
+            // Import existed. Drawn in flat coordinates even while
+            // polarMode() is true - there's no real content yet to show a
+            // flower of, matching setPolarMode()'s own "never a separate
+            // copy of the data" framing (nothing to project).
             const QRect canvasRect(0, 0, static_cast<int>(project_->settings().canvasWidth),
                                     static_cast<int>(project_->settings().canvasHeight));
             painter.fillRect(canvasRect.intersected(rect()), QColor(40, 40, 40));
@@ -325,34 +349,43 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
             painter.drawRect(canvasRect.adjusted(0, 0, -1, -1));
         }
 
-        if (showBoundingBoxes_ || showPathGeometry_) {
-            drawOperationOverlays(painter);
-        }
+        // Every overlay below this point is built from straight lines
+        // between a handful of corner points (a rectangle's four corners,
+        // a grid line's two endpoints) - suppressed entirely while
+        // polarMode() is true rather than drawn as a misleading chord or
+        // quadrilateral across the disk instead of the curved shape the
+        // underlying geometry actually has. See setPolarMode()'s own docs.
+        if (!polarMode_) {
+            if (showBoundingBoxes_ || showPathGeometry_) {
+                drawOperationOverlays(painter);
+            }
 
-        // Overlay Grids (see setFrequencyGridConfig()'s/
-        // setTimingGridConfig()'s own docs) - drawn over the rendered
-        // content but under every interactive overlay below (the live
-        // paint preview, Pick/Selection highlights), the same "a
-        // reference aid the artist paints against, not a foreground
-        // element" ordering the design doc's own "purely a display aid"
-        // framing implies.
-        drawGrid(painter);
+            // Overlay Grids (see setFrequencyGridConfig()'s/
+            // setTimingGridConfig()'s own docs) - drawn over the rendered
+            // content but under every interactive overlay below (the live
+            // paint preview, Pick/Selection highlights), the same "a
+            // reference aid the artist paints against, not a foreground
+            // element" ordering the design doc's own "purely a display aid"
+            // framing implies.
+            drawGrid(painter);
 
-        // Chord Overlay (see setChordPreview()'s own docs) - same
-        // reference-aid ordering as Overlay Grids above, drawn right after
-        // them so both sets of reference lines sit together, under every
-        // interactive overlay.
-        drawChordPreview(painter);
+            // Chord Overlay (see setChordPreview()'s own docs) - same
+            // reference-aid ordering as Overlay Grids above, drawn right
+            // after them so both sets of reference lines sit together,
+            // under every interactive overlay.
+            drawChordPreview(painter);
 
-        // MindWave Preview (see setMindWavePreview()'s own docs) - a
-        // semi-transparent grayscale overlay, same ordering reasoning as
-        // Overlay Grids above (a display aid over the content, under any
-        // interactive overlay). setOpacity() is reset immediately after -
-        // nothing else drawn below should inherit it.
-        if (!mindWavePreviewImage_.isNull()) {
-            painter.setOpacity(0.5);
-            painter.drawImage(rect(), mindWavePreviewImage_);
-            painter.setOpacity(1.0);
+            // MindWave Preview (see setMindWavePreview()'s own docs) - a
+            // semi-transparent grayscale overlay, same ordering reasoning
+            // as Overlay Grids above (a display aid over the content,
+            // under any interactive overlay). setOpacity() is reset
+            // immediately after - nothing else drawn below should inherit
+            // it.
+            if (!mindWavePreviewImage_.isNull()) {
+                painter.setOpacity(0.5);
+                painter.drawImage(rect(), mindWavePreviewImage_);
+                painter.setOpacity(1.0);
+            }
         }
     }
 
@@ -360,11 +393,23 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     // whatever the canvas otherwise shows - independent of project_/layer
     // state, matching video export's own playhead line
     // (sound_mind::codec::exportVideo()) so live playback and an exported
-    // video look the same.
+    // video look the same. In polar mode, a rotating ray from the disk's
+    // own centre (clockwise from twelve o'clock) replaces the moving
+    // vertical line - still a single well-defined position either way,
+    // unlike the corner/endpoint-based overlays suppressed above.
     if (playheadFraction_.has_value()) {
-        const int x = static_cast<int>(*playheadFraction_ * rect().width());
         painter.setPen(QPen(Qt::white, 1));
-        painter.drawLine(x, 0, x, rect().height());
+        if (polarMode_) {
+            const QRectF disk = polarDiskRect();
+            const double radius = disk.width() / 2.0;
+            const double theta = *playheadFraction_ * kTwoPi;
+            const QPointF edge(disk.center().x() + radius * std::sin(theta),
+                                disk.center().y() - radius * std::cos(theta));
+            painter.drawLine(disk.center(), edge);
+        } else {
+            const int x = static_cast<int>(*playheadFraction_ * rect().width());
+            painter.drawLine(x, 0, x, rect().height());
+        }
     }
 
     // The live paint-stroke preview (v0.Y.24.1, Basic Painting) - see
@@ -403,7 +448,8 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     // the one most visibly wrong while dragging down and to the right).
     // The live preview itself already shows the object's current extent
     // more accurately than this rectangle ever could mid-drag.
-    if (project_ != nullptr && pickSelectionBounds_.has_value() && paintPreviewPath_.nodes().empty()) {
+    if (!polarMode_ && project_ != nullptr && pickSelectionBounds_.has_value() &&
+        paintPreviewPath_.nodes().empty()) {
         painter.setPen(QPen(Qt::white, 2));
         painter.drawRect(widgetRectFor(*pickSelectionBounds_));
     }
@@ -431,12 +477,15 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         boundaryPath.closeSubpath();
         painter.setPen(QPen(Qt::green, 2));
         painter.drawPath(boundaryPath);
-    } else if (project_ != nullptr && selectionToolActive && selectionBounds_.has_value()) {
+    } else if (!polarMode_ && project_ != nullptr && selectionToolActive && selectionBounds_.has_value()) {
         // A Mask-shaped selection (Wand, or any boolean-combined result -
         // see setSelectionHasMaskShape()'s own docs) has no single curve to
         // draw - a dashed pen distinguishes "the real shape is somewhere
         // inside this box, not exactly this box" from a real Rectangle
-        // selection's own solid outline.
+        // selection's own solid outline. Suppressed in polar mode (see
+        // setPolarMode()'s own docs) - a Lasso's own curve (above) still
+        // draws correctly there, since it's built point-wise rather than
+        // from this rectangle's own four corners.
         painter.setPen(QPen(Qt::green, 2, selectionHasMaskShape_ ? Qt::DashLine : Qt::SolidLine));
         painter.drawRect(widgetRectFor(*selectionBounds_));
     }
@@ -447,7 +496,8 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     // handles elsewhere already use, connected back to the selection's
     // own center with a thin line so the handle doesn't read as an
     // unrelated, floating mark.
-    if (project_ != nullptr && selectionRotationHandle_.has_value() && selectionBounds_.has_value()) {
+    if (!polarMode_ && project_ != nullptr && selectionRotationHandle_.has_value() &&
+        selectionBounds_.has_value()) {
         constexpr double kRotationHandleRadius = 4.0;
         const QPointF handlePoint = timeFrequencyToWidgetPoint(*selectionRotationHandle_);
         const QPointF centerPoint = widgetRectFor(*selectionBounds_).center();
@@ -462,7 +512,8 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     // setHorizontalAxisLabelMode()'s own docs) - drawn last, over
     // everything else, the same "always legible" precedent the playhead
     // and every Pick/Selection highlight above already established.
-    if (project_ != nullptr) {
+    // Suppressed in polar mode - see setPolarMode()'s own docs.
+    if (!polarMode_ && project_ != nullptr) {
         drawAxisLabels(painter);
     }
 }
@@ -789,6 +840,13 @@ void CanvasWidget::mouseReleaseEvent(QMouseEvent* event) {
     QWidget::mouseReleaseEvent(event);
 }
 
+QRectF CanvasWidget::polarDiskRect() const {
+    const double side = std::min(rect().width(), rect().height());
+    const double x = (rect().width() - side) / 2.0;
+    const double y = (rect().height() - side) / 2.0;
+    return QRectF(x, y, side, side);
+}
+
 std::optional<sound_mind::core::TimeFrequencyPoint> CanvasWidget::widgetPointToTimeFrequency(QPointF point) const {
     if (project_ == nullptr || rect().width() <= 0 || rect().height() <= 0) {
         return std::nullopt;
@@ -796,16 +854,42 @@ std::optional<sound_mind::core::TimeFrequencyPoint> CanvasWidget::widgetPointToT
     const auto& settings = project_->settings();
     const auto config = sound_mind::core::streamCodecConfigFor(settings);
 
-    // Bin index rises bottom-to-top on screen, not top-to-bottom - see
-    // this method's own docs (and color_mapping.cpp's toRgbImage(), the
-    // actual rendered image's "row 0 = highest frequency"/highest bin
-    // convention this has to match). Flipping here, rather than changing
-    // frequencyToBinIndex()/binIndexToFrequency() themselves, keeps those
-    // shared with paint_application.cpp's own frequency-domain math,
-    // which has no notion of screen pixels at all.
-    const double frameIndex = point.x() * static_cast<double>(settings.canvasWidth) / rect().width();
-    const double binIndex =
-        static_cast<double>(settings.binCount) - (point.y() * static_cast<double>(settings.binCount) / rect().height());
+    double frameIndex = 0.0;
+    double binIndex = 0.0;
+
+    if (polarMode_) {
+        // See setPolarMode()'s own docs on the polar convention: theta = 0
+        // at twelve o'clock, increasing clockwise, one full revolution
+        // covering the entire canvas width; r = 0 at the centre (lowest
+        // bin), the disk's own outer edge (the highest bin) - the exact
+        // inverse of sound_mind::codec::rectToPolar()'s own forward
+        // mapping.
+        const QRectF disk = polarDiskRect();
+        const double radius = disk.width() / 2.0;
+        const double dx = point.x() - disk.center().x();
+        const double dy = point.y() - disk.center().y();
+        const double r = std::sqrt(dx * dx + dy * dy);
+        if (radius <= 0.0 || r > radius) {
+            return std::nullopt;  // Outside the disk - see this method's own docs.
+        }
+        double theta = std::atan2(dx, -dy);
+        if (theta < 0.0) {
+            theta += kTwoPi;
+        }
+        frameIndex = static_cast<double>(settings.canvasWidth) * theta / kTwoPi;
+        binIndex = static_cast<double>(settings.binCount) * (r / radius);
+    } else {
+        // Bin index rises bottom-to-top on screen, not top-to-bottom - see
+        // this method's own docs (and color_mapping.cpp's toRgbImage(), the
+        // actual rendered image's "row 0 = highest frequency"/highest bin
+        // convention this has to match). Flipping here, rather than
+        // changing frequencyToBinIndex()/binIndexToFrequency() themselves,
+        // keeps those shared with paint_application.cpp's own frequency-
+        // domain math, which has no notion of screen pixels at all.
+        frameIndex = point.x() * static_cast<double>(settings.canvasWidth) / rect().width();
+        binIndex = static_cast<double>(settings.binCount) -
+                   (point.y() * static_cast<double>(settings.binCount) / rect().height());
+    }
 
     sound_mind::core::TimeFrequencyPoint result;
     result.timeSeconds = sound_mind::core::frameIndexToTime(frameIndex, config);
@@ -823,8 +907,20 @@ QPointF CanvasWidget::timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequency
     const double frameIndex = sound_mind::core::timeToFrameIndex(point.timeSeconds, config);
     const double binIndex = sound_mind::core::frequencyToBinIndex(static_cast<float>(point.frequencyHz), config);
 
-    // The exact inverse of widgetPointToTimeFrequency()'s own flip - see
-    // its comment above.
+    if (polarMode_) {
+        // The exact inverse of widgetPointToTimeFrequency()'s own polar
+        // branch - see its comment above.
+        const QRectF disk = polarDiskRect();
+        const double radius = disk.width() / 2.0;
+        const double theta = kTwoPi * frameIndex / static_cast<double>(settings.canvasWidth);
+        const double r = radius * (binIndex / static_cast<double>(settings.binCount));
+        const double x = disk.center().x() + r * std::sin(theta);
+        const double y = disk.center().y() - r * std::cos(theta);
+        return QPointF(x, y);
+    }
+
+    // The exact inverse of widgetPointToTimeFrequency()'s own flat-mode
+    // flip - see its comment above.
     const double x = frameIndex * rect().width() / static_cast<double>(settings.canvasWidth);
     const double y =
         (static_cast<double>(settings.binCount) - binIndex) * rect().height() / static_cast<double>(settings.binCount);

@@ -8,6 +8,7 @@ add_executable(sound-mind-codec-tests
     test_wav_file.cpp
     test_color_mapping.cpp
     test_rgb_image_resample.cpp
+    test_polar_projection.cpp
     test_pool_codec.cpp
     test_pool_file.cpp
     test_audio_export.cpp

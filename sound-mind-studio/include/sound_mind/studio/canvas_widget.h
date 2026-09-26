@@ -112,6 +112,49 @@ public:
     void setPlayheadFraction(std::optional<double> fraction);
 
     /**
+     * @brief Enables or disables the Sound Flower polar view -
+     *        `docs/sound-mind-design.md`'s "Polar Coordinates (Sound
+     *        Flower)", `docs/sound-mind-roadmap.md`'s `v0.Y.53.1`.
+     *
+     * A pure display/interaction toggle over the exact same project data -
+     * never a separate copy, and never persisted (a fresh project always
+     * opens in flat view, matching the legacy Python Studio's own
+     * precedent). While enabled: paintEvent() draws the composited canvas
+     * projected onto a circular disk (`sound_mind::codec::rectToPolar()`)
+     * instead of the flat rectangle, sized to the largest square that fits
+     * the widget's own current `rect()`, centred - independent of
+     * zoomTime_/zoomFrequency_ (a circular flower has no meaningful
+     * separate horizontal/vertical zoom axis the way the flat view does:
+     * one full revolution always covers the *entire* canvas width,
+     * regardless of the flat view's own current time-zoom level).
+     * widgetPointToTimeFrequency()/timeFrequencyToWidgetPoint() both
+     * become polar-aware too, so every paint/pick/select/path/chord-stamp
+     * gesture - and the live paint-stroke preview - keeps working exactly
+     * as it does in flat view, inverse-mapped through the disk instead
+     * (points outside the disk convert to `std::nullopt`, matching a
+     * flat-mode click outside the canvas). Every other overlay (Overlay
+     * Grids, Chord Overlay, Axis Labels, Show bounding boxes/path
+     * geometry, the MindWave preview, a Rectangle-shaped Pick/Selection
+     * highlight and its own rotate handle) is suppressed while active
+     * rather than drawn incorrectly - each is built from straight lines
+     * between a handful of corner points, which would render as a
+     * misleading chord or quadrilateral cutting across the disk rather
+     * than the curved shape the underlying geometry actually has; a
+     * proper polar-aware redraw for each is real, separate future work
+     * (see `docs/sound-mind-architecture.md`'s Decision on this
+     * installment). The playhead (setPlayheadFraction()) becomes a
+     * rotating ray from the disk's own centre instead of a moving
+     * vertical line - still a single, well-defined point either way.
+     *
+     * @param enabled Whether polar view should be active.
+     */
+    void setPolarMode(bool enabled);
+
+    /// @brief Whether the Sound Flower polar view is currently active.
+    /// @return `true` if enabled; `false` (flat view) by default.
+    [[nodiscard]] bool polarMode() const noexcept { return polarMode_; }
+
+    /**
      * @brief Sets which kind of mouse interaction the canvas currently
      *        accepts.
      *
@@ -738,16 +781,28 @@ private:
     ///        Accounts for the rendered image's own top-is-highest-
     ///        frequency convention (`color_mapping.cpp`'s `toRgbImage()`),
     ///        so a point over a visible feature on screen converts to the
-    ///        same bin that feature actually lives in.
+    ///        same bin that feature actually lives in. **While
+    ///        polarMode() is `true`**, `point` is instead interpreted as a
+    ///        position on the polar disk (see setPolarMode()'s own docs) -
+    ///        `std::nullopt` for any point outside it, matching a flat-mode
+    ///        click outside the canvas.
     /// @param point The widget-local pixel position.
-    /// @return The converted point, or `std::nullopt` if no project is set.
+    /// @return The converted point, or `std::nullopt` if no project is
+    ///         set, or (polar mode only) `point` falls outside the disk.
     [[nodiscard]] std::optional<sound_mind::core::TimeFrequencyPoint> widgetPointToTimeFrequency(
         QPointF point) const;
 
     /// @brief The inverse of widgetPointToTimeFrequency() - converts a
     ///        time/frequency point back into widget-local pixels, for
-    ///        drawing the live preview path.
+    ///        drawing the live preview path. Polar-aware the same way its
+    ///        own inverse is - see setPolarMode()'s own docs.
     [[nodiscard]] QPointF timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint point) const;
+
+    /// @brief The Sound Flower disk's own widget-space rect while
+    ///        polarMode() is `true` - the largest square that fits
+    ///        `rect()`, centred. See setPolarMode()'s own docs.
+    /// @return The disk's bounding square.
+    [[nodiscard]] QRectF polarDiskRect() const;
 
     /// @brief Draws every active `PaintOperation` targeting the displayed
     ///        layer's own bounding box and/or Path geometry, per
@@ -820,6 +875,8 @@ private:
 
     const sound_mind::core::Project* project_ = nullptr;
     std::optional<double> playheadFraction_;
+    /// @brief See setPolarMode()'s own docs.
+    bool polarMode_ = false;
     ToolMode toolMode_ = ToolMode::None;
     bool paintStrokeActive_ = false;
     bool pickStrokeActive_ = false;

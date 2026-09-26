@@ -570,13 +570,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // slot re-reads all three off gridPanel_ itself and re-applies them
     // to both controllers, rather than three separate slots each only
     // updating one piece of state the other two calls already hold.
-    const auto applyGridSnapping = [this]() {
-        toolPaletteController_->setGridSnapping(gridPanel_->snapToGridEnabled(), gridPanel_->frequencyGridConfig(),
-                                                 gridPanel_->timingGridConfig());
-    };
-    connect(gridPanel_, &GridPanel::snapToGridChanged, this, applyGridSnapping);
-    connect(gridPanel_, &GridPanel::frequencyGridConfigChanged, this, applyGridSnapping);
-    connect(gridPanel_, &GridPanel::timingGridConfigChanged, this, applyGridSnapping);
+    connect(gridPanel_, &GridPanel::snapToGridChanged, this, &MainWindow::applyGridSnapping);
+    connect(gridPanel_, &GridPanel::frequencyGridConfigChanged, this, &MainWindow::applyGridSnapping);
+    connect(gridPanel_, &GridPanel::timingGridConfigChanged, this, &MainWindow::applyGridSnapping);
 
     filterConfigurationPanel_ = new FilterConfigurationPanel(this);
     filterConfigurationPanel_->hide();
@@ -945,6 +941,20 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         hardwareAccelerationAction->setChecked(hardwareAccelerationEnabled);
     }
     connect(hardwareAccelerationAction, &QAction::toggled, this, &MainWindow::setHardwareAccelerationEnabled);
+
+    // Sound Flower (v0.Y.53.1) - a polar-coordinate view over the exact
+    // same canvas data (see CanvasWidget::setPolarMode()'s own docs).
+    // Not persisted (unlike Hardware Acceleration above) - a fresh project
+    // always opens in flat view, matching the legacy Python Studio's own
+    // precedent.
+    QAction* soundFlowerAction = viewMenu->addAction(tr("Sound &Flower"));
+    soundFlowerAction->setCheckable(true);
+    soundFlowerAction->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F));
+    soundFlowerAction->setToolTip(
+        tr("Display the spectrogram as a Sound Flower - a polar coordinate\n"
+           "projection where time wraps around the ring and frequency radiates\n"
+           "outward from the centre. Painting works in polar mode."));
+    connect(soundFlowerAction, &QAction::toggled, this, &MainWindow::setSoundFlowerModeEnabled);
 
     // Workflow & Device Polish, Installment D: Documentation links
     // (v0.0.42.4) - each link is reachable from both the Help menu and the
@@ -2974,6 +2984,20 @@ void MainWindow::setHardwareAccelerationEnabled(bool enabled) {
     settings_.setValue(QStringLiteral("hardwareAccelerationEnabled"), enabled);
     sound_mind::core::setHardwareAccelerationEnabled(enabled);
     canvas_->update();
+}
+
+void MainWindow::setSoundFlowerModeEnabled(bool enabled) {
+    canvas_->setPolarMode(enabled);
+    applyGridSnapping();
+    if (enabled) {
+        statusBar()->showMessage(tr("Sound Flower - polar view active"), 3000);
+    }
+}
+
+void MainWindow::applyGridSnapping() {
+    toolPaletteController_->setGridSnapping(
+        gridPanel_->snapToGridEnabled() && !canvas_->polarMode(), gridPanel_->frequencyGridConfig(),
+        gridPanel_->timingGridConfig());
 }
 
 void MainWindow::setPlaybackRepeat(bool enabled) {

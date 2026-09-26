@@ -1467,3 +1467,149 @@ void CanvasWidgetTest::chordPreviewHidesAgainOnceNeitherConditionHolds() {
 
     QCOMPARE(widget.grab().toImage(), hidden);
 }
+
+void CanvasWidgetTest::polarModeDefaultsToFalse() {
+    CanvasWidget widget;
+    QCOMPARE(widget.polarMode(), false);
+}
+
+void CanvasWidgetTest::setPolarModeChangesPolarMode() {
+    CanvasWidget widget;
+    widget.setPolarMode(true);
+    QCOMPARE(widget.polarMode(), true);
+    widget.setPolarMode(false);
+    QCOMPARE(widget.polarMode(), false);
+}
+
+namespace {
+
+/// @brief Sends `pixel` (a widget-local point) to `widget` as a plain
+/// mouse move (no button held) and returns cursorMoved()'s own converted
+/// domain point - the shared body every polar-mode coordinate-conversion
+/// test below uses, mirroring mouseMoveEmitsCursorMovedRegardlessOfToolMode()'s
+/// own send-a-synthetic-QMouseEvent technique.
+std::optional<TimeFrequencyPoint> polarDomainPointAt(CanvasWidget& widget, QPointF pixel) {
+    std::optional<TimeFrequencyPoint> receivedDomain;
+    QObject::connect(&widget, &CanvasWidget::cursorMoved,
+                      [&](QPointF, std::optional<TimeFrequencyPoint> domain) { receivedDomain = domain; });
+    QMouseEvent moveEvent(QEvent::MouseMove, pixel, widget.mapToGlobal(pixel.toPoint()), Qt::NoButton, Qt::NoButton,
+                          Qt::NoModifier);
+    QCoreApplication::sendEvent(&widget, &moveEvent);
+    return receivedDomain;
+}
+
+}  // namespace
+
+void CanvasWidgetTest::polarModeCentrePointConvertsToTimeZeroAndTheLowestFrequency() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 100);  // Square, so polarDiskRect() is the whole widget - see its own docs.
+    widget.setPolarMode(true);
+
+    // Exactly at the centre (r=0), theta is genuinely undefined - any
+    // angle maps to the same physical point - so only frequency (which
+    // depends on r alone) is meaningfully assertable here; a point
+    // fractionally off-centre (checked below) is what actually pins down
+    // the theta=0/time=0 convention this class's own name describes.
+    const auto centreDomain = polarDomainPointAt(widget, QPointF(50, 50));
+    QVERIFY(centreDomain.has_value());
+    const float expectedFrequency = sound_mind::core::binIndexToFrequency(0.0f, config);
+    QVERIFY(qAbs(centreDomain->frequencyHz - expectedFrequency) < 1.0);
+
+    // A hair below straight up from centre (theta ~ 0, r > 0) pins down
+    // time ~ 0 without the r=0 ambiguity above.
+    const auto nearCentreDomain = polarDomainPointAt(widget, QPointF(50, 45));
+    QVERIFY(nearCentreDomain.has_value());
+    QVERIFY(qAbs(nearCentreDomain->timeSeconds - 0.0) < 0.01);
+}
+
+void CanvasWidgetTest::polarModeTopEdgeConvertsToTimeZeroAndTheHighestFrequency() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 100);
+    widget.setPolarMode(true);
+
+    // Twelve o'clock - straight up from centre, at the disk's own outer edge.
+    const auto domain = polarDomainPointAt(widget, QPointF(50, 0));
+
+    QVERIFY(domain.has_value());
+    QVERIFY(qAbs(domain->timeSeconds - 0.0) < 0.01);
+    const float expectedFrequency = sound_mind::core::binIndexToFrequency(static_cast<float>(settings.binCount), config);
+    QVERIFY(qAbs(domain->frequencyHz - expectedFrequency) < 1.0);
+}
+
+void CanvasWidgetTest::polarModeAQuarterTurnClockwiseConvertsToAQuarterOfTheWayThroughTime() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 100);
+    widget.setPolarMode(true);
+
+    // Three o'clock - a quarter-turn clockwise from twelve, at the disk's
+    // own outer edge.
+    const auto domain = polarDomainPointAt(widget, QPointF(100, 50));
+
+    QVERIFY(domain.has_value());
+    const double expectedTime = sound_mind::core::frameIndexToTime(
+        static_cast<double>(settings.canvasWidth) / 4.0, config);
+    QVERIFY(qAbs(domain->timeSeconds - expectedTime) < 0.01);
+}
+
+void CanvasWidgetTest::polarModeOutsideTheDiskConvertsToNullopt() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 100);
+    widget.setPolarMode(true);
+
+    // The square widget's own top-left corner - well outside the disk
+    // inscribed within it.
+    const auto domain = polarDomainPointAt(widget, QPointF(0, 0));
+
+    QVERIFY(!domain.has_value());
+}
+
+void CanvasWidgetTest::polarModePaintPressInsideTheDiskEmitsPaintStrokeStarted() {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 100);
+    widget.setPolarMode(true);
+    widget.setToolMode(CanvasWidget::ToolMode::Paint);
+
+    QSignalSpy spy(&widget, &CanvasWidget::paintStrokeStarted);
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(50, 50));
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void CanvasWidgetTest::polarModePaintPressOutsideTheDiskEmitsNothing() {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 100);
+    widget.setPolarMode(true);
+    widget.setToolMode(CanvasWidget::ToolMode::Paint);
+
+    QSignalSpy spy(&widget, &CanvasWidget::paintStrokeStarted);
+    // Not QPoint(0, 0) - QTest::mousePress()'s own `pos` parameter treats an
+    // unspecified (default-constructed) QPoint as "click the widget's own
+    // centre" instead, which (0, 0) is indistinguishable from and would
+    // silently land *inside* the disk instead of testing outside it.
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(2, 2));
+
+    QCOMPARE(spy.count(), 0);
+}

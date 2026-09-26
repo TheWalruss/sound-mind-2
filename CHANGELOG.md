@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.3] - 2026-09-26
+
+Sound Flower, Installment A: **the polar canvas view.**
+
+### Added
+
+- **A new "Sound Flower" toggle** (`View → Sound Flower`, `Ctrl+Alt+F`) - projects the canvas onto a circular disk, time wrapping clockwise around the ring and frequency radiating outward from the centre. Every paint/pick/select/path/chord-stamp gesture keeps working, inverse-mapped through the disk; the playhead becomes a rotating ray.
+
+### Notes
+
+- Overlay Grids, the Chord Overlay, Axis Labels, bounding-box/path-geometry display, the MindWave preview, and a Rectangle-shaped Pick/Selection highlight are hidden while Sound Flower is active (each would otherwise draw as a misleading straight-line shape cut across the disk) - a proper polar-aware redraw for each is future work. Snap to Grid is suspended while active. Polar-form image import (unwarping an already-circular source image back to rectangular) is a separate, later installment.
+
+Full regression: `sound-mind-core` unaffected, `sound-mind-codec` 67/67 (6 new), `sound-mind-studio` full suite unaffected (8 new tests, still 0 failures). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #167.
+
 ## [0.1.3.2] - 2026-09-26
 
 Analysis Tools v1, Installment A: **the per-layer loudness indicator.**

@@ -455,6 +455,28 @@ public slots:
     void setHardwareAccelerationEnabled(bool enabled);
 
     /**
+     * @brief Sets whether the Sound Flower polar view is active - the
+     *        actual work behind the View menu's own Sound Flower checkable
+     *        action (`Ctrl+Alt+F`), `docs/sound-mind-roadmap.md`'s
+     *        `v0.Y.53.1` (Sound Flower).
+     *
+     * Forwards to `canvas_->setPolarMode()` (see its own docs for what
+     * actually changes on screen and in mouse handling) and re-applies
+     * Snap to Grid (`applyGridSnapping()`) - suspended while polar mode is
+     * active, matching the legacy Python Studio's own precedent (a grid
+     * overlay drawn as straight lines has no meaningful "snap to" target
+     * once it's suppressed for not translating onto a disk - see
+     * `CanvasWidget::setPolarMode()`'s own docs on why the grid overlay
+     * itself is suppressed there). Not persisted across sessions - a
+     * fresh project always opens in flat view, matching the legacy
+     * Studio's own "the toggle state is not saved with the project"
+     * precedent.
+     *
+     * @param enabled Whether polar view should be active.
+     */
+    void setSoundFlowerModeEnabled(bool enabled);
+
+    /**
      * @brief Sets whether Repeat Playback is active - the actual work
      *        behind the Playback panel's own Repeat checkbox (`v0.0.42.2`,
      *        Workflow & Device Polish, Installment B).
@@ -2679,6 +2701,18 @@ private:
      * @param positionSeconds The current playback position, in seconds.
      */
     void checkRepeatPlaybackRange(double positionSeconds);
+
+    /**
+     * @brief Re-reads `gridPanel_`'s own current Snap to Grid checkbox and
+     *        both grid configurations, and re-applies them to
+     *        `toolPaletteController_` - the single shared body every
+     *        `GridPanel` config-change signal and setSoundFlowerModeEnabled()
+     *        need, since Snap to Grid's own *effective* state depends on
+     *        both the panel's own checkbox and whether Sound Flower is
+     *        currently active (suspended while it is - see
+     *        setSoundFlowerModeEnabled()'s own docs).
+     */
+    void applyGridSnapping();
 
     /**
      * @brief Fires every macroPlaybackEvents_ entry whose own

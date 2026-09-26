@@ -48,6 +48,7 @@ add_library(sound-mind-codec
     src/wav_file.cpp
     src/color_mapping.cpp
     src/rgb_image_resample.cpp
+    src/polar_projection.cpp
     src/pool_codec.cpp
     src/pool_file.cpp
     src/ffmpeg_audio_encoder.cpp

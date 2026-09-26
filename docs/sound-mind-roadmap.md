@@ -874,6 +874,9 @@ A first useful cross-section across all five categories (loudness/mastering, pit
 
 Polar canvas view, and polar-form image import.
 
+- ✅ **Installment A: the polar canvas view.** Fixed in `v0.1.3.3`, see `docs/sound-mind-architecture.md`'s Decision #167: a new checkable **View → Sound Flower** action (`Ctrl+Alt+F`) projects the composited canvas onto a circular disk - time wraps clockwise around the ring from twelve o'clock, frequency radiates outward from the centre. Every paint/pick/select/path/chord-stamp gesture, and the live paint-stroke preview, keeps working exactly as in flat view, inverse-mapped through the disk instead; the playhead becomes a rotating ray. Overlay Grids, the Chord Overlay, Axis Labels, Show bounding boxes/path geometry, the MindWave preview, and a Rectangle-shaped Pick/Selection highlight are suppressed while active rather than drawn incorrectly (each is built from straight lines between corner points, which don't translate onto a disk without their own dedicated polar redraw - real, separate future work, deferred here). Snap to Grid is suspended while active, matching the legacy Python Studio's own precedent.
+- **Polar-form image import** - deferred to its own later installment.
+
 **Demo:** toggle Sound Flower view while painting and keep working without switching tools.
 
 ### v0.Y.54.1 - Paint Tool Enhancements
