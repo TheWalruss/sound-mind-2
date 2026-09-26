@@ -534,6 +534,16 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
                 handleContentChangedForPlayback(layer);
                 refreshHistoryPanel();
                 refreshComposerPanel();
+                // ToolPaletteController::contentChanged() fires for every
+                // kind of content commit (paint, fill, cut, paste, apply
+                // filter to selection, chord stamps, path strokes), not
+                // only genuine painting - a real, acknowledged coarseness
+                // for this recording-only installment, matching the same
+                // "captures more than its own event-type name implies"
+                // caveat applyFilterConfiguration()'s/updateMindWave()'s
+                // own recordEvent() calls already accept.
+                macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PaintCommitted,
+                                            tr("Painted content"), layer);
             });
 
     gridPanel_ = new GridPanel(this);
@@ -1049,6 +1059,18 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // Off by default, same reasoning - see composerPanel_'s own docs.
     transportToolBar->addAction(composerPanel_->toggleViewAction());
 
+    // Record Macro (v0.Y.49.1, Macro Mode Installment A) - a plain
+    // checkable QAction, not a toggleViewAction(), since macroRecorder_
+    // isn't a dock panel with its own visibility to track (there's no
+    // inspection UI yet at all - see setMacroRecordingEnabled()'s own
+    // docs). Off by default, same reasoning as every panel toggle above.
+    macroRecordAction_ = transportToolBar->addAction(tr("Record &Macro"));
+    macroRecordAction_->setCheckable(true);
+    macroRecordAction_->setToolTip(
+        tr("Records a timestamped log of playback start/stop, layer visibility, painting, filter, and MindWave "
+           "changes - recording only for now, nothing plays it back or exports it yet"));
+    connect(macroRecordAction_, &QAction::toggled, this, &MainWindow::setMacroRecordingEnabled);
+
     // Zoom's own toolbar, added after transportToolBar (not before) so
     // findChild<QToolBar*>()'s own singular/first-match behavior - already
     // relied on by existing tests to reach transportToolBar specifically -
@@ -1309,6 +1331,11 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     selectAction_->setChecked(false);
     pathAction_->setChecked(false);
     chordAction_->setChecked(false);
+    // A project switch mid-recording is exactly the kind of unrelated
+    // event every other reset above already treats as "start clean" - see
+    // macroRecordAction_'s own docs. A no-op (does nothing, triggers no
+    // toggled()) when nothing was recording.
+    macroRecordAction_->setChecked(false);
     canvas_->setToolMode(CanvasWidget::ToolMode::None);
     canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     canvas_->setPickSelectionBounds(std::nullopt);
@@ -2058,6 +2085,8 @@ void MainWindow::updateWindowTitle() {
 
 void MainWindow::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
     layerController_->cycleLayerVisibilityState(id);
+    macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::LayerVisibilityChanged,
+                                tr("Changed layer visibility"), id);
 }
 
 void MainWindow::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
@@ -2146,6 +2175,15 @@ void MainWindow::handleLayerSelectionChanged(std::optional<sound_mind::core::Lay
 
 void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
     layerController_->applyFilterConfiguration(config);
+    // Fires on every parameter change (e.g. live while dragging a
+    // slider), not just a deliberate "done editing" commit - a real,
+    // acknowledged coarseness for this recording-only installment (see
+    // MacroRecorder's own class docs). layersPanel_->selectedLayerId() -
+    // the same target LayerController::applyFilterConfiguration() itself
+    // just used - is std::nullopt when nothing's selected (the edit only
+    // seeded the pending configuration, not any real layer yet).
+    macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::FilterConfigurationChanged,
+                                tr("Changed filter configuration"), layersPanel_->selectedLayerId());
 }
 
 void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {
@@ -2175,6 +2213,10 @@ void MainWindow::renameMindWave(sound_mind::core::MindWaveId id) {
 
 void MainWindow::updateMindWave(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave) {
     mindWaveController_->updateMindWave(id, wave);
+    // Fires on every parameter change while editing, the same coarseness
+    // applyFilterConfiguration()'s own recordEvent() call above accepts.
+    macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::MindWaveConfigurationChanged,
+                                tr("Changed MindWave configuration"), std::nullopt, id);
 }
 
 void MainWindow::setPaintModeEnabled(bool enabled) {
@@ -2468,6 +2510,20 @@ void MainWindow::setPrincipalMode(bool imageModeEnabled) {
     hasUnsavedChanges_ = true;
 }
 
+void MainWindow::setMacroRecordingEnabled(bool enabled) {
+    if (!project_) {
+        return;
+    }
+    if (enabled) {
+        macroRecorder_.startRecording();
+        statusBar()->showMessage(tr("Recording macro..."));
+    } else {
+        macroRecorder_.stopRecording();
+        statusBar()->showMessage(
+            tr("Macro recording stopped - %1 event(s) captured.").arg(macroRecorder_.events().size()), 5000);
+    }
+}
+
 void MainWindow::usePickedPathAsMindWaveShape() {
     const auto curve = toolPaletteController_->selectedPath();
     if (!curve.has_value()) {
@@ -2597,6 +2653,8 @@ void MainWindow::startPlayback() {
     }
 
     playbackController_->play();
+    macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStarted,
+                                tr("Started playback"));
 }
 
 void MainWindow::pausePlayback() {
@@ -2608,6 +2666,8 @@ void MainWindow::pausePlayback() {
 
 void MainWindow::stopPlayback() {
     playbackController_->stop();
+    macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStopped,
+                                tr("Stopped playback"));
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
 }
@@ -3240,6 +3300,8 @@ void MainWindow::pollCompositeProgress() {
                 repeatRangeEndSeconds_ = playbackController_->totalSeconds();
                 repeatLoopBackSeconds_ = 0.0;
                 playbackController_->play();
+                macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStarted,
+                                            tr("Started playback"));
                 statusBar()->clearMessage();
             } else {
                 // Shouldn't happen given startPlayback()'s own pre-check

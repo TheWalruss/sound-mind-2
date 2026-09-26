@@ -1392,6 +1392,14 @@ It's read-only for now: you can't yet drag a box to retime it, move it to
 a different track, or edit an object's/track's own settings from there -
 those are all still to come.
 
+**Macro Mode** has taken its very first step: a **Record Macro** toggle
+(also on the transport toolbar) captures a timestamped log of playback
+start/stop, layer visibility changes, painting, filter configuration
+changes, and MindWave edits - stopping it reports how many events were
+captured, in the status bar. That's the whole feature so far - nothing
+plays a recorded macro back yet, there's no way to export one as a video,
+and there's no panel to inspect what it actually contains.
+
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:
 

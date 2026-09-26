@@ -29,6 +29,7 @@
 #include "sound_mind/studio/grid_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/layer_controller.h"
+#include "sound_mind/studio/macro_recorder.h"
 #include "sound_mind/studio/mind_wave_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/playback_panel.h"
@@ -1379,6 +1380,20 @@ public slots:
     void setPrincipalMode(bool imageModeEnabled);
 
     /**
+     * @brief Starts or stops macroRecorder_ - `v0.Y.49.1` (Macro Mode)
+     *        Installment A's own transport toolbar toggle.
+     *
+     * A no-op with no project open. Status-bar-reports the captured event
+     * count once stopped, so a user gets some real confirmation recording
+     * actually captured something - there's no dedicated inspection panel
+     * yet (that's the roadmap's own "additional timeline-editing
+     * interface," deliberately a later installment).
+     *
+     * @param enabled `true` starts recording; `false` stops it.
+     */
+    void setMacroRecordingEnabled(bool enabled);
+
+    /**
      * @brief Captures the currently Picked object's own `Path` as the
      *        MindWaves panel's own currently-selected library entry's drawn
      *        shape - `docs/sound-mind-design.md`'s "MindWave Functions"
@@ -2677,6 +2692,21 @@ private:
     ///        method's own body.
     UndoStack undoStack_;
 
+    /// @brief Records a timestamped macro while active - `v0.Y.49.1`
+    ///        (Macro Mode) Installment A. Owned by value, the same
+    ///        reasoning undoStack_ above already gives - nothing else
+    ///        needs to own it. Not clear()ed in setProject(), unlike
+    ///        undoStack_ - a macro is a deliberately independent, opt-in
+    ///        recording a user starts/stops explicitly, not implicitly
+    ///        invalidated by switching projects (though `layerId`/
+    ///        `mindWaveId` references inside an already-recorded macro
+    ///        would no longer resolve against a different project's own
+    ///        ids - a real limitation, acceptable for this installment's
+    ///        own recording-only scope, and something a future replay
+    ///        installment will need to address directly rather than
+    ///        silently ignore).
+    MacroRecorder macroRecorder_;
+
     /// @brief Owns the four Paint/Pick/Select/Path tool controllers and
     /// all of their wiring to `canvas_`/`toolConfigurationPanel_` - see its
     /// own class docs. Extracted out of this class as part of the
@@ -2738,6 +2768,15 @@ private:
     /// `setChecked()`, the same pattern its own initial-state application
     /// already uses) every time `setProject()` loads a different project.
     QAction* principalModeAction_ = nullptr;
+
+    /// @brief The transport toolbar's "Record Macro" checkable toggle -
+    /// `v0.Y.49.1` (Macro Mode) Installment A. Checked while
+    /// macroRecorder_.isRecording() - kept as a member so
+    /// setMacroRecordingEnabled() and setProject() can both keep it in
+    /// sync (a project switch mid-recording stops the recording outright,
+    /// the same "unrelated event, start clean" reasoning setProject()'s
+    /// own paintAction_/pickAction_ reset already uses).
+    QAction* macroRecordAction_ = nullptr;
 
     /// @brief The dockable panel exposing the current paint tool's own
     /// parameters - see its own class docs for what's deliberately not
@@ -2911,7 +2950,9 @@ private:
     /// tracked here (PlaybackController exposes no positionSeconds()
     /// getter, only the positionChanged() signal) so
     /// handleContentChangedForPlayback() knows where to resume from for
-    /// `PlaybackScope::Track` (which never jumps on an edit).
+    /// `PlaybackScope::Track` (which never jumps on an edit). Also read by
+    /// macroRecorder_'s own recordEvent() calls (`v0.Y.49.1`, Macro Mode)
+    /// as the timestamp to record against.
     double currentPlaybackPositionSeconds_ = 0.0;
 
     /// @brief The currently running export (video or audio), if any - see

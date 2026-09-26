@@ -35,6 +35,7 @@
 #include "test_layer_controller.h"
 #include "test_layers_panel.h"
 #include "test_loop_panel.h"
+#include "test_macro_recorder.h"
 #include "test_main_window.h"
 #include "test_mind_wave_controller.h"
 #include "test_mind_wave_editor.h"
@@ -107,6 +108,9 @@ int main(int argc, char** argv) {
 
     LoopPanelTest loopPanelTest;
     status |= QTest::qExec(&loopPanelTest, argc, argv);
+
+    MacroRecorderTest macroRecorderTest;
+    status |= QTest::qExec(&macroRecorderTest, argc, argv);
 
     RecordPanelTest recordPanelTest;
     status |= QTest::qExec(&recordPanelTest, argc, argv);

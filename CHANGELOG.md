@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.2.3] - 2026-09-26
+
+Macro Mode, Installment A: **recording only.**
+
+### Added
+
+- **A new "Record Macro" toolbar toggle.** While it's on, the app keeps a timestamped log (against playback position) of: starting/stopping playback, showing/hiding a layer, painting, changing a filter's configuration, and editing a MindWave. Turning it off shows how many events were captured, in the status bar.
+
+### Notes
+
+- Nothing plays a recorded macro back yet, and there's no way to export one as a video - both are future work. There's also no dedicated panel to inspect a macro's own contents yet.
+
+Full regression: `sound-mind-core` 879/879 (unaffected), `sound-mind-studio` full suite unaffected (8 new tests, still 0 failures). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #162.
+
 ## [0.1.2.2] - 2026-09-26
 
 Composer Mode, Installment A: **the new track view.**

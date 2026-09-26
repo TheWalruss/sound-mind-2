@@ -831,6 +831,11 @@ Moved here, to the end of Phase 4.5, rather than staying among Phase 4's own Exp
 
 **A "record macro" function that records project operations along with a timestamp** - the purpose is that a song or performance can be recorded/scripted by starting Playback, then activating/hiding layers, painting, modifying filter settings, changing MindWave configurations, etc. The macro can then be exported as a music video or played back in the Studio as part of a live performance. When exported as a music video, the Studio re-renders everything frame by frame, so what may be a 1-second delay for a heavy filter change during live recording is seamless in the output video. This would require an additional timeline-editing interface as well.
 
+**Unlike every other Phase 4.5 milestone, this one has no `docs/sound-mind-design.md` section at all** - the paragraph above is its entire spec. A real planning pass happened before implementation anyway (see `docs/sound-mind-architecture.md`'s Decision #162), confirming with the user that none of this feature's three pillars (timestamped recording, scripted live playback, frame-by-frame video export) have any existing precedent to build from, and scoping the first installment to recording alone.
+
+- ✅ **Installment A: `MacroRecorder` - a real, timestamped, inspectable macro, recording only.** Fixed in `v0.1.2.3`. A new **Record Macro** toolbar toggle captures playback start/stop, layer visibility changes, painting, filter configuration changes, and MindWave configuration changes, each timestamped against the project's own playback position. No playback or export of a recorded macro yet - confirmed with the user as its own, much larger, later installment(s).
+- **In-app scripted playback, frame-by-frame video export, and any timeline-editing/inspection UI** - all deferred to their own later installments, confirmed with the user, since none of the three have any existing precedent in the codebase to build from (see Decision #162).
+
 **Demo:** record, replay, and export a macro performance.
 
 ### v0.Y.50.1 - Refactor & Clean Up
