@@ -13,6 +13,12 @@ private slots:
     void importAudioSnippetsIntoReturnsZeroWhenNothingWasImported();
     void encodeAudioSnippetsReturnsUnattachedLayersForTheRequestedSubset();
     void encodeAudioSnippetsThrowsImportCancelledOnceShouldCancelStartsReturningTrue();
+
+    // Snippet offsets, real-world testing pass finding #23.
+    void audioSnippetsForFileShiftsTheSplitByTheGivenOffset();
+    void audioSnippetsForFileReturnsEmptyWhenTheOffsetExceedsTheFilesDuration();
+    void encodeAudioSnippetsAppliesTheGivenOffset();
+    void importAudioSnippetsIntoAppliesTheGivenOffset();
     void importImageFileIntoAddsANewLayer();
     void importImageFileIntoFailsForAnUnreadableFile();
     void importImageFilesIntoImportsEachFileIndependentlyWhenNotSequential();

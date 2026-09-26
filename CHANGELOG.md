@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.0.3] - 2026-09-25
+
+Real-world testing pass finding #23: **Snippet offsets.**
+
+### Added
+
+- **An "Offset" field in the Import Audio snippet picker** - discards that much audio off the very start before splitting, so the split grid restarts fresh at the offset instead of just shortening the first snippet. Lets a chosen point of interest actually land on a snippet boundary, no matter how many snippets in. Works the same way when dropping a multi-snippet audio file onto the canvas.
+
+Full regression: `sound-mind-studio` `ImportExportTest` 21/21 (4 new), `AudioSnippetPickerDialogTest` (3 new), `MainWindowTest` (1 new), full suite otherwise unchanged. Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #152.
+
 ## [0.1.0.2] - 2026-09-25
 
 Real-world testing pass finding #22: **Duplicate layer button.**

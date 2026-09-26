@@ -70,11 +70,23 @@ public:
  * @param path Path to the WAV file to analyze.
  * @param errorMessage If non-null and this returns empty, set to a
  *        human-readable description of what went wrong.
+ * @param offsetSeconds Real-world testing pass finding #23: discards this
+ *        much audio off the very start before splitting, so the grid
+ *        restarts fresh at that point rather than just shortening
+ *        snippet `0` within an otherwise-unchanged grid - lets a chosen
+ *        point of interest land exactly on a snippet boundary. `0.0` (the
+ *        default) reproduces the pre-finding-#23 behavior exactly.
+ *        `startSeconds`/`endSeconds` on each returned row stay relative
+ *        to the *original*, untrimmed file's own timeline (where the
+ *        sound actually is), not re-zeroed at the offset. An offset at or
+ *        beyond the file's own duration returns empty, the same as an
+ *        unreadable file.
  * @return One entry per snippet, in order; empty if the file couldn't be
- *         read.
+ *         read, or `offsetSeconds` leaves nothing to split.
  */
 [[nodiscard]] std::vector<AudioSnippetPickerDialog::RowData> audioSnippetsForFile(
-    const sound_mind::core::Project& project, const std::filesystem::path& path, QString* errorMessage = nullptr);
+    const sound_mind::core::Project& project, const std::filesystem::path& path, QString* errorMessage = nullptr,
+    double offsetSeconds = 0.0);
 
 /**
  * @brief Encodes specific snippets (see audioSnippetsForFile()) of an audio
@@ -109,6 +121,10 @@ public:
  *        touched any project. `nullptr` (the default) never cancels.
  * @param errorMessage If non-null and this returns empty, set to a
  *        human-readable description of what went wrong.
+ * @param offsetSeconds See audioSnippetsForFile()'s own docs - must match
+ *        whatever offset `snippetIndices` was itself computed against,
+ *        since this discards the same leading stretch before resolving
+ *        indices to actual sample ranges.
  * @return The encoded layers, in ascending snippet order - `id() == 0` on
  *         each (unattached; `Project::addLayer()` assigns a real one);
  *         empty if the file couldn't be read, or nothing was actually
@@ -120,7 +136,7 @@ public:
 [[nodiscard]] std::vector<sound_mind::core::Layer> encodeAudioSnippets(
     const sound_mind::core::ProjectSettings& settings, const std::filesystem::path& path,
     const std::vector<std::size_t>& snippetIndices, const std::function<bool()>& shouldCancel = nullptr,
-    QString* errorMessage = nullptr);
+    QString* errorMessage = nullptr, double offsetSeconds = 0.0);
 
 /**
  * @brief Imports specific snippets (see audioSnippetsForFile()) of an
@@ -145,13 +161,15 @@ public:
  *        source's actual snippet count is silently skipped, not an error.
  * @param errorMessage If non-null and this returns `0`, set to a
  *        human-readable description of what went wrong.
+ * @param offsetSeconds See audioSnippetsForFile()'s own docs - must match
+ *        whatever offset `snippetIndices` was itself computed against.
  * @return How many snippets were actually imported - `0` if the file
  *         couldn't be read, or nothing was actually imported (an empty
  *         `snippetIndices`, or every given index out of range).
  */
 [[nodiscard]] int importAudioSnippetsInto(sound_mind::core::Project& project, const std::filesystem::path& path,
                                            const std::vector<std::size_t>& snippetIndices,
-                                           QString* errorMessage = nullptr);
+                                           QString* errorMessage = nullptr, double offsetSeconds = 0.0);
 
 /**
  * @brief Imports an image file as a new layer into `project`, resized per

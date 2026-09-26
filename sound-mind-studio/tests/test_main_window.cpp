@@ -2990,6 +2990,33 @@ void MainWindowTest::handleDroppedFilesAppliesGivenAudioSnippetSelections() {
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);  // not all 4.
 }
 
+void MainWindowTest::handleDroppedFilesAppliesGivenAudioSnippetOffsets() {
+    // Real-world testing pass finding #23 - a separate map from
+    // audioSnippetSelections (see handleDroppedFiles()'s own docs), applied
+    // alongside it.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-drop-audio-offset.wav";
+    constexpr std::size_t loopLengthSamples = 3528;  // 8 * 441 - see smallCanvasProjectSettings()'s docs.
+    writeTestWavFileWithFrameCount(path, loopLengthSamples * 4);  // 4 whole snippets at offset 0: 0, 1, 2, 3.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-drop-audio-offset.smproj";
+    const double oneLoopSeconds = static_cast<double>(loopLengthSamples) / 44100.0;
+
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+    const std::size_t layerCountBefore = window.project()->layers().size();
+
+    // Offset by one whole loop length leaves only 3 available (indices
+    // 0-2) - requesting all four (0-3) under that offset silently skips
+    // the now-out-of-range index 3, proving the offset actually reached
+    // the encode step, not just the (never shown, in this headless test)
+    // picker dialog.
+    window.handleDroppedFiles({path}, ImageScalePickerDialog::Mode::RescaleToFitProject,
+                               /*importAsSequence=*/false, {{path, {0, 1, 2, 3}}}, {{path, oneLoopSeconds}});
+    std::filesystem::remove(path);
+    std::filesystem::remove(projectPath);
+
+    QCOMPARE(window.project()->layers().size(), layerCountBefore + 3);
+}
+
 namespace {
 
 /// @brief Writes a solid-color PNG of the given size to `path` - like

@@ -185,6 +185,66 @@ void ImportExportTest::encodeAudioSnippetsThrowsImportCancelledOnceShouldCancelS
     std::filesystem::remove(path);
 }
 
+// --- Snippet offsets (real-world testing pass finding #23) -----------------
+
+void ImportExportTest::audioSnippetsForFileShiftsTheSplitByTheGivenOffset() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-snippets-offset.wav";
+    writeTestWavFileWithFrameCount(path, 3528 * 3);  // 3 whole snippets at offset 0.
+    Project project = Project::createNew(smallCanvasProjectSettings());
+    const double oneLoopSeconds = 3528.0 / 44100.0;  // exactly one loop length.
+
+    const auto snippets = sound_mind::studio::audioSnippetsForFile(project, path, nullptr, oneLoopSeconds);
+    std::filesystem::remove(path);
+
+    // Trimming one whole loop length off the front leaves exactly 2, not 3 -
+    // the split grid restarts fresh at the offset, it doesn't just shorten
+    // snippet 0 in an otherwise-unchanged grid.
+    QCOMPARE(snippets.size(), static_cast<std::size_t>(2));
+    // startSeconds/endSeconds stay relative to the *original* file's own
+    // timeline (where the sound actually is), not the trimmed-and-rezeroed one.
+    QVERIFY(qAbs(snippets.front().startSeconds - oneLoopSeconds) < 1e-6);
+}
+
+void ImportExportTest::audioSnippetsForFileReturnsEmptyWhenTheOffsetExceedsTheFilesDuration() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-snippets-offset-too-far.wav";
+    writeTestWavFileWithFrameCount(path, 100);  // ~0.0023s.
+    Project project = Project::createNew(smallCanvasProjectSettings());
+
+    const auto snippets = sound_mind::studio::audioSnippetsForFile(project, path, nullptr, /*offsetSeconds=*/1.0);
+    std::filesystem::remove(path);
+
+    QVERIFY(snippets.empty());
+}
+
+void ImportExportTest::encodeAudioSnippetsAppliesTheGivenOffset() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-encode-offset.wav";
+    writeTestWavFileWithFrameCount(path, 3528 * 4);  // 4 whole snippets at offset 0.
+    const double oneLoopSeconds = 3528.0 / 44100.0;
+
+    // Offset by one loop length leaves exactly 3 available (indices 0-2),
+    // not the 4 an offset-0 split of this same file would have.
+    const auto layers = sound_mind::studio::encodeAudioSnippets(smallCanvasProjectSettings(), path, {0, 1, 2, 3},
+                                                                 nullptr, nullptr, oneLoopSeconds);
+    std::filesystem::remove(path);
+
+    QCOMPARE(layers.size(), static_cast<std::size_t>(3));
+}
+
+void ImportExportTest::importAudioSnippetsIntoAppliesTheGivenOffset() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-import-offset.wav";
+    writeTestWavFileWithFrameCount(path, 3528 * 4);
+    Project project = Project::createNew(smallCanvasProjectSettings());
+    const std::size_t layerCountBefore = project.layers().size();
+    const double oneLoopSeconds = 3528.0 / 44100.0;
+
+    const int importedCount =
+        sound_mind::studio::importAudioSnippetsInto(project, path, {0, 1, 2, 3}, nullptr, oneLoopSeconds);
+    std::filesystem::remove(path);
+
+    QCOMPARE(importedCount, 3);  // index 3 is out of range once offset by a whole loop - silently skipped.
+    QCOMPARE(project.layers().size(), layerCountBefore + 3);
+}
+
 void ImportExportTest::importImageFileIntoAddsANewLayer() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-image-add.png";
     writeImageScalingTestImage(path);

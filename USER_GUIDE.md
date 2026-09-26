@@ -179,6 +179,13 @@ consecutive Duration-length snippets and you're shown a list to
 check/uncheck - only the checked snippets become layers, named
 `<filename>_0000`, `<filename>_0001`, and so on.
 
+An **Offset** field above that list discards that much audio off the very
+start before splitting, so the whole split restarts fresh at that point
+instead of the grid always being anchored to the file's own beginning -
+useful for lining up a specific moment in the recording with a snippet
+boundary. Changing it recomputes the list live; every row resets to
+checked, since a changed offset is a genuinely new split.
+
 Importing runs in the background - you can keep working while it encodes,
 and a small **✕** button appears in the status bar to cancel it if you
 change your mind; cancelling adds nothing to the project at all, as if it

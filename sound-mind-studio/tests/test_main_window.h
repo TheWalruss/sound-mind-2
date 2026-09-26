@@ -153,6 +153,7 @@ private slots:
     void handleDroppedFilesAppliesTheGivenImageMode();
     void handleDroppedFilesSequencesDroppedImagesWhenRequested();
     void handleDroppedFilesAppliesGivenAudioSnippetSelections();
+    void handleDroppedFilesAppliesGivenAudioSnippetOffsets();
 
     // Layer Time Alignment (v0.Y.21.1)
     void setLayerTranslationChangesTheLayersTranslation();

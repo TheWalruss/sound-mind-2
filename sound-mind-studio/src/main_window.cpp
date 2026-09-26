@@ -1072,6 +1072,7 @@ void MainWindow::dropEvent(QDropEvent* event) {
     }
 
     std::map<std::filesystem::path, std::vector<std::size_t>> audioSnippetSelections;
+    std::map<std::filesystem::path, double> audioSnippetOffsets;
     for (const auto& path : audioPaths) {
         QString snippetsError;
         const auto snippets = audioSnippetsForFile(path, &snippetsError);
@@ -1083,18 +1084,21 @@ void MainWindow::dropEvent(QDropEvent* event) {
             continue;
         }
         AudioSnippetPickerDialog dialog(snippets, this);
+        wireSnippetOffsetRecompute(dialog, path);
         if (dialog.exec() != QDialog::Accepted) {
             return;
         }
         audioSnippetSelections[path] = dialog.selectedIndices();
+        audioSnippetOffsets[path] = dialog.offsetSeconds();
     }
 
-    handleDroppedFiles(paths, imageMode, importImagesAsSequence, audioSnippetSelections);
+    handleDroppedFiles(paths, imageMode, importImagesAsSequence, audioSnippetSelections, audioSnippetOffsets);
 }
 
 void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& paths,
                                      ImageScalePickerDialog::Mode imageMode, bool importImagesAsSequence,
-                                     const std::map<std::filesystem::path, std::vector<std::size_t>>& audioSnippetSelections) {
+                                     const std::map<std::filesystem::path, std::vector<std::size_t>>& audioSnippetSelections,
+                                     const std::map<std::filesystem::path, double>& audioSnippetOffsets) {
     std::vector<std::filesystem::path> imagePaths;
     for (const auto& path : paths) {
         if (isImageExtension(lowercasedExtension(path))) {
@@ -1114,8 +1118,10 @@ void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& pa
         QString errorMessage;
         if (isAudioExtension(extension)) {
             const auto selection = audioSnippetSelections.find(path);
+            const auto offsetIt = audioSnippetOffsets.find(path);
+            const double offsetSeconds = offsetIt != audioSnippetOffsets.end() ? offsetIt->second : 0.0;
             const bool ok = selection != audioSnippetSelections.end()
-                                 ? importAudioSnippets(path, selection->second, &errorMessage)
+                                 ? importAudioSnippets(path, selection->second, &errorMessage, offsetSeconds)
                                  : importAudioFile(path, &errorMessage);
             if (!ok) {
                 statusBar()->showMessage(
@@ -1460,6 +1466,7 @@ void MainWindow::importAudio() {
     }
 
     std::vector<std::size_t> indices;
+    double offsetSeconds = 0.0;
     if (snippets.size() == 1) {
         // The common case - audio no longer than the project's own
         // duration - skips the picker entirely, matching this method's
@@ -1467,6 +1474,7 @@ void MainWindow::importAudio() {
         indices.push_back(snippets.front().index);
     } else {
         AudioSnippetPickerDialog dialog(snippets, this);
+        wireSnippetOffsetRecompute(dialog, path);
         if (dialog.exec() != QDialog::Accepted) {
             return;
         }
@@ -1474,9 +1482,10 @@ void MainWindow::importAudio() {
         if (indices.empty()) {
             return;
         }
+        offsetSeconds = dialog.offsetSeconds();
     }
 
-    importAudioSnippetsAsync(path, indices);
+    importAudioSnippetsAsync(path, indices, offsetSeconds);
 }
 
 void MainWindow::importImage() {
@@ -1522,18 +1531,26 @@ bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* err
 }
 
 std::vector<AudioSnippetPickerDialog::RowData> MainWindow::audioSnippetsForFile(const std::filesystem::path& path,
-                                                                                 QString* errorMessage) const {
+                                                                                 QString* errorMessage,
+                                                                                 double offsetSeconds) const {
     if (!project_) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No project is open.");
         }
         return {};
     }
-    return sound_mind::studio::audioSnippetsForFile(*project_, path, errorMessage);
+    return sound_mind::studio::audioSnippetsForFile(*project_, path, errorMessage, offsetSeconds);
+}
+
+void MainWindow::wireSnippetOffsetRecompute(AudioSnippetPickerDialog& dialog, const std::filesystem::path& path) {
+    connect(&dialog, &AudioSnippetPickerDialog::offsetChanged, &dialog, [this, &dialog, path](double offsetSeconds) {
+        QString errorMessage;
+        dialog.setSnippets(audioSnippetsForFile(path, &errorMessage, offsetSeconds));
+    });
 }
 
 bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const std::vector<std::size_t>& snippetIndices,
-                                      QString* errorMessage) {
+                                      QString* errorMessage, double offsetSeconds) {
     if (!project_) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No project is open.");
@@ -1542,7 +1559,8 @@ bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const st
     }
 
     showBusyStatus(statusBar(), tr("Importing audio..."));
-    const int importedCount = sound_mind::studio::importAudioSnippetsInto(*project_, path, snippetIndices, errorMessage);
+    const int importedCount =
+        sound_mind::studio::importAudioSnippetsInto(*project_, path, snippetIndices, errorMessage, offsetSeconds);
     if (importedCount == 0) {
         statusBar()->clearMessage();
         return false;
@@ -1562,7 +1580,7 @@ bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const st
 }
 
 void MainWindow::importAudioSnippetsAsync(const std::filesystem::path& path,
-                                           const std::vector<std::size_t>& snippetIndices) {
+                                           const std::vector<std::size_t>& snippetIndices, double offsetSeconds) {
     if (!project_) {
         statusBar()->showMessage(tr("No project is open."), 5000);
         return;
@@ -1582,12 +1600,12 @@ void MainWindow::importAudioSnippetsAsync(const std::filesystem::path& path,
     // synchronize against - see this method's own docs.
     const auto settings = project_->settings();
     importTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, snippetIndices, settings](sound_mind::core::CancellationToken& token) {
+        [this, path, snippetIndices, settings, offsetSeconds](sound_mind::core::CancellationToken& token) {
             QString encodeError;
             try {
                 importedLayers_ = sound_mind::studio::encodeAudioSnippets(
                     settings, path, snippetIndices, [&token]() { return token.cancellationRequested(); },
-                    &encodeError);
+                    &encodeError, offsetSeconds);
                 if (importedLayers_.empty()) {
                     importOutcome_ = ImportOutcome::Failed;
                     importErrorMessage_ = encodeError;

@@ -1564,11 +1564,15 @@ public:
      * @param path Path to the audio file to analyze.
      * @param errorMessage If non-null and this returns empty, set to a
      *        human-readable description of what went wrong.
+     * @param offsetSeconds See `sound_mind::studio::audioSnippetsForFile()`'s
+     *        own docs (real-world testing pass finding #23) - `0.0` (the
+     *        default) reproduces the pre-finding-#23 behavior exactly.
      * @return One entry per snippet, in order; empty if no project is
-     *         open or the file couldn't be read.
+     *         open, the file couldn't be read, or `offsetSeconds` leaves
+     *         nothing to split.
      */
     [[nodiscard]] std::vector<AudioSnippetPickerDialog::RowData> audioSnippetsForFile(
-        const std::filesystem::path& path, QString* errorMessage = nullptr) const;
+        const std::filesystem::path& path, QString* errorMessage = nullptr, double offsetSeconds = 0.0) const;
 
     /**
      * @brief Imports specific snippets (see audioSnippetsForFile()) of an
@@ -1598,13 +1602,16 @@ public:
      *        skipped, not an error.
      * @param errorMessage If non-null and this returns `false`, set to a
      *        human-readable description of what went wrong.
+     * @param offsetSeconds See audioSnippetsForFile()'s own docs - must
+     *        match whatever offset `snippetIndices` was itself computed
+     *        against.
      * @return `true` if the file was read and at least one requested
      *         snippet was imported; `false` if the file couldn't be read,
      *         no project is open, or nothing was actually imported (an
      *         empty `snippetIndices`, or every given index out of range).
      */
     bool importAudioSnippets(const std::filesystem::path& path, const std::vector<std::size_t>& snippetIndices,
-                              QString* errorMessage = nullptr);
+                              QString* errorMessage = nullptr, double offsetSeconds = 0.0);
 
     /**
      * @brief Starts an asynchronous import of specific snippets (see
@@ -1648,8 +1655,12 @@ public:
      * @param path Path to the audio file to import from.
      * @param snippetIndices Which of the source's snippets to import - see
      *        importAudioSnippets()'s own docs.
+     * @param offsetSeconds See audioSnippetsForFile()'s own docs - must
+     *        match whatever offset `snippetIndices` was itself computed
+     *        against.
      */
-    void importAudioSnippetsAsync(const std::filesystem::path& path, const std::vector<std::size_t>& snippetIndices);
+    void importAudioSnippetsAsync(const std::filesystem::path& path, const std::vector<std::size_t>& snippetIndices,
+                                   double offsetSeconds = 0.0);
 
     /// @brief Whether an importAudioSnippetsAsync() import is still
     /// running.
@@ -1784,12 +1795,22 @@ public:
      *        path with no entry here imports every snippet it has, the
      *        pre-existing default every test predating this parameter
      *        still gets.
+     * @param audioSnippetOffsets The offset (see audioSnippetsForFile()'s
+     *        own docs, real-world testing pass finding #23)
+     *        `audioSnippetSelections`' own indices were computed against,
+     *        for a given path - a path with no entry here uses `0.0`, the
+     *        pre-existing default every test predating this parameter
+     *        still gets. A separate map, not folded into
+     *        `audioSnippetSelections` itself, so that parameter's own
+     *        pre-existing shape (and every test already constructing it)
+     *        stays untouched.
      */
     void handleDroppedFiles(
         const std::vector<std::filesystem::path>& paths,
         ImageScalePickerDialog::Mode imageMode = ImageScalePickerDialog::Mode::RescaleToFitProject,
         bool importImagesAsSequence = false,
-        const std::map<std::filesystem::path, std::vector<std::size_t>>& audioSnippetSelections = {});
+        const std::map<std::filesystem::path, std::vector<std::size_t>>& audioSnippetSelections = {},
+        const std::map<std::filesystem::path, double>& audioSnippetOffsets = {});
 
     /**
      * @brief Pools the topmost layer with content and writes its Stream
@@ -2094,6 +2115,29 @@ protected:
 
 private:
     void setProject(sound_mind::core::Project project);
+
+    /**
+     * @brief Wires `dialog`'s own offsetChanged() to recompute `path`'s
+     *        own snippet split and push it back in via `setSnippets()` -
+     *        real-world testing pass finding #23, shared by every call
+     *        site that shows an `AudioSnippetPickerDialog` (importAudio(),
+     *        and dropEvent()'s own per-file loop).
+     *
+     * `dialog` isn't UI-agnostic of file access the way `AudioSnippetPickerDialog`
+     * itself deliberately stays (see its own docs on why) - this is exactly
+     * the caller-side half of that division of responsibility: `MainWindow`
+     * already has the file path and project, so it recomputes and pushes
+     * the result back in, rather than the dialog reaching for either
+     * itself.
+     *
+     * @param dialog The dialog to wire - must outlive this connection
+     *        (i.e. still be on the stack, about to have `exec()` called on
+     *        it), the same lifetime every other per-dialog `connect()` in
+     *        this codebase already assumes.
+     * @param path The audio file `dialog`'s own snippets were computed
+     *        from, re-read on every offset change.
+     */
+    void wireSnippetOffsetRecompute(AudioSnippetPickerDialog& dialog, const std::filesystem::path& path);
 
     /**
      * @brief Sets canvas_'s own tool mode to `mode` (or `None` if

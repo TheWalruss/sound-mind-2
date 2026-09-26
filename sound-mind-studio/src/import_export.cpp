@@ -1,6 +1,7 @@
 #include "sound_mind/studio/import_export.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 
 #include <QCoreApplication>
@@ -30,7 +31,7 @@ QString tr(const char* text) {
 
 std::vector<AudioSnippetPickerDialog::RowData> audioSnippetsForFile(const sound_mind::core::Project& project,
                                                                       const std::filesystem::path& path,
-                                                                      QString* errorMessage) {
+                                                                      QString* errorMessage, double offsetSeconds) {
     try {
         const auto audio = sound_mind::codec::readAudioFile(path);
         const auto config = sound_mind::core::streamCodecConfigFor(project.settings());
@@ -44,13 +45,26 @@ std::vector<AudioSnippetPickerDialog::RowData> audioSnippetsForFile(const sound_
         }
 
         const std::size_t totalSamples = audio.frameCount();
+        // Finding #23: offsetSamples worth of audio is discarded outright
+        // before the split grid is even considered - see this function's
+        // own docs on why that's a real restart, not just a shorter
+        // snippet 0.
+        const auto offsetSamples =
+            static_cast<std::size_t>(std::llround(offsetSeconds * static_cast<double>(audio.sampleRateHz)));
+        const std::size_t effectiveTotalSamples = totalSamples > offsetSamples ? totalSamples - offsetSamples : 0;
+        if (effectiveTotalSamples == 0) {
+            if (errorMessage != nullptr) {
+                *errorMessage = tr("The chosen offset leaves nothing left in the file to split.");
+            }
+            return {};
+        }
         const std::size_t snippetCount =
-            std::max<std::size_t>((totalSamples + loopLengthSamples - 1) / loopLengthSamples, std::size_t{1});
+            std::max<std::size_t>((effectiveTotalSamples + loopLengthSamples - 1) / loopLengthSamples, std::size_t{1});
 
         std::vector<AudioSnippetPickerDialog::RowData> result;
         result.reserve(snippetCount);
         for (std::size_t index = 0; index < snippetCount; ++index) {
-            const std::size_t start = index * loopLengthSamples;
+            const std::size_t start = offsetSamples + index * loopLengthSamples;
             const std::size_t end = std::min(start + loopLengthSamples, totalSamples);
             AudioSnippetPickerDialog::RowData row;
             row.index = index;
@@ -71,17 +85,23 @@ std::vector<sound_mind::core::Layer> encodeAudioSnippets(const sound_mind::core:
                                                            const std::filesystem::path& path,
                                                            const std::vector<std::size_t>& snippetIndices,
                                                            const std::function<bool()>& shouldCancel,
-                                                           QString* errorMessage) {
+                                                           QString* errorMessage, double offsetSeconds) {
     try {
         const auto audio = sound_mind::codec::readAudioFile(path);
         const auto config = sound_mind::core::streamCodecConfigFor(settings);
         const auto loopLengthSamples =
             static_cast<std::size_t>(settings.canvasWidth) * static_cast<std::size_t>(config.hopLength);
         const std::size_t totalSamples = audio.frameCount();
+        // See audioSnippetsForFile()'s own docs - must agree with it exactly,
+        // since snippetIndices was computed against that same offset.
+        const auto offsetSamples =
+            static_cast<std::size_t>(std::llround(offsetSeconds * static_cast<double>(audio.sampleRateHz)));
+        const std::size_t effectiveTotalSamples = totalSamples > offsetSamples ? totalSamples - offsetSamples : 0;
         const std::size_t snippetCount =
-            loopLengthSamples > 0
-                ? std::max<std::size_t>((totalSamples + loopLengthSamples - 1) / loopLengthSamples, std::size_t{1})
-                : 1;
+            loopLengthSamples > 0 && effectiveTotalSamples > 0
+                ? std::max<std::size_t>((effectiveTotalSamples + loopLengthSamples - 1) / loopLengthSamples,
+                                         std::size_t{1})
+                : (effectiveTotalSamples > 0 ? 1 : 0);
 
         // Sorted, de-duplicated so layers land in ascending snippet order
         // regardless of the order the caller listed indices in - a snippet
@@ -99,7 +119,7 @@ std::vector<sound_mind::core::Layer> encodeAudioSnippets(const sound_mind::core:
             if (shouldCancel && shouldCancel()) {
                 throw ImportCancelled{};
             }
-            const std::size_t start = loopLengthSamples > 0 ? index * loopLengthSamples : 0;
+            const std::size_t start = loopLengthSamples > 0 ? offsetSamples + index * loopLengthSamples : offsetSamples;
             const std::size_t end =
                 loopLengthSamples > 0 ? std::min(start + loopLengthSamples, totalSamples) : totalSamples;
             if (start > end) {
@@ -137,8 +157,9 @@ std::vector<sound_mind::core::Layer> encodeAudioSnippets(const sound_mind::core:
 }
 
 int importAudioSnippetsInto(sound_mind::core::Project& project, const std::filesystem::path& path,
-                             const std::vector<std::size_t>& snippetIndices, QString* errorMessage) {
-    auto layers = encodeAudioSnippets(project.settings(), path, snippetIndices, nullptr, errorMessage);
+                             const std::vector<std::size_t>& snippetIndices, QString* errorMessage,
+                             double offsetSeconds) {
+    auto layers = encodeAudioSnippets(project.settings(), path, snippetIndices, nullptr, errorMessage, offsetSeconds);
     for (auto& layer : layers) {
         project.addLayer(std::move(layer));
     }

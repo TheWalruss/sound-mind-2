@@ -3,7 +3,9 @@
 #include <algorithm>
 
 #include <QCheckBox>
+#include <QDoubleSpinBox>
 #include <QListWidget>
+#include <QSignalSpy>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
@@ -71,4 +73,41 @@ void AudioSnippetPickerDialogTest::selectAllCheckboxTogglesEveryRow() {
 
     selectAll->setChecked(true);
     QCOMPARE(dialog.selectedIndices().size(), static_cast<std::size_t>(3));
+}
+
+void AudioSnippetPickerDialogTest::freshDialogHasAZeroOffset() {
+    const AudioSnippetPickerDialog dialog(threeSnippets());
+
+    QCOMPARE(dialog.offsetSeconds(), 0.0);
+}
+
+void AudioSnippetPickerDialogTest::changingTheOffsetSpinBoxEmitsOffsetChanged() {
+    AudioSnippetPickerDialog dialog(threeSnippets());
+    QSignalSpy spy(&dialog, &AudioSnippetPickerDialog::offsetChanged);
+
+    auto* offsetSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("offsetSpinBox"));
+    QVERIFY(offsetSpinBox != nullptr);
+    offsetSpinBox->setValue(1.5);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.constFirst().at(0).toDouble(), 1.5);
+    QCOMPARE(dialog.offsetSeconds(), 1.5);
+}
+
+void AudioSnippetPickerDialogTest::setSnippetsReplacesTheListAndResetsEveryRowToChecked() {
+    AudioSnippetPickerDialog dialog(threeSnippets());
+    auto* list = dialog.findChild<QListWidget*>(QStringLiteral("snippetList"));
+    QVERIFY(list != nullptr);
+    list->item(0)->setCheckState(Qt::Unchecked);  // an edit that a real recompute should discard.
+
+    AudioSnippetPickerDialog::RowData onlyOne;
+    onlyOne.index = 0;
+    onlyOne.startSeconds = 1.5;
+    onlyOne.endSeconds = 11.5;
+    dialog.setSnippets({onlyOne});
+
+    QCOMPARE(list->count(), 1);
+    // Every row resets to checked - a changed offset is a genuinely new
+    // split, not an edit to the old one - see setSnippets()'s own docs.
+    QCOMPARE(dialog.selectedIndices().size(), static_cast<std::size_t>(1));
 }

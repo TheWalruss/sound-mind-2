@@ -2,6 +2,8 @@
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
+#include <QFormLayout>
 #include <QListWidget>
 #include <QVBoxLayout>
 
@@ -27,6 +29,20 @@ AudioSnippetPickerDialog::AudioSnippetPickerDialog(const std::vector<RowData>& s
 
     auto* root = new QVBoxLayout(this);
 
+    auto* offsetForm = new QFormLayout();
+    offsetSpinBox_ = new QDoubleSpinBox(this);
+    offsetSpinBox_->setObjectName(QStringLiteral("offsetSpinBox"));
+    offsetSpinBox_->setRange(0.0, 3600.0);
+    offsetSpinBox_->setSingleStep(0.5);
+    offsetSpinBox_->setDecimals(2);
+    offsetSpinBox_->setSuffix(tr(" s"));
+    offsetSpinBox_->setToolTip(
+        tr("Discards this much audio off the very start before splitting, so the grid restarts fresh at that "
+           "point - lets a point of interest land exactly on a snippet boundary."));
+    connect(offsetSpinBox_, &QDoubleSpinBox::valueChanged, this, &AudioSnippetPickerDialog::offsetChanged);
+    offsetForm->addRow(tr("Offset:"), offsetSpinBox_);
+    root->addLayout(offsetForm);
+
     auto* selectAllCheckBox = new QCheckBox(tr("Select All"), this);
     selectAllCheckBox->setObjectName(QStringLiteral("selectAllCheckBox"));
     selectAllCheckBox->setChecked(true);
@@ -35,17 +51,8 @@ AudioSnippetPickerDialog::AudioSnippetPickerDialog(const std::vector<RowData>& s
 
     list_ = new QListWidget(this);
     list_->setObjectName(QStringLiteral("snippetList"));
-    for (const RowData& snippet : snippets) {
-        auto* item = new QListWidgetItem(
-            tr("Snippet %1: %2 - %3")
-                .arg(snippet.index, 4, 10, QLatin1Char('0'))
-                .arg(formatTimestamp(snippet.startSeconds), formatTimestamp(snippet.endSeconds)),
-            list_);
-        item->setData(Qt::UserRole, static_cast<qulonglong>(snippet.index));
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(Qt::Checked);  // every row checked by default - see the class docs.
-    }
     root->addWidget(list_);
+    populateList(snippets);
 
     auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     buttonBox->setObjectName(QStringLiteral("buttonBox"));
@@ -63,6 +70,24 @@ std::vector<std::size_t> AudioSnippetPickerDialog::selectedIndices() const {
         }
     }
     return result;
+}
+
+double AudioSnippetPickerDialog::offsetSeconds() const { return offsetSpinBox_->value(); }
+
+void AudioSnippetPickerDialog::setSnippets(const std::vector<RowData>& snippets) { populateList(snippets); }
+
+void AudioSnippetPickerDialog::populateList(const std::vector<RowData>& snippets) {
+    list_->clear();
+    for (const RowData& snippet : snippets) {
+        auto* item = new QListWidgetItem(
+            tr("Snippet %1: %2 - %3")
+                .arg(snippet.index, 4, 10, QLatin1Char('0'))
+                .arg(formatTimestamp(snippet.startSeconds), formatTimestamp(snippet.endSeconds)),
+            list_);
+        item->setData(Qt::UserRole, static_cast<qulonglong>(snippet.index));
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Checked);  // every row checked by default - see the class docs.
+    }
 }
 
 void AudioSnippetPickerDialog::setAllChecked(bool checked) {
