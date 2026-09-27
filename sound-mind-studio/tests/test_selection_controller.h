@@ -33,11 +33,13 @@ private slots:
     void continueSelectionDragIgnoresGridConfigurationWhenSnapToGridIsDisabled();
 
     void captureMindShotAddsANamedEntryToTheProjectsMindShotLibrary();
+    void captureMindShotStoresFundamentalFrequencyAndStartTimeOffsetWhenGiven();
     void captureMindShotIsANoOpWithNoCommittedSelection();
     void captureMindShotDoesNotTouchTheClipboardOrSourcePixels();
     void captureMindShotEmitsMindShotCapturedWithTheNewId();
 
     void captureMindGrainAddsANamedEntryToTheProjectsMindGrainLibrary();
+    void captureMindGrainStoresFundamentalFrequencyAndStartTimeOffsetWhenGiven();
     void captureMindGrainIsANoOpWithNoCommittedSelection();
     void captureMindGrainDoesNotTouchTheClipboardOrSourceLayerContent();
     void captureMindGrainEmitsMindGrainCapturedWithTheNewId();

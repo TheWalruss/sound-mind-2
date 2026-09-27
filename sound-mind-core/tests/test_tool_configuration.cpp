@@ -450,6 +450,22 @@ TEST_CASE("MindShotConfiguration's blend mode can be changed", "[core][tool_conf
     REQUIRE(config.blendMode() == BlendMode::Multiply);
 }
 
+TEST_CASE("A fresh MindShotConfiguration's fundamentalFrequencyHz/startTimeOffsetSeconds are both unset (0.0)",
+          "[core][tool_configuration]") {
+    const MindShotConfiguration config;
+    REQUIRE(config.fundamentalFrequencyHz() == 0.0);
+    REQUIRE(config.startTimeOffsetSeconds() == 0.0);
+}
+
+TEST_CASE("MindShotConfiguration's fundamentalFrequencyHz/startTimeOffsetSeconds can be changed",
+          "[core][tool_configuration]") {
+    MindShotConfiguration config;
+    config.setFundamentalFrequencyHz(261.63);
+    config.setStartTimeOffsetSeconds(0.05);
+    REQUIRE(config.fundamentalFrequencyHz() == 261.63);
+    REQUIRE(config.startTimeOffsetSeconds() == 0.05);
+}
+
 TEST_CASE("MindShotConfiguration::setClip() sets the source id and the clip", "[core][tool_configuration]") {
     MindShotConfiguration config;
     config.setClip(sound_mind::core::MindShotId{7}, makeTestClip());
@@ -483,6 +499,8 @@ TEST_CASE("A MindShotConfiguration round-trips through JSON, source id included"
     config.setClip(sound_mind::core::MindShotId{3}, makeTestClip());
     config.setFalloff(0.6f);
     config.setBlendMode(BlendMode::Screen);
+    config.setFundamentalFrequencyHz(261.63);
+    config.setStartTimeOffsetSeconds(0.05);
 
     const nlohmann::json json = config;
     const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
@@ -496,6 +514,24 @@ TEST_CASE("A MindShotConfiguration round-trips through JSON, source id included"
     REQUIRE(mindShot.clip().leftMagnitudeDb == std::vector<float>{-1.0f, -2.0f, -3.0f, -4.0f});
     REQUIRE(roundTripped->falloff() == 0.6f);
     REQUIRE(mindShot.blendMode() == BlendMode::Screen);
+    REQUIRE(mindShot.fundamentalFrequencyHz() == 261.63);
+    REQUIRE(mindShot.startTimeOffsetSeconds() == 0.05);
+}
+
+TEST_CASE("A MindShotConfiguration loads from JSON missing fundamentalFrequencyHz/startTimeOffsetSeconds (saved "
+          "before v0.Y.55.1) as unset",
+          "[core][tool_configuration]") {
+    MindShotConfiguration config;
+    config.setClip(sound_mind::core::MindShotId{3}, makeTestClip());
+    nlohmann::json json = config;
+    json.erase("fundamentalFrequencyHz");
+    json.erase("startTimeOffsetSeconds");
+
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    const auto& mindShot = dynamic_cast<const MindShotConfiguration&>(*roundTripped);
+    REQUIRE(mindShot.fundamentalFrequencyHz() == 0.0);
+    REQUIRE(mindShot.startTimeOffsetSeconds() == 0.0);
 }
 
 TEST_CASE("A MindShotConfiguration loads from JSON missing blendMode (saved before v0.Y.37.1) as Overwrite",
@@ -538,6 +574,22 @@ TEST_CASE("MindGrainConfiguration's blend mode can be changed", "[core][tool_con
     REQUIRE(config.blendMode() == BlendMode::Difference);
 }
 
+TEST_CASE("A fresh MindGrainConfiguration's fundamentalFrequencyHz/startTimeOffsetSeconds are both unset (0.0)",
+          "[core][tool_configuration]") {
+    const MindGrainConfiguration config;
+    REQUIRE(config.fundamentalFrequencyHz() == 0.0);
+    REQUIRE(config.startTimeOffsetSeconds() == 0.0);
+}
+
+TEST_CASE("MindGrainConfiguration's fundamentalFrequencyHz/startTimeOffsetSeconds can be changed",
+          "[core][tool_configuration]") {
+    MindGrainConfiguration config;
+    config.setFundamentalFrequencyHz(220.0);
+    config.setStartTimeOffsetSeconds(0.02);
+    REQUIRE(config.fundamentalFrequencyHz() == 220.0);
+    REQUIRE(config.startTimeOffsetSeconds() == 0.02);
+}
+
 TEST_CASE("MindGrainConfiguration::setReference() sets the source id, layer, and bounds",
           "[core][tool_configuration]") {
     MindGrainConfiguration config;
@@ -578,6 +630,8 @@ TEST_CASE("A MindGrainConfiguration round-trips through JSON, source id included
                          sound_mind::core::TimeFrequencyRect{0.5, 1.5, 200.0, 800.0});
     config.setFalloff(0.6f);
     config.setBlendMode(BlendMode::Add);
+    config.setFundamentalFrequencyHz(220.0);
+    config.setStartTimeOffsetSeconds(0.02);
 
     const nlohmann::json json = config;
     const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
@@ -591,6 +645,25 @@ TEST_CASE("A MindGrainConfiguration round-trips through JSON, source id included
     REQUIRE(mindGrain.bounds().highFrequencyHz == 800.0);
     REQUIRE(roundTripped->falloff() == 0.6f);
     REQUIRE(mindGrain.blendMode() == BlendMode::Add);
+    REQUIRE(mindGrain.fundamentalFrequencyHz() == 220.0);
+    REQUIRE(mindGrain.startTimeOffsetSeconds() == 0.02);
+}
+
+TEST_CASE("A MindGrainConfiguration loads from JSON missing fundamentalFrequencyHz/startTimeOffsetSeconds (saved "
+          "before v0.Y.55.1) as unset",
+          "[core][tool_configuration]") {
+    MindGrainConfiguration config;
+    config.setReference(sound_mind::core::MindGrainId{3}, sound_mind::core::LayerId{4},
+                         sound_mind::core::TimeFrequencyRect{0.5, 1.5, 200.0, 800.0});
+    nlohmann::json json = config;
+    json.erase("fundamentalFrequencyHz");
+    json.erase("startTimeOffsetSeconds");
+
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    const auto& mindGrain = dynamic_cast<const MindGrainConfiguration&>(*roundTripped);
+    REQUIRE(mindGrain.fundamentalFrequencyHz() == 0.0);
+    REQUIRE(mindGrain.startTimeOffsetSeconds() == 0.0);
 }
 
 TEST_CASE("A MindGrainConfiguration loads from JSON missing blendMode (saved before v0.Y.37.1) as Overwrite",

@@ -65,6 +65,18 @@ struct NamedMindGrain {
     ///        against `sourceLayerId`'s own *current* content fresh at
     ///        every render, not captured once.
     TimeFrequencyRect bounds;
+    /// @brief The real-world pitch this grain's own referenced region is
+    ///        recorded/painted at, in Hz - see `NamedMindShot::
+    ///        fundamentalFrequencyHz()`'s own docs; the same "MIDI track
+    ///        import" prerequisite, applied to a live reference instead of
+    ///        a captured snapshot. `0.0` (the default) means "not set - no
+    ///        pitch-shifting."
+    double fundamentalFrequencyHz = 0.0;
+    /// @brief How far into `bounds`'s own span, in seconds, the "true"
+    ///        onset actually sits - see `NamedMindShot::
+    ///        startTimeOffsetSeconds()`'s own docs. `0.0` (the default)
+    ///        means "no offset."
+    double startTimeOffsetSeconds = 0.0;
 };
 
 /// @brief Serializes a named Mind Grain to its JSON representation.

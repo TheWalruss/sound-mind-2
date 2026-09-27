@@ -1542,15 +1542,47 @@ public slots:
      *        `toolPaletteController_`); a no-op if there's no committed
      *        selection or no project open.
      *
-     * Auto-names the new entry `"Mind Shot <N>"`, `N` one more than the
-     * library's own current size - no naming dialog, matching this
-     * codebase's own "quick action, not a richer flow" precedent for
-     * Copy/Cut (this is architecturally the same capture, just stored
-     * permanently). Confirms success via a status-bar message, the same
-     * lightweight feedback `importAudioFile()`/`importImageFiles()` already
-     * give for a comparably one-off, meaningfully-persistent action.
+     * Opens a `MindCaptureDialog` (`v0.Y.55.1`), pre-filled with an
+     * auto-suggested name `"Mind Shot <N>"` (`N` one more than the
+     * library's own current size) - unlike Copy/Cut's own no-dialog "quick
+     * action" precedent, a real dialog is needed here because
+     * `fundamentalFrequencyHz()`/`startTimeOffsetSeconds()` (this
+     * milestone's own MIDI-import prerequisite) have no other UI to be set
+     * from at all yet (see `NamedMindGrain`'s own "no library management UI
+     * yet" note). The dialog is only ever shown when there's actually a
+     * committed selection to capture (checked *before* `exec()`, via
+     * `toolPaletteController_->hasSelection()`) - both so clicking the
+     * menu action with nothing selected stays the same harmless no-op it
+     * always was, and so a headless caller with no selection (the
+     * existing regression test in particular) never blocks on a modal
+     * dialog no one is there to close. Confirms success via a status-bar
+     * message, the same lightweight feedback `importAudioFile()`/
+     * `importImageFiles()` already give for a comparably one-off,
+     * meaningfully-persistent action.
      */
     void captureMindShot();
+
+    /**
+     * @brief The dialog-free half of captureMindShot() - actually performs
+     *        the capture given already-known details, without ever
+     *        showing `MindCaptureDialog` itself. `captureMindShot()`
+     *        gathers those details from the dialog and calls straight
+     *        through to this; a caller that already knows what it wants
+     *        (in particular, this codebase's own test suite - the same
+     *        "test the dialog-free half, never the real modal-dialog-
+     *        showing slot" precedent `importAudioSnippetsAsync()` already
+     *        establishes for `importAudio()`) can call this directly
+     *        instead.
+     * @param name Display name for the new library entry.
+     * @param fundamentalFrequencyHz See `SelectionController::
+     *        captureMindShot()`'s own identical parameter docs. Defaults
+     *        to `0.0` ("not set").
+     * @param startTimeOffsetSeconds See `SelectionController::
+     *        captureMindShot()`'s own identical parameter docs. Defaults
+     *        to `0.0` ("no offset").
+     */
+    void captureMindShotWithDetails(const std::string& name, double fundamentalFrequencyHz = 0.0,
+                                      double startTimeOffsetSeconds = 0.0);
 
     /**
      * @brief Captures the current selection's own `{layer, bounds}` into a
@@ -1562,11 +1594,21 @@ public slots:
      *        selection or no project open.
      *
      * Unlike captureMindShot(), no pixel content is ever captured - see
-     * `SelectionController::captureMindGrain()`'s own docs. Auto-names the
-     * new entry `"Mind Grain <N>"`, the same convention captureMindShot()
-     * uses, and confirms success the same way (a status-bar message).
+     * `SelectionController::captureMindGrain()`'s own docs. Opens the same
+     * `MindCaptureDialog` captureMindShot() does (auto-suggesting
+     * `"Mind Grain <N>"`), only when there's a selection to capture (see
+     * captureMindShot()'s own docs on why), and confirms success the same
+     * way (a status-bar message).
      */
     void captureMindGrain();
+
+    /// @brief The dialog-free half of captureMindGrain() - see
+    ///        captureMindShotWithDetails()'s own identical docs.
+    /// @param name Display name for the new library entry.
+    /// @param fundamentalFrequencyHz Defaults to `0.0` ("not set").
+    /// @param startTimeOffsetSeconds Defaults to `0.0` ("no offset").
+    void captureMindGrainWithDetails(const std::string& name, double fundamentalFrequencyHz = 0.0,
+                                       double startTimeOffsetSeconds = 0.0);
 
     /**
      * @brief Finishes the Path tool's own in-progress node placement,

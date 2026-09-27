@@ -111,6 +111,8 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config) {
         }
         json["clip"] = mindShot->clip();
         json["blendMode"] = mindShot->blendMode();
+        json["fundamentalFrequencyHz"] = mindShot->fundamentalFrequencyHz();
+        json["startTimeOffsetSeconds"] = mindShot->startTimeOffsetSeconds();
     } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(&config)) {
         writeCommonToolConfigurationFields(json, config);
         if (const auto sourceId = mindGrain->sourceMindGrainId(); sourceId.has_value()) {
@@ -119,6 +121,8 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config) {
         json["sourceLayerId"] = mindGrain->sourceLayerId();
         json["bounds"] = mindGrain->bounds();
         json["blendMode"] = mindGrain->blendMode();
+        json["fundamentalFrequencyHz"] = mindGrain->fundamentalFrequencyHz();
+        json["startTimeOffsetSeconds"] = mindGrain->startTimeOffsetSeconds();
     } else if (dynamic_cast<const HealConfiguration*>(&config)) {
         // No subtype-specific fields at all - see HealConfiguration's own
         // docs on why.
@@ -177,6 +181,10 @@ std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::jso
         // v0.Y.37.1 (Deferred Blend Modes); a configuration saved before
         // this milestone was implicitly always a hard overwrite anyway.
         mindShot->setBlendMode(json.value("blendMode", BlendMode::Overwrite));
+        // Lenient - absent before v0.Y.55.1's own prerequisite existed,
+        // falling back to "unset" (no pitch-shifting/offset).
+        mindShot->setFundamentalFrequencyHz(json.value("fundamentalFrequencyHz", 0.0));
+        mindShot->setStartTimeOffsetSeconds(json.value("startTimeOffsetSeconds", 0.0));
         config = std::move(mindShot);
     } else if (type == ToolType::MindGrain) {
         auto mindGrain = std::make_unique<MindGrainConfiguration>();
@@ -188,6 +196,8 @@ std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::jso
                                  json.at("bounds").get<TimeFrequencyRect>());
         // Lenient, same reasoning as MindShotConfiguration's own above.
         mindGrain->setBlendMode(json.value("blendMode", BlendMode::Overwrite));
+        mindGrain->setFundamentalFrequencyHz(json.value("fundamentalFrequencyHz", 0.0));
+        mindGrain->setStartTimeOffsetSeconds(json.value("startTimeOffsetSeconds", 0.0));
         config = std::move(mindGrain);
     } else if (type == ToolType::Heal) {
         config = std::make_unique<HealConfiguration>();

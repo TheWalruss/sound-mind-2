@@ -28,6 +28,7 @@ add_executable(sound-mind-studio-tests
     test_loop_panel.cpp
     test_macro_recorder.cpp
     test_main_window.cpp
+    test_mind_capture_dialog.cpp
     test_mind_wave_controller.cpp
     test_mind_wave_editor.cpp
     test_mind_waves_panel.cpp

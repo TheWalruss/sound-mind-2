@@ -25,6 +25,8 @@ TEST_CASE("A NamedMindShot round-trips through JSON unchanged", "[core][mind_sho
     original.id = 7;
     original.name = "Piano Hit";
     original.clip = makeTestClip();
+    original.fundamentalFrequencyHz = 261.63;
+    original.startTimeOffsetSeconds = 0.05;
 
     const nlohmann::json json = original;
     const auto restored = json.get<NamedMindShot>();
@@ -36,4 +38,30 @@ TEST_CASE("A NamedMindShot round-trips through JSON unchanged", "[core][mind_sho
     REQUIRE(restored.clip.leftMagnitudeDb == original.clip.leftMagnitudeDb);
     REQUIRE(restored.clip.rightMagnitudeDb == original.clip.rightMagnitudeDb);
     REQUIRE(restored.clip.sharedPhaseRadians == original.clip.sharedPhaseRadians);
+    REQUIRE(restored.fundamentalFrequencyHz == original.fundamentalFrequencyHz);
+    REQUIRE(restored.startTimeOffsetSeconds == original.startTimeOffsetSeconds);
+}
+
+TEST_CASE("A fresh NamedMindShot's fundamentalFrequencyHz/startTimeOffsetSeconds are both unset (0.0)",
+          "[core][mind_shot]") {
+    const NamedMindShot fresh;
+    REQUIRE(fresh.fundamentalFrequencyHz == 0.0);
+    REQUIRE(fresh.startTimeOffsetSeconds == 0.0);
+}
+
+TEST_CASE("A NamedMindShot loaded from JSON with no fundamentalFrequencyHz/startTimeOffsetSeconds keys falls back "
+          "to unset",
+          "[core][mind_shot]") {
+    // A project saved before v0.Y.55.1's own prerequisite existed.
+    nlohmann::json json = NamedMindShot{};
+    json["id"] = 3;
+    json["name"] = "Old Shot";
+    json["clip"] = makeTestClip();
+    json.erase("fundamentalFrequencyHz");
+    json.erase("startTimeOffsetSeconds");
+
+    const auto restored = json.get<NamedMindShot>();
+
+    REQUIRE(restored.fundamentalFrequencyHz == 0.0);
+    REQUIRE(restored.startTimeOffsetSeconds == 0.0);
 }

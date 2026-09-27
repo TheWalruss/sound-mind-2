@@ -38,6 +38,7 @@
 #include "test_loop_panel.h"
 #include "test_macro_recorder.h"
 #include "test_main_window.h"
+#include "test_mind_capture_dialog.h"
 #include "test_mind_wave_controller.h"
 #include "test_mind_wave_editor.h"
 #include "test_mind_waves_panel.h"
@@ -197,6 +198,9 @@ int main(int argc, char** argv) {
 
     MindWavesPanelTest mindWavesPanelTest;
     status |= QTest::qExec(&mindWavesPanelTest, argc, argv);
+
+    MindCaptureDialogTest mindCaptureDialogTest;
+    status |= QTest::qExec(&mindCaptureDialogTest, argc, argv);
 
     MindWaveControllerTest mindWaveControllerTest;
     status |= QTest::qExec(&mindWaveControllerTest, argc, argv);

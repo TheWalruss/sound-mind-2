@@ -545,10 +545,22 @@ public:
      * can refresh itself.
      *
      * @param name Display name for the new library entry.
+     * @param fundamentalFrequencyHz `v0.Y.55.1`'s own new field, set on the
+     *        entry via `Project::mindShotById()`'s own mutable overload
+     *        right after `Project::addMindShot()` returns (no signature
+     *        change to that function itself) - see `sound_mind::core::
+     *        NamedMindShot::fundamentalFrequencyHz`'s own docs. Defaults to
+     *        `0.0` ("not set"), the only behavior that existed before this
+     *        milestone.
+     * @param startTimeOffsetSeconds See `NamedMindShot::
+     *        startTimeOffsetSeconds`'s own docs; defaults to `0.0` ("no
+     *        offset").
      * @return The new entry's own id, or `std::nullopt` if this was a
      *         no-op (no committed selection).
      */
-    std::optional<sound_mind::core::MindShotId> captureMindShot(const std::string& name);
+    std::optional<sound_mind::core::MindShotId> captureMindShot(const std::string& name,
+                                                                    double fundamentalFrequencyHz = 0.0,
+                                                                    double startTimeOffsetSeconds = 0.0);
 
     /**
      * @brief Captures the current committed selection's own `selectionLayer_`
@@ -571,10 +583,17 @@ public:
      * can refresh itself.
      *
      * @param name Display name for the new library entry.
+     * @param fundamentalFrequencyHz See `captureMindShot()`'s own identical
+     *        parameter docs - `sound_mind::core::NamedMindGrain::
+     *        fundamentalFrequencyHz`'s own field instead. Defaults to `0.0`.
+     * @param startTimeOffsetSeconds See `captureMindShot()`'s own identical
+     *        parameter docs. Defaults to `0.0`.
      * @return The new entry's own id, or `std::nullopt` if this was a
      *         no-op (no committed selection).
      */
-    std::optional<sound_mind::core::MindGrainId> captureMindGrain(const std::string& name);
+    std::optional<sound_mind::core::MindGrainId> captureMindGrain(const std::string& name,
+                                                                     double fundamentalFrequencyHz = 0.0,
+                                                                     double startTimeOffsetSeconds = 0.0);
 
 signals:
     /// @brief Emitted whenever displayBounds()/displayBoundary() would

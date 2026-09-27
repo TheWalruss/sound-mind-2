@@ -507,7 +507,9 @@ void SelectionController::cutSelection() {
     emit contentChanged(selectionLayer_);
 }
 
-std::optional<sound_mind::core::MindShotId> SelectionController::captureMindShot(const std::string& name) {
+std::optional<sound_mind::core::MindShotId> SelectionController::captureMindShot(const std::string& name,
+                                                                                    double fundamentalFrequencyHz,
+                                                                                    double startTimeOffsetSeconds) {
     if (!committedBounds_.has_value() || project_ == nullptr) {
         return std::nullopt;
     }
@@ -520,11 +522,20 @@ std::optional<sound_mind::core::MindShotId> SelectionController::captureMindShot
 
     sound_mind::core::Clip clip = sound_mind::core::captureClip(*layer->content(), *committedBounds_);
     const sound_mind::core::MindShotId id = project_->addMindShot(name, std::move(clip));
+    // v0.Y.55.1 - set via the mutable accessor rather than a addMindShot()
+    // signature change, so every pre-existing call site (including the
+    // whole existing test suite) keeps compiling and behaving unchanged.
+    if (sound_mind::core::NamedMindShot* added = project_->mindShotById(id)) {
+        added->fundamentalFrequencyHz = fundamentalFrequencyHz;
+        added->startTimeOffsetSeconds = startTimeOffsetSeconds;
+    }
     emit mindShotCaptured(id);
     return id;
 }
 
-std::optional<sound_mind::core::MindGrainId> SelectionController::captureMindGrain(const std::string& name) {
+std::optional<sound_mind::core::MindGrainId> SelectionController::captureMindGrain(const std::string& name,
+                                                                                      double fundamentalFrequencyHz,
+                                                                                      double startTimeOffsetSeconds) {
     if (!committedBounds_.has_value() || project_ == nullptr) {
         return std::nullopt;
     }
@@ -532,6 +543,10 @@ std::optional<sound_mind::core::MindGrainId> SelectionController::captureMindGra
     // stores only the reference {selectionLayer_, bounds}; see this
     // method's own docs.
     const sound_mind::core::MindGrainId id = project_->addMindGrain(name, selectionLayer_, *committedBounds_);
+    if (sound_mind::core::NamedMindGrain* added = project_->mindGrainById(id)) {
+        added->fundamentalFrequencyHz = fundamentalFrequencyHz;
+        added->startTimeOffsetSeconds = startTimeOffsetSeconds;
+    }
     emit mindGrainCaptured(id);
     return id;
 }

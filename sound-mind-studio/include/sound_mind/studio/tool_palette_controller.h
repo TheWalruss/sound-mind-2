@@ -315,17 +315,33 @@ public:
     /// @brief Captures the current selection into a new, named Mind Shot -
     ///        forwards to `SelectionController::captureMindShot()`.
     /// @param name Display name for the new library entry.
+    /// @param fundamentalFrequencyHz See `SelectionController::
+    ///        captureMindShot()`'s own identical parameter docs. Defaults
+    ///        to `0.0` ("not set").
+    /// @param startTimeOffsetSeconds See `SelectionController::
+    ///        captureMindShot()`'s own identical parameter docs. Defaults
+    ///        to `0.0` ("no offset").
     /// @return The new entry's own id, or `std::nullopt` if there was no
     ///         committed selection to capture.
-    std::optional<sound_mind::core::MindShotId> captureMindShot(const std::string& name);
+    std::optional<sound_mind::core::MindShotId> captureMindShot(const std::string& name,
+                                                                    double fundamentalFrequencyHz = 0.0,
+                                                                    double startTimeOffsetSeconds = 0.0);
 
     /// @brief Captures the current selection's own `{layer, bounds}` into a
     ///        new, named Mind Grain - forwards to
     ///        `SelectionController::captureMindGrain()`.
     /// @param name Display name for the new library entry.
+    /// @param fundamentalFrequencyHz See `SelectionController::
+    ///        captureMindGrain()`'s own identical parameter docs. Defaults
+    ///        to `0.0`.
+    /// @param startTimeOffsetSeconds See `SelectionController::
+    ///        captureMindGrain()`'s own identical parameter docs. Defaults
+    ///        to `0.0`.
     /// @return The new entry's own id, or `std::nullopt` if there was no
     ///         committed selection to capture.
-    std::optional<sound_mind::core::MindGrainId> captureMindGrain(const std::string& name);
+    std::optional<sound_mind::core::MindGrainId> captureMindGrain(const std::string& name,
+                                                                     double fundamentalFrequencyHz = 0.0,
+                                                                     double startTimeOffsetSeconds = 0.0);
 
     /// @brief Pastes the clipboard onto `targetLayer` - forwards to
     ///        `SelectionController::pasteInto()`.

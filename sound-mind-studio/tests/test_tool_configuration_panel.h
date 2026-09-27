@@ -63,6 +63,7 @@ private slots:
     void refreshMindShotsAddsNewEntriesAndPreservesTheCurrentSelection();
     void refreshMindShotsShowsThePlaceholderWhenTheLibraryIsEmpty();
     void selectingAMindShotEmitsToolConfigurationChangedWithItsClip();
+    void selectingAMindShotCopiesItsOwnFundamentalFrequencyAndStartTimeOffset();
     void loadingAMindShotConfigurationSyncsToolTypeAndThePickerSelection();
 
     // Mind Grains (v0.Y.33.1 Installment B).
@@ -71,6 +72,7 @@ private slots:
     void refreshMindGrainsAddsNewEntriesAndPreservesTheCurrentSelection();
     void refreshMindGrainsShowsThePlaceholderWhenTheLibraryIsEmpty();
     void selectingAMindGrainEmitsToolConfigurationChangedWithItsReference();
+    void selectingAMindGrainCopiesItsOwnFundamentalFrequencyAndStartTimeOffset();
     void loadingAMindGrainConfigurationSyncsToolTypeAndThePickerSelection();
     void setActiveLayerHighlightsTheGroupWhenTheActiveLayerIsNotAboveTheSource();
     void setActiveLayerClearsTheHighlightWhenTheActiveLayerIsAboveTheSource();

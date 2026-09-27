@@ -282,12 +282,16 @@ void ToolPaletteController::copySelection() { selectionController_->copySelectio
 
 void ToolPaletteController::cutSelection() { selectionController_->cutSelection(); }
 
-std::optional<sound_mind::core::MindShotId> ToolPaletteController::captureMindShot(const std::string& name) {
-    return selectionController_->captureMindShot(name);
+std::optional<sound_mind::core::MindShotId> ToolPaletteController::captureMindShot(const std::string& name,
+                                                                                     double fundamentalFrequencyHz,
+                                                                                     double startTimeOffsetSeconds) {
+    return selectionController_->captureMindShot(name, fundamentalFrequencyHz, startTimeOffsetSeconds);
 }
 
-std::optional<sound_mind::core::MindGrainId> ToolPaletteController::captureMindGrain(const std::string& name) {
-    return selectionController_->captureMindGrain(name);
+std::optional<sound_mind::core::MindGrainId> ToolPaletteController::captureMindGrain(const std::string& name,
+                                                                                       double fundamentalFrequencyHz,
+                                                                                       double startTimeOffsetSeconds) {
+    return selectionController_->captureMindGrain(name, fundamentalFrequencyHz, startTimeOffsetSeconds);
 }
 
 std::optional<sound_mind::core::OperationId> ToolPaletteController::pasteInto(sound_mind::core::LayerId targetLayer,

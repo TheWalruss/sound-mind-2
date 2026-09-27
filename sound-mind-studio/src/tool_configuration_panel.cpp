@@ -586,6 +586,11 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
             const auto id = static_cast<MindShotId>(data.toULongLong());
             if (const auto* named = project_->mindShotById(id)) {
                 mindShot->setClip(id, named->clip);
+                // v0.Y.55.1 - the library entry's own MIDI-import
+                // prerequisite fields, copied the same way clip/blendMode
+                // already are.
+                mindShot->setFundamentalFrequencyHz(named->fundamentalFrequencyHz);
+                mindShot->setStartTimeOffsetSeconds(named->startTimeOffsetSeconds);
             }
         }
         // Same reasoning as mindShotCombo_'s own carry-over just above -
@@ -601,6 +606,8 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
             const auto id = static_cast<MindGrainId>(data.toULongLong());
             if (const auto* named = project_->mindGrainById(id)) {
                 mindGrain->setReference(id, named->sourceLayerId, named->bounds);
+                mindGrain->setFundamentalFrequencyHz(named->fundamentalFrequencyHz);
+                mindGrain->setStartTimeOffsetSeconds(named->startTimeOffsetSeconds);
             }
         }
         mindGrain->setBlendMode(static_cast<BlendMode>(blendModeCombo_->currentData().toInt()));
@@ -983,6 +990,8 @@ void ToolConfigurationPanel::handleMindShotComboChanged(int index) {
     }
     if (auto* mindShot = dynamic_cast<MindShotConfiguration*>(config_.get())) {
         mindShot->setClip(id, named->clip);
+        mindShot->setFundamentalFrequencyHz(named->fundamentalFrequencyHz);
+        mindShot->setStartTimeOffsetSeconds(named->startTimeOffsetSeconds);
         emitConfigChanged();
     }
 }
@@ -1014,6 +1023,8 @@ void ToolConfigurationPanel::handleMindGrainComboChanged(int index) {
             if (const auto* named = project_->mindGrainById(id)) {
                 if (auto* mindGrain = dynamic_cast<MindGrainConfiguration*>(config_.get())) {
                     mindGrain->setReference(id, named->sourceLayerId, named->bounds);
+                    mindGrain->setFundamentalFrequencyHz(named->fundamentalFrequencyHz);
+                    mindGrain->setStartTimeOffsetSeconds(named->startTimeOffsetSeconds);
                     emitConfigChanged();
                 }
             }

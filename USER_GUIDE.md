@@ -790,10 +790,15 @@ settings:
   size, not scaled by Falloff/Size the way Procedural/Instrument are -
   combined with what's already there per its own **Blend Mode** control
   (Overwrite by default, reproducing the original "stamps back exactly
-  as it was captured" behavior). The panel hides Falloff, Brush Size,
-  Color, and Opacity for Mind Shot, since none of them have any effect
-  on it - only Stamp Mode/Interval (which control the stamp's own
-  placement, not its content) still apply.
+  as it was captured" behavior). If the picked Mind Shot has a
+  Fundamental Frequency set (see "Capture as Mind Shot"), each stamp is
+  also pitch-shifted to match wherever it lands - painting the same Mind
+  Shot at a higher or lower pitch on the canvas genuinely changes its own
+  pitch, not just its position; a Mind Shot with no Fundamental Frequency
+  set stamps back at the same pitch everywhere, as it always has. The
+  panel hides Falloff, Brush Size, Color, and Opacity for Mind Shot,
+  since none of them have any effect on it - only Stamp Mode/Interval
+  (which control the stamp's own placement, not its content) still apply.
 - **Mind Grain** (Mind Grain only) - a drop-down of every Mind Grain you've
   captured so far (see [Selection and Fill](#selection-and-fill)'s own
   "Capture as Mind Grain"), empty until you capture your first one. The
@@ -1166,26 +1171,35 @@ selection to a plain, axis-aligned rectangle.
   Switches straight to [Pick](#pick) and selects the newly pasted result
   there - move, modify, delete, or restack it right away, with no
   separate click needed to find it again.
-- **Capture as Mind Shot** it - **Edit → Capture as Mind Shot** stores the
-  selection's own pixels permanently, named "Mind Shot 1", "Mind Shot 2",
-  and so on - unlike Copy, this doesn't touch the clipboard, and the
-  source pixels are left exactly as they were (no silencing, unlike Cut).
-  Once captured, pick **Mind Shot** as the Tool Type in
-  [Painting](#painting)'s Tool Configuration panel and select it from the
-  drop-down there to paint with it - it stamps back exactly as captured,
-  wherever you paint, on any layer. Always captures the selection's own
-  full bounding box, even for a Lasso/Wand/combined selection - not yet
-  confined to its actual shape.
-- **Capture as Mind Grain** it - **Edit → Capture as Mind Grain** stores a
-  *reference* to the selection's own layer and region, named "Mind Grain 1",
-  "Mind Grain 2", and so on - unlike Capture as Mind Shot, no pixels are
-  captured at all, and neither the clipboard nor the source layer's content
-  is touched. Once captured, pick **Mind Grain** as the Tool Type and
-  select it from the drop-down there to paint with it - see
-  [Painting](#painting)'s own Mind Grain entry for the "only paintable
-  above its own source layer" rule and the guardrails that enforce it.
-  Also always references the selection's own full bounding box, same as
-  Mind Shot above.
+- **Capture as Mind Shot** it - **Edit → Capture as Mind Shot** opens a small
+  dialog before storing the selection's own pixels permanently: a **Name**
+  (defaulting to "Mind Shot 1", "Mind Shot 2", and so on, still editable), a
+  **Fundamental Frequency**, and a **Start-Time Offset**. Unlike Copy, this
+  doesn't touch the clipboard, and the source pixels are left exactly as
+  they were (no silencing, unlike Cut). Once captured, pick **Mind Shot** as
+  the Tool Type in [Painting](#painting)'s Tool Configuration panel and
+  select it from the drop-down there to paint with it - it stamps back
+  exactly as captured, wherever you paint, on any layer, **pitch-shifted to
+  match wherever you stamp it** if you set a Fundamental Frequency (leave it
+  at `0`, the default, for a verbatim stamp at every pitch, unchanged from
+  before this dialog existed). Start-Time Offset shifts the stamp's own
+  placement earlier by that many seconds, so a capture with a little
+  lead-in before its own real attack still lands its attack exactly where
+  you paint, instead of the capture's own geometric middle landing there.
+  Always captures the selection's own full bounding box, even for a
+  Lasso/Wand/combined selection - not yet confined to its actual shape.
+- **Capture as Mind Grain** it - **Edit → Capture as Mind Grain** opens the
+  same dialog Capture as Mind Shot does (defaulting to "Mind Grain 1", "Mind
+  Grain 2", and so on) and stores a *reference* to the selection's own layer
+  and region - unlike Capture as Mind Shot, no pixels are captured at all,
+  and neither the clipboard nor the source layer's content is touched. Once
+  captured, pick **Mind Grain** as the Tool Type and select it from the
+  drop-down there to paint with it - see [Painting](#painting)'s own Mind
+  Grain entry for the "only paintable above its own source layer" rule and
+  the guardrails that enforce it, and Capture as Mind Shot's own entry just
+  above for what Fundamental Frequency/Start-Time Offset do (identical
+  either way). Also always references the selection's own full bounding
+  box, same as Mind Shot above.
 - **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
   actually dragging (a plain click) on the canvas while in Select mode.
 

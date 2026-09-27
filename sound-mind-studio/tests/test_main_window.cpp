@@ -4746,12 +4746,37 @@ void MainWindowTest::captureMindShotAddsANamedEntryToTheProjectsMindShotLibrary(
     QTest::mouseMove(canvas, QPoint(60, 30));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
 
-    window.captureMindShot();
+    // The dialog-free half - see captureMindShotWithDetails()'s own docs
+    // for why tests never call the real, modal-dialog-showing
+    // captureMindShot() slot directly (the same precedent
+    // importAudioSnippetsAsync() already establishes for importAudio()).
+    window.captureMindShotWithDetails("Mind Shot 1");
 
     QCOMPARE(window.project()->mindShots().size(), std::size_t{1});
     QCOMPARE(window.project()->mindShots().front().name, std::string("Mind Shot 1"));
     // A capture never logs an Operation - it's a read, not an edit.
     QCOMPARE(window.project()->operationLog().size(), std::size_t{0});
+}
+
+void MainWindowTest::captureMindShotWithDetailsStoresFundamentalFrequencyAndStartTimeOffset() {
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "sound-mind-test-capture-mind-shot-details.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    window.setSelectModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+
+    window.captureMindShotWithDetails("Piano Hit", 261.63, 0.05);
+
+    QCOMPARE(window.project()->mindShots().front().fundamentalFrequencyHz, 261.63);
+    QCOMPARE(window.project()->mindShots().front().startTimeOffsetSeconds, 0.05);
 }
 
 void MainWindowTest::captureMindShotIsANoOpWithNoSelection() {

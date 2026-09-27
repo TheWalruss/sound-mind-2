@@ -610,6 +610,24 @@ void SelectionControllerTest::captureMindShotAddsANamedEntryToTheProjectsMindSho
     QCOMPARE(project.operationLog().size(), std::size_t{0});
 }
 
+void SelectionControllerTest::captureMindShotStoresFundamentalFrequencyAndStartTimeOffsetWhenGiven() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    setPixel(project, layerId, 25, 10, -3.0f);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+
+    const auto id = controller.captureMindShot("Piano Hit", 261.63, 0.05);
+
+    QVERIFY(id.has_value());
+    QCOMPARE(project.mindShots().front().fundamentalFrequencyHz, 261.63);
+    QCOMPARE(project.mindShots().front().startTimeOffsetSeconds, 0.05);
+}
+
 void SelectionControllerTest::captureMindShotIsANoOpWithNoCommittedSelection() {
     Project project = Project::createNew(testSettings());
     addBlankNormalLayer(project);
@@ -686,6 +704,23 @@ void SelectionControllerTest::captureMindGrainAddsANamedEntryToTheProjectsMindGr
     // Unlike captureMindShot(), no content capture at all - never even
     // logs an Operation, the same "a read, not an edit" reasoning.
     QCOMPARE(project.operationLog().size(), std::size_t{0});
+}
+
+void SelectionControllerTest::captureMindGrainStoresFundamentalFrequencyAndStartTimeOffsetWhenGiven() {
+    const auto config = testConfig();
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    PaintController paintController;
+    paintController.setProject(&project);
+    SelectionController controller(&paintController);
+    controller.setProject(&project);
+    selectRect(controller, layerId, config, 20, 30, 5, 15);
+
+    const auto id = controller.captureMindGrain("Rain Texture", 220.0, 0.02);
+
+    QVERIFY(id.has_value());
+    QCOMPARE(project.mindGrains().front().fundamentalFrequencyHz, 220.0);
+    QCOMPARE(project.mindGrains().front().startTimeOffsetSeconds, 0.02);
 }
 
 void SelectionControllerTest::captureMindGrainIsANoOpWithNoCommittedSelection() {

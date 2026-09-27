@@ -79,6 +79,8 @@ TEST_CASE("A NamedMindGrain round-trips through JSON unchanged", "[core][mind_gr
     original.name = "Rain Texture";
     original.sourceLayerId = 3;
     original.bounds = TimeFrequencyRect{0.5, 1.5, 200.0, 800.0};
+    original.fundamentalFrequencyHz = 220.0;
+    original.startTimeOffsetSeconds = 0.02;
 
     const nlohmann::json json = original;
     const auto restored = json.get<NamedMindGrain>();
@@ -90,6 +92,32 @@ TEST_CASE("A NamedMindGrain round-trips through JSON unchanged", "[core][mind_gr
     REQUIRE(restored.bounds.endTimeSeconds == original.bounds.endTimeSeconds);
     REQUIRE(restored.bounds.lowFrequencyHz == original.bounds.lowFrequencyHz);
     REQUIRE(restored.bounds.highFrequencyHz == original.bounds.highFrequencyHz);
+    REQUIRE(restored.fundamentalFrequencyHz == original.fundamentalFrequencyHz);
+    REQUIRE(restored.startTimeOffsetSeconds == original.startTimeOffsetSeconds);
+}
+
+TEST_CASE("A fresh NamedMindGrain's fundamentalFrequencyHz/startTimeOffsetSeconds are both unset (0.0)",
+          "[core][mind_grain]") {
+    const NamedMindGrain fresh;
+    REQUIRE(fresh.fundamentalFrequencyHz == 0.0);
+    REQUIRE(fresh.startTimeOffsetSeconds == 0.0);
+}
+
+TEST_CASE("A NamedMindGrain loaded from JSON with no fundamentalFrequencyHz/startTimeOffsetSeconds keys falls "
+          "back to unset",
+          "[core][mind_grain]") {
+    nlohmann::json json = NamedMindGrain{};
+    json["id"] = 3;
+    json["name"] = "Old Grain";
+    json["sourceLayerId"] = 2;
+    json["bounds"] = TimeFrequencyRect{0.0, 1.0, 100.0, 200.0};
+    json.erase("fundamentalFrequencyHz");
+    json.erase("startTimeOffsetSeconds");
+
+    const auto restored = json.get<NamedMindGrain>();
+
+    REQUIRE(restored.fundamentalFrequencyHz == 0.0);
+    REQUIRE(restored.startTimeOffsetSeconds == 0.0);
 }
 
 TEST_CASE("isLayerAbove is true only when the layer is strictly above the other", "[core][mind_grain]") {

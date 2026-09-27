@@ -39,7 +39,9 @@ void to_json(nlohmann::json& json, const NamedMindGrain& namedMindGrain) {
     json = nlohmann::json{{"id", namedMindGrain.id},
                            {"name", namedMindGrain.name},
                            {"sourceLayerId", namedMindGrain.sourceLayerId},
-                           {"bounds", namedMindGrain.bounds}};
+                           {"bounds", namedMindGrain.bounds},
+                           {"fundamentalFrequencyHz", namedMindGrain.fundamentalFrequencyHz},
+                           {"startTimeOffsetSeconds", namedMindGrain.startTimeOffsetSeconds}};
 }
 
 void from_json(const nlohmann::json& json, NamedMindGrain& namedMindGrain) {
@@ -47,6 +49,10 @@ void from_json(const nlohmann::json& json, NamedMindGrain& namedMindGrain) {
     json.at("name").get_to(namedMindGrain.name);
     json.at("sourceLayerId").get_to(namedMindGrain.sourceLayerId);
     json.at("bounds").get_to(namedMindGrain.bounds);
+    // Absent in a project saved before v0.Y.55.1's own prerequisite existed -
+    // falls back to "not set", matching both fields' own documented default.
+    namedMindGrain.fundamentalFrequencyHz = json.value("fundamentalFrequencyHz", 0.0);
+    namedMindGrain.startTimeOffsetSeconds = json.value("startTimeOffsetSeconds", 0.0);
 }
 
 bool isLayerAbove(const Project& project, LayerId layer, LayerId other) noexcept {

@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.9] - 2026-09-27
+
+MIDI track import prerequisite: **Mind Shot/Mind Grain pitch-shifting.**
+
+### Added
+
+- **Capturing a Mind Shot or Mind Grain now opens a small dialog** asking for a name, a **Fundamental Frequency**, and a **Start-Time Offset**, instead of capturing instantly. Setting a Fundamental Frequency lets that capture be pitch-shifted to a different target pitch wherever it's stamped afterward - painting the same captured sound at a higher or lower note now genuinely changes its pitch, not just where it lands on the canvas. Start-Time Offset lets a capture with a little lead-in before its own "real" attack still line up correctly when stamped. Leaving either at `0` (the default) behaves exactly as before - a verbatim, centered stamp.
+
+### Notes
+
+New `fundamentalFrequencyHz`/`startTimeOffsetSeconds` on Mind Shot/Mind Grain library entries and their paint configurations; a new pitch-shift primitive resamples a captured clip's own frequency axis by the ratio between its target and fundamental pitch. This is a prerequisite for the upcoming MIDI track import milestone, not yet MIDI import itself. Full regression: `sound-mind-core` 959/959 (14 new), `sound-mind-studio` full suite genuinely passing (9 new). Builds cleanly on both Arm64 and x64 (Core); Studio verified on Arm64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #173.
+
 ## [0.1.3.8] - 2026-09-27
 
 Paint Tool Enhancements, Installment C (final): **operation-relative (stroke-space) MindWave bindings - milestone complete.**

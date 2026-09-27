@@ -229,6 +229,7 @@ private slots:
     void pasteIsANoOpWithNoClipboard();
     void copySelectionIsANoOpWithNoSelection();
     void captureMindShotAddsANamedEntryToTheProjectsMindShotLibrary();
+    void captureMindShotWithDetailsStoresFundamentalFrequencyAndStartTimeOffset();
     void captureMindShotIsANoOpWithNoSelection();
     void clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject();
     void cancelPathDiscardsInProgressPlacementWithoutCommittingAnything();

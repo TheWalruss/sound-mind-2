@@ -69,6 +69,7 @@
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/loop_panel.h"
+#include "sound_mind/studio/mind_capture_dialog.h"
 #include "sound_mind/studio/mind_waves_panel.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/playback_panel.h"
@@ -2856,21 +2857,52 @@ void MainWindow::paste() {
 }
 
 void MainWindow::captureMindShot() {
+    if (!project_.has_value() || !toolPaletteController_->hasSelection()) {
+        return;
+    }
+    const QString defaultName =
+        tr("Mind Shot %1").arg(QString::number(project_->mindShots().size() + 1));
+    MindCaptureDialog dialog(tr("Capture Mind Shot"), defaultName, this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    captureMindShotWithDetails(dialog.name().toStdString(), dialog.fundamentalFrequencyHz(),
+                                 dialog.startTimeOffsetSeconds());
+}
+
+void MainWindow::captureMindShotWithDetails(const std::string& name, double fundamentalFrequencyHz,
+                                              double startTimeOffsetSeconds) {
     if (!project_.has_value()) {
         return;
     }
-    const std::string name = "Mind Shot " + std::to_string(project_->mindShots().size() + 1);
-    if (const auto id = toolPaletteController_->captureMindShot(name); id.has_value()) {
+    if (const auto id = toolPaletteController_->captureMindShot(name, fundamentalFrequencyHz, startTimeOffsetSeconds);
+        id.has_value()) {
         statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(name)), 5000);
     }
 }
 
 void MainWindow::captureMindGrain() {
+    if (!project_.has_value() || !toolPaletteController_->hasSelection()) {
+        return;
+    }
+    const QString defaultName =
+        tr("Mind Grain %1").arg(QString::number(project_->mindGrains().size() + 1));
+    MindCaptureDialog dialog(tr("Capture Mind Grain"), defaultName, this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    captureMindGrainWithDetails(dialog.name().toStdString(), dialog.fundamentalFrequencyHz(),
+                                  dialog.startTimeOffsetSeconds());
+}
+
+void MainWindow::captureMindGrainWithDetails(const std::string& name, double fundamentalFrequencyHz,
+                                               double startTimeOffsetSeconds) {
     if (!project_.has_value()) {
         return;
     }
-    const std::string name = "Mind Grain " + std::to_string(project_->mindGrains().size() + 1);
-    if (const auto id = toolPaletteController_->captureMindGrain(name); id.has_value()) {
+    if (const auto id =
+            toolPaletteController_->captureMindGrain(name, fundamentalFrequencyHz, startTimeOffsetSeconds);
+        id.has_value()) {
         statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(name)), 5000);
     }
 }

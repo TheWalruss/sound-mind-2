@@ -748,6 +748,24 @@ void ToolConfigurationPanelTest::selectingAMindShotEmitsToolConfigurationChanged
     QCOMPARE(mindShot.clip().frameCount, static_cast<std::uint32_t>(2));
 }
 
+void ToolConfigurationPanelTest::selectingAMindShotCopiesItsOwnFundamentalFrequencyAndStartTimeOffset() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    const MindShotId id = project.addMindShot("Piano Hit", makeTestClip());
+    project.mindShotById(id)->fundamentalFrequencyHz = 261.63;
+    project.mindShotById(id)->startTimeOffsetSeconds = 0.05;
+    panel.setProject(&project);
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Shot")));
+    auto* mindShotCombo = panel.findChild<QComboBox*>(QStringLiteral("mindShotCombo"));
+
+    mindShotCombo->setCurrentIndex(mindShotCombo->findText(QStringLiteral("Piano Hit")));
+
+    const auto& mindShot = dynamic_cast<const MindShotConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(mindShot.fundamentalFrequencyHz(), 261.63);
+    QCOMPARE(mindShot.startTimeOffsetSeconds(), 0.05);
+}
+
 void ToolConfigurationPanelTest::loadingAMindShotConfigurationSyncsToolTypeAndThePickerSelection() {
     ToolConfigurationPanel panel;
     Project project = Project::createNew(ProjectSettings{});
@@ -843,6 +861,24 @@ void ToolConfigurationPanelTest::selectingAMindGrainEmitsToolConfigurationChange
     QCOMPARE(mindGrain.sourceMindGrainId(), std::optional<MindGrainId>(secondId));
     QCOMPARE(mindGrain.sourceLayerId(), LayerId{1});
     QCOMPARE(mindGrain.bounds().startTimeSeconds, 0.5);
+}
+
+void ToolConfigurationPanelTest::selectingAMindGrainCopiesItsOwnFundamentalFrequencyAndStartTimeOffset() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    const MindGrainId id = project.addMindGrain("Rain Texture", LayerId{1}, TimeFrequencyRect{});
+    project.mindGrainById(id)->fundamentalFrequencyHz = 220.0;
+    project.mindGrainById(id)->startTimeOffsetSeconds = 0.02;
+    panel.setProject(&project);
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Grain")));
+    auto* mindGrainCombo = panel.findChild<QComboBox*>(QStringLiteral("mindGrainCombo"));
+
+    mindGrainCombo->setCurrentIndex(mindGrainCombo->findText(QStringLiteral("Rain Texture")));
+
+    const auto& mindGrain = dynamic_cast<const MindGrainConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(mindGrain.fundamentalFrequencyHz(), 220.0);
+    QCOMPARE(mindGrain.startTimeOffsetSeconds(), 0.02);
 }
 
 void ToolConfigurationPanelTest::loadingAMindGrainConfigurationSyncsToolTypeAndThePickerSelection() {

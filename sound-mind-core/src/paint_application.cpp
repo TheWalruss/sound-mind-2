@@ -664,6 +664,97 @@ void applyInstrumentPaintOperation(const PaintOperation& operation, const Instru
     }
 }
 
+/// @brief `clip`, with every row shifted along its own bin (frequency) axis
+/// by `binDelta` (fractional; linearly interpolated between the two nearest
+/// source rows) - `v0.Y.55.1`'s own pitch-shift primitive for Mind Shot/
+/// Mind Grain stamps (see `MindShotConfiguration::fundamentalFrequencyHz()`'s
+/// own docs for the full picture).
+///
+/// A real Hz ratio always corresponds to exactly this same bin delta,
+/// **independent of position** - `frequencyToBinIndex()`'s own log-scale
+/// mapping means `binIndex(f * ratio) - binIndex(f)` is a constant,
+/// regardless of `f`, the same insight `translateFrequencyByBins()`'s own
+/// docs already establish for shifting a single point, generalized here to
+/// every row of a whole `Clip` at once (see this function's own callers for
+/// how `binDelta` itself is actually computed, by calling
+/// `frequencyToBinIndex()` at the target and fundamental frequencies and
+/// subtracting - reusing that existing, already-tested formula rather than
+/// re-deriving the log math here).
+///
+/// A destination row that would read from outside `clip`'s own bin range
+/// reads as silence (`kSilenceDb` magnitude, zero phase) instead of
+/// wrapping or clamping to the nearest edge - the same "nothing captured
+/// there" spirit `blitClipCentered()`'s own out-of-range handling already
+/// has, just filled in explicitly rather than skipped (this function always
+/// returns a full `clip.binCount`-tall `Clip`, never a partial one, so its
+/// own result can still be blitted through the unmodified `blitClipCentered()`
+/// below). Magnitude interpolates linearly in dB - the same "treat dB
+/// values directly" simplicity precedent `blurredNeighborhoodStop()` already
+/// establishes; phase does **not** interpolate (there's no meaningful
+/// circular-mean shortcut in this codebase yet) - each destination row
+/// takes its own nearest source row's phase verbatim instead.
+///
+/// @param clip The clip to shift; returned unchanged (a cheap copy, not
+///        reprocessed) if `binDelta == 0.0` or `clip` is empty.
+/// @param binDelta How far to shift, in bins - positive shifts content
+///        toward higher-index bins (higher frequencies).
+/// @return A new `Clip` of the same `frameCount`/`binCount`, shifted.
+Clip shiftClipByBins(const Clip& clip, double binDelta) {
+    if (binDelta == 0.0 || clip.frameCount == 0 || clip.binCount == 0) {
+        return clip;
+    }
+    constexpr float kSilenceDb = -96.0f;  // Matches gradient.cpp's own silenceGradient() floor.
+
+    Clip result;
+    result.frameCount = clip.frameCount;
+    result.binCount = clip.binCount;
+    const std::size_t cellCount = static_cast<std::size_t>(clip.binCount) * static_cast<std::size_t>(clip.frameCount);
+    result.leftMagnitudeDb.assign(cellCount, kSilenceDb);
+    result.rightMagnitudeDb.assign(cellCount, kSilenceDb);
+    result.sharedPhaseRadians.assign(cellCount, 0.0f);
+
+    for (int destBin = 0; destBin < static_cast<int>(clip.binCount); ++destBin) {
+        const double sourceBin = static_cast<double>(destBin) - binDelta;
+        const int lowBin = static_cast<int>(std::floor(sourceBin));
+        const int highBin = lowBin + 1;
+        const float fraction = static_cast<float>(sourceBin - static_cast<double>(lowBin));
+        const bool lowValid = lowBin >= 0 && lowBin < static_cast<int>(clip.binCount);
+        const bool highValid = highBin >= 0 && highBin < static_cast<int>(clip.binCount);
+        if (!lowValid && !highValid) {
+            continue;  // Already silence-filled above.
+        }
+        for (std::uint32_t frame = 0; frame < clip.frameCount; ++frame) {
+            const std::size_t destIndex = cellIndex(static_cast<std::uint32_t>(destBin), frame, clip.frameCount);
+            const float leftLow =
+                lowValid ? clip.leftMagnitudeDb[cellIndex(static_cast<std::uint32_t>(lowBin), frame, clip.frameCount)]
+                          : kSilenceDb;
+            const float leftHigh =
+                highValid
+                    ? clip.leftMagnitudeDb[cellIndex(static_cast<std::uint32_t>(highBin), frame, clip.frameCount)]
+                    : kSilenceDb;
+            const float rightLow =
+                lowValid
+                    ? clip.rightMagnitudeDb[cellIndex(static_cast<std::uint32_t>(lowBin), frame, clip.frameCount)]
+                    : kSilenceDb;
+            const float rightHigh =
+                highValid
+                    ? clip.rightMagnitudeDb[cellIndex(static_cast<std::uint32_t>(highBin), frame, clip.frameCount)]
+                    : kSilenceDb;
+            result.leftMagnitudeDb[destIndex] = leftLow + (leftHigh - leftLow) * fraction;
+            result.rightMagnitudeDb[destIndex] = rightLow + (rightHigh - rightLow) * fraction;
+
+            const bool nearestIsLow = fraction < 0.5f;
+            const int nearestBin = nearestIsLow ? lowBin : highBin;
+            const bool nearestValid = nearestIsLow ? lowValid : highValid;
+            result.sharedPhaseRadians[destIndex] =
+                nearestValid
+                    ? clip.sharedPhaseRadians[cellIndex(static_cast<std::uint32_t>(nearestBin), frame, clip.frameCount)]
+                    : 0.0f;
+        }
+    }
+    return result;
+}
+
 /// @brief `MindShotConfiguration`'s/`MindGrainConfiguration`'s own stamp:
 /// `clip`'s own cells combined with whatever's already there via `blendMode`
 /// (`applyBlendedCell()`, at full strength - `opacity = 1.0`, the same
@@ -705,11 +796,40 @@ void blitClipCentered(const Clip& clip, double frameCenter, float binCenter, Ble
     }
 }
 
+/// @brief `frameCenter`, adjusted so the point `offsetSeconds` into a clip
+/// (measured from its own start, not its middle) lands exactly at
+/// `frameCenter` instead of the clip's own geometric middle -
+/// `MindShotConfiguration::startTimeOffsetSeconds()`'s/`MindGrainConfiguration`'s
+/// own placement primitive, `v0.Y.55.1`. `blitClipCentered()`'s own
+/// signature/semantics are unchanged - this computes the adjusted value to
+/// pass in as its `frameCenter` argument, rather than adding a second
+/// offset parameter there: `frameOrigin = round(adjusted) -
+/// static_cast<int>(frameCount / 2)` must equal `frameCenter - offsetFrames`,
+/// which solves to `adjusted = frameCenter - offsetFrames +
+/// static_cast<int>(frameCount / 2)` - the same **integer**, truncating
+/// half-width `blitClipCentered()` itself computes (not a plain `/ 2.0`),
+/// so the two agree exactly for an odd `frameCount` too. `offsetSeconds ==
+/// 0.0` (unset) returns `frameCenter` unchanged.
+double adjustedFrameCenterForStartTimeOffset(double frameCenter, double offsetSeconds, std::uint32_t frameCount,
+                                               const sound_mind::codec::StreamCodecConfig& config) {
+    if (offsetSeconds == 0.0) {
+        return frameCenter;
+    }
+    const double offsetFrames = timeToFrameIndex(offsetSeconds, config) - timeToFrameIndex(0.0, config);
+    return frameCenter - offsetFrames + static_cast<double>(static_cast<int>(frameCount / 2));
+}
+
 /// @brief `MindShotConfiguration`'s own stamp, applied at every stamp
 /// position along the stroke - see `blitClipCentered()`'s own docs for
 /// what happens at each one. A no-op if no Mind Shot has ever been
 /// selected (`clip.frameCount()`/`binCount()` both `0` - a fresh,
 /// never-configured `MindShotConfiguration`).
+///
+/// **`v0.Y.55.1` adds real pitch-shifting and start-time-offset placement**
+/// - see `MindShotConfiguration::fundamentalFrequencyHz()`'s/
+/// `startTimeOffsetSeconds()`'s own docs. Both are no-ops (verbatim blit,
+/// centered exactly as before this milestone) while left at their own
+/// default (`0.0`) - the only behavior that existed previously.
 void applyMindShotPaintOperation(const MindShotConfiguration& toolConfig, const std::vector<StrokeSample>& samples,
                                   sound_mind::codec::StreamImage& content) {
     const Clip& clip = toolConfig.clip();
@@ -718,9 +838,19 @@ void applyMindShotPaintOperation(const MindShotConfiguration& toolConfig, const 
     }
 
     for (const StrokeSample& sample : samples) {
-        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
+        const double frameCenter = adjustedFrameCenterForStartTimeOffset(
+            timeToFrameIndex(sample.point.timeSeconds, content.config), toolConfig.startTimeOffsetSeconds(),
+            clip.frameCount, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
-        blitClipCentered(clip, frameCenter, binCenter, toolConfig.blendMode(), content);
+
+        if (toolConfig.fundamentalFrequencyHz() > 0.0) {
+            const double binDelta = static_cast<double>(binCenter) -
+                                      static_cast<double>(frequencyToBinIndex(
+                                          static_cast<float>(toolConfig.fundamentalFrequencyHz()), content.config));
+            blitClipCentered(shiftClipByBins(clip, binDelta), frameCenter, binCenter, toolConfig.blendMode(), content);
+        } else {
+            blitClipCentered(clip, frameCenter, binCenter, toolConfig.blendMode(), content);
+        }
     }
 }
 
@@ -734,6 +864,11 @@ void applyMindShotPaintOperation(const MindShotConfiguration& toolConfig, const 
 /// Shot uses. A no-op if `resolveLayerContent` is empty, the resolved
 /// layer doesn't exist/has no content, or the captured clip turns out
 /// empty (`bounds()` outside the source's own current extent).
+///
+/// **`v0.Y.55.1` adds real pitch-shifting and start-time-offset placement**
+/// - see `applyMindShotPaintOperation()`'s own identical docs on this same
+/// mechanism, applied here to the freshly-captured live `clip` instead of
+/// a stored one.
 void applyMindGrainPaintOperation(const MindGrainConfiguration& toolConfig, const std::vector<StrokeSample>& samples,
                                    const LayerContentResolver& resolveLayerContent,
                                    sound_mind::codec::StreamImage& content) {
@@ -750,9 +885,19 @@ void applyMindGrainPaintOperation(const MindGrainConfiguration& toolConfig, cons
     }
 
     for (const StrokeSample& sample : samples) {
-        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
+        const double frameCenter = adjustedFrameCenterForStartTimeOffset(
+            timeToFrameIndex(sample.point.timeSeconds, content.config), toolConfig.startTimeOffsetSeconds(),
+            clip.frameCount, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
-        blitClipCentered(clip, frameCenter, binCenter, toolConfig.blendMode(), content);
+
+        if (toolConfig.fundamentalFrequencyHz() > 0.0) {
+            const double binDelta = static_cast<double>(binCenter) -
+                                      static_cast<double>(frequencyToBinIndex(
+                                          static_cast<float>(toolConfig.fundamentalFrequencyHz()), content.config));
+            blitClipCentered(shiftClipByBins(clip, binDelta), frameCenter, binCenter, toolConfig.blendMode(), content);
+        } else {
+            blitClipCentered(clip, frameCenter, binCenter, toolConfig.blendMode(), content);
+        }
     }
 }
 

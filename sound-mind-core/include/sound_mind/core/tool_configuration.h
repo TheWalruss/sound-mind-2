@@ -849,10 +849,61 @@ public:
     /// @param mode The new mode - see blendMode()'s own docs.
     void setBlendMode(BlendMode mode) noexcept { blendMode_ = mode; }
 
+    /**
+     * @brief The real-world pitch `clip()`'s own content was captured at,
+     *        in Hz - copied in from `NamedMindShot::fundamentalFrequencyHz`
+     *        at `setClip()` time (see `setFundamentalFrequencyHz()`'s own
+     *        docs for why this is a separate setter, not a `setClip()`
+     *        parameter); see `NamedMindShot::fundamentalFrequencyHz`'s own
+     *        docs for the field's own general meaning. `v0.Y.55.1`.
+     *
+     * **Drives real pitch-shifting**: whenever this is a positive value
+     * (a real fundamental is actually known), `applyMindShotPaintOperation()`
+     * resamples `clip()`'s own frequency axis by the ratio between each
+     * stamp's own target frequency and this value before blitting it -
+     * see `shiftClipByFrequencyRatio()`'s own docs (`paint_application.cpp`)
+     * for the exact log-scale-bin-shift formula. `0.0` (the default, and
+     * every Mind Shot captured before this milestone existed) disables
+     * pitch-shifting entirely - `clip()` blits verbatim, the only behavior
+     * that existed before this field.
+     * @return The current fundamental frequency, in Hz; `0.0` means unset.
+     */
+    [[nodiscard]] double fundamentalFrequencyHz() const noexcept { return fundamentalFrequencyHz_; }
+
+    /**
+     * @brief Sets `fundamentalFrequencyHz()` - a separate setter from
+     *        `setClip()` (rather than an added parameter there) so every
+     *        pre-existing `setClip()` call site - none of which had any
+     *        notion of a fundamental frequency before this milestone -
+     *        keeps compiling and behaving unchanged; a caller that cares
+     *        calls this too, right after `setClip()`.
+     * @param frequencyHz The new fundamental frequency, in Hz; `0.0`
+     *        disables pitch-shifting.
+     */
+    void setFundamentalFrequencyHz(double frequencyHz) noexcept { fundamentalFrequencyHz_ = frequencyHz; }
+
+    /// @brief How far into `clip()`'s own captured span, in seconds, the
+    ///        "true" onset sits - copied in from `NamedMindShot::
+    ///        startTimeOffsetSeconds` at capture time; see that field's own
+    ///        docs for the general meaning and `applyMindShotPaintOperation()`'s
+    ///        own docs for exactly how this shifts a stamp's own placement.
+    ///        `v0.Y.55.1`.
+    /// @return The current offset, in seconds; `0.0` (the default) means
+    ///         "no offset - stamp centered exactly as before this field
+    ///         existed."
+    [[nodiscard]] double startTimeOffsetSeconds() const noexcept { return startTimeOffsetSeconds_; }
+
+    /// @brief Sets `startTimeOffsetSeconds()` - see `setFundamentalFrequencyHz()`'s
+    ///        own docs for why this is a separate setter from `setClip()`.
+    /// @param offsetSeconds The new offset, in seconds.
+    void setStartTimeOffsetSeconds(double offsetSeconds) noexcept { startTimeOffsetSeconds_ = offsetSeconds; }
+
 private:
     std::optional<MindShotId> sourceMindShotId_;
     Clip clip_;
     BlendMode blendMode_ = BlendMode::Overwrite;
+    double fundamentalFrequencyHz_ = 0.0;
+    double startTimeOffsetSeconds_ = 0.0;
 };
 
 /**
@@ -945,11 +996,25 @@ public:
     /// @copydoc MindShotConfiguration::setBlendMode()
     void setBlendMode(BlendMode mode) noexcept { blendMode_ = mode; }
 
+    /// @copydoc MindShotConfiguration::fundamentalFrequencyHz()
+    [[nodiscard]] double fundamentalFrequencyHz() const noexcept { return fundamentalFrequencyHz_; }
+
+    /// @copydoc MindShotConfiguration::setFundamentalFrequencyHz()
+    void setFundamentalFrequencyHz(double frequencyHz) noexcept { fundamentalFrequencyHz_ = frequencyHz; }
+
+    /// @copydoc MindShotConfiguration::startTimeOffsetSeconds()
+    [[nodiscard]] double startTimeOffsetSeconds() const noexcept { return startTimeOffsetSeconds_; }
+
+    /// @copydoc MindShotConfiguration::setStartTimeOffsetSeconds()
+    void setStartTimeOffsetSeconds(double offsetSeconds) noexcept { startTimeOffsetSeconds_ = offsetSeconds; }
+
 private:
     std::optional<MindGrainId> sourceMindGrainId_;
     LayerId sourceLayerId_ = 0;
     TimeFrequencyRect bounds_;
     BlendMode blendMode_ = BlendMode::Overwrite;
+    double fundamentalFrequencyHz_ = 0.0;
+    double startTimeOffsetSeconds_ = 0.0;
 };
 
 /**

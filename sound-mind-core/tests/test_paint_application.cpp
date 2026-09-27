@@ -1327,6 +1327,153 @@ TEST_CASE("applyPaintOperation with a MindShotConfiguration blits the clip cente
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin + 2)] == 0.0f);
 }
 
+TEST_CASE("applyPaintOperation with a MindShotConfiguration's own fundamentalFrequencyHz set pitch-shifts the clip "
+          "by the exact bin delta between the stamp's own target frequency and the fundamental",
+          "[core][paint_application][mind_shot]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+
+    // The exact inverse of two whole bin positions one apart, so the
+    // resulting bin delta is an exact integer (1.0) - no interpolation
+    // blending to account for in this test's own assertions.
+    const float fundamentalHz = binIndexToFrequency(40.0f, config);
+    const float targetHz = binIndexToFrequency(41.0f, config);
+    const Path path = makeSingleTapPath(0.3, static_cast<double>(targetHz), -10.0f, 1.0f);
+
+    Clip clip;
+    clip.frameCount = 1;
+    clip.binCount = 5;
+    clip.leftMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f, -5.0f};
+    clip.rightMagnitudeDb = {-10.0f, -20.0f, -30.0f, -40.0f, -50.0f};
+    clip.sharedPhaseRadians = {0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
+
+    auto toolConfig = makeMindShotTool(clip);
+    toolConfig->setFundamentalFrequencyHz(static_cast<double>(fundamentalHz));
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(targetHz, config))));
+    REQUIRE(centerBin == 41);
+
+    // Unshifted, the clip's own 5 rows (2 above/below center) would land at
+    // destination bins 39-43, center bin 41 reading the clip's own middle
+    // row (-3dB) verbatim. Shifted up by exactly 1 bin, every destination
+    // bin instead reads the source row one *below* it - center bin 41 now
+    // reads the clip's own row 1 (-2dB) instead, and bin 39 (which would
+    // have read row 0) instead shifts in silence, since there's no row -1
+    // to read from.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, 39)] == -96.0f);
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, 40)] == -1.0f);
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, 41)] == -2.0f);
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, 42)] == -3.0f);
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, 43)] == -4.0f);
+    REQUIRE(content.rightMagnitudeDb[pixelIndex(content, centerFrame, 41)] == -20.0f);
+    // Approx - binDelta itself is derived from a real Hz ratio (a log/exp
+    // round trip), so it lands extremely close to but not bit-exactly 1.0.
+    REQUIRE(content.sharedPhaseRadians[pixelIndex(content, centerFrame, 41)] == Catch::Approx(0.2f));
+}
+
+TEST_CASE("applyPaintOperation with a MindShotConfiguration leaves the clip verbatim when "
+          "fundamentalFrequencyHz is left unset (0.0), even at a stamp frequency far from any obvious default",
+          "[core][paint_application][mind_shot]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 5000.0, -10.0f, 1.0f);
+
+    Clip clip;
+    clip.frameCount = 1;
+    clip.binCount = 3;
+    clip.leftMagnitudeDb = {-1.0f, -2.0f, -3.0f};
+    clip.rightMagnitudeDb = {-1.0f, -2.0f, -3.0f};
+    clip.sharedPhaseRadians = {0.0f, 0.0f, 0.0f};
+
+    const PaintOperation op(1, LayerId{1}, path, makeMindShotTool(clip));  // fundamentalFrequencyHz left at 0.0.
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(5000.0f, config))));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] == -2.0f);  // The clip's own middle row, verbatim.
+}
+
+TEST_CASE("applyPaintOperation with a MindShotConfiguration's own startTimeOffsetSeconds shifts the clip's own "
+          "placement earlier, so a point that many seconds into the clip lands exactly on the stamp's own time",
+          "[core][paint_application][mind_shot]") {
+    const auto config = makeTestConfig();
+    StreamImage unshiftedContent = makeBlankContent(config, 100);
+    StreamImage shiftedContent = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    // A 5-frame clip, one distinct value per frame, so the shift is
+    // directly visible in which frame each value ends up at.
+    Clip clip;
+    clip.frameCount = 5;
+    clip.binCount = 1;
+    clip.leftMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f, -5.0f};
+    clip.rightMagnitudeDb = clip.leftMagnitudeDb;
+    clip.sharedPhaseRadians.assign(5, 0.0f);
+
+    applyPaintOperation(PaintOperation(1, LayerId{1}, path, makeMindShotTool(clip)), 2000.0, unshiftedContent);
+
+    // One frame's own worth of seconds (hopLength/sampleRateHz, "~10ms/frame"
+    // per makeTestConfig()'s own comment) - an exact integer frame shift,
+    // no interpolation to account for (this offset is a placement shift,
+    // not a resample, so it's always frame-exact regardless of the value).
+    const double oneFrameSeconds =
+        timeToFrameIndex(1.0, config) > 0.0 ? 1.0 / (config.sampleRateHz / static_cast<double>(config.hopLength)) : 0.0;
+    auto shiftedTool = makeMindShotTool(clip);
+    shiftedTool->setStartTimeOffsetSeconds(oneFrameSeconds);
+    applyPaintOperation(PaintOperation(1, LayerId{1}, path, std::move(shiftedTool)), 2000.0, shiftedContent);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    // Unshifted, the clip's own middle (row index 2, -3dB) lands exactly on
+    // the stamp's own center - blitClipCentered()'s own default centering.
+    // With a 1-frame startTimeOffsetSeconds, the clip's own *start* moves 1
+    // frame earlier (frameOrigin = targetFrame - offsetFrames instead of
+    // targetFrame - frameCount/2), so the row that was 1 frame *before* the
+    // clip's own middle (row index 1, -2dB - one frame closer to the clip's
+    // own start) now lands at the stamp's own center instead: the point 1
+    // frame into the clip lands exactly on the target time, as intended.
+    REQUIRE(unshiftedContent.leftMagnitudeDb[pixelIndex(unshiftedContent, centerFrame, centerBin)] == -3.0f);
+    REQUIRE(shiftedContent.leftMagnitudeDb[pixelIndex(shiftedContent, centerFrame, centerBin)] == -2.0f);
+}
+
+TEST_CASE("applyPaintOperation with a MindGrainConfiguration's own fundamentalFrequencyHz set pitch-shifts the "
+          "live-captured clip - a stamp at a different target frequency paints differently than with it unset",
+          "[core][paint_application][mind_grain]") {
+    const auto config = makeTestConfig();
+
+    // A source layer with a distinct, non-uniform value at every bin in the
+    // referenced region, so a bin-shift is actually detectable.
+    StreamImage sourceContent = makeBlankContent(config, 100);
+    for (int bin = 30; bin <= 50; ++bin) {
+        sourceContent.leftMagnitudeDb[pixelIndex(sourceContent, 10, bin)] = -100.0f + static_cast<float>(bin);
+    }
+    const auto resolve = [&sourceContent](LayerId) -> const StreamImage* { return &sourceContent; };
+
+    const TimeFrequencyRect bounds{frameIndexToTime(5.0, config), frameIndexToTime(15.0, config),
+                                    static_cast<double>(binIndexToFrequency(35.0f, config)),
+                                    static_cast<double>(binIndexToFrequency(45.0f, config))};
+    const float targetHz = binIndexToFrequency(41.0f, config);
+    const Path path = makeSingleTapPath(frameIndexToTime(10.0, config), static_cast<double>(targetHz), 0.0f, 0.0f);
+
+    StreamImage unshiftedDest = makeBlankContent(config, 100);
+    auto unshiftedTool = std::make_unique<MindGrainConfiguration>();
+    unshiftedTool->setReference(std::nullopt, LayerId{1}, bounds);  // fundamentalFrequencyHz left at 0.0.
+    applyPaintOperation(PaintOperation(1, LayerId{2}, path, std::move(unshiftedTool)), 2000.0, unshiftedDest, resolve);
+
+    StreamImage shiftedDest = makeBlankContent(config, 100);
+    auto shiftedTool = std::make_unique<MindGrainConfiguration>();
+    shiftedTool->setReference(std::nullopt, LayerId{1}, bounds);
+    shiftedTool->setFundamentalFrequencyHz(static_cast<double>(binIndexToFrequency(35.0f, config)));
+    applyPaintOperation(PaintOperation(1, LayerId{2}, path, std::move(shiftedTool)), 2000.0, shiftedDest, resolve);
+
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(targetHz, config))));
+    REQUIRE(unshiftedDest.leftMagnitudeDb[pixelIndex(unshiftedDest, 10, centerBin)] !=
+            shiftedDest.leftMagnitudeDb[pixelIndex(shiftedDest, 10, centerBin)]);
+}
+
 TEST_CASE("applyPaintOperation with a MindShotConfiguration paints nothing when no Mind Shot has been configured",
           "[core][paint_application]") {
     const auto config = makeTestConfig();

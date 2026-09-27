@@ -53,6 +53,42 @@ struct NamedMindShot {
     ///        capture" would be a fresh `addMindShot()` call, not an edit
     ///        of an existing entry's own `clip`).
     Clip clip;
+    /**
+     * @brief The real-world pitch `clip`'s own captured content was
+     *        recorded/painted at, in Hz - `docs/sound-mind-roadmap.md`'s
+     *        `v0.Y.55.1` (MIDI track import) own stated prerequisite,
+     *        needed so a MIDI note played back through this Mind Shot can
+     *        be pitch-shifted to its own correct target pitch (see
+     *        `MindShotConfiguration::fundamentalFrequencyHz()`'s own docs
+     *        for the actual shift this drives).
+     *
+     * `0.0` (the default - every Mind Shot captured before this milestone
+     * existed) means "not set": no pitch-shifting is ever applied for such
+     * an entry, the same "meaningless until configured" convention every
+     * other optional binding in this codebase already follows. A real,
+     * positive value is never inferred automatically from the capture
+     * itself (there is no reliable way to detect "the" pitch of an
+     * arbitrary captured region) - the artist sets this deliberately, at
+     * capture time or after.
+     */
+    double fundamentalFrequencyHz = 0.0;
+    /**
+     * @brief How far into `clip`'s own captured span, in seconds, the
+     *        "true" onset actually sits - `v0.Y.55.1`'s own second stated
+     *        prerequisite, alongside `fundamentalFrequencyHz`.
+     *
+     * A captured region often includes a little context before the actual
+     * attack (a pre-roll, a breath, a pick scrape) - stamping it centered
+     * on `clip`'s own geometric middle would then place that lead-in
+     * *after* a MIDI note's own start time instead of before it. This
+     * offset shifts the stamp's own placement earlier by this many
+     * seconds, so the captured attack lands exactly on the target note's
+     * own start regardless of how much lead-in the capture includes. `0.0`
+     * (the default) means "no offset - stamp centered exactly as
+     * `blitClipCentered()` already does," the only behavior that existed
+     * before this milestone.
+     */
+    double startTimeOffsetSeconds = 0.0;
 };
 
 /// @brief Serializes a named Mind Shot to its JSON representation.
