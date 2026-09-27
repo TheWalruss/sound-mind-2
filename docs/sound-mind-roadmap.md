@@ -1,6 +1,6 @@
 # Sound Mind Studio - Development Roadmap
 
-Status: **first draft, revised once.** This sequences `sound-mind-design.md`'s feature set into a series of concrete, always-working Studio versions, from the current empty-window bring-up (`v0.0.0.1`) to a feature-complete `v1.0.0.0`. Expect this to be revised further as work proceeds and real effort/complexity becomes clearer — it's a plan to work from, not a schedule to hold to.
+Status: **first draft, revised twice** (most recently 2026-09-27, re-sequencing Phase 6's tail into a UI-polish-first, then-performance-validation, then-interleaved-until-beta-ready order - see that phase's own notes). This sequences `sound-mind-design.md`'s feature set into a series of concrete, always-working Studio versions, from the current empty-window bring-up (`v0.0.0.1`) to a feature-complete `v1.0.0.0`. Expect this to be revised further as work proceeds and real effort/complexity becomes clearer — it's a plan to work from, not a schedule to hold to.
 
 **Status legend:** ✅ marks a milestone actually implemented, tested, and merged - not just planned. 🔜 marks what's next in line, in order. An unmarked milestone hasn't been started yet. This tracks real, current progress, not the roadmap's own planning history - a milestone implemented out of its listed order (Visual Identity, `v0.Y.16.1`) is still marked ✅ once it's actually done.
 
@@ -28,7 +28,7 @@ Exactly *when* Y will bump can't be predicted precisely this far out - it depend
 4. **Dependency order, not design-doc reading order.** The sequence below follows what each capability actually needs to exist first, which isn't the same order the design doc presents things in. A few milestones below get a *simpler* first pass than their eventual design-doc scope, specifically because they're now scheduled before something they'd otherwise lean on (Live Mode before MindWaves, Record before Mind Shots) - each says so, and says which later milestone comes back to finish the job.
 5. **Open questions get resolved where the work that needs them happens**, not all up front. Each milestone that depends on one of `sound-mind-architecture.md`'s Decisions Needed / Deferred Decisions says so.
 6. **`.5` phases get inserted between numbered phases as UI/workflow checkpoints, not planned in advance.** `Phase 2.5` (added after `v0.0.8.1`) is the first: a review of the legacy Studio's UI surfaced patterns (a persistent start screen, a real project-creation wizard, a fixed-length loop-pedal Live Mode) worth adopting deliberately once enough of the underlying engine existed to make that concrete, rather than guessing at UI needs from Phase 1. Numbered phases keep their names and don't get renumbered when this happens - only the `Z` values of whatever came after the insertion point shift up to make room. Expect more of these (`Phase 3.5`, etc.) at similar junctures, not just this one.
-7. **Every phase ends with a "Refactor & Clean Up" milestone**, added once all of a phase's real feature work exists to clean up after - not planned in detail in advance, since what actually needs cleaning up only becomes clear once the phase's real code exists. Purely internal: code quality, structure, testability, and decomposition/separation-of-concerns work that makes the *next* phase faster and cheaper to build, especially for Claude Code working in this codebase - never new user-facing behavior, and never expected to bump Y.
+7. **Every phase ends with a "Refactor & Clean Up" milestone**, added once all of a phase's real feature work exists to clean up after - not planned in detail in advance, since what actually needs cleaning up only becomes clear once the phase's real code exists. Purely internal: code quality, structure, testability, and decomposition/separation-of-concerns work that makes the *next* phase faster and cheaper to build, especially for Claude Code working in this codebase - never new user-facing behavior, and never expected to bump Y. **Exception, added 2026-09-27**: Phase 6, the last phase before Beta, doesn't end with one fixed instance of this milestone - see that phase's own "Beta Readiness Loop" for why a single closing cleanup pass isn't the right shape this close to shipping.
 
 ## Explicit non-goals for this roadmap
 
@@ -927,31 +927,48 @@ Standalone `.smwave` and `.sminst` files; cross-project import of layers, Mind S
 
 **Demo:** export an instrument from one project, import it cleanly into another.
 
-### v0.Y.58.1 - Performance Validation & Hardening
+**Re-sequencing note, 2026-09-27 (per direct instruction):** everything below in this phase was originally three fixed milestones, in this order: Performance Validation & Hardening, UI polish, then a single closing Refactor & Clean Up. It's now UI polish first, then Performance Validation, then an open-ended **Beta Readiness Loop** interleaving refactoring/performance optimization/UI refinement instead of one fixed cleanup pass - continuing until the product is actually judged ready for beta, not until some milestone count is reached. Portable Resources above is unaffected by this reordering - it's a real feature milestone, not polish/performance/refactor work, and stays exactly where it was, completed before the resequenced tail below begins.
 
-By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. **Narrower than this entry's own original scope, now that `v0.Y.30.1` moved GPU compute enablement ahead of Phase 4**: the DX12 compute path itself already exists by this point, built and validated on this laptop's own Adreno GPU - what's left here is validating it (and the ~100 ms / ~250 ms latency targets generally) for real, on actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding), extending GPU acceleration to whichever operations `v0.Y.30.1` didn't already cover if profiling still shows a need, and hardening what's there rather than building it fresh. Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
-
-**Demo:** the full design-doc feature set, exercised together, meeting the latency targets on real desktop GPU hardware.
-
-### v0.Y.59.1 - UI polish
+### v0.Y.58.1 - UI polish
 
 A pass over two controls that shipped functional but plain, once the rest of the design-doc feature set exists to compare them against: a real **visual editor** for a Sound Mind Instrument's own harmonic series (dragging harmonic-strength bars directly, rather than only the plain per-harmonic spin boxes `v0.Y.32.1` shipped) and a **preview image** shown alongside each saved instrument in its own selection menu (a small rendered thumbnail of its harmonic content, the same spirit as `v0.0.31.12`'s MindWave grayscale preview); and a **MindWave UI/UX uplift** - `docs/sound-mind-design.md`'s own **Continuous Controls** interaction model (still an open question as of `v0.Y.31.1`'s own scoping pass - a classic visual LFO-style interface is one candidate, not yet a settled answer), plus a real affordance for combining several MindWaves together (superposition already exists in Core since `v0.Y.31.1`'s own Installment B; nothing exposes it as a user gesture yet).
 
 **Demo:** drag a harmonic-strength bar directly in the Instrument editor and hear the timbre change; browse a list of saved instruments and recognize one by its own preview thumbnail; combine two MindWaves through the uplifted UI without hand-editing JSON.
 
-### v0.Y.60.1 - Refactor & Clean Up
+**Moved ahead of Performance Validation & Hardening, 2026-09-27** - previously `v0.Y.59.1`, second in the phase. Rationale: polish the surfaces a real tester will actually touch before spending the (real-hardware-dependent) effort validating performance against them, so performance work measures the UI beta testers will actually see, not an interim version of it.
 
-A dedicated pass over everything Phase 6 (Portable Resources, Performance Validation & Hardening, UI polish) added, same purpose and scope as `v0.Y.5.1`'s entry - and, by extension, the last general cleanup pass before `v1.0.0.0` itself. Real overlap with `v0.Y.58.1`'s own "full pass reconciling Doxygen output, architecture.md, and the test suite" - that milestone already covers documentation/test consistency end to end, so this one's own scope is specifically the code structure/decomposition half Sequencing principle #7 describes, not a duplicate documentation pass.
+### v0.Y.59.1 - Performance Validation & Hardening
 
-**Demo:** the full regression suite still passes, unchanged in behavior.
+By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. **Narrower than this entry's own original scope, now that `v0.Y.30.1` moved GPU compute enablement ahead of Phase 4**: the DX12 compute path itself already exists by this point, built and validated on this laptop's own Adreno GPU - what's left here is validating it (and the ~100 ms / ~250 ms latency targets generally) for real, on actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding), extending GPU acceleration to whichever operations `v0.Y.30.1` didn't already cover if profiling still shows a need, and hardening what's there rather than building it fresh. Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
 
-**No Y bump expected.**
+**Demo:** the full design-doc feature set, exercised together, meeting the latency targets on real desktop GPU hardware.
+
+**Moved after UI polish, 2026-09-27** - previously `v0.Y.58.1`, first in the phase; see that milestone's own note for why. **Methodology to be elaborated when this milestone is actually reached** - flagged here rather than detailed now, since specific validation ideas for it haven't been written down yet.
+
+### Beta Readiness Loop (`v0.Y.60.1` onward) - open-ended, until beta-ready
+
+**Replaces the single, fixed "Refactor & Clean Up" milestone this phase previously closed with** (re-sequenced 2026-09-27, per direct instruction). This close to shipping, cleanup, performance, and UI work all feed each other too directly to sequence as one pass each: a refactor can surface a performance win invisible before the decomposition; a performance fix can change what a control needs to expose or explain; a UI-refinement pass can turn up rough edges only real interactive use reveals. So this isn't one milestone - it's a repeating cycle of refactoring, performance optimization, and UI refinement, each iteration's own focus decided by what the previous iteration actually found, continuing for as many `Z` installments as it takes (`v0.Y.60.1`, `v0.Y.61.1`, ...) until the product is genuinely judged ready for beta testing - not a fixed, pre-planned count. This generalizes Sequencing principle #6's "insert a checkpoint once it's concretely useful, not planned in advance" reasoning from UI alone to all three categories at once, this close to a real release.
+
+- Each iteration is still a normal, working-Studio milestone (Sequencing principle #3) - whichever of refactor/perf-optimization/UI-refinement it addresses, it ships as its own reviewable, tested, documented unit, the same discipline every earlier milestone in this roadmap already follows.
+- **No fixed order among the three, and no requirement that every iteration touch only one** - unlike the numbered milestones earlier in this roadmap, what an iteration covers is a real-time judgment call informed by whatever profiling, user testing, or code-reading turns up at the time.
+- Real overlap with `v0.Y.59.1`'s own "full pass reconciling Doxygen output, architecture.md, and the test suite" - that milestone already covers documentation/test consistency end to end; this loop's own refactor-flavored iterations are specifically the code structure/decomposition half Sequencing principle #7 describes, not a duplicate documentation pass.
+- **Ends when the product is judged beta-ready** - a real, human call (this roadmap doesn't attempt to define the bar numerically), not a specific installment count decided now.
+
+**Demo, per iteration:** the full regression suite still passes; whatever that iteration's own refactor/perf-optimization/UI-refinement work was is described in its own commit/CHANGELOG entry, same as any other milestone in this roadmap.
+
+**No Y bump expected for any iteration** - by definition, none of the three categories touches the project file format; a genuine breaking change surfaced along the way would be flagged and handled as its own explicit, separate decision, not folded in silently here.
+
+---
+
+## Beta
+
+Where the Beta Readiness Loop above actually ends: real testers get a build, real-world feedback comes back. Whatever that feedback surfaces becomes new roadmap entries in the same interleaved refactor/performance/UI-refinement pattern, still before `v1.0.0.0` - this roadmap deliberately doesn't attempt to pre-plan that content now, since what beta feedback finds can't be known in advance. This is also where the Project file schema's own "near-beta concern" (see *Explicit non-goals for this roadmap*, above) actually gets decided, now that real projects from real testers exist to weigh a breaking change against.
 
 ---
 
 ## v1.0.0.0 - First real release
 
-X becomes `1`. Feature-complete relative to `sound-mind-design.md`; every Decision Needed and Deferred Decision in the architecture doc is either resolved or explicitly, deliberately carried forward as known future work; the DX12 GPU compute path is validated on real desktop hardware, not just this laptop's Adreno GPU.
+X becomes `1`. Feature-complete relative to `sound-mind-design.md`; every Decision Needed and Deferred Decision in the architecture doc is either resolved or explicitly, deliberately carried forward as known future work; the DX12 GPU compute path is validated on real desktop hardware, not just this laptop's Adreno GPU; beta feedback has been incorporated, not just collected.
 
 ## After v1.0.0.0 (not part of this roadmap)
 
