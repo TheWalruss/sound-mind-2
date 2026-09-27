@@ -526,6 +526,106 @@ void ToolConfigurationPanelTest::switchingAwayFromAndBackToInstrumentPreservesVi
     QCOMPARE(instrument.vibratoDepthSemitones(), 3.0);
 }
 
+// --- Paint Tool Enhancements: canvas-space Opacity/Size/Color bindings (v0.Y.54.1 Installment B) ----------------
+
+void ToolConfigurationPanelTest::setAvailableMindWavesPopulatesTheOpacitySizeAndColorCombosToo() {
+    ToolConfigurationPanel panel;
+
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")},
+                                  {MindWaveId{6}, QStringLiteral("Fast Pulse")}});
+
+    for (const auto& comboName :
+         {QStringLiteral("opacityMindWaveCombo"), QStringLiteral("sizeMindWaveCombo"), QStringLiteral("colorMindWaveCombo")}) {
+        auto* combo = panel.findChild<QComboBox*>(comboName);
+        QVERIFY(combo != nullptr);
+        QCOMPARE(combo->count(), 3);  // None + two MindWaves.
+        QCOMPARE(combo->itemText(1), QStringLiteral("Slow Pulse"));
+        QCOMPARE(combo->itemText(2), QStringLiteral("Fast Pulse"));
+    }
+}
+
+void ToolConfigurationPanelTest::changingTheOpacityMindWaveComboEmitsToolConfigurationChangedWithTheNewBinding() {
+    ToolConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    panel.findChild<QComboBox*>(QStringLiteral("opacityMindWaveCombo"))->setCurrentIndex(1);  // "Slow Pulse".
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.toolConfiguration().opacityMindWave(), std::optional<MindWaveId>(MindWaveId{5}));
+    // Size/Color are untouched.
+    QVERIFY(!panel.toolConfiguration().sizeMindWave().has_value());
+    QVERIFY(!panel.toolConfiguration().colorMindWave().has_value());
+}
+
+void ToolConfigurationPanelTest::selectingNoneOnTheSizeMindWaveComboUnbindsAndEmits() {
+    ToolConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("sizeMindWaveCombo"));
+    combo->setCurrentIndex(1);  // Bind first.
+    QVERIFY(panel.toolConfiguration().sizeMindWave().has_value());
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    combo->setCurrentIndex(0);  // "None".
+
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(!panel.toolConfiguration().sizeMindWave().has_value());
+}
+
+void ToolConfigurationPanelTest::loadingAConfigurationSyncsTheOpacitySizeAndColorCombos() {
+    ToolConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    ProceduralConfiguration config;
+    config.setOpacityMindWave(MindWaveId{5});
+
+    panel.setToolConfiguration(config);
+
+    auto* opacityCombo = panel.findChild<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
+    auto* sizeCombo = panel.findChild<QComboBox*>(QStringLiteral("sizeMindWaveCombo"));
+    QCOMPARE(opacityCombo->currentText(), QStringLiteral("Slow Pulse"));
+    QCOMPARE(sizeCombo->currentText(), QStringLiteral("None"));
+}
+
+void ToolConfigurationPanelTest::switchingToolTypeAwayFromAndBackPreservesOpacitySizeAndColorBindings() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    panel.findChild<QComboBox*>(QStringLiteral("colorMindWaveCombo"))->setCurrentIndex(1);
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Procedural")));
+
+    QCOMPARE(panel.toolConfiguration().colorMindWave(), std::optional<MindWaveId>(MindWaveId{5}));
+    QCOMPARE(panel.findChild<QComboBox*>(QStringLiteral("colorMindWaveCombo"))->currentText(),
+              QStringLiteral("Slow Pulse"));
+}
+
+void ToolConfigurationPanelTest::opacitySizeColorCombosAreHiddenForMindShotAndMindGrain() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* opacityCombo = panel.findChild<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
+    auto* sizeCombo = panel.findChild<QComboBox*>(QStringLiteral("sizeMindWaveCombo"));
+    auto* colorCombo = panel.findChild<QComboBox*>(QStringLiteral("colorMindWaveCombo"));
+    QVERIFY(!opacityCombo->isHidden());  // Visible for the fresh Procedural default.
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Shot")));
+    QVERIFY(opacityCombo->isHidden());
+    QVERIFY(sizeCombo->isHidden());
+    QVERIFY(colorCombo->isHidden());
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Grain")));
+    QVERIFY(opacityCombo->isHidden());
+    QVERIFY(sizeCombo->isHidden());
+    QVERIFY(colorCombo->isHidden());
+
+    // Still visible for Heal (a FixedStampPlacementConfiguration subtype -
+    // meaningful there too, unlike Mind Shot/Mind Grain).
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Heal")));
+    QVERIFY(!opacityCombo->isHidden());
+    QVERIFY(!sizeCombo->isHidden());
+    QVERIFY(!colorCombo->isHidden());
+}
+
 // --- Mind Shots (v0.Y.33.1 Installment A) -----------------------------------
 
 void ToolConfigurationPanelTest::switchingToolTypeToMindShotShowsItsOwnGroupAndHidesProcedural() {

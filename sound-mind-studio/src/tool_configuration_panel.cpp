@@ -423,6 +423,36 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
 
     updateStampIntervalAppearance();
 
+    // v0.Y.54.1 Installment B: canvas-space Opacity/Size/Color bindings -
+    // one MindWave combo each, no paired depth spin box (see the header's
+    // own docs on why, unlike vibrato/tremolo).
+    opacityMindWaveCombo_ = makeMindWaveCombo(container, QStringLiteral("opacityMindWaveCombo"));
+    connect(opacityMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = opacityMindWaveCombo_->itemData(index).toULongLong();
+        config_->setOpacityMindWave(rawId == 0 ? std::nullopt : std::optional<MindWaveId>(rawId));
+        emitConfigChanged();
+    });
+    sharedControlsForm_->addRow(tr("Opacity MindWave:"), opacityMindWaveCombo_);
+
+    sizeMindWaveCombo_ = makeMindWaveCombo(container, QStringLiteral("sizeMindWaveCombo"));
+    connect(sizeMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = sizeMindWaveCombo_->itemData(index).toULongLong();
+        config_->setSizeMindWave(rawId == 0 ? std::nullopt : std::optional<MindWaveId>(rawId));
+        emitConfigChanged();
+    });
+    sharedControlsForm_->addRow(tr("Size MindWave:"), sizeMindWaveCombo_);
+
+    colorMindWaveCombo_ = makeMindWaveCombo(container, QStringLiteral("colorMindWaveCombo"));
+    colorMindWaveCombo_->setToolTip(
+        tr("Bind this stroke's own gradient lookup to a MindWave - samples the gradient by this field's own canvas "
+           "position instead of by progress along the stroke."));
+    connect(colorMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const auto rawId = colorMindWaveCombo_->itemData(index).toULongLong();
+        config_->setColorMindWave(rawId == 0 ? std::nullopt : std::optional<MindWaveId>(rawId));
+        emitConfigChanged();
+    });
+    sharedControlsForm_->addRow(tr("Color MindWave:"), colorMindWaveCombo_);
+
     // The stroke's own real, multi-stop gradient - see the class's own
     // docs. Every edit here writes straight into config_'s own
     // defaultGradient() and emits, the same "purely presentational"
@@ -583,9 +613,26 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
     replacement->setFalloff(config_->falloff());
     replacement->setSize(config_->size());
     replacement->defaultGradient() = config_->defaultGradient();
+    // v0.Y.54.1 Installment B - also base-class fields, carried over the
+    // same unconditional way as Stamp Mode/Interval/Falloff/Size above.
+    replacement->setOpacityMindWave(config_->opacityMindWave());
+    replacement->setSizeMindWave(config_->sizeMindWave());
+    replacement->setColorMindWave(config_->colorMindWave());
 
     config_ = std::move(replacement);
     updateVisibleToolTypeGroup();
+    // Only the new Opacity/Size/Color combos - never a full
+    // rebuildMindWaveCombos() here, which would also reset
+    // vibratoMindWaveCombo_/tremoloMindWaveCombo_ to "None" the moment
+    // config_ stops being an InstrumentConfiguration. Those two combos
+    // deliberately keep showing their own last-selected value across a
+    // type switch instead (see this function's own Instrument branch above,
+    // which reads them back out) - resetting them here would silently lose
+    // a vibrato/tremolo binding the instant the user detours through
+    // another tool type and back.
+    populateMindWaveCombo(opacityMindWaveCombo_, config_->opacityMindWave());
+    populateMindWaveCombo(sizeMindWaveCombo_, config_->sizeMindWave());
+    populateMindWaveCombo(colorMindWaveCombo_, config_->colorMindWave());
     emitConfigChanged();
 }
 
@@ -613,6 +660,11 @@ void ToolConfigurationPanel::updateSharedControlVisibility() {
     sharedControlsForm_->setRowVisible(sizeSpinBox_, showFalloffSizeAndOpacity);
     sharedControlsForm_->setRowVisible(stampModeCombo_, showStampModeAndInterval);
     sharedControlsForm_->setRowVisible(stampIntervalSpinBox_, showStampModeAndInterval);
+    // v0.Y.54.1 Installment B - same gate as Falloff/Size (meaningless for
+    // MindShot/MindGrain, per each binding's own docs).
+    sharedControlsForm_->setRowVisible(opacityMindWaveCombo_, showFalloffSizeAndOpacity);
+    sharedControlsForm_->setRowVisible(sizeMindWaveCombo_, showFalloffSizeAndOpacity);
+    sharedControlsForm_->setRowVisible(colorMindWaveCombo_, showFalloffSizeAndOpacity);
     sharedControlsForm_->setRowVisible(gradientEditor_, showGradientEditor);
     // Intensity is genuinely unused by FixedStampPlacementConfiguration's
     // own blend (opacity alone is the blend strength) - see the class's
@@ -722,7 +774,6 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
             const QSignalBlocker blocker(tremoloDepthSpinBox_);
             tremoloDepthSpinBox_->setValue(instrument->tremoloDepth());
         }
-        rebuildMindWaveCombos();
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(config_.get())) {
         const QSignalBlocker blocker(mindShotCombo_);
         int index = -1;
@@ -774,6 +825,11 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
     stampIntervalPatternErrorLabel_->clear();
     updateStampIntervalAppearance();
     gradientEditor_->setGradient(config_->defaultGradient());
+    // Unconditional (moved out of the Instrument-only branch above) - v0.Y.54.1
+    // Installment B's own Opacity/Size/Color combos are base-class fields,
+    // relevant regardless of type, so they need syncing on every load, not
+    // only when the loaded config happens to be an InstrumentConfiguration.
+    rebuildMindWaveCombos();
 }
 
 void ToolConfigurationPanel::updateStampIntervalAppearance() {
@@ -930,23 +986,29 @@ void ToolConfigurationPanel::setAvailableMindWaves(
     rebuildMindWaveCombos();
 }
 
+void ToolConfigurationPanel::populateMindWaveCombo(QComboBox* combo, std::optional<MindWaveId> boundId) {
+    const QSignalBlocker blocker(combo);
+    combo->clear();
+    combo->addItem(tr("None"), QVariant::fromValue(qulonglong{0}));
+    int selectedIndex = 0;
+    for (const auto& [mindWaveId, name] : availableMindWaves_) {
+        combo->addItem(name, QVariant::fromValue(static_cast<qulonglong>(mindWaveId)));
+        if (boundId.has_value() && *boundId == mindWaveId) {
+            selectedIndex = combo->count() - 1;
+        }
+    }
+    combo->setCurrentIndex(selectedIndex);
+}
+
 void ToolConfigurationPanel::rebuildMindWaveCombos() {
     const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(config_.get());
-    const auto populate = [this](QComboBox* combo, std::optional<MindWaveId> boundId) {
-        const QSignalBlocker blocker(combo);
-        combo->clear();
-        combo->addItem(tr("None"), QVariant::fromValue(qulonglong{0}));
-        int selectedIndex = 0;
-        for (const auto& [mindWaveId, name] : availableMindWaves_) {
-            combo->addItem(name, QVariant::fromValue(static_cast<qulonglong>(mindWaveId)));
-            if (boundId.has_value() && *boundId == mindWaveId) {
-                selectedIndex = combo->count() - 1;
-            }
-        }
-        combo->setCurrentIndex(selectedIndex);
-    };
-    populate(vibratoMindWaveCombo_, instrument != nullptr ? instrument->vibratoMindWave() : std::nullopt);
-    populate(tremoloMindWaveCombo_, instrument != nullptr ? instrument->tremoloMindWave() : std::nullopt);
+    populateMindWaveCombo(vibratoMindWaveCombo_, instrument != nullptr ? instrument->vibratoMindWave() : std::nullopt);
+    populateMindWaveCombo(tremoloMindWaveCombo_, instrument != nullptr ? instrument->tremoloMindWave() : std::nullopt);
+    // v0.Y.54.1 Installment B - read straight from config_ itself (a
+    // base-class field every type shares), not gated by a dynamic_cast.
+    populateMindWaveCombo(opacityMindWaveCombo_, config_->opacityMindWave());
+    populateMindWaveCombo(sizeMindWaveCombo_, config_->sizeMindWave());
+    populateMindWaveCombo(colorMindWaveCombo_, config_->colorMindWave());
 }
 
 void ToolConfigurationPanel::setActiveLayer(sound_mind::core::LayerId layer) {

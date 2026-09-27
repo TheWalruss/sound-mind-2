@@ -935,6 +935,34 @@ settings:
   all; for Heal, Soften, Smudge, and Order/Chaos, only the Intensity
   fields hide - Opacity stays, as the blend's own strength (see each
   tool's own entry below).
+- **Opacity MindWave / Size MindWave / Color MindWave** - three MindWave-
+  binding drop-downs (**None** or pick a MindWave from the library), one
+  per parameter, available for every tool except Mind Shot/Mind Grain
+  (which don't use a gradient or a footprint radius at all). Each is
+  sampled at every stamp's own real position on the canvas as you paint -
+  the same fixed-mask-over-the-whole-piece behavior a layer's own opacity
+  binding already uses (see [MindWaves](#mindwaves) below), not tied to
+  the stroke's own position along itself the way Vibrato/Tremolo are (see
+  below):
+  - **Opacity MindWave** multiplies the stamp's own strength at that
+    point - dark areas of the field paint faintly or not at all, bright
+    areas paint at full strength.
+  - **Size MindWave** scales the stamp's own footprint at that point -
+    dark areas shrink the stamp down (all the way to nothing, at the
+    field's own darkest), bright areas paint at the full Brush Size
+    configured above.
+  - **Color MindWave** changes *where along the stroke's own Gradient*
+    that stamp samples its color/intensity from, instead of the stroke's
+    own position - so the same stroke can pick up different colors from
+    its own Gradient bar depending purely on where it crosses the bound
+    field, independent of drawing order or direction. For Heal, Soften,
+    Smudge, and Order/Chaos (whose own Gradient only exposes Opacity, not
+    Intensity - see Gradient's own entry above), this still changes which
+    stop's own Opacity gets used, just never an Intensity value none of
+    those four tools read anyway.
+  
+  None of the three bind a MindWave by default - painting behaves exactly
+  as before this existed until you deliberately pick one.
 - **Blend Mode** - how a Mind Shot/Mind Grain stamp combines with what's
   already there: **Overwrite** (the default) replaces it entirely, same
   as before this control existed; **Normal**, **Multiply**, **Screen**,
@@ -1625,18 +1653,24 @@ of loose ends remain:
 [MindWaves](#mindwaves) (see above) exist now, but only a narrow slice of
 what's designed for them:
 
-- **Layer opacity, every filter-parameter scalar, and Sound Mind
-  Instruments' own Vibrato/Tremolo** can bind to a MindWave now (see
-  [Painting](#painting) above for Vibrato/Tremolo); no other brush
-  parameter can yet. A layer's **Blend Mode** can't bind to a MindWave
-  either - it's a single, fixed choice per layer, not spatially varying.
-- **Vibrato/Tremolo track a stroke's own position along itself, not a
-  genuine per-note clock** - every other binding in this codebase is
-  canvas-space (a fixed mask laid over the whole piece); Vibrato/Tremolo
-  instead follow the stroke's own progress, so a MindWave's shape always
-  plays out fully over one stroke, however long or short it is. A real
-  "retriggers exactly the same way for every distinct note, regardless of
-  stroke length" alternative is still planned, not yet built.
+- **Layer opacity, every filter-parameter scalar, a stroke's own Opacity/
+  Size/Color, and Sound Mind Instruments' own Vibrato/Tremolo** can bind to
+  a MindWave now (see [Painting](#painting) above for all of these). A
+  layer's **Blend Mode** can't bind to a MindWave either - it's a single,
+  fixed choice per layer, not spatially varying.
+- **Only Opacity/Size/Color track true canvas position; Vibrato/Tremolo
+  still track a stroke's own position along itself, not a genuine per-note
+  clock** - a stroke's Opacity/Size/Color MindWave is sampled at each
+  stamp's own real position on the canvas, the same fixed-mask-over-the-
+  whole-piece behavior layer opacity/filter parameters already use, so two
+  identical strokes at different points on the canvas are shaded
+  differently. Vibrato/Tremolo instead follow the stroke's *own* progress
+  from start to end, so a MindWave's shape always plays out fully over one
+  stroke, however long or short it is, and two identical strokes anywhere
+  in the piece look the same as each other. A real "retriggers exactly the
+  same way for every distinct note, regardless of stroke length"
+  alternative - generalizing Vibrato/Tremolo's own mechanism to Opacity/
+  Size/Color too - is still planned, not yet built.
 - **Warp and Reduce exist now**, alongside Superposition - Warp (one field
   distorting where another samples from) is directly editable in the
   MindWaves panel; Reduce (collapsing a field to a plain control signal)

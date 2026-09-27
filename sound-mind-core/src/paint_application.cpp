@@ -257,6 +257,82 @@ std::vector<StrokeSample> sampleStroke(const Path& path, double frequencyToTimeS
     }
 }
 
+/// @brief `ToolConfiguration::opacityMindWave()`/`sizeMindWave()`/
+/// `colorMindWave()`, each resolved against a `Project`'s own MindWave
+/// library - `v0.Y.54.1` Paint Tool Enhancements Installment B's own
+/// per-stroke resolution step, mirroring `applyInstrumentPaintOperation()`'s
+/// own `vibratoWave`/`tremoloWave` resolution precedent (and
+/// `FilterParameterMindWaves`'s own identical "plain resolved pointers, all
+/// null if unbound" shape) rather than three independent per-parameter
+/// lookups repeated across six different apply functions.
+struct PaintParameterMindWaves {
+    const MindWave* opacity = nullptr;
+    const MindWave* size = nullptr;
+    const MindWave* color = nullptr;
+};
+
+/// @brief Resolves `toolConfig`'s own three canvas-space bindings - `nullptr`
+/// for any that's unbound, or if `resolveMindWave` itself is empty (no
+/// Project to resolve against - most of the test suite).
+PaintParameterMindWaves resolvePaintParameterMindWaves(const ToolConfiguration& toolConfig,
+                                                         const MindWaveResolver& resolveMindWave) {
+    PaintParameterMindWaves result;
+    if (!resolveMindWave) {
+        return result;
+    }
+    if (toolConfig.opacityMindWave().has_value()) {
+        result.opacity = resolveMindWave(*toolConfig.opacityMindWave());
+    }
+    if (toolConfig.sizeMindWave().has_value()) {
+        result.size = resolveMindWave(*toolConfig.sizeMindWave());
+    }
+    if (toolConfig.colorMindWave().has_value()) {
+        result.color = resolveMindWave(*toolConfig.colorMindWave());
+    }
+    return result;
+}
+
+/// @brief One stamp's own effective opacity multiplier/size-scale/gradient-
+/// lookup-position, after applying `mindWaves`' own canvas-space bindings
+/// (if any) - every apply function's own single per-stamp entry point,
+/// computed once per `StrokeSample` rather than three independent checks
+/// repeated inline.
+struct StampParameters {
+    /// @brief Multiplies this stamp's own per-pixel blend weight - see
+    /// `ToolConfiguration::opacityMindWave()`'s own docs. `1.0f` (no
+    /// effect) unless `mindWaves.opacity` is bound.
+    float opacityMultiplier = 1.0f;
+    /// @brief Scales `ToolConfiguration::size()` before this stamp's own
+    /// footprint radius is computed - see `sizeMindWave()`'s own docs.
+    /// `1.0f` (no effect, the full configured size) unless `mindWaves.size`
+    /// is bound.
+    float sizeScale = 1.0f;
+    /// @brief Where along `Path::gradient()` this stamp samples its own
+    /// target - see `colorMindWave()`'s own docs. Defaults to the stamp's
+    /// own `pathT` unless `mindWaves.color` is bound.
+    float gradientT = 0.0f;
+};
+
+/// @brief Evaluates `mindWaves` at `sample`'s own canvas position
+/// (`MindWave::evaluate()` directly - a continuous position, not snapped to
+/// a bin/frame the way a per-cell Filter parameter binding is) and returns
+/// the resulting per-stamp parameters - see `StampParameters`'s own docs.
+StampParameters resolveStampParameters(const PaintParameterMindWaves& mindWaves, const StrokeSample& sample,
+                                         const sound_mind::codec::StreamCodecConfig& config) {
+    StampParameters result;
+    result.gradientT = sample.pathT;
+    if (mindWaves.opacity != nullptr) {
+        result.opacityMultiplier = mindWaves.opacity->evaluate(sample.point, config);
+    }
+    if (mindWaves.size != nullptr) {
+        result.sizeScale = mindWaves.size->evaluate(sample.point, config);
+    }
+    if (mindWaves.color != nullptr) {
+        result.gradientT = mindWaves.color->evaluate(sample.point, config);
+    }
+    return result;
+}
+
 /// @brief The tip footprint's own normalized distance metric - `<= 1.0`
 /// means the pixel at `(dt, df)` (already divided by the tip's own frame/
 /// bin radius) falls within the stamp.
@@ -338,24 +414,36 @@ double localBinRadius(PrincipalMode mode, double frameRadius, float binCenter, f
 /// @brief `ProceduralConfiguration`'s own stamp: the existing 2D
 /// footprint-blend algorithm, unchanged since before `ToolConfiguration`
 /// became polymorphic - see applyPaintOperation()'s own docs.
+///
+/// **`v0.Y.54.1` Installment B adds canvas-space Opacity/Size/Color
+/// bindings**: `toolConfig`'s own `opacityMindWave()`/`sizeMindWave()`/
+/// `colorMindWave()` are resolved once via `resolveMindWave`, then each
+/// stamp's own `StampParameters` (via `resolveStampParameters()`) scales
+/// this stamp's own footprint radius (`size()`), multiplies its own blend
+/// weight, and/or replaces its own gradient-lookup position - see each
+/// binding's own docs on `ToolConfiguration` for the exact formulas.
 void applyProceduralPaintOperation(const PaintOperation& operation, const ProceduralConfiguration& toolConfig,
                                     const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
-                                    sound_mind::codec::StreamImage& content, PrincipalMode principalMode) {
-    const double frameRadius =
-        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
-    if (frameRadius <= 0.0) {
-        return;
-    }
+                                    sound_mind::codec::StreamImage& content, PrincipalMode principalMode,
+                                    const MindWaveResolver& resolveMindWave) {
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
 
     for (const StrokeSample& sample : samples) {
-        const GradientStop target = operation.path().gradient().evaluate(sample.pathT);
+        const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);
+        const double frameRadius = timeToFrameIndex(toolConfig.size() * params.sizeScale, content.config) -
+                                    timeToFrameIndex(0.0, content.config);
+        if (frameRadius <= 0.0) {
+            continue;
+        }
+
+        const GradientStop target = operation.path().gradient().evaluate(params.gradientT);
 
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
 
         const double binRadius =
             localBinRadius(principalMode, frameRadius, binCenter, static_cast<float>(sample.point.frequencyHz),
-                            toolConfig.size(), frequencyToTimeScale, content.config);
+                            toolConfig.size() * params.sizeScale, frequencyToTimeScale, content.config);
 
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
         const auto frameHigh =
@@ -369,7 +457,7 @@ void applyProceduralPaintOperation(const PaintOperation& operation, const Proced
             for (int bin = binLow; bin <= binHigh; ++bin) {
                 const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
                 const double dist = footprintDistance(toolConfig.tipShape(), normalizedDt, normalizedDf);
-                const float weight = falloffWeight(dist, toolConfig.falloff());
+                const float weight = falloffWeight(dist, toolConfig.falloff()) * params.opacityMultiplier;
                 if (weight <= 0.0f) {
                     continue;
                 }
@@ -430,15 +518,18 @@ float sampleAtProgress(const std::vector<float>& signal, float progress) {
 /// encoded range and be skipped, the same as any other harmonic); tremolo
 /// scales `strength` before the falloff weight is computed, exactly like a
 /// harmonic's own static strength would.
+///
+/// **`v0.Y.54.1` Installment B adds canvas-space Opacity/Size/Color
+/// bindings** - the same three `ToolConfiguration`-level bindings
+/// `applyProceduralPaintOperation()` uses, resolved and applied identically
+/// here: `sizeMindWave()` scales this stamp's own time-axis-only frame
+/// radius, `opacityMindWave()` multiplies the final per-harmonic blend
+/// weight, `colorMindWave()` replaces the gradient's own lookup position.
 void applyInstrumentPaintOperation(const PaintOperation& operation, const InstrumentConfiguration& toolConfig,
                                     const std::vector<StrokeSample>& samples,
                                     sound_mind::codec::StreamImage& content,
                                     const MindWaveResolver& resolveMindWave) {
-    const double frameRadius =
-        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
-    if (frameRadius <= 0.0) {
-        return;
-    }
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
 
     const std::vector<double>& strengths = toolConfig.harmonicStrengths();
     if (strengths.empty()) {
@@ -472,7 +563,14 @@ void applyInstrumentPaintOperation(const PaintOperation& operation, const Instru
                     : std::vector<float>{};
 
     for (const StrokeSample& sample : samples) {
-        const GradientStop target = operation.path().gradient().evaluate(sample.pathT);
+        const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);
+        const double frameRadius = timeToFrameIndex(toolConfig.size() * params.sizeScale, content.config) -
+                                    timeToFrameIndex(0.0, content.config);
+        if (frameRadius <= 0.0) {
+            continue;
+        }
+
+        const GradientStop target = operation.path().gradient().evaluate(params.gradientT);
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
         const auto frameHigh =
@@ -511,7 +609,7 @@ void applyInstrumentPaintOperation(const PaintOperation& operation, const Instru
             for (int frame = frameLow; frame <= frameHigh; ++frame) {
                 const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
                 const float weight = falloffWeight(std::abs(normalizedDt), toolConfig.falloff()) *
-                                      static_cast<float>(strength);
+                                      static_cast<float>(strength) * params.opacityMultiplier;
                 if (weight <= 0.0f) {
                     continue;
                 }
@@ -710,25 +808,38 @@ GradientStop blurredNeighborhoodStop(const LocalMagnitudeSnapshot& snapshot, int
 /// both the footprint radius and the blur window's own half-width, and
 /// `blurredNeighborhoodStop()`'s own docs for why each stamp reads from a
 /// fresh per-stamp snapshot rather than the live, mutating `content`.
+///
+/// **`v0.Y.54.1` Installment B adds canvas-space Opacity/Size/Color
+/// bindings** - the same mechanism `applyProceduralPaintOperation()` uses:
+/// `sizeMindWave()` scales this stamp's own footprint/blur-window radius,
+/// `opacityMindWave()` multiplies the blend weight, `colorMindWave()`
+/// replaces the gradient's own lookup position (only affecting which
+/// stop's own *opacity* is read here - `blurredNeighborhoodStop()` never
+/// reads a stop's own intensity, always the live neighborhood average
+/// instead, per `colorMindWave()`'s own docs).
 void applyHealPaintOperation(const PaintOperation& operation, const HealConfiguration& toolConfig,
                               const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
-                              sound_mind::codec::StreamImage& content, PrincipalMode principalMode) {
-    const double frameRadius =
-        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
-    if (frameRadius <= 0.0) {
-        return;
-    }
-    const int blurFrameWindow = std::max(1, static_cast<int>(std::lround(frameRadius)));
+                              sound_mind::codec::StreamImage& content, PrincipalMode principalMode,
+                              const MindWaveResolver& resolveMindWave) {
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
 
     for (const StrokeSample& sample : samples) {
-        const GradientStop opacitySource = operation.path().gradient().evaluate(sample.pathT);
+        const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);
+        const double frameRadius = timeToFrameIndex(toolConfig.size() * params.sizeScale, content.config) -
+                                    timeToFrameIndex(0.0, content.config);
+        if (frameRadius <= 0.0) {
+            continue;
+        }
+        const int blurFrameWindow = std::max(1, static_cast<int>(std::lround(frameRadius)));
+
+        const GradientStop opacitySource = operation.path().gradient().evaluate(params.gradientT);
 
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
 
         const double binRadius =
             localBinRadius(principalMode, frameRadius, binCenter, static_cast<float>(sample.point.frequencyHz),
-                            toolConfig.size(), frequencyToTimeScale, content.config);
+                            toolConfig.size() * params.sizeScale, frequencyToTimeScale, content.config);
 
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
         const auto frameHigh =
@@ -750,7 +861,7 @@ void applyHealPaintOperation(const PaintOperation& operation, const HealConfigur
             for (int bin = binLow; bin <= binHigh; ++bin) {
                 const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
                 const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
-                const float weight = falloffWeight(dist, toolConfig.falloff());
+                const float weight = falloffWeight(dist, toolConfig.falloff()) * params.opacityMultiplier;
                 if (weight <= 0.0f) {
                     continue;
                 }
@@ -766,25 +877,33 @@ void applyHealPaintOperation(const PaintOperation& operation, const HealConfigur
 /// `applyHealPaintOperation()` above except the blur neighborhood spans
 /// both axes (isotropic) rather than frames alone, per
 /// `SoftenConfiguration`'s own docs.
+///
+/// **`v0.Y.54.1` Installment B adds canvas-space Opacity/Size/Color
+/// bindings** - see `applyHealPaintOperation()`'s own identical docs on
+/// this same mechanism.
 void applySoftenPaintOperation(const PaintOperation& operation, const SoftenConfiguration& toolConfig,
                                 const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
-                                sound_mind::codec::StreamImage& content, PrincipalMode principalMode) {
-    const double frameRadius =
-        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
-    if (frameRadius <= 0.0) {
-        return;
-    }
-    const int blurFrameWindow = std::max(1, static_cast<int>(std::lround(frameRadius)));
+                                sound_mind::codec::StreamImage& content, PrincipalMode principalMode,
+                                const MindWaveResolver& resolveMindWave) {
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
 
     for (const StrokeSample& sample : samples) {
-        const GradientStop opacitySource = operation.path().gradient().evaluate(sample.pathT);
+        const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);
+        const double frameRadius = timeToFrameIndex(toolConfig.size() * params.sizeScale, content.config) -
+                                    timeToFrameIndex(0.0, content.config);
+        if (frameRadius <= 0.0) {
+            continue;
+        }
+        const int blurFrameWindow = std::max(1, static_cast<int>(std::lround(frameRadius)));
+
+        const GradientStop opacitySource = operation.path().gradient().evaluate(params.gradientT);
 
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
 
         const double binRadius =
             localBinRadius(principalMode, frameRadius, binCenter, static_cast<float>(sample.point.frequencyHz),
-                            toolConfig.size(), frequencyToTimeScale, content.config);
+                            toolConfig.size() * params.sizeScale, frequencyToTimeScale, content.config);
         const int blurBinWindow = std::max(1, static_cast<int>(std::lround(binRadius)));
 
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
@@ -806,7 +925,7 @@ void applySoftenPaintOperation(const PaintOperation& operation, const SoftenConf
             for (int bin = binLow; bin <= binHigh; ++bin) {
                 const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
                 const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
-                const float weight = falloffWeight(dist, toolConfig.falloff());
+                const float weight = falloffWeight(dist, toolConfig.falloff()) * params.opacityMultiplier;
                 if (weight <= 0.0f) {
                     continue;
                 }
@@ -869,17 +988,20 @@ GradientStop lineAverageStop(const LocalMagnitudeSnapshot& snapshot, int frame, 
 /// per-pixel line average, from a fresh per-stamp snapshot (the same
 /// "never read from the buffer being written" precedent
 /// `blurredNeighborhoodStop()` already established).
+///
+/// **`v0.Y.54.1` Installment B adds canvas-space Opacity/Size/Color
+/// bindings** - see `applyHealPaintOperation()`'s own identical docs on
+/// this same mechanism; the smear direction itself (`deltaFrame`/
+/// `deltaBin`, precomputed once for every sample below) is unaffected,
+/// since only the footprint/blur radius and blend weight/target vary.
 void applySmudgePaintOperation(const PaintOperation& operation, const SmudgeConfiguration& toolConfig,
                                 const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
-                                sound_mind::codec::StreamImage& content, PrincipalMode principalMode) {
+                                sound_mind::codec::StreamImage& content, PrincipalMode principalMode,
+                                const MindWaveResolver& resolveMindWave) {
     if (samples.size() < 2) {
         return;  // No neighboring sample to smear toward - see this tool's own docs.
     }
-    const double frameRadius =
-        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
-    if (frameRadius <= 0.0) {
-        return;
-    }
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
 
     // Every sample's own (frameCenter, binCenter), computed once - each
     // sample's own smear direction needs its neighbor's position too.
@@ -898,13 +1020,20 @@ void applySmudgePaintOperation(const PaintOperation& operation, const SmudgeConf
             continue;  // No movement between these two samples - nothing to smear along.
         }
 
-        const GradientStop opacitySource = operation.path().gradient().evaluate(samples[i].pathT);
+        const StampParameters params = resolveStampParameters(mindWaves, samples[i], content.config);
+        const double frameRadius = timeToFrameIndex(toolConfig.size() * params.sizeScale, content.config) -
+                                    timeToFrameIndex(0.0, content.config);
+        if (frameRadius <= 0.0) {
+            continue;
+        }
+
+        const GradientStop opacitySource = operation.path().gradient().evaluate(params.gradientT);
         const double frameCenter = frameCenters[i];
         const float binCenter = static_cast<float>(binCenters[i]);
 
         const double binRadius =
             localBinRadius(principalMode, frameRadius, binCenter, static_cast<float>(samples[i].point.frequencyHz),
-                            toolConfig.size(), frequencyToTimeScale, content.config);
+                            toolConfig.size() * params.sizeScale, frequencyToTimeScale, content.config);
 
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
         const auto frameHigh =
@@ -929,7 +1058,7 @@ void applySmudgePaintOperation(const PaintOperation& operation, const SmudgeConf
             for (int bin = binLow; bin <= binHigh; ++bin) {
                 const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
                 const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
-                const float weight = falloffWeight(dist, toolConfig.falloff());
+                const float weight = falloffWeight(dist, toolConfig.falloff()) * params.opacityMultiplier;
                 if (weight <= 0.0f) {
                     continue;
                 }
@@ -1100,17 +1229,20 @@ void applyOrder(const std::vector<OrderChaosPoolEntry>& pool, double fraction, c
 /// 0`). Each stamp draws its own fresh per-stamp snapshot first, the same
 /// "never read from the buffer being written" precedent every other
 /// blur/rearrange tool type already establishes.
+///
+/// **`v0.Y.54.1` Installment B adds canvas-space Opacity/Size/Color
+/// bindings** - see `applyHealPaintOperation()`'s own identical docs on
+/// this same mechanism; `opacityMindWave()` scales each pool entry's own
+/// weight before it's stored, so both `applyChaos()`/`applyOrder()` blend
+/// back with it already applied.
 void applyOrderChaosPaintOperation(const PaintOperation& operation, const OrderChaosConfiguration& toolConfig,
                                     const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
-                                    sound_mind::codec::StreamImage& content, PrincipalMode principalMode) {
+                                    sound_mind::codec::StreamImage& content, PrincipalMode principalMode,
+                                    const MindWaveResolver& resolveMindWave) {
     if (toolConfig.amount() == 0.0) {
         return;
     }
-    const double frameRadius =
-        timeToFrameIndex(toolConfig.size(), content.config) - timeToFrameIndex(0.0, content.config);
-    if (frameRadius <= 0.0) {
-        return;
-    }
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
 
     // One shared engine for every stamp/sample this call processes -
     // reseeded fresh only once per applyPaintOperation() call (heap
@@ -1119,14 +1251,21 @@ void applyOrderChaosPaintOperation(const PaintOperation& operation, const OrderC
     thread_local std::mt19937 rng{std::random_device{}()};
 
     for (const StrokeSample& sample : samples) {
-        const GradientStop opacitySource = operation.path().gradient().evaluate(sample.pathT);
+        const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);
+        const double frameRadius = timeToFrameIndex(toolConfig.size() * params.sizeScale, content.config) -
+                                    timeToFrameIndex(0.0, content.config);
+        if (frameRadius <= 0.0) {
+            continue;
+        }
+
+        const GradientStop opacitySource = operation.path().gradient().evaluate(params.gradientT);
 
         const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
         const float binCenter = frequencyToBinIndex(static_cast<float>(sample.point.frequencyHz), content.config);
 
         const double binRadius =
             localBinRadius(principalMode, frameRadius, binCenter, static_cast<float>(sample.point.frequencyHz),
-                            toolConfig.size(), frequencyToTimeScale, content.config);
+                            toolConfig.size() * params.sizeScale, frequencyToTimeScale, content.config);
 
         const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
         const auto frameHigh =
@@ -1143,7 +1282,7 @@ void applyOrderChaosPaintOperation(const PaintOperation& operation, const OrderC
             for (int bin = binLow; bin <= binHigh; ++bin) {
                 const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
                 const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
-                const float weight = falloffWeight(dist, toolConfig.falloff());
+                const float weight = falloffWeight(dist, toolConfig.falloff()) * params.opacityMultiplier;
                 if (weight > 0.0f) {
                     pool.push_back(OrderChaosPoolEntry{frame, bin, weight});
                 }
@@ -1262,7 +1401,8 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
     // rebuildPaintedContent() below) - revisit if a third real tool type
     // makes this unwieldy.
     if (const auto* procedural = dynamic_cast<const ProceduralConfiguration*>(&toolConfig)) {
-        applyProceduralPaintOperation(operation, *procedural, samples, frequencyToTimeScale, content, principalMode);
+        applyProceduralPaintOperation(operation, *procedural, samples, frequencyToTimeScale, content, principalMode,
+                                       resolveMindWave);
     } else if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(&toolConfig)) {
         applyInstrumentPaintOperation(operation, *instrument, samples, content, resolveMindWave);
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(&toolConfig)) {
@@ -1270,13 +1410,17 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
     } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(&toolConfig)) {
         applyMindGrainPaintOperation(*mindGrain, samples, resolveLayerContent, content);
     } else if (const auto* heal = dynamic_cast<const HealConfiguration*>(&toolConfig)) {
-        applyHealPaintOperation(operation, *heal, samples, frequencyToTimeScale, content, principalMode);
+        applyHealPaintOperation(operation, *heal, samples, frequencyToTimeScale, content, principalMode,
+                                 resolveMindWave);
     } else if (const auto* soften = dynamic_cast<const SoftenConfiguration*>(&toolConfig)) {
-        applySoftenPaintOperation(operation, *soften, samples, frequencyToTimeScale, content, principalMode);
+        applySoftenPaintOperation(operation, *soften, samples, frequencyToTimeScale, content, principalMode,
+                                   resolveMindWave);
     } else if (const auto* smudge = dynamic_cast<const SmudgeConfiguration*>(&toolConfig)) {
-        applySmudgePaintOperation(operation, *smudge, samples, frequencyToTimeScale, content, principalMode);
+        applySmudgePaintOperation(operation, *smudge, samples, frequencyToTimeScale, content, principalMode,
+                                   resolveMindWave);
     } else if (const auto* orderChaos = dynamic_cast<const OrderChaosConfiguration*>(&toolConfig)) {
-        applyOrderChaosPaintOperation(operation, *orderChaos, samples, frequencyToTimeScale, content, principalMode);
+        applyOrderChaosPaintOperation(operation, *orderChaos, samples, frequencyToTimeScale, content, principalMode,
+                                       resolveMindWave);
     }
     // Any other/future ToolType (Clone) paints nothing yet - the same
     // "groundwork, not yet functional" state ToolConfiguration's own docs

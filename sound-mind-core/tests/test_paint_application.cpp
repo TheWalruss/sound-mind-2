@@ -183,6 +183,22 @@ MindWave alwaysBaselineWave() {
     return wave;
 }
 
+/// @brief A MindWave that reads as a constant ~0.5 anywhere on a small
+/// canvas - `Sine`'s own `(sin(phase) + 1) / 2` at `phase == 0` (`sin(0)
+/// == 0`), with the same huge-period trick `alwaysCeilingWave()`/
+/// `alwaysBaselineWave()` already use so position barely moves the
+/// cycle at all. Used for `sizeMindWave()`'s own tests, where a value
+/// strictly between the baseline (0, no footprint) and ceiling (1, full
+/// configured size) extremes is what actually exercises the scaling
+/// formula.
+MindWave halfWave() {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Sine);
+    wave.setPeriod(1'000'000.0);
+    wave.setPhaseRadians(0.0);
+    return wave;
+}
+
 /// @brief A single-node Path (a tap, not a drag) at (timeSeconds,
 /// frequencyHz), with a uniform gradient of the given intensity/opacity -
 /// exercises applyPaintOperation()'s own single-stamp handling without any
@@ -825,6 +841,289 @@ TEST_CASE("applyPaintOperation's Instrument tremolo does nothing when the resolv
     const int fundamentalBin =
         static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == -10.0f);
+}
+
+// --- Paint Tool Enhancements Installment B: canvas-space Opacity/Size/
+// Color bindings (v0.Y.54.1) ------------------------------------------------
+
+TEST_CASE("applyPaintOperation's Procedural opacityMindWave, bound to a MindWave at baseline, paints nothing",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto toolConfig = makeCircleTool(0.05, 0.0f);
+    toolConfig->setOpacityMindWave(MindWaveId{1});
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+
+    const auto opacity = alwaysBaselineWave();
+    const MindWaveResolver resolve = [&opacity](MindWaveId) -> const MindWave* { return &opacity; };
+    applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation's Procedural opacityMindWave, bound to a MindWave at ceiling, paints exactly as if "
+          "unbound",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage boundContent = makeBlankContent(config, 100);
+    StreamImage unboundContent = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto boundTool = makeCircleTool(0.05, 0.0f);
+    boundTool->setOpacityMindWave(MindWaveId{1});
+    const PaintOperation boundOp(1, LayerId{1}, path, std::move(boundTool));
+    const auto opacity = alwaysCeilingWave();
+    const MindWaveResolver resolve = [&opacity](MindWaveId) -> const MindWave* { return &opacity; };
+    applyPaintOperation(boundOp, 2000.0, boundContent, LayerContentResolver{}, resolve);
+
+    const PaintOperation unboundOp(1, LayerId{1}, path, makeCircleTool(0.05, 0.0f));
+    applyPaintOperation(unboundOp, 2000.0, unboundContent);
+
+    REQUIRE(boundContent.leftMagnitudeDb == unboundContent.leftMagnitudeDb);
+}
+
+TEST_CASE("applyPaintOperation's Procedural sizeMindWave, bound to a MindWave at baseline, paints nothing",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto toolConfig = makeCircleTool(0.05, 0.0f);
+    toolConfig->setSizeMindWave(MindWaveId{1});
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+
+    const auto size = alwaysBaselineWave();
+    const MindWaveResolver resolve = [&size](MindWaveId) -> const MindWave* { return &size; };
+    applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation's Procedural sizeMindWave, bound to a MindWave at half, shrinks the stamp's own "
+          "footprint radius by half",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage halfContent = makeBlankContent(config, 100);
+    StreamImage fullContent = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto halfTool = makeCircleTool(0.05, 0.0f);
+    halfTool->setSizeMindWave(MindWaveId{1});
+    const PaintOperation halfOp(1, LayerId{1}, path, std::move(halfTool));
+    const auto size = halfWave();
+    const MindWaveResolver resolve = [&size](MindWaveId) -> const MindWave* { return &size; };
+    applyPaintOperation(halfOp, 2000.0, halfContent, LayerContentResolver{}, resolve);
+
+    // A stamp at half the size() below - the full-size stamp's own edge,
+    // reached at 0.05 seconds away, is well outside the half-size stamp's
+    // own 0.025-second reach.
+    const PaintOperation fullOp(1, LayerId{1}, path, makeCircleTool(0.025, 0.0f));
+    applyPaintOperation(fullOp, 2000.0, fullContent);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    // Both stamps still paint their own center.
+    REQUIRE(halfContent.leftMagnitudeDb[pixelIndex(halfContent, centerFrame, centerBin)] == -10.0f);
+    REQUIRE(fullContent.leftMagnitudeDb[pixelIndex(fullContent, centerFrame, centerBin)] == -10.0f);
+
+    // A point at the *full* 0.05s radius - within the unbound stamp's own
+    // reach, but well outside the half-sized (0.025s radius) stamp's own.
+    const int edgeFrame = static_cast<int>(std::lround(timeToFrameIndex(0.34, config)));
+    REQUIRE(halfContent.leftMagnitudeDb[pixelIndex(halfContent, edgeFrame, centerBin)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation's Procedural colorMindWave replaces the gradient's own lookup position with the "
+          "field value instead of the stamp's own pathT",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    // A single-tap stroke's own lone sample has pathT == 0.0 - without
+    // colorMindWave bound, this would always sample the gradient's own
+    // t=0 stop (-5dB below). Binding colorMindWave to a MindWave always at
+    // ceiling (field == 1.0) instead samples the t=1 stop (-20dB) - proof
+    // the field, not pathT, is driving the lookup.
+    Path path;
+    PathNode node;
+    node.anchor = TimeFrequencyPoint{0.3, 1000.0};
+    node.type = PathNodeType::Corner;
+    path.addNode(node);
+    auto stop0 = path.gradient().stops().front();
+    stop0.leftIntensity = -5.0f;
+    stop0.leftOpacity = 1.0f;
+    path.gradient().setStopValues(0, stop0);
+    auto stop1 = stop0;
+    stop1.leftIntensity = -20.0f;
+    path.gradient().setStopValues(1, stop1);
+
+    auto toolConfig = makeCircleTool(0.05, 0.0f);
+    toolConfig->setColorMindWave(MindWaveId{1});
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+
+    const auto color = alwaysCeilingWave();
+    const MindWaveResolver resolve = [&color](MindWaveId) -> const MindWave* { return &color; };
+    applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] == -20.0f);
+}
+
+TEST_CASE("applyPaintOperation's Instrument opacityMindWave, bound to a MindWave at baseline, paints nothing",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto toolConfig = makeInstrumentTool({1.0}, 0.0, 0.05, 0.0f);
+    toolConfig->setOpacityMindWave(MindWaveId{1});
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+
+    const auto opacity = alwaysBaselineWave();
+    const MindWaveResolver resolve = [&opacity](MindWaveId) -> const MindWave* { return &opacity; };
+    applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation's Instrument sizeMindWave, bound to a MindWave at baseline, paints nothing",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto toolConfig = makeInstrumentTool({1.0}, 0.0, 0.05, 0.0f);
+    toolConfig->setSizeMindWave(MindWaveId{1});
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+
+    const auto size = alwaysBaselineWave();
+    const MindWaveResolver resolve = [&size](MindWaveId) -> const MindWave* { return &size; };
+    applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation's Heal opacityMindWave, bound to a MindWave at baseline, leaves content unchanged",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto toolConfig = std::make_unique<HealConfiguration>();
+    toolConfig->setSize(0.05);
+    toolConfig->setOpacityMindWave(MindWaveId{1});
+    const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+
+    const auto opacity = alwaysBaselineWave();
+    const MindWaveResolver resolve = [&opacity](MindWaveId) -> const MindWave* { return &opacity; };
+    applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation's Heal colorMindWave only changes which stop's own opacity is read, never intensity "
+          "(Heal's own blend target always comes from the live neighborhood average)",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    StreamImage boundContent = makeBlankContent(config, 100);
+    StreamImage unboundContent = makeBlankContent(config, 100);
+    // A uniform (2 dB everywhere) starting point, so Heal's own box-average
+    // blend target is the same known value regardless of neighborhood.
+    std::fill(boundContent.leftMagnitudeDb.begin(), boundContent.leftMagnitudeDb.end(), 2.0f);
+    std::fill(unboundContent.leftMagnitudeDb.begin(), unboundContent.leftMagnitudeDb.end(), 2.0f);
+
+    Path path;
+    PathNode node;
+    node.anchor = TimeFrequencyPoint{0.3, 1000.0};
+    node.type = PathNodeType::Corner;
+    path.addNode(node);
+    // Both stops share the same opacity (1.0) - colorMindWave's own field
+    // value can't change *which* opacity gets read when every stop already
+    // agrees, so this isolates "intensity is never read" from "opacity
+    // still varies by lookup position" (covered by the Procedural test
+    // above) - both stops' own leftIntensity differ sharply, which would
+    // change the painted result if Heal ever read it.
+    auto stop = path.gradient().stops().front();
+    stop.leftOpacity = 1.0f;
+    stop.leftIntensity = -50.0f;
+    path.gradient().setStopValues(0, stop);
+    stop.leftIntensity = 50.0f;
+    path.gradient().setStopValues(1, stop);
+
+    auto boundTool = std::make_unique<HealConfiguration>();
+    boundTool->setSize(0.05);
+    boundTool->setColorMindWave(MindWaveId{1});
+    const PaintOperation boundOp(1, LayerId{1}, path, std::move(boundTool));
+    const auto color = alwaysCeilingWave();  // Field == 1.0 -> the t=1 stop, if intensity were ever read.
+    const MindWaveResolver resolve = [&color](MindWaveId) -> const MindWave* { return &color; };
+    applyPaintOperation(boundOp, 2000.0, boundContent, LayerContentResolver{}, resolve);
+
+    auto unboundTool = std::make_unique<HealConfiguration>();
+    unboundTool->setSize(0.05);
+    const PaintOperation unboundOp(1, LayerId{1}, path, std::move(unboundTool));
+    applyPaintOperation(unboundOp, 2000.0, unboundContent);
+
+    REQUIRE(boundContent.leftMagnitudeDb == unboundContent.leftMagnitudeDb);
+}
+
+TEST_CASE("applyPaintOperation's Soften/Smudge/OrderChaos opacityMindWave, bound to a MindWave at baseline, leaves "
+          "content unchanged",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    const auto opacity = alwaysBaselineWave();
+    const MindWaveResolver resolve = [&opacity](MindWaveId) -> const MindWave* { return &opacity; };
+
+    SECTION("Soften") {
+        StreamImage content = makeBlankContent(config, 100);
+        std::fill(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(), 2.0f);
+        const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+        auto toolConfig = std::make_unique<SoftenConfiguration>();
+        toolConfig->setSize(0.05);
+        toolConfig->setOpacityMindWave(MindWaveId{1});
+        const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+        applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+        for (const float value : content.leftMagnitudeDb) {
+            REQUIRE(value == 2.0f);
+        }
+    }
+    SECTION("Smudge") {
+        StreamImage content = makeBlankContent(config, 100);
+        std::fill(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(), 2.0f);
+        const Path path = makeUniformHorizontalPath(0.2, 0.4, 1000.0, -10.0f, 1.0f);
+        auto toolConfig = std::make_unique<SmudgeConfiguration>();
+        toolConfig->setSize(0.05);
+        toolConfig->setOpacityMindWave(MindWaveId{1});
+        const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+        applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+        for (const float value : content.leftMagnitudeDb) {
+            REQUIRE(value == 2.0f);
+        }
+    }
+    SECTION("OrderChaos") {
+        StreamImage content = makeBlankContent(config, 100);
+        std::fill(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(), 2.0f);
+        const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+        auto toolConfig = std::make_unique<OrderChaosConfiguration>();
+        toolConfig->setSize(0.05);
+        toolConfig->setAmount(-1.0);  // Chaos - a no-op without this.
+        toolConfig->setOpacityMindWave(MindWaveId{1});
+        const PaintOperation op(1, LayerId{1}, path, std::move(toolConfig));
+        applyPaintOperation(op, 2000.0, content, LayerContentResolver{}, resolve);
+        for (const float value : content.leftMagnitudeDb) {
+            REQUIRE(value == 2.0f);
+        }
+    }
 }
 
 TEST_CASE("rebuildPaintedContent threads its own MindWaveResolver through to each replayed PaintOperation, "

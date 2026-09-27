@@ -43,6 +43,14 @@ private slots:
     void loadingAnInstrumentConfigurationSyncsVibratoAndTremoloControls();
     void switchingAwayFromAndBackToInstrumentPreservesVibratoAndTremoloBindings();
 
+    // Paint Tool Enhancements - canvas-space Opacity/Size/Color bindings (v0.Y.54.1 Installment B).
+    void setAvailableMindWavesPopulatesTheOpacitySizeAndColorCombosToo();
+    void changingTheOpacityMindWaveComboEmitsToolConfigurationChangedWithTheNewBinding();
+    void selectingNoneOnTheSizeMindWaveComboUnbindsAndEmits();
+    void loadingAConfigurationSyncsTheOpacitySizeAndColorCombos();
+    void switchingToolTypeAwayFromAndBackPreservesOpacitySizeAndColorBindings();
+    void opacitySizeColorCombosAreHiddenForMindShotAndMindGrain();
+
     // Mind Shots (v0.Y.33.1 Installment A).
     void switchingToolTypeToMindShotShowsItsOwnGroupAndHidesProcedural();
     void setProjectPopulatesTheMindShotCombo();

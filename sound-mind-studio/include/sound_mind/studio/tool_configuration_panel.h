@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -349,6 +350,16 @@ private:
      *   `setIntensityVisible(true)` - both genuinely use all of Falloff/
      *   Size/Stamp Mode/Interval/Intensity/Opacity.
      *
+     * **`opacityMindWaveCombo_`/`sizeMindWaveCombo_`/`colorMindWaveCombo_`
+     * (`v0.Y.54.1` Installment B) follow the same visibility as Falloff/
+     * Size** - hidden for `MindShotConfiguration`/`MindGrainConfiguration`
+     * (meaningless, per each binding's own docs on `ToolConfiguration`),
+     * visible for every other type, including `FixedStampPlacementConfiguration`'s
+     * own four subtypes (where `colorMindWaveCombo_` still narrows to
+     * affecting only which stop's own *opacity* is read, the same "still
+     * meaningful, just narrower" shape `gradientEditor_`'s own
+     * `setIntensityVisible(false)` already establishes for those four).
+     *
      * Called wherever `updateVisibleToolTypeGroup()` already is, right
      * alongside it - the same "config_'s type just changed" trigger.
      */
@@ -412,8 +423,22 @@ private:
     ///        `setAvailableMindWaves()`'s own docs. Called from there, and
     ///        from `setToolConfiguration()` so a freshly-loaded
     ///        `InstrumentConfiguration`'s own bindings are reflected
-    ///        immediately even if the library itself hasn't changed.
+    ///        immediately even if the library itself hasn't changed. Also
+    ///        rebuilds `opacityMindWaveCombo_`/`sizeMindWaveCombo_`/
+    ///        `colorMindWaveCombo_` (`v0.Y.54.1` Installment B) - unlike the
+    ///        vibrato/tremolo pair, these read straight from `config_`
+    ///        itself (a base-class field every type shares), not gated by
+    ///        a `dynamic_cast`.
     void rebuildMindWaveCombos();
+
+    /// @brief Repopulates one MindWave-binding combo from `availableMindWaves_`,
+    ///        selecting `boundId`'s own entry if it names one currently in
+    ///        the list - the shared body every `rebuildMindWaveCombos()`
+    ///        call and `changeToolType()`'s own narrower Opacity/Size/Color-
+    ///        only refresh (see its own docs) both build on.
+    /// @param combo The combo to repopulate.
+    /// @param boundId The id to preselect, or `std::nullopt` for "None".
+    void populateMindWaveCombo(QComboBox* combo, std::optional<sound_mind::core::MindWaveId> boundId);
 
     std::unique_ptr<sound_mind::core::ToolConfiguration> config_;
 
@@ -489,6 +514,24 @@ private:
     QDoubleSpinBox* stampIntervalSpinBox_ = nullptr;
     QLineEdit* stampIntervalPatternLineEdit_ = nullptr;
     QLabel* stampIntervalPatternErrorLabel_ = nullptr;
+
+    /// @brief Canvas-space Opacity/Size/Color MindWave binding combos -
+    ///        `v0.Y.54.1` Paint Tool Enhancements Installment B. Live in
+    ///        `sharedControlsForm_` alongside Falloff/Size (not per-type
+    ///        groups) since `ToolConfiguration::opacityMindWave()`/
+    ///        `sizeMindWave()`/`colorMindWave()` are base-class fields every
+    ///        gradient-blended type shares - see
+    ///        `updateSharedControlVisibility()`'s own docs for exactly which
+    ///        types show them (the same set that shows Falloff/Size).
+    ///        Unlike `vibratoMindWaveCombo_`/`tremoloMindWaveCombo_`, no
+    ///        paired depth spin box - each binding's own field value
+    ///        directly multiplies/scales/replaces the parameter it targets
+    ///        (see each one's own docs on `ToolConfiguration`), with no
+    ///        separate depth dial. Repopulated by `rebuildMindWaveCombos()`,
+    ///        the same as the vibrato/tremolo pair.
+    QComboBox* opacityMindWaveCombo_ = nullptr;
+    QComboBox* sizeMindWaveCombo_ = nullptr;
+    QComboBox* colorMindWaveCombo_ = nullptr;
 
     /// @brief The stroke's own gradient editor - see the class's own docs
     ///        and updateSharedControlVisibility()'s own docs for which

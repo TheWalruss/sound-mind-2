@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.7] - 2026-09-27
+
+Paint Tool Enhancements, Installment B: **canvas-space Opacity/Size/Color MindWave bindings.**
+
+### Added
+
+- **Three new MindWave binding combos** in the Tool Configuration panel - **Opacity MindWave**, **Size MindWave**, and **Color MindWave** - available for every brush-like tool (Procedural, Instrument, Heal, Soften, Smudge, Order/Chaos). Each is evaluated once per stamp, at that stamp's own position on the canvas: Opacity multiplies the stamp's own strength, Size scales its own footprint, and Color changes where along the stroke's own gradient that stamp samples its color/intensity from - so a single stroke can visibly vary its strength, width, or hue as it crosses a bound MindWave's own field, independent of the stroke's own path position.
+- Hidden for Mind Shot/Mind Grain (neither uses a gradient or footprint radius), same as Falloff/Brush Size already are.
+
+### Notes
+
+New `ToolConfiguration::opacityMindWave()`/`sizeMindWave()`/`colorMindWave()` (base-class fields, JSON-persisted the same way as existing MindWave bindings). Full regression: `sound-mind-core` 938/938 (15 new), `sound-mind-studio` full suite genuinely passing (6 new). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #171.
+
 ## [0.1.3.6] - 2026-09-27
 
 Paint Tool Enhancements, Installment A: **non-uniform stamp timing along a path.**

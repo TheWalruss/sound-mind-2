@@ -104,6 +104,65 @@ TEST_CASE("A ToolConfiguration's stamp interval can be changed", "[core][tool_co
     REQUIRE(config.stampInterval() == 0.5);
 }
 
+TEST_CASE("A fresh ToolConfiguration's opacity/size/color MindWave bindings are all unbound",
+          "[core][tool_configuration]") {
+    const ProceduralConfiguration config;
+    REQUIRE_FALSE(config.opacityMindWave().has_value());
+    REQUIRE_FALSE(config.sizeMindWave().has_value());
+    REQUIRE_FALSE(config.colorMindWave().has_value());
+}
+
+TEST_CASE("A ToolConfiguration's opacity/size/color MindWave bindings can be set and cleared",
+          "[core][tool_configuration]") {
+    ProceduralConfiguration config;
+    config.setOpacityMindWave(MindWaveId{1});
+    config.setSizeMindWave(MindWaveId{2});
+    config.setColorMindWave(MindWaveId{3});
+    REQUIRE(config.opacityMindWave() == MindWaveId{1});
+    REQUIRE(config.sizeMindWave() == MindWaveId{2});
+    REQUIRE(config.colorMindWave() == MindWaveId{3});
+
+    config.setOpacityMindWave(std::nullopt);
+    REQUIRE_FALSE(config.opacityMindWave().has_value());
+}
+
+TEST_CASE("A ToolConfiguration's opacity/size/color MindWave bindings round-trip through JSON",
+          "[core][tool_configuration]") {
+    ProceduralConfiguration config;
+    config.setOpacityMindWave(MindWaveId{10});
+    config.setSizeMindWave(MindWaveId{20});
+    config.setColorMindWave(MindWaveId{30});
+
+    const nlohmann::json json = config;
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    REQUIRE(json.at("opacityMindWaveId").get<MindWaveId>() == MindWaveId{10});
+    REQUIRE(json.at("sizeMindWaveId").get<MindWaveId>() == MindWaveId{20});
+    REQUIRE(json.at("colorMindWaveId").get<MindWaveId>() == MindWaveId{30});
+    REQUIRE(roundTripped->opacityMindWave() == MindWaveId{10});
+    REQUIRE(roundTripped->sizeMindWave() == MindWaveId{20});
+    REQUIRE(roundTripped->colorMindWave() == MindWaveId{30});
+}
+
+TEST_CASE("A ToolConfiguration with no opacity/size/color MindWave bindings writes none of those keys at all",
+          "[core][tool_configuration]") {
+    const ProceduralConfiguration config;
+    const nlohmann::json json = config;
+    REQUIRE_FALSE(json.contains("opacityMindWaveId"));
+    REQUIRE_FALSE(json.contains("sizeMindWaveId"));
+    REQUIRE_FALSE(json.contains("colorMindWaveId"));
+}
+
+TEST_CASE("A ToolConfiguration loaded from JSON with no opacity/size/color MindWave keys falls back to unbound",
+          "[core][tool_configuration]") {
+    // A project saved before Paint Tool Enhancements Installment B existed.
+    const nlohmann::json json = ProceduralConfiguration{};
+    const std::unique_ptr<ToolConfiguration> loaded = toolConfigurationFromJson(json);
+    REQUIRE_FALSE(loaded->opacityMindWave().has_value());
+    REQUIRE_FALSE(loaded->sizeMindWave().has_value());
+    REQUIRE_FALSE(loaded->colorMindWave().has_value());
+}
+
 TEST_CASE("A fresh ToolConfiguration's stamp interval pattern text is empty", "[core][tool_configuration]") {
     const ProceduralConfiguration config;
     REQUIRE(config.stampIntervalPatternText().empty());

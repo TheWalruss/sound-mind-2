@@ -368,6 +368,121 @@ public:
     /// @return The default gradient painting with this tool starts from.
     [[nodiscard]] Gradient& defaultGradient() noexcept { return defaultGradient_; }
 
+    /**
+     * @brief Binds a canvas-space MindWave to this stroke's own per-stamp
+     *        opacity - `docs/sound-mind-design.md`'s "Brush parameters"
+     *        ("strength"), `v0.Y.54.1` Paint Tool Enhancements Installment
+     *        B. Meaningless for `MindShotConfiguration`/
+     *        `MindGrainConfiguration`, which blend nothing (see their own
+     *        docs).
+     *
+     * Sampled once per stamp, at that stamp's own canvas position
+     * (`sample.point`, via `MindWave::evaluate()` directly - a continuous
+     * position, not snapped to a bin/frame the way a Filter parameter's
+     * own per-*cell* binding is) - not once per pixel within a stamp's own
+     * footprint, matching the granularity `InstrumentConfiguration`'s own
+     * pre-existing vibrato/tremolo bindings already established (per-stamp,
+     * not per-pixel), rather than introducing a new, finer-grained
+     * mechanism nothing else in this feature area uses.
+     *
+     * The resolved field value (`[0, 1]`) directly **multiplies** the
+     * stamp's own per-pixel blend weight everywhere in its footprint - the
+     * same canonical "baseline 0, ceiling the configured/unbound value"
+     * formula every other MindWave-bound parameter in this codebase already
+     * follows (`Layer::opacityMindWave()`'s own "multiplies the layer's
+     * effective opacity by that field" is the exact same formula, applied
+     * per-layer during compositing instead of per-stamp during painting).
+     * Unbound (`std::nullopt`, the default) leaves every stamp's own weight
+     * exactly as it already was - the only behavior that existed before
+     * this installment.
+     *
+     * @return The bound MindWave's id, or `std::nullopt` if unbound.
+     */
+    [[nodiscard]] std::optional<MindWaveId> opacityMindWave() const noexcept { return opacityMindWave_; }
+
+    /// @brief Binds (or unbinds, via `std::nullopt`) the canvas-space
+    ///        opacity MindWave - see `opacityMindWave()`'s own docs.
+    /// @param mindWaveId The new binding.
+    void setOpacityMindWave(std::optional<MindWaveId> mindWaveId) noexcept { opacityMindWave_ = mindWaveId; }
+
+    /**
+     * @brief Binds a canvas-space MindWave to this stroke's own per-stamp
+     *        size - `docs/sound-mind-design.md`'s "Brush parameters"
+     *        ("width"), `v0.Y.54.1` Paint Tool Enhancements Installment B.
+     *        Meaningless for `MindShotConfiguration`/`MindGrainConfiguration`
+     *        (no footprint radius at all - see their own docs).
+     *
+     * Sampled once per stamp, at that stamp's own canvas position - see
+     * `opacityMindWave()`'s own docs for why per-stamp, not per-pixel. The
+     * resolved field value (`[0, 1]`) scales `size()` directly
+     * (`effectiveSize = size() * field`) before that stamp's own footprint
+     * radius is computed from it - the same "baseline 0, ceiling the
+     * configured value" formula `opacityMindWave()` uses, applied to a
+     * radius instead of a blend weight: a stamp where the field evaluates
+     * to `0` shrinks to nothing, one where it evaluates to `1` uses the
+     * full configured `size()`, unchanged from the unbound case. Unbound
+     * (`std::nullopt`, the default) leaves every stamp at its own fixed,
+     * configured `size()` - the only behavior that existed before this
+     * installment.
+     *
+     * @return The bound MindWave's id, or `std::nullopt` if unbound.
+     */
+    [[nodiscard]] std::optional<MindWaveId> sizeMindWave() const noexcept { return sizeMindWave_; }
+
+    /// @brief Binds (or unbinds, via `std::nullopt`) the canvas-space size
+    ///        MindWave - see `sizeMindWave()`'s own docs.
+    /// @param mindWaveId The new binding.
+    void setSizeMindWave(std::optional<MindWaveId> mindWaveId) noexcept { sizeMindWave_ = mindWaveId; }
+
+    /**
+     * @brief Binds a canvas-space MindWave to this stroke's own per-stamp
+     *        color/intensity - `docs/sound-mind-design.md`'s "Brush
+     *        parameters" ("hue"), `v0.Y.54.1` Paint Tool Enhancements
+     *        Installment B.
+     *
+     * **A genuinely different mechanism from `opacityMindWave()`/
+     * `sizeMindWave()`, not the same lerp formula reapplied** - a stroke's
+     * own color already comes from `Path::gradient()`, evaluated at each
+     * stamp's own `pathT` (position along the stroke), so there is no
+     * single fixed "color" scalar left to lerp toward a baseline the way
+     * opacity/size have (lerping a *target* intensity from the existing
+     * pixel value toward the gradient's own stop would be mathematically
+     * identical to `opacityMindWave()`'s own multiply - see `docs/
+     * sound-mind-architecture.md`'s Decision on this installment for the
+     * derivation). Instead, a bound `colorMindWave()` supplies each stamp's
+     * own gradient-lookup position directly: `path().gradient().evaluate(
+     * field)` in place of `path().gradient().evaluate(sample.pathT)`, field
+     * being this MindWave's own canvas-space value (`[0, 1]`) at that
+     * stamp. This reuses every existing `Gradient`/`GradientStop` mechanism
+     * unchanged - only *which* position along it a stamp samples changes -
+     * so a stroke can traverse its own gradient by canvas position instead
+     * of by progress along the path.
+     *
+     * Only affects the *target* a stamp blends toward
+     * (`leftIntensity`/`rightIntensity`) for the tool types that actually
+     * read one (`ProceduralConfiguration`/`InstrumentConfiguration`) -
+     * `HealConfiguration`/`SoftenConfiguration`/`SmudgeConfiguration`/
+     * `OrderChaosConfiguration` never read a gradient stop's own intensity
+     * at all (their own blend target always comes from a live neighborhood/
+     * line average instead - see each one's own docs), so for those four
+     * this binding only changes which stop's own *opacity* a stamp reads,
+     * the same still-meaningful (if narrower) effect `stampIntervalPatternText()`'s
+     * own "meaningless for some subtypes" precedent already establishes for
+     * a shared, not-universally-applicable field.
+     *
+     * Unbound (`std::nullopt`, the default) leaves every stamp's own
+     * gradient lookup at `sample.pathT`, unchanged from before this
+     * installment.
+     *
+     * @return The bound MindWave's id, or `std::nullopt` if unbound.
+     */
+    [[nodiscard]] std::optional<MindWaveId> colorMindWave() const noexcept { return colorMindWave_; }
+
+    /// @brief Binds (or unbinds, via `std::nullopt`) the canvas-space
+    ///        color/intensity MindWave - see `colorMindWave()`'s own docs.
+    /// @param mindWaveId The new binding.
+    void setColorMindWave(std::optional<MindWaveId> mindWaveId) noexcept { colorMindWave_ = mindWaveId; }
+
 protected:
     ToolConfiguration() = default;
 
@@ -388,6 +503,9 @@ private:
     double stampInterval_ = 0.1;
     std::string stampIntervalPatternText_;
     Gradient defaultGradient_;
+    std::optional<MindWaveId> opacityMindWave_;
+    std::optional<MindWaveId> sizeMindWave_;
+    std::optional<MindWaveId> colorMindWave_;
 };
 
 /**

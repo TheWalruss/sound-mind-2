@@ -8,6 +8,24 @@ namespace sound_mind::core {
 
 namespace {
 
+/// @brief Writes `mindWaveId` under `key`, only if present - the same
+/// "only write if present" convention `filter_configuration.cpp`'s own
+/// identical helper already establishes, duplicated here rather than
+/// shared across modules for the same reason `MindWaveId` itself is
+/// duplicated (see this header's own docs on that alias).
+void writeOptionalMindWaveId(nlohmann::json& json, const char* key, std::optional<MindWaveId> mindWaveId) {
+    if (mindWaveId.has_value()) {
+        json[key] = *mindWaveId;
+    }
+}
+
+/// @brief The inverse of writeOptionalMindWaveId() - `std::nullopt` if
+/// `key` is absent (a configuration saved before `v0.Y.39.1` was never
+/// bound anyway).
+std::optional<MindWaveId> readOptionalMindWaveId(const nlohmann::json& json, const char* key) {
+    return json.contains(key) ? std::optional(json.at(key).get<MindWaveId>()) : std::nullopt;
+}
+
 /// @brief Writes every field `ToolConfiguration`'s own base class defines
 /// into `json` - the fields every concrete subtype's own `to_json()`
 /// branch needs, identically. Shared here rather than repeated per branch,
@@ -28,29 +46,16 @@ void writeCommonToolConfigurationFields(nlohmann::json& json, const ToolConfigur
         json["stampIntervalPattern"] = config.stampIntervalPatternText();
     }
     json["defaultGradient"] = config.defaultGradient();
+    // v0.Y.54.1 Installment B - see writeOptionalMindWaveId()'s own "only if
+    // present" convention.
+    writeOptionalMindWaveId(json, "opacityMindWaveId", config.opacityMindWave());
+    writeOptionalMindWaveId(json, "sizeMindWaveId", config.sizeMindWave());
+    writeOptionalMindWaveId(json, "colorMindWaveId", config.colorMindWave());
 }
 
 /// @brief The inverse of writeCommonToolConfigurationFields() - reads
 /// `json`'s own base-class fields back into `config`. Shared here rather
 /// than repeated per `toolConfigurationFromJson()` branch.
-/// @brief Writes `mindWaveId` under `key`, only if present - the same
-/// "only write if present" convention `filter_configuration.cpp`'s own
-/// identical helper already establishes, duplicated here rather than
-/// shared across modules for the same reason `MindWaveId` itself is
-/// duplicated (see this header's own docs on that alias).
-void writeOptionalMindWaveId(nlohmann::json& json, const char* key, std::optional<MindWaveId> mindWaveId) {
-    if (mindWaveId.has_value()) {
-        json[key] = *mindWaveId;
-    }
-}
-
-/// @brief The inverse of writeOptionalMindWaveId() - `std::nullopt` if
-/// `key` is absent (a configuration saved before `v0.Y.39.1` was never
-/// bound anyway).
-std::optional<MindWaveId> readOptionalMindWaveId(const nlohmann::json& json, const char* key) {
-    return json.contains(key) ? std::optional(json.at(key).get<MindWaveId>()) : std::nullopt;
-}
-
 void readCommonToolConfigurationFields(const nlohmann::json& json, ToolConfiguration& config) {
     config.setName(json.at("name").get<std::string>());
     config.setFalloff(json.at("falloff").get<float>());
@@ -66,6 +71,12 @@ void readCommonToolConfigurationFields(const nlohmann::json& json, ToolConfigura
     // pattern, matching stampIntervalPatternText()'s own docs.
     config.setStampIntervalPatternText(json.value("stampIntervalPattern", std::string()));
     config.defaultGradient() = json.at("defaultGradient").get<Gradient>();
+    // v0.Y.54.1 Installment B - absent in a project saved before this
+    // installment, falling back to unbound (std::nullopt), matching
+    // opacityMindWave()'s/sizeMindWave()'s/colorMindWave()'s own defaults.
+    config.setOpacityMindWave(readOptionalMindWaveId(json, "opacityMindWaveId"));
+    config.setSizeMindWave(readOptionalMindWaveId(json, "sizeMindWaveId"));
+    config.setColorMindWave(readOptionalMindWaveId(json, "colorMindWaveId"));
 }
 
 }  // namespace
