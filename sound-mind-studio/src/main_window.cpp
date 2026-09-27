@@ -38,6 +38,7 @@
 #include <QStatusBar>
 #include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
 #include <QUrl>
 
 #include "sound_mind/codec/color_mapping.h"
@@ -1028,11 +1029,28 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* poolAction = transportToolBar->addAction(tr("Pool Layer"));
     connect(poolAction, &QAction::triggered, this, &MainWindow::poolTopmostLayer);
 
-    // A plain checkable toggle, not toggleViewAction()-based like the
-    // panels below - this isn't a dock's own visibility, it's the
-    // canvas's current tool mode (see CanvasWidget::setToolMode()'s own
+    // Tool dropdown (v0.Y.58.1, "Reduce top-level buttons" UI polish): a
+    // single QToolButton/QMenu collapsing what used to be five separate
+    // checkable toolbar actions (Paint/Pick/Select/Path/Chord) plus a new
+    // Pan entry, per the roadmap's own "Choosing between Paint/Pick/Path/
+    // Chord should be a single Tool drop-down option" spec (Select folds
+    // in as a sixth entry - it's a full peer tool mode in CanvasWidget::
+    // ToolMode already, not one of the four named, but dropping it wasn't
+    // an option). Each entry is still its own real QAction (not a
+    // QComboBox item) so per-entry enable/disable + tooltip keeps working
+    // exactly as before for the Mind Grain guardrail (see
+    // updateMindGrainGuardrails()'s own docs) - only *where* the actions
+    // live changed, not what they are or how setExclusiveToolMode()
+    // manages them.
+    panAction_ = new QAction(tr("Pan"), this);
+    panAction_->setCheckable(true);
+    panAction_->setToolTip(tr("Navigate the canvas without painting, picking, or placing anything"));
+    connect(panAction_, &QAction::toggled, this, &MainWindow::setPanModeEnabled);
+
+    // A plain checkable toggle - this isn't a dock's own visibility, it's
+    // the canvas's current tool mode (see CanvasWidget::setToolMode()'s own
     // docs).
-    paintAction_ = transportToolBar->addAction(tr("Paint"));
+    paintAction_ = new QAction(tr("Paint"), this);
     paintAction_->setCheckable(true);
     connect(paintAction_, &QAction::toggled, this, &MainWindow::setPaintModeEnabled);
 
@@ -1041,19 +1059,19 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // with paintAction_ via QActionGroup - see setPaintModeEnabled()'s own
     // docs on why mutual exclusivity is instead handled directly, by hand,
     // in setPaintModeEnabled()/setPickModeEnabled() themselves.
-    pickAction_ = transportToolBar->addAction(tr("Pick"));
+    pickAction_ = new QAction(tr("Pick"), this);
     pickAction_->setCheckable(true);
     connect(pickAction_, &QAction::toggled, this, &MainWindow::setPickModeEnabled);
 
     // Selection & Fill (v0.Y.25.1): the same kind of plain checkable
     // toggle as Paint/Pick above, for CanvasWidget::ToolMode::Select.
-    selectAction_ = transportToolBar->addAction(tr("Select"));
+    selectAction_ = new QAction(tr("Select"), this);
     selectAction_->setCheckable(true);
     connect(selectAction_, &QAction::toggled, this, &MainWindow::setSelectModeEnabled);
 
     // Paths & Grids (v0.Y.26.1): the same kind of plain checkable toggle
     // as Paint/Pick/Select above, for CanvasWidget::ToolMode::Path.
-    pathAction_ = transportToolBar->addAction(tr("Path"));
+    pathAction_ = new QAction(tr("Path"), this);
     pathAction_->setCheckable(true);
     connect(pathAction_, &QAction::toggled, this, &MainWindow::setPathModeEnabled);
 
@@ -1062,9 +1080,35 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // CanvasWidget::ToolMode::ChordStamp - arms the Chord Generator's own
     // "click to place" gesture (see ChordGeneratorPanel's own docs on why
     // there's no separate "Stamp" button).
-    chordAction_ = transportToolBar->addAction(tr("Chord"));
+    chordAction_ = new QAction(tr("Chord"), this);
     chordAction_->setCheckable(true);
     connect(chordAction_, &QAction::toggled, this, &MainWindow::setChordModeEnabled);
+
+    auto* toolMenu = new QMenu(this);
+    toolMenu->setToolTipsVisible(true);
+    toolMenu->addAction(panAction_);
+    toolMenu->addAction(paintAction_);
+    toolMenu->addAction(pickAction_);
+    toolMenu->addAction(selectAction_);
+    toolMenu->addAction(pathAction_);
+    toolMenu->addAction(chordAction_);
+
+    toolButton_ = new QToolButton(this);
+    // QToolBar creates its own internal, unnamed QToolButton for every
+    // plain QAction added to it (Pool Layer, every dock's
+    // toggleViewAction(), etc.) - an explicit object name is what lets
+    // tests reliably find *this* one via findChild<QToolButton*>(name)
+    // rather than matching one of those by accident.
+    toolButton_->setObjectName(QStringLiteral("toolButton"));
+    toolButton_->setPopupMode(QToolButton::InstantPopup);
+    toolButton_->setMenu(toolMenu);
+    toolButton_->setToolTip(tr("Choose the canvas's current input tool"));
+    transportToolBar->addWidget(toolButton_);
+    // Establishes the "exactly one of the six is checked" invariant
+    // setExclusiveToolMode() relies on from here on, and sets toolButton_'s
+    // own initial label - matches ToolMode::None already being the
+    // documented default (see paintModeIsOffByDefault()'s own test).
+    panAction_->setChecked(true);
 
     // The Path tool's own "standing default" node type (see
     // PathController::setDefaultNodeType()'s own docs) - deliberately
@@ -1425,6 +1469,10 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     selectAction_->setChecked(false);
     pathAction_->setChecked(false);
     chordAction_->setChecked(false);
+    // Explicit, for the same "unconditional and idempotent" reasoning -
+    // already true via setExclusiveToolMode()'s own fallback whenever one
+    // of the five above was actually checked, a no-op otherwise.
+    panAction_->setChecked(true);
     // A project switch mid-recording is exactly the kind of unrelated
     // event every other reset above already treats as "start clean" - see
     // macroRecordAction_'s own docs. A no-op (does nothing, triggers no
@@ -2626,6 +2674,10 @@ void MainWindow::updateMindWave(sound_mind::core::MindWaveId id, const sound_min
                                 tr("Changed MindWave configuration"), undoStack_.currentIndex(), std::nullopt, id);
 }
 
+void MainWindow::setPanModeEnabled(bool enabled) {
+    setExclusiveToolMode(panAction_, enabled, CanvasWidget::ToolMode::None);
+}
+
 void MainWindow::setPaintModeEnabled(bool enabled) {
     if (!enabled) {
         toolPaletteController_->cancelPaintStroke();
@@ -2669,33 +2721,39 @@ void MainWindow::setChordModeEnabled(bool enabled) {
 void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWidget::ToolMode mode) {
     canvas_->setToolMode(enabled ? mode : CanvasWidget::ToolMode::None);
 
-    // Blocked so this doesn't recurse back into setPaintModeEnabled()/
-    // setPickModeEnabled()/setSelectModeEnabled()/setPathModeEnabled() -
-    // see this method's own docs for why exclusivity is handled by hand
-    // here rather than via a QActionGroup.
+    // Blocked so this doesn't recurse back into setPanModeEnabled()/
+    // setPaintModeEnabled()/setPickModeEnabled()/setSelectModeEnabled()/
+    // setPathModeEnabled()/setChordModeEnabled() - see this method's own
+    // docs for why exclusivity is handled by hand here rather than via a
+    // QActionGroup.
+    const QSignalBlocker panBlocker(panAction_);
     const QSignalBlocker paintBlocker(paintAction_);
     const QSignalBlocker pickBlocker(pickAction_);
     const QSignalBlocker selectBlocker(selectAction_);
     const QSignalBlocker pathBlocker(pathAction_);
     const QSignalBlocker chordBlocker(chordAction_);
-    activated->setChecked(enabled);
-    if (enabled) {
-        if (activated != paintAction_) {
-            paintAction_->setChecked(false);
-        }
-        if (activated != pickAction_) {
-            pickAction_->setChecked(false);
-        }
-        if (activated != selectAction_) {
-            selectAction_->setChecked(false);
-        }
-        if (activated != pathAction_) {
-            pathAction_->setChecked(false);
-        }
-        if (activated != chordAction_) {
-            chordAction_->setChecked(false);
+    // When disabled, Pan (ToolMode::None's own entry) is the one left
+    // checked - falls out of the same "exactly one of six checked"
+    // invariant as the enabled case below, not a special case.
+    QAction* const checkedAction = enabled ? activated : panAction_;
+    panAction_->setChecked(checkedAction == panAction_);
+    paintAction_->setChecked(checkedAction == paintAction_);
+    pickAction_->setChecked(checkedAction == pickAction_);
+    selectAction_->setChecked(checkedAction == selectAction_);
+    pathAction_->setChecked(checkedAction == pathAction_);
+    chordAction_->setChecked(checkedAction == chordAction_);
+    updateToolButtonLabel();
+}
+
+void MainWindow::updateToolButtonLabel() {
+    QAction* checkedAction = panAction_;
+    for (QAction* candidate : {panAction_, paintAction_, pickAction_, selectAction_, pathAction_, chordAction_}) {
+        if (candidate->isChecked()) {
+            checkedAction = candidate;
+            break;
         }
     }
+    toolButton_->setText(tr("Tool: %1").arg(checkedAction->text()));
 }
 
 void MainWindow::updateMindGrainGuardrails() {

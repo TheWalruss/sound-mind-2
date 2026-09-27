@@ -190,6 +190,7 @@ private slots:
 
     // Basic Painting (v0.Y.24.1)
     void paintModeIsOffByDefault();
+    void toolDropdownDefaultsToPanAndItsLabelSaysSo();
     void setPaintModeEnabledTogglesTheCanvasToolMode();
     void paintingOnTheCanvasAppendsAPaintOperationToTheProjectsLog();
     void undoAndRedoDelegateToThePaintController();
@@ -219,6 +220,8 @@ private slots:
     void settingANewProjectResetsPickModeToOff();
     void pickingTheSameSpotTwiceSelectsTheOccludedStrokeUnderneath();
     void paintPickAndSelectToolbarActionsAreAllMutuallyExclusive();
+    void toolDropdownLabelTracksTheActiveToolAndFallsBackToPanWhenTurnedOff();
+    void setPanModeEnabledSelectsTheNeutralToolModeAndCanBeReachedDirectly();
     void drawingASelectionAndFillingItChangesTheLayersContent();
     void selectionPersistsAfterSwitchingAwayFromSelectMode();
     void deselectClearsTheCurrentSelectionSoFillBecomesANoOp();

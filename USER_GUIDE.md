@@ -100,6 +100,12 @@ Once a project is open, the title bar shows the project's name next to
 - **The canvas** (center) - shows the current spectrogram. See
   [Working with Layers](#working-with-layers) for exactly which layer
   that is.
+- **Tool dropdown** - a single toolbar button choosing the canvas's
+  current tool: **Pan** (the default - navigate the canvas without
+  painting, picking, or placing anything), **Paint**, **Pick**,
+  **Select**, **Path**, or **Chord**. Its own label always names whichever
+  one is active; turning a tool off (rather than choosing a different one)
+  falls back to Pan automatically. See each tool's own section below.
 - **Layers panel** (right, by default) - lists every layer in the
   project, top of the stack first. Shown by default; toggled from the
   **Layers** toolbar button.
@@ -773,9 +779,9 @@ loudness.
 
 ## Painting
 
-Click the **Paint** toolbar button to switch the canvas into paint mode;
-click it again (or switch tools) to leave it. While it's on, dragging on
-the canvas draws a stroke - you'll see it live as a black-outlined white
+Choose **Paint** from the **Tool** dropdown to switch the canvas into
+paint mode; choose **Pan** (or any other tool) to leave it. While it's on,
+dragging on the canvas draws a stroke - you'll see it live as a black-outlined white
 line while drawing (visible over any painted color underneath, including
 a matching one), and it's applied to the spectrogram once you release
 the mouse.
@@ -882,8 +888,8 @@ settings:
   panel won't even let you attempt it on the wrong layer: the Mind Grain
   group turns red (with a tooltip explaining why) whenever the active
   layer isn't above the configured grain's source, the Layers panel marks
-  every disallowed layer with a red **✕**, and the Paint toolbar button
-  itself is disabled (its own tooltip explains why) - switch to a layer
+  every disallowed layer with a red **✕**, and the Tool dropdown's own
+  **Paint** entry is disabled (its own tooltip explains why) - switch to a layer
   higher in the stack, or reorder the layers, to paint with it. Reordering
   or deleting a layer that would break an *already-painted* Mind Grain
   stroke's own ordering is refused outright too, with a dialog explaining
@@ -1087,8 +1093,8 @@ around painting.
 
 ## Pick
 
-Click the **Pick** toolbar button (next to Paint) to switch the canvas
-into pick mode; click it again (or Paint) to leave it. While it's on,
+Choose **Pick** from the **Tool** dropdown to switch the canvas into pick
+mode; choose **Pan** (or any other tool) to leave it. While it's on,
 clicking any painted object - a brush stroke, a filled selection, or a
 pasted region - selects it - shown with a white outline around it,
 regardless of the "Show bounding boxes" setting - ready to:
@@ -1149,9 +1155,9 @@ handle from its own mirrored pair - see
 
 ## Selection and Fill
 
-Click the **Select** toolbar button (next to Paint/Pick) to switch the
-canvas into select mode; click it again (or Paint/Pick) to leave it.
-While it's on, drag (or, for Wand, click) on the canvas to select a
+Choose **Select** from the **Tool** dropdown to switch the canvas into
+select mode; choose **Pan** (or any other tool) to leave it. While it's
+on, drag (or, for Wand, click) on the canvas to select a
 region - shown as a green outline, dashed for a Wand or combined
 selection (see below). A selection stays active (still scoping Fill/
 Copy/Paste, and usable again the moment you switch back to Select) even
@@ -1279,9 +1285,9 @@ with each other, and a Rectangle selection can be rotated.
 
 ## Path Tool
 
-Click the **Path** toolbar button (next to Select) to switch the canvas
-into Path mode; click it again (or Paint/Pick/Select) to leave it. While
-it's on, each click on the canvas places one more node, building a path
+Choose **Path** from the **Tool** dropdown to switch the canvas into Path
+mode; choose **Pan** (or any other tool) to leave it. While it's on, each
+click on the canvas places one more node, building a path
 one node at a time - a live line always shows the path built so far, plus
 a segment out to wherever the cursor currently is.
 
@@ -1364,8 +1370,8 @@ Instrument, Mind Shot, or Mind Grain) - there's no separate instrument
 picker in the Chord Generator itself; switch the Painting tool's own
 settings to change what it sounds like.
 
-To actually place it, click the **Chord** toolbar button (next to Path) to
-arm it, then click anywhere on the canvas - the click only sets *when*
+To actually place it, choose **Chord** from the **Tool** dropdown to arm
+it, then click anywhere on the canvas - the click only sets *when*
 the sequence starts (its own time position); every note's own pitch
 always comes from the panel above, regardless of where vertically you
 click. While the panel is configured, its notes preview live on the

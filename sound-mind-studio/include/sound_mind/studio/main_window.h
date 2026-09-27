@@ -52,6 +52,7 @@ class QScrollArea;
 class QStackedWidget;
 class QString;
 class QTimer;
+class QToolButton;
 
 namespace sound_mind::studio {
 
@@ -1159,44 +1160,65 @@ public slots:
     void updateMindWave(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave);
 
     /**
+     * @brief Selects the neutral "Pan" entry of the Tool dropdown - plain,
+     *        non-interactive canvas display (`CanvasWidget::ToolMode::
+     *        None`), added in `v0.Y.58.1`'s "Reduce top-level buttons" UI
+     *        polish pass as the Tool dropdown's own explicit default so a
+     *        user can navigate the canvas without inadvertently painting,
+     *        picking, or placing path nodes.
+     *
+     * Unlike setPaintModeEnabled()/setPickModeEnabled()/
+     * setSelectModeEnabled()/setPathModeEnabled() below, there is no
+     * in-progress gesture to cancel - Pan has no gesture of its own at all.
+     * See setPaintModeEnabled()'s own docs for the shared exclusivity with
+     * Paint/Pick/Select/Path/Chord.
+     *
+     * @param enabled `true` to select Pan; `false` has no effect of its own
+     *        (falling back to Pan happens automatically, via
+     *        setExclusiveToolMode(), whenever another tool is turned off).
+     */
+    void setPanModeEnabled(bool enabled);
+
+    /**
      * @brief Turns the canvas's Paint tool on or off - the actual work
-     *        behind the toolbar's Paint toggle.
+     *        behind the Tool dropdown's Paint entry.
      *
      * Turning it off cancels any in-progress stroke (see
      * `PaintController::cancelStroke()`'s own docs) rather than leaving
      * it dangling; turning it on has no effect if no project is open.
      *
-     * Paint/Pick/Select/Path share one canvas tool mode (`CanvasWidget::
-     * ToolMode`) and so can never have more than one active - enforced by
-     * setExclusiveToolMode() (see its own docs for why that's hand-managed
-     * rather than a `QActionGroup`), not repeated here or in
-     * setPickModeEnabled()/setSelectModeEnabled()/setPathModeEnabled().
+     * Pan/Paint/Pick/Select/Path/Chord share one canvas tool mode
+     * (`CanvasWidget::ToolMode`) and so can never have more than one active
+     * - enforced by setExclusiveToolMode() (see its own docs for why that's
+     * hand-managed rather than a `QActionGroup`), not repeated here or in
+     * setPanModeEnabled()/setPickModeEnabled()/setSelectModeEnabled()/
+     * setPathModeEnabled().
      *
      * @param enabled `true` to accept freehand paint input on the canvas;
-     *        `false` to return to plain, non-interactive display.
+     *        `false` to return to plain, non-interactive display (Pan).
      */
     void setPaintModeEnabled(bool enabled);
 
     /**
      * @brief Toggles between Pick and plain (`ToolMode::None`) canvas
-     *        interaction - the actual work behind the toolbar's Pick
-     *        toggle.
+     *        interaction - the actual work behind the Tool dropdown's Pick
+     *        entry.
      *
      * Turning it off clears the current selection (see `PickController::
      * clearSelection()`'s own docs) rather than leaving it dangling;
      * turning it on has no effect if no project is open. See
      * setPaintModeEnabled()'s own docs for the shared exclusivity with
-     * Paint/Select/Path.
+     * Pan/Paint/Select/Path/Chord.
      *
      * @param enabled `true` to accept Pick input on the canvas; `false`
-     *        to return to plain, non-interactive display.
+     *        to return to plain, non-interactive display (Pan).
      */
     void setPickModeEnabled(bool enabled);
 
     /**
      * @brief Toggles between Select and plain (`ToolMode::None`) canvas
-     *        interaction - the actual work behind the toolbar's Select
-     *        toggle.
+     *        interaction - the actual work behind the Tool dropdown's
+     *        Select entry.
      *
      * Turning it off cancels any in-progress selection drag (see
      * `SelectionController::cancelSelectionDrag()`'s own docs) - a
@@ -1204,33 +1226,33 @@ public slots:
      * Fill/Cut/Copy/Paste independent of which tool is currently active
      * (`docs/sound-mind-design.md`'s own "Selection" framing); turning it
      * on has no effect if no project is open. See setPaintModeEnabled()'s
-     * own docs for the shared exclusivity with Paint/Pick/Path.
+     * own docs for the shared exclusivity with Pan/Paint/Pick/Path/Chord.
      *
      * @param enabled `true` to accept Select input on the canvas; `false`
-     *        to return to plain, non-interactive display.
+     *        to return to plain, non-interactive display (Pan).
      */
     void setSelectModeEnabled(bool enabled);
 
     /**
      * @brief Toggles between Path and plain (`ToolMode::None`) canvas
-     *        interaction - the actual work behind the toolbar's Path
-     *        toggle.
+     *        interaction - the actual work behind the Tool dropdown's Path
+     *        entry.
      *
      * Turning it off cancels any in-progress node placement (see
      * `PathController::cancelPath()`'s own docs) - discarded, not
      * committed; turning it on has no effect if no project is open. See
      * setPaintModeEnabled()'s own docs for the shared exclusivity with
-     * Paint/Pick/Select.
+     * Pan/Paint/Pick/Select/Chord.
      *
      * @param enabled `true` to accept Path input on the canvas; `false` to
-     *        return to plain, non-interactive display.
+     *        return to plain, non-interactive display (Pan).
      */
     void setPathModeEnabled(bool enabled);
 
     /**
      * @brief Toggles between Chord Stamp and plain (`ToolMode::None`)
-     *        canvas interaction - the actual work behind the toolbar's
-     *        Chord toggle.
+     *        canvas interaction - the actual work behind the Tool
+     *        dropdown's Chord entry.
      *
      * Unlike setPaintModeEnabled()/setPickModeEnabled()/
      * setSelectModeEnabled()/setPathModeEnabled() above, turning it off
@@ -1238,10 +1260,10 @@ public slots:
      * in-progress state to begin with (see
      * `CanvasWidget::ToolMode::ChordStamp`'s own docs); turning it on has
      * no effect if no project is open. See setPaintModeEnabled()'s own
-     * docs for the shared exclusivity with Paint/Pick/Select/Path.
+     * docs for the shared exclusivity with Pan/Paint/Pick/Select/Path.
      *
      * @param enabled `true` to accept Chord Stamp input on the canvas;
-     *        `false` to return to plain, non-interactive display.
+     *        `false` to return to plain, non-interactive display (Pan).
      */
     void setChordModeEnabled(bool enabled);
 
@@ -2611,34 +2633,52 @@ private:
 
     /**
      * @brief Sets canvas_'s own tool mode to `mode` (or `None` if
-     *        `enabled` is `false`), and syncs paintAction_/pickAction_/
-     *        selectAction_'s own checked state so exactly `activated` (or
-     *        none of them) ends up checked - the shared exclusivity
-     *        behind setPaintModeEnabled()/setPickModeEnabled()/
-     *        setSelectModeEnabled(), since `CanvasWidget::ToolMode` only
+     *        `enabled` is `false`), syncs panAction_/paintAction_/
+     *        pickAction_/selectAction_/pathAction_/chordAction_'s own
+     *        checked state so exactly one of the six ends up checked, and
+     *        updates toolButton_'s own label to name whichever one that
+     *        is - the shared exclusivity behind setPanModeEnabled()/
+     *        setPaintModeEnabled()/setPickModeEnabled()/
+     *        setSelectModeEnabled()/setPathModeEnabled()/
+     *        setChordModeEnabled(), since `CanvasWidget::ToolMode` only
      *        ever has one active value at a time.
+     *
+     * When `enabled` is `false` (a tool turning itself off rather than a
+     * different one taking over), panAction_ is the one left checked -
+     * `ToolMode::None` is Pan's own tool mode, so this is simply
+     * `activated`'s own case falling out of the same "exactly one checked"
+     * invariant, not a special case.
      *
      * Deliberately hand-managed rather than a `QActionGroup`: a group's
      * own exclusivity would fire *two* `toggled()` calls per click (the
      * newly-checked action's own, and the now-unchecked previous one's)
-     * in an order Qt doesn't document as stable, and each of the four
+     * in an order Qt doesn't document as stable, and each of the six
      * handlers above trusting only its own late-arriving call could stomp
      * on another's `canvas_->setToolMode()` result depending on that
      * order - a real bug, caught before it shipped (see
      * `docs/sound-mind-architecture.md`'s Decisions Made). Setting every
      * action's checked state directly and unconditionally (blocked, so
-     * this doesn't recurse back into any of the four callers) also keeps
-     * the toolbar buttons correctly in sync when one of them is called
-     * directly (e.g. by a test), not just via a real click.
+     * this doesn't recurse back into any of the six callers) also keeps
+     * the Tool dropdown correctly in sync when one of them is called
+     * directly (e.g. by a test), not just via a real menu selection.
      *
      * @param activated Which action to leave checked when `enabled` is
-     *        `true` - `paintAction_`, `pickAction_`, `selectAction_`,
-     *        `pathAction_`, or `chordAction_`.
+     *        `true` - `panAction_`, `paintAction_`, `pickAction_`,
+     *        `selectAction_`, `pathAction_`, or `chordAction_`.
      * @param enabled Whether `activated`'s own tool mode should become
      *        active.
      * @param mode The tool mode `activated` corresponds to.
      */
     void setExclusiveToolMode(QAction* activated, bool enabled, CanvasWidget::ToolMode mode);
+
+    /**
+     * @brief Sets toolButton_'s own label to name whichever of
+     *        panAction_/paintAction_/pickAction_/selectAction_/pathAction_/
+     *        chordAction_ is currently checked - called only from
+     *        setExclusiveToolMode(), the sole place that ever changes which
+     *        one of the six is checked.
+     */
+    void updateToolButtonLabel();
 
     /**
      * @brief Recomputes every UI guardrail for `docs/sound-mind-design.md`'s
@@ -2660,11 +2700,14 @@ private:
      *   configured tool actually is one; an empty list (clearing every
      *   mark) otherwise.
      * - `paintAction_->setEnabled()`/`setToolTip()` - disabled, with an
-     *   explanatory tooltip, whenever the configured tool is a Mind Grain
-     *   not usable on the *active* layer specifically; force-deactivates
-     *   Paint mode first (`setPaintModeEnabled(false)`) if it was currently
-     *   checked, so a user can never be left with Paint mode still active
-     *   on a now-disabled button. Re-enabled, tooltip cleared, otherwise.
+     *   explanatory tooltip (still shown despite being disabled - the Tool
+     *   dropdown's own menu has `setToolTipsVisible(true)`), whenever the
+     *   configured tool is a Mind Grain not usable on the *active* layer
+     *   specifically; force-deactivates Paint mode first
+     *   (`setPaintModeEnabled(false)`) if it was currently checked, falling
+     *   back to Pan via setExclusiveToolMode()'s own fallback, so a user
+     *   can never be left with Paint mode still active on a now-disabled
+     *   entry. Re-enabled, tooltip cleared, otherwise.
      *
      * A no-op-safe default (nothing disabled/marked) whenever no project is
      * open, no layer is active yet, or the configured tool isn't a Mind
@@ -3081,12 +3124,35 @@ private:
     /// own class docs. Extracted out of this class as part of the
     /// Refactor & Clean Up milestone (`v0.Y.29.1`, Installment C); "which
     /// layer" a freehand gesture targets (`paintTargetLayerId()`) and the
-    /// four toolbar `QAction`s' own mutual exclusivity
+    /// six Tool-dropdown `QAction`s' own mutual exclusivity
     /// (`setExclusiveToolMode()`) both stay this class's own job - see the
     /// class docs' own `v0.Y.29.1` note.
     ToolPaletteController* toolPaletteController_ = nullptr;
 
-    /// @brief The toolbar's Paint tool toggle - checked while the canvas
+    /// @brief The Tool dropdown's own button (`toolButton_`'s menu) - a
+    /// `QToolButton` in `QToolButton::InstantPopup` mode rather than a
+    /// `QComboBox`, added in `v0.Y.58.1`'s "Reduce top-level buttons" UI
+    /// polish pass to collapse what used to be five separate toolbar
+    /// toggles (Paint/Pick/Select/Path/Chord) plus the new Pan entry into
+    /// one control. Chosen over `QComboBox` so each entry keeps its own
+    /// `QAction` - preserving per-entry enable/disable + tooltip (see
+    /// updateMindGrainGuardrails()'s own docs) without `QStandardItemModel`
+    /// item-flag plumbing. Its label is kept in sync with whichever entry
+    /// is checked by updateToolButtonLabel(), called from
+    /// setExclusiveToolMode().
+    QToolButton* toolButton_ = nullptr;
+
+    /// @brief The Tool dropdown's Pan entry - checked while the canvas is
+    /// in its neutral, non-interactive state (`CanvasWidget::ToolMode::
+    /// None`). Added in `v0.Y.58.1`'s "Reduce top-level buttons" UI polish
+    /// pass as the dropdown's own explicit default, so navigating the
+    /// canvas without inadvertently painting/picking/placing nodes has its
+    /// own named entry rather than being reachable only by turning every
+    /// other tool off. Kept as a member for the same setProject()-resets-it
+    /// reason as paintAction_ below.
+    QAction* panAction_ = nullptr;
+
+    /// @brief The Tool dropdown's Paint entry - checked while the canvas
     /// accepts freehand paint input (`CanvasWidget::ToolMode::Paint`).
     /// Kept as a member (rather than a local in the constructor) so
     /// setProject() can uncheck it when a new/different project is
@@ -3094,33 +3160,33 @@ private:
     /// state.
     QAction* paintAction_ = nullptr;
 
-    /// @brief The toolbar's Pick tool toggle - checked while the canvas
+    /// @brief The Tool dropdown's Pick entry - checked while the canvas
     /// accepts Pick input (`CanvasWidget::ToolMode::Pick`). Kept mutually
-    /// exclusive with paintAction_/selectAction_/pathAction_ by
-    /// setExclusiveToolMode() (see its own docs), not a `QActionGroup`;
-    /// kept as a member for the same setProject()-resets-it reason as
-    /// paintAction_.
+    /// exclusive with panAction_/paintAction_/selectAction_/pathAction_/
+    /// chordAction_ by setExclusiveToolMode() (see its own docs), not a
+    /// `QActionGroup`; kept as a member for the same setProject()-resets-it
+    /// reason as paintAction_.
     QAction* pickAction_ = nullptr;
 
-    /// @brief The toolbar's Select tool toggle - checked while the canvas
+    /// @brief The Tool dropdown's Select entry - checked while the canvas
     /// accepts Select input (`CanvasWidget::ToolMode::Select`). Kept
-    /// mutually exclusive with paintAction_/pickAction_/pathAction_ by
-    /// setExclusiveToolMode(); kept as a member for the same
-    /// setProject()-resets-it reason as paintAction_.
+    /// mutually exclusive with panAction_/paintAction_/pickAction_/
+    /// pathAction_/chordAction_ by setExclusiveToolMode(); kept as a
+    /// member for the same setProject()-resets-it reason as paintAction_.
     QAction* selectAction_ = nullptr;
 
-    /// @brief The toolbar's Path tool toggle - checked while the canvas
+    /// @brief The Tool dropdown's Path entry - checked while the canvas
     /// accepts Path input (`CanvasWidget::ToolMode::Path`). Kept mutually
-    /// exclusive with paintAction_/pickAction_/selectAction_ by
-    /// setExclusiveToolMode(); kept as a member for the same
-    /// setProject()-resets-it reason as paintAction_.
+    /// exclusive with panAction_/paintAction_/pickAction_/selectAction_/
+    /// chordAction_ by setExclusiveToolMode(); kept as a member for the
+    /// same setProject()-resets-it reason as paintAction_.
     QAction* pathAction_ = nullptr;
 
-    /// @brief The toolbar's Chord Stamp tool toggle - checked while the
+    /// @brief The Tool dropdown's Chord Stamp entry - checked while the
     /// canvas accepts Chord Stamp input (`CanvasWidget::ToolMode::ChordStamp`).
-    /// Kept mutually exclusive with paintAction_/pickAction_/selectAction_/
-    /// pathAction_ by setExclusiveToolMode(); kept as a member for the same
-    /// setProject()-resets-it reason as paintAction_.
+    /// Kept mutually exclusive with panAction_/paintAction_/pickAction_/
+    /// selectAction_/pathAction_ by setExclusiveToolMode(); kept as a
+    /// member for the same setProject()-resets-it reason as paintAction_.
     QAction* chordAction_ = nullptr;
 
     /// @brief The toolbar's "Smooth Nodes" checkable toggle - the Path

@@ -6,6 +6,31 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.15] - 2026-09-27
+
+UI polish, Installment B: **Tool dropdown + Pan mode.**
+
+### Changed
+
+- **Paint/Pick/Select/Path/Chord are now one "Tool" dropdown** instead of
+  five separate toolbar buttons - click it to choose the canvas's current
+  tool, and its label always shows which one is active.
+
+### Added
+
+- **A new "Pan" tool**, and the dropdown's own default - lets you navigate
+  the canvas without painting, picking, or placing anything. Turning any
+  other tool off (not just choosing Pan directly) falls back to it
+  automatically.
+
+### Notes
+
+First installment of "Reduce top-level buttons." `CanvasWidget::ToolMode::
+Select` folds in as the dropdown's sixth entry. Full regression:
+`sound-mind-studio` full suite genuinely passing (3 new tests, 1 existing
+test extended), `sound-mind-core` unaffected and unchanged. Doxygen: 0
+warnings. See `docs/sound-mind-architecture.md`'s Decision #179.
+
 ## [0.1.3.14] - 2026-09-27
 
 UI polish, Installment A: **Layers Panel fixes.**

@@ -24,6 +24,7 @@
 #include <QSlider>
 #include <QStatusBar>
 #include <QToolBar>
+#include <QToolButton>
 #include <QUrl>
 #include <QtTest/QtTest>
 
@@ -3762,6 +3763,13 @@ void MainWindowTest::paintModeIsOffByDefault() {
     QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
 }
 
+void MainWindowTest::toolDropdownDefaultsToPanAndItsLabelSaysSo() {
+    const TestMainWindow window;
+    auto* toolButton = window.findChild<QToolButton*>(QStringLiteral("toolButton"));
+    QVERIFY(toolButton != nullptr);
+    QCOMPARE(toolButton->text(), QStringLiteral("Tool: Pan"));
+}
+
 void MainWindowTest::setPaintModeEnabledTogglesTheCanvasToolMode() {
     TestMainWindow window;
     createFreshTestProject(window);
@@ -4522,6 +4530,46 @@ void MainWindowTest::paintPickAndSelectToolbarActionsAreAllMutuallyExclusive() {
     QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Select);
 }
 
+void MainWindowTest::toolDropdownLabelTracksTheActiveToolAndFallsBackToPanWhenTurnedOff() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* toolButton = window.findChild<QToolButton*>(QStringLiteral("toolButton"));
+    QVERIFY(toolButton != nullptr);
+    QCOMPARE(toolButton->text(), QStringLiteral("Tool: Pan"));
+
+    window.setPaintModeEnabled(true);
+    QCOMPARE(toolButton->text(), QStringLiteral("Tool: Paint"));
+
+    window.setPickModeEnabled(true);
+    QCOMPARE(toolButton->text(), QStringLiteral("Tool: Pick"));
+
+    // Turning the active tool off (rather than another one taking over)
+    // falls back to Pan, both on the canvas and in the dropdown's label -
+    // see setExclusiveToolMode()'s own docs on why this isn't a special
+    // case, just the same "exactly one of six checked" invariant.
+    window.setPickModeEnabled(false);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
+    QCOMPARE(toolButton->text(), QStringLiteral("Tool: Pan"));
+}
+
+void MainWindowTest::setPanModeEnabledSelectsTheNeutralToolModeAndCanBeReachedDirectly() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    auto* toolButton = window.findChild<QToolButton*>(QStringLiteral("toolButton"));
+    QVERIFY(toolButton != nullptr);
+
+    window.setChordModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::ChordStamp);
+
+    window.setPanModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
+    QCOMPARE(toolButton->text(), QStringLiteral("Tool: Pan"));
+}
+
 void MainWindowTest::drawingASelectionAndFillingItChangesTheLayersContent() {
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-select-fill.smproj";
     TestMainWindow window;
@@ -5031,6 +5079,9 @@ void MainWindowTest::settingANewProjectResetsPathModeToOff() {
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);
     QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::None);
+    auto* toolButton = window.findChild<QToolButton*>(QStringLiteral("toolButton"));
+    QVERIFY(toolButton != nullptr);
+    QCOMPARE(toolButton->text(), QStringLiteral("Tool: Pan"));
 }
 
 void MainWindowTest::pastedContentIsPickableAndMovable() {
