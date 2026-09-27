@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -13,6 +14,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
+#include "sound_mind/studio/polar_origin_dialog.h"
 
 namespace sound_mind::studio {
 
@@ -175,10 +177,15 @@ public:
  * @brief Imports an image file as a new layer into `project`, resized per
  *        `mode`.
  *
- * The image is first resized to `project`'s canvas dimensions according
- * to `mode` (see `ImageScalePickerDialog::Mode`'s own docs), then its RGB
- * pixels are converted into amplitude/phase data via
- * `sound_mind::codec::fromRgbImage()`.
+ * For every mode except `Mode::Polar`, the image is first resized to
+ * `project`'s canvas dimensions according to `mode` (see
+ * `ImageScalePickerDialog::Mode`'s own docs), then its RGB pixels are
+ * converted into amplitude/phase data via `sound_mind::codec::
+ * fromRgbImage()`. For `Mode::Polar`, `sound_mind::codec::polarToRect()`
+ * un-warps the image directly to `project`'s own canvas height and
+ * `polarParams`'s own `outputWidth` in one step (its own per-output-pixel
+ * sampling already produces the exact target size - no separate resize
+ * pass needed afterward), then converts that result the same way.
  *
  * @param project The project to import into.
  * @param path Path to the image file to import.
@@ -191,20 +198,27 @@ public:
  *        stack isn't predictable from the outside alone (it lands just
  *        below an Equalizer layer, if one exists - see `addLayer()`'s
  *        own docs - so it's never simply `project.layers().back()`).
- * @return `true` on success; `false` if loading or converting it failed.
+ * @param polarParams The origin/radius/arc to un-warp from - required
+ *        (returns `false` if absent) when `mode` is `Mode::Polar`;
+ *        ignored otherwise. See `ImageScalePickerDialog::polarParams()`'s
+ *        own docs.
+ * @return `true` on success; `false` if loading or converting it failed,
+ *         or `mode` is `Mode::Polar` with no `polarParams` given.
  */
 [[nodiscard]] bool importImageFileInto(sound_mind::core::Project& project, const std::filesystem::path& path,
                                         ImageScalePickerDialog::Mode mode, QString* errorMessage = nullptr,
-                                        sound_mind::core::LayerId* outLayerId = nullptr);
+                                        sound_mind::core::LayerId* outLayerId = nullptr,
+                                        std::optional<PolarImportParams> polarParams = std::nullopt);
 
 /**
  * @brief Imports several image files at once into `project`.
  *
  * When `importAsSequence` is `false`, every path is imported
- * independently via importImageFileInto(), each with `mode` and no
- * translation. When `true`, `mode` is ignored entirely: every file is
- * imported with `ImageScalePickerDialog::Mode::ScaleVerticalProportional`,
- * sorted by path first (deterministic), and given a cumulative
+ * independently via importImageFileInto(), each with `mode` (and
+ * `polarParams`, for `Mode::Polar`) and no translation. When `true`,
+ * `mode`/`polarParams` are ignored entirely: every file is imported with
+ * `ImageScalePickerDialog::Mode::ScaleVerticalProportional`, sorted by
+ * path first (deterministic), and given a cumulative
  * `translationColumns()` so each layer starts immediately after the
  * previous one's own (proportional) width ends - wrapping back to `0`
  * once the running total reaches `project`'s own `canvasWidth`.
@@ -219,13 +233,19 @@ public:
  *        instead of importing each independently.
  * @param errorMessage If non-null and this returns `0`, set to the first
  *        failure's own message.
+ * @param polarParams See importImageFileInto()'s own docs - meaningful
+ *        only when `mode` is `Mode::Polar` and `paths` has exactly one
+ *        entry (`ImageScalePickerDialog`'s own "Polar" option is never
+ *        offered for a multi-file import in the first place - see its
+ *        own docs).
  * @return How many files were actually imported - `0` if `paths` is
  *         empty, or every file failed.
  */
 [[nodiscard]] int importImageFilesInto(sound_mind::core::Project& project,
                                         const std::vector<std::filesystem::path>& paths,
                                         ImageScalePickerDialog::Mode mode, bool importAsSequence,
-                                        QString* errorMessage = nullptr);
+                                        QString* errorMessage = nullptr,
+                                        std::optional<PolarImportParams> polarParams = std::nullopt);
 
 /**
  * @brief Exports `layer`'s audio to `path` (see

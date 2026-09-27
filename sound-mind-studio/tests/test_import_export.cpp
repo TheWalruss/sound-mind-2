@@ -277,6 +277,51 @@ void ImportExportTest::importImageFileIntoFailsForAnUnreadableFile() {
     QVERIFY(!errorMessage.isEmpty());
 }
 
+void ImportExportTest::importImageFileIntoWithModePolarUnwarpsAndAddsANewLayer() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-image-polar.png";
+    writeImageScalingTestImage(path);  // A 30x20 image - see this file's own docs.
+    Project project = Project::createNew(imageScalingTestProjectSettings());
+    const std::size_t layerCountBefore = project.layers().size();
+
+    sound_mind::studio::PolarImportParams polarParams;
+    polarParams.originX = 15.0;
+    polarParams.originY = 10.0;
+    polarParams.radius = 9.0;
+    polarParams.arcStartRadians = 0.0;
+    polarParams.arcEndRadians = 0.0;  // Full circle.
+    polarParams.outputWidth = 40;
+
+    LayerId newLayerId = 0;
+    const bool ok = sound_mind::studio::importImageFileInto(project, path, ImageScalePickerDialog::Mode::Polar,
+                                                             nullptr, &newLayerId, polarParams);
+    std::filesystem::remove(path);
+
+    QVERIFY(ok);
+    QCOMPARE(project.layers().size(), layerCountBefore + 1);
+    const Layer* newLayer = project.layerById(newLayerId);
+    QVERIFY(newLayer != nullptr);
+    const auto& content = *newLayer->content();
+    // polarToRect() targets outputWidth x the project's own canvasHeight
+    // directly - see importImageFileInto()'s own docs on why no separate
+    // resize pass follows it, unlike every other mode.
+    QCOMPARE(content.frameCount, polarParams.outputWidth);
+    QCOMPARE(content.config.binCount, imageScalingTestProjectSettings().canvasHeight);
+}
+
+void ImportExportTest::importImageFileIntoWithModePolarAndNoParamsFails() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-ie-image-polar-noparams.png";
+    writeImageScalingTestImage(path);
+    Project project = Project::createNew(imageScalingTestProjectSettings());
+    QString errorMessage;
+
+    const bool ok =
+        sound_mind::studio::importImageFileInto(project, path, ImageScalePickerDialog::Mode::Polar, &errorMessage);
+    std::filesystem::remove(path);
+
+    QVERIFY(!ok);
+    QVERIFY(!errorMessage.isEmpty());
+}
+
 void ImportExportTest::importImageFilesIntoImportsEachFileIndependentlyWhenNotSequential() {
     const auto pathA = std::filesystem::temp_directory_path() / "sound-mind-test-ie-images-a.png";
     const auto pathB = std::filesystem::temp_directory_path() / "sound-mind-test-ie-images-b.png";

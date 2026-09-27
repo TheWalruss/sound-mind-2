@@ -9,6 +9,7 @@
 
 #include "sound_mind/codec/audio_file.h"
 #include "sound_mind/codec/color_mapping.h"
+#include "sound_mind/codec/polar_projection.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/layer_export.h"
 #include "sound_mind/core/project_settings.h"
@@ -168,7 +169,7 @@ int importAudioSnippetsInto(sound_mind::core::Project& project, const std::files
 
 bool importImageFileInto(sound_mind::core::Project& project, const std::filesystem::path& path,
                           ImageScalePickerDialog::Mode mode, QString* errorMessage,
-                          sound_mind::core::LayerId* outLayerId) {
+                          sound_mind::core::LayerId* outLayerId, std::optional<PolarImportParams> polarParams) {
     const QImage sourceImage(QString::fromStdString(path.string()));
     if (sourceImage.isNull()) {
         if (errorMessage != nullptr) {
@@ -177,11 +178,30 @@ bool importImageFileInto(sound_mind::core::Project& project, const std::filesyst
         return false;
     }
 
+    if (mode == ImageScalePickerDialog::Mode::Polar && !polarParams.has_value()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No polar origin was set for this import.");
+        }
+        return false;
+    }
+
     try {
         const auto& settings = project.settings();
-        const QImage scaledImage = scaleImageForImport(sourceImage, mode, static_cast<int>(settings.canvasWidth),
-                                                         static_cast<int>(settings.canvasHeight));
-        const auto rgbImage = toRgbImage(scaledImage);
+        sound_mind::codec::RgbImage rgbImage;
+        if (mode == ImageScalePickerDialog::Mode::Polar) {
+            // polarToRect()'s own per-output-pixel sampling already
+            // targets the exact final size - see this function's own
+            // docs - so no separate scaleImageForImport() pass follows,
+            // unlike every other mode below.
+            rgbImage = sound_mind::codec::polarToRect(toRgbImage(sourceImage), polarParams->originX,
+                                                       polarParams->originY, polarParams->radius,
+                                                       polarParams->arcStartRadians, polarParams->arcEndRadians,
+                                                       polarParams->outputWidth, settings.canvasHeight);
+        } else {
+            const QImage scaledImage = scaleImageForImport(sourceImage, mode, static_cast<int>(settings.canvasWidth),
+                                                             static_cast<int>(settings.canvasHeight));
+            rgbImage = toRgbImage(scaledImage);
+        }
         const auto content = sound_mind::codec::fromRgbImage(rgbImage, sound_mind::core::streamCodecConfigFor(settings));
 
         sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
@@ -200,7 +220,8 @@ bool importImageFileInto(sound_mind::core::Project& project, const std::filesyst
 }
 
 int importImageFilesInto(sound_mind::core::Project& project, const std::vector<std::filesystem::path>& paths,
-                          ImageScalePickerDialog::Mode mode, bool importAsSequence, QString* errorMessage) {
+                          ImageScalePickerDialog::Mode mode, bool importAsSequence, QString* errorMessage,
+                          std::optional<PolarImportParams> polarParams) {
     if (paths.empty()) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No files to import.");
@@ -224,9 +245,10 @@ int importImageFilesInto(sound_mind::core::Project& project, const std::vector<s
 
     for (const auto& path : orderedPaths) {
         const auto fileMode = importAsSequence ? ImageScalePickerDialog::Mode::ScaleVerticalProportional : mode;
+        const auto filePolarParams = importAsSequence ? std::nullopt : polarParams;
         QString thisError;
         sound_mind::core::LayerId newLayerId = 0;
-        if (!importImageFileInto(project, path, fileMode, &thisError, &newLayerId)) {
+        if (!importImageFileInto(project, path, fileMode, &thisError, &newLayerId, filePolarParams)) {
             if (firstError.isEmpty()) {
                 firstError = thisError;
             }

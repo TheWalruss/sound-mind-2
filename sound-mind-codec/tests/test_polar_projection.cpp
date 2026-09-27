@@ -5,6 +5,7 @@
 
 #include "sound_mind/codec/polar_projection.h"
 
+using sound_mind::codec::polarToRect;
 using sound_mind::codec::rectToPolar;
 using sound_mind::codec::RgbImage;
 
@@ -135,4 +136,100 @@ TEST_CASE("rectToPolar's ring a quarter-turn clockwise from twelve o'clock sampl
 
     const std::uint32_t centre = kDiameter / 2;
     CHECK(redAt(result, kDiameter - 2, centre) > 200);
+}
+
+TEST_CASE("polarToRect produces the requested output dimensions", "[polar_projection]") {
+    const RgbImage source = makeImage(40, 40, [](std::uint32_t, std::uint32_t) {
+        return std::array<std::uint8_t, 3>{128, 128, 128};
+    });
+
+    const RgbImage result = polarToRect(source, 20.0, 20.0, 15.0, 0.0, 0.0, 50, 30);
+
+    CHECK(result.width == 50);
+    CHECK(result.height == 30);
+    CHECK(result.pixels.size() == std::size_t{50} * 30 * 3);
+}
+
+TEST_CASE("polarToRect returns an all-black image for a zero output size or an empty source",
+          "[polar_projection]") {
+    const RgbImage source = makeImage(40, 40, [](std::uint32_t, std::uint32_t) {
+        return std::array<std::uint8_t, 3>{200, 200, 200};
+    });
+
+    const RgbImage zeroWidth = polarToRect(source, 20.0, 20.0, 15.0, 0.0, 0.0, 0, 30);
+    CHECK(zeroWidth.pixels.empty());
+    const RgbImage zeroHeight = polarToRect(source, 20.0, 20.0, 15.0, 0.0, 0.0, 50, 0);
+    CHECK(zeroHeight.pixels.empty());
+
+    const RgbImage emptySource = polarToRect(RgbImage{}, 20.0, 20.0, 15.0, 0.0, 0.0, 50, 30);
+    for (std::uint8_t value : emptySource.pixels) {
+        CHECK(value == 0);
+    }
+}
+
+TEST_CASE("polarToRect's top row (full circle) samples straight up from the origin at column zero",
+          "[polar_projection]") {
+    // A bright two-row band straight above the origin - two, not one, for
+    // the same bilinear-tolerance reason rectToPolar()'s own equivalent
+    // tests use.
+    const RgbImage source = makeImage(40, 40, [](std::uint32_t, std::uint32_t y) {
+        return (y == 4 || y == 5) ? std::array<std::uint8_t, 3>{255, 255, 255} : std::array<std::uint8_t, 3>{0, 0, 0};
+    });
+
+    // originY - maxRadius = 20 - 15 = 5, landing in the bright band.
+    const RgbImage result = polarToRect(source, 20.0, 20.0, 15.0, 0.0, 0.0, 20, 10);
+
+    CHECK(redAt(result, 0, 0) > 200);
+}
+
+TEST_CASE("polarToRect's bottom row samples the origin itself, regardless of column",
+          "[polar_projection]") {
+    // A small bright patch exactly at the origin (20, 20) - every column
+    // of the output's own last row (r=0) should land on it.
+    const RgbImage source = makeImage(40, 40, [](std::uint32_t x, std::uint32_t y) {
+        return (x >= 19 && x <= 21 && y >= 19 && y <= 21) ? std::array<std::uint8_t, 3>{255, 255, 255}
+                                                           : std::array<std::uint8_t, 3>{0, 0, 0};
+    });
+
+    const RgbImage result = polarToRect(source, 20.0, 20.0, 15.0, 0.0, 0.0, 20, 10);
+
+    for (std::uint32_t column = 0; column < 20; column += 4) {
+        CHECK(redAt(result, column, 9) > 200);
+    }
+}
+
+TEST_CASE("polarToRect's arc range restricts which angles the output columns sample",
+          "[polar_projection]") {
+    // A bright two-column band directly to the right of the origin (three
+    // o'clock) and a separate bright two-row band directly below it (six
+    // o'clock) - a quarter-arc from three o'clock to six o'clock should
+    // sample the first at its own first output column and the second at
+    // its own last, both at the outer ring (row 0).
+    const RgbImage source = makeImage(60, 60, [](std::uint32_t x, std::uint32_t y) {
+        const bool rightOfOrigin = (x == 44 || x == 45) && y >= 25 && y <= 35;  // three o'clock band.
+        const bool belowOrigin = (y == 44 || y == 45) && x >= 25 && x <= 35;    // six o'clock band.
+        return (rightOfOrigin || belowOrigin) ? std::array<std::uint8_t, 3>{255, 255, 255}
+                                               : std::array<std::uint8_t, 3>{0, 0, 0};
+    });
+
+    constexpr double kHalfPi = 1.5707963267948966;
+    constexpr double kPi = 3.141592653589793;
+    const RgbImage result = polarToRect(source, 30.0, 30.0, 15.0, kHalfPi, kPi, 10, 5);
+
+    CHECK(redAt(result, 0, 0) > 200);  // Three o'clock - the arc's own start.
+    CHECK(redAt(result, 9, 0) > 200);  // Six o'clock - the arc's own end.
+}
+
+TEST_CASE("polarToRect leaves a sample point that falls outside the source's own bounds black",
+          "[polar_projection]") {
+    // An all-white source, but the origin/radius are chosen so the outer
+    // ring at twelve o'clock samples a point above row 0 - genuinely
+    // outside the image, not just near its edge.
+    const RgbImage source = makeImage(40, 40, [](std::uint32_t, std::uint32_t) {
+        return std::array<std::uint8_t, 3>{255, 255, 255};
+    });
+
+    const RgbImage result = polarToRect(source, 20.0, 5.0, 15.0, 0.0, 0.0, 20, 10);
+
+    CHECK(redAt(result, 0, 0) == 0);
 }

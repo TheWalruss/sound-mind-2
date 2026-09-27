@@ -19,6 +19,7 @@ add_executable(sound-mind-studio-tests
     test_grid_panel.cpp
     test_history_panel.cpp
     test_image_scale_picker_dialog.cpp
+    test_polar_origin_dialog.cpp
     test_import_export.cpp
     test_import_helpers.cpp
     test_landing_page.cpp

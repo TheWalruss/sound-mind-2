@@ -63,6 +63,7 @@ add_library(sound-mind-studio-lib
     src/pick_controller.cpp
     src/playback_controller.cpp
     src/playback_panel.cpp
+    src/polar_origin_dialog.cpp
     src/qt_image_conversion.cpp
     src/record_panel.cpp
     src/recent_projects.cpp
@@ -108,6 +109,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/pick_controller.h
     include/sound_mind/studio/playback_controller.h
     include/sound_mind/studio/playback_panel.h
+    include/sound_mind/studio/polar_origin_dialog.h
     include/sound_mind/studio/qt_image_conversion.h
     include/sound_mind/studio/record_panel.h
     include/sound_mind/studio/recent_projects.h

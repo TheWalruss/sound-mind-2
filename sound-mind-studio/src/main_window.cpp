@@ -1228,13 +1228,25 @@ void MainWindow::dropEvent(QDropEvent* event) {
     // Cancelling any one of these dialogs cancels the whole drop.
     ImageScalePickerDialog::Mode imageMode = ImageScalePickerDialog::Mode::RescaleToFitProject;
     bool importImagesAsSequence = false;
+    std::optional<PolarImportParams> imagePolarParams;
     if (!imagePaths.empty()) {
-        ImageScalePickerDialog dialog(this, /*allowSequential=*/imagePaths.size() > 1);
+        // See importImage()'s own identical reasoning for when a source
+        // image is loaded up front for the "Polar" option.
+        QImage polarSourceImage;
+        if (imagePaths.size() == 1) {
+            polarSourceImage = QImage(QString::fromStdString(imagePaths.front().string()));
+        }
+        const std::uint32_t polarDefaultOutputWidth = project_ ? project_->settings().canvasWidth : 0;
+        const double polarTimestepMs = project_ ? project_->settings().timestepMs : 0.0;
+
+        ImageScalePickerDialog dialog(this, /*allowSequential=*/imagePaths.size() > 1, polarSourceImage,
+                                      polarDefaultOutputWidth, polarTimestepMs);
         if (dialog.exec() != QDialog::Accepted) {
             return;
         }
         imageMode = dialog.selectedMode();
         importImagesAsSequence = dialog.importAsSequence();
+        imagePolarParams = dialog.polarParams();
     }
 
     std::map<std::filesystem::path, std::vector<std::size_t>> audioSnippetSelections;
@@ -1258,13 +1270,15 @@ void MainWindow::dropEvent(QDropEvent* event) {
         audioSnippetOffsets[path] = dialog.offsetSeconds();
     }
 
-    handleDroppedFiles(paths, imageMode, importImagesAsSequence, audioSnippetSelections, audioSnippetOffsets);
+    handleDroppedFiles(paths, imageMode, importImagesAsSequence, audioSnippetSelections, audioSnippetOffsets,
+                       imagePolarParams);
 }
 
 void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& paths,
                                      ImageScalePickerDialog::Mode imageMode, bool importImagesAsSequence,
                                      const std::map<std::filesystem::path, std::vector<std::size_t>>& audioSnippetSelections,
-                                     const std::map<std::filesystem::path, double>& audioSnippetOffsets) {
+                                     const std::map<std::filesystem::path, double>& audioSnippetOffsets,
+                                     std::optional<PolarImportParams> imagePolarParams) {
     std::vector<std::filesystem::path> imagePaths;
     for (const auto& path : paths) {
         if (isImageExtension(lowercasedExtension(path))) {
@@ -1273,7 +1287,7 @@ void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& pa
     }
     if (!imagePaths.empty()) {
         QString errorMessage;
-        if (!importImageFiles(imagePaths, imageMode, importImagesAsSequence, &errorMessage)) {
+        if (!importImageFiles(imagePaths, imageMode, importImagesAsSequence, &errorMessage, imagePolarParams)) {
             statusBar()->showMessage(tr("Could not import image(s): %1").arg(errorMessage), 5000);
         }
     }
@@ -1689,13 +1703,25 @@ void MainWindow::importImage() {
         paths.emplace_back(fileName.toStdString());
     }
 
-    ImageScalePickerDialog dialog(this, /*allowSequential=*/paths.size() > 1);
+    // A single file's own image is loaded up front so ImageScalePickerDialog
+    // can offer "Polar" (and its own "Set origin..." preview) - see its
+    // own constructor docs on why a multi-file import never gets this.
+    QImage polarSourceImage;
+    if (paths.size() == 1) {
+        polarSourceImage = QImage(QString::fromStdString(paths.front().string()));
+    }
+    const std::uint32_t polarDefaultOutputWidth = project_ ? project_->settings().canvasWidth : 0;
+    const double polarTimestepMs = project_ ? project_->settings().timestepMs : 0.0;
+
+    ImageScalePickerDialog dialog(this, /*allowSequential=*/paths.size() > 1, polarSourceImage,
+                                  polarDefaultOutputWidth, polarTimestepMs);
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
     QString errorMessage;
-    if (!importImageFiles(paths, dialog.selectedMode(), dialog.importAsSequence(), &errorMessage)) {
+    if (!importImageFiles(paths, dialog.selectedMode(), dialog.importAsSequence(), &errorMessage,
+                           dialog.polarParams())) {
         QMessageBox::critical(this, tr("Import Image Failed"), errorMessage);
     }
 }
@@ -1886,7 +1912,8 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePi
 }
 
 bool MainWindow::importImageFiles(const std::vector<std::filesystem::path>& paths, ImageScalePickerDialog::Mode mode,
-                                   bool importAsSequence, QString* errorMessage) {
+                                   bool importAsSequence, QString* errorMessage,
+                                   std::optional<PolarImportParams> polarParams) {
     if (!project_) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No project is open.");
@@ -1896,7 +1923,7 @@ bool MainWindow::importImageFiles(const std::vector<std::filesystem::path>& path
 
     showBusyStatus(statusBar(), tr("Importing image..."));
     const int importedCount =
-        sound_mind::studio::importImageFilesInto(*project_, paths, mode, importAsSequence, errorMessage);
+        sound_mind::studio::importImageFilesInto(*project_, paths, mode, importAsSequence, errorMessage, polarParams);
     if (importedCount == 0) {
         statusBar()->clearMessage();
         return false;

@@ -193,6 +193,44 @@ Selection's own highlight box (a Lasso selection's own curve still shows
 correctly). Snap to Grid is also suspended while it's active. All of this
 returns the moment you switch back to flat view.
 
+### Polar Image Import
+
+You can import a source image that's already encoded in polar form - a
+spectrogram exported as a circular flower from elsewhere, or any image
+whose content radiates from a centre point. The Image Import wizard
+un-warps it back to a rectangular layer automatically.
+
+1. Open **File → Import Image...** and choose a single image file (Polar
+   is only offered for a single file - a multi-file import has no one
+   source image to preview or pick against).
+2. In the size-mode list, select **Polar - un-warp a polar/flower-shaped
+   image to rectangular**.
+3. Click **Set origin...**, next to that option, to open the graphical
+   picker.
+
+The picker shows your source image with four draggable handles:
+
+| Handle | Appearance | What it controls |
+|--------|-----------|-------------------|
+| **Crosshair** | Yellow lines spanning the whole preview | The flower's own centre |
+| **Ring** | Yellow circle, dragged from its own top point | The maximum sampling radius |
+| **Arc start** | Blue square on the ring | Where the unwrapped image's own left edge samples from (0° = twelve o'clock, clockwise) |
+| **Arc end** | Pink square on the ring | Where its own right edge samples from - equal to Arc start means a full circle |
+
+Every handle has a matching spinbox (Origin X/Y, Radius, Arc start/end in
+degrees) kept in sync both ways - drag a handle and its own spinbox
+updates live; type a value and the handle jumps to match. An **Output
+width** field sets the unwrapped layer's own width in pixels - it starts
+out tracking the radius automatically (roughly enough pixels for square
+arc pixels) until you type a value directly, after which it stays put
+regardless of further radius changes. A duration label next to it shows
+how long the resulting layer will play at your project's own timestep.
+
+Click **OK** in the picker, then **OK** in the wizard, to import. The
+unwrapped result becomes a new layer, exactly like any other image
+import - sized to your project's own canvas height and the output width
+you chose.
+
 ## Importing Media
 
 ### Importing Audio
@@ -1459,13 +1497,14 @@ configured target loudness in Configure Devices - is still future work;
 only the one loudness/mastering meter above actually exists so far.
 
 **Sound Flower** (see [Canvas Navigation](#canvas-navigation) above) now
-has its polar canvas view - toggle it, paint, pick, select, or place path
-nodes and chord stamps exactly as in flat view. Overlay Grids, the Chord
-Overlay, Axis Labels, bounding-box/path-geometry display, the MindWave
-preview, and a Rectangle-shaped Pick/Selection highlight are hidden while
-it's active rather than drawn incorrectly - their own polar-aware redraw
-is still future work, as is polar-form image import (unwarping an
-already-circular source image back to rectangular).
+has both its polar canvas view and polar-form image import - toggle the
+view and paint, pick, select, or place path nodes and chord stamps
+exactly as in flat view, or import an already-circular source image via
+the wizard's own **Polar** size mode. Overlay Grids, the Chord Overlay,
+Axis Labels, bounding-box/path-geometry display, the MindWave preview,
+and a Rectangle-shaped Pick/Selection highlight are still hidden while
+the polar view is active rather than drawn incorrectly - their own
+polar-aware redraw is still future work.
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:

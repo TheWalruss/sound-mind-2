@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.4] - 2026-09-27
+
+Sound Flower, Installment B: **polar-form image import.**
+
+### Added
+
+- **A new "Polar" size mode** in the Image Import wizard (single-file imports only) - un-warps an already-circular source image back to a rectangular layer. Its own **Set origin...** button opens a graphical picker: drag the crosshair to place the flower's centre, drag the ring to set the sampling radius, and drag the two square handles to restrict the import to a partial arc - every value also editable as a spinbox, synced both ways with the picker.
+
+Full regression: `sound-mind-core` unaffected, `sound-mind-codec` 73/73 (6 new), `sound-mind-studio` full suite genuinely passing (26 new tests across 3 files, one new). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #168.
+
 ## [0.1.3.3] - 2026-09-26
 
 Sound Flower, Installment A: **the polar canvas view.**

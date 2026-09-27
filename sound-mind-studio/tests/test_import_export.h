@@ -21,6 +21,8 @@ private slots:
     void importAudioSnippetsIntoAppliesTheGivenOffset();
     void importImageFileIntoAddsANewLayer();
     void importImageFileIntoFailsForAnUnreadableFile();
+    void importImageFileIntoWithModePolarUnwarpsAndAddsANewLayer();
+    void importImageFileIntoWithModePolarAndNoParamsFails();
     void importImageFilesIntoImportsEachFileIndependentlyWhenNotSequential();
     void importImageFilesIntoAppliesCumulativeTranslationWhenSequential();
     void importImageFilesIntoReturnsZeroWhenNothingWasImported();

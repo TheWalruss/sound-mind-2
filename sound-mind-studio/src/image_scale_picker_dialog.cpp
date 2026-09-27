@@ -1,14 +1,31 @@
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QDialogButtonBox>
+#include <QHBoxLayout>
+#include <QPushButton>
 #include <QRadioButton>
 #include <QVBoxLayout>
 
 namespace sound_mind::studio {
 
-ImageScalePickerDialog::ImageScalePickerDialog(QWidget* parent, bool allowSequential) : QDialog(parent) {
+namespace {
+constexpr double kTwoPi = 6.283185307179586;
+}  // namespace
+
+ImageScalePickerDialog::ImageScalePickerDialog(QWidget* parent, bool allowSequential, QImage polarSourceImage,
+                                                std::uint32_t polarDefaultOutputWidth, double polarTimestepMs)
+    : QDialog(parent),
+      polarSourceImage_(std::move(polarSourceImage)),
+      polarDefaultOutputWidth_(polarDefaultOutputWidth),
+      polarTimestepMs_(polarTimestepMs) {
+    if (!polarSourceImage_.isNull()) {
+        polarParams_ = defaultPolarParams();
+    }
     setWindowTitle(tr("Choose How to Scale This Image"));
 
     auto* root = new QVBoxLayout(this);
@@ -68,6 +85,34 @@ ImageScalePickerDialog::ImageScalePickerDialog(QWidget* parent, bool allowSequen
         }
     });
 
+    // Polar-form image import (v0.Y.53.1 Installment B) - only offered
+    // when a real source image was given to preview/pick against (see
+    // this constructor's own docs on why a multi-file import never has
+    // one).
+    if (!polarSourceImage_.isNull()) {
+        auto* polarRow = new QHBoxLayout();
+        auto* polarRadio = new QRadioButton(tr("Polar - un-warp a polar/flower-shaped image to rectangular"), this);
+        polarRadio->setObjectName(QStringLiteral("polarRadio"));
+        group->addButton(polarRadio);
+        polarRow->addWidget(polarRadio);
+
+        polarOriginButton_ = new QPushButton(tr("Set origin..."), this);
+        polarOriginButton_->setObjectName(QStringLiteral("polarOriginButton"));
+        polarOriginButton_->setToolTip(
+            tr("Open the graphical origin picker to set the flower centre, sampling radius, and arc range"));
+        polarOriginButton_->setVisible(false);
+        connect(polarOriginButton_, &QPushButton::clicked, this, &ImageScalePickerDialog::openPolarOriginDialog);
+        polarRow->addWidget(polarOriginButton_);
+        root->addLayout(polarRow);
+
+        connect(polarRadio, &QRadioButton::toggled, this, [this](bool checked) {
+            if (checked) {
+                selectedMode_ = Mode::Polar;
+            }
+            polarOriginButton_->setVisible(checked);
+        });
+    }
+
     // Image Sequence Import (v0.Y.22.1): only offered when importing more
     // than one file at once (allowSequential) - see this constructor's own
     // docs. Checking it overrides/disables the five mode radios above
@@ -102,6 +147,33 @@ ImageScalePickerDialog::Mode ImageScalePickerDialog::selectedMode() const {
 
 bool ImageScalePickerDialog::importAsSequence() const {
     return importAsSequence_;
+}
+
+std::optional<PolarImportParams> ImageScalePickerDialog::polarParams() const {
+    return polarParams_;
+}
+
+PolarImportParams ImageScalePickerDialog::defaultPolarParams() const {
+    PolarImportParams params;
+    params.originX = polarSourceImage_.width() / 2.0;
+    params.originY = polarSourceImage_.height() / 2.0;
+    params.radius = std::min(polarSourceImage_.width(), polarSourceImage_.height()) / 2.0 * 0.9;
+    params.arcStartRadians = 0.0;
+    params.arcEndRadians = 0.0;
+    params.outputWidth = polarDefaultOutputWidth_ > 0
+                              ? polarDefaultOutputWidth_
+                              : static_cast<std::uint32_t>(std::max(1.0, kTwoPi * params.radius));
+    return params;
+}
+
+void ImageScalePickerDialog::openPolarOriginDialog() {
+    // Re-opening the picker (having already picked once) resumes from
+    // that same choice, rather than resetting back to the defaults - see
+    // PolarOriginDialog::PolarOriginDialog()'s own `initialParams` docs.
+    PolarOriginDialog dialog(polarSourceImage_, polarParams_, polarDefaultOutputWidth_, polarTimestepMs_, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        polarParams_ = dialog.params();
+    }
 }
 
 }  // namespace sound_mind::studio

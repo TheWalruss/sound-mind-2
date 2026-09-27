@@ -47,6 +47,7 @@
 #include "test_pick_controller.h"
 #include "test_playback_controller.h"
 #include "test_playback_panel.h"
+#include "test_polar_origin_dialog.h"
 #include "test_record_panel.h"
 #include "test_recent_projects.h"
 #include "test_selection_configuration_panel.h"
@@ -151,6 +152,9 @@ int main(int argc, char** argv) {
 
     ImageScalePickerDialogTest imageScalePickerDialogTest;
     status |= QTest::qExec(&imageScalePickerDialogTest, argc, argv);
+
+    PolarOriginDialogTest polarOriginDialogTest;
+    status |= QTest::qExec(&polarOriginDialogTest, argc, argv);
 
     ImportHelpersTest importHelpersTest;
     status |= QTest::qExec(&importHelpersTest, argc, argv);

@@ -18,4 +18,13 @@ private slots:
     void sequentialCheckBoxStartsUnchecked();
     void checkingSequentialCheckBoxSetsImportAsSequence();
     void checkingSequentialCheckBoxDisablesTheModeRadios();
+
+    // Polar-form image import (v0.Y.53.1 Installment B).
+    void polarRadioAndOriginButtonAreAbsentWithoutASourceImage();
+    void polarParamsIsNulloptWithoutASourceImage();
+    void polarRadioExistsWithASourceImage();
+    void selectingPolarUpdatesSelectedMode();
+    void polarOriginButtonIsHiddenUntilPolarIsSelected();
+    void polarParamsDefaultsToTheImagesOwnCentreRadiusAndFullCircle();
+    void polarParamsUsesTheGivenDefaultOutputWidth();
 };

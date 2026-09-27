@@ -86,4 +86,63 @@ RgbImage rectToPolar(const RgbImage& source, std::uint32_t diameter) {
     return result;
 }
 
+RgbImage polarToRect(const RgbImage& source, double originX, double originY, double maxRadius,
+                      double arcStartRadians, double arcEndRadians, std::uint32_t outputWidth,
+                      std::uint32_t outputHeight) {
+    RgbImage result;
+    result.width = outputWidth;
+    result.height = outputHeight;
+    result.pixels.assign(std::size_t{outputWidth} * outputHeight * 3, 0);
+
+    if (source.width == 0 || source.height == 0 || outputWidth == 0 || outputHeight == 0) {
+        return result;
+    }
+
+    // Equal (within a small epsilon) means a full circle - see this
+    // function's own docs. Otherwise, the arc spans clockwise from start
+    // to end, wrapping through zero if end < start (matching normal
+    // clock-face arithmetic).
+    constexpr double kEpsilon = 1e-9;
+    double arcSpan = std::fmod(arcEndRadians - arcStartRadians + kTwoPi, kTwoPi);
+    if (std::abs(arcSpan) < kEpsilon) {
+        arcSpan = kTwoPi;
+    }
+
+    const double sourceWidth = static_cast<double>(source.width);
+    const double sourceHeight = static_cast<double>(source.height);
+    const double widthDivisor = outputWidth > 1 ? static_cast<double>(outputWidth - 1) : 1.0;
+    const double heightDivisor = outputHeight > 1 ? static_cast<double>(outputHeight - 1) : 1.0;
+
+    for (std::uint32_t outputRow = 0; outputRow < outputHeight; ++outputRow) {
+        // outputRow=0 (top) samples r=maxRadius (the outer ring, the
+        // highest encoded frequency); outputRow=outputHeight-1 (bottom)
+        // samples r=0 (the centre, the lowest) - see this function's own
+        // docs.
+        const double r = maxRadius * (1.0 - static_cast<double>(outputRow) / heightDivisor);
+        for (std::uint32_t outputColumn = 0; outputColumn < outputWidth; ++outputColumn) {
+            const double theta = arcStartRadians + arcSpan * static_cast<double>(outputColumn) / widthDivisor;
+
+            // sin/cos, not cos/sin - theta=0 (twelve o'clock) points
+            // straight up (negative y), matching rectToPolar()'s own
+            // inverse convention exactly.
+            const double xSrc = originX + r * std::sin(theta);
+            const double ySrc = originY - r * std::cos(theta);
+
+            const bool outOfBounds =
+                xSrc < 0.0 || xSrc > sourceWidth - 1.0 || ySrc < 0.0 || ySrc > sourceHeight - 1.0;
+            if (outOfBounds) {
+                continue;  // stays black - see this function's own docs.
+            }
+
+            const auto sampled = bilinearSample(source, xSrc, ySrc);
+            const std::size_t dstIndex = (std::size_t{outputRow} * outputWidth + outputColumn) * 3;
+            result.pixels[dstIndex] = static_cast<std::uint8_t>(std::clamp(sampled[0], 0.0, 255.0));
+            result.pixels[dstIndex + 1] = static_cast<std::uint8_t>(std::clamp(sampled[1], 0.0, 255.0));
+            result.pixels[dstIndex + 2] = static_cast<std::uint8_t>(std::clamp(sampled[2], 0.0, 255.0));
+        }
+    }
+
+    return result;
+}
+
 }  // namespace sound_mind::codec

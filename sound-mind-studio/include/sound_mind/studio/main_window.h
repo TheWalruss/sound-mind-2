@@ -1962,11 +1962,15 @@ public:
      *        time instead of importing each independently.
      * @param errorMessage If non-null and this returns `false`, set to the
      *        first failure's own message.
+     * @param polarParams See `importImageFilesInto()`'s own docs -
+     *        meaningful only when `mode` is `ImageScalePickerDialog::
+     *        Mode::Polar`.
      * @return `true` if at least one file was imported; `false` if no
      *         project is open, `paths` is empty, or every file failed.
      */
     bool importImageFiles(const std::vector<std::filesystem::path>& paths, ImageScalePickerDialog::Mode mode,
-                           bool importAsSequence, QString* errorMessage = nullptr);
+                           bool importAsSequence, QString* errorMessage = nullptr,
+                           std::optional<PolarImportParams> polarParams = std::nullopt);
 
     /**
      * @brief Routes a list of dropped local file paths to the matching
@@ -2030,13 +2034,18 @@ public:
      *        `audioSnippetSelections` itself, so that parameter's own
      *        pre-existing shape (and every test already constructing it)
      *        stays untouched.
+     * @param imagePolarParams See `importImageFiles()`'s own docs -
+     *        meaningful only when `imageMode` is `ImageScalePickerDialog::
+     *        Mode::Polar`. Defaults to `std::nullopt`, the pre-existing
+     *        default every test predating this parameter still gets.
      */
     void handleDroppedFiles(
         const std::vector<std::filesystem::path>& paths,
         ImageScalePickerDialog::Mode imageMode = ImageScalePickerDialog::Mode::RescaleToFitProject,
         bool importImagesAsSequence = false,
         const std::map<std::filesystem::path, std::vector<std::size_t>>& audioSnippetSelections = {},
-        const std::map<std::filesystem::path, double>& audioSnippetOffsets = {});
+        const std::map<std::filesystem::path, double>& audioSnippetOffsets = {},
+        std::optional<PolarImportParams> imagePolarParams = std::nullopt);
 
     /**
      * @brief Pools the topmost layer with content and writes its Stream
