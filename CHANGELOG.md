@@ -6,6 +6,28 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.18] - 2026-09-28
+
+UI polish, Installment E: **Configure drop-down.**
+
+### Changed
+
+- **Tool Configuration, MIDI Configuration, Chord Generator, Selection
+  Configuration, Grid, Filter Configuration, and MindWaves are now one
+  "Configure" dropdown** on the toolbar, instead of seven separate
+  toolbar buttons. Any number of these can still be open together -
+  unlike Input/Output, there's no "only one at a time" here.
+
+### Notes
+
+Fifth and final installment of "Reduce top-level buttons" - the toolbar
+now matches the roadmap's own confirmed target: Pool Layer, Tool,
+Layers, Input/Output, Configure, History. Full regression:
+`sound-mind-studio` full suite genuinely passing (1 new test, 1 existing
+test fixed for the reorg), `sound-mind-core` unaffected and unchanged.
+Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision
+#182.
+
 ## [0.1.3.17] - 2026-09-27
 
 UI polish, Installment D: **Input/Output panel consolidation.**

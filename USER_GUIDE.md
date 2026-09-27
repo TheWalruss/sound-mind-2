@@ -115,6 +115,11 @@ Once a project is open, the title bar shows the project's name next to
   a time - choosing another closes whichever one was open. All three
   start hidden; whichever one you have open (or none) stays that way
   across New/Open Project, within the same run of the Studio.
+- **Configure dropdown** - choose **Tool Configuration**, **MIDI
+  Configuration**, **Chord Generator**, **Selection Configuration**,
+  **Grid**, **Filter Configuration**, or **MindWaves** to show that
+  panel; each is covered in its own section below. Unlike Input/Output,
+  any number of these can stay open together.
 - **File menu** - New/Open/Save/Save As, Import Audio/Image, Export
   Audio/Video.
 - **View menu** - Zoom controls (see [Canvas Navigation](#canvas-navigation)
@@ -315,9 +320,9 @@ Otherwise, a picker lets you:
 
 ### MIDI Configuration
 
-The **MIDI Configuration** toolbar button opens a dockable panel (off by
-default) mapping a MIDI instrument (a General MIDI program, 0-127) to one
-of your saved Tool Presets:
+**MIDI Configuration**, in the **Configure** dropdown, opens a dockable
+panel (off by default) mapping a MIDI instrument (a General MIDI
+program, 0-127) to one of your saved Tool Presets:
 
 - **Add Mapping** - pick a program from the drop-down beside it, then
   click to add a row for it. Each program can only be mapped once; once
@@ -500,7 +505,7 @@ and Export are the exception - see the note above.
 
 ### MindWaves
 
-The **MindWaves** panel (toggle it from the toolbar) manages a small
+The **MindWaves** panel (toggle it from the **Configure** dropdown) manages a small
 library of reusable waveforms - each one a shape that varies across the
 canvas (over time, over frequency, or both) rather than a single fixed
 number. A MindWave can bind to a **layer's own opacity** (instead of a
@@ -587,7 +592,8 @@ Layer** to add one; it's tagged **Filter** in its own row, and selecting
 it (click its name, the same as any other layer) opens the **Filter
 Configuration** panel with its own controls.
 
-The Filter Configuration panel is available even before you've added a
+The Filter Configuration panel (also reachable directly from the
+**Configure** dropdown) is available even before you've added a
 Filter layer at all - dial in the settings you want first, then click
 **+ Add Filter Layer**, and the new layer lands already configured that
 way rather than starting from scratch. Whatever you last set stays in
@@ -807,9 +813,8 @@ no longer lining up the way they would in Sound-mode. This is saved with
 the project, so it stays set the way you left it. Switching modes never
 changes anything you've already painted - only new strokes reflect it.
 
-The **Tool Configuration** toolbar button opens a dockable panel (off by
-default, alongside Layers/Playback/Record/Loop) with the brush's own
-settings:
+**Tool Configuration**, in the **Configure** dropdown, opens a dockable
+panel (off by default) with the brush's own settings:
 
 - **Tool Preset** - a drop-down at the top of the panel listing every
   preset saved in the current project, empty ("(none saved yet)") until
@@ -1167,8 +1172,8 @@ itself, only to having drawn one - but its green outline only shows
 while Select or Pick is the active tool, not while Paint or another tool
 is.
 
-The **Selection Configuration** toolbar button opens a dockable panel
-(off by default, alongside the others):
+**Selection Configuration**, in the **Configure** dropdown, opens a
+dockable panel (off by default):
 
 - **Selection Type** - **Rectangle** (the default) drags out an
   axis-aligned box, corner to corner. **Lasso** traces a freehand,
@@ -1317,8 +1322,8 @@ starts/ends where the old one did) isn't here yet; see
 
 ## Chord Generator
 
-The **Chord Generator** toolbar button (next to Tool Configuration) opens
-a dockable panel (off by default) that builds a chord, arpeggio, or a
+**Chord Generator**, in the **Configure** dropdown, opens a dockable
+panel (off by default) that builds a chord, arpeggio, or a
 hand-written sequence, and stamps it onto the canvas as a series of notes.
 An **Input Mode** switch at the top chooses between two independent ways
 to build what gets stamped:
@@ -1392,8 +1397,8 @@ stamped chord's own instrument for editing isn't here yet; see
 
 ## Axis Labels
 
-The **Grid** toolbar button opens a dockable panel (off by default) with
-two drop-downs, one per canvas axis:
+**Grid**, in the **Configure** dropdown, opens a dockable panel (off by
+default) with two drop-downs, one per canvas axis:
 
 - **Vertical axis (frequency)** - **Off** (the default), **Hz** (round
   frequency values), **Notes** (the nearest note name, e.g. `A4`, `C#5`,

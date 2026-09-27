@@ -126,6 +126,7 @@ private slots:
     void inputOutputMenuContainsPlaybackRecordAndLoopToggles();
     void showingOnePlaybackRecordOrLoopPanelHidesTheOtherTwo();
     void configureDevicesButtonInEachOfTheThreePanelsShowsAndRaisesTheSharedPanel();
+    void configureMenuContainsEveryConfigurationPanelsOwnToggle();
 
     // Audio Import Snippets (v0.Y.19.1)
     void audioSnippetsForFileReturnsOneSnippetForAudioNoLongerThanTheProject();

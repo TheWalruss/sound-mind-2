@@ -41,13 +41,17 @@
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/chord_generator_panel.h"
 #include "sound_mind/studio/configure_devices_panel.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
+#include "sound_mind/studio/grid_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/loop_panel.h"
 #include "sound_mind/studio/main_window.h"
+#include "sound_mind/studio/midi_configuration_panel.h"
+#include "sound_mind/studio/mind_waves_panel.h"
 #include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/record_panel.h"
 #include "sound_mind/studio/selection_configuration_panel.h"
@@ -61,13 +65,17 @@ using sound_mind::core::PaintOperation;
 using sound_mind::core::PasteOperation;
 using sound_mind::core::PathNodeType;
 using sound_mind::studio::CanvasWidget;
+using sound_mind::studio::ChordGeneratorPanel;
 using sound_mind::studio::ConfigureDevicesPanel;
 using sound_mind::studio::ImageScalePickerDialog;
+using sound_mind::studio::GridPanel;
 using sound_mind::studio::LandingPage;
 using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::LayersPanel;
 using sound_mind::studio::LoopPanel;
 using sound_mind::studio::MainWindow;
+using sound_mind::studio::MidiConfigurationPanel;
+using sound_mind::studio::MindWavesPanel;
 using sound_mind::studio::PlaybackPanel;
 using sound_mind::studio::PlaybackScope;
 using sound_mind::studio::RecordPanel;
@@ -2516,6 +2524,37 @@ void MainWindowTest::configureDevicesButtonInEachOfTheThreePanelsShowsAndRaisesT
     }
 }
 
+void MainWindowTest::configureMenuContainsEveryConfigurationPanelsOwnToggle() {
+    const TestMainWindow window;
+    auto* configureButton = window.findChild<QToolButton*>(QStringLiteral("configureButton"));
+    QVERIFY(configureButton != nullptr);
+    auto* configureMenu = configureButton->menu();
+    QVERIFY(configureMenu != nullptr);
+
+    auto* toolConfigurationPanel = window.findChild<ToolConfigurationPanel*>();
+    auto* midiConfigurationPanel = window.findChild<MidiConfigurationPanel*>();
+    auto* chordGeneratorPanel = window.findChild<ChordGeneratorPanel*>();
+    auto* selectionConfigurationPanel = window.findChild<SelectionConfigurationPanel*>();
+    auto* gridPanel = window.findChild<GridPanel*>();
+    auto* filterConfigurationPanel = window.findChild<FilterConfigurationPanel*>();
+    auto* mindWavesPanel = window.findChild<MindWavesPanel*>();
+    QVERIFY(toolConfigurationPanel != nullptr);
+    QVERIFY(midiConfigurationPanel != nullptr);
+    QVERIFY(chordGeneratorPanel != nullptr);
+    QVERIFY(selectionConfigurationPanel != nullptr);
+    QVERIFY(gridPanel != nullptr);
+    QVERIFY(filterConfigurationPanel != nullptr);
+    QVERIFY(mindWavesPanel != nullptr);
+
+    QVERIFY(configureMenu->actions().contains(toolConfigurationPanel->toggleViewAction()));
+    QVERIFY(configureMenu->actions().contains(midiConfigurationPanel->toggleViewAction()));
+    QVERIFY(configureMenu->actions().contains(chordGeneratorPanel->toggleViewAction()));
+    QVERIFY(configureMenu->actions().contains(selectionConfigurationPanel->toggleViewAction()));
+    QVERIFY(configureMenu->actions().contains(gridPanel->toggleViewAction()));
+    QVERIFY(configureMenu->actions().contains(filterConfigurationPanel->toggleViewAction()));
+    QVERIFY(configureMenu->actions().contains(mindWavesPanel->toggleViewAction()));
+}
+
 void MainWindowTest::audioSnippetsForFileReturnsOneSnippetForAudioNoLongerThanTheProject() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-snippets-short.wav";
     writeTestWavFile(path);  // 4 samples - far shorter than any project's own duration.
@@ -4029,9 +4068,12 @@ void MainWindowTest::toggleToolConfigurationPanelShowsAndHidesIt() {
 
     QAction* toggleAction = panel->toggleViewAction();
     QVERIFY(toggleAction != nullptr);
-    auto* toolBar = window.findChild<QToolBar*>();
-    QVERIFY(toolBar != nullptr);
-    QVERIFY(toolBar->actions().contains(toggleAction));
+    // Lives in the "Configure" dropdown, not directly on the toolbar - see
+    // configureMenuContainsEveryConfigurationPanelsOwnToggle().
+    auto* configureButton = window.findChild<QToolButton*>(QStringLiteral("configureButton"));
+    QVERIFY(configureButton != nullptr);
+    QVERIFY(configureButton->menu() != nullptr);
+    QVERIFY(configureButton->menu()->actions().contains(toggleAction));
 
     toggleAction->trigger();
     QVERIFY(!panel->isHidden());

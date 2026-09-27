@@ -1203,20 +1203,39 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // confirmed with the user, along with visibility persisting across
     // project switches within a session rather than resetting every time.
     transportToolBar->addAction(layersPanel_->toggleViewAction());
-    // Off by default, the same as Playback/Record/Loop above - see
-    // toolConfigurationPanel_'s own docs.
-    transportToolBar->addAction(toolConfigurationPanel_->toggleViewAction());
-    // Off by default, same reasoning - see midiConfigurationPanel_'s own docs.
-    transportToolBar->addAction(midiConfigurationPanel_->toggleViewAction());
-    // Off by default, same reasoning - see chordGeneratorPanel_'s own docs.
-    transportToolBar->addAction(chordGeneratorPanel_->toggleViewAction());
-    transportToolBar->addAction(selectionConfigurationPanel_->toggleViewAction());
-    // Off by default, same reasoning - see gridPanel_'s own docs.
-    transportToolBar->addAction(gridPanel_->toggleViewAction());
-    // Off by default, same reasoning - see filterConfigurationPanel_'s own docs.
-    transportToolBar->addAction(filterConfigurationPanel_->toggleViewAction());
-    // Off by default, same reasoning - see mindWavesPanel_'s own docs.
-    transportToolBar->addAction(mindWavesPanel_->toggleViewAction());
+
+    // "Configure" dropdown (v0.Y.58.1, "Reduce top-level buttons", the
+    // last sub-item) - collects every remaining per-feature configuration
+    // panel's own toggleViewAction() behind one button, the same "reuse
+    // each dock's own self-syncing toggle directly as a menu entry"
+    // pattern the Input/Output dropdown already established (unlike the
+    // Tool dropdown's hand-rolled QActions - there's no separate "mode"
+    // concept here either, just a dock's own visibility). Unlike
+    // Input/Output, there's no mutual exclusivity - any number of these
+    // can stay open together, this is purely decluttering the toolbar.
+    // MIDI Configuration and Chord Generator join the four panels the
+    // roadmap's own spec named explicitly (Selection/Filter/MindWaves/
+    // Tool Configuration/Grid) - confirmed with the user (see
+    // docs/sound-mind-architecture.md's Decision #179 on where this and
+    // the other roadmap-silent panels/actions were confirmed to land).
+    auto* configureMenu = new QMenu(this);
+    configureMenu->addAction(toolConfigurationPanel_->toggleViewAction());
+    configureMenu->addAction(midiConfigurationPanel_->toggleViewAction());
+    configureMenu->addAction(chordGeneratorPanel_->toggleViewAction());
+    configureMenu->addAction(selectionConfigurationPanel_->toggleViewAction());
+    configureMenu->addAction(gridPanel_->toggleViewAction());
+    configureMenu->addAction(filterConfigurationPanel_->toggleViewAction());
+    configureMenu->addAction(mindWavesPanel_->toggleViewAction());
+
+    auto* configureButton = new QToolButton(this);
+    configureButton->setObjectName(QStringLiteral("configureButton"));
+    configureButton->setText(tr("Configure"));
+    configureButton->setPopupMode(QToolButton::InstantPopup);
+    configureButton->setMenu(configureMenu);
+    configureButton->setToolTip(tr("Open Tool/MIDI/Selection/Filter Configuration, Grid, MindWaves, or the Chord "
+                                   "Generator"));
+    transportToolBar->addWidget(configureButton);
+
     // Off by default, same reasoning - see historyPanel_'s own docs.
     transportToolBar->addAction(historyPanel_->toggleViewAction());
     // Off by default, same reasoning - see composerPanel_'s own docs.
