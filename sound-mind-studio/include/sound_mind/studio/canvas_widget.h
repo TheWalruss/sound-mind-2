@@ -132,19 +132,22 @@ public:
      * gesture - and the live paint-stroke preview - keeps working exactly
      * as it does in flat view, inverse-mapped through the disk instead
      * (points outside the disk convert to `std::nullopt`, matching a
-     * flat-mode click outside the canvas). Every other overlay (Overlay
-     * Grids, Chord Overlay, Axis Labels, Show bounding boxes/path
-     * geometry, the MindWave preview, a Rectangle-shaped Pick/Selection
-     * highlight and its own rotate handle) is suppressed while active
-     * rather than drawn incorrectly - each is built from straight lines
-     * between a handful of corner points, which would render as a
-     * misleading chord or quadrilateral cutting across the disk rather
-     * than the curved shape the underlying geometry actually has; a
-     * proper polar-aware redraw for each is real, separate future work
-     * (see `docs/sound-mind-architecture.md`'s Decision on this
-     * installment). The playhead (setPlayheadFraction()) becomes a
-     * rotating ray from the disk's own centre instead of a moving
-     * vertical line - still a single, well-defined point either way.
+     * flat-mode click outside the canvas). Every corner/line-based overlay
+     * (Overlay Grids, Chord Overlay, Axis Labels, Show bounding boxes/path
+     * geometry, a Rectangle-shaped Pick/Selection highlight and its own
+     * rotate handle) is suppressed while active rather than drawn
+     * incorrectly - each is built from straight lines between a handful of
+     * corner points, which would render as a misleading chord or
+     * quadrilateral cutting across the disk rather than the curved shape
+     * the underlying geometry actually has; a proper polar-aware redraw for
+     * each is real, separate future work (see `docs/sound-mind-
+     * architecture.md`'s Decision on this installment). The **MindWave
+     * preview** (setMindWavePreview()) is not suppressed - it's a
+     * full-canvas *image*, the same category as the composite itself, so
+     * it warps onto the disk through `rectToPolar()` exactly the same way.
+     * The playhead (setPlayheadFraction()) becomes a rotating ray from the
+     * disk's own centre instead of a moving vertical line - still a
+     * single, well-defined point either way.
      *
      * @param enabled Whether polar view should be active.
      */
@@ -365,10 +368,12 @@ public:
      *
      * The field is evaluated once here, not on every paintEvent() - a
      * plain cached `QImage`, scaled to fill the widget the same way the
-     * main composite already is (`drawImage(rect(), ...)`), gets redrawn
-     * as many times as needed for free. A no-op (clears any existing
-     * preview instead) if no project is set - there's no canvas geometry
-     * to evaluate `wave` against yet.
+     * main composite already is (`drawImage(rect(), ...)`) in flat view,
+     * or warped onto the disk the same way too (`rectToPolar()`) while
+     * polarMode() is `true` - see setPolarMode()'s own docs - gets redrawn
+     * as many times as needed for free either way. A no-op (clears any
+     * existing preview instead) if no project is set - there's no canvas
+     * geometry to evaluate `wave` against yet.
      *
      * @param wave The MindWave to preview, by value (no lifetime tie to
      *        wherever the caller's own copy lives - see

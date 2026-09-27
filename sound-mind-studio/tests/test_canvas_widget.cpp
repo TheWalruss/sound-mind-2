@@ -1613,3 +1613,33 @@ void CanvasWidgetTest::polarModePaintPressOutsideTheDiskEmitsNothing() {
 
     QCOMPARE(spy.count(), 0);
 }
+
+void CanvasWidgetTest::polarModeStillDrawsTheMindWavePreview() {
+    // Unlike the corner/line-based overlays (Grid, Chord Overlay, Axis
+    // Labels, ...) suppressed in polar mode, the MindWave preview is a
+    // full-canvas image, warped onto the disk the same way the composite
+    // itself is - see CanvasWidget::setPolarMode()'s own docs.
+    Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 100);
+    widget.setPolarMode(true);
+    const QImage before = widget.grab().toImage();
+
+    MindWave wave;
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(0.1);  // Short period - plenty of visible variation across the canvas.
+    widget.setMindWavePreview(wave);
+    const QImage after = widget.grab().toImage();
+
+    bool foundDifference = false;
+    for (int y = 0; y < 100 && !foundDifference; ++y) {
+        for (int x = 0; x < 100; ++x) {
+            if (before.pixelColor(x, y) != after.pixelColor(x, y)) {
+                foundDifference = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundDifference);
+}

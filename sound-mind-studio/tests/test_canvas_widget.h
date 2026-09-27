@@ -88,4 +88,5 @@ private slots:
     void polarModeOutsideTheDiskConvertsToNullopt();
     void polarModePaintPressInsideTheDiskEmitsPaintStrokeStarted();
     void polarModePaintPressOutsideTheDiskEmitsNothing();
+    void polarModeStillDrawsTheMindWavePreview();
 };

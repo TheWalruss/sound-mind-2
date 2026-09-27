@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.5] - 2026-09-27
+
+Sound Flower: **the MindWave preview in polar mode - milestone complete.**
+
+### Added
+
+- **The MindWave preview now warps onto the Sound Flower disk too**, instead of being hidden while polar view is active - it's a full-canvas image, the same as the composited canvas itself, so it projects onto the disk the same way.
+
+### Notes
+
+- This closes out `v0.Y.53.1` (Sound Flower) - both installments (the polar canvas view, and polar-form image import) plus this closing pass.
+
+Full regression: `sound-mind-core`/`sound-mind-codec` unaffected, `sound-mind-studio` full suite genuinely passing (1 new test). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #169.
+
 ## [0.1.3.4] - 2026-09-27
 
 Sound Flower, Installment B: **polar-form image import.**

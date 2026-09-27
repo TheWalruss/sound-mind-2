@@ -374,18 +374,28 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
             // after them so both sets of reference lines sit together,
             // under every interactive overlay.
             drawChordPreview(painter);
+        }
 
-            // MindWave Preview (see setMindWavePreview()'s own docs) - a
-            // semi-transparent grayscale overlay, same ordering reasoning
-            // as Overlay Grids above (a display aid over the content,
-            // under any interactive overlay). setOpacity() is reset
-            // immediately after - nothing else drawn below should inherit
-            // it.
-            if (!mindWavePreviewImage_.isNull()) {
-                painter.setOpacity(0.5);
+        // MindWave Preview (see setMindWavePreview()'s own docs) - a
+        // semi-transparent grayscale overlay, same ordering reasoning as
+        // Overlay Grids above (a display aid over the content, under any
+        // interactive overlay). setOpacity() is reset immediately after -
+        // nothing else drawn below should inherit it. Unlike the
+        // corner/line-based overlays suppressed above, this is a full-
+        // canvas *image*, the same category as the composite itself - so
+        // it warps onto the disk exactly the same way (see setPolarMode()'s
+        // own docs), rather than being suppressed too.
+        if (!mindWavePreviewImage_.isNull()) {
+            painter.setOpacity(0.5);
+            if (polarMode_) {
+                const QRectF disk = polarDiskRect();
+                const auto diameter = static_cast<std::uint32_t>(disk.width());
+                const auto polarPreview = sound_mind::codec::rectToPolar(toRgbImage(mindWavePreviewImage_), diameter);
+                painter.drawImage(disk, toQImageView(polarPreview));
+            } else {
                 painter.drawImage(rect(), mindWavePreviewImage_);
-                painter.setOpacity(1.0);
             }
+            painter.setOpacity(1.0);
         }
     }
 

@@ -185,13 +185,15 @@ between the disk and the same underlying canvas coordinates flat view
 uses, so a stroke painted on the flower lands in exactly the same place a
 stroke painted on the flat view would. The playback position indicator
 becomes a rotating ray from the centre instead of a moving vertical line.
+A MindWave preview (see [MindWaves](#mindwaves)) warps onto the disk the
+same way the canvas itself does, so it's still visible while you work.
 
 A few things are hidden while Sound Flower is active, rather than drawn
 incorrectly: Overlay Grids, the Chord Overlay, Axis Labels, Show bounding
-boxes/path geometry, the MindWave preview, and a Rectangle-shaped Pick or
-Selection's own highlight box (a Lasso selection's own curve still shows
-correctly). Snap to Grid is also suspended while it's active. All of this
-returns the moment you switch back to flat view.
+boxes/path geometry, and a Rectangle-shaped Pick or Selection's own
+highlight box (a Lasso selection's own curve still shows correctly).
+Snap to Grid is also suspended while it's active. All of this returns
+the moment you switch back to flat view.
 
 ### Polar Image Import
 
@@ -1496,15 +1498,15 @@ health, and criticality/pattern, plus output audio normalization toward a
 configured target loudness in Configure Devices - is still future work;
 only the one loudness/mastering meter above actually exists so far.
 
-**Sound Flower** (see [Canvas Navigation](#canvas-navigation) above) now
-has both its polar canvas view and polar-form image import - toggle the
-view and paint, pick, select, or place path nodes and chord stamps
-exactly as in flat view, or import an already-circular source image via
-the wizard's own **Polar** size mode. Overlay Grids, the Chord Overlay,
-Axis Labels, bounding-box/path-geometry display, the MindWave preview,
-and a Rectangle-shaped Pick/Selection highlight are still hidden while
-the polar view is active rather than drawn incorrectly - their own
-polar-aware redraw is still future work.
+**Sound Flower** (see [Canvas Navigation](#canvas-navigation) above) is
+now complete for its own confirmed scope: the polar canvas view and
+polar-form image import both work, and the MindWave preview warps onto
+the disk along with everything else. Overlay Grids, the Chord Overlay,
+Axis Labels, bounding-box/path-geometry display, and a Rectangle-shaped
+Pick/Selection highlight are still hidden while the polar view is active
+rather than drawn incorrectly - a proper polar-aware redraw for each
+remains future work, since each is built from straight lines that don't
+translate onto a disk without their own dedicated redesign.
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:
