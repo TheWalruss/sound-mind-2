@@ -10,6 +10,7 @@
 
 #include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/tool_configuration.h"
+#include "sound_mind/core/tool_preset.h"
 
 class QCheckBox;
 class QComboBox;
@@ -17,6 +18,7 @@ class QDoubleSpinBox;
 class QFormLayout;
 class QLabel;
 class QLineEdit;
+class QPushButton;
 class QSpinBox;
 class QVBoxLayout;
 class QWidget;
@@ -33,15 +35,15 @@ class GradientEditorWidget;
  * @brief A dockable panel for configuring the current painting tool - see
  *        `docs/sound-mind-design.md`'s "Tool Configuration".
  *
- * **Deliberately partial, for now**: the design doc describes a Wizard
- * button and a "Tool Preset" drop-down at the top of this panel, loading/
- * saving named configurations to/from the project - neither exists yet
- * (no Wizard has been built, and `Project` has no saved-preset list to
- * populate a drop-down from), so both are omitted entirely rather than
- * shown as dead controls, matching this codebase's own established
+ * **Still partial**: the design doc describes both a Wizard button and a
+ * "Tool Preset" drop-down at the top of this panel, loading/saving named
+ * configurations to/from the project - `v0.Y.55.1`'s own second
+ * prerequisite (see `refreshToolPresets()`'s own docs) built the Tool
+ * Preset half (`toolPresetCombo_`/`savePresetButton_`/`deletePresetButton_`),
+ * but no Wizard has been built yet, so it's still omitted entirely rather
+ * than shown as a dead control, matching this codebase's own established
  * "don't build placeholder UI for a feature that doesn't work yet"
- * philosophy. What's here is the actual parameter area the design doc
- * says both entry points edit - just reached directly, by hand, for now.
+ * philosophy.
  *
  * **Eight real tool types as of `v0.Y.34.1` Installment B (Smudge/Order-
  * Chaos):** a `ToolType` selector (`toolTypeCombo_`) switches between
@@ -193,6 +195,40 @@ public:
      * to check.
      */
     void refreshMindGrains();
+
+    /**
+     * @brief Repopulates the Tool Preset picker from `project`'s own
+     *        current `toolPresets()` - `v0.Y.55.1`'s own second
+     *        prerequisite, the same "call whenever that library might have
+     *        changed out from under this panel" role `refreshMindShots()`/
+     *        `refreshMindGrains()` already establish (`setProject()`
+     *        already calls this itself for a project switch;
+     *        `saveCurrentAsToolPresetNamed()`/`deleteCurrentToolPreset()`
+     *        call it too, after changing the library themselves).
+     *
+     * Preserves the currently-selected entry, by id, if it still exists;
+     * otherwise leaves nothing selected.
+     */
+    void refreshToolPresets();
+
+    /**
+     * @brief Saves `config_`'s own current state as a new Tool Preset
+     *        named `name`, in `project_`'s own library - the dialog-free
+     *        half of the "Save..." button's own click handler (which
+     *        gathers `name` from a `QInputDialog` first), the same split
+     *        `MainWindow::renameLayerTo()`/`captureMindShotWithDetails()`
+     *        already establish so a caller that already knows what it
+     *        wants - in particular, this codebase's own test suite - never
+     *        needs to trigger the real modal dialog itself.
+     *
+     * A no-op (returns `std::nullopt`) if `project_` is `nullptr` or `name`
+     * is empty.
+     *
+     * @param name Display name for the new preset.
+     * @return The new preset's own id, or `std::nullopt` if this was a
+     *         no-op.
+     */
+    std::optional<sound_mind::core::ToolPresetId> saveCurrentAsToolPresetNamed(const QString& name);
 
     /**
      * @brief Repopulates `vibratoMindWaveCombo_`/`tremoloMindWaveCombo_` from
@@ -396,6 +432,35 @@ private:
     /// @param index The combo's own newly-selected row.
     void handleMindGrainComboChanged(int index);
 
+    /// @brief `toolPresetCombo_`'s own `currentIndexChanged` handler: loads
+    ///        the newly-selected preset's own configuration wholesale via
+    ///        `setToolConfiguration()` (so every shared/per-type control
+    ///        refreshes together, the same as loading a Picked object's own
+    ///        configuration) - a no-op if the selection is the placeholder
+    ///        "no presets saved" item, or `project_` is `nullptr`.
+    /// @param index The combo's own newly-selected row.
+    void handleToolPresetComboChanged(int index);
+
+    /// @brief `savePresetButton_`'s own `clicked` handler: prompts for a
+    ///        name via `QInputDialog::getText()` (pre-filled with `config_`'s
+    ///        own current `name()`, if any), then calls
+    ///        `saveCurrentAsToolPresetNamed()` - see that method's own docs
+    ///        for why the two are split (this one is never called from a
+    ///        test, which calls the dialog-free half directly instead). A
+    ///        no-op if the dialog is cancelled or the entered name is
+    ///        empty.
+    void saveCurrentAsToolPreset();
+
+    /// @brief `deletePresetButton_`'s own `clicked` handler: removes the
+    ///        currently-selected Tool Preset from `project_`'s own library
+    ///        - a no-op if nothing is selected (the placeholder item) or
+    ///        `project_` is `nullptr`. No confirmation dialog - matching
+    ///        `NamedMindShot`'s own docs that removing a library entry
+    ///        never affects anything that already loaded it, so this is a
+    ///        low-stakes action, the same way removing a saved MindWave or
+    ///        convolution kernel already is elsewhere in this codebase.
+    void deleteCurrentToolPreset();
+
     /// @brief Recomputes `mindGrainGroup_`'s own red-highlight/tooltip -
     ///        see setActiveLayer()'s own docs. Called after anything that
     ///        could change either input to that check: `activeLayer_`
@@ -441,6 +506,14 @@ private:
     void populateMindWaveCombo(QComboBox* combo, std::optional<sound_mind::core::MindWaveId> boundId);
 
     std::unique_ptr<sound_mind::core::ToolConfiguration> config_;
+
+    /// @brief `v0.Y.55.1`'s own second prerequisite - see
+    ///        `refreshToolPresets()`'s own docs. Reads from `project_`,
+    ///        the same field `mindShotCombo_`/`mindGrainCombo_` already
+    ///        draw their own entries from.
+    QComboBox* toolPresetCombo_ = nullptr;
+    QPushButton* savePresetButton_ = nullptr;
+    QPushButton* deletePresetButton_ = nullptr;
 
     QComboBox* toolTypeCombo_ = nullptr;
 

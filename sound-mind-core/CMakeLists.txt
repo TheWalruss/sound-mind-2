@@ -36,6 +36,7 @@ add_library(sound-mind-core
     src/sequence_application.cpp
     src/mind_shot.cpp
     src/mind_grain.cpp
+    src/tool_preset.cpp
     src/convolution_kernel.cpp
     src/blend_mode_application.cpp
     src/music_theory.cpp

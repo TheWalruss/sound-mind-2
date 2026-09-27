@@ -9,8 +9,10 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -47,6 +49,7 @@ using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::ToolConfiguration;
+using sound_mind::core::ToolPresetId;
 using sound_mind::core::ToolType;
 
 /// @brief The style sheet applied to `mindGrainGroup_` while its currently-
@@ -175,6 +178,34 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     connect(showPathGeometryCheckBox_, &QCheckBox::toggled, this, &ToolConfigurationPanel::showPathGeometryChanged);
     overlayRow->addWidget(showPathGeometryCheckBox_);
     root->addLayout(overlayRow);
+
+    // v0.Y.55.1's own second prerequisite: docs/sound-mind-design.md's own
+    // "Tool Preset drop-down listing every tool configuration saved in the
+    // current project" - the Wizard button that same paragraph also
+    // describes remains unbuilt (see the class's own docs).
+    auto* presetRow = new QHBoxLayout();
+    toolPresetCombo_ = new QComboBox(container);
+    toolPresetCombo_->setObjectName(QStringLiteral("toolPresetCombo"));
+    toolPresetCombo_->setToolTip(tr("Load a saved Tool Preset"));
+    connect(toolPresetCombo_, &QComboBox::currentIndexChanged, this,
+            &ToolConfigurationPanel::handleToolPresetComboChanged);
+    presetRow->addWidget(toolPresetCombo_, 1);
+
+    savePresetButton_ = new QPushButton(tr("Save..."), container);
+    savePresetButton_->setObjectName(QStringLiteral("savePresetButton"));
+    savePresetButton_->setToolTip(tr("Save the current configuration as a new Tool Preset"));
+    connect(savePresetButton_, &QPushButton::clicked, this, &ToolConfigurationPanel::saveCurrentAsToolPreset);
+    presetRow->addWidget(savePresetButton_);
+
+    deletePresetButton_ = new QPushButton(tr("Delete"), container);
+    deletePresetButton_->setObjectName(QStringLiteral("deletePresetButton"));
+    deletePresetButton_->setToolTip(tr("Delete the selected Tool Preset"));
+    connect(deletePresetButton_, &QPushButton::clicked, this, &ToolConfigurationPanel::deleteCurrentToolPreset);
+    presetRow->addWidget(deletePresetButton_);
+
+    auto* presetForm = new QFormLayout();
+    presetForm->addRow(tr("Tool Preset:"), presetRow);
+    root->addLayout(presetForm);
 
     auto* topForm = new QFormLayout();
     toolTypeCombo_ = new QComboBox(container);
@@ -954,6 +985,7 @@ void ToolConfigurationPanel::setProject(sound_mind::core::Project* project) {
     project_ = project;
     refreshMindShots();
     refreshMindGrains();
+    refreshToolPresets();
 }
 
 void ToolConfigurationPanel::refreshMindShots() {
@@ -1062,6 +1094,74 @@ void ToolConfigurationPanel::rebuildMindWaveCombos() {
     populateMindWaveCombo(opacityMindWaveCombo_, config_->opacityMindWave());
     populateMindWaveCombo(sizeMindWaveCombo_, config_->sizeMindWave());
     populateMindWaveCombo(colorMindWaveCombo_, config_->colorMindWave());
+}
+
+void ToolConfigurationPanel::refreshToolPresets() {
+    const QVariant previousData = toolPresetCombo_->currentData();
+
+    const QSignalBlocker blocker(toolPresetCombo_);
+    toolPresetCombo_->clear();
+    if (project_ == nullptr || project_->toolPresets().empty()) {
+        toolPresetCombo_->addItem(tr("(none saved yet)"));
+        return;
+    }
+    for (const auto& named : project_->toolPresets()) {
+        toolPresetCombo_->addItem(QString::fromStdString(named.name),
+                                    QVariant::fromValue(static_cast<qulonglong>(named.id)));
+    }
+    const int index = toolPresetCombo_->findData(previousData);
+    toolPresetCombo_->setCurrentIndex(index >= 0 ? index : 0);
+}
+
+void ToolConfigurationPanel::handleToolPresetComboChanged(int index) {
+    if (project_ == nullptr) {
+        return;
+    }
+    const QVariant data = toolPresetCombo_->itemData(index);
+    if (!data.isValid()) {
+        return;  // The "(none saved yet)" placeholder.
+    }
+    const auto id = static_cast<ToolPresetId>(data.toULongLong());
+    const auto* named = project_->toolPresetById(id);
+    if (named == nullptr || !named->config) {
+        return;
+    }
+    setToolConfiguration(*named->config);
+    emitConfigChanged();
+}
+
+void ToolConfigurationPanel::saveCurrentAsToolPreset() {
+    bool ok = false;
+    const QString name =
+        QInputDialog::getText(this, tr("Save Tool Preset"), tr("Name:"), QLineEdit::Normal,
+                                QString::fromStdString(config_->name()), &ok);
+    if (!ok) {
+        return;
+    }
+    saveCurrentAsToolPresetNamed(name);
+}
+
+std::optional<ToolPresetId> ToolConfigurationPanel::saveCurrentAsToolPresetNamed(const QString& name) {
+    if (project_ == nullptr || name.trimmed().isEmpty()) {
+        return std::nullopt;
+    }
+    const ToolPresetId id = project_->addToolPreset(name.trimmed().toStdString(), *config_);
+    refreshToolPresets();
+    const int index = toolPresetCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(id)));
+    toolPresetCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    return id;
+}
+
+void ToolConfigurationPanel::deleteCurrentToolPreset() {
+    if (project_ == nullptr) {
+        return;
+    }
+    const QVariant data = toolPresetCombo_->currentData();
+    if (!data.isValid()) {
+        return;  // The "(none saved yet)" placeholder.
+    }
+    project_->removeToolPreset(static_cast<ToolPresetId>(data.toULongLong()));
+    refreshToolPresets();
 }
 
 void ToolConfigurationPanel::setActiveLayer(sound_mind::core::LayerId layer) {

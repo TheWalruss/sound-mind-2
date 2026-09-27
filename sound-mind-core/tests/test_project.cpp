@@ -16,6 +16,7 @@
 
 using sound_mind::codec::PoolImage;
 using sound_mind::codec::StreamImage;
+using sound_mind::core::BrushTipShape;
 using sound_mind::core::Clip;
 using sound_mind::core::ConvolutionKernelId;
 using sound_mind::core::FilterType;
@@ -26,9 +27,11 @@ using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotId;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
+using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyRect;
+using sound_mind::core::ToolPresetId;
 
 TEST_CASE("A new Project has a Background layer at the bottom and an Equalizer layer at the top",
           "[core][project]") {
@@ -493,6 +496,122 @@ TEST_CASE("A Project saved before the convolution kernel library existed loads w
     const Project restored = json.get<Project>();
 
     REQUIRE(restored.convolutionKernels().empty());
+}
+
+TEST_CASE("A new Project has no saved Tool Presets", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.toolPresets().empty());
+}
+
+TEST_CASE("addToolPreset appends a named, cloned preset with a fresh, unique id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration config;
+    config.setTipShape(BrushTipShape::Star);
+
+    const ToolPresetId firstId = project.addToolPreset("My Brush", config);
+    const ToolPresetId secondId = project.addToolPreset("Another Brush", config);
+
+    REQUIRE(firstId != secondId);
+    REQUIRE(project.toolPresets().size() == 2);
+    REQUIRE(project.toolPresets()[0].id == firstId);
+    REQUIRE(project.toolPresets()[0].name == "My Brush");
+    REQUIRE(project.toolPresets()[0].config != nullptr);
+    // A clone, not the same instance passed in.
+    REQUIRE(project.toolPresets()[0].config.get() != static_cast<const void*>(&config));
+    REQUIRE(dynamic_cast<const ProceduralConfiguration&>(*project.toolPresets()[0].config).tipShape() ==
+            BrushTipShape::Star);
+}
+
+TEST_CASE("toolPresetById finds the entry with a matching id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration config;
+    config.setTipShape(BrushTipShape::Diamond);
+    const ToolPresetId id = project.addToolPreset("My Brush", config);
+
+    const auto* found = project.toolPresetById(id);
+
+    REQUIRE(found != nullptr);
+    REQUIRE(found->name == "My Brush");
+    REQUIRE(dynamic_cast<const ProceduralConfiguration&>(*found->config).tipShape() == BrushTipShape::Diamond);
+}
+
+TEST_CASE("toolPresetById returns nullptr for an unknown id", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.toolPresetById(ToolPresetId{999}) == nullptr);
+}
+
+TEST_CASE("toolPresetById's mutable overload allows in-place edits", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const ToolPresetId id = project.addToolPreset("My Brush", ProceduralConfiguration{});
+
+    auto* found = project.toolPresetById(id);
+    REQUIRE(found != nullptr);
+    found->name = "Renamed";
+
+    REQUIRE(project.toolPresetById(id)->name == "Renamed");
+}
+
+TEST_CASE("removeToolPreset removes the entry with the given id and returns true", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const ToolPresetId id = project.addToolPreset("My Brush", ProceduralConfiguration{});
+
+    const bool removed = project.removeToolPreset(id);
+
+    REQUIRE(removed);
+    REQUIRE(project.toolPresets().empty());
+}
+
+TEST_CASE("removeToolPreset returns false and changes nothing for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    project.addToolPreset("My Brush", ProceduralConfiguration{});
+
+    const bool removed = project.removeToolPreset(ToolPresetId{999999});
+
+    REQUIRE_FALSE(removed);
+    REQUIRE(project.toolPresets().size() == 1);
+}
+
+TEST_CASE("A Project's Tool Preset library round-trips through JSON", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration config;
+    config.setTipShape(BrushTipShape::Square);
+    const ToolPresetId id = original.addToolPreset("My Brush", config);
+
+    const nlohmann::json json = original;
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.toolPresets().size() == 1);
+    REQUIRE(restored.toolPresets()[0].id == id);
+    REQUIRE(restored.toolPresets()[0].name == "My Brush");
+    REQUIRE(dynamic_cast<const ProceduralConfiguration&>(*restored.toolPresets()[0].config).tipShape() ==
+            BrushTipShape::Square);
+}
+
+TEST_CASE("A Project saved before the Tool Preset library existed loads with an empty one", "[core][project]") {
+    // Lenient deserialization, matching MindWaves'/Mind Shots' own
+    // precedent - a project file saved before v0.Y.55.1's own second
+    // prerequisite has no "toolPresets" key at all.
+    Project original = Project::createNew(ProjectSettings{});
+    nlohmann::json json = original;
+    json.erase("toolPresets");
+
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.toolPresets().empty());
+}
+
+TEST_CASE("Copying a Project deep-clones its own Tool Preset library, independent of the original",
+          "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration config;
+    config.setTipShape(BrushTipShape::Star);
+    original.addToolPreset("My Brush", config);
+
+    const Project copy = original;
+    dynamic_cast<ProceduralConfiguration&>(*original.toolPresets()[0].config).setTipShape(BrushTipShape::Circle);
+
+    REQUIRE(dynamic_cast<const ProceduralConfiguration&>(*copy.toolPresets()[0].config).tipShape() ==
+            BrushTipShape::Star);
 }
 
 TEST_CASE("A new Project has no Mind Grains", "[core][project]") {

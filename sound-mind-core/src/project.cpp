@@ -71,7 +71,8 @@ Project::Project(const Project& other)
       mindWaves_(other.mindWaves_),
       mindShots_(other.mindShots_),
       mindGrains_(other.mindGrains_),
-      convolutionKernels_(other.convolutionKernels_) {
+      convolutionKernels_(other.convolutionKernels_),
+      toolPresets_(other.toolPresets_) {
     // operationLog_ deliberately left default-constructed (empty) - see
     // this constructor's own docs.
 }
@@ -84,6 +85,7 @@ Project& Project::operator=(const Project& other) {
         mindShots_ = other.mindShots_;
         mindGrains_ = other.mindGrains_;
         convolutionKernels_ = other.convolutionKernels_;
+        toolPresets_ = other.toolPresets_;
         operationLog_ = OperationLog{};
     }
     return *this;
@@ -341,6 +343,46 @@ NamedConvolutionKernel* Project::convolutionKernelById(ConvolutionKernelId id) n
     return nullptr;
 }
 
+ToolPresetId Project::addToolPreset(std::string name, const ToolConfiguration& config) {
+    const auto maxId = std::max_element(toolPresets_.begin(), toolPresets_.end(),
+                                          [](const NamedToolPreset& a, const NamedToolPreset& b) { return a.id < b.id; });
+    const ToolPresetId newId = (maxId == toolPresets_.end() ? ToolPresetId{0} : maxId->id) + 1;
+    NamedToolPreset preset;
+    preset.id = newId;
+    preset.name = std::move(name);
+    preset.config = config.clone();
+    toolPresets_.push_back(std::move(preset));
+    return newId;
+}
+
+bool Project::removeToolPreset(ToolPresetId id) {
+    const auto it =
+        std::find_if(toolPresets_.begin(), toolPresets_.end(), [id](const NamedToolPreset& named) { return named.id == id; });
+    if (it == toolPresets_.end()) {
+        return false;
+    }
+    toolPresets_.erase(it);
+    return true;
+}
+
+const NamedToolPreset* Project::toolPresetById(ToolPresetId id) const noexcept {
+    for (const NamedToolPreset& named : toolPresets_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
+NamedToolPreset* Project::toolPresetById(ToolPresetId id) noexcept {
+    for (NamedToolPreset& named : toolPresets_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
 bool Project::removeLayer(LayerId id) {
     const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const Layer& layer) { return layer.id() == id; });
     if (it == layers_.end()) {
@@ -388,6 +430,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"mindShots", project.mindShots_},
         {"mindGrains", project.mindGrains_},
         {"convolutionKernels", project.convolutionKernels_},
+        {"toolPresets", project.toolPresets_},
     };
 }
 
@@ -434,6 +477,16 @@ void from_json(const nlohmann::json& json, Project& project) {
     if (json.contains("convolutionKernels")) {
         for (const auto& namedJson : json.at("convolutionKernels")) {
             project.convolutionKernels_.push_back(namedJson.get<NamedConvolutionKernel>());
+        }
+    }
+
+    // Lenient, same reasoning - didn't exist before v0.Y.55.1's own second
+    // prerequisite; a project saved before it had no saved Tool Presets to
+    // lose.
+    project.toolPresets_.clear();
+    if (json.contains("toolPresets")) {
+        for (const auto& namedJson : json.at("toolPresets")) {
+            project.toolPresets_.push_back(namedJson.get<NamedToolPreset>());
         }
     }
 }

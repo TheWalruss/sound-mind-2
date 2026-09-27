@@ -745,6 +745,15 @@ The **Tool Configuration** toolbar button opens a dockable panel (off by
 default, alongside Layers/Playback/Record/Loop) with the brush's own
 settings:
 
+- **Tool Preset** - a drop-down at the top of the panel listing every
+  preset saved in the current project, empty ("(none saved yet)") until
+  you save your first one. Picking one loads every setting below - Tool
+  Type and everything under it - at once. **Save...** prompts for a name
+  and stores the panel's *current* settings as a new preset; **Delete**
+  removes whichever preset is currently selected (no confirmation - like
+  removing a saved MindWave, this never affects anything already painted
+  with it). There's no Wizard yet (see "What's Not Here Yet" below) - this
+  is a plain save/load of the panel as it stands.
 - **Tool Type** - **Procedural** (the default), **Instrument**, **Mind
   Shot**, **Mind Grain**, **Heal**, **Soften**, **Smudge**, or
   **Order/Chaos**; picks which set of controls below applies (Tip Shape for
@@ -1587,9 +1596,9 @@ what's designed for it:
   carried across the whole stroke the way a classic paint program's own
   Smudge tool works), and **Order/Chaos** (concrete permutation/reordering
   mechanics rather than a formal entropy metric) exist - **Clone** and the
-  Tool Configuration Wizard/Tool Preset library (see the next point) are
-  **permanently deferred, until further notice**, not merely not yet
-  scheduled. Instrument strokes
+  Tool Configuration Wizard (see the next point) are **permanently
+  deferred, until further notice**, not merely not yet scheduled.
+  Instrument strokes
   also don't yet bind to a MindWave, and Loop Mode doesn't yet retrigger
   per note. There's also no UI yet to reposition an
   already-captured Mind Grain's own referenced region, and a Mind Grain
@@ -1597,10 +1606,11 @@ what's designed for it:
   full composite (every layer up through it, blended together) as it
   actually appears at that point in the stack; see
   `docs/sound-mind-design.md`'s own Deferred Decisions for that one.
-- No **Tool Configuration Wizard** or **Tool Preset** drop-down - the
-  Panel described above is the only way to set brush parameters today,
-  and there's no way yet to save/reuse/export a particular brush setup.
-  Permanently deferred, until further notice, along with Clone above.
+- No **Tool Configuration Wizard** - a guided, question-based way to build
+  up a brush setup step by step. The Panel's own Tool Preset drop-down
+  (save/load/delete a named brush setup, described above) exists today;
+  only the guided Wizard itself is permanently deferred, until further
+  notice, along with Clone above.
 - Pick can't **copy** a picked object yet - only move, modify a stroke's
   own brush settings, delete it, restack it within its own layer, or (for
   a brush stroke) edit its own path.

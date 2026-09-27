@@ -1,14 +1,17 @@
 #include "test_tool_configuration_panel.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QtTest/QtTest>
@@ -45,6 +48,7 @@ using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
 using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ToolConfiguration;
+using sound_mind::core::ToolPresetId;
 using sound_mind::core::ToolType;
 using sound_mind::studio::GradientEditorWidget;
 using sound_mind::studio::ToolConfigurationPanel;
@@ -1250,4 +1254,138 @@ void ToolConfigurationPanelTest::loadingAMindShotConfigurationSyncsTheBlendModeC
 
     auto* blendModeCombo = panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"));
     QCOMPARE(blendModeCombo->currentText(), QStringLiteral("Screen"));
+}
+
+// --- Named Tool Configuration preset library (v0.Y.55.1 Prerequisite 2) ----
+
+void ToolConfigurationPanelTest::freshPanelsToolPresetComboIsEmptyWhenNoProjectIsSet() {
+    const ToolConfigurationPanel panel;
+    auto* toolPresetCombo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
+    QVERIFY(toolPresetCombo != nullptr);
+    // Same as mindShotCombo_/mindGrainCombo_: never populated until setProject()
+    // is called - see refreshToolPresets()'s own docs.
+    QCOMPARE(toolPresetCombo->count(), 0);
+}
+
+void ToolConfigurationPanelTest::setProjectPopulatesTheToolPresetCombo() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration config;
+    project.addToolPreset("Soft Circle", config);
+    project.addToolPreset("Hard Diamond", config);
+
+    panel.setProject(&project);
+
+    auto* toolPresetCombo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
+    QCOMPARE(toolPresetCombo->count(), 2);
+    QCOMPARE(toolPresetCombo->itemText(0), QStringLiteral("Soft Circle"));
+    QCOMPARE(toolPresetCombo->itemText(1), QStringLiteral("Hard Diamond"));
+}
+
+void ToolConfigurationPanelTest::saveCurrentAsToolPresetNamedAddsANamedEntryAndSelectsIt() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    panel.setProject(&project);
+    auto* tipShapeCombo = panel.findChild<QComboBox*>(QStringLiteral("tipShapeCombo"));
+    tipShapeCombo->setCurrentIndex(tipShapeCombo->findText(QStringLiteral("Diamond")));
+
+    const auto id = panel.saveCurrentAsToolPresetNamed(QStringLiteral("My Diamond"));
+
+    QVERIFY(id.has_value());
+    QCOMPARE(project.toolPresets().size(), static_cast<std::size_t>(1));
+    const auto* named = project.toolPresetById(*id);
+    QVERIFY(named != nullptr);
+    QCOMPARE(named->name, std::string("My Diamond"));
+    QCOMPARE(dynamic_cast<const ProceduralConfiguration&>(*named->config).tipShape(), BrushTipShape::Diamond);
+
+    auto* toolPresetCombo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
+    QCOMPARE(toolPresetCombo->currentText(), QStringLiteral("My Diamond"));
+}
+
+void ToolConfigurationPanelTest::saveCurrentAsToolPresetNamedReturnsNulloptWithNoProject() {
+    ToolConfigurationPanel panel;  // No setProject() call.
+
+    const auto id = panel.saveCurrentAsToolPresetNamed(QStringLiteral("Orphan"));
+
+    QVERIFY(!id.has_value());
+}
+
+void ToolConfigurationPanelTest::saveCurrentAsToolPresetNamedReturnsNulloptForAnEmptyOrWhitespaceOnlyName() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    panel.setProject(&project);
+
+    QVERIFY(!panel.saveCurrentAsToolPresetNamed(QStringLiteral("")).has_value());
+    QVERIFY(!panel.saveCurrentAsToolPresetNamed(QStringLiteral("   ")).has_value());
+    QCOMPARE(project.toolPresets().size(), static_cast<std::size_t>(0));
+}
+
+void ToolConfigurationPanelTest::selectingAToolPresetLoadsItsConfigurationAndEmits() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration circleConfig;
+    project.addToolPreset("Soft Circle", circleConfig);
+    ProceduralConfiguration diamondConfig;
+    diamondConfig.setTipShape(BrushTipShape::Diamond);
+    project.addToolPreset("My Diamond", diamondConfig);
+    panel.setProject(&project);
+    auto* toolPresetCombo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    toolPresetCombo->setCurrentIndex(toolPresetCombo->findText(QStringLiteral("My Diamond")));
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(dynamic_cast<const ProceduralConfiguration&>(panel.toolConfiguration()).tipShape(),
+              BrushTipShape::Diamond);
+}
+
+void ToolConfigurationPanelTest::deleteCurrentToolPresetRemovesTheSelectedEntryAndRefreshes() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration config;
+    const auto id = project.addToolPreset("Soft Circle", config);
+    panel.setProject(&project);
+    auto* toolPresetCombo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
+    toolPresetCombo->setCurrentIndex(toolPresetCombo->findText(QStringLiteral("Soft Circle")));
+    auto* deletePresetButton = panel.findChild<QPushButton*>(QStringLiteral("deletePresetButton"));
+    QVERIFY(deletePresetButton != nullptr);
+
+    deletePresetButton->click();
+
+    QVERIFY(project.toolPresetById(id) == nullptr);
+    QCOMPARE(toolPresetCombo->count(), 1);
+    QCOMPARE(toolPresetCombo->itemData(0).isValid(), false);
+}
+
+void ToolConfigurationPanelTest::refreshToolPresetsPreservesTheCurrentSelection() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration config;
+    project.addToolPreset("Soft Circle", config);
+    panel.setProject(&project);
+    auto* toolPresetCombo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
+    QCOMPARE(toolPresetCombo->currentText(), QStringLiteral("Soft Circle"));
+
+    project.addToolPreset("Hard Diamond", config);
+    panel.refreshToolPresets();
+
+    QCOMPARE(toolPresetCombo->count(), 2);
+    QCOMPARE(toolPresetCombo->currentText(), QStringLiteral("Soft Circle"));
+}
+
+void ToolConfigurationPanelTest::switchingProjectsRefreshesTheToolPresetCombo() {
+    ToolConfigurationPanel panel;
+    Project firstProject = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration config;
+    firstProject.addToolPreset("From First Project", config);
+    panel.setProject(&firstProject);
+    auto* toolPresetCombo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
+    QCOMPARE(toolPresetCombo->currentText(), QStringLiteral("From First Project"));
+
+    Project secondProject = Project::createNew(ProjectSettings{});
+    secondProject.addToolPreset("From Second Project", config);
+    panel.setProject(&secondProject);
+
+    QCOMPARE(toolPresetCombo->count(), 1);
+    QCOMPARE(toolPresetCombo->currentText(), QStringLiteral("From Second Project"));
 }

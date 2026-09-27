@@ -14,6 +14,7 @@
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/core/tool_preset.h"
 
 namespace sound_mind::core {
 
@@ -556,6 +557,70 @@ public:
     ///         with this id exists in this project's library.
     [[nodiscard]] NamedConvolutionKernel* convolutionKernelById(ConvolutionKernelId id) noexcept;
 
+    /**
+     * @brief This project's Tool Preset library - `v0.Y.55.1`'s own second
+     *        prerequisite, per `docs/sound-mind-design.md`'s "Tool
+     *        Configuration": "a Tool Preset drop-down listing every tool
+     *        configuration saved in the current project" (see
+     *        `NamedToolPreset`'s own docs), the same "peer resource
+     *        library" shape `mindWaves()`/`mindShots()`/`mindGrains()`/
+     *        `convolutionKernels()` already establish.
+     * @return This project's current Tool Preset library.
+     */
+    [[nodiscard]] const std::vector<NamedToolPreset>& toolPresets() const noexcept { return toolPresets_; }
+
+    /// @brief This project's Tool Preset library - mutable access, for
+    ///        in-place edits (renaming) that don't change the library's
+    ///        own membership (addToolPreset() is still how a new entry
+    ///        gets appended).
+    /// @return This project's current Tool Preset library.
+    [[nodiscard]] std::vector<NamedToolPreset>& toolPresets() noexcept { return toolPresets_; }
+
+    /**
+     * @brief Adds a new, named Tool Preset to this project's library -
+     *        `config` is cloned in (see `NamedToolPreset`'s own docs), not
+     *        referenced, so the caller's own original stays independently
+     *        owned/mutable afterward.
+     * @param name Display name - see `NamedToolPreset::name`'s own docs on
+     *        uniqueness being this project's own responsibility, not
+     *        enforced here.
+     * @param config The configuration to save; must not be `nullptr`.
+     * @return The id assigned to the new entry - see `addLayer()`'s own
+     *         docs for the identical "fresh, project-unique id" pattern.
+     */
+    ToolPresetId addToolPreset(std::string name, const ToolConfiguration& config);
+
+    /**
+     * @brief Removes the Tool Preset with the given id, if one exists.
+     *
+     * Does **not** affect any `PaintOperation`/`ToolConfigurationPanel`
+     * that already loaded this preset's own configuration - see
+     * `removeMindShot()`'s own docs for the identical "a loaded copy is
+     * independent, not a live reference" reasoning.
+     *
+     * @param id The Tool Preset to remove.
+     * @return `true` if a Tool Preset with this id was found and removed;
+     *         `false` (no change) if none was.
+     */
+    bool removeToolPreset(ToolPresetId id);
+
+    /**
+     * @brief Finds the Tool Preset library entry with the given id, if one
+     *        exists - the same "small, project-level lookup" `layerById()`/
+     *        `mindWaveById()` already provide.
+     * @param id The entry to find.
+     * @return A pointer to that entry, or `nullptr` if no Tool Preset with
+     *         this id exists in this project's library.
+     */
+    [[nodiscard]] const NamedToolPreset* toolPresetById(ToolPresetId id) const noexcept;
+
+    /// @brief Mutable overload of toolPresetById() - for in-place edits
+    ///        (renaming).
+    /// @param id The entry to find.
+    /// @return A mutable pointer to that entry, or `nullptr` if no Tool
+    ///         Preset with this id exists in this project's library.
+    [[nodiscard]] NamedToolPreset* toolPresetById(ToolPresetId id) noexcept;
+
     friend void to_json(nlohmann::json& json, const Project& project);
     friend void from_json(const nlohmann::json& json, Project& project);
 
@@ -567,6 +632,7 @@ private:
     std::vector<NamedMindShot> mindShots_;
     std::vector<NamedMindGrain> mindGrains_;
     std::vector<NamedConvolutionKernel> convolutionKernels_;
+    std::vector<NamedToolPreset> toolPresets_;
 };
 
 /// @brief Serializes a Project to its JSON representation.

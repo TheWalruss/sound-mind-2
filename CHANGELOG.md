@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.10] - 2026-09-27
+
+MIDI track import prerequisite: **named Tool Configuration presets.**
+
+### Added
+
+- **A new "Tool Preset" drop-down at the top of the Tool Configuration panel**, with "Save..." and "Delete" buttons alongside it. "Save..." asks for a name and stores the panel's current settings (tool type, brush shape, falloff/size, gradient, stamp mode, MindWave bindings - everything the panel currently shows) as a new entry in the project's own Tool Preset library. Selecting a saved preset from the drop-down loads every one of its settings back into the panel at once. "Delete" removes the currently-selected preset from the library (no confirmation prompt, matching how removing a saved MindWave or convolution kernel already works elsewhere).
+
+### Notes
+
+New `NamedToolPreset`/`Project::toolPresets()` (add/remove/find by id), the same "peer resource library" shape `NamedMindShot`/`NamedMindWave`/`NamedMindGrain` already establish. This is the second and final prerequisite for the upcoming MIDI track import milestone (each MIDI program will map to a saved Tool Preset) - not yet MIDI import itself. The Wizard button `docs/sound-mind-design.md` also describes for this panel still doesn't exist. Full regression: `sound-mind-core` 974/974 (15 new), `sound-mind-studio` full suite genuinely passing (8 new). Builds cleanly on both Arm64 and x64 (Core); Studio verified on Arm64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #174.
+
 ## [0.1.3.9] - 2026-09-27
 
 MIDI track import prerequisite: **Mind Shot/Mind Grain pitch-shifting.**

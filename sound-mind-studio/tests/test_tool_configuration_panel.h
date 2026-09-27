@@ -107,4 +107,15 @@ private slots:
     void mindGrainShowsTheBlendModeComboDefaultedToOverwrite();
     void changingTheBlendModeComboEmitsToolConfigurationChangedWithTheNewMode();
     void loadingAMindShotConfigurationSyncsTheBlendModeCombo();
+
+    // Named Tool Configuration preset library (v0.Y.55.1 Prerequisite 2).
+    void freshPanelsToolPresetComboIsEmptyWhenNoProjectIsSet();
+    void setProjectPopulatesTheToolPresetCombo();
+    void saveCurrentAsToolPresetNamedAddsANamedEntryAndSelectsIt();
+    void saveCurrentAsToolPresetNamedReturnsNulloptWithNoProject();
+    void saveCurrentAsToolPresetNamedReturnsNulloptForAnEmptyOrWhitespaceOnlyName();
+    void selectingAToolPresetLoadsItsConfigurationAndEmits();
+    void deleteCurrentToolPresetRemovesTheSelectedEntryAndRefreshes();
+    void refreshToolPresetsPreservesTheCurrentSelection();
+    void switchingProjectsRefreshesTheToolPresetCombo();
 };
