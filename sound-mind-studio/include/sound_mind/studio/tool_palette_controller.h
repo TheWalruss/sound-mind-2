@@ -409,6 +409,28 @@ public:
     ///        user clicked on the canvas's own time axis.
     void stampChord(sound_mind::core::LayerId layer, double timeSeconds);
 
+    /**
+     * @brief Bakes `layer`'s own currently-active operations into real
+     *        pixel content - forwards to
+     *        `PaintController::rebuildLayerContent()`.
+     *
+     * The one narrow point of access this class exposes onto its own
+     * private `paintController_`, for a caller that appended new
+     * `Operation`s to a layer through some route other than an interactive
+     * paint/pick/stamp gesture (`MainWindow::importMidiFile()`, in
+     * particular - see `sound_mind::studio::importMidiChannelsInto()`'s
+     * own docs on why it can't call this itself) and needs the resulting
+     * content to actually render rather than sitting unrendered in the
+     * operation log. Emits contentChanged() the same as every other
+     * content-mutating method here, via `PaintController::contentChanged()`
+     * already being forwarded through (see this class's own docs).
+     *
+     * @param layer The layer to rebuild - a no-op if it doesn't exist, or
+     *        no project is set (see `PaintController::rebuildLayerContent()`'s
+     *        own docs).
+     */
+    void rebuildLayerContent(sound_mind::core::LayerId layer);
+
 signals:
     /// @brief Emitted whenever any of the four tool controllers changes a
     ///        layer's own rendered content, as a result of painting,

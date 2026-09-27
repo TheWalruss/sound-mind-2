@@ -326,6 +326,23 @@ public slots:
     void importImage();
 
     /**
+     * @brief Prompts for a Standard MIDI File and imports every channel
+     *        that has notes as its own new, editable layer - see
+     *        `docs/sound-mind-design.md`'s "Import" and
+     *        `docs/sound-mind-roadmap.md`'s MIDI track import milestone
+     *        (`v0.Y.55.1`).
+     *
+     * **Installment A scope** - always imports every channel, into
+     * separate layers, with no picker dialog at all beyond the file
+     * chooser itself: see `sound_mind::studio::importMidiChannelsInto()`'s
+     * own docs for the two real simplifications this carries (a plain
+     * default Tool Configuration for every channel; no snippet chopping).
+     * Both are real, separate, still-unbuilt installments of this same
+     * milestone, not permanent limitations.
+     */
+    void importMidi();
+
+    /**
      * @brief Starts (or resumes) playback of the project's own real
      *        composite.
      *
@@ -2015,6 +2032,36 @@ public:
                            std::optional<PolarImportParams> polarParams = std::nullopt);
 
     /**
+     * @brief Imports a Standard MIDI File's every note-bearing channel as
+     *        new, editable layer(s), without prompting or showing an error
+     *        dialog on failure - the testable core behind `importMidi()`'s
+     *        file dialog, same split as `importAudioFile()`/
+     *        `importImageFile()`.
+     *
+     * A thin wrapper around `sound_mind::studio::importMidiChannelsInto()`
+     * (see its own docs for the actual parsing/`SequenceOperation`
+     * construction) that then bakes each new layer's own content in via
+     * `toolPaletteController_->rebuildLayerContent()` - unlike audio/image
+     * import, which set a layer's `content()` directly, a MIDI import's
+     * new layers start content-less until this rebuild happens, since
+     * their content comes from the operation log, not a direct assignment.
+     * See importAudioFile()'s docs for why this never shows a message box
+     * itself.
+     *
+     * Marks hasUnsavedChanges() on success, same as importAudioFile().
+     *
+     * @param path Path to the `.mid`/`.midi` file to import.
+     * @param separateLayerPerChannel See `importMidiChannelsInto()`'s own
+     *        docs.
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @return `true` on success; `false` if no project is open, or the
+     *         file couldn't be parsed/had no notes on any channel.
+     */
+    bool importMidiFile(const std::filesystem::path& path, bool separateLayerPerChannel = true,
+                         QString* errorMessage = nullptr);
+
+    /**
      * @brief Routes a list of dropped local file paths to the matching
      *        import/open method by extension - the actual work behind
      *        dropEvent(), split out so it's callable directly by a test
@@ -2030,7 +2077,11 @@ public:
      * "every computed snippet, no picker" behavior importAudioFile()
      * always had; every image extension
      * `importImageFiles()` accepts is collected and imported as one batch
-     * with `imageMode`/`importAsSequence`. dropEvent() is the one that
+     * with `imageMode`/`importAsSequence`; `.mid`/`.midi` goes straight to
+     * importMidiFile() with its own "every channel, separate layers, no
+     * picker" default - there's no per-file MIDI option to collect here
+     * yet, matching Installment A's own scope (see importMidi()'s docs).
+     * dropEvent() is the one that
      * actually decides all of this (via real `AudioSnippetPickerDialog`/
      * `ImageScalePickerDialog` prompts, the same ones File → Import Audio/
      * Image themselves show - confirmed with the user: a drop should offer

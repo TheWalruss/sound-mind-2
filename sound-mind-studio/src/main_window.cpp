@@ -65,6 +65,7 @@
 #include "sound_mind/studio/history_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/import_export.h"
+#include "sound_mind/studio/midi_import.h"
 #include "sound_mind/studio/import_helpers.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
@@ -87,6 +88,7 @@ namespace {
 const char* kProjectFileFilter = "Sound Mind Projects (*.smproj)";
 const char* kAudioFileFilter = "Audio (*.wav *.mp3 *.flac *.ogg *.aiff *.aif *.m4a *.opus)";
 const char* kImageFileFilter = "Images (*.png *.jpg *.jpeg *.bmp *.tga *.webp)";
+const char* kMidiFileFilter = "MIDI Files (*.mid *.midi)";
 const char* kExportAudioFileFilter = "FLAC Audio (*.flac);;Ogg Vorbis Audio (*.ogg);;MP3 Audio (*.mp3)";
 const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
 
@@ -662,6 +664,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
 
     QAction* importImageAction = fileMenu->addAction(tr("Import &Image..."));
     connect(importImageAction, &QAction::triggered, this, &MainWindow::importImage);
+
+    QAction* importMidiAction = fileMenu->addAction(tr("Import &MIDI..."));
+    connect(importMidiAction, &QAction::triggered, this, &MainWindow::importMidi);
 
     fileMenu->addSeparator();
 
@@ -1311,6 +1316,12 @@ void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& pa
             }
         } else if (isImageExtension(extension)) {
             continue;  // already handled above, as a batch.
+        } else if (extension == ".mid" || extension == ".midi") {
+            if (!importMidiFile(path, /*separateLayerPerChannel=*/true, &errorMessage)) {
+                statusBar()->showMessage(
+                    tr("Could not import \"%1\": %2").arg(QString::fromStdString(path.filename().string()), errorMessage),
+                    5000);
+            }
         } else if (extension == ".smproj") {
             // Same guard as openProject() - see its docs - before reaching
             // openProjectAt(), which enforces the Loop Mode/Recording
@@ -1725,6 +1736,49 @@ void MainWindow::importImage() {
                            dialog.polarParams())) {
         QMessageBox::critical(this, tr("Import Image Failed"), errorMessage);
     }
+}
+
+void MainWindow::importMidi() {
+    const QString fileName = QFileDialog::getOpenFileName(this, tr("Import MIDI"), QString(), tr(kMidiFileFilter));
+    if (fileName.isEmpty()) {
+        return;
+    }
+    const std::filesystem::path path(fileName.toStdString());
+
+    QString errorMessage;
+    if (!importMidiFile(path, /*separateLayerPerChannel=*/true, &errorMessage)) {
+        QMessageBox::critical(this, tr("Import MIDI Failed"),
+                               errorMessage.isEmpty() ? tr("Could not read the MIDI file.") : errorMessage);
+    }
+}
+
+bool MainWindow::importMidiFile(const std::filesystem::path& path, bool separateLayerPerChannel,
+                                 QString* errorMessage) {
+    if (!project_) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No project is open.");
+        }
+        return false;
+    }
+
+    showBusyStatus(statusBar(), tr("Importing MIDI..."));
+    const auto newLayerIds =
+        sound_mind::studio::importMidiChannelsInto(*project_, path, separateLayerPerChannel, errorMessage);
+    if (newLayerIds.empty()) {
+        statusBar()->clearMessage();
+        return false;
+    }
+
+    for (const auto layerId : newLayerIds) {
+        toolPaletteController_->rebuildLayerContent(layerId);
+    }
+
+    canvas_->update();
+    playbackController_->invalidate();
+    hasUnsavedChanges_ = true;
+    layerController_->refreshLayersPanel();
+    statusBar()->showMessage(tr("Imported \"%1\".").arg(QString::fromStdString(path.filename().string())), 5000);
+    return true;
 }
 
 bool MainWindow::importAudioFile(const std::filesystem::path& path, QString* errorMessage) {

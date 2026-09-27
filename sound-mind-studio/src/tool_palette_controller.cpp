@@ -175,6 +175,10 @@ void ToolPaletteController::stampChord(sound_mind::core::LayerId layer, double t
     chordGeneratorController_->stampAt(layer, timeSeconds);
 }
 
+void ToolPaletteController::rebuildLayerContent(sound_mind::core::LayerId layer) {
+    paintController_->rebuildLayerContent(layer);
+}
+
 void ToolPaletteController::setGridSnapping(bool enabled, const FrequencyGridConfig& frequencyGridConfig,
                                              const TimingGridConfig& timingGridConfig) {
     pickController_->setGridSnapping(enabled, frequencyGridConfig, timingGridConfig);

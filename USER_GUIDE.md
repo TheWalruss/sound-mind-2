@@ -283,6 +283,25 @@ order regardless of the order you selected them in, which makes a set of
 files like `frame001.png`, `frame002.png`, ... land in the right order
 automatically.
 
+### Importing MIDI
+
+**File → Import MIDI...** prompts for a Standard MIDI File (`.mid`/`.midi`)
+and imports every channel that has notes as its own new layer, named
+`<filename> - Ch<N> (<instrument name>)`. Unlike audio or image import, a
+MIDI-imported layer stays fully editable afterward - every note is Pickable
+and modifiable, since it's stored as a real, non-destructive paint
+operation rather than a fixed picture.
+
+This is an early pass, not the full feature described in the design
+docs - see [What's Not Here Yet](#whats-not-here-yet):
+
+- Every note currently paints through a plain default brush (a circular
+  Procedural tip) - there's no way yet to map a MIDI channel/program to a
+  specific saved Tool Preset.
+- There's no picker yet for which portion of a long MIDI file to import,
+  or which channels to include - every channel, and every note in the
+  file, always imports in one pass.
+
 ### Drag and Drop
 
 Dragging files onto the main window imports/opens them, by extension, with
@@ -290,7 +309,8 @@ the same choices the File menu offers: dropped images show the same
 scaling/sequencing picker **File → Import Image...** does; a dropped audio
 file (WAV, MP3, FLAC, Ogg, AIFF, M4A, or Opus) with more than one computed
 snippet shows the same snippet picker **File → Import Audio...** does, one
-picker per such file; `.smproj` opens
+picker per such file; a dropped MIDI file (`.mid`/`.midi`) imports the same
+way **File → Import MIDI...** does, with no picker at all; `.smproj` opens
 that project (after confirming if your current project has unsaved
 changes). Anything else is ignored. **Cancelling any one of these pickers
 cancels the whole drop** - nothing in it is imported or opened, even files

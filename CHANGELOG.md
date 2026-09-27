@@ -6,6 +6,36 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.11] - 2026-09-27
+
+MIDI track import, Installment A: **basic MIDI file import.**
+
+### Added
+
+- **A new File → Import MIDI... action** imports a Standard MIDI File
+  (`.mid`/`.midi`), creating one new layer per channel that has notes
+  (named `<filename> - Ch<N> (<instrument name>)`). Unlike audio or image
+  import, a MIDI-imported layer stays fully editable afterward - every
+  note is Pickable and modifiable, since it's a real, non-destructive
+  paint operation, not a fixed picture.
+- Dropping a `.mid`/`.midi` file onto the main window imports it the same
+  way.
+
+### Notes
+
+Early pass, not the full feature: every note currently paints through a
+plain default Procedural brush (no per-channel/program Tool Preset
+mapping yet), and there's no picker for which portion of a long file or
+which channels to import - everything always imports in one pass. Both
+are separate, still-unbuilt installments of this same milestone. New
+`sound_mind::core::parseMidiFile()` (Core, via `juce::MidiFile`) and
+`sound_mind::studio::importMidiChannelsInto()` (Studio orchestration,
+building `SequenceOperation`s the same way the Chord Generator already
+does). Full regression: `sound-mind-core` 979/979 (5 new), `sound-mind-studio`
+full suite genuinely passing (4 new). Builds cleanly on both Arm64 and x64
+(Core); Studio verified on Arm64. Doxygen: 0 warnings. See
+`docs/sound-mind-architecture.md`'s Decision #175.
+
 ## [0.1.3.10] - 2026-09-27
 
 MIDI track import prerequisite: **named Tool Configuration presets.**
