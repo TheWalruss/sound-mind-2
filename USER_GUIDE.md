@@ -902,6 +902,20 @@ settings:
   canvas zoom yet, so seconds/Hz are the only units that make sense). For
   Heal/Soften/Smudge/Order-Chaos, Interval is likewise hidden - it's always
   66% of Brush Size, so it stays proportional as Brush Size changes.
+- **Stamp Pattern** (Along Curve only) - an optional text field, shown right
+  below Interval only while Stamp Mode is Along Curve, for cycling through a
+  non-uniform sequence of spacings instead of one fixed Interval. Enter
+  whitespace-separated steps, each a number followed by `ms` (milliseconds)
+  or `b` (beats, at this project's own tempo) - for example, `100ms 200ms`
+  alternates a short gap and a long one along the stroke, repeating for as
+  long as the stroke lasts. Leave it blank to use the fixed Interval above,
+  unchanged. An invalid entry (a step missing its `ms`/`b` suffix, or any
+  other malformed text) shows a red error message underneath and simply
+  falls back to the fixed Interval until fixed - it's never rejected
+  outright, so an in-progress edit is never lost. Not available for Time
+  Axis/Frequency Axis - a repeating pattern has no consistent meaning
+  measured against a fixed time/frequency grid the way it does along a
+  stroke's own length.
 - **Gradient** - the same draggable gradient bar/stop editor Filter
   Configuration's Frequency-Axis Gradient uses (see [Filter
   Layers](#filter-layers) above), here editing the stroke's own

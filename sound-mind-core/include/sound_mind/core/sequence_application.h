@@ -57,11 +57,17 @@ namespace sound_mind::core {
  *        note - see its own docs (`v0.Y.47.1`, Principal Modes). Defaults
  *        to `Sound`, the only behavior that existed before this
  *        parameter.
+ * @param bpm Passed through to `applyPaintOperation()` for each note - see
+ *        its own docs (`v0.Y.54.1`, Paint Tool Enhancements' non-uniform
+ *        stamp timing). Defaults to `120.0`, matching
+ *        `ProjectSettings::defaultTempoBpm`'s own default - only actually
+ *        consulted for a note whose `operation.config()` uses
+ *        `StampMode::AlongCurve` with a beats-based pattern set.
  */
 void applySequenceOperation(const SequenceOperation& operation, double frequencyToTimeScale,
                              sound_mind::codec::StreamImage& content,
                              const LayerContentResolver& resolveLayerContent = {},
                              const MindWaveResolver& resolveMindWave = {},
-                             PrincipalMode principalMode = PrincipalMode::Sound);
+                             PrincipalMode principalMode = PrincipalMode::Sound, double bpm = 120.0);
 
 }  // namespace sound_mind::core

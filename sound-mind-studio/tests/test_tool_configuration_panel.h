@@ -19,6 +19,12 @@ private slots:
     void changingTheStampIntervalEmitsToolConfigurationChanged();
     void loadingAConfigurationSyncsTheStampModeAndIntervalControls();
 
+    // Paint Tool Enhancements - non-uniform stamp timing (v0.Y.54.1 Installment A).
+    void stampPatternFieldIsHiddenUnlessStampModeIsAlongCurve();
+    void enteringAValidStampPatternEmitsToolConfigurationChangedAndClearsTheErrorLabel();
+    void enteringAnInvalidStampPatternShowsAnErrorButStillStoresTheRawText();
+    void loadingAConfigurationSyncsTheStampPatternFieldAndClearsAnyStaleError();
+
     // Sound Mind Instruments (v0.Y.32.1).
     void freshPanelDefaultsToProceduralWithTheProceduralGroupVisible();
     void switchingToolTypeToInstrumentShowsItsOwnGroupAndHidesProcedural();

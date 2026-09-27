@@ -20,6 +20,13 @@ void writeCommonToolConfigurationFields(nlohmann::json& json, const ToolConfigur
     json["size"] = config.size();
     json["stampMode"] = config.stampMode();
     json["stampInterval"] = config.stampInterval();
+    // Only written if non-empty - matches writeOptionalMindWaveId()'s own
+    // "only if present" convention; absent entirely (rather than an
+    // explicit empty string) for the overwhelming majority of
+    // configurations that never set one.
+    if (!config.stampIntervalPatternText().empty()) {
+        json["stampIntervalPattern"] = config.stampIntervalPatternText();
+    }
     json["defaultGradient"] = config.defaultGradient();
 }
 
@@ -54,6 +61,10 @@ void readCommonToolConfigurationFields(const nlohmann::json& json, ToolConfigura
     // render identically after loading.
     config.setStampMode(json.value("stampMode", StampMode::Stroke));
     config.setStampInterval(json.value("stampInterval", 0.1));
+    // Absent in a project saved before Paint Tool Enhancements existed
+    // (or one that simply never set a pattern) - falls back to no
+    // pattern, matching stampIntervalPatternText()'s own docs.
+    config.setStampIntervalPatternText(json.value("stampIntervalPattern", std::string()));
     config.defaultGradient() = json.at("defaultGradient").get<Gradient>();
 }
 

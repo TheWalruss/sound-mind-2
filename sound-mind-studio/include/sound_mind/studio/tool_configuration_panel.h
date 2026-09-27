@@ -14,6 +14,8 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QFormLayout;
+class QLabel;
+class QLineEdit;
 class QSpinBox;
 class QVBoxLayout;
 class QWidget;
@@ -255,8 +257,30 @@ private:
     ///        while that mode is `Stroke` (where an interval is
     ///        meaningless - see `ToolConfiguration::stampInterval()`'s
     ///        own docs) - called after any change to config_'s stamp
-    ///        mode, so the spin box never shows a stale/wrong unit.
+    ///        mode, so the spin box never shows a stale/wrong unit. Also
+    ///        shows/hides stampIntervalPatternLineEdit_/
+    ///        stampIntervalPatternErrorLabel_, visible only for
+    ///        `StampMode::AlongCurve` - the only mode
+    ///        `ToolConfiguration::stampIntervalPatternText()` actually
+    ///        affects (`v0.Y.54.1` Paint Tool Enhancements Installment A;
+    ///        see that method's own docs for why `TimeAxis`/`FrequencyAxis`
+    ///        are deliberately excluded).
     void updateStampIntervalAppearance();
+
+    /// @brief `stampIntervalPatternLineEdit_`'s own `textChanged` handler:
+    ///        writes the raw text into `config_` unconditionally (so an
+    ///        in-progress edit is never lost or silently reverted), then
+    ///        attempts `sound_mind::core::parseStampIntervalPattern()`
+    ///        purely to surface a validation error in
+    ///        `stampIntervalPatternErrorLabel_` - the same "always store the
+    ///        raw text, validate only to inform the user" pattern
+    ///        `ChordGeneratorPanel::emitNotationChanged()` already
+    ///        establishes for `parseSequenceNotation()`. A pattern that
+    ///        fails to parse is never rejected here: painting itself already
+    ///        falls back to the plain `stampInterval()` scalar for an
+    ///        unparseable pattern (see `stampIntervalPatternText()`'s own
+    ///        docs), so this handler's error label is purely informational.
+    void updateStampIntervalPattern();
 
     /// @brief `toolTypeCombo_`'s own `currentIndexChanged` handler:
     ///        constructs a fresh `ProceduralConfiguration`/
@@ -463,6 +487,8 @@ private:
     QDoubleSpinBox* sizeSpinBox_ = nullptr;
     QComboBox* stampModeCombo_ = nullptr;
     QDoubleSpinBox* stampIntervalSpinBox_ = nullptr;
+    QLineEdit* stampIntervalPatternLineEdit_ = nullptr;
+    QLabel* stampIntervalPatternErrorLabel_ = nullptr;
 
     /// @brief The stroke's own gradient editor - see the class's own docs
     ///        and updateSharedControlVisibility()'s own docs for which

@@ -34,7 +34,7 @@ Path notePath(const NoteEvent& note, const Gradient& gradient) {
 
 void applySequenceOperation(const SequenceOperation& operation, double frequencyToTimeScale,
                              sound_mind::codec::StreamImage& content, const LayerContentResolver& resolveLayerContent,
-                             const MindWaveResolver& resolveMindWave, PrincipalMode principalMode) {
+                             const MindWaveResolver& resolveMindWave, PrincipalMode principalMode, double bpm) {
     for (const NoteEvent& note : operation.notes()) {
         // A throwaway id - this PaintOperation is never logged, only used
         // as applyPaintOperation()'s own required argument shape; its own
@@ -42,7 +42,7 @@ void applySequenceOperation(const SequenceOperation& operation, double frequency
         const PaintOperation noteStamp(0, *operation.targetLayer(), notePath(note, operation.config().defaultGradient()),
                                         operation.config().clone());
         applyPaintOperation(noteStamp, frequencyToTimeScale, content, resolveLayerContent, resolveMindWave,
-                             principalMode);
+                             principalMode, bpm);
     }
 }
 

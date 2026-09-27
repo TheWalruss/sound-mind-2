@@ -57,6 +57,7 @@ add_library(sound-mind-core
     src/background_task.cpp
     src/generator.cpp
     src/loudness_analysis.cpp
+    src/stamp_interval_pattern.cpp
 )
 
 target_include_directories(sound-mind-core

@@ -427,6 +427,94 @@ TEST_CASE("applyPaintOperation with AlongCurve stamp mode leaves gaps between st
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, midFrame, bin)] == 0.0f);
 }
 
+TEST_CASE("applyPaintOperation with AlongCurve stamp mode and a stamp interval pattern places stamps at "
+          "non-uniform arc-length steps",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);  // 0.4s span, constant frequency.
+
+    auto tool = makeCircleTool(0.02, 0.0f);
+    tool->setStampMode(StampMode::AlongCurve);
+    tool->setStampInterval(0.1);  // Ignored - the pattern text below takes priority.
+    tool->setStampIntervalPatternText("100ms 200ms");
+
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int bin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    // Cumulative offsets from the path's own start (t=0.1): 0, 0.1s, 0.3s,
+    // 0.4s - cycling 100ms then 200ms, not a fixed 0.1s/0.2s step.
+    for (const double t : {0.1, 0.2, 0.4, 0.5}) {
+        const int frame = static_cast<int>(std::lround(timeToFrameIndex(t, config)));
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, frame, bin)] == -10.0f);
+    }
+    // t=0.3 falls in the middle of the 200ms step (between the t=0.2 and
+    // t=0.4 stamps) - a fixed 0.1s spacing would have stamped here, a
+    // cycling 100ms/200ms pattern does not.
+    const int midFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, midFrame, bin)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation with AlongCurve stamp mode falls back to stampInterval() when the pattern text "
+          "fails to parse",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);
+
+    auto tool = makeCircleTool(0.02, 0.0f);
+    tool->setStampMode(StampMode::AlongCurve);
+    tool->setStampInterval(0.1);
+    tool->setStampIntervalPatternText("not a valid pattern");  // No "ms"/"b" suffix - fails to parse.
+
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
+    REQUIRE_NOTHROW(applyPaintOperation(op, 2000.0, content));
+
+    // Same fixed 0.1s spacing the plain stampInterval() would produce -
+    // a corrupted pattern string degrades gracefully rather than crashing
+    // or silently painting nothing, per stampIntervalPatternText()'s own
+    // documented contract.
+    const int bin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    for (const double t : {0.1, 0.2, 0.3, 0.4, 0.5}) {
+        const int frame = static_cast<int>(std::lround(timeToFrameIndex(t, config)));
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, frame, bin)] == -10.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation with AlongCurve stamp mode resolves a beats-suffixed pattern token against the "
+          "given bpm",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeUniformHorizontalPath(0.1, 0.6, 1000.0, -10.0f, 1.0f);  // 0.5s span, constant frequency.
+
+    auto tool = makeCircleTool(0.02, 0.0f);
+    tool->setStampMode(StampMode::AlongCurve);
+    tool->setStampIntervalPatternText("1b");  // One beat per stamp.
+
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
+    applyPaintOperation(op, 2000.0, content, {}, {}, PrincipalMode::Sound, 120.0);  // 120bpm -> 0.5s/beat.
+
+    const int bin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    // 0.5s/beat steps from the path's own start (t=0.1): t=0.1, t=0.6.
+    for (const double t : {0.1, 0.6}) {
+        const int frame = static_cast<int>(std::lround(timeToFrameIndex(t, config)));
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, frame, bin)] == -10.0f);
+    }
+    // At 240bpm (0.25s/beat) the same pattern stamps twice as often -
+    // t=0.35, untouched at 120bpm, is now painted too.
+    StreamImage fasterContent = makeBlankContent(config, 100);
+    auto fasterTool = makeCircleTool(0.02, 0.0f);
+    fasterTool->setStampMode(StampMode::AlongCurve);
+    fasterTool->setStampIntervalPatternText("1b");
+    const PaintOperation fasterOp(1, LayerId{1}, path, std::move(fasterTool));
+    applyPaintOperation(fasterOp, 2000.0, fasterContent, {}, {}, PrincipalMode::Sound, 240.0);
+
+    const int fasterFrame = static_cast<int>(std::lround(timeToFrameIndex(0.35, config)));
+    REQUIRE(fasterContent.leftMagnitudeDb[pixelIndex(fasterContent, fasterFrame, bin)] == -10.0f);
+}
+
 TEST_CASE("applyPaintOperation with TimeAxis stamp mode stamps at each time-grid crossing",
           "[core][paint_application]") {
     const auto config = makeTestConfig();
@@ -460,6 +548,35 @@ TEST_CASE("applyPaintOperation with TimeAxis stamp mode stamps at each time-grid
     const int midFrame = static_cast<int>(std::lround(timeToFrameIndex(0.25, config)));
     const int midBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(550.0f, config))));
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, midFrame, midBin)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation with TimeAxis stamp mode ignores a stamp interval pattern, using the fixed "
+          "stampInterval() instead",
+          "[core][paint_application]") {
+    // A cyclic pattern has no well-defined meaning for axis-crossing
+    // placement (see ToolConfiguration::stampIntervalPatternText()'s own
+    // docs) - deliberately AlongCurve-only, unlike stampInterval() itself.
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path =
+        makeUniformDiagonalPath(TimeFrequencyPoint{0.1, 400.0}, TimeFrequencyPoint{0.9, 1200.0}, -10.0f, 1.0f);
+
+    auto tool = makeCircleTool(0.03, 0.0f);
+    tool->setStampMode(StampMode::TimeAxis);
+    tool->setStampInterval(0.3);
+    tool->setStampIntervalPatternText("1ms");  // Would produce wildly different stamps if it were consulted here.
+
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
+    applyPaintOperation(op, 2000.0, content);
+
+    // Identical result to the plain TimeAxis test above: the pattern was
+    // ignored entirely.
+    for (const auto& [t, frequencyHz] : {std::pair{0.1, 400.0}, std::pair{0.4, 700.0}, std::pair{0.7, 1000.0}}) {
+        const int frame = static_cast<int>(std::lround(timeToFrameIndex(t, config)));
+        const int bin =
+            static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(static_cast<float>(frequencyHz), config))));
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, frame, bin)] == -10.0f);
+    }
 }
 
 TEST_CASE("applyPaintOperation with FrequencyAxis stamp mode stamps at each frequency-grid crossing",

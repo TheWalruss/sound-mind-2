@@ -13,6 +13,7 @@
 #include "sound_mind/core/paste_application.h"
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/sequence_application.h"
+#include "sound_mind/core/stamp_interval_pattern.h"
 
 namespace sound_mind::core {
 
@@ -118,21 +119,30 @@ StrokeSample lerpSample(const StrokeSample& a, const StrokeSample& b, double t) 
                           static_cast<float>(a.pathT + (b.pathT - a.pathT) * t)};
 }
 
-/// @brief `dense`, re-sampled at fixed steps of `interval` along its own
-/// arc length (in the same normalized space `size()` uses) -
-/// `StampMode::AlongCurve`'s own placement. Linearly interpolates the
-/// exact point at each target arc length, between whichever dense-to-
-/// dense hop it falls in (the same technique `sampleStrokeAxisCrossings()`
-/// below uses along a straight hop) - snapping to the *nearest* already-
-/// dense sample instead would only be exact by coincidence, since `dense`
-/// itself is tuned to be fine enough for a stamp's own blended footprint
-/// (see its own docs), not for arc length specifically - a requested
-/// `interval` finer than one dense hop's own length would otherwise
-/// repeat the same nearest vertex for every target that falls within it.
+/// @brief `dense`, re-sampled at successive steps along its own arc length
+/// (in the same normalized space `size()` uses) - `StampMode::AlongCurve`'s
+/// own placement. Each step's own length is `intervalPattern`'s own next
+/// entry, cycling back to its first entry once exhausted - a single-entry
+/// `intervalPattern` (the common case, before Paint Tool Enhancements'
+/// own non-uniform timing grammar existed) degenerates to the original
+/// fixed-spacing behavior. Linearly interpolates the exact point at each
+/// target arc length, between whichever dense-to-dense hop it falls in
+/// (the same technique `sampleStrokeAxisCrossings()` below uses along a
+/// straight hop) - snapping to the *nearest* already-dense sample instead
+/// would only be exact by coincidence, since `dense` itself is tuned to be
+/// fine enough for a stamp's own blended footprint (see its own docs), not
+/// for arc length specifically - a requested interval finer than one dense
+/// hop's own length would otherwise repeat the same nearest vertex for
+/// every target that falls within it.
+///
+/// Every entry in `intervalPattern` must be positive - `parseStampIntervalPattern()`/
+/// `resolveStampIntervalPattern()` already guarantee this for a
+/// pattern-driven caller, and a non-positive step here would loop forever
+/// walking `total`.
 std::vector<StrokeSample> sampleStrokeAlongCurve(const std::vector<StrokeSample>& dense, double frequencyToTimeScale,
-                                                   double interval) {
+                                                   const std::vector<double>& intervalPattern) {
     std::vector<StrokeSample> result;
-    if (dense.empty() || interval <= 0.0) {
+    if (dense.empty() || intervalPattern.empty()) {
         return result;
     }
     if (dense.size() == 1) {
@@ -149,7 +159,8 @@ std::vector<StrokeSample> sampleStrokeAlongCurve(const std::vector<StrokeSample>
     const double total = cumulativeLength.back();
 
     std::size_t segment = 0;
-    for (double target = 0.0; target <= total + 1e-9; target += interval) {
+    std::size_t patternIndex = 0;
+    for (double target = 0.0; target <= total + 1e-9; target += intervalPattern[patternIndex % intervalPattern.size()], ++patternIndex) {
         while (segment + 2 < dense.size() && cumulativeLength[segment + 1] < target) {
             ++segment;
         }
@@ -210,12 +221,32 @@ std::vector<StrokeSample> sampleStrokeAxisCrossings(const std::vector<StrokeSamp
     return result;
 }
 
+/// @brief `toolConfig`'s own effective `AlongCurve` interval pattern, in
+/// the same seconds-equivalent arc-length space `stampInterval()` alone
+/// already used before non-uniform timing existed: a parsed/resolved
+/// `stampIntervalPatternText()` if one is set and parses cleanly against
+/// `bpm`, else the single fixed `stampInterval()` scalar - the same
+/// fallback `stampIntervalPatternText()`'s own docs promise, so a
+/// hand-edited/corrupted project file's own bad pattern text degrades to
+/// the plain fixed-interval behavior rather than failing to paint at all.
+std::vector<double> effectiveAlongCurveIntervals(const ToolConfiguration& toolConfig, double bpm) {
+    const std::string& patternText = toolConfig.stampIntervalPatternText();
+    if (!patternText.empty()) {
+        try {
+            return resolveStampIntervalPattern(parseStampIntervalPattern(patternText), bpm);
+        } catch (const std::invalid_argument&) {
+            // Fall through to the fixed-interval default below.
+        }
+    }
+    return {toolConfig.stampInterval()};
+}
+
 std::vector<StrokeSample> sampleStroke(const Path& path, double frequencyToTimeScale,
-                                        const ToolConfiguration& toolConfig) {
+                                        const ToolConfiguration& toolConfig, double bpm) {
     const std::vector<StrokeSample> dense = sampleStrokeDense(path, frequencyToTimeScale);
     switch (toolConfig.stampMode()) {
         case StampMode::AlongCurve:
-            return sampleStrokeAlongCurve(dense, frequencyToTimeScale, toolConfig.stampInterval());
+            return sampleStrokeAlongCurve(dense, frequencyToTimeScale, effectiveAlongCurveIntervals(toolConfig, bpm));
         case StampMode::TimeAxis:
             return sampleStrokeAxisCrossings(dense, toolConfig.stampInterval(), StampAxis::Time);
         case StampMode::FrequencyAxis:
@@ -1213,13 +1244,13 @@ FrameBinRange rangeFor(const TimeFrequencyRect& bounds, const sound_mind::codec:
 
 void applyPaintOperation(const PaintOperation& operation, double frequencyToTimeScale,
                           sound_mind::codec::StreamImage& content, const LayerContentResolver& resolveLayerContent,
-                          const MindWaveResolver& resolveMindWave, PrincipalMode principalMode) {
+                          const MindWaveResolver& resolveMindWave, PrincipalMode principalMode, double bpm) {
     if (frequencyToTimeScale <= 0.0 || content.frameCount == 0 || content.config.binCount == 0) {
         return;
     }
 
     const ToolConfiguration& toolConfig = operation.config();
-    const std::vector<StrokeSample> samples = sampleStroke(operation.path(), frequencyToTimeScale, toolConfig);
+    const std::vector<StrokeSample> samples = sampleStroke(operation.path(), frequencyToTimeScale, toolConfig, bpm);
     if (samples.empty()) {
         return;
     }
@@ -1259,18 +1290,19 @@ sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::St
                                                        const MindWaveResolver& resolveMindWave,
                                                        const ProjectSettings* settings) {
     const PrincipalMode principalMode = settings != nullptr ? settings->principalMode : PrincipalMode::Sound;
+    const double bpm = settings != nullptr ? settings->defaultTempoBpm : 120.0;
     sound_mind::codec::StreamImage result = base;
     for (const Operation* operation : operations) {
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation)) {
             applyPaintOperation(*paint, frequencyToTimeScale, result, resolveLayerContent, resolveMindWave,
-                                 principalMode);
+                                 principalMode, bpm);
         } else if (const auto* fill = dynamic_cast<const FillOperation*>(operation)) {
             applyFillOperation(*fill, result);
         } else if (const auto* paste = dynamic_cast<const PasteOperation*>(operation)) {
             applyPasteOperation(*paste, result);
         } else if (const auto* sequence = dynamic_cast<const SequenceOperation*>(operation)) {
             applySequenceOperation(*sequence, frequencyToTimeScale, result, resolveLayerContent, resolveMindWave,
-                                    principalMode);
+                                    principalMode, bpm);
         } else if (const auto* filter = dynamic_cast<const FilterOperation*>(operation)) {
             if (settings != nullptr) {
                 applyFilterOperation(*filter, result, *settings,

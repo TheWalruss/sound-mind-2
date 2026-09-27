@@ -10,6 +10,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -17,9 +18,12 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <stdexcept>
+
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/project.h"
+#include "sound_mind/core/stamp_interval_pattern.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
 
 namespace sound_mind::studio {
@@ -398,6 +402,25 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
         emitConfigChanged();
     });
     sharedControlsForm_->addRow(tr("Stamp Interval:"), stampIntervalSpinBox_);
+
+    stampIntervalPatternLineEdit_ = new QLineEdit(container);
+    stampIntervalPatternLineEdit_->setObjectName(QStringLiteral("stampIntervalPatternLineEdit"));
+    stampIntervalPatternLineEdit_->setPlaceholderText(tr("e.g. 100ms 200ms, or 1b 2b"));
+    stampIntervalPatternLineEdit_->setToolTip(
+        tr("Optional: cycle through a non-uniform sequence of arc-length steps instead of the fixed Stamp "
+           "Interval above - whitespace-separated tokens, each a number followed by \"ms\" (milliseconds) or "
+           "\"b\" (beats, at this project's own tempo). Leave blank to use the fixed Stamp Interval. Only "
+           "affects Along Curve mode."));
+    connect(stampIntervalPatternLineEdit_, &QLineEdit::textChanged, this,
+            [this](const QString&) { updateStampIntervalPattern(); });
+    sharedControlsForm_->addRow(tr("Stamp Pattern:"), stampIntervalPatternLineEdit_);
+
+    stampIntervalPatternErrorLabel_ = new QLabel(container);
+    stampIntervalPatternErrorLabel_->setObjectName(QStringLiteral("stampIntervalPatternErrorLabel"));
+    stampIntervalPatternErrorLabel_->setWordWrap(true);
+    stampIntervalPatternErrorLabel_->setStyleSheet(QStringLiteral("color: red;"));
+    sharedControlsForm_->addRow(QString(), stampIntervalPatternErrorLabel_);
+
     updateStampIntervalAppearance();
 
     // The stroke's own real, multi-stop gradient - see the class's own
@@ -555,6 +578,7 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
     // correct either way.
     replacement->setStampMode(config_->storedStampMode());
     replacement->setStampInterval(config_->storedStampInterval());
+    replacement->setStampIntervalPatternText(config_->stampIntervalPatternText());
     replacement->setName(config_->name());
     replacement->setFalloff(config_->falloff());
     replacement->setSize(config_->size());
@@ -595,6 +619,12 @@ void ToolConfigurationPanel::updateSharedControlVisibility() {
     // own docs.
     gradientEditor_->setIntensityVisible(!isFixedPlacement);
     sharedControlsForm_->setRowVisible(blendModeCombo_, isMindShotOrGrain);
+    // Also refreshes the pattern row's own visibility (isFixedPlacement can
+    // change here, on a tool-type switch, independently of any stamp-mode
+    // change) - see updateStampIntervalAppearance()'s own docs for why it
+    // owns that combined check itself rather than this function
+    // duplicating it.
+    updateStampIntervalAppearance();
 }
 
 void ToolConfigurationPanel::handleBlendModeComboChanged(int index) {
@@ -737,6 +767,11 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
         const QSignalBlocker blocker(stampIntervalSpinBox_);
         stampIntervalSpinBox_->setValue(config_->stampInterval());
     }
+    {
+        const QSignalBlocker blocker(stampIntervalPatternLineEdit_);
+        stampIntervalPatternLineEdit_->setText(QString::fromStdString(config_->stampIntervalPatternText()));
+    }
+    stampIntervalPatternErrorLabel_->clear();
     updateStampIntervalAppearance();
     gradientEditor_->setGradient(config_->defaultGradient());
 }
@@ -744,6 +779,18 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
 void ToolConfigurationPanel::updateStampIntervalAppearance() {
     const bool active = config_->stampMode() != StampMode::Stroke;
     stampIntervalSpinBox_->setEnabled(active);
+
+    // Own gate, not just `showStampModeAndInterval`'s own isFixedPlacement
+    // check (updateSharedControlVisibility()) - a pattern is meaningless
+    // for TimeAxis/FrequencyAxis too (see stampIntervalPatternText()'s own
+    // docs), not only for a FixedStampPlacementConfiguration's forced mode,
+    // so this function computes the full AND itself rather than relying on
+    // call order between the two.
+    const bool isFixedPlacement = dynamic_cast<const FixedStampPlacementConfiguration*>(config_.get()) != nullptr;
+    const bool showPattern = !isFixedPlacement && config_->stampMode() == StampMode::AlongCurve;
+    sharedControlsForm_->setRowVisible(stampIntervalPatternLineEdit_, showPattern);
+    sharedControlsForm_->setRowVisible(stampIntervalPatternErrorLabel_,
+                                        showPattern && !stampIntervalPatternErrorLabel_->text().isEmpty());
 
     switch (config_->stampMode()) {
         case StampMode::Stroke:
@@ -771,6 +818,31 @@ void ToolConfigurationPanel::updateStampIntervalAppearance() {
                    "the path's own shape."));
             break;
     }
+}
+
+void ToolConfigurationPanel::updateStampIntervalPattern() {
+    const std::string text = stampIntervalPatternLineEdit_->text().toStdString();
+    config_->setStampIntervalPatternText(text);
+
+    if (text.empty()) {
+        stampIntervalPatternErrorLabel_->clear();
+    } else {
+        try {
+            [[maybe_unused]] const auto tokens = sound_mind::core::parseStampIntervalPattern(text);
+            stampIntervalPatternErrorLabel_->clear();
+        } catch (const std::invalid_argument& error) {
+            stampIntervalPatternErrorLabel_->setText(QString::fromStdString(error.what()));
+        }
+    }
+    // isHidden(), not isVisible() - this panel is never show()n in the
+    // test suite (a headless QDockWidget), so isVisible() would always
+    // report false regardless of setRowVisible()'s own state, the same
+    // gotcha CreateProjectWizardTest's own established reasoning already
+    // documents.
+    sharedControlsForm_->setRowVisible(stampIntervalPatternErrorLabel_,
+                                        !stampIntervalPatternLineEdit_->isHidden() &&
+                                            !stampIntervalPatternErrorLabel_->text().isEmpty());
+    emitConfigChanged();
 }
 
 void ToolConfigurationPanel::setProject(sound_mind::core::Project* project) {

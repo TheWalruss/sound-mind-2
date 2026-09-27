@@ -302,8 +302,15 @@ struct FrameBinRange {
  * `AlongCurve`/`TimeAxis`/`FrequencyAxis` instead space stamps
  * `stampInterval()` apart - by arc length, or wherever the path crosses a
  * time/frequency grid line, respectively - producing visibly separate
- * stamps rather than a solid stroke. What each stamp actually *paints*
- * differs by tool type:
+ * stamps rather than a solid stroke. `AlongCurve` alone can instead cycle
+ * through a non-uniform pattern of arc-length steps
+ * (`ToolConfiguration::stampIntervalPatternText()`, `v0.Y.54.1` Paint Tool
+ * Enhancements Installment A) when one is set and parses successfully -
+ * `TimeAxis`/`FrequencyAxis` always use the plain fixed `stampInterval()`,
+ * since a cyclic pattern has no well-defined meaning for axis-crossing
+ * placement if the stroke's own path reverses direction along that axis
+ * (deliberately out of scope for this installment, not an oversight).
+ * What each stamp actually *paints* differs by tool type:
  *
  * - **`ProceduralConfiguration`**: every pixel within the tip's own 2D
  *   (time and frequency) radius blends toward
@@ -438,12 +445,22 @@ struct FrameBinRange {
  *        entirely. Defaults to `Sound`, the only behavior that existed
  *        before this parameter - every pre-existing call site keeps its
  *        exact prior behavior unchanged.
+ * @param bpm The tempo (beats per minute) `AlongCurve`'s own non-uniform
+ *        stamp timing pattern (`ToolConfiguration::stampIntervalPatternText()`,
+ *        `v0.Y.54.1` Paint Tool Enhancements Installment A) resolves any
+ *        beats-suffixed token against - see
+ *        `resolveStampIntervalPattern()`'s own docs. Ignored entirely
+ *        unless `operation.config()` uses `StampMode::AlongCurve` with a
+ *        pattern set that actually contains a beats token. Defaults to
+ *        `120.0`, matching `ProjectSettings::defaultTempoBpm`'s own
+ *        default - every pre-existing call site with no tempo of its own
+ *        to offer keeps its exact prior behavior unchanged.
  */
 void applyPaintOperation(const PaintOperation& operation, double frequencyToTimeScale,
                           sound_mind::codec::StreamImage& content,
                           const LayerContentResolver& resolveLayerContent = {},
                           const MindWaveResolver& resolveMindWave = {},
-                          PrincipalMode principalMode = PrincipalMode::Sound);
+                          PrincipalMode principalMode = PrincipalMode::Sound, double bpm = 120.0);
 
 /**
  * @brief Rebuilds a layer's own painted content from scratch: a copy of
@@ -501,8 +518,12 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
  *        own docs. `nullptr` (the default) means "no `FilterOperation`
  *        support": any such entry in `operations` is skipped entirely
  *        rather than applied, the same forward-tolerant handling any
- *        other unrecognized `Operation` subtype already gets. Every
- *        other operation type here has no need for it at all.
+ *        other unrecognized `Operation` subtype already gets. Also supplies
+ *        the `bpm` passed to `applyPaintOperation()`/`applySequenceOperation()`
+ *        for each `PaintOperation`/`SequenceOperation` replayed
+ *        (`settings->defaultTempoBpm`, `v0.Y.54.1` Paint Tool Enhancements) -
+ *        `nullptr` falls back to `120.0`, the same default those functions'
+ *        own `bpm` parameter already uses.
  * @return A fresh `StreamImage`: `base`, with every operation in
  *         `operations` applied on top, in order.
  */

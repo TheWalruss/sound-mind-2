@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.6] - 2026-09-27
+
+Paint Tool Enhancements, Installment A: **non-uniform stamp timing along a path.**
+
+### Added
+
+- **A new "Stamp Pattern" text field**, shown only for Along Curve stamp mode, for cycling through a repeating sequence of spacings instead of one fixed Interval - e.g. `100ms 200ms` alternates a short gap and a long one for as long as the stroke lasts. Steps can be given in milliseconds (`ms`) or in beats at the project's own tempo (`b`), and both units can be mixed in one pattern. Leave it blank to keep using the fixed Interval, unchanged. An invalid entry shows an inline error and falls back to the fixed Interval rather than being rejected outright.
+- Not available for Time Axis/Frequency Axis stamp modes - a repeating pattern has no well-defined meaning measured against a fixed grid, only along a stroke's own length; this is a deliberate scope decision, not a bug.
+
+### Notes
+
+New `sound_mind::core::parseStampIntervalPattern()`/`resolveStampIntervalPattern()`/`stampIntervalPatternFor()` (`stamp_interval_pattern.h`/`.cpp`) implement the grammar. `applyPaintOperation()`/`rebuildPaintedContent()` gain a `bpm` parameter (sourced from `ProjectSettings::defaultTempoBpm`) to resolve beats-suffixed steps. Full regression: `sound-mind-core` 923/923 (27 new), `sound-mind-studio` full suite genuinely passing (4 new). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #170.
+
 ## [0.1.3.5] - 2026-09-27
 
 Sound Flower: **the MindWave preview in polar mode - milestone complete.**

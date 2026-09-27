@@ -313,6 +313,49 @@ public:
     /// @return The literal stored value, ignoring any override.
     [[nodiscard]] double storedStampInterval() const noexcept { return stampInterval_; }
 
+    /**
+     * @brief An alternative to a single, fixed `stampInterval()` -
+     *        `docs/sound-mind-roadmap.md`'s `v0.Y.54.1` (Paint Tool
+     *        Enhancements), "non-uniform timing along a path".
+     *
+     * A `sound_mind::core::parseStampIntervalPattern()`-grammar pattern
+     * text (`"100ms 200ms"`, `"1b 2b"`, ...) - when non-empty, `StampMode::
+     * AlongCurve` cycles through the pattern's own intervals instead of
+     * repeating `stampInterval()` a fixed number of times (see
+     * `sampleStrokeAlongCurve()`'s own docs in `paint_application.cpp`).
+     * Meaningless for every other `stampMode()` - `TimeAxis`/
+     * `FrequencyAxis`'s own axis-crossing placement has no well-defined
+     * notion of "the next crossing" under a pattern whose own direction
+     * would need to reverse along with the stroke's; extending this
+     * there is real, separate future work, not attempted in this
+     * installment.
+     *
+     * Empty (the default) means "no pattern - use `stampInterval()`
+     * alone", not "an invalid pattern" - this getter never validates or
+     * parses its own stored text (a plain string field, the same
+     * un-validated-until-used shape `stampInterval()` itself already
+     * has); `sampleStrokeAlongCurve()` parses it lazily, at the point a
+     * stroke actually needs it, falling back to the plain
+     * `stampInterval()` scalar if that parse fails (a hand-edited or
+     * corrupted project file's own stray invalid text shouldn't crash
+     * painting).
+     *
+     * @return The current pattern text, or an empty string for "no
+     *         pattern".
+     */
+    [[nodiscard]] const std::string& stampIntervalPatternText() const noexcept {
+        return stampIntervalPatternText_;
+    }
+
+    /// @brief Sets stampIntervalPatternText() - not validated here (see
+    ///        its own docs on why); a caller that wants to reject bad
+    ///        input before committing it should call
+    ///        `sound_mind::core::parseStampIntervalPattern()` itself
+    ///        first.
+    /// @param pattern The new pattern text; empty clears it (falls back
+    ///        to the plain `stampInterval()` scalar).
+    void setStampIntervalPatternText(std::string pattern) { stampIntervalPatternText_ = std::move(pattern); }
+
     /// @brief This tool's own default gradient - seeds a new Path's own
     ///        gradient (see `path.h`) whenever painting starts with this
     ///        configuration; the artist can then further customize that
@@ -343,6 +386,7 @@ private:
     double size_ = 0.2;
     StampMode stampMode_ = StampMode::Stroke;
     double stampInterval_ = 0.1;
+    std::string stampIntervalPatternText_;
     Gradient defaultGradient_;
 };
 

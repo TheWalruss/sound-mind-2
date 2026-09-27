@@ -104,6 +104,17 @@ TEST_CASE("A ToolConfiguration's stamp interval can be changed", "[core][tool_co
     REQUIRE(config.stampInterval() == 0.5);
 }
 
+TEST_CASE("A fresh ToolConfiguration's stamp interval pattern text is empty", "[core][tool_configuration]") {
+    const ProceduralConfiguration config;
+    REQUIRE(config.stampIntervalPatternText().empty());
+}
+
+TEST_CASE("A ToolConfiguration's stamp interval pattern text can be changed", "[core][tool_configuration]") {
+    ProceduralConfiguration config;
+    config.setStampIntervalPatternText("100ms 200ms 1b");
+    REQUIRE(config.stampIntervalPatternText() == "100ms 200ms 1b");
+}
+
 TEST_CASE("A ProceduralConfiguration's clone() is an independent, equal copy", "[core][tool_configuration]") {
     ProceduralConfiguration config;
     config.setName("My Brush");
@@ -142,6 +153,42 @@ TEST_CASE("A ProceduralConfiguration round-trips through JSON", "[core][tool_con
     REQUIRE(roundTripped->stampMode() == StampMode::FrequencyAxis);
     REQUIRE(roundTripped->stampInterval() == 150.0);
     REQUIRE(roundTripped->defaultGradient().linkChannels());
+}
+
+TEST_CASE("A ToolConfiguration's stamp interval pattern text round-trips through JSON", "[core][tool_configuration]") {
+    ProceduralConfiguration config;
+    config.setStampMode(StampMode::AlongCurve);
+    config.setStampIntervalPatternText("100ms 200ms 1b");
+
+    const nlohmann::json json = config;
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    REQUIRE(json.at("stampIntervalPattern").get<std::string>() == "100ms 200ms 1b");
+    REQUIRE(roundTripped->stampIntervalPatternText() == "100ms 200ms 1b");
+}
+
+TEST_CASE("A ToolConfiguration with no stamp interval pattern set writes no stampIntervalPattern key at all",
+          "[core][tool_configuration]") {
+    // Matches writeOptionalMindWaveId()'s own "absent, not an explicit
+    // empty string" convention for the overwhelming majority of
+    // configurations that never set a pattern.
+    const ProceduralConfiguration config;
+
+    const nlohmann::json json = config;
+
+    REQUIRE_FALSE(json.contains("stampIntervalPattern"));
+}
+
+TEST_CASE("A ToolConfiguration loaded from JSON with no stampIntervalPattern key falls back to no pattern",
+          "[core][tool_configuration]") {
+    // A project saved before Paint Tool Enhancements existed - its own
+    // strokes must render identically after loading (plain fixed
+    // stampInterval(), no cyclic pattern).
+    const nlohmann::json json = ProceduralConfiguration{};
+
+    const std::unique_ptr<ToolConfiguration> loaded = toolConfigurationFromJson(json);
+
+    REQUIRE(loaded->stampIntervalPatternText().empty());
 }
 
 TEST_CASE("A ToolConfiguration loaded from JSON with no stampMode/stampInterval keys falls back to Stroke",

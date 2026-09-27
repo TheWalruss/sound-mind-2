@@ -7,6 +7,8 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QLabel>
+#include <QLineEdit>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QtTest/QtTest>
@@ -212,6 +214,81 @@ void ToolConfigurationPanelTest::loadingAConfigurationSyncsTheStampModeAndInterv
     QCOMPARE(combo->currentText(), QStringLiteral("Frequency Axis"));
     QCOMPARE(intervalSpinBox->value(), 150.0);
     QVERIFY(intervalSpinBox->isEnabled());
+}
+
+void ToolConfigurationPanelTest::stampPatternFieldIsHiddenUnlessStampModeIsAlongCurve() {
+    ToolConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
+    auto* patternLineEdit = panel.findChild<QLineEdit*>(QStringLiteral("stampIntervalPatternLineEdit"));
+    QVERIFY(combo != nullptr);
+    QVERIFY(patternLineEdit != nullptr);
+
+    // Stroke (the fresh default) - meaningless, hidden.
+    QVERIFY(patternLineEdit->isHidden());
+
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Along Curve")));
+    QVERIFY(!patternLineEdit->isHidden());
+
+    // TimeAxis/FrequencyAxis - a cyclic pattern has no well-defined meaning
+    // for axis-crossing placement (see stampIntervalPatternText()'s own
+    // docs), so this stays hidden for both, same as Stroke.
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Time Axis")));
+    QVERIFY(patternLineEdit->isHidden());
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Frequency Axis")));
+    QVERIFY(patternLineEdit->isHidden());
+}
+
+void ToolConfigurationPanelTest::enteringAValidStampPatternEmitsToolConfigurationChangedAndClearsTheErrorLabel() {
+    ToolConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Along Curve")));
+    auto* patternLineEdit = panel.findChild<QLineEdit*>(QStringLiteral("stampIntervalPatternLineEdit"));
+    auto* errorLabel = panel.findChild<QLabel*>(QStringLiteral("stampIntervalPatternErrorLabel"));
+    QVERIFY(patternLineEdit != nullptr);
+    QVERIFY(errorLabel != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    patternLineEdit->setText(QStringLiteral("100ms 200ms"));
+
+    QVERIFY(spy.count() >= 1);
+    QCOMPARE(panel.toolConfiguration().stampIntervalPatternText(), std::string("100ms 200ms"));
+    QVERIFY(errorLabel->text().isEmpty());
+}
+
+void ToolConfigurationPanelTest::enteringAnInvalidStampPatternShowsAnErrorButStillStoresTheRawText() {
+    ToolConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Along Curve")));
+    auto* patternLineEdit = panel.findChild<QLineEdit*>(QStringLiteral("stampIntervalPatternLineEdit"));
+    auto* errorLabel = panel.findChild<QLabel*>(QStringLiteral("stampIntervalPatternErrorLabel"));
+
+    patternLineEdit->setText(QStringLiteral("100 not valid"));
+
+    // Stored regardless of validity - painting itself falls back to the
+    // fixed stampInterval() for an unparseable pattern (see
+    // stampIntervalPatternText()'s own docs), so an in-progress edit is
+    // never silently reverted here.
+    QCOMPARE(panel.toolConfiguration().stampIntervalPatternText(), std::string("100 not valid"));
+    QVERIFY(!errorLabel->text().isEmpty());
+    QVERIFY(!errorLabel->isHidden());
+}
+
+void ToolConfigurationPanelTest::loadingAConfigurationSyncsTheStampPatternFieldAndClearsAnyStaleError() {
+    ToolConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Along Curve")));
+    auto* patternLineEdit = panel.findChild<QLineEdit*>(QStringLiteral("stampIntervalPatternLineEdit"));
+    auto* errorLabel = panel.findChild<QLabel*>(QStringLiteral("stampIntervalPatternErrorLabel"));
+    patternLineEdit->setText(QStringLiteral("invalid"));
+    QVERIFY(!errorLabel->text().isEmpty());  // A stale error from the panel's own prior state.
+
+    ProceduralConfiguration config;
+    config.setStampMode(StampMode::AlongCurve);
+    config.setStampIntervalPatternText("1b 2b");
+    panel.setToolConfiguration(config);
+
+    QCOMPARE(patternLineEdit->text(), QStringLiteral("1b 2b"));
+    QVERIFY(errorLabel->text().isEmpty());
 }
 
 // --- Sound Mind Instruments (v0.Y.32.1) -------------------------------------
