@@ -285,12 +285,26 @@ automatically.
 
 ### Importing MIDI
 
-**File → Import MIDI...** prompts for a Standard MIDI File (`.mid`/`.midi`)
-and imports every channel that has notes as its own new layer, named
-`<filename> - Ch<N> (<instrument name>)`. Unlike audio or image import, a
-MIDI-imported layer stays fully editable afterward - every note is Pickable
-and modifiable, since it's stored as a real, non-destructive paint
-operation rather than a fixed picture.
+**File → Import MIDI...** prompts for a Standard MIDI File (`.mid`/`.midi`).
+Unlike audio or image import, a MIDI-imported layer stays fully editable
+afterward - every note is Pickable and modifiable, since it's stored as a
+real, non-destructive paint operation rather than a fixed picture.
+
+If the file has just one channel and fits within your project's own
+Duration, it imports immediately as one new layer named
+`<filename> - Ch<N> (<instrument name>)` - no picker, nothing to choose.
+Otherwise, a picker lets you:
+
+- Check which channels to import (each row shows the channel number, its
+  instrument name, and how many notes it has).
+- Choose **Separate layer per channel** (checked by default) to give each
+  channel its own layer, or uncheck it to merge every checked channel into
+  one shared layer instead.
+- Choose **Import whole file** (checked by default) to import each
+  checked channel's entire content as-is, or uncheck it to instead pick
+  specific project-length snippet(s) of a longer file - the same
+  "snippets" concept **Import Audio...** already uses, listed below the
+  checkbox once it's unchecked.
 
 This is an early pass, not the full feature described in the design
 docs - see [What's Not Here Yet](#whats-not-here-yet):
@@ -298,9 +312,6 @@ docs - see [What's Not Here Yet](#whats-not-here-yet):
 - Every note currently paints through a plain default brush (a circular
   Procedural tip) - there's no way yet to map a MIDI channel/program to a
   specific saved Tool Preset.
-- There's no picker yet for which portion of a long MIDI file to import,
-  or which channels to include - every channel, and every note in the
-  file, always imports in one pass.
 
 ### Drag and Drop
 

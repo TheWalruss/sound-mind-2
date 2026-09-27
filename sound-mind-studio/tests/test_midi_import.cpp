@@ -1,5 +1,6 @@
 #include "test_midi_import.h"
 
+#include <algorithm>
 #include <filesystem>
 
 #include <QtTest/QtTest>
@@ -12,6 +13,7 @@
 #include "sound_mind/core/sequence_operation.h"
 #include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/midi_import.h"
+#include "sound_mind/studio/paint_controller.h"
 
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
@@ -46,6 +48,53 @@ std::filesystem::path writeTestMidiFile() {
     midiFile.addTrack(track1);
 
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-studio-test-midi-import.mid";
+    {
+        juce::File file(juce::String(path.string()));
+        juce::FileOutputStream stream(file);
+        midiFile.writeTo(stream);
+    }
+    return path;
+}
+
+/// @brief A small canvasWidth - fast, exact snippet-splitting math, the
+///        same precedent test_import_export.cpp's own
+///        smallCanvasProjectSettings() already establishes: `100 * 10ms =
+///        1.0` real second per project-length snippet, a clean number to
+///        build note timings against.
+ProjectSettings oneSecondSnippetProjectSettings() {
+    ProjectSettings settings;
+    settings.canvasWidth = 100;
+    return settings;
+}
+
+/// @brief Writes a two-channel Standard MIDI File spanning two 1.0-second
+///        snippets (see oneSecondSnippetProjectSettings()) to a fresh temp
+///        path and returns it. Channel 1 has one note in each snippet
+///        (`t=0.0`, `t=1.2`); channel 2 has a note only in the first
+///        (`t=0.3`) - so selecting channel 2 + snippet 1 together should
+///        yield nothing, the real "combination with nothing left after
+///        clipping is silently skipped" case importMidiSelectionInto()'s
+///        own docs describe.
+std::filesystem::path writeTwoSnippetTestMidiFile() {
+    juce::MidiFile midiFile;
+    midiFile.setTicksPerQuarterNote(960);
+    // 120 BPM default: 1 real second == 1920 ticks.
+
+    juce::MidiMessageSequence track0;
+    track0.addEvent(juce::MidiMessage::noteOn(1, 69, static_cast<juce::uint8>(100)).withTimeStamp(0.0));  // t=0.0
+    track0.addEvent(juce::MidiMessage::noteOff(1, 69).withTimeStamp(960.0));                              // dur 0.5s
+    track0.addEvent(juce::MidiMessage::noteOn(1, 72, static_cast<juce::uint8>(90)).withTimeStamp(2304.0));  // t=1.2
+    track0.addEvent(juce::MidiMessage::noteOff(1, 72).withTimeStamp(2880.0));                               // dur 0.3s
+    track0.updateMatchedPairs();
+    midiFile.addTrack(track0);
+
+    juce::MidiMessageSequence track1;
+    track1.addEvent(juce::MidiMessage::noteOn(2, 60, static_cast<juce::uint8>(80)).withTimeStamp(576.0));  // t=0.3
+    track1.addEvent(juce::MidiMessage::noteOff(2, 60).withTimeStamp(1344.0));                              // dur 0.4s
+    track1.updateMatchedPairs();
+    midiFile.addTrack(track1);
+
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-studio-test-midi-import-snippets.mid";
     {
         juce::File file(juce::String(path.string()));
         juce::FileOutputStream stream(file);
@@ -121,4 +170,158 @@ void MidiImportTest::importMidiChannelsIntoUsesAPlainProceduralConfigurationForE
     const auto* sequence = dynamic_cast<const SequenceOperation*>(operations.front());
     QVERIFY(sequence != nullptr);
     QCOMPARE(sequence->config().type(), ToolType::Procedural);
+}
+
+void MidiImportTest::importMidiChannelsIntoOnlyIncludesSelectedChannelsWhenGiven() {
+    const auto path = writeTestMidiFile();
+    Project project = Project::createNew(ProjectSettings{});
+    const std::size_t layerCountBefore = project.layers().size();
+
+    const auto newLayerIds =
+        sound_mind::studio::importMidiChannelsInto(project, path, /*separateLayerPerChannel=*/true, nullptr, {2});
+    std::filesystem::remove(path);
+
+    QCOMPARE(newLayerIds.size(), static_cast<std::size_t>(1));
+    QCOMPARE(project.layers().size(), layerCountBefore + 1);
+    const auto* layer = project.layerById(newLayerIds[0]);
+    QVERIFY(layer != nullptr);
+    QVERIFY(layer->name().find("Ch2") != std::string::npos);
+}
+
+void MidiImportTest::rebuildingAMidiImportedLayerProducesRealNonSilentPaintedContent() {
+    const auto path = writeTestMidiFile();
+    Project project = Project::createNew(ProjectSettings{});
+
+    const auto newLayerIds = sound_mind::studio::importMidiChannelsInto(project, path);
+    std::filesystem::remove(path);
+    QVERIFY(!newLayerIds.empty());
+
+    sound_mind::studio::PaintController controller;
+    controller.setProject(&project);
+    controller.rebuildLayerContent(newLayerIds[0]);
+
+    const auto* layer = project.layerById(newLayerIds[0]);
+    QVERIFY(layer != nullptr);
+    QVERIFY(layer->content().has_value());
+    // A silent base is uniformly very quiet (see silentContentFor()'s own
+    // docs) - a real painted stamp should leave at least one cell audibly
+    // louder than that floor.
+    const auto& content = *layer->content();
+    const bool anyPainted =
+        std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(), [](float db) { return db > -50.0f; });
+    QVERIFY(anyPainted);
+}
+
+void MidiImportTest::midiImportPreviewForFileReturnsChannelsAndComputedSnippets() {
+    const auto path = writeTwoSnippetTestMidiFile();
+    Project project = Project::createNew(oneSecondSnippetProjectSettings());
+
+    const auto preview = sound_mind::studio::midiImportPreviewForFile(project, path);
+    std::filesystem::remove(path);
+
+    QVERIFY(preview.has_value());
+    QCOMPARE(preview->channels.size(), static_cast<std::size_t>(2));
+    // Latest note end is channel 1's second note: 1.2 + 0.3 = 1.5s: two
+    // 1.0-second snippets, the second one shorter than a full second.
+    QCOMPARE(preview->snippets.size(), static_cast<std::size_t>(2));
+    QCOMPARE(preview->snippets[0].startSeconds, 0.0);
+    QCOMPARE(preview->snippets[0].endSeconds, 1.0);
+    QCOMPARE(preview->snippets[1].startSeconds, 1.0);
+    QCOMPARE(preview->snippets[1].endSeconds, 1.5);
+}
+
+void MidiImportTest::midiImportPreviewForFileFailsGracefullyForAnUnreadableFile() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-studio-test-midi-preview-missing.mid";
+    std::filesystem::remove(path);
+    Project project = Project::createNew(oneSecondSnippetProjectSettings());
+
+    QString errorMessage;
+    const auto preview = sound_mind::studio::midiImportPreviewForFile(project, path, &errorMessage);
+
+    QVERIFY(!preview.has_value());
+    QVERIFY(!errorMessage.isEmpty());
+}
+
+void MidiImportTest::importMidiSelectionIntoOnlyIncludesSelectedChannels() {
+    const auto path = writeTwoSnippetTestMidiFile();
+    Project project = Project::createNew(oneSecondSnippetProjectSettings());
+
+    // Channel 2 has no note at all in snippet 1 - that combination should
+    // simply be skipped, not produce an empty layer.
+    const auto newLayerIds =
+        sound_mind::studio::importMidiSelectionInto(project, path, {2}, {0, 1}, /*separateLayerPerChannel=*/true);
+    std::filesystem::remove(path);
+
+    QCOMPARE(newLayerIds.size(), static_cast<std::size_t>(1));
+    const auto* layer = project.layerById(newLayerIds[0]);
+    QVERIFY(layer != nullptr);
+    QVERIFY(layer->name().find("Ch2") != std::string::npos);
+}
+
+void MidiImportTest::importMidiSelectionIntoClipsAndRebasesNotesToTheSelectedSnippetWindow() {
+    const auto path = writeTwoSnippetTestMidiFile();
+    Project project = Project::createNew(oneSecondSnippetProjectSettings());
+
+    const auto newLayerIds =
+        sound_mind::studio::importMidiSelectionInto(project, path, {1}, {1}, /*separateLayerPerChannel=*/true);
+    std::filesystem::remove(path);
+
+    QCOMPARE(newLayerIds.size(), static_cast<std::size_t>(1));
+    const auto operations = project.operationLog().activeOperationsTargeting(newLayerIds[0]);
+    QCOMPARE(operations.size(), static_cast<std::size_t>(1));
+    const auto* sequence = dynamic_cast<const SequenceOperation*>(operations.front());
+    QVERIFY(sequence != nullptr);
+    QCOMPARE(sequence->notes().size(), static_cast<std::size_t>(1));
+    // The note started at t=1.2 in the source file; snippet 1 starts at
+    // t=1.0, so it should be rebased to 0.2 within this new layer.
+    QVERIFY(qAbs(sequence->notes().front().startTimeSeconds - 0.2) < 0.001);
+}
+
+void MidiImportTest::importMidiSelectionIntoMergesChannelsIntoOneLayerPerSnippetWhenNotSeparating() {
+    const auto path = writeTwoSnippetTestMidiFile();
+    Project project = Project::createNew(oneSecondSnippetProjectSettings());
+
+    const auto newLayerIds = sound_mind::studio::importMidiSelectionInto(project, path, {1, 2}, {0, 1},
+                                                                           /*separateLayerPerChannel=*/false);
+    std::filesystem::remove(path);
+
+    // Snippet 0: both channels have a note (2 operations, 1 layer).
+    // Snippet 1: only channel 1 has a note (1 operation, 1 layer).
+    QCOMPARE(newLayerIds.size(), static_cast<std::size_t>(2));
+    const auto snippet0Operations = project.operationLog().activeOperationsTargeting(newLayerIds[0]);
+    const auto snippet1Operations = project.operationLog().activeOperationsTargeting(newLayerIds[1]);
+    QCOMPARE(snippet0Operations.size(), static_cast<std::size_t>(2));
+    QCOMPARE(snippet1Operations.size(), static_cast<std::size_t>(1));
+}
+
+void MidiImportTest::importMidiSelectionIntoAppendsSnippetSuffixToLayerNamesWhenMoreThanOneSnippet() {
+    const auto path = writeTwoSnippetTestMidiFile();
+    Project project = Project::createNew(oneSecondSnippetProjectSettings());
+
+    const auto newLayerIds =
+        sound_mind::studio::importMidiSelectionInto(project, path, {1}, {0, 1}, /*separateLayerPerChannel=*/true);
+    std::filesystem::remove(path);
+
+    QCOMPARE(newLayerIds.size(), static_cast<std::size_t>(2));
+    const auto* layer0 = project.layerById(newLayerIds[0]);
+    const auto* layer1 = project.layerById(newLayerIds[1]);
+    QVERIFY(layer0 != nullptr);
+    QVERIFY(layer1 != nullptr);
+    QVERIFY(layer0->name().find("_0000") != std::string::npos);
+    QVERIFY(layer1->name().find("_0001") != std::string::npos);
+}
+
+void MidiImportTest::importMidiSelectionIntoFailsGracefullyForAnUnreadableFile() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-studio-test-midi-selection-missing.mid";
+    std::filesystem::remove(path);
+    Project project = Project::createNew(oneSecondSnippetProjectSettings());
+    const std::size_t layerCountBefore = project.layers().size();
+
+    QString errorMessage;
+    const auto newLayerIds =
+        sound_mind::studio::importMidiSelectionInto(project, path, {1}, {0}, true, &errorMessage);
+
+    QVERIFY(newLayerIds.empty());
+    QVERIFY(!errorMessage.isEmpty());
+    QCOMPARE(project.layers().size(), layerCountBefore);
 }

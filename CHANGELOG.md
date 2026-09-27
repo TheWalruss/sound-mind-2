@@ -6,6 +6,47 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.12] - 2026-09-27
+
+MIDI track import, Installment B: **snippet/channel picker, plus a real visibility fix.**
+
+### Added
+
+- **File → Import MIDI... now shows a picker** when there's an actual
+  choice to make (more than one channel, or a file longer than the
+  project's own duration): check which channels to import, whether to
+  import each one's entire content or only specific project-length
+  snippet(s) of it, and whether each channel becomes its own layer or
+  they share one. A file with exactly one channel that fits in one
+  snippet still imports immediately, with no picker, as before.
+- **A new "Import whole file" option** in that picker (checked by
+  default) - the fix for a real gap found while trying this out: once
+  the picker appeared at all, there was no way back to "just import
+  everything, unchopped" without it.
+
+### Fixed
+
+- **MIDI-imported notes previously painted completely invisibly** - real
+  layers and paint operations were created, but every one of them painted
+  at zero opacity, so nothing showed up on the canvas. Every future MIDI
+  import now paints fully opaque, as intended.
+
+### Notes
+
+New `sound_mind::studio::midiImportPreviewForFile()`/
+`importMidiSelectionInto()`/`MidiImportDialog`. The invisible-painting bug
+traced back to a bare `ProceduralConfiguration`'s own default gradient
+being fully transparent by design (the Tool Configuration panel already
+knows to reseed full opacity before a user paints; MIDI import's own
+note-painting path didn't) - a new regression test now checks that a
+MIDI-imported layer's own rebuilt content is actually non-silent, closing
+a real gap in the previous installment's own test coverage (every prior
+test checked the operation log, never the rendered pixels). Still ahead:
+mapping MIDI channels/programs to saved Tool Presets (the still-unbuilt
+"MIDI Configuration panel"). Full regression: `sound-mind-studio` full
+suite genuinely passing (19 new). Doxygen: 0 warnings. See
+`docs/sound-mind-architecture.md`'s Decision #176.
+
 ## [0.1.3.11] - 2026-09-27
 
 MIDI track import, Installment A: **basic MIDI file import.**

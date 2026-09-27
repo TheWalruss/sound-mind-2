@@ -66,6 +66,7 @@
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/import_export.h"
 #include "sound_mind/studio/midi_import.h"
+#include "sound_mind/studio/midi_import_dialog.h"
 #include "sound_mind/studio/import_helpers.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
@@ -1745,15 +1746,57 @@ void MainWindow::importMidi() {
     }
     const std::filesystem::path path(fileName.toStdString());
 
+    QString previewError;
+    const auto preview = midiImportPreviewForFile(path, &previewError);
+    if (!preview) {
+        QMessageBox::critical(this, tr("Import MIDI Failed"),
+                               previewError.isEmpty() ? tr("Could not read the MIDI file.") : previewError);
+        return;
+    }
+
     QString errorMessage;
-    if (!importMidiFile(path, /*separateLayerPerChannel=*/true, &errorMessage)) {
+    if (preview->channels.size() <= 1 && preview->snippets.size() <= 1) {
+        // Nothing to choose either way - matching importAudio()'s own
+        // "skip the picker for the trivial case" precedent.
+        if (!importMidiFile(path, /*separateLayerPerChannel=*/true, &errorMessage)) {
+            QMessageBox::critical(this, tr("Import MIDI Failed"),
+                                   errorMessage.isEmpty() ? tr("Could not read the MIDI file.") : errorMessage);
+        }
+        return;
+    }
+
+    MidiImportDialog dialog(preview->channels, preview->snippets, this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    const auto channelNumbers = dialog.selectedChannelNumbers();
+    if (channelNumbers.empty()) {
+        return;
+    }
+
+    bool ok = false;
+    if (dialog.wholeFile()) {
+        // Real-world testing pass, 2026-09-27: a real way to import
+        // everything unchopped, even when there was a real channel/
+        // separate-layer choice to make too - see MidiImportDialog::
+        // wholeFile()'s own docs.
+        ok = importMidiFile(path, dialog.separateLayerPerChannel(), &errorMessage, channelNumbers);
+    } else {
+        const auto snippetIndices = dialog.selectedSnippetIndices();
+        if (snippetIndices.empty()) {
+            return;
+        }
+        ok = importMidiSelection(path, channelNumbers, snippetIndices, dialog.separateLayerPerChannel(),
+                                  &errorMessage);
+    }
+    if (!ok) {
         QMessageBox::critical(this, tr("Import MIDI Failed"),
                                errorMessage.isEmpty() ? tr("Could not read the MIDI file.") : errorMessage);
     }
 }
 
 bool MainWindow::importMidiFile(const std::filesystem::path& path, bool separateLayerPerChannel,
-                                 QString* errorMessage) {
+                                 QString* errorMessage, const std::vector<int>& channelNumbers) {
     if (!project_) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No project is open.");
@@ -1762,8 +1805,40 @@ bool MainWindow::importMidiFile(const std::filesystem::path& path, bool separate
     }
 
     showBusyStatus(statusBar(), tr("Importing MIDI..."));
-    const auto newLayerIds =
-        sound_mind::studio::importMidiChannelsInto(*project_, path, separateLayerPerChannel, errorMessage);
+    const auto newLayerIds = sound_mind::studio::importMidiChannelsInto(*project_, path, separateLayerPerChannel,
+                                                                         errorMessage, channelNumbers);
+    return finishMidiImport(newLayerIds, path);
+}
+
+std::optional<sound_mind::studio::MidiImportPreview> MainWindow::midiImportPreviewForFile(
+    const std::filesystem::path& path, QString* errorMessage) const {
+    if (!project_) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No project is open.");
+        }
+        return std::nullopt;
+    }
+    return sound_mind::studio::midiImportPreviewForFile(*project_, path, errorMessage);
+}
+
+bool MainWindow::importMidiSelection(const std::filesystem::path& path, const std::vector<int>& channelNumbers,
+                                      const std::vector<std::size_t>& snippetIndices, bool separateLayerPerChannel,
+                                      QString* errorMessage) {
+    if (!project_) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No project is open.");
+        }
+        return false;
+    }
+
+    showBusyStatus(statusBar(), tr("Importing MIDI..."));
+    const auto newLayerIds = sound_mind::studio::importMidiSelectionInto(
+        *project_, path, channelNumbers, snippetIndices, separateLayerPerChannel, errorMessage);
+    return finishMidiImport(newLayerIds, path);
+}
+
+bool MainWindow::finishMidiImport(const std::vector<sound_mind::core::LayerId>& newLayerIds,
+                                   const std::filesystem::path& path) {
     if (newLayerIds.empty()) {
         statusBar()->clearMessage();
         return false;

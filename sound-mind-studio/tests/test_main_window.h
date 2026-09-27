@@ -16,6 +16,11 @@ private slots:
     void importAudioFileAddsANewLayer();
     void importImageFileAddsANewLayer();
     void importAudioFileFailsGracefullyForAMissingFile();
+    void importMidiFileAddsANewLayerWithRealPaintedContent();
+    void importMidiFileFailsGracefullyForAMissingFile();
+    void importMidiFileWithChannelNumbersOnlyImportsSelectedChannels();
+    void midiImportPreviewForFileReturnsChannelsAndSnippets();
+    void importMidiSelectionImportsOnlyTheSelectedSnippet();
     void startPlaybackDoesNothingWithNoContent();
     void startPlaybackPlaysAnImportedLayer();
     void pauseAndResumePlayback();

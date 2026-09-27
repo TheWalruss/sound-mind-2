@@ -1,5 +1,6 @@
 #include "test_main_window.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -25,6 +26,8 @@
 #include <QToolBar>
 #include <QUrl>
 #include <QtTest/QtTest>
+
+#include <juce_audio_basics/juce_audio_basics.h>
 
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/filter_configuration.h"
@@ -120,6 +123,60 @@ const sound_mind::core::Layer& topmostNonEqualizerLayer(const sound_mind::core::
         }
     }
     return layers.back();  // Defensive only - a real project always has a Background layer at least.
+}
+
+/// @brief Writes a small, one-channel Standard MIDI File to a fresh temp
+///        path and returns it - a local copy of
+///        sound-mind-studio/tests/test_midi_import.cpp's own identical
+///        fixture (a different test binary/translation unit - QTest
+///        classes don't share fixtures across files, matching
+///        test_import_export.cpp's own established precedent).
+std::filesystem::path writeTestMidiFile() {
+    juce::MidiFile midiFile;
+    midiFile.setTicksPerQuarterNote(960);
+
+    juce::MidiMessageSequence track;
+    track.addEvent(juce::MidiMessage::noteOn(1, 69, static_cast<juce::uint8>(100)).withTimeStamp(0.0));
+    track.addEvent(juce::MidiMessage::noteOff(1, 69).withTimeStamp(960.0));
+    track.updateMatchedPairs();
+    midiFile.addTrack(track);
+
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-main-window-midi-import.mid";
+    {
+        juce::File file(juce::String(path.string()));
+        juce::FileOutputStream stream(file);
+        midiFile.writeTo(stream);
+    }
+    return path;
+}
+
+/// @brief Writes a two-channel Standard MIDI File to a fresh temp path and
+///        returns it - a local copy of the identical fixture in
+///        sound-mind-studio/tests/test_midi_import.cpp.
+std::filesystem::path writeTwoChannelTestMidiFile() {
+    juce::MidiFile midiFile;
+    midiFile.setTicksPerQuarterNote(960);
+
+    juce::MidiMessageSequence track0;
+    track0.addEvent(juce::MidiMessage::noteOn(1, 69, static_cast<juce::uint8>(100)).withTimeStamp(0.0));
+    track0.addEvent(juce::MidiMessage::noteOff(1, 69).withTimeStamp(960.0));
+    track0.updateMatchedPairs();
+    midiFile.addTrack(track0);
+
+    juce::MidiMessageSequence track1;
+    track1.addEvent(juce::MidiMessage::noteOn(2, 60, static_cast<juce::uint8>(80)).withTimeStamp(0.0));
+    track1.addEvent(juce::MidiMessage::noteOff(2, 60).withTimeStamp(960.0));
+    track1.updateMatchedPairs();
+    midiFile.addTrack(track1);
+
+    const auto path =
+        std::filesystem::temp_directory_path() / "sound-mind-test-main-window-midi-import-two-channel.mid";
+    {
+        juce::File file(juce::String(path.string()));
+        juce::FileOutputStream stream(file);
+        midiFile.writeTo(stream);
+    }
+    return path;
 }
 
 void appendUint32(std::vector<char>& bytes, std::uint32_t value) {
@@ -430,6 +487,77 @@ void MainWindowTest::importAudioFileFailsGracefullyForAMissingFile() {
 
     QVERIFY(!ok);
     QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(2));  // Background + Equalizer, unchanged.
+}
+
+void MainWindowTest::importMidiFileAddsANewLayerWithRealPaintedContent() {
+    const auto path = writeTestMidiFile();
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    const bool ok = window.importMidiFile(path);
+    std::filesystem::remove(path);
+
+    QVERIFY(ok);
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(3));  // Background + Equalizer + imported.
+    const auto& layer = topmostNonEqualizerLayer(*window.project());
+    QVERIFY(layer.content().has_value());
+    // Real-world testing pass, 2026-09-27: a MIDI-imported note previously
+    // rebuilt into a real, but entirely silent, content() (see
+    // makeOpaqueDefaultConfiguration()'s own docs) - confirm end to end,
+    // through MainWindow's own real import path, that a cell is now
+    // actually louder than a silent base.
+    const bool anyPainted = std::any_of(layer.content()->leftMagnitudeDb.begin(), layer.content()->leftMagnitudeDb.end(),
+                                         [](float db) { return db > -50.0f; });
+    QVERIFY(anyPainted);
+}
+
+void MainWindowTest::importMidiFileFailsGracefullyForAMissingFile() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    const bool ok = window.importMidiFile(std::filesystem::temp_directory_path() / "sound-mind-does-not-exist.mid");
+
+    QVERIFY(!ok);
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(2));  // Background + Equalizer, unchanged.
+}
+
+void MainWindowTest::importMidiFileWithChannelNumbersOnlyImportsSelectedChannels() {
+    const auto path = writeTwoChannelTestMidiFile();
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    const bool ok = window.importMidiFile(path, /*separateLayerPerChannel=*/true, nullptr, {2});
+    std::filesystem::remove(path);
+
+    QVERIFY(ok);
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(3));  // Background + Equalizer + Ch2 only.
+    QVERIFY(topmostNonEqualizerLayer(*window.project()).name().find("Ch2") != std::string::npos);
+}
+
+void MainWindowTest::midiImportPreviewForFileReturnsChannelsAndSnippets() {
+    const auto path = writeTwoChannelTestMidiFile();
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    const auto preview = window.midiImportPreviewForFile(path);
+    std::filesystem::remove(path);
+
+    QVERIFY(preview.has_value());
+    QCOMPARE(preview->channels.size(), static_cast<std::size_t>(2));
+    QCOMPARE(preview->snippets.size(), static_cast<std::size_t>(1));  // Well within the default project's duration.
+}
+
+void MainWindowTest::importMidiSelectionImportsOnlyTheSelectedSnippet() {
+    const auto path = writeTwoChannelTestMidiFile();
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    const bool ok = window.importMidiSelection(path, {1, 2}, {0}, /*separateLayerPerChannel=*/false);
+    std::filesystem::remove(path);
+
+    QVERIFY(ok);
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(3));  // Background + Equalizer + one shared.
+    const auto& layer = topmostNonEqualizerLayer(*window.project());
+    QVERIFY(layer.content().has_value());
 }
 
 void MainWindowTest::startPlaybackDoesNothingWithNoContent() {

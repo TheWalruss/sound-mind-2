@@ -31,6 +31,7 @@
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/layer_controller.h"
 #include "sound_mind/studio/macro_recorder.h"
+#include "sound_mind/studio/midi_import.h"
 #include "sound_mind/studio/mind_wave_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/playback_panel.h"
@@ -326,19 +327,29 @@ public slots:
     void importImage();
 
     /**
-     * @brief Prompts for a Standard MIDI File and imports every channel
-     *        that has notes as its own new, editable layer - see
-     *        `docs/sound-mind-design.md`'s "Import" and
+     * @brief Prompts for a Standard MIDI File, then - when there's a real
+     *        choice to make - which of its channels/project-length
+     *        snippets to import and whether to keep them in separate
+     *        layers, and imports the result as new, editable layer(s) -
+     *        see `docs/sound-mind-design.md`'s "Import" and
      *        `docs/sound-mind-roadmap.md`'s MIDI track import milestone
      *        (`v0.Y.55.1`).
      *
-     * **Installment A scope** - always imports every channel, into
-     * separate layers, with no picker dialog at all beyond the file
-     * chooser itself: see `sound_mind::studio::importMidiChannelsInto()`'s
-     * own docs for the two real simplifications this carries (a plain
-     * default Tool Configuration for every channel; no snippet chopping).
-     * Both are real, separate, still-unbuilt installments of this same
-     * milestone, not permanent limitations.
+     * Skips `MidiImportDialog` entirely for a file with exactly one
+     * channel and one computed snippet (nothing to choose either way),
+     * matching `importAudio()`'s own "trivial case, skip the picker"
+     * precedent - imports every channel, into separate layers, via
+     * importMidiFile() directly in that case. Otherwise shows
+     * `MidiImportDialog` (built from `midiImportPreviewForFile()`'s own
+     * result) and imports only the checked channels/snippets, with the
+     * dialog's own "Separate layer per channel" choice, via
+     * importMidiSelection(); cancelling it, or accepting with nothing
+     * checked in either list, imports nothing.
+     *
+     * **Every channel still plays through a plain default Tool
+     * Configuration** - mapping a channel/program to one of the project's
+     * own saved Tool Presets is the still-unbuilt "MIDI Configuration
+     * panel" installment's job, not this one's.
      */
     void importMidi();
 
@@ -2055,11 +2066,58 @@ public:
      *        docs.
      * @param errorMessage If non-null and this returns `false`, set to a
      *        human-readable description of what went wrong.
+     * @param channelNumbers See `importMidiChannelsInto()`'s own docs -
+     *        empty (the default) means every channel, unchanged from this
+     *        method's own original behavior.
      * @return `true` on success; `false` if no project is open, or the
-     *         file couldn't be parsed/had no notes on any channel.
+     *         file couldn't be parsed/had no notes on any (selected)
+     *         channel.
      */
     bool importMidiFile(const std::filesystem::path& path, bool separateLayerPerChannel = true,
-                         QString* errorMessage = nullptr);
+                         QString* errorMessage = nullptr, const std::vector<int>& channelNumbers = {});
+
+    /**
+     * @brief Parses a MIDI file and computes its own channels/snippets,
+     *        without importing anything or showing any dialog - a thin,
+     *        `!project_`-checking member wrapper around
+     *        `sound_mind::studio::midiImportPreviewForFile()`, the same
+     *        shape `audioSnippetsForFile()` already establishes for audio.
+     * @param path Path to the `.mid`/`.midi` file to analyze.
+     * @param errorMessage If non-null and this returns `std::nullopt`, set
+     *        to a human-readable description of what went wrong.
+     * @return The parsed channels/computed snippets; `std::nullopt` if no
+     *         project is open, the file couldn't be parsed, or the
+     *         project's own duration is zero.
+     */
+    [[nodiscard]] std::optional<sound_mind::studio::MidiImportPreview> midiImportPreviewForFile(
+        const std::filesystem::path& path, QString* errorMessage = nullptr) const;
+
+    /**
+     * @brief Imports specific channels/snippets (see
+     *        midiImportPreviewForFile()) of a MIDI file as new layers,
+     *        without prompting or showing an error dialog on failure - the
+     *        testable core behind `importMidi()`'s own `MidiImportDialog`
+     *        flow, the same split `importAudioSnippets()` establishes for
+     *        audio's own picker.
+     *
+     * A thin wrapper around `sound_mind::studio::importMidiSelectionInto()`
+     * that then bakes each new layer's own content in via
+     * `toolPaletteController_->rebuildLayerContent()`, the same tail
+     * importMidiFile() already has.
+     *
+     * @param path Path to the `.mid`/`.midi` file to import.
+     * @param channelNumbers See `importMidiSelectionInto()`'s own docs.
+     * @param snippetIndices See `importMidiSelectionInto()`'s own docs.
+     * @param separateLayerPerChannel See `importMidiSelectionInto()`'s own
+     *        docs.
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @return `true` on success; `false` if no project is open, the file
+     *         couldn't be parsed, or nothing was actually imported.
+     */
+    bool importMidiSelection(const std::filesystem::path& path, const std::vector<int>& channelNumbers,
+                              const std::vector<std::size_t>& snippetIndices, bool separateLayerPerChannel,
+                              QString* errorMessage = nullptr);
 
     /**
      * @brief Routes a list of dropped local file paths to the matching
@@ -2481,6 +2539,26 @@ protected:
 
 private:
     void setProject(sound_mind::core::Project project);
+
+    /**
+     * @brief The shared "bake content in, then update the UI" tail
+     *        importMidiFile()/importMidiSelection() both need after their
+     *        own Studio-level import call returns - rebuilds each of
+     *        `newLayerIds` via `toolPaletteController_->rebuildLayerContent()`
+     *        (a MIDI import's new layers start content-less, unlike audio/
+     *        image import - see importMidiFile()'s own docs), then the
+     *        same `canvas_->update()`/`playbackController_->invalidate()`/
+     *        `hasUnsavedChanges_`/`layerController_->refreshLayersPanel()`/
+     *        status-bar sequence importImageFile() already establishes.
+     * @param newLayerIds The layer ids the Studio-level import call just
+     *        returned - empty means nothing was imported.
+     * @param path The source file, for the status-bar message only.
+     * @return `true` if `newLayerIds` was non-empty (something was
+     *         imported); `false` otherwise, clearing the busy status
+     *         message first.
+     */
+    bool finishMidiImport(const std::vector<sound_mind::core::LayerId>& newLayerIds,
+                           const std::filesystem::path& path);
 
     /**
      * @brief Wires `dialog`'s own offsetChanged() to recompute `path`'s
