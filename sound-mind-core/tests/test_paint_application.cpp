@@ -30,6 +30,7 @@ using sound_mind::core::LayerId;
 using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::MindWave;
+using sound_mind::core::MindWaveBindingFrame;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::MindWaveResolver;
 using sound_mind::core::Operation;
@@ -972,6 +973,129 @@ TEST_CASE("applyPaintOperation's Procedural colorMindWave replaces the gradient'
     const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
     const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] == -20.0f);
+}
+
+// --- Paint Tool Enhancements Installment C: operation-relative (stroke-
+// space) Opacity/Size/Color bindings (v0.Y.54.1) ----------------------------
+
+TEST_CASE("applyPaintOperation's opacityMindWave under OperationRelative samples the stroke's own pathT instead of "
+          "real canvas time, diverging from CanvasSpace for the identical stroke",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    // A single-tap stroke's own lone sample has pathT == 0.0. Its own real
+    // time (0.25s) is a quarter of the wave's own 1-second period.
+    const Path path = makeSingleTapPath(0.25, 1000.0, -10.0f, 1.0f);
+
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Sine);
+    wave.setPeriod(1.0);
+    const MindWaveResolver resolve = [&wave](MindWaveId) -> const MindWave* { return &wave; };
+
+    // CanvasSpace (the default): evaluated at the stamp's own real time
+    // (0.25s) -> phase pi/2 -> field == 1.0 (ceiling) -> full-strength paint.
+    StreamImage canvasContent = makeBlankContent(config, 100);
+    auto canvasTool = makeCircleTool(0.05, 0.0f);
+    canvasTool->setOpacityMindWave(MindWaveId{1});
+    const PaintOperation canvasOp(1, LayerId{1}, path, std::move(canvasTool));
+    applyPaintOperation(canvasOp, 2000.0, canvasContent, LayerContentResolver{}, resolve);
+
+    // OperationRelative: evaluated at the stamp's own pathT (0.0) against
+    // the wave's own one-cycle-long reduced signal -> phase 0 -> field ==
+    // 0.5 -> half-strength paint - regardless of the stamp's own real time.
+    StreamImage operationRelativeContent = makeBlankContent(config, 100);
+    auto operationRelativeTool = makeCircleTool(0.05, 0.0f);
+    operationRelativeTool->setOpacityMindWave(MindWaveId{1});
+    operationRelativeTool->setMindWaveBindingFrame(MindWaveBindingFrame::OperationRelative);
+    const PaintOperation operationRelativeOp(1, LayerId{1}, path, std::move(operationRelativeTool));
+    applyPaintOperation(operationRelativeOp, 2000.0, operationRelativeContent, LayerContentResolver{}, resolve);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.25, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    REQUIRE(canvasContent.leftMagnitudeDb[pixelIndex(canvasContent, centerFrame, centerBin)] == -10.0f);
+    REQUIRE(operationRelativeContent.leftMagnitudeDb[pixelIndex(operationRelativeContent, centerFrame, centerBin)] ==
+            -5.0f);
+}
+
+TEST_CASE("applyPaintOperation's sizeMindWave under OperationRelative samples the stroke's own pathT instead of "
+          "real canvas time, diverging from CanvasSpace for the identical stroke",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    const Path path = makeSingleTapPath(0.25, 1000.0, -10.0f, 1.0f);
+
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Sine);
+    wave.setPeriod(1.0);
+    const MindWaveResolver resolve = [&wave](MindWaveId) -> const MindWave* { return &wave; };
+
+    // CanvasSpace: field == 1.0 (ceiling, see the opacity test above for
+    // the derivation) -> the full configured 0.1s radius.
+    StreamImage canvasContent = makeBlankContent(config, 100);
+    auto canvasTool = makeCircleTool(0.1, 0.0f);
+    canvasTool->setSizeMindWave(MindWaveId{1});
+    const PaintOperation canvasOp(1, LayerId{1}, path, std::move(canvasTool));
+    applyPaintOperation(canvasOp, 2000.0, canvasContent, LayerContentResolver{}, resolve);
+
+    // OperationRelative: field == 0.5 -> half the configured radius
+    // (0.05s), regardless of the stamp's own real time.
+    StreamImage operationRelativeContent = makeBlankContent(config, 100);
+    auto operationRelativeTool = makeCircleTool(0.1, 0.0f);
+    operationRelativeTool->setSizeMindWave(MindWaveId{1});
+    operationRelativeTool->setMindWaveBindingFrame(MindWaveBindingFrame::OperationRelative);
+    const PaintOperation operationRelativeOp(1, LayerId{1}, path, std::move(operationRelativeTool));
+    applyPaintOperation(operationRelativeOp, 2000.0, operationRelativeContent, LayerContentResolver{}, resolve);
+
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    // A point 0.08s away from center - within the full 0.1s radius, but
+    // outside the halved 0.05s one.
+    const int edgeFrame = static_cast<int>(std::lround(timeToFrameIndex(0.33, config)));
+    REQUIRE(canvasContent.leftMagnitudeDb[pixelIndex(canvasContent, edgeFrame, centerBin)] == -10.0f);
+    REQUIRE(operationRelativeContent.leftMagnitudeDb[pixelIndex(operationRelativeContent, edgeFrame, centerBin)] ==
+            0.0f);
+}
+
+TEST_CASE("applyPaintOperation's colorMindWave under OperationRelative samples the stroke's own pathT instead of "
+          "real canvas time, diverging from CanvasSpace for the identical stroke",
+          "[core][paint_application][mind_wave]") {
+    const auto config = makeTestConfig();
+    Path path;
+    PathNode node;
+    node.anchor = TimeFrequencyPoint{0.25, 1000.0};
+    node.type = PathNodeType::Corner;
+    path.addNode(node);
+    auto stop0 = path.gradient().stops().front();
+    stop0.leftIntensity = -5.0f;
+    stop0.leftOpacity = 1.0f;
+    path.gradient().setStopValues(0, stop0);
+    auto stop1 = stop0;
+    stop1.leftIntensity = -20.0f;
+    path.gradient().setStopValues(1, stop1);
+
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::Sine);
+    wave.setPeriod(1.0);
+    const MindWaveResolver resolve = [&wave](MindWaveId) -> const MindWave* { return &wave; };
+
+    // CanvasSpace: field == 1.0 -> the t=1 stop (-20 dB) verbatim.
+    StreamImage canvasContent = makeBlankContent(config, 100);
+    auto canvasTool = makeCircleTool(0.05, 0.0f);
+    canvasTool->setColorMindWave(MindWaveId{1});
+    const PaintOperation canvasOp(1, LayerId{1}, path, std::move(canvasTool));
+    applyPaintOperation(canvasOp, 2000.0, canvasContent, LayerContentResolver{}, resolve);
+
+    // OperationRelative: field == 0.5 -> exactly halfway between the two
+    // stops (-12.5 dB), regardless of the stamp's own real time.
+    StreamImage operationRelativeContent = makeBlankContent(config, 100);
+    auto operationRelativeTool = makeCircleTool(0.05, 0.0f);
+    operationRelativeTool->setColorMindWave(MindWaveId{1});
+    operationRelativeTool->setMindWaveBindingFrame(MindWaveBindingFrame::OperationRelative);
+    const PaintOperation operationRelativeOp(1, LayerId{1}, path, std::move(operationRelativeTool));
+    applyPaintOperation(operationRelativeOp, 2000.0, operationRelativeContent, LayerContentResolver{}, resolve);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.25, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    REQUIRE(canvasContent.leftMagnitudeDb[pixelIndex(canvasContent, centerFrame, centerBin)] == -20.0f);
+    REQUIRE(operationRelativeContent.leftMagnitudeDb[pixelIndex(operationRelativeContent, centerFrame, centerBin)] ==
+            -12.5f);
 }
 
 TEST_CASE("applyPaintOperation's Instrument opacityMindWave, bound to a MindWave at baseline, paints nothing",

@@ -158,6 +158,49 @@ NLOHMANN_JSON_SERIALIZE_ENUM(StampMode, {
 // clang-format on
 
 /**
+ * @brief Which coordinate frame `ToolConfiguration::opacityMindWave()`/
+ *        `sizeMindWave()`/`colorMindWave()` sample their own bound
+ *        MindWave in - `docs/sound-mind-design.md`'s "Binding Coordinate
+ *        Frame", `v0.Y.54.1` Paint Tool Enhancements Installment C.
+ *
+ * A single shared choice governing all three bindings together, not one
+ * per binding - the design doc frames this as a property of "a paint
+ * operation... bound to a MindWave," not of any one parameter
+ * individually, and `InstrumentConfiguration`'s own pre-existing vibrato/
+ * tremolo bindings already establish a single-frame-per-mechanism
+ * precedent (always operation-relative, with no per-binding choice of
+ * their own).
+ */
+enum class MindWaveBindingFrame {
+    /// @brief The field is sampled at the operation's actual position on
+    ///        the canvas - the same way a layer- or filter-bound MindWave
+    ///        already is (`MindWave::evaluate()` at `sample.point`
+    ///        directly). Two identical strokes at different points on the
+    ///        canvas are shaded differently, since each sits over a
+    ///        different part of the same fixed field. The default -
+    ///        `v0.Y.54.1` Installment B's own only behavior, before
+    ///        Installment C added a second choice.
+    CanvasSpace,
+    /// @brief The field is re-centred on the operation itself: collapsed
+    ///        once per stroke into a 1D signal via `reduceMindWaveToSignal()`
+    ///        (the exact same mechanism `InstrumentConfiguration`'s own
+    ///        vibrato/tremolo bindings already use), then sampled per stamp
+    ///        at that stamp's own `pathT` (stroke-relative progress, `0` at
+    ///        the stroke's own start, `1` at its end) rather than at a real
+    ///        canvas position. Two identical strokes anywhere in the piece
+    ///        are shaded identically, since each sees the same field from
+    ///        its own point of view.
+    OperationRelative,
+};
+
+// clang-format off
+NLOHMANN_JSON_SERIALIZE_ENUM(MindWaveBindingFrame, {
+    {MindWaveBindingFrame::CanvasSpace, "canvasSpace"},
+    {MindWaveBindingFrame::OperationRelative, "operationRelative"},
+})
+// clang-format on
+
+/**
  * @brief Abstract base for a named, savable/shareable painting-tool setup -
  *        see `docs/sound-mind-design.md`'s "Tool Configuration".
  *
@@ -483,6 +526,20 @@ public:
     /// @param mindWaveId The new binding.
     void setColorMindWave(std::optional<MindWaveId> mindWaveId) noexcept { colorMindWave_ = mindWaveId; }
 
+    /**
+     * @brief Which coordinate frame `opacityMindWave()`/`sizeMindWave()`/
+     *        `colorMindWave()` sample in - see `MindWaveBindingFrame`'s own
+     *        docs. `v0.Y.54.1` Paint Tool Enhancements Installment C.
+     * @return The current binding frame; `CanvasSpace` (the only behavior
+     *         Installment B ever had) by default.
+     */
+    [[nodiscard]] MindWaveBindingFrame mindWaveBindingFrame() const noexcept { return mindWaveBindingFrame_; }
+
+    /// @brief Sets the coordinate frame `opacityMindWave()`/`sizeMindWave()`/
+    ///        `colorMindWave()` sample in.
+    /// @param frame The new binding frame.
+    void setMindWaveBindingFrame(MindWaveBindingFrame frame) noexcept { mindWaveBindingFrame_ = frame; }
+
 protected:
     ToolConfiguration() = default;
 
@@ -506,6 +563,7 @@ private:
     std::optional<MindWaveId> opacityMindWave_;
     std::optional<MindWaveId> sizeMindWave_;
     std::optional<MindWaveId> colorMindWave_;
+    MindWaveBindingFrame mindWaveBindingFrame_ = MindWaveBindingFrame::CanvasSpace;
 };
 
 /**

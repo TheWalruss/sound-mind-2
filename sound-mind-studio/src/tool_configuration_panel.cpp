@@ -39,6 +39,7 @@ using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::MindShotId;
+using sound_mind::core::MindWaveBindingFrame;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
@@ -65,6 +66,13 @@ constexpr std::array<std::pair<StampMode, const char*>, 4> kStampModes{{
     {StampMode::AlongCurve, "Along Curve"},
     {StampMode::TimeAxis, "Time Axis"},
     {StampMode::FrequencyAxis, "Frequency Axis"},
+}};
+
+/// @brief Every `MindWaveBindingFrame` paired with its display name -
+/// `v0.Y.54.1` Installment C.
+constexpr std::array<std::pair<MindWaveBindingFrame, const char*>, 2> kMindWaveBindingFrames{{
+    {MindWaveBindingFrame::CanvasSpace, "Canvas Space"},
+    {MindWaveBindingFrame::OperationRelative, "Operation-Relative"},
 }};
 
 /// @brief Every `BrushTipShape` paired with its display name, in the same
@@ -444,14 +452,33 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
 
     colorMindWaveCombo_ = makeMindWaveCombo(container, QStringLiteral("colorMindWaveCombo"));
     colorMindWaveCombo_->setToolTip(
-        tr("Bind this stroke's own gradient lookup to a MindWave - samples the gradient by this field's own canvas "
-           "position instead of by progress along the stroke."));
+        tr("Bind this stroke's own gradient lookup to a MindWave - samples the gradient by this field's own value "
+           "(at the Binding Frame below) instead of by progress along the stroke."));
     connect(colorMindWaveCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         const auto rawId = colorMindWaveCombo_->itemData(index).toULongLong();
         config_->setColorMindWave(rawId == 0 ? std::nullopt : std::optional<MindWaveId>(rawId));
         emitConfigChanged();
     });
     sharedControlsForm_->addRow(tr("Color MindWave:"), colorMindWaveCombo_);
+
+    // v0.Y.54.1 Installment C: a single shared coordinate-frame choice for
+    // the three combos above - see MindWaveBindingFrame's own docs.
+    mindWaveBindingFrameCombo_ = new QComboBox(container);
+    mindWaveBindingFrameCombo_->setObjectName(QStringLiteral("mindWaveBindingFrameCombo"));
+    for (const auto& [frame, name] : kMindWaveBindingFrames) {
+        mindWaveBindingFrameCombo_->addItem(tr(name), QVariant::fromValue(static_cast<int>(frame)));
+    }
+    mindWaveBindingFrameCombo_->setToolTip(
+        tr("Canvas Space samples each of the three MindWaves above at the stamp's own real position on the canvas - "
+           "two identical strokes at different points look different. Operation-Relative instead samples by "
+           "progress along the stroke itself, the same way Vibrato/Tremolo already do - two identical strokes "
+           "anywhere look the same as each other."));
+    connect(mindWaveBindingFrameCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        config_->setMindWaveBindingFrame(
+            static_cast<MindWaveBindingFrame>(mindWaveBindingFrameCombo_->itemData(index).toInt()));
+        emitConfigChanged();
+    });
+    sharedControlsForm_->addRow(tr("Binding Frame:"), mindWaveBindingFrameCombo_);
 
     // The stroke's own real, multi-stop gradient - see the class's own
     // docs. Every edit here writes straight into config_'s own
@@ -618,6 +645,7 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
     replacement->setOpacityMindWave(config_->opacityMindWave());
     replacement->setSizeMindWave(config_->sizeMindWave());
     replacement->setColorMindWave(config_->colorMindWave());
+    replacement->setMindWaveBindingFrame(config_->mindWaveBindingFrame());
 
     config_ = std::move(replacement);
     updateVisibleToolTypeGroup();
@@ -633,6 +661,12 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
     populateMindWaveCombo(opacityMindWaveCombo_, config_->opacityMindWave());
     populateMindWaveCombo(sizeMindWaveCombo_, config_->sizeMindWave());
     populateMindWaveCombo(colorMindWaveCombo_, config_->colorMindWave());
+    {
+        const QSignalBlocker blocker(mindWaveBindingFrameCombo_);
+        const int index = mindWaveBindingFrameCombo_->findData(
+            QVariant::fromValue(static_cast<int>(config_->mindWaveBindingFrame())));
+        mindWaveBindingFrameCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    }
     emitConfigChanged();
 }
 
@@ -665,6 +699,7 @@ void ToolConfigurationPanel::updateSharedControlVisibility() {
     sharedControlsForm_->setRowVisible(opacityMindWaveCombo_, showFalloffSizeAndOpacity);
     sharedControlsForm_->setRowVisible(sizeMindWaveCombo_, showFalloffSizeAndOpacity);
     sharedControlsForm_->setRowVisible(colorMindWaveCombo_, showFalloffSizeAndOpacity);
+    sharedControlsForm_->setRowVisible(mindWaveBindingFrameCombo_, showFalloffSizeAndOpacity);
     sharedControlsForm_->setRowVisible(gradientEditor_, showGradientEditor);
     // Intensity is genuinely unused by FixedStampPlacementConfiguration's
     // own blend (opacity alone is the blend strength) - see the class's
@@ -830,6 +865,13 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
     // relevant regardless of type, so they need syncing on every load, not
     // only when the loaded config happens to be an InstrumentConfiguration.
     rebuildMindWaveCombos();
+    {
+        // v0.Y.54.1 Installment C.
+        const QSignalBlocker blocker(mindWaveBindingFrameCombo_);
+        const int index = mindWaveBindingFrameCombo_->findData(
+            QVariant::fromValue(static_cast<int>(config_->mindWaveBindingFrame())));
+        mindWaveBindingFrameCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    }
 }
 
 void ToolConfigurationPanel::updateStampIntervalAppearance() {

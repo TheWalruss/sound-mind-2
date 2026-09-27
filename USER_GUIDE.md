@@ -963,6 +963,16 @@ settings:
   
   None of the three bind a MindWave by default - painting behaves exactly
   as before this existed until you deliberately pick one.
+- **Binding Frame** - **Canvas Space** (the default) or **Operation-
+  Relative**, choosing how *all three* of the combos above are sampled.
+  Canvas Space samples each field at a stamp's own real position on the
+  canvas, as described above - two identical strokes drawn at different
+  points look different, since each sees a different part of the same
+  fixed field. Operation-Relative instead samples by progress along the
+  stroke itself, the same way Vibrato/Tremolo already do (see above) - two
+  identical strokes drawn anywhere in the piece look the same as each
+  other, since each one sees the bound field's own shape play out fully
+  over its own length, however long or short that stroke is.
 - **Blend Mode** - how a Mind Shot/Mind Grain stamp combines with what's
   already there: **Overwrite** (the default) replaces it entirely, same
   as before this control existed; **Normal**, **Multiply**, **Screen**,
@@ -1658,19 +1668,23 @@ what's designed for them:
   a MindWave now (see [Painting](#painting) above for all of these). A
   layer's **Blend Mode** can't bind to a MindWave either - it's a single,
   fixed choice per layer, not spatially varying.
-- **Only Opacity/Size/Color track true canvas position; Vibrato/Tremolo
-  still track a stroke's own position along itself, not a genuine per-note
-  clock** - a stroke's Opacity/Size/Color MindWave is sampled at each
-  stamp's own real position on the canvas, the same fixed-mask-over-the-
-  whole-piece behavior layer opacity/filter parameters already use, so two
-  identical strokes at different points on the canvas are shaded
-  differently. Vibrato/Tremolo instead follow the stroke's *own* progress
-  from start to end, so a MindWave's shape always plays out fully over one
-  stroke, however long or short it is, and two identical strokes anywhere
-  in the piece look the same as each other. A real "retriggers exactly the
-  same way for every distinct note, regardless of stroke length"
-  alternative - generalizing Vibrato/Tremolo's own mechanism to Opacity/
-  Size/Color too - is still planned, not yet built.
+- **Opacity/Size/Color can track either true canvas position or a stroke's
+  own progress along itself, via Binding Frame; Vibrato/Tremolo always
+  track stroke progress, with no Canvas Space choice of their own** -
+  Canvas Space (the default) samples a stroke's Opacity/Size/Color
+  MindWave at each stamp's own real position on the canvas, the same
+  fixed-mask-over-the-whole-piece behavior layer opacity/filter parameters
+  already use, so two identical strokes at different points on the canvas
+  are shaded differently. Operation-Relative instead follows the stroke's
+  *own* progress from start to end - the same mechanism Vibrato/Tremolo
+  already use, unconditionally - so a MindWave's shape always plays out
+  fully over one stroke, however long or short it is, and two identical
+  strokes anywhere in the piece look the same as each other. Vibrato/
+  Tremolo's own "retriggers exactly the same way for every distinct note,
+  regardless of stroke length" behavior is not a genuine per-note clock in
+  the real-time synthesis sense (there is no live playback voice here yet)
+  - it only shapes how a painted stroke's own stamps vary, the same as
+  Opacity/Size/Color do.
 - **Warp and Reduce exist now**, alongside Superposition - Warp (one field
   distorting where another samples from) is directly editable in the
   MindWaves panel; Reduce (collapsing a field to a plain control signal)

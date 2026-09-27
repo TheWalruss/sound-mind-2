@@ -257,6 +257,31 @@ std::vector<StrokeSample> sampleStroke(const Path& path, double frequencyToTimeS
     }
 }
 
+/// @brief How many samples `reduceMindWaveToSignal()` produces for an
+/// operation-relative modulator (`InstrumentConfiguration`'s own vibrato/
+/// tremolo, and - `v0.Y.54.1` Installment C - `ToolConfiguration`'s own
+/// Opacity/Size/Color bindings under `MindWaveBindingFrame::OperationRelative`) -
+/// dense enough that linear interpolation between adjacent samples (see
+/// `sampleAtProgress()`) is indistinguishable from the underlying MindWave's
+/// own continuous shape for any waveform this codebase generates.
+constexpr std::uint32_t kModulatorSampleCount = 256;
+
+/// @brief Reads `signal` (a periodic, one-cycle-long modulator from
+/// `reduceMindWaveToSignal()`) at continuous `progress` (0..1, wrapping past
+/// 1 the same way `progress`'s own source - a stroke's `pathT` - repeats
+/// for a new note), linearly interpolating between the two nearest samples.
+float sampleAtProgress(const std::vector<float>& signal, float progress) {
+    if (signal.empty()) {
+        return 0.5f;  // Neutral (see reduceMindWaveToSignal()'s own [0, 1] range) - never hit while empty-guarded by callers.
+    }
+    float wrapped = progress - std::floor(progress);
+    const float scaled = wrapped * static_cast<float>(signal.size());
+    const std::size_t indexLow = static_cast<std::size_t>(std::floor(scaled)) % signal.size();
+    const std::size_t indexHigh = (indexLow + 1) % signal.size();
+    const float fraction = scaled - std::floor(scaled);
+    return signal[indexLow] + (signal[indexHigh] - signal[indexLow]) * fraction;
+}
+
 /// @brief `ToolConfiguration::opacityMindWave()`/`sizeMindWave()`/
 /// `colorMindWave()`, each resolved against a `Project`'s own MindWave
 /// library - `v0.Y.54.1` Paint Tool Enhancements Installment B's own
@@ -265,18 +290,39 @@ std::vector<StrokeSample> sampleStroke(const Path& path, double frequencyToTimeS
 /// `FilterParameterMindWaves`'s own identical "plain resolved pointers, all
 /// null if unbound" shape) rather than three independent per-parameter
 /// lookups repeated across six different apply functions.
+///
+/// **`v0.Y.54.1` Installment C adds `frame`/`opacitySignal`/`sizeSignal`/
+/// `colorSignal`**: under `MindWaveBindingFrame::OperationRelative`, each
+/// bound MindWave is additionally collapsed once per stroke into a 1D
+/// modulator signal via `reduceMindWaveToSignal(..., wave.period(),
+/// ReduceMode::Integrate)` - the exact same mechanism
+/// `applyInstrumentPaintOperation()`'s own vibrato/tremolo bindings already
+/// use - so `resolveStampParameters()` can sample it per stamp at that
+/// stamp's own `pathT` instead of evaluating the field at a real canvas
+/// position. Left empty (and never consulted) under
+/// `MindWaveBindingFrame::CanvasSpace`, the default - computing a signal
+/// nothing will read would be pure waste.
 struct PaintParameterMindWaves {
     const MindWave* opacity = nullptr;
     const MindWave* size = nullptr;
     const MindWave* color = nullptr;
+    MindWaveBindingFrame frame = MindWaveBindingFrame::CanvasSpace;
+    std::vector<float> opacitySignal;
+    std::vector<float> sizeSignal;
+    std::vector<float> colorSignal;
 };
 
-/// @brief Resolves `toolConfig`'s own three canvas-space bindings - `nullptr`
-/// for any that's unbound, or if `resolveMindWave` itself is empty (no
-/// Project to resolve against - most of the test suite).
+/// @brief Resolves `toolConfig`'s own three bindings - `nullptr` for any
+/// that's unbound, or if `resolveMindWave` itself is empty (no Project to
+/// resolve against - most of the test suite). Also reduces each *bound*
+/// one into its own operation-relative modulator signal when
+/// `toolConfig.mindWaveBindingFrame()` is `OperationRelative` - see
+/// `PaintParameterMindWaves`'s own docs.
 PaintParameterMindWaves resolvePaintParameterMindWaves(const ToolConfiguration& toolConfig,
-                                                         const MindWaveResolver& resolveMindWave) {
+                                                         const MindWaveResolver& resolveMindWave,
+                                                         const sound_mind::codec::StreamCodecConfig& config) {
     PaintParameterMindWaves result;
+    result.frame = toolConfig.mindWaveBindingFrame();
     if (!resolveMindWave) {
         return result;
     }
@@ -289,14 +335,28 @@ PaintParameterMindWaves resolvePaintParameterMindWaves(const ToolConfiguration& 
     if (toolConfig.colorMindWave().has_value()) {
         result.color = resolveMindWave(*toolConfig.colorMindWave());
     }
+    if (result.frame == MindWaveBindingFrame::OperationRelative) {
+        if (result.opacity != nullptr) {
+            result.opacitySignal = reduceMindWaveToSignal(*result.opacity, config, kModulatorSampleCount,
+                                                             result.opacity->period(), ReduceMode::Integrate);
+        }
+        if (result.size != nullptr) {
+            result.sizeSignal = reduceMindWaveToSignal(*result.size, config, kModulatorSampleCount,
+                                                          result.size->period(), ReduceMode::Integrate);
+        }
+        if (result.color != nullptr) {
+            result.colorSignal = reduceMindWaveToSignal(*result.color, config, kModulatorSampleCount,
+                                                           result.color->period(), ReduceMode::Integrate);
+        }
+    }
     return result;
 }
 
 /// @brief One stamp's own effective opacity multiplier/size-scale/gradient-
-/// lookup-position, after applying `mindWaves`' own canvas-space bindings
-/// (if any) - every apply function's own single per-stamp entry point,
-/// computed once per `StrokeSample` rather than three independent checks
-/// repeated inline.
+/// lookup-position, after applying `mindWaves`' own bindings (if any) -
+/// every apply function's own single per-stamp entry point, computed once
+/// per `StrokeSample` rather than three independent checks repeated
+/// inline.
 struct StampParameters {
     /// @brief Multiplies this stamp's own per-pixel blend weight - see
     /// `ToolConfiguration::opacityMindWave()`'s own docs. `1.0f` (no
@@ -313,22 +373,29 @@ struct StampParameters {
     float gradientT = 0.0f;
 };
 
-/// @brief Evaluates `mindWaves` at `sample`'s own canvas position
-/// (`MindWave::evaluate()` directly - a continuous position, not snapped to
-/// a bin/frame the way a per-cell Filter parameter binding is) and returns
-/// the resulting per-stamp parameters - see `StampParameters`'s own docs.
+/// @brief Evaluates `mindWaves` at `sample`'s own position - a real canvas
+/// position (`MindWave::evaluate()` directly - continuous, not snapped to
+/// a bin/frame the way a per-cell Filter parameter binding is) under
+/// `MindWaveBindingFrame::CanvasSpace`, or `sample.pathT` against the
+/// pre-reduced operation-relative signal (`sampleAtProgress()`) under
+/// `OperationRelative` - and returns the resulting per-stamp parameters,
+/// see `StampParameters`'s own docs.
 StampParameters resolveStampParameters(const PaintParameterMindWaves& mindWaves, const StrokeSample& sample,
                                          const sound_mind::codec::StreamCodecConfig& config) {
     StampParameters result;
     result.gradientT = sample.pathT;
+    const bool operationRelative = mindWaves.frame == MindWaveBindingFrame::OperationRelative;
     if (mindWaves.opacity != nullptr) {
-        result.opacityMultiplier = mindWaves.opacity->evaluate(sample.point, config);
+        result.opacityMultiplier = operationRelative ? sampleAtProgress(mindWaves.opacitySignal, sample.pathT)
+                                                       : mindWaves.opacity->evaluate(sample.point, config);
     }
     if (mindWaves.size != nullptr) {
-        result.sizeScale = mindWaves.size->evaluate(sample.point, config);
+        result.sizeScale = operationRelative ? sampleAtProgress(mindWaves.sizeSignal, sample.pathT)
+                                               : mindWaves.size->evaluate(sample.point, config);
     }
     if (mindWaves.color != nullptr) {
-        result.gradientT = mindWaves.color->evaluate(sample.point, config);
+        result.gradientT = operationRelative ? sampleAtProgress(mindWaves.colorSignal, sample.pathT)
+                                               : mindWaves.color->evaluate(sample.point, config);
     }
     return result;
 }
@@ -426,7 +493,7 @@ void applyProceduralPaintOperation(const PaintOperation& operation, const Proced
                                     const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
                                     sound_mind::codec::StreamImage& content, PrincipalMode principalMode,
                                     const MindWaveResolver& resolveMindWave) {
-    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave, content.config);
 
     for (const StrokeSample& sample : samples) {
         const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);
@@ -469,29 +536,6 @@ void applyProceduralPaintOperation(const PaintOperation& operation, const Proced
     }
 }
 
-/// @brief How many samples `reduceMindWaveToSignal()` produces for a
-/// vibrato/tremolo modulator - dense enough that linear interpolation
-/// between adjacent samples (see `sampleAtProgress()`) is indistinguishable
-/// from the underlying MindWave's own continuous shape for any waveform
-/// this codebase generates.
-constexpr std::uint32_t kModulatorSampleCount = 256;
-
-/// @brief Reads `signal` (a periodic, one-cycle-long modulator from
-/// `reduceMindWaveToSignal()`) at continuous `progress` (0..1, wrapping past
-/// 1 the same way `progress`'s own source - a stroke's `pathT` - repeats
-/// for a new note), linearly interpolating between the two nearest samples.
-float sampleAtProgress(const std::vector<float>& signal, float progress) {
-    if (signal.empty()) {
-        return 0.5f;  // Neutral (see reduceMindWaveToSignal()'s own [0, 1] range) - never hit while empty-guarded by callers.
-    }
-    float wrapped = progress - std::floor(progress);
-    const float scaled = wrapped * static_cast<float>(signal.size());
-    const std::size_t indexLow = static_cast<std::size_t>(std::floor(scaled)) % signal.size();
-    const std::size_t indexHigh = (indexLow + 1) % signal.size();
-    const float fraction = scaled - std::floor(scaled);
-    return signal[indexLow] + (signal[indexHigh] - signal[indexLow]) * fraction;
-}
-
 /// @brief `InstrumentConfiguration`'s own stamp: one bin-exact spike per
 /// harmonic above each sample's own frequency (see
 /// `InstrumentConfiguration::inharmonicity()`'s own docs for the stretched-
@@ -529,7 +573,7 @@ void applyInstrumentPaintOperation(const PaintOperation& operation, const Instru
                                     const std::vector<StrokeSample>& samples,
                                     sound_mind::codec::StreamImage& content,
                                     const MindWaveResolver& resolveMindWave) {
-    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave, content.config);
 
     const std::vector<double>& strengths = toolConfig.harmonicStrengths();
     if (strengths.empty()) {
@@ -821,7 +865,7 @@ void applyHealPaintOperation(const PaintOperation& operation, const HealConfigur
                               const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
                               sound_mind::codec::StreamImage& content, PrincipalMode principalMode,
                               const MindWaveResolver& resolveMindWave) {
-    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave, content.config);
 
     for (const StrokeSample& sample : samples) {
         const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);
@@ -885,7 +929,7 @@ void applySoftenPaintOperation(const PaintOperation& operation, const SoftenConf
                                 const std::vector<StrokeSample>& samples, double frequencyToTimeScale,
                                 sound_mind::codec::StreamImage& content, PrincipalMode principalMode,
                                 const MindWaveResolver& resolveMindWave) {
-    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave, content.config);
 
     for (const StrokeSample& sample : samples) {
         const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);
@@ -1001,7 +1045,7 @@ void applySmudgePaintOperation(const PaintOperation& operation, const SmudgeConf
     if (samples.size() < 2) {
         return;  // No neighboring sample to smear toward - see this tool's own docs.
     }
-    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave, content.config);
 
     // Every sample's own (frameCenter, binCenter), computed once - each
     // sample's own smear direction needs its neighbor's position too.
@@ -1242,7 +1286,7 @@ void applyOrderChaosPaintOperation(const PaintOperation& operation, const OrderC
     if (toolConfig.amount() == 0.0) {
         return;
     }
-    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave);
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave, content.config);
 
     // One shared engine for every stamp/sample this call processes -
     // reseeded fresh only once per applyPaintOperation() call (heap

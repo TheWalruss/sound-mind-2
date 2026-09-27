@@ -16,6 +16,7 @@ using sound_mind::core::HealConfiguration;
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindShotConfiguration;
+using sound_mind::core::MindWaveBindingFrame;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
@@ -161,6 +162,36 @@ TEST_CASE("A ToolConfiguration loaded from JSON with no opacity/size/color MindW
     REQUIRE_FALSE(loaded->opacityMindWave().has_value());
     REQUIRE_FALSE(loaded->sizeMindWave().has_value());
     REQUIRE_FALSE(loaded->colorMindWave().has_value());
+}
+
+TEST_CASE("A fresh ToolConfiguration's MindWave binding frame is CanvasSpace", "[core][tool_configuration]") {
+    const ProceduralConfiguration config;
+    REQUIRE(config.mindWaveBindingFrame() == MindWaveBindingFrame::CanvasSpace);
+}
+
+TEST_CASE("A ToolConfiguration's MindWave binding frame can be changed", "[core][tool_configuration]") {
+    ProceduralConfiguration config;
+    config.setMindWaveBindingFrame(MindWaveBindingFrame::OperationRelative);
+    REQUIRE(config.mindWaveBindingFrame() == MindWaveBindingFrame::OperationRelative);
+}
+
+TEST_CASE("A ToolConfiguration's MindWave binding frame round-trips through JSON", "[core][tool_configuration]") {
+    ProceduralConfiguration config;
+    config.setMindWaveBindingFrame(MindWaveBindingFrame::OperationRelative);
+
+    const nlohmann::json json = config;
+    const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
+
+    REQUIRE(json.at("mindWaveBindingFrame").get<std::string>() == "operationRelative");
+    REQUIRE(roundTripped->mindWaveBindingFrame() == MindWaveBindingFrame::OperationRelative);
+}
+
+TEST_CASE("A ToolConfiguration loaded from JSON with no mindWaveBindingFrame key falls back to CanvasSpace",
+          "[core][tool_configuration]") {
+    // A project saved before Paint Tool Enhancements Installment C existed.
+    const nlohmann::json json = ProceduralConfiguration{};
+    const std::unique_ptr<ToolConfiguration> loaded = toolConfigurationFromJson(json);
+    REQUIRE(loaded->mindWaveBindingFrame() == MindWaveBindingFrame::CanvasSpace);
 }
 
 TEST_CASE("A fresh ToolConfiguration's stamp interval pattern text is empty", "[core][tool_configuration]") {

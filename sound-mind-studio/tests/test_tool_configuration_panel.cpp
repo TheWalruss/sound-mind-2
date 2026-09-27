@@ -34,6 +34,7 @@ using sound_mind::core::MindGrainConfiguration;
 using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotConfiguration;
 using sound_mind::core::MindShotId;
+using sound_mind::core::MindWaveBindingFrame;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
@@ -624,6 +625,51 @@ void ToolConfigurationPanelTest::opacitySizeColorCombosAreHiddenForMindShotAndMi
     QVERIFY(!opacityCombo->isHidden());
     QVERIFY(!sizeCombo->isHidden());
     QVERIFY(!colorCombo->isHidden());
+}
+
+// --- Paint Tool Enhancements: operation-relative binding frame (v0.Y.54.1 Installment C) ------------------------
+
+void ToolConfigurationPanelTest::freshPanelsBindingFrameIsCanvasSpace() {
+    const ToolConfigurationPanel panel;
+    QCOMPARE(panel.toolConfiguration().mindWaveBindingFrame(), MindWaveBindingFrame::CanvasSpace);
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("mindWaveBindingFrameCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(combo->currentText(), QStringLiteral("Canvas Space"));
+}
+
+void ToolConfigurationPanelTest::changingTheBindingFrameComboEmitsToolConfigurationChanged() {
+    ToolConfigurationPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("mindWaveBindingFrameCombo"));
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    combo->setCurrentIndex(combo->findText(QStringLiteral("Operation-Relative")));
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.toolConfiguration().mindWaveBindingFrame(), MindWaveBindingFrame::OperationRelative);
+}
+
+void ToolConfigurationPanelTest::loadingAConfigurationSyncsTheBindingFrameCombo() {
+    ToolConfigurationPanel panel;
+    ProceduralConfiguration config;
+    config.setMindWaveBindingFrame(MindWaveBindingFrame::OperationRelative);
+
+    panel.setToolConfiguration(config);
+
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("mindWaveBindingFrameCombo"));
+    QCOMPARE(combo->currentText(), QStringLiteral("Operation-Relative"));
+}
+
+void ToolConfigurationPanelTest::switchingToolTypeAwayFromAndBackPreservesTheBindingFrame() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* frameCombo = panel.findChild<QComboBox*>(QStringLiteral("mindWaveBindingFrameCombo"));
+    frameCombo->setCurrentIndex(frameCombo->findText(QStringLiteral("Operation-Relative")));
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Procedural")));
+
+    QCOMPARE(panel.toolConfiguration().mindWaveBindingFrame(), MindWaveBindingFrame::OperationRelative);
+    QCOMPARE(frameCombo->currentText(), QStringLiteral("Operation-Relative"));
 }
 
 // --- Mind Shots (v0.Y.33.1 Installment A) -----------------------------------

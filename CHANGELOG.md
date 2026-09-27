@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.8] - 2026-09-27
+
+Paint Tool Enhancements, Installment C (final): **operation-relative (stroke-space) MindWave bindings - milestone complete.**
+
+### Added
+
+- **A new "Binding Frame" drop-down** (Canvas Space / Operation-Relative) alongside the Opacity/Size/Color MindWave combos. Canvas Space (the default, unchanged from Installment B) samples each bound field at a stamp's own real position on the canvas - two identical strokes at different points look different. Operation-Relative instead samples by progress along the stroke itself, the same way Vibrato/Tremolo already do - two identical strokes anywhere in the piece now look the same as each other.
+
+### Notes
+
+This closes out `v0.Y.54.1` (Paint Tool Enhancements) - all three installments (non-uniform stamp timing, canvas-space bindings, and this operation-relative option) are now complete. New `ToolConfiguration::mindWaveBindingFrame()`, reusing the exact same per-stroke modulator-signal mechanism Vibrato/Tremolo already established. Full regression: `sound-mind-core` 945/945 (7 new), `sound-mind-studio` full suite genuinely passing (4 new). Builds cleanly on both Arm64 and x64. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #172.
+
 ## [0.1.3.7] - 2026-09-27
 
 Paint Tool Enhancements, Installment B: **canvas-space Opacity/Size/Color MindWave bindings.**

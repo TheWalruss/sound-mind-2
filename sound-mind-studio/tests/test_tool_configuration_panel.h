@@ -51,6 +51,12 @@ private slots:
     void switchingToolTypeAwayFromAndBackPreservesOpacitySizeAndColorBindings();
     void opacitySizeColorCombosAreHiddenForMindShotAndMindGrain();
 
+    // Paint Tool Enhancements - operation-relative binding frame (v0.Y.54.1 Installment C).
+    void freshPanelsBindingFrameIsCanvasSpace();
+    void changingTheBindingFrameComboEmitsToolConfigurationChanged();
+    void loadingAConfigurationSyncsTheBindingFrameCombo();
+    void switchingToolTypeAwayFromAndBackPreservesTheBindingFrame();
+
     // Mind Shots (v0.Y.33.1 Installment A).
     void switchingToolTypeToMindShotShowsItsOwnGroupAndHidesProcedural();
     void setProjectPopulatesTheMindShotCombo();

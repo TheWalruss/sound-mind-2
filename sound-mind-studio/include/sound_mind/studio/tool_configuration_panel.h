@@ -533,6 +533,14 @@ private:
     QComboBox* sizeMindWaveCombo_ = nullptr;
     QComboBox* colorMindWaveCombo_ = nullptr;
 
+    /// @brief Which coordinate frame the three combos above sample in -
+    ///        `sound_mind::core::MindWaveBindingFrame`, `v0.Y.54.1`
+    ///        Installment C. A single shared choice, not one per binding -
+    ///        see `MindWaveBindingFrame`'s own docs on `ToolConfiguration`
+    ///        for why. Lives in `sharedControlsForm_` right alongside the
+    ///        three combos, same visibility gate.
+    QComboBox* mindWaveBindingFrameCombo_ = nullptr;
+
     /// @brief The stroke's own gradient editor - see the class's own docs
     ///        and updateSharedControlVisibility()'s own docs for which
     ///        tool types show it, and in which display mode.

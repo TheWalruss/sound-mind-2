@@ -51,6 +51,8 @@ void writeCommonToolConfigurationFields(nlohmann::json& json, const ToolConfigur
     writeOptionalMindWaveId(json, "opacityMindWaveId", config.opacityMindWave());
     writeOptionalMindWaveId(json, "sizeMindWaveId", config.sizeMindWave());
     writeOptionalMindWaveId(json, "colorMindWaveId", config.colorMindWave());
+    // v0.Y.54.1 Installment C.
+    json["mindWaveBindingFrame"] = config.mindWaveBindingFrame();
 }
 
 /// @brief The inverse of writeCommonToolConfigurationFields() - reads
@@ -77,6 +79,10 @@ void readCommonToolConfigurationFields(const nlohmann::json& json, ToolConfigura
     config.setOpacityMindWave(readOptionalMindWaveId(json, "opacityMindWaveId"));
     config.setSizeMindWave(readOptionalMindWaveId(json, "sizeMindWaveId"));
     config.setColorMindWave(readOptionalMindWaveId(json, "colorMindWaveId"));
+    // v0.Y.54.1 Installment C - absent in a project saved before this
+    // installment, falling back to CanvasSpace (Installment B's own only
+    // behavior), so an old project's own strokes render identically.
+    config.setMindWaveBindingFrame(json.value("mindWaveBindingFrame", MindWaveBindingFrame::CanvasSpace));
 }
 
 }  // namespace
