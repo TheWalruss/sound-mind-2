@@ -1,7 +1,11 @@
 #include "test_layers_panel.h"
 
+#include <algorithm>
+
+#include <QApplication>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QEnterEvent>
 #include <QImage>
 #include <QLabel>
 #include <QListWidget>
@@ -211,11 +215,13 @@ void LayersPanelTest::rescaleSpinBoxEmitsRescaleChanged() {
     QCOMPARE(spy.at(0).at(1).toDouble(), 2.0);
 }
 
-void LayersPanelTest::unselectedRowsShowNoOpacityOrTransformOrBlendModeOrDeleteControls() {
+void LayersPanelTest::unselectedRowsShowNoOpacityOrTransformOrBlendModeControls() {
     // The Layers Panel Redesign's own central premise: an unselected row
     // shows only its visibility eye alongside its name - everything else
-    // (opacity, MindWave combo, transform controls, blend mode, delete,
-    // drag handle) waits for selection.
+    // (opacity, MindWave combo, transform controls, blend mode, drag
+    // handle) waits for selection. Delete is a deliberate exception since
+    // real-world testing pass 2026-09-27 - it now *exists* on an unselected
+    // row too, just hidden until hovered - see its own dedicated test.
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());  // nothing selected.
 
@@ -225,12 +231,40 @@ void LayersPanelTest::unselectedRowsShowNoOpacityOrTransformOrBlendModeOrDeleteC
     QVERIFY(panel.findChild<QSpinBox*>(QStringLiteral("translationSpinBox")) == nullptr);
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")) == nullptr);
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo")) == nullptr);
-    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("deleteButton")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("duplicateButton")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("cleanUpPhaseButton")) == nullptr);
     QVERIFY(panel.findChild<QWidget*>(QStringLiteral("dragHandle")) == nullptr);
-    // The visibility eye is the one named exception - always present.
+    // Delete exists on every unlocked row (2, for twoNormalLayers()) but
+    // starts hidden on all of them - not absent, unlike every control
+    // above. isHidden() (not isVisible()) is the reliable signal here -
+    // isVisible() also depends on the whole ancestor chain actually being
+    // shown on screen, which these headless tests never do.
+    const auto deleteButtons = panel.findChildren<QPushButton*>(QStringLiteral("deleteButton"));
+    QCOMPARE(deleteButtons.size(), 2);
+    QVERIFY(std::all_of(deleteButtons.begin(), deleteButtons.end(), [](QPushButton* b) { return b->isHidden(); }));
+    // The visibility eye is the other named exception - always present.
     QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton")).size(), 2);
+}
+
+void LayersPanelTest::hoveringAnUnselectedRowRevealsItsDeleteButtonAndLeavingHidesItAgain() {
+    // Real-world testing pass, 2026-09-27: confirmed with the user as a
+    // real discoverability gap - delete alone gets this extra affordance,
+    // unlike every other selection-revealed control.
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());  // nothing selected.
+    auto* deleteButton = panel.findChild<QPushButton*>(QStringLiteral("deleteButton"));
+    QVERIFY(deleteButton != nullptr);
+    QVERIFY(deleteButton->isHidden());
+    auto* row = deleteButton->parentWidget();  // the LayerRowWidget itself - see its own docs.
+    QVERIFY(row != nullptr);
+
+    QEnterEvent enterEvent(QPointF(0, 0), QPointF(0, 0), QPointF(0, 0));
+    QApplication::sendEvent(row, &enterEvent);
+    QVERIFY(!deleteButton->isHidden());
+
+    QEvent leaveEvent(QEvent::Leave);
+    QApplication::sendEvent(row, &leaveEvent);
+    QVERIFY(deleteButton->isHidden());
 }
 
 void LayersPanelTest::selectingARowRevealsItsOwnControlsAndDeselectingHidesThemAgain() {
@@ -238,15 +272,22 @@ void LayersPanelTest::selectingARowRevealsItsOwnControlsAndDeselectingHidesThemA
     panel.setLayers(twoNormalLayers());
 
     panel.selectLayer(static_cast<LayerId>(1));  // "Bottom".
+    QTest::qWait(0);  // rebuildRows() rebuilds via deleteLater() - see setLayersReplacesThePreviousRows().
     QCOMPARE(panel.findChildren<QSlider*>(QStringLiteral("opacitySlider")).size(), 1);
     QCOMPARE(panel.findChildren<QSlider*>(QStringLiteral("balanceSlider")).size(), 1);
     QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo")).size(), 1);
     QCOMPARE(panel.findChildren<QSpinBox*>(QStringLiteral("translationSpinBox")).size(), 1);
     QCOMPARE(panel.findChildren<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")).size(), 1);
     QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo")).size(), 1);
-    QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("deleteButton")).size(), 1);
     QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("duplicateButton")).size(), 1);
     QCOMPARE(panel.findChildren<QWidget*>(QStringLiteral("dragHandle")).size(), 1);
+    // Delete exists on both rows (selected and not - see this class's own
+    // hover-reveal docs) but only the selected one's own is actually shown.
+    auto deleteButtons = panel.findChildren<QPushButton*>(QStringLiteral("deleteButton"));
+    QCOMPARE(deleteButtons.size(), 2);
+    QCOMPARE(std::count_if(deleteButtons.begin(), deleteButtons.end(),
+                            [](QPushButton* b) { return !b->isHidden(); }),
+              1);
     // twoNormalLayers() rows have no thumbnail (no content yet) - the
     // phase-cleanup button stays absent even once selected, unlike
     // duplicate/delete, which only gate on selection - real-world testing
@@ -258,8 +299,12 @@ void LayersPanelTest::selectingARowRevealsItsOwnControlsAndDeselectingHidesThemA
 
     QVERIFY(panel.findChild<QSlider*>(QStringLiteral("opacitySlider")) == nullptr);
     QVERIFY(panel.findChild<QSlider*>(QStringLiteral("balanceSlider")) == nullptr);
-    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("deleteButton")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("duplicateButton")) == nullptr);
+    // Delete exists on both rows again, but both now hidden - see
+    // hoveringAnUnselectedRowRevealsItsDeleteButtonAndLeavingHidesItAgain().
+    deleteButtons = panel.findChildren<QPushButton*>(QStringLiteral("deleteButton"));
+    QCOMPARE(deleteButtons.size(), 2);
+    QVERIFY(std::all_of(deleteButtons.begin(), deleteButtons.end(), [](QPushButton* b) { return b->isHidden(); }));
 }
 
 void LayersPanelTest::doubleClickingNameEmitsRenameRequested() {
@@ -278,13 +323,18 @@ void LayersPanelTest::doubleClickingNameEmitsRenameRequested() {
 void LayersPanelTest::deleteButtonEmitsDeleteRequestedForNormalLayers() {
     LayersPanel panel;
     panel.setLayers(twoNormalLayers());
-    panel.selectLayer(static_cast<LayerId>(2));  // "Top" - delete is one of the redesign's own
-                                                  // "revealed once selected" controls.
+    panel.selectLayer(static_cast<LayerId>(2));  // "Top".
+    QTest::qWait(0);  // rebuildRows() rebuilds via deleteLater() - see setLayersReplacesThePreviousRows().
     QSignalSpy spy(&panel, &LayersPanel::deleteRequested);
 
+    // Delete now exists on both rows (see this class's own hover-reveal
+    // docs) - only the selected one's own is actually shown; clicking that
+    // one specifically confirms the signal still carries the right id.
     const auto buttons = panel.findChildren<QPushButton*>(QStringLiteral("deleteButton"));
-    QCOMPARE(buttons.size(), 1);
-    buttons.at(0)->click();
+    QCOMPARE(buttons.size(), 2);
+    const auto it = std::find_if(buttons.begin(), buttons.end(), [](QPushButton* b) { return !b->isHidden(); });
+    QVERIFY(it != buttons.end());
+    (*it)->click();
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(2));
@@ -380,6 +430,57 @@ void LayersPanelTest::nonNormalLayersShowATypeTag() {
     panel.setLayers(twoNormalLayers());
     QTest::qWait(0);  // let the Background row's deleteLater() actually happen - see setLayersReplacesThePreviousRows().
     QVERIFY(panel.findChild<QLabel*>(QStringLiteral("typeTagLabel")) == nullptr);
+}
+
+void LayersPanelTest::filterAndEqualizerRowsShowAnEditFilterButtonUnconditionally() {
+    // Real-world testing pass, 2026-09-27: "editing a filter layer should
+    // be immediately accessible from the layers panel" - unlike every
+    // other row action, this one isn't gated on selection at all.
+    LayersPanel::RowData filter;
+    filter.id = 1;
+    filter.type = LayerType::Filter;
+
+    LayersPanel::RowData equalizer;
+    equalizer.id = 2;
+    equalizer.type = LayerType::Equalizer;
+
+    LayersPanel panel;
+    panel.setLayers({filter, equalizer});  // nothing selected.
+
+    const auto buttons = panel.findChildren<QPushButton*>(QStringLiteral("editFilterButton"));
+    QCOMPARE(buttons.size(), 2);
+    QVERIFY(std::all_of(buttons.begin(), buttons.end(), [](QPushButton* b) { return !b->isHidden(); }));
+}
+
+void LayersPanelTest::normalAndBackgroundRowsShowNoEditFilterButton() {
+    LayersPanel::RowData background;
+    background.id = 1;
+    background.type = LayerType::Background;
+
+    LayersPanel panel;
+    panel.setLayers({background});
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("editFilterButton")) == nullptr);
+
+    panel.setLayers(twoNormalLayers());
+    QTest::qWait(0);  // let the Background row's deleteLater() actually happen.
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("editFilterButton")) == nullptr);
+}
+
+void LayersPanelTest::editFilterButtonEmitsEditFilterRequestedWithTheRowsOwnId() {
+    LayersPanel::RowData filter;
+    filter.id = 5;
+    filter.type = LayerType::Filter;
+
+    LayersPanel panel;
+    panel.setLayers({filter});
+    QSignalSpy spy(&panel, &LayersPanel::editFilterRequested);
+
+    auto* button = panel.findChild<QPushButton*>(QStringLiteral("editFilterButton"));
+    QVERIFY(button != nullptr);
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(5));
 }
 
 void LayersPanelTest::freshPanelHasNoSelection() {

@@ -202,6 +202,7 @@ private slots:
     void addEmptyLayerIsANoOpWithNoProjectOpen();
     void addFilterLayerAddsAFilterTypeLayerAndSelectsIt();
     void selectingAFilterLayerLoadsAndEnablesFilterConfigurationPanel();
+    void editFilterLayerSelectsTheLayerAndShowsTheFilterConfigurationPanel();
     void selectingANormalLayerShowsThePendingFilterConfigurationInsteadOfDisablingThePanel();
     void addFilterLayerSeedsTheNewLayerFromThePendingFilterConfiguration();
     void pendingFilterConfigurationPersistsAcrossMultipleAddedFilterLayers();

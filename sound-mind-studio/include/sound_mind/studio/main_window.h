@@ -927,6 +927,31 @@ public slots:
     void cleanUpLayerPhase(sound_mind::core::LayerId id);
 
     /**
+     * @brief Makes `id`'s own Filter/Equalizer configuration immediately
+     *        editable - the actual work behind `LayersPanel`'s own "edit
+     *        filter" (⚙) button, real-world testing pass 2026-09-27
+     *        ("editing a filter layer should be immediately accessible
+     *        from the layers panel").
+     *
+     * Two steps, both already-established mechanisms reused rather than
+     * duplicated: `layersPanel_->selectLayer(id)` (which fires
+     * selectionChanged() into `LayerController::handleLayerSelectionChanged()`,
+     * already responsible for loading a selected Filter/Equalizer layer's
+     * own configuration into `filterConfigurationPanel_` - see that
+     * method's own docs), then `filterConfigurationPanel_->show()`/
+     * `raise()`, since nothing previously surfaced that panel automatically
+     * if it happened to be hidden (its own toolbar toggle is "off by
+     * default" - see its own docs).
+     *
+     * @param id The Filter/Equalizer layer to edit. A no-op for any other
+     *        layer type or an unknown id - `LayersPanel` itself only ever
+     *        emits this for a row where `sound_mind::core::isFilterLayerType()`
+     *        is true, and `selectLayer()` is already a no-op for an unknown
+     *        id (see its own docs).
+     */
+    void editFilterLayer(sound_mind::core::LayerId id);
+
+    /**
      * @brief Selects the layer above the currently selected one - the
      *        actual work behind the "Select Layer Above" Edit menu action
      *        (Page Up), `v0.Y.46.1` Installment A ("Layers Panel & Editing

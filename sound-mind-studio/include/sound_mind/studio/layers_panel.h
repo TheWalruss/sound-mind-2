@@ -92,6 +92,13 @@ namespace sound_mind::studio {
  * whose opacity is bound to a MindWave (`opacityMindWaveId`) gets a
  * second, smaller, non-selectable child row directly beneath its own -
  * see setMindWavePreviewImages()'s own docs.
+ *
+ * **Delete also reveals on hover, real-world testing pass 2026-09-27** -
+ * confirmed with the user as a real discoverability gap (not a reason to
+ * revert the redesign): every other selection-revealed control above still
+ * needs a click first, but a row's own `LayerRowWidget` (see its own class
+ * docs, `layers_panel.cpp`) additionally shows its delete button while the
+ * cursor is simply hovering over that row, whether or not it's selected.
  */
 class LayersPanel : public QDockWidget {
     Q_OBJECT
@@ -342,6 +349,23 @@ signals:
     ///        thumbnail means) - `Filter`/`Equalizer` rows and a brand-new
     ///        empty layer's row never show this button at all.
     void cleanUpPhaseRequested(sound_mind::core::LayerId id);
+
+    /**
+     * @brief A row's "edit filter" (⚙) button was clicked - real-world
+     *        testing pass, 2026-09-27 ("editing a filter layer should be
+     *        immediately accessible from the layers panel", confirmed with
+     *        the user). Only shown for `Filter`/`Equalizer` rows
+     *        (`sound_mind::core::isFilterLayerType()`), unconditionally -
+     *        not gated on selection, unlike every other row action here.
+     *        `MainWindow` responds by selecting this layer (which already
+     *        populates `FilterConfigurationPanel` via the existing
+     *        selectionChanged()/`LayerController::
+     *        handleLayerSelectionChanged()` wiring) and showing/raising
+     *        that panel if it's currently hidden - see
+     *        `MainWindow::editFilterLayer()`'s own docs.
+     * @param id The Filter/Equalizer layer to edit.
+     */
+    void editFilterRequested(sound_mind::core::LayerId id);
 
     /// @brief The "+ Add Layer" button was clicked - `MainWindow` responds
     ///        by adding a new, silent, project-sized `Normal` layer (see

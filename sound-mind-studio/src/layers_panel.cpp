@@ -8,6 +8,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QEnterEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -200,6 +201,12 @@ protected:
 /// always the floor of the stack, always fully opaque, with nothing
 /// beneath it to line up against in time, so none of those concepts apply
 /// to it the way they do to every other layer type.
+///
+/// **Delete also reveals on hover, real-world testing pass 2026-09-27** -
+/// every other "revealed once selected" control above stays selection-only
+/// (clicking a row first is still how you reach opacity/blend/etc.), but
+/// hiding delete specifically behind a click made it too easy to miss
+/// entirely; see enterEvent()/leaveEvent()'s own docs for the mechanism.
 class LayerRowWidget : public QWidget {
     Q_OBJECT
 
@@ -207,7 +214,7 @@ public:
     LayerRowWidget(const LayersPanel::RowData& data, QListWidget* list,
                    const std::vector<std::pair<MindWaveId, QString>>& availableMindWaves, bool disallowedForMindGrain,
                    bool isSelected, QWidget* parent = nullptr)
-        : QWidget(parent), id_(data.id) {
+        : QWidget(parent), id_(data.id), isSelected_(isSelected) {
         auto* outer = new QVBoxLayout(this);
         outer->setContentsMargins(2, 1, 2, 1);
         outer->setSpacing(2);
@@ -334,6 +341,29 @@ public:
             header->addWidget(typeTag);
         }
 
+        // Real-world testing pass, 2026-09-27: "editing a filter layer
+        // should be immediately accessible from the layers panel" -
+        // confirmed with the user. Unlike every other row action above,
+        // this one is *not* gated on selection at all (nor hidden behind
+        // hover, unlike delete's own real-world testing pass fix just
+        // above) - a Filter/Equalizer row's only real reason to exist is
+        // its own configuration, so the affordance to reach it stays
+        // visible unconditionally, the same "always present" treatment the
+        // visibility eye already gets. Shown for both Filter and Equalizer
+        // (`isFilterLayerType()` - the Equalizer is itself "a Filter layer
+        // of Equalizer type", per `docs/sound-mind-design.md`'s own
+        // "Special Layers") - including the locked Equalizer row, which has
+        // no delete/drag affordance of its own but still needs this one.
+        if (sound_mind::core::isFilterLayerType(data.type)) {
+            auto* editFilterButton = new QPushButton(QStringLiteral("⚙"));
+            editFilterButton->setObjectName(QStringLiteral("editFilterButton"));
+            editFilterButton->setFlat(true);
+            editFilterButton->setFixedWidth(22);
+            editFilterButton->setToolTip(tr("Edit this layer's filter configuration"));
+            connect(editFilterButton, &QPushButton::clicked, this, [this]() { emit editFilterRequested(id_); });
+            header->addWidget(editFilterButton);
+        }
+
         // Per-layer loudness indicator (v0.Y.52.1, Analysis Tools v1) -
         // shown regardless of selection (unlike the redesign's own
         // selection-revealed controls below), so watching it move during
@@ -351,7 +381,7 @@ public:
         }
 
         if (isSelected && !locked) {
-            // Duplicate/Delete are two more of the redesign's own
+            // Duplicate/Clean-up-phase are two more of the redesign's own
             // "revealed once selected" controls - see the class docs.
             // Real-world testing pass finding #22.
             auto* duplicateButton = new QPushButton(QStringLiteral("⧉"));
@@ -377,15 +407,29 @@ public:
                         [this]() { emit cleanUpPhaseRequested(id_); });
                 header->addWidget(cleanUpPhaseButton);
             }
+        }
 
-            auto* deleteButton = new QPushButton(QStringLiteral("×"));
-            deleteButton->setObjectName(QStringLiteral("deleteButton"));
-            deleteButton->setFlat(true);
-            deleteButton->setFixedWidth(22);
-            deleteButton->setStyleSheet(QStringLiteral("color: #c04040;"));
-            deleteButton->setToolTip(tr("Delete layer"));
-            connect(deleteButton, &QPushButton::clicked, this, [this]() { emit deleteRequested(id_); });
-            header->addWidget(deleteButton);
+        if (!locked) {
+            // Real-world testing pass, 2026-09-27: delete stayed one of the
+            // redesign's own "revealed once selected" controls above, but
+            // hiding it entirely until a row is clicked made it too easy to
+            // miss altogether - confirmed with the user as a discoverability
+            // gap, not a reason to revert the redesign. Unlike
+            // duplicate/clean-up-phase above, this button always *exists*
+            // for an unlocked row (not just once selected) so
+            // enterEvent()/leaveEvent() below can reveal it on hover too;
+            // its initial visibility still matches `isSelected` exactly, so
+            // an unselected, unhovered row looks identical to before this
+            // change.
+            deleteButton_ = new QPushButton(QStringLiteral("×"));
+            deleteButton_->setObjectName(QStringLiteral("deleteButton"));
+            deleteButton_->setFlat(true);
+            deleteButton_->setFixedWidth(22);
+            deleteButton_->setStyleSheet(QStringLiteral("color: #c04040;"));
+            deleteButton_->setToolTip(tr("Delete layer"));
+            deleteButton_->setVisible(isSelected);
+            connect(deleteButton_, &QPushButton::clicked, this, [this]() { emit deleteRequested(id_); });
+            header->addWidget(deleteButton_);
         }
 
         outer->addLayout(header);
@@ -513,6 +557,7 @@ signals:
     void deleteRequested(sound_mind::core::LayerId id);
     void duplicateRequested(sound_mind::core::LayerId id);
     void cleanUpPhaseRequested(sound_mind::core::LayerId id);
+    void editFilterRequested(sound_mind::core::LayerId id);
     void selected(sound_mind::core::LayerId id);
 
 public:
@@ -524,9 +569,33 @@ public:
     /// @return That label, or `nullptr` if this row has none.
     [[nodiscard]] QLabel* loudnessLabel() const { return loudnessLabel_; }
 
+protected:
+    /// @brief Reveals `deleteButton_` (if this row has one) for as long as
+    ///        the cursor stays over the row - see this class's own docs on
+    ///        why delete specifically gets this extra affordance, unlike
+    ///        every other "revealed once selected" control here.
+    void enterEvent(QEnterEvent* event) override {
+        if (deleteButton_ != nullptr) {
+            deleteButton_->setVisible(true);
+        }
+        QWidget::enterEvent(event);
+    }
+
+    /// @brief Reverts `deleteButton_`'s own visibility back to whatever
+    ///        `isSelected_` says once the cursor leaves - hidden again for
+    ///        an unselected row, still shown for a selected one.
+    void leaveEvent(QEvent* event) override {
+        if (deleteButton_ != nullptr) {
+            deleteButton_->setVisible(isSelected_);
+        }
+        QWidget::leaveEvent(event);
+    }
+
 private:
     sound_mind::core::LayerId id_;
+    bool isSelected_ = false;
     QLabel* loudnessLabel_ = nullptr;
+    QPushButton* deleteButton_ = nullptr;
 };
 
 /// @brief A smaller, non-interactive, visually indented "child" row shown
@@ -754,6 +823,7 @@ void LayersPanel::rebuildRows() {
         connect(row, &LayerRowWidget::deleteRequested, this, &LayersPanel::deleteRequested);
         connect(row, &LayerRowWidget::duplicateRequested, this, &LayersPanel::duplicateRequested);
         connect(row, &LayerRowWidget::cleanUpPhaseRequested, this, &LayersPanel::cleanUpPhaseRequested);
+        connect(row, &LayerRowWidget::editFilterRequested, this, &LayersPanel::editFilterRequested);
         connect(row, &LayerRowWidget::selected, this, &LayersPanel::selectLayer);
 
         // Restores the selection highlight across this refresh, for the

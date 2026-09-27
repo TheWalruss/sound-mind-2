@@ -221,6 +221,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layersPanel_, &LayersPanel::deleteRequested, this, &MainWindow::deleteLayer);
     connect(layersPanel_, &LayersPanel::duplicateRequested, this, &MainWindow::duplicateLayer);
     connect(layersPanel_, &LayersPanel::cleanUpPhaseRequested, this, &MainWindow::cleanUpLayerPhase);
+    connect(layersPanel_, &LayersPanel::editFilterRequested, this, &MainWindow::editFilterLayer);
     connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
     connect(layersPanel_, &LayersPanel::addLayerRequested, this, &MainWindow::addEmptyLayer);
     connect(layersPanel_, &LayersPanel::addFilterLayerRequested, this, &MainWindow::addFilterLayer);
@@ -2525,6 +2526,12 @@ void MainWindow::deleteLayer(sound_mind::core::LayerId id) { layerController_->d
 void MainWindow::duplicateLayer(sound_mind::core::LayerId id) { layerController_->duplicateLayer(id); }
 
 void MainWindow::cleanUpLayerPhase(sound_mind::core::LayerId id) { layerController_->cleanUpLayerPhase(id); }
+
+void MainWindow::editFilterLayer(sound_mind::core::LayerId id) {
+    layersPanel_->selectLayer(id);
+    filterConfigurationPanel_->show();
+    filterConfigurationPanel_->raise();
+}
 
 void MainWindow::selectLayerAbove() { layerController_->selectLayerAbove(); }
 

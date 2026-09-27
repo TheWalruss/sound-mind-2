@@ -406,7 +406,14 @@ stroke paints into) to reveal its full set of controls:
   being completely inaudible; this clears it without touching any cell
   that actually carries sound. A one-time cleanup, not an ongoing effect
   - it doesn't undo.
-- A **delete** button (×), for any layer except the locked one(s).
+- A **delete** button (×), for any layer except the locked one(s) - also
+  appears just by hovering over the row, even without selecting it first,
+  so it's never more than a click away.
+- An **edit filter** button (⚙), always visible (no need to select the
+  row first) on any **Filter** or **Equalizer** layer - jumps straight to
+  that layer's own configuration, selecting it and opening the Filter
+  Configuration panel if it isn't already open. See
+  [Filter Layers](#filter-layers) below.
 
 Double-clicking a row's name renames it, whether the row is currently
 selected or not. A layer whose opacity is bound to a MindWave shows a

@@ -22,6 +22,9 @@ private slots:
     void lockedLayersHaveNoDeleteButton();
     void lockedLayersHaveALockIconInsteadOfADragHandle();
     void nonNormalLayersShowATypeTag();
+    void filterAndEqualizerRowsShowAnEditFilterButtonUnconditionally();
+    void normalAndBackgroundRowsShowNoEditFilterButton();
+    void editFilterButtonEmitsEditFilterRequestedWithTheRowsOwnId();
     void freshPanelHasNoSelection();
     void clickingANameSelectsItsLayer();
     void selectionSurvivesASetLayersRefreshOfTheSameLayers();
@@ -53,8 +56,9 @@ private slots:
     void changingARowsBlendModeComboEmitsBlendModeChanged();
 
     // Layers Panel Redesign (v0.Y.44.1).
-    void unselectedRowsShowNoOpacityOrTransformOrBlendModeOrDeleteControls();
+    void unselectedRowsShowNoOpacityOrTransformOrBlendModeControls();
     void selectingARowRevealsItsOwnControlsAndDeselectingHidesThemAgain();
+    void hoveringAnUnselectedRowRevealsItsDeleteButtonAndLeavingHidesItAgain();
     void aRowsThumbnailIsShownWhenGivenAndAPlainBackgroundWhenNot();
     void mindWaveChildRowAppearsOnlyWhenBoundAndAPreviewImageExists();
     void mindWaveChildRowDisappearsWhenTheBindingIsCleared();

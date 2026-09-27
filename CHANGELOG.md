@@ -6,6 +6,28 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.14] - 2026-09-27
+
+UI polish, Installment A: **Layers Panel fixes.**
+
+### Added
+
+- **A layer row's delete button now also appears on hover**, not just once
+  the row is selected - easier to find without cluttering every row all
+  the time.
+- **A new "edit filter" (⚙) button** on every Filter/Equalizer layer row,
+  always visible. Click it to jump straight to that layer's own
+  configuration - it selects the layer and opens the Filter Configuration
+  panel if it isn't already open.
+
+### Notes
+
+Both fixes came from real-world use of the current build. New
+`LayersPanel::editFilterRequested`/`MainWindow::editFilterLayer()`. Full
+regression: `sound-mind-studio` full suite genuinely passing (6 new).
+Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision
+#178.
+
 ## [0.1.3.13] - 2026-09-27
 
 MIDI track import, Installment C (final): **the MIDI Configuration panel.**

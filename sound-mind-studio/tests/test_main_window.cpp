@@ -4084,6 +4084,29 @@ void MainWindowTest::selectingAFilterLayerLoadsAndEnablesFilterConfigurationPane
     QCOMPARE(filterPanel->filterConfiguration().frequencyGradient().stops().front().leftIntensity, -20.0f);
 }
 
+void MainWindowTest::editFilterLayerSelectsTheLayerAndShowsTheFilterConfigurationPanel() {
+    // Real-world testing pass, 2026-09-27: "editing a filter layer should
+    // be immediately accessible from the layers panel" - the actual work
+    // behind LayersPanel's own new "edit filter" (⚙) button.
+    TestMainWindow window;
+    createFreshTestProject(window);
+    window.addFilterLayer();  // Selects it immediately.
+    const auto filterLayerId = topmostNonEqualizerLayer(*window.project()).id();
+
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    auto* filterPanel = window.findChild<FilterConfigurationPanel*>();
+    QVERIFY(filterPanel != nullptr);
+    layersPanel->clearSelection();
+    filterPanel->hide();  // The panel's own "off by default" starting state.
+    QVERIFY(filterPanel->isHidden());
+
+    window.editFilterLayer(filterLayerId);
+
+    QCOMPARE(layersPanel->selectedLayerId(), std::optional(filterLayerId));
+    QVERIFY(!filterPanel->isHidden());
+}
+
 void MainWindowTest::selectingANormalLayerShowsThePendingFilterConfigurationInsteadOfDisablingThePanel() {
     // Finding #13 (real-world testing pass, 2026-09-20): selecting a
     // Normal-type layer used to disable the panel entirely - it now stays
