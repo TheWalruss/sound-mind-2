@@ -14,6 +14,7 @@ add_executable(sound-mind-core-tests
     test_mind_grain.cpp
     test_tool_preset.cpp
     test_midi_import.cpp
+    test_midi_program_mapping.cpp
     test_convolution_kernel.cpp
     test_blend_mode_application.cpp
     test_filter_application.cpp

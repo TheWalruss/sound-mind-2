@@ -20,4 +20,10 @@ private slots:
     void importMidiSelectionIntoMergesChannelsIntoOneLayerPerSnippetWhenNotSeparating();
     void importMidiSelectionIntoAppendsSnippetSuffixToLayerNamesWhenMoreThanOneSnippet();
     void importMidiSelectionIntoFailsGracefullyForAnUnreadableFile();
+
+    // MIDI Configuration panel (v0.Y.55.1 Installment C).
+    void importMidiChannelsIntoUsesTheMappedToolPresetWhenOneExists();
+    void importMidiChannelsIntoAppliesDurationScaleAndPitchOffset();
+    void importMidiChannelsIntoFallsBackToDefaultWhenTheMappedPresetNoLongerExists();
+    void importMidiSelectionIntoAppliesTheProgramMappingToo();
 };

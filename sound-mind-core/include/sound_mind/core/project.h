@@ -12,6 +12,7 @@
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/mind_wave.h"
+#include "sound_mind/core/midi_program_mapping.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/tool_preset.h"
@@ -621,6 +622,49 @@ public:
     ///         Preset with this id exists in this project's library.
     [[nodiscard]] NamedToolPreset* toolPresetById(ToolPresetId id) noexcept;
 
+    /**
+     * @brief This project's own MIDI Configuration - which saved Tool
+     *        Preset, duration scale, and pitch offset a given General MIDI
+     *        program paints through on import - `v0.Y.55.1`'s own MIDI
+     *        Configuration panel installment, see `MidiProgramMapping`'s
+     *        own docs for why this is keyed by `programNumber` directly
+     *        rather than an auto-assigned id like every other library
+     *        here.
+     * @return This project's current MIDI program mappings, in no
+     *         particular order.
+     */
+    [[nodiscard]] const std::vector<MidiProgramMapping>& midiProgramMappings() const noexcept {
+        return midiProgramMappings_;
+    }
+
+    /**
+     * @brief Inserts a new mapping, or replaces the existing one for the
+     *        same `mapping.programNumber` - the "upsert" shape this
+     *        naturally-keyed (not auto-assigned-id) library needs instead
+     *        of a separate `addMidiProgramMapping()`.
+     * @param mapping The mapping to save.
+     */
+    void setMidiProgramMapping(const MidiProgramMapping& mapping);
+
+    /**
+     * @brief Removes the mapping for the given program, if one exists.
+     * @param programNumber The program to remove.
+     * @return `true` if a mapping for this program was found and removed;
+     *         `false` (no change) if none was.
+     */
+    bool removeMidiProgramMapping(int programNumber);
+
+    /**
+     * @brief Finds this project's own mapping for the given program, if
+     *        one exists.
+     * @param programNumber The program to find.
+     * @return A pointer to that mapping, or `nullptr` if this project has
+     *         no mapping for this program - the same "not mapped yet, use
+     *         the plain default" meaning `MidiProgramMapping::toolPresetId`
+     *         being `std::nullopt` has once a mapping *does* exist.
+     */
+    [[nodiscard]] const MidiProgramMapping* midiProgramMappingForProgram(int programNumber) const noexcept;
+
     friend void to_json(nlohmann::json& json, const Project& project);
     friend void from_json(const nlohmann::json& json, Project& project);
 
@@ -633,6 +677,7 @@ private:
     std::vector<NamedMindGrain> mindGrains_;
     std::vector<NamedConvolutionKernel> convolutionKernels_;
     std::vector<NamedToolPreset> toolPresets_;
+    std::vector<MidiProgramMapping> midiProgramMappings_;
 };
 
 /// @brief Serializes a Project to its JSON representation.

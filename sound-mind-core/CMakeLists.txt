@@ -38,6 +38,7 @@ add_library(sound-mind-core
     src/mind_grain.cpp
     src/tool_preset.cpp
     src/midi_import.cpp
+    src/midi_program_mapping.cpp
     src/convolution_kernel.cpp
     src/blend_mode_application.cpp
     src/music_theory.cpp

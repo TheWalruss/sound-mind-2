@@ -6,6 +6,33 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.13] - 2026-09-27
+
+MIDI track import, Installment C (final): **the MIDI Configuration panel.**
+
+### Added
+
+- **A new MIDI Configuration panel** maps a MIDI instrument (General MIDI
+  program) to one of your saved Tool Presets, with its own **Duration
+  Scale** and **Pitch Offset (semitones)** modifiers. Add a mapping for
+  any program, pick a Tool Preset from the drop-down (or leave it "None"
+  for the plain default brush), and adjust duration/pitch to taste -
+  every change applies immediately. A mapping is saved with the project
+  and reused automatically by any future MIDI import that uses the same
+  program, not just the file you mapped it from.
+
+### Notes
+
+This completes MIDI track import (`v0.Y.55.1`) - file parsing, the
+channel/snippet picker, and now program-to-preset mapping are all in
+place. No velocity/strength modifier - there's still nothing in this
+build's own paint model for a note's loudness to attach to. New
+`sound_mind::core::MidiProgramMapping`/`Project::midiProgramMappings()`
+and `sound_mind::studio::MidiConfigurationPanel`. Full regression:
+`sound-mind-core` 992/992 (13 new), `sound-mind-studio` full suite
+genuinely passing (12 new). Doxygen: 0 warnings. See
+`docs/sound-mind-architecture.md`'s Decision #177.
+
 ## [0.1.3.12] - 2026-09-27
 
 MIDI track import, Installment B: **snippet/channel picker, plus a real visibility fix.**

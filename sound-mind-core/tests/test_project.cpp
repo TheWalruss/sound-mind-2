@@ -27,6 +27,7 @@ using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotId;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
+using sound_mind::core::MidiProgramMapping;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
@@ -612,6 +613,118 @@ TEST_CASE("Copying a Project deep-clones its own Tool Preset library, independen
 
     REQUIRE(dynamic_cast<const ProceduralConfiguration&>(*copy.toolPresets()[0].config).tipShape() ==
             BrushTipShape::Star);
+}
+
+TEST_CASE("A new Project has no MIDI program mappings", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.midiProgramMappings().empty());
+}
+
+TEST_CASE("setMidiProgramMapping inserts a new mapping for an unmapped program", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    MidiProgramMapping mapping;
+    mapping.programNumber = 4;
+    mapping.toolPresetId = ToolPresetId{7};
+    mapping.durationScale = 2.0;
+
+    project.setMidiProgramMapping(mapping);
+
+    REQUIRE(project.midiProgramMappings().size() == 1);
+    const auto* found = project.midiProgramMappingForProgram(4);
+    REQUIRE(found != nullptr);
+    REQUIRE(found->toolPresetId == ToolPresetId{7});
+    REQUIRE(found->durationScale == 2.0);
+}
+
+TEST_CASE("setMidiProgramMapping replaces the existing mapping for the same program, not duplicating it",
+          "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    MidiProgramMapping first;
+    first.programNumber = 4;
+    first.durationScale = 2.0;
+    project.setMidiProgramMapping(first);
+
+    MidiProgramMapping replacement;
+    replacement.programNumber = 4;
+    replacement.durationScale = 0.5;
+    project.setMidiProgramMapping(replacement);
+
+    REQUIRE(project.midiProgramMappings().size() == 1);
+    REQUIRE(project.midiProgramMappingForProgram(4)->durationScale == 0.5);
+}
+
+TEST_CASE("midiProgramMappingForProgram returns nullptr for an unmapped program", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.midiProgramMappingForProgram(4) == nullptr);
+}
+
+TEST_CASE("removeMidiProgramMapping removes the mapping for the given program and returns true",
+          "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    MidiProgramMapping mapping;
+    mapping.programNumber = 4;
+    project.setMidiProgramMapping(mapping);
+
+    const bool removed = project.removeMidiProgramMapping(4);
+
+    REQUIRE(removed);
+    REQUIRE(project.midiProgramMappings().empty());
+}
+
+TEST_CASE("removeMidiProgramMapping returns false and changes nothing for an unmapped program",
+          "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    MidiProgramMapping mapping;
+    mapping.programNumber = 4;
+    project.setMidiProgramMapping(mapping);
+
+    const bool removed = project.removeMidiProgramMapping(5);
+
+    REQUIRE_FALSE(removed);
+    REQUIRE(project.midiProgramMappings().size() == 1);
+}
+
+TEST_CASE("A Project's MIDI program mappings round-trip through JSON", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    MidiProgramMapping mapping;
+    mapping.programNumber = 4;
+    mapping.toolPresetId = ToolPresetId{7};
+    mapping.durationScale = 1.5;
+    mapping.pitchOffsetSemitones = -12.0;
+    original.setMidiProgramMapping(mapping);
+
+    const nlohmann::json json = original;
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.midiProgramMappings().size() == 1);
+    const auto* found = restored.midiProgramMappingForProgram(4);
+    REQUIRE(found != nullptr);
+    REQUIRE(found->toolPresetId == ToolPresetId{7});
+    REQUIRE(found->durationScale == 1.5);
+    REQUIRE(found->pitchOffsetSemitones == -12.0);
+}
+
+TEST_CASE("A Project saved before MIDI program mappings existed loads with an empty set", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    nlohmann::json json = original;
+    json.erase("midiProgramMappings");
+
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.midiProgramMappings().empty());
+}
+
+TEST_CASE("Copying a Project copies its own MIDI program mappings", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    MidiProgramMapping mapping;
+    mapping.programNumber = 4;
+    mapping.durationScale = 2.0;
+    original.setMidiProgramMapping(mapping);
+
+    const Project copy = original;
+
+    REQUIRE(copy.midiProgramMappings().size() == 1);
+    REQUIRE(copy.midiProgramMappingForProgram(4)->durationScale == 2.0);
 }
 
 TEST_CASE("A new Project has no Mind Grains", "[core][project]") {

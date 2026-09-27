@@ -306,12 +306,33 @@ Otherwise, a picker lets you:
   "snippets" concept **Import Audio...** already uses, listed below the
   checkbox once it's unchecked.
 
-This is an early pass, not the full feature described in the design
-docs - see [What's Not Here Yet](#whats-not-here-yet):
+### MIDI Configuration
 
-- Every note currently paints through a plain default brush (a circular
-  Procedural tip) - there's no way yet to map a MIDI channel/program to a
-  specific saved Tool Preset.
+The **MIDI Configuration** toolbar button opens a dockable panel (off by
+default) mapping a MIDI instrument (a General MIDI program, 0-127) to one
+of your saved Tool Presets:
+
+- **Add Mapping** - pick a program from the drop-down beside it, then
+  click to add a row for it. Each program can only be mapped once; once
+  added, it disappears from the drop-down.
+- **Tool Preset** - which saved preset that program's notes paint
+  through. Leave it "None" to use the plain default brush (an opaque
+  circular Procedural tip) - the same thing every program used before
+  this panel existed.
+- **Duration Scale** - multiplies how long each note on that program
+  lasts (`2.0` doubles it, `0.5` halves it).
+- **Pitch Offset (st)** - shifts every note on that program up or down
+  by this many semitones (`12` is one octave up, `-12` one octave down).
+- **Delete** - removes that program's mapping, making it paint through
+  the plain default brush again and putting it back in the Add Mapping
+  drop-down.
+
+Every change here applies immediately - there's no separate save step.
+A mapping is stored with the project and reused automatically the next
+time you import a MIDI file that uses the same program, not just the one
+you had open when you set it up. There's still no way to adjust a note's
+own strength/velocity - nothing in this build's paint model yet
+represents how hard a note was played.
 
 ### Drag and Drop
 
@@ -1551,9 +1572,10 @@ while you have unsaved changes prompts you to save first.
 ## What's Not Here Yet
 
 The [design document](docs/sound-mind-design.md) describes the Studio's
-full intended scope - analysis tools, Sound Flower's polar view, MIDI
-import, chord/sequence generation, and a Sound Mind VST plugin, among
-others none of which exist in the Studio yet. MindWave-
+full intended scope - analysis tools, Sound Flower's polar view, chord/
+sequence generation, and a Sound Mind VST plugin, among others none of
+which exist in the Studio yet. MIDI import (see
+[Importing MIDI](#importing-media) above) is built. MindWave-
 driven modulation (see [MindWaves](#mindwaves) above) has made a real
 start - layer opacity binding works - but it's far from its own full
 scope either; see the note further down. Filter layers (see

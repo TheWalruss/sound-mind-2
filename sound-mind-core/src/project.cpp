@@ -72,7 +72,8 @@ Project::Project(const Project& other)
       mindShots_(other.mindShots_),
       mindGrains_(other.mindGrains_),
       convolutionKernels_(other.convolutionKernels_),
-      toolPresets_(other.toolPresets_) {
+      toolPresets_(other.toolPresets_),
+      midiProgramMappings_(other.midiProgramMappings_) {
     // operationLog_ deliberately left default-constructed (empty) - see
     // this constructor's own docs.
 }
@@ -86,6 +87,7 @@ Project& Project::operator=(const Project& other) {
         mindGrains_ = other.mindGrains_;
         convolutionKernels_ = other.convolutionKernels_;
         toolPresets_ = other.toolPresets_;
+        midiProgramMappings_ = other.midiProgramMappings_;
         operationLog_ = OperationLog{};
     }
     return *this;
@@ -383,6 +385,37 @@ NamedToolPreset* Project::toolPresetById(ToolPresetId id) noexcept {
     return nullptr;
 }
 
+void Project::setMidiProgramMapping(const MidiProgramMapping& mapping) {
+    for (MidiProgramMapping& existing : midiProgramMappings_) {
+        if (existing.programNumber == mapping.programNumber) {
+            existing = mapping;
+            return;
+        }
+    }
+    midiProgramMappings_.push_back(mapping);
+}
+
+bool Project::removeMidiProgramMapping(int programNumber) {
+    const auto it = std::find_if(midiProgramMappings_.begin(), midiProgramMappings_.end(),
+                                  [programNumber](const MidiProgramMapping& mapping) {
+                                      return mapping.programNumber == programNumber;
+                                  });
+    if (it == midiProgramMappings_.end()) {
+        return false;
+    }
+    midiProgramMappings_.erase(it);
+    return true;
+}
+
+const MidiProgramMapping* Project::midiProgramMappingForProgram(int programNumber) const noexcept {
+    for (const MidiProgramMapping& mapping : midiProgramMappings_) {
+        if (mapping.programNumber == programNumber) {
+            return &mapping;
+        }
+    }
+    return nullptr;
+}
+
 bool Project::removeLayer(LayerId id) {
     const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const Layer& layer) { return layer.id() == id; });
     if (it == layers_.end()) {
@@ -431,6 +464,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"mindGrains", project.mindGrains_},
         {"convolutionKernels", project.convolutionKernels_},
         {"toolPresets", project.toolPresets_},
+        {"midiProgramMappings", project.midiProgramMappings_},
     };
 }
 
@@ -487,6 +521,16 @@ void from_json(const nlohmann::json& json, Project& project) {
     if (json.contains("toolPresets")) {
         for (const auto& namedJson : json.at("toolPresets")) {
             project.toolPresets_.push_back(namedJson.get<NamedToolPreset>());
+        }
+    }
+
+    // Lenient, same reasoning - didn't exist before v0.Y.55.1's own MIDI
+    // Configuration panel installment; a project saved before it had no
+    // MIDI program mappings to lose.
+    project.midiProgramMappings_.clear();
+    if (json.contains("midiProgramMappings")) {
+        for (const auto& mappingJson : json.at("midiProgramMappings")) {
+            project.midiProgramMappings_.push_back(mappingJson.get<MidiProgramMapping>());
         }
     }
 }

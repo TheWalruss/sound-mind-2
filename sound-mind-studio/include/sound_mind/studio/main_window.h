@@ -31,6 +31,7 @@
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/layer_controller.h"
 #include "sound_mind/studio/macro_recorder.h"
+#include "sound_mind/studio/midi_configuration_panel.h"
 #include "sound_mind/studio/midi_import.h"
 #include "sound_mind/studio/mind_wave_controller.h"
 #include "sound_mind/studio/playback_controller.h"
@@ -3134,11 +3135,17 @@ private:
     QAction* macroExportVideoAction_ = nullptr;
 
     /// @brief The dockable panel exposing the current paint tool's own
-    /// parameters - see its own class docs for what's deliberately not
-    /// built yet (the Wizard button, the Tool Preset drop-down). Hidden
-    /// by default, matching Playback/Record/Loop's own "off until shown"
-    /// convention (not Layers', which is shown automatically once).
+    /// parameters, including its Tool Preset drop-down - see its own class
+    /// docs for what's still deliberately not built (the Wizard button).
+    /// Hidden by default, matching Playback/Record/Loop's own "off until
+    /// shown" convention (not Layers', which is shown automatically once).
     ToolConfigurationPanel* toolConfigurationPanel_ = nullptr;
+
+    /// @brief The dockable panel mapping General MIDI programs to saved
+    /// Tool Presets - `v0.Y.55.1`'s own last installment, see its own
+    /// class docs. Hidden by default, the same convention
+    /// toolConfigurationPanel_ above already establishes.
+    MidiConfigurationPanel* midiConfigurationPanel_ = nullptr;
 
     /// @brief The dockable panel exposing the Chord Generator's own
     /// parameters - see its own class docs. Hidden by default, the same

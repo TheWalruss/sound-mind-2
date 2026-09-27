@@ -58,18 +58,55 @@ std::unique_ptr<sound_mind::core::ProceduralConfiguration> makeOpaqueDefaultConf
     return config;
 }
 
+/// @brief The `ToolConfiguration` a note on `programNumber` should paint
+///        through - `project`'s own `MidiProgramMapping` for that program,
+///        if one exists and its own `toolPresetId` still resolves to a
+///        real, saved Tool Preset; a fresh, genuinely opaque default
+///        `ProceduralConfiguration` (see makeOpaqueDefaultConfiguration()'s
+///        own docs) otherwise - the same graceful "a stale reference
+///        degrades to the default, it doesn't fail the import" contract
+///        `MidiProgramMapping::toolPresetId`'s own docs describe.
+std::unique_ptr<sound_mind::core::ToolConfiguration> configurationForProgram(const sound_mind::core::Project& project,
+                                                                              int programNumber) {
+    const auto* mapping = project.midiProgramMappingForProgram(programNumber);
+    if (mapping != nullptr && mapping->toolPresetId.has_value()) {
+        const auto* preset = project.toolPresetById(*mapping->toolPresetId);
+        if (preset != nullptr && preset->config != nullptr) {
+            return preset->config->clone();
+        }
+    }
+    return makeOpaqueDefaultConfiguration();
+}
+
+/// @brief Scales every one of `notes`' own `durationSeconds` by
+///        `mapping->durationScale` and shifts every `frequencyHz` by
+///        `mapping->pitchOffsetSemitones` (equal temperament) in place - a
+///        no-op if `mapping` is `nullptr` (the program has no mapping yet,
+///        matching every field's own "unmodified" default).
+void applyMidiProgramMappingToNotes(std::vector<sound_mind::core::NoteEvent>& notes,
+                                     const sound_mind::core::MidiProgramMapping* mapping) {
+    if (mapping == nullptr) {
+        return;
+    }
+    const double pitchRatio = std::pow(2.0, mapping->pitchOffsetSemitones / 12.0);
+    for (sound_mind::core::NoteEvent& note : notes) {
+        note.durationSeconds *= mapping->durationScale;
+        note.frequencyHz *= pitchRatio;
+    }
+}
+
 /// @brief Appends a SequenceOperation carrying `notes` to `project`'s own
-///        OperationLog, targeting `layerId`, through a fresh, genuinely
-///        opaque default `ProceduralConfiguration` (see
-///        makeOpaqueDefaultConfiguration()'s own docs) - the one line of
-///        real logic importMidiChannelsInto()/importMidiSelectionInto()
-///        both need, shared rather than duplicated.
+///        OperationLog, targeting `layerId`, through `config` - the one
+///        line of real logic importMidiChannelsInto()/
+///        importMidiSelectionInto() both need, shared rather than
+///        duplicated.
 void appendSequenceOperation(sound_mind::core::Project& project, sound_mind::core::LayerId layerId,
-                              std::vector<sound_mind::core::NoteEvent> notes) {
+                              std::vector<sound_mind::core::NoteEvent> notes,
+                              std::unique_ptr<sound_mind::core::ToolConfiguration> config) {
     sound_mind::core::OperationLog& log = project.operationLog();
     const auto operationId = log.reserveId();
     log.append(std::make_unique<sound_mind::core::SequenceOperation>(operationId, layerId, std::move(notes),
-                                                                       makeOpaqueDefaultConfiguration()));
+                                                                       std::move(config)));
 }
 
 /// @brief Computes how `channels`' own combined duration (the latest
@@ -188,17 +225,21 @@ std::vector<sound_mind::core::LayerId> importMidiChannelsInto(sound_mind::core::
     if (separateLayerPerChannel) {
         newLayerIds.reserve(channels.size());
         for (auto& channel : channels) {
+            applyMidiProgramMappingToNotes(channel.notes, project.midiProgramMappingForProgram(channel.programNumber));
+            auto config = configurationForProgram(project, channel.programNumber);
             const std::string name =
                 stem + " - Ch" + std::to_string(channel.channelNumber) + " (" + channel.instrumentName + ")";
             const auto layerId =
                 project.addLayer(sound_mind::core::Layer(0, name, sound_mind::core::LayerType::Normal));
-            appendSequenceOperation(project, layerId, std::move(channel.notes));
+            appendSequenceOperation(project, layerId, std::move(channel.notes), std::move(config));
             newLayerIds.push_back(layerId);
         }
     } else {
         const auto layerId = project.addLayer(sound_mind::core::Layer(0, stem, sound_mind::core::LayerType::Normal));
         for (auto& channel : channels) {
-            appendSequenceOperation(project, layerId, std::move(channel.notes));
+            applyMidiProgramMappingToNotes(channel.notes, project.midiProgramMappingForProgram(channel.programNumber));
+            auto config = configurationForProgram(project, channel.programNumber);
+            appendSequenceOperation(project, layerId, std::move(channel.notes), std::move(config));
         }
         newLayerIds.push_back(layerId);
     }
@@ -261,6 +302,9 @@ std::vector<sound_mind::core::LayerId> importMidiSelectionInto(sound_mind::core:
         }
         return {};
     }
+    for (auto& channel : selectedChannels) {
+        applyMidiProgramMappingToNotes(channel.notes, project.midiProgramMappingForProgram(channel.programNumber));
+    }
 
     const auto windows = midiSnippetWindowsFor(project, selectedChannels);
     if (windows.empty()) {
@@ -292,7 +336,8 @@ std::vector<sound_mind::core::LayerId> importMidiSelectionInto(sound_mind::core:
                 }
                 const auto layerId =
                     project.addLayer(sound_mind::core::Layer(0, name, sound_mind::core::LayerType::Normal));
-                appendSequenceOperation(project, layerId, std::move(clipped));
+                appendSequenceOperation(project, layerId, std::move(clipped),
+                                        configurationForProgram(project, channel.programNumber));
                 newLayerIds.push_back(layerId);
             }
         }
@@ -315,7 +360,8 @@ std::vector<sound_mind::core::LayerId> importMidiSelectionInto(sound_mind::core:
                     }
                     layerId = project.addLayer(sound_mind::core::Layer(0, name, sound_mind::core::LayerType::Normal));
                 }
-                appendSequenceOperation(project, *layerId, std::move(clipped));
+                appendSequenceOperation(project, *layerId, std::move(clipped),
+                                        configurationForProgram(project, channel.programNumber));
             }
             if (layerId.has_value()) {
                 newLayerIds.push_back(*layerId);

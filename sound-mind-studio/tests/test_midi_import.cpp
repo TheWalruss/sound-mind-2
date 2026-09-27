@@ -7,6 +7,7 @@
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
+#include "sound_mind/core/midi_program_mapping.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
@@ -15,10 +16,13 @@
 #include "sound_mind/studio/midi_import.h"
 #include "sound_mind/studio/paint_controller.h"
 
+using sound_mind::core::BrushTipShape;
+using sound_mind::core::MidiProgramMapping;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::SequenceOperation;
+using sound_mind::core::ToolPresetId;
 using sound_mind::core::ToolType;
 
 namespace {
@@ -324,4 +328,85 @@ void MidiImportTest::importMidiSelectionIntoFailsGracefullyForAnUnreadableFile()
     QVERIFY(newLayerIds.empty());
     QVERIFY(!errorMessage.isEmpty());
     QCOMPARE(project.layers().size(), layerCountBefore);
+}
+
+void MidiImportTest::importMidiChannelsIntoUsesTheMappedToolPresetWhenOneExists() {
+    const auto path = writeTestMidiFile();
+    Project project = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration diamondConfig;
+    diamondConfig.setTipShape(BrushTipShape::Diamond);
+    const auto presetId = project.addToolPreset("My Diamond", diamondConfig);
+    MidiProgramMapping mapping;
+    mapping.programNumber = 4;  // Channel 1's own program in writeTestMidiFile()'s fixture.
+    mapping.toolPresetId = presetId;
+    project.setMidiProgramMapping(mapping);
+
+    const auto newLayerIds = sound_mind::studio::importMidiChannelsInto(project, path);
+    std::filesystem::remove(path);
+
+    const auto operations = project.operationLog().activeOperationsTargeting(newLayerIds[0]);
+    const auto* sequence = dynamic_cast<const SequenceOperation*>(operations.front());
+    QVERIFY(sequence != nullptr);
+    QCOMPARE(dynamic_cast<const ProceduralConfiguration&>(sequence->config()).tipShape(), BrushTipShape::Diamond);
+}
+
+void MidiImportTest::importMidiChannelsIntoAppliesDurationScaleAndPitchOffset() {
+    const auto path = writeTestMidiFile();
+    Project project = Project::createNew(ProjectSettings{});
+    MidiProgramMapping mapping;
+    mapping.programNumber = 4;
+    mapping.durationScale = 2.0;
+    mapping.pitchOffsetSemitones = 12.0;  // One octave up - frequency doubles.
+    project.setMidiProgramMapping(mapping);
+
+    const auto newLayerIds = sound_mind::studio::importMidiChannelsInto(project, path);
+    std::filesystem::remove(path);
+
+    const auto operations = project.operationLog().activeOperationsTargeting(newLayerIds[0]);
+    const auto* sequence = dynamic_cast<const SequenceOperation*>(operations.front());
+    QVERIFY(sequence != nullptr);
+    QCOMPARE(sequence->notes().size(), static_cast<std::size_t>(1));
+    const auto& note = sequence->notes().front();
+    QVERIFY(qAbs(note.durationSeconds - 1.0) < 0.001);  // Original 0.5s * 2.0.
+    QVERIFY(qAbs(note.frequencyHz - 880.0) < 0.5);       // Original 440Hz (A4), one octave up.
+}
+
+void MidiImportTest::importMidiChannelsIntoFallsBackToDefaultWhenTheMappedPresetNoLongerExists() {
+    const auto path = writeTestMidiFile();
+    Project project = Project::createNew(ProjectSettings{});
+    MidiProgramMapping mapping;
+    mapping.programNumber = 4;
+    mapping.toolPresetId = ToolPresetId{999999};  // Never existed.
+    project.setMidiProgramMapping(mapping);
+
+    const auto newLayerIds = sound_mind::studio::importMidiChannelsInto(project, path);
+    std::filesystem::remove(path);
+
+    const auto operations = project.operationLog().activeOperationsTargeting(newLayerIds[0]);
+    const auto* sequence = dynamic_cast<const SequenceOperation*>(operations.front());
+    QVERIFY(sequence != nullptr);
+    QCOMPARE(sequence->config().type(), ToolType::Procedural);
+    // Confirm it's the genuinely opaque default (see makeOpaqueDefaultConfiguration()'s
+    // own docs), not just any Procedural configuration.
+    QCOMPARE(sequence->config().defaultGradient().stops().front().leftOpacity, 1.0f);
+}
+
+void MidiImportTest::importMidiSelectionIntoAppliesTheProgramMappingToo() {
+    const auto path = writeTwoSnippetTestMidiFile();
+    Project project = Project::createNew(oneSecondSnippetProjectSettings());
+    MidiProgramMapping mapping;
+    mapping.programNumber = 0;  // Channel 1 has no Program Change in this fixture - defaults to 0.
+    mapping.durationScale = 2.0;
+    project.setMidiProgramMapping(mapping);
+
+    const auto newLayerIds =
+        sound_mind::studio::importMidiSelectionInto(project, path, {1}, {0}, /*separateLayerPerChannel=*/true);
+    std::filesystem::remove(path);
+
+    QCOMPARE(newLayerIds.size(), static_cast<std::size_t>(1));
+    const auto operations = project.operationLog().activeOperationsTargeting(newLayerIds[0]);
+    const auto* sequence = dynamic_cast<const SequenceOperation*>(operations.front());
+    QVERIFY(sequence != nullptr);
+    // Original note in snippet 0: duration 0.5s, scaled by 2.0.
+    QVERIFY(qAbs(sequence->notes().front().durationSeconds - 1.0) < 0.001);
 }

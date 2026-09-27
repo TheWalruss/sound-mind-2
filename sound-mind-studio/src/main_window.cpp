@@ -297,6 +297,24 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     toolConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, toolConfigurationPanel_);
 
+    // MIDI Configuration panel (v0.Y.55.1's own last installment) - see its
+    // own class docs on why it mutates project_ directly, the same
+    // exception toolConfigurationPanel_'s own Tool Preset combo already
+    // establishes.
+    midiConfigurationPanel_ = new MidiConfigurationPanel(this);
+    midiConfigurationPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, midiConfigurationPanel_);
+    // Refreshes each row's own Tool Preset combo whenever the panel is
+    // actually shown, rather than needing a dedicated signal from
+    // toolConfigurationPanel_'s own Save/Delete actions - simpler, and
+    // this panel's own Tool Preset choices are only ever looked at while
+    // it's visible anyway.
+    connect(midiConfigurationPanel_, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (visible) {
+            midiConfigurationPanel_->refreshToolPresets();
+        }
+    });
+
     // Chords/Arpeggiator/Sequencer, Installment B (v0.0.40.2) - see
     // ChordGeneratorPanel's own docs. toolPaletteController_ isn't
     // constructed until just below, but this lambda only ever runs later,
@@ -1076,6 +1094,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // Off by default, the same as Playback/Record/Loop above - see
     // toolConfigurationPanel_'s own docs.
     transportToolBar->addAction(toolConfigurationPanel_->toggleViewAction());
+    // Off by default, same reasoning - see midiConfigurationPanel_'s own docs.
+    transportToolBar->addAction(midiConfigurationPanel_->toggleViewAction());
     // Off by default, same reasoning - see chordGeneratorPanel_'s own docs.
     transportToolBar->addAction(chordGeneratorPanel_->toggleViewAction());
     // Off by default, same reasoning - see configureDevicesPanel_'s own docs.
@@ -1466,6 +1486,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     toolPaletteController_->setProject(&*project_);
     layerController_->setProject(&*project_);
     mindWaveController_->setProject(&*project_);
+    midiConfigurationPanel_->setProject(&*project_);
     refreshComposerPanel();
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvasScrollArea_);

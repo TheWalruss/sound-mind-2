@@ -41,12 +41,14 @@ namespace sound_mind::studio {
  * `import_export.cpp` counterpart's existing "pure `Project&` mutation, no
  * UI/rendering concerns" boundary.
  *
- * **Every channel plays through a plain, default `ProceduralConfiguration`**
- * (a fresh instance per channel, since each `SequenceOperation` owns its
- * own `ToolConfiguration` - see that class's own docs) - mapping a
- * channel's own `programNumber` to one of `project`'s own saved Tool
- * Presets is the still-unbuilt "MIDI Configuration panel" installment's
- * job, same as `importMidiSelectionInto()`.
+ * **Each channel plays through whatever `project`'s own MIDI Configuration
+ * maps its `programNumber` to** (`sound_mind::core::MidiProgramMapping`,
+ * `v0.Y.55.1` Installment C) - a clone of that mapping's own saved Tool
+ * Preset, with `durationScale`/`pitchOffsetSemitones` applied to every
+ * note first, or a plain, default `ProceduralConfiguration` (a fresh
+ * instance per channel, since each `SequenceOperation` owns its own
+ * `ToolConfiguration` - see that class's own docs) for a program with no
+ * mapping yet, or whose mapping's own Tool Preset no longer resolves.
  *
  * @param project The project to import into.
  * @param path Path to the `.mid`/`.midi` file to import.
