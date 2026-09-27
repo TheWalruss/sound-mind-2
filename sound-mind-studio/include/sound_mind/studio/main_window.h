@@ -953,6 +953,18 @@ public slots:
     void editFilterLayer(sound_mind::core::LayerId id);
 
     /**
+     * @brief Shows and raises `configureDevicesPanel_` - the actual work
+     *        behind the "Configure Devices" button each of
+     *        `playbackPanel_`/`recordPanel_`/`loopPanel_` now carries
+     *        (`v0.Y.58.1`, "Reduce top-level buttons"), replacing
+     *        `configureDevicesPanel_`'s own now-removed standalone toolbar
+     *        toggle. The same "surface an off-by-default panel
+     *        automatically rather than leaving the user to find its own
+     *        toggle" pattern `editFilterLayer()` already established.
+     */
+    void showConfigureDevicesPanel();
+
+    /**
      * @brief Selects the layer above the currently selected one - the
      *        actual work behind the "Select Layer Above" Edit menu action
      *        (Page Up), `v0.Y.46.1` Installment A ("Layers Panel & Editing

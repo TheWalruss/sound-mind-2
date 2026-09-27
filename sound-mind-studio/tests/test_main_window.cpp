@@ -18,6 +18,7 @@
 #include <QGroupBox>
 #include <QImage>
 #include <QLabel>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -40,6 +41,7 @@
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/configure_devices_panel.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/landing_page.h"
@@ -59,6 +61,7 @@ using sound_mind::core::PaintOperation;
 using sound_mind::core::PasteOperation;
 using sound_mind::core::PathNodeType;
 using sound_mind::studio::CanvasWidget;
+using sound_mind::studio::ConfigureDevicesPanel;
 using sound_mind::studio::ImageScalePickerDialog;
 using sound_mind::studio::LandingPage;
 using sound_mind::studio::FilterConfigurationPanel;
@@ -2432,6 +2435,85 @@ void MainWindowTest::playbackPanelButtonsDriveRealPlayback() {
 
     stopButton->click();
     QVERIFY(!window.isPlaying());
+}
+
+void MainWindowTest::inputOutputMenuContainsPlaybackRecordAndLoopToggles() {
+    const TestMainWindow window;
+    auto* ioButton = window.findChild<QToolButton*>(QStringLiteral("inputOutputButton"));
+    QVERIFY(ioButton != nullptr);
+    auto* ioMenu = ioButton->menu();
+    QVERIFY(ioMenu != nullptr);
+
+    auto* playbackPanel = window.findChild<PlaybackPanel*>();
+    auto* recordPanel = window.findChild<RecordPanel*>();
+    auto* loopPanel = window.findChild<LoopPanel*>();
+    QVERIFY(playbackPanel != nullptr);
+    QVERIFY(recordPanel != nullptr);
+    QVERIFY(loopPanel != nullptr);
+
+    QVERIFY(ioMenu->actions().contains(playbackPanel->toggleViewAction()));
+    QVERIFY(ioMenu->actions().contains(recordPanel->toggleViewAction()));
+    QVERIFY(ioMenu->actions().contains(loopPanel->toggleViewAction()));
+}
+
+void MainWindowTest::showingOnePlaybackRecordOrLoopPanelHidesTheOtherTwo() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    // QDockWidget::visibilityChanged() reports the dock's own real,
+    // ancestor-chain-aware isVisible() - always false for a dock whose
+    // top-level MainWindow was never actually shown (the same "isVisible()
+    // vs. isHidden()" lesson as Decision #178, one level up: here it's the
+    // *signal*, not just the assertion, that needs a real show()).
+    // window.show() makes the mutual-exclusivity connects in MainWindow's
+    // own constructor actually fire in this offscreen test, matching how
+    // they'd behave in the real, shown application.
+    window.show();
+    auto* playbackPanel = window.findChild<PlaybackPanel*>();
+    auto* recordPanel = window.findChild<RecordPanel*>();
+    auto* loopPanel = window.findChild<LoopPanel*>();
+    QVERIFY(playbackPanel != nullptr);
+    QVERIFY(recordPanel != nullptr);
+    QVERIFY(loopPanel != nullptr);
+    QVERIFY(playbackPanel->isHidden());
+    QVERIFY(recordPanel->isHidden());
+    QVERIFY(loopPanel->isHidden());
+
+    playbackPanel->show();
+    QVERIFY(!playbackPanel->isHidden());
+    QVERIFY(recordPanel->isHidden());
+    QVERIFY(loopPanel->isHidden());
+
+    recordPanel->show();
+    QVERIFY(playbackPanel->isHidden());
+    QVERIFY(!recordPanel->isHidden());
+    QVERIFY(loopPanel->isHidden());
+
+    loopPanel->show();
+    QVERIFY(playbackPanel->isHidden());
+    QVERIFY(recordPanel->isHidden());
+    QVERIFY(!loopPanel->isHidden());
+}
+
+void MainWindowTest::configureDevicesButtonInEachOfTheThreePanelsShowsAndRaisesTheSharedPanel() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* configureDevicesPanel = window.findChild<ConfigureDevicesPanel*>();
+    QVERIFY(configureDevicesPanel != nullptr);
+
+    for (QDockWidget* panel : {
+             static_cast<QDockWidget*>(window.findChild<PlaybackPanel*>()),
+             static_cast<QDockWidget*>(window.findChild<RecordPanel*>()),
+             static_cast<QDockWidget*>(window.findChild<LoopPanel*>()),
+         }) {
+        QVERIFY(panel != nullptr);
+        configureDevicesPanel->hide();
+        QVERIFY(configureDevicesPanel->isHidden());
+
+        auto* configureDevicesButton = panel->findChild<QPushButton*>(QStringLiteral("configureDevicesButton"));
+        QVERIFY(configureDevicesButton != nullptr);
+        configureDevicesButton->click();
+        QVERIFY(!configureDevicesPanel->isHidden());
+    }
 }
 
 void MainWindowTest::audioSnippetsForFileReturnsOneSnippetForAudioNoLongerThanTheProject() {

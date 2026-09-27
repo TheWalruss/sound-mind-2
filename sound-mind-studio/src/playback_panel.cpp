@@ -97,6 +97,11 @@ PlaybackPanel::PlaybackPanel(QWidget* parent) : QDockWidget(tr("Playback"), pare
     repeatRow->addWidget(scopeCombo_, 1);
     root->addLayout(repeatRow);
 
+    auto* configureDevicesButton = new QPushButton(tr("Configure Devices"), container);
+    configureDevicesButton->setObjectName(QStringLiteral("configureDevicesButton"));
+    connect(configureDevicesButton, &QPushButton::clicked, this, &PlaybackPanel::configureDevicesRequested);
+    root->addWidget(configureDevicesButton);
+
     root->addStretch();
 
     auto* scrollArea = new QScrollArea(this);

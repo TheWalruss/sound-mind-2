@@ -26,6 +26,12 @@ namespace sound_mind::studio {
  * `LayersPanel`/`LoopPanel`: every user action is a signal `MainWindow`
  * connects to its own handlers. Wrapped in a `QScrollArea` so its content
  * is never clipped, and never forces the dock wider than the window.
+ *
+ * **"Configure Devices" button (`v0.Y.58.1`, "Reduce top-level buttons"):**
+ * a quick-access shortcut into `ConfigureDevicesPanel`, shared identically
+ * by `PlaybackPanel`/`LoopPanel` - see `configureDevicesRequested()`'s own
+ * docs. Replaces `ConfigureDevicesPanel`'s own now-removed standalone
+ * toolbar toggle, folded into the new "Input/Output" dropdown instead.
  */
 class RecordPanel : public QDockWidget {
     Q_OBJECT
@@ -43,6 +49,13 @@ public:
 signals:
     /// @brief The Start/Stop button was clicked.
     void toggleRequested();
+
+    /// @brief The "Configure Devices" button was clicked - `MainWindow`
+    ///        responds by showing/raising `configureDevicesPanel_` (the
+    ///        same "panel emits, MainWindow shows/raises a different
+    ///        dock" pattern `LayersPanel::editFilterRequested()` already
+    ///        established).
+    void configureDevicesRequested();
 
 private:
     QPushButton* toggleButton_ = nullptr;

@@ -30,6 +30,11 @@ LoopPanel::LoopPanel(QWidget* parent) : QDockWidget(tr("Loop"), parent) {
     connect(keepLoopingCheckBox_, &QCheckBox::toggled, this, &LoopPanel::keepLoopingChanged);
     root->addWidget(keepLoopingCheckBox_);
 
+    auto* configureDevicesButton = new QPushButton(tr("Configure Devices"), container);
+    configureDevicesButton->setObjectName(QStringLiteral("configureDevicesButton"));
+    connect(configureDevicesButton, &QPushButton::clicked, this, &LoopPanel::configureDevicesRequested);
+    root->addWidget(configureDevicesButton);
+
     root->addStretch();
 
     // Wrapped in a QScrollArea - per the confirmed scope for this

@@ -123,6 +123,9 @@ private slots:
     void loopModeLocksAndUnlocksConfigureDevicesDeviceCombos();
     void recordingLocksTheInputComboButNotTheOutputCombo();
     void playbackPanelButtonsDriveRealPlayback();
+    void inputOutputMenuContainsPlaybackRecordAndLoopToggles();
+    void showingOnePlaybackRecordOrLoopPanelHidesTheOtherTwo();
+    void configureDevicesButtonInEachOfTheThreePanelsShowsAndRaisesTheSharedPanel();
 
     // Audio Import Snippets (v0.Y.19.1)
     void audioSnippetsForFileReturnsOneSnippetForAudioNoLongerThanTheProject();

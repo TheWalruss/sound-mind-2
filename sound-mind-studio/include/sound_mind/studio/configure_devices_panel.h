@@ -51,6 +51,14 @@ namespace sound_mind::studio {
  * Purely presentational, the same division of responsibility as every
  * other dock panel: every user action is a signal `MainWindow` connects to
  * its own handlers.
+ *
+ * **No longer has its own toolbar toggle, as of `v0.Y.58.1`'s "Reduce
+ * top-level buttons".** Reached instead via a "Configure Devices" button
+ * inside each of `PlaybackPanel`/`RecordPanel`/`LoopPanel` (see
+ * `MainWindow::showConfigureDevicesPanel()`) - a quick-access shortcut
+ * back to the one shared place all three panels' own device/gain
+ * preferences already live, now that `transportToolBar` no longer carries
+ * a standalone toggle for it directly.
  */
 class ConfigureDevicesPanel : public QDockWidget {
     Q_OBJECT

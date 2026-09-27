@@ -294,6 +294,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     });
     connect(playbackPanel_, &PlaybackPanel::repeatChanged, this, &MainWindow::setPlaybackRepeat);
     connect(playbackPanel_, &PlaybackPanel::scopeChanged, this, &MainWindow::setPlaybackScope);
+    connect(playbackPanel_, &PlaybackPanel::configureDevicesRequested, this, &MainWindow::showConfigureDevicesPanel);
 
     toolConfigurationPanel_ = new ToolConfigurationPanel(this);
     toolConfigurationPanel_->hide();
@@ -653,12 +654,70 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     recordPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, recordPanel_);
     connect(recordPanel_, &RecordPanel::toggleRequested, this, &MainWindow::toggleRecording);
+    connect(recordPanel_, &RecordPanel::configureDevicesRequested, this, &MainWindow::showConfigureDevicesPanel);
 
     loopPanel_ = new LoopPanel(this);
     loopPanel_->hide();  // also needs setProject() - loopEngine_ doesn't exist until then.
     addDockWidget(Qt::RightDockWidgetArea, loopPanel_);
     connect(loopPanel_, &LoopPanel::toggleRequested, this, &MainWindow::toggleLoopMode);
     connect(loopPanel_, &LoopPanel::keepLoopingChanged, this, &MainWindow::setKeepLooping);
+    connect(loopPanel_, &LoopPanel::configureDevicesRequested, this, &MainWindow::showConfigureDevicesPanel);
+
+    // Input/Output consolidation (v0.Y.58.1, "Reduce top-level buttons"):
+    // only one of Playback/Record/Loop stays open at a time - whichever
+    // one just became visible hides the other two. Each toggleViewAction()
+    // (reused below as the new dropdown's own three entries) already stays
+    // correctly checked/unchecked in sync with its own dock's real
+    // visibility, so hiding the other two here is the only bookkeeping
+    // this needs; hide() on an already-hidden dock is a no-op (doesn't
+    // re-emit visibilityChanged()), so this can't recurse.
+    connect(playbackPanel_, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (visible) {
+            recordPanel_->hide();
+            loopPanel_->hide();
+        }
+    });
+    connect(recordPanel_, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (visible) {
+            playbackPanel_->hide();
+            loopPanel_->hide();
+        }
+    });
+    connect(loopPanel_, &QDockWidget::visibilityChanged, this, [this](bool visible) {
+        if (visible) {
+            playbackPanel_->hide();
+            recordPanel_->hide();
+        }
+    });
+
+    // The "Input/Output" dropdown itself - reuses each panel's own
+    // toggleViewAction() directly as its three entries (rather than
+    // hand-rolled QActions, unlike the Tool dropdown's own
+    // panAction_/paintAction_/etc.) precisely because a dock's visibility
+    // *is* already a QWidget-backed, self-syncing piece of state - there's
+    // no separate "mode" concept like CanvasWidget::ToolMode to manage
+    // alongside it. Placed at the menu bar's own top-right corner, per the
+    // roadmap's own "default location... up at the top-right of the menu
+    // bar, rather than in the sidebar" - QMenuBar::setCornerWidget()'s
+    // documented mechanism for exactly this; not used anywhere else in
+    // this codebase, and Qt reparents the widget to the menu bar itself
+    // when accepted (constructed with menuBar() as its own parent to
+    // match). Note for future cross-platform testing: a native macOS menu
+    // bar doesn't render corner widgets - Qt degrades gracefully (the
+    // control simply doesn't appear there), not a crash, but worth knowing
+    // if this is ever exercised on that platform.
+    auto* ioMenu = new QMenu(menuBar());
+    ioMenu->addAction(playbackPanel_->toggleViewAction());
+    ioMenu->addAction(recordPanel_->toggleViewAction());
+    ioMenu->addAction(loopPanel_->toggleViewAction());
+
+    auto* ioButton = new QToolButton(menuBar());
+    ioButton->setObjectName(QStringLiteral("inputOutputButton"));
+    ioButton->setText(tr("Input/Output"));
+    ioButton->setPopupMode(QToolButton::InstantPopup);
+    ioButton->setMenu(ioMenu);
+    ioButton->setToolTip(tr("Show Playback, Record, or Loop - only one at a time"));
+    menuBar()->setCornerWidget(ioButton, Qt::TopRightCorner);
 
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
 
@@ -1134,21 +1193,16 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
 
     // As of v0.Y.16.1 (Transport Panels): Play/Pause/Stop/Loop/Record are
     // no longer direct toolbar actions - each now lives inside its own
-    // dock panel (see the panel construction above), and these three
-    // toolbar actions are pure show/hide toggles for those docks.
-    // toggleViewAction() is Qt's own ready-made action for exactly this -
-    // it stays in sync with the dock's actual visibility automatically, no
+    // dock panel (see the panel construction above). toggleViewAction() is
+    // Qt's own ready-made action for a dock's own show/hide toggle - it
+    // stays in sync with the dock's actual visibility automatically, no
     // manual signal wiring needed (unlike a hand-rolled checkable QAction
     // would).
-    // The Layers panel gets the same kind of toggle - unlike the three
-    // above (OFF by default, see setProject()'s own docs), it's ON by
-    // default, matching its pre-existing "just show it" behavior; both are
+    // The Layers panel gets this kind of toggle directly on the toolbar -
+    // ON by default, matching its pre-existing "just show it" behavior;
     // confirmed with the user, along with visibility persisting across
     // project switches within a session rather than resetting every time.
     transportToolBar->addAction(layersPanel_->toggleViewAction());
-    transportToolBar->addAction(playbackPanel_->toggleViewAction());
-    transportToolBar->addAction(recordPanel_->toggleViewAction());
-    transportToolBar->addAction(loopPanel_->toggleViewAction());
     // Off by default, the same as Playback/Record/Loop above - see
     // toolConfigurationPanel_'s own docs.
     transportToolBar->addAction(toolConfigurationPanel_->toggleViewAction());
@@ -1156,8 +1210,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     transportToolBar->addAction(midiConfigurationPanel_->toggleViewAction());
     // Off by default, same reasoning - see chordGeneratorPanel_'s own docs.
     transportToolBar->addAction(chordGeneratorPanel_->toggleViewAction());
-    // Off by default, same reasoning - see configureDevicesPanel_'s own docs.
-    transportToolBar->addAction(configureDevicesPanel_->toggleViewAction());
     transportToolBar->addAction(selectionConfigurationPanel_->toggleViewAction());
     // Off by default, same reasoning - see gridPanel_'s own docs.
     transportToolBar->addAction(gridPanel_->toggleViewAction());
@@ -2598,6 +2650,11 @@ void MainWindow::editFilterLayer(sound_mind::core::LayerId id) {
     layersPanel_->selectLayer(id);
     filterConfigurationPanel_->show();
     filterConfigurationPanel_->raise();
+}
+
+void MainWindow::showConfigureDevicesPanel() {
+    configureDevicesPanel_->show();
+    configureDevicesPanel_->raise();
 }
 
 void MainWindow::selectLayerAbove() { layerController_->selectLayerAbove(); }

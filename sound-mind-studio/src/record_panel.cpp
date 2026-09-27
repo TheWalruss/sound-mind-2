@@ -17,6 +17,11 @@ RecordPanel::RecordPanel(QWidget* parent) : QDockWidget(tr("Record"), parent) {
     connect(toggleButton_, &QPushButton::clicked, this, &RecordPanel::toggleRequested);
     root->addWidget(toggleButton_);
 
+    auto* configureDevicesButton = new QPushButton(tr("Configure Devices"), container);
+    configureDevicesButton->setObjectName(QStringLiteral("configureDevicesButton"));
+    connect(configureDevicesButton, &QPushButton::clicked, this, &RecordPanel::configureDevicesRequested);
+    root->addWidget(configureDevicesButton);
+
     root->addStretch();
 
     auto* scrollArea = new QScrollArea(this);

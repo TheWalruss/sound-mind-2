@@ -109,11 +109,12 @@ Once a project is open, the title bar shows the project's name next to
 - **Layers panel** (right, by default) - lists every layer in the
   project, top of the stack first. Shown by default; toggled from the
   **Layers** toolbar button.
-- **Playback / Record / Loop panels** - dockable panels, each toggled
-  from its own toolbar button; each is covered in its own section below.
-  Unlike Layers, these three start hidden - click the matching toolbar
-  button to show one. Whichever panels you have open (or closed) stays
-  that way across New/Open Project, within the same run of the Studio.
+- **Input/Output dropdown** (top-right of the menu bar) - choose
+  **Playback**, **Record**, or **Loop** to show that panel; each is
+  covered in its own section below. Only one of the three stays open at
+  a time - choosing another closes whichever one was open. All three
+  start hidden; whichever one you have open (or none) stays that way
+  across New/Open Project, within the same run of the Studio.
 - **File menu** - New/Open/Save/Save As, Import Audio/Image, Export
   Audio/Video.
 - **View menu** - Zoom controls (see [Canvas Navigation](#canvas-navigation)
@@ -1457,7 +1458,8 @@ project's own real composite - every visible layer mixed together (see
 canvas-width duration, silence included past wherever real content ends.
 Pressing Play decodes that composite once, unless **Repeat** (below) is
 checked. The output device and volume it plays through are set from
-[Configure Devices](#configure-devices), not from this panel.
+[Configure Devices](#configure-devices), not from this panel - open it
+directly with this panel's own **Configure Devices** button.
 
 While playing, a white line sweeps across the canvas in real time,
 tracking the current position - the same playhead line a video export
@@ -1498,10 +1500,11 @@ back to playing (or looping) the whole track.
 ## Recording
 
 The **Record** panel has a single **Start Recording**/**Stop Recording**
-toggle. Recording captures from the input device chosen in
-[Configure Devices](#configure-devices) into a brand-new layer, encoded
-the same way an imported file would be, the moment you stop. That input
-device (and its Gain) can't be changed while recording is in progress.
+toggle, and its own **Configure Devices** button. Recording captures from
+the input device chosen in [Configure Devices](#configure-devices) into a
+brand-new layer, encoded the same way an imported file would be, the
+moment you stop. That input device (and its Gain) can't be changed while
+recording is in progress.
 
 ## Loop Mode
 
@@ -1511,7 +1514,8 @@ passes, playing the previous pass back while it records the next. By
 default each new pass records over the last one, same as a standard loop
 pedal; check **Freeze Loop** to freeze whatever's currently playing so it
 just repeats instead of being overwritten. Input and output devices are
-chosen from [Configure Devices](#configure-devices); a device change
+chosen from [Configure Devices](#configure-devices) - open it directly
+with this panel's own **Configure Devices** button; a device change
 takes effect the next time you start the loop, not immediately. Both
 devices are locked (can't be changed) while a loop is running.
 
@@ -1521,10 +1525,11 @@ watch the spectrogram fill in live, in real time.
 
 ## Configure Devices
 
-The **Configure Devices** toolbar button opens a dockable panel (off by
-default) that's the *only* place input and output devices are chosen -
-Playback, Recording, and Loop Mode all use whatever's set here rather
-than having pickers of their own.
+Open **Configure Devices** from the **Configure Devices** button inside
+the Playback, Record, or Loop panel (it's the same shared panel either
+way, off by default) - it's the *only* place input and output devices are
+chosen; Playback, Recording, and Loop Mode all use whatever's set here
+rather than having pickers of their own.
 
 - **Refresh Devices** re-scans for newly connected devices.
 - **Input**: pick the active input device - applies to both Recording and

@@ -35,6 +35,12 @@ namespace sound_mind::studio {
  * its own handlers - no engine state is touched here directly. Its content
  * is wrapped in a `QScrollArea` so it's never clipped, and never forces
  * the dock wider than the window, if it doesn't fit the available height.
+ *
+ * **"Configure Devices" button (`v0.Y.58.1`, "Reduce top-level buttons"):**
+ * a quick-access shortcut into `ConfigureDevicesPanel`, shared identically
+ * by `PlaybackPanel`/`RecordPanel` - see `configureDevicesRequested()`'s
+ * own docs. Replaces `ConfigureDevicesPanel`'s own now-removed standalone
+ * toolbar toggle, folded into the new "Input/Output" dropdown instead.
  */
 class LoopPanel : public QDockWidget {
     Q_OBJECT
@@ -61,6 +67,13 @@ signals:
 
     /// @brief The "Freeze Loop" checkbox changed.
     void keepLoopingChanged(bool checked);
+
+    /// @brief The "Configure Devices" button was clicked - `MainWindow`
+    ///        responds by showing/raising `configureDevicesPanel_` (the
+    ///        same "panel emits, MainWindow shows/raises a different
+    ///        dock" pattern `LayersPanel::editFilterRequested()` already
+    ///        established).
+    void configureDevicesRequested();
 
 private:
     QPushButton* toggleButton_ = nullptr;

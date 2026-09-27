@@ -29,8 +29,9 @@ spectrogram, and as a new row in the **Layers** panel on the right.
 
 ## 3. Play it back
 
-Open the **Playback** panel (one of the toolbar buttons, if it isn't
-already visible) and hit **Play**. You're hearing the topmost
+Open the **Playback** panel (choose it from the **Input/Output** dropdown
+at the top-right of the menu bar, if it isn't already visible) and hit
+**Play**. You're hearing the topmost
 layer that has content - toggle a layer's visibility (the ● button in the
 Layers panel) to change which one that is.
 

@@ -6,6 +6,26 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.17] - 2026-09-27
+
+UI polish, Installment D: **Input/Output panel consolidation.**
+
+### Changed
+
+- **Playback, Record, and Loop are now one "Input/Output" dropdown**,
+  at the top-right of the menu bar, instead of three separate toolbar
+  buttons. Only one of the three panels stays open at a time - opening
+  one closes whichever of the other two was open.
+- **"Configure Devices" moved inside Playback, Record, and Loop** as a
+  button in each - it's no longer a separate toolbar button of its own.
+
+### Notes
+
+Third installment of "Reduce top-level buttons." Full regression:
+`sound-mind-studio` full suite genuinely passing (3 new tests),
+`sound-mind-core` unaffected and unchanged. Doxygen: 0 warnings. See
+`docs/sound-mind-architecture.md`'s Decision #181.
+
 ## [0.1.3.16] - 2026-09-27
 
 UI polish, Installment C: **Smooth Nodes gating.**

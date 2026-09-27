@@ -82,6 +82,12 @@ enum class PlaybackScope {
  * `MainWindow` connects to its own handlers. Wrapped in a `QScrollArea` so
  * its content is never clipped, and never forces the dock wider than the
  * window.
+ *
+ * **"Configure Devices" button (`v0.Y.58.1`, "Reduce top-level buttons"):**
+ * a quick-access shortcut into `ConfigureDevicesPanel`, shared identically
+ * by `RecordPanel`/`LoopPanel` - see `configureDevicesRequested()`'s own
+ * docs. Replaces `ConfigureDevicesPanel`'s own now-removed standalone
+ * toolbar toggle, folded into the new "Input/Output" dropdown instead.
  */
 class PlaybackPanel : public QDockWidget {
     Q_OBJECT
@@ -153,6 +159,13 @@ signals:
     /// @brief The Scope combo's selection changed.
     /// @param scope The newly selected scope.
     void scopeChanged(sound_mind::studio::PlaybackScope scope);
+
+    /// @brief The "Configure Devices" button was clicked - `MainWindow`
+    ///        responds by showing/raising `configureDevicesPanel_` (the
+    ///        same "panel emits, MainWindow shows/raises a different
+    ///        dock" pattern `LayersPanel::editFilterRequested()` already
+    ///        established).
+    void configureDevicesRequested();
 
 private:
     /// @brief Refreshes positionLabel_'s text from totalSeconds_ and
