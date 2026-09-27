@@ -1296,10 +1296,13 @@ a segment out to wherever the cursor currently is.
   opacity settings), exactly like a freehand stroke.
 - **Cancel** it - **Edit → Cancel Path** discards everything placed so
   far instead.
-- **Smooth Nodes** - the toolbar checkbox next to Path controls which
-  node type the *next* click places: unchecked (the default) places a
-  sharp-cornered node, checked places a smooth one. Flip it mid-path to
-  mix both kinds in the same path.
+- **Smooth Nodes** - the toolbar checkbox next to the Tool dropdown
+  controls which node type the *next* click places: unchecked (the
+  default) places a sharp-cornered node, checked places a smooth one.
+  Flip it mid-path to mix both kinds in the same path. Only clickable
+  while it means something - while you're placing a new path, or while an
+  existing one is [Picked](#pick) (freehand-drawn or placed this way,
+  either counts) - greyed out the rest of the time.
 
 A path placed this way becomes a real paint object once finished, exactly
 like a freehand stroke - it's selectable/movable/modifiable/deletable

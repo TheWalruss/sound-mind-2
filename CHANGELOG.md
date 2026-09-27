@@ -6,6 +6,25 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.16] - 2026-09-27
+
+UI polish, Installment C: **Smooth Nodes gating.**
+
+### Changed
+
+- **"Smooth Nodes" is now only available while it means something**:
+  while a path is Picked, or while the Path tool is placing a new one.
+  Previously always clickable regardless of context.
+
+### Notes
+
+Second installment of "Reduce top-level buttons." Applies whether the
+Picked path was drawn freehand or placed with the Path tool - Smooth
+Nodes governs node type for editing any path's nodes either way. Full
+regression: `sound-mind-studio` full suite genuinely passing (3 new
+tests), `sound-mind-core` unaffected and unchanged. Doxygen: 0 warnings.
+See `docs/sound-mind-architecture.md`'s Decision #180.
+
 ## [0.1.3.15] - 2026-09-27
 
 UI polish, Installment B: **Tool dropdown + Pan mode.**

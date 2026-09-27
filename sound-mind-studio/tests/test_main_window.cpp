@@ -5056,6 +5056,67 @@ void MainWindowTest::smoothNodesToggleAffectsSubsequentlyPlacedNodes() {
     QCOMPARE(painted->path().nodes().at(1).type, PathNodeType::Smooth);
 }
 
+void MainWindowTest::smoothNodesActionIsDisabledWithNoProjectOpen() {
+    const TestMainWindow window;
+    auto* smoothNodesAction = window.findChild<QAction*>(QStringLiteral("smoothNodesAction"));
+    QVERIFY(smoothNodesAction != nullptr);
+    QVERIFY(!smoothNodesAction->isEnabled());
+}
+
+void MainWindowTest::smoothNodesActionBecomesEnabledWhilePlacingANewPathAndDisabledAfterFinishing() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    auto* smoothNodesAction = window.findChild<QAction*>(QStringLiteral("smoothNodesAction"));
+    QVERIFY(smoothNodesAction != nullptr);
+
+    window.setPathModeEnabled(true);
+    QVERIFY(!smoothNodesAction->isEnabled());  // Path mode alone, nothing placed yet.
+
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QVERIFY(smoothNodesAction->isEnabled());  // First node placed - now mid-placement.
+
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+    QVERIFY(smoothNodesAction->isEnabled());  // Still mid-placement.
+
+    window.finishPath();
+    QVERIFY(!smoothNodesAction->isEnabled());  // Committed - nothing Picked, nothing in progress.
+}
+
+void MainWindowTest::smoothNodesActionBecomesEnabledWhileAStrokeIsPickedAndDisabledAfterDeselecting() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-smooth-nodes-pick.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    auto* smoothNodesAction = window.findChild<QAction*>(QStringLiteral("smoothNodesAction"));
+    QVERIFY(smoothNodesAction != nullptr);
+
+    // A plain freehand stroke, not one placed via the Path tool - Smooth
+    // Nodes governs node type for editing *any* Picked path's nodes, per
+    // updateSmoothNodesGuardrail()'s own docs, not only Path-tool-placed
+    // ones.
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QVERIFY(!smoothNodesAction->isEnabled());  // Paint mode, nothing Picked.
+
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QVERIFY(smoothNodesAction->isEnabled());  // The stroke is now Picked.
+
+    window.setPickModeEnabled(false);
+    QVERIFY(!smoothNodesAction->isEnabled());  // Leaving Pick clears the selection.
+}
+
 void MainWindowTest::finishPathWithNoNodesPlacedIsANoOp() {
     TestMainWindow window;
     createFreshTestProject(window);

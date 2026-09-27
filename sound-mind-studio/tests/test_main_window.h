@@ -243,6 +243,9 @@ private slots:
     void clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject();
     void cancelPathDiscardsInProgressPlacementWithoutCommittingAnything();
     void smoothNodesToggleAffectsSubsequentlyPlacedNodes();
+    void smoothNodesActionIsDisabledWithNoProjectOpen();
+    void smoothNodesActionBecomesEnabledWhilePlacingANewPathAndDisabledAfterFinishing();
+    void smoothNodesActionBecomesEnabledWhileAStrokeIsPickedAndDisabledAfterDeselecting();
     void finishPathWithNoNodesPlacedIsANoOp();
     void settingANewProjectResetsPathModeToOff();
     void pastedContentIsPickableAndMovable();

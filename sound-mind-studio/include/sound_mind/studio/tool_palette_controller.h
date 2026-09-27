@@ -281,6 +281,15 @@ public:
     ///         is Picked.
     [[nodiscard]] std::optional<sound_mind::core::Path> selectedPath() const;
 
+    /// @brief Whether the Path tool is currently mid-placement (a first
+    ///        node placed, no `finishPath()`/`cancelPath()` yet) - forwards
+    ///        to `PathController::isPlacementInProgress()`. Half of the
+    ///        signal behind `MainWindow`'s own Smooth Nodes gating (`v0.Y.
+    ///        58.1`'s "Reduce top-level buttons") - the other half is
+    ///        `selectedPath()` above.
+    /// @return `true` while a new path is being placed.
+    [[nodiscard]] bool isPathPlacementInProgress() const;
+
     /// @brief The currently Picked object's own paste blend mode, if any -
     ///        forwards to `PickController::selectedPasteBlendMode()`. The
     ///        mechanism behind pre-filling Selection Configuration's own

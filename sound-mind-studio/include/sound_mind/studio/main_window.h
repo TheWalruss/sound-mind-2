@@ -2716,6 +2716,31 @@ private:
     void updateMindGrainGuardrails();
 
     /**
+     * @brief Enables/disables `smoothNodesAction_` to match whether it's
+     *        currently applicable - `v0.Y.58.1`'s "Reduce top-level
+     *        buttons" ("Smooth Nodes should only be available when a path
+     *        is Picked or newly created").
+     *
+     * Applicable whenever either is true: `toolPaletteController_->
+     * selectedPath()` has a value (Pick currently has a `PaintOperation`
+     * selected - freehand-drawn or Path-tool-placed alike, since Smooth
+     * Nodes governs node type for editing *any* path's nodes, not only
+     * ones placed via the Path tool), or `toolPaletteController_->
+     * isPathPlacementInProgress()` (the Path tool is mid-placement, before
+     * `finishPath()`/`cancelPath()`). Disabled with an explanatory tooltip
+     * otherwise - its own *checked* state (the standing default node type
+     * preference) is left untouched either way, since disabling it only
+     * means "not applicable right now," not "turn this preference off."
+     *
+     * Called from every place either input could have changed: `pan`/
+     * `paint`/`pick`/`select`/`path`/`chord` mode switching
+     * (`setExclusiveToolMode()`), Pick's own selection changing
+     * (`pickSelectionChanged()`), a path node being placed
+     * (`CanvasWidget::pathNodePlaced`), and `finishPath()`/`cancelPath()`.
+     */
+    void updateSmoothNodesGuardrail();
+
+    /**
      * @brief Enables/disables Configure Devices' own input and output
      *        device pickers to match whether an engine currently has that
      *        device actually open - preserves the "locked while running"
@@ -3192,7 +3217,11 @@ private:
     /// @brief The toolbar's "Smooth Nodes" checkable toggle - the Path
     /// tool's own standing default node type (see
     /// `PathController::setDefaultNodeType()`'s own docs), independent of
-    /// (and not reset by) which tool mode is currently active.
+    /// (and not reset by) which tool mode is currently active. Its own
+    /// *checked* state is a standing preference, untouched by tool
+    /// switching; its *enabled* state is gated by
+    /// `updateSmoothNodesGuardrail()` (`v0.Y.58.1`) to whether a path is
+    /// currently Picked or being newly placed.
     QAction* smoothNodesAction_ = nullptr;
 
     /// @brief The Edit menu's Image Mode checkable toggle (`v0.Y.47.1`,
