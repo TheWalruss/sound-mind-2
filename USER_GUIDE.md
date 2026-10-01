@@ -541,8 +541,8 @@ shape instead of staying fixed.
   the actual composite, and switches off automatically when you open or
   create a different project, or when you close this panel.
 - Selecting a MindWave shows its own editor: a **Generator Type** (Periodic,
-  Envelope, Stepped/Noise, Spatial, Fractal, Drawn, Step Grid, or
-  Continuous) and that type's own plain numeric parameters - a period, a
+  Envelope, Stepped/Noise, Spatial, Fractal, Drawn, Step Grid, Continuous,
+  or Resonant) and that type's own plain numeric parameters - a period, a
   phase, a seed, and so on. This is a bare-bones, functional editor, not a
   polished one yet - there are no dials or drawing tools here, just fields
   to type numbers into.
@@ -576,6 +576,12 @@ shape instead of staying fixed.
   as you turn any dial or the shared Period/Phase fields above them. All
   three values are saved with your project, so reopening one shows them
   exactly where you left them.
+- **Resonant** repeats a captured Resonant Instrument profile's own spectrum
+  shape once per period, the same way Step Grid repeats a hand-typed list -
+  a **Resonant Profile** drop-down picks which captured profile to use (see
+  [Pick](#pick)'s "Create Resonant Instrument from Picked Path..." for how
+  to capture one). With nothing picked yet, or nothing captured in the
+  project at all, the generator produces a flat neutral value instead.
 - **Superposition** lets one MindWave combine several others together
   (multiply, add, min, max, or average) - **+ Add Member** starts the
   first one. The rest of Superposition's own controls (**- Remove

@@ -24,4 +24,7 @@ private slots:
     void editingTheSelectedMindWaveWhilePreviewingUpdatesTheOverlayLive();
     void settingANewProjectTurnsPreviewOffAndClearsTheOverlay();
     void closingTheMindWavesPanelTurnsPreviewOffAndClearsTheOverlay();
+
+    // Resonant Instruments Installment E (v0.Y.59.1).
+    void refreshMindWavesPanelPushesResonantProfilesIntoTheMindWavesPanel();
 };

@@ -1,5 +1,6 @@
 #include "sound_mind/studio/mind_wave_editor.h"
 
+#include <algorithm>
 #include <array>
 #include <limits>
 #include <utility>
@@ -459,6 +460,34 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
 
     root->addWidget(continuousGroup_);
 
+    // --- Resonant's own group - v0.Y.59.1 Installment E -------------------
+    resonantGroup_ = new QGroupBox(tr("Resonant"), this);
+    resonantGroup_->setObjectName(QStringLiteral("resonantGroup"));
+    auto* resonantForm = new QFormLayout(resonantGroup_);
+
+    resonantProfileCombo_ = new QComboBox(resonantGroup_);
+    resonantProfileCombo_->setObjectName(QStringLiteral("resonantProfileCombo"));
+    resonantProfileCombo_->addItem(tr("(none captured yet)"));
+    connect(resonantProfileCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const QVariant data = resonantProfileCombo_->itemData(index);
+        if (!data.isValid()) {
+            return;  // The "(none captured yet)" placeholder.
+        }
+        const auto id = static_cast<sound_mind::core::ResonantProfileId>(data.toULongLong());
+        const auto it = std::find_if(availableResonantProfiles_.begin(), availableResonantProfiles_.end(),
+                                      [id](const sound_mind::core::NamedResonantProfile& named) {
+                                          return named.id == id;
+                                      });
+        if (it == availableResonantProfiles_.end()) {
+            return;
+        }
+        wave_.setResonantSpectrum(id, it->spectrum);
+        emitChanged();
+    });
+    resonantForm->addRow(tr("Resonant Profile:"), resonantProfileCombo_);
+
+    root->addWidget(resonantGroup_);
+
     root->addStretch();
 
     // Seeded from wave_'s own default stepGridValues() (present regardless
@@ -518,6 +547,7 @@ void MindWaveEditor::updateVisibleGroup() {
     drawnGroup_->setVisible(type == GeneratorType::Drawn);
     stepGridGroup_->setVisible(type == GeneratorType::StepGrid);
     continuousGroup_->setVisible(type == GeneratorType::Continuous);
+    resonantGroup_->setVisible(type == GeneratorType::Resonant);
 }
 
 void MindWaveEditor::updateContinuousPreview() {
@@ -562,6 +592,7 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     const QSignalBlocker continuousShapeBlocker(continuousShapeSpinBox_);
     const QSignalBlocker continuousSkewBlocker(continuousSkewSpinBox_);
     const QSignalBlocker continuousCharacterBlocker(continuousCharacterSpinBox_);
+    const QSignalBlocker resonantProfileBlocker(resonantProfileCombo_);
 
     selectComboValue(generatorTypeCombo_, wave_.type());
     selectComboValue(axisCombo_, wave_.axis());
@@ -593,6 +624,14 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     continuousCharacterSpinBox_->setValue(wave_.continuousCharacter());
     continuousCharacterDial_->setValue(wave_.continuousCharacter());
 
+    if (wave_.sourceResonantProfileId().has_value()) {
+        const int index = resonantProfileCombo_->findData(
+            QVariant::fromValue(static_cast<qulonglong>(*wave_.sourceResonantProfileId())));
+        resonantProfileCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    } else {
+        resonantProfileCombo_->setCurrentIndex(0);
+    }
+
     const int nodeCount = static_cast<int>(wave_.drawnPath().nodes().size());
     drawnStatusLabel_->setText(
         nodeCount >= 2
@@ -614,6 +653,25 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
 
     updateVisibleGroup();
     updateContinuousPreview();
+}
+
+void MindWaveEditor::setAvailableResonantProfiles(
+    const std::vector<sound_mind::core::NamedResonantProfile>& profiles) {
+    availableResonantProfiles_ = profiles;
+
+    const QVariant previousData = resonantProfileCombo_->currentData();
+    const QSignalBlocker blocker(resonantProfileCombo_);
+    resonantProfileCombo_->clear();
+    if (profiles.empty()) {
+        resonantProfileCombo_->addItem(tr("(none captured yet)"));
+        return;
+    }
+    for (const auto& named : profiles) {
+        resonantProfileCombo_->addItem(QString::fromStdString(named.name),
+                                        QVariant::fromValue(static_cast<qulonglong>(named.id)));
+    }
+    const int index = resonantProfileCombo_->findData(previousData);
+    resonantProfileCombo_->setCurrentIndex(index >= 0 ? index : 0);
 }
 
 void MindWaveEditor::rebuildStepGridValueRows(std::size_t count) {

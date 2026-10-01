@@ -10,6 +10,7 @@
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/rgb_image_resample.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/core/resonant_profile.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/layers_panel.h"
@@ -37,6 +38,7 @@ namespace {
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::NamedMindWave;
+using sound_mind::core::NamedResonantProfile;
 
 /// @brief The smallest N such that "MindWave N" isn't already a name in
 /// `entries` - addMindWave()'s own default-naming scheme. Not the same
@@ -155,6 +157,8 @@ void MindWaveController::refreshMindWavesPanel() {
     }
     mindWavesPanel_->setMindWaves(rows);
     mindWavesPanel_->setPreviewImages(previewImages);
+    mindWavesPanel_->setAvailableResonantProfiles(
+        project_ != nullptr ? project_->resonantProfiles() : std::vector<NamedResonantProfile>{});
     layersPanel_->setAvailableMindWaves(availableForBinding);
     layersPanel_->setMindWavePreviewImages(previewImages);
     filterConfigurationPanel_->setAvailableMindWaves(availableForBinding);

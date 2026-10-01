@@ -11,6 +11,7 @@
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/path.h"
+#include "sound_mind/core/resonant_profile.h"
 #include "sound_mind/studio/mind_wave_editor.h"
 #include "sound_mind/studio/rotary_dial_widget.h"
 #include "sound_mind/studio/waveform_preview_widget.h"
@@ -19,6 +20,7 @@ using sound_mind::core::EnvelopeShape;
 using sound_mind::core::GeneratorType;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveAxis;
+using sound_mind::core::NamedResonantProfile;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
@@ -411,4 +413,73 @@ void MindWaveEditorTest::loadingAContinuousMindWaveSyncsAllThreeKnobs() {
     QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousSkewDial"))->value(), 0.1);
     QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousCharacterDial"))->value(), 0.8);
     QVERIFY(editor.findChild<WaveformPreviewWidget*>(QStringLiteral("continuousPreviewWidget"))->samples().size() > 0);
+}
+
+void MindWaveEditorTest::switchingToResonantShowsOnlyItsOwnGroup() {
+    MindWaveEditor editor;
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+
+    combo->setCurrentIndex(combo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::Resonant))));
+
+    QCOMPARE(editor.mindWave().type(), GeneratorType::Resonant);
+    QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("resonantGroup"))->isHidden());
+    QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("periodicGroup"))->isHidden());
+}
+
+void MindWaveEditorTest::settingAvailableResonantProfilesWithNoneShowsThePlaceholder() {
+    MindWaveEditor editor;
+
+    editor.setAvailableResonantProfiles({});
+
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    QCOMPARE(combo->count(), 1);
+    QCOMPARE(combo->currentText(), QStringLiteral("(none captured yet)"));
+}
+
+void MindWaveEditorTest::selectingAResonantProfileUpdatesTheWaveAndEmits() {
+    MindWaveEditor editor;
+    editor.setAvailableResonantProfiles({NamedResonantProfile{1, "Profile One", {0.1F, 0.2F}},
+                                          NamedResonantProfile{2, "Profile Two", {0.3F, 0.4F, 0.5F}}});
+    std::optional<MindWave> received;
+    connect(&editor, &MindWaveEditor::mindWaveChanged, [&](const MindWave& wave) { received = wave; });
+
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    combo->setCurrentIndex(combo->findData(QVariant::fromValue(static_cast<qulonglong>(2))));
+
+    QVERIFY(received.has_value());
+    QCOMPARE(received->sourceResonantProfileId().value(), sound_mind::core::ResonantProfileId{2});
+    QCOMPARE(received->resonantSpectrum().size(), std::size_t{3});
+    QCOMPARE(received->resonantSpectrum()[0], 0.3F);
+    QCOMPARE(editor.mindWave().resonantSpectrum()[0], 0.3F);
+}
+
+void MindWaveEditorTest::loadingAResonantMindWaveSyncsThePickersSelection() {
+    MindWaveEditor editor;
+    editor.setAvailableResonantProfiles({NamedResonantProfile{1, "Profile One", {0.1F, 0.2F}},
+                                          NamedResonantProfile{2, "Profile Two", {0.3F, 0.4F, 0.5F}}});
+    MindWave wave;
+    wave.setType(GeneratorType::Resonant);
+    wave.setResonantSpectrum(sound_mind::core::ResonantProfileId{2}, {0.3F, 0.4F, 0.5F});
+
+    editor.setMindWave(wave);
+
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    QCOMPARE(combo->currentData().toULongLong(), static_cast<qulonglong>(2));
+    QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("resonantGroup"))->isHidden());
+}
+
+void MindWaveEditorTest::loadingAResonantMindWaveWithNoSourceIdSelectsThePlaceholder() {
+    MindWaveEditor editor;
+    // No profiles made available at all - the only item is the
+    // "(none captured yet)" placeholder, the same fallback
+    // ToolConfigurationPanel::setToolConfiguration()'s own identical
+    // `ResonantInstrumentConfiguration` branch relies on.
+    MindWave wave;
+    wave.setType(GeneratorType::Resonant);
+
+    editor.setMindWave(wave);
+
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    QCOMPARE(combo->currentIndex(), 0);
+    QCOMPARE(combo->currentText(), QStringLiteral("(none captured yet)"));
 }

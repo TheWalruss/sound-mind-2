@@ -38,4 +38,11 @@ private slots:
     // MindWave UI/UX uplift - real rotary dials + a live shape preview (v0.Y.58.1).
     void draggingAContinuousDialUpdatesItsOwnSpinBoxAndEmits();
     void changingContinuousFieldsUpdatesTheLivePreview();
+
+    // Resonant Instruments Installment E: Resonant generator (v0.Y.59.1).
+    void switchingToResonantShowsOnlyItsOwnGroup();
+    void settingAvailableResonantProfilesWithNoneShowsThePlaceholder();
+    void selectingAResonantProfileUpdatesTheWaveAndEmits();
+    void loadingAResonantMindWaveSyncsThePickersSelection();
+    void loadingAResonantMindWaveWithNoSourceIdSelectsThePlaceholder();
 };

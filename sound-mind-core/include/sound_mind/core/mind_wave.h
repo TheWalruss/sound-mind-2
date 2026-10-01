@@ -1,12 +1,14 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/path.h"
+#include "sound_mind/core/resonant_profile.h"
 
 #include <nlohmann/json.hpp>
 
@@ -40,6 +42,14 @@ using MindWaveId = std::uint64_t;
  * design.md`'s own Deferred Decision #7 disclaims a real interaction-design
  * pass for MindWaves generally, and this generator's own exact formula is
  * subject to revision once that pass happens.
+ *
+ * `v0.Y.59.1` Installment E adds `Resonant` (`docs/sound-mind-roadmap.md`'s
+ * "Resonant Instruments" own item 6, "also make the WKS curve available as
+ * a MindWave") - samples a computed Wave Kernel Signature spectrum
+ * (`resonantSpectrum()`'s own docs) the same discrete, no-interpolation way
+ * `StepGrid` already samples its own hand-authored values, just populated
+ * from a `NamedResonantProfile` library entry (`resonant_profile.h`)
+ * instead of typed in directly.
  */
 enum class GeneratorType {
     Periodic,
@@ -50,6 +60,7 @@ enum class GeneratorType {
     Drawn,
     StepGrid,
     Continuous,
+    Resonant,
 };
 
 // clang-format off
@@ -62,6 +73,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(GeneratorType, {
     {GeneratorType::Drawn, "drawn"},
     {GeneratorType::StepGrid, "stepGrid"},
     {GeneratorType::Continuous, "continuous"},
+    {GeneratorType::Resonant, "resonant"},
 })
 // clang-format on
 
@@ -773,6 +785,52 @@ public:
     void setContinuousCharacter(double character) noexcept { continuousCharacter_ = character; }
 
     /**
+     * @brief Which `NamedResonantProfile` library entry `resonantSpectrum()`
+     *        was last set from, if any - for UI purposes only (so a
+     *        MindWave editor showing this instance can highlight the right
+     *        entry in its own Resonant Instrument picker); never consulted
+     *        by `evaluate()` itself, which only ever reads
+     *        `resonantSpectrum()` directly - the same role
+     *        `MindShotConfiguration::sourceMindShotId()` already plays for
+     *        an embedded `Clip`.
+     * @return The source entry's own id, or `std::nullopt` if
+     *         `resonantSpectrum()` was never set from a library entry.
+     */
+    [[nodiscard]] std::optional<ResonantProfileId> sourceResonantProfileId() const noexcept {
+        return sourceResonantProfileId_;
+    }
+
+    /**
+     * @brief The computed Wave Kernel Signature spectrum a
+     *        `GeneratorType::Resonant` MindWave samples - see
+     *        `computeWaveKernelSignature()`'s own docs
+     *        (`resonant_instrument.h`) for exactly what these values mean
+     *        and why every one is already in `[0, 1]`.
+     * @return The current spectrum; empty until `setResonantSpectrum()` is
+     *         called, meaningless unless `type()` is
+     *         `GeneratorType::Resonant`.
+     */
+    [[nodiscard]] const std::vector<float>& resonantSpectrum() const noexcept { return resonantSpectrum_; }
+
+    /**
+     * @brief Sets which computed spectrum this MindWave samples -
+     *        snapshotting `spectrum` directly (see this field's own docs
+     *        on why: the same "embed a copy, not a live reference" shape
+     *        `ResonantInstrumentConfiguration::setSpectrum()` already
+     *        establishes, for the identical reason - a library entry can
+     *        be removed, or never existed, without breaking anything
+     *        already bound to it).
+     * @param sourceId The library entry `spectrum` was copied from, for
+     *        `sourceResonantProfileId()`'s own UI-only purpose;
+     *        `std::nullopt` if unknown/not applicable.
+     * @param spectrum The spectrum to sample, copied in.
+     */
+    void setResonantSpectrum(std::optional<ResonantProfileId> sourceId, std::vector<float> spectrum) {
+        sourceResonantProfileId_ = sourceId;
+        resonantSpectrum_ = std::move(spectrum);
+    }
+
+    /**
      * @brief This MindWave's own field value at `point`, after superposing
      *        `superpositionStack()` (if any) on top of its own generator.
      *
@@ -829,6 +887,13 @@ public:
      * by `continuousCharacter()` - see `continuousShape()`'s own docs for
      * the full formula.
      *
+     * `GeneratorType::Resonant` (`v0.Y.59.1` Installment E) divides one
+     * `period()`-length cycle into `resonantSpectrum().size()` equal-width
+     * steps and returns whichever one `axisPosition` currently falls in,
+     * verbatim - the same discrete, no-interpolation indexing `StepGrid`
+     * above already uses, just reading `resonantSpectrum()` instead of
+     * `stepGridValues()` - see that field's own docs.
+     *
      * @param point The canvas position to evaluate.
      * @param config Interprets `point`'s own Hz against `config`'s own
      *        frequency range/bin count, needed whenever a bin index is
@@ -869,6 +934,8 @@ private:
     double continuousShape_ = 0.0;
     double continuousSkew_ = 0.5;
     double continuousCharacter_ = 0.0;
+    std::optional<ResonantProfileId> sourceResonantProfileId_;
+    std::vector<float> resonantSpectrum_;
 };
 
 /**

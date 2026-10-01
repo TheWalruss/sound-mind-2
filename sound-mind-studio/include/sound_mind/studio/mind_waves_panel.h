@@ -9,6 +9,7 @@
 #include <QString>
 
 #include "sound_mind/core/mind_wave.h"
+#include "sound_mind/core/resonant_profile.h"
 
 class QCheckBox;
 class QComboBox;
@@ -131,6 +132,18 @@ public:
      * @param previewImages Each entry's own current preview, keyed by id.
      */
     void setPreviewImages(const std::map<sound_mind::core::MindWaveId, QImage>& previewImages);
+
+    /**
+     * @brief Forwards the project's current Resonant Instrument profile
+     *        library to all three embedded `MindWaveEditor`s (the top-level
+     *        editor, `stackMemberEditor_`, and `warpSourceEditor_`) - see
+     *        `MindWaveEditor::setAvailableResonantProfiles()`'s own docs for
+     *        why each one needs the full entries, not just id/name pairs.
+     *        `v0.Y.59.1` Installment E.
+     * @param profiles The project's current Resonant Instrument profile
+     *        library.
+     */
+    void setAvailableResonantProfiles(const std::vector<sound_mind::core::NamedResonantProfile>& profiles);
 
     /// @brief The currently selected library entry's id, if any.
     /// @return That entry's id, or `std::nullopt` if no row is selected.

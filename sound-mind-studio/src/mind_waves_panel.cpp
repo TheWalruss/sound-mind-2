@@ -26,6 +26,7 @@ namespace {
 using sound_mind::core::GeneratorType;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
+using sound_mind::core::NamedResonantProfile;
 using sound_mind::core::SuperpositionBlendMode;
 
 /// @brief A short display name for `type` - used as a row's own type
@@ -479,6 +480,12 @@ void MindWavesPanel::setMindWaves(const std::vector<RowData>& entries) {
 void MindWavesPanel::setPreviewImages(const std::map<MindWaveId, QImage>& previewImages) {
     previewImages_ = previewImages;
     setMindWaves(currentRows_);
+}
+
+void MindWavesPanel::setAvailableResonantProfiles(const std::vector<NamedResonantProfile>& profiles) {
+    mindWaveEditor_->setAvailableResonantProfiles(profiles);
+    stackMemberEditor_->setAvailableResonantProfiles(profiles);
+    warpSourceEditor_->setAvailableResonantProfiles(profiles);
 }
 
 void MindWavesPanel::clearSelection() {

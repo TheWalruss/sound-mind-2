@@ -6,6 +6,28 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.4.5] - 2026-10-01
+
+Resonant Instruments, Installment E: a MindWave generator fed by a captured profile.
+
+### Added
+
+- **Resonant** is now a selectable MindWave generator type, alongside
+  Periodic, Envelope, Fractal, and the rest. Pick a captured Resonant
+  Instrument profile from its own drop-down in the MindWave editor and the
+  wave repeats that profile's own spectrum shape once per period, the same
+  "sample a captured array, no interpolation" indexing the existing
+  Step Grid generator already uses.
+- With no profile picked yet (or none captured in the project), the
+  generator falls back to a flat neutral value, the same "nothing captured
+  yet" placeholder already shown elsewhere for Resonant Instrument pickers.
+
+### Notes
+
+Full regression: `sound-mind-core` 221645 assertions (1032 cases) passing
+(7 new), `sound-mind-studio` full suite genuinely passing (7 new tests),
+Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s Decision #191.
+
 ## [0.1.4.4] - 2026-10-01
 
 Resonant Instruments, Installment D: the brush tip is paintable.
