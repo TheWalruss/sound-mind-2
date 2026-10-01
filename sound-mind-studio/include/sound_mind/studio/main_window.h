@@ -33,6 +33,7 @@
 #include "sound_mind/studio/macro_recorder.h"
 #include "sound_mind/studio/midi_configuration_panel.h"
 #include "sound_mind/studio/midi_import.h"
+#include "sound_mind/studio/midi_import_dialog.h"
 #include "sound_mind/studio/mind_wave_controller.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/playback_panel.h"
@@ -304,7 +305,7 @@ public slots:
      * snippet checked by default) and imports only what's still checked
      * when it's accepted - cancelling it, or accepting with nothing
      * checked, imports nothing. Progress and completion are reported via
-     * the status bar (non-modal) - see poolTopmostLayer()'s docs for why
+     * the status bar (non-modal) - see poolLayer()'s docs for why
      * only failure shows a modal.
      */
     void importAudio();
@@ -712,21 +713,35 @@ public slots:
     void toggleTestOutputDevice(bool testing);
 
     /**
-     * @brief Pools the topmost layer with content, then exports both its
-     *        Stream and Pool renders as PNG files, for side-by-side
-     *        comparison in any image viewer.
+     * @brief Pools `id`, then exports both its Stream and Pool renders as
+     *        PNG files, for side-by-side comparison in any image viewer -
+     *        the actual work behind `LayersPanel`'s own "Pool" button
+     *        (⬇), real-world testing pass 2026-09-29 ("move Pool Layer
+     *        into the Layers panel, as an option available to the
+     *        currently active layer" - confirmed with the user). Replaces
+     *        the removed toolbar's own `poolTopmostLayer()`, which always
+     *        targeted whichever layer happened to be topmost regardless of
+     *        selection; see `poolTopmostLayerAsync()`'s own docs for why
+     *        that specific "topmost" convenience entry point is kept
+     *        around (as a thin wrapper over this one) rather than deleted
+     *        outright.
      *
      * Per the confirmed scope for this milestone: pooling replaces the
      * layer's content in place (see `sound_mind::core::poolLayer()`'s
      * docs for why this isn't yet the design doc's "hide-not-delete,
-     * undoable operation" behavior) rather than prompting for anything -
-     * "the topmost layer" is the same one startPlayback() and
-     * CanvasWidget use. Progress and success are reported via the status
-     * bar (non-modal, since pooling can take a real amount of time); only
-     * a failure shows a modal, per this milestone's confirmed "status bar
-     * for progress/success, keep errors modal" scope.
+     * undoable operation" behavior) rather than prompting for anything.
+     * Progress and success are reported via the status bar (non-modal,
+     * since pooling can take a real amount of time); only a failure shows
+     * a modal, per this milestone's confirmed "status bar for
+     * progress/success, keep errors modal" scope.
+     *
+     * @param id The layer to pool - `LayersPanel`'s own "Pool" button only
+     *        ever emits this for the currently selected row, but this
+     *        itself is a no-op-safe entry point for any id: a no-op
+     *        (beyond a status bar/modal message) for an unknown id or one
+     *        with no content, the same as `poolLayerAsync()`'s own guard.
      */
-    void poolTopmostLayer();
+    void poolLayer(sound_mind::core::LayerId id);
 
     /**
      * @brief Prompts for a destination file and exports the topmost layer
@@ -737,7 +752,7 @@ public slots:
      * The chosen format (Flac/Ogg/MP3) is inferred from the destination
      * file's extension. Does nothing if no layer has content, or none is
      * open. Progress and completion are reported via the status bar
-     * (non-modal) - see poolTopmostLayer()'s docs for why only failure
+     * (non-modal) - see poolLayer()'s docs for why only failure
      * shows a modal.
      */
     void exportAudio();
@@ -750,7 +765,7 @@ public slots:
      *
      * Does nothing if no layer has content, or none is open. Progress and
      * completion are reported via the status bar (non-modal) - see
-     * poolTopmostLayer()'s docs for why only failure shows a modal.
+     * poolLayer()'s docs for why only failure shows a modal.
      */
     void exportVideo();
 
@@ -2193,22 +2208,28 @@ public:
      * importAudioSnippets() with whatever indices `audioSnippetSelections`
      * gives that path, or - for a path with no entry there - the same
      * "every computed snippet, no picker" behavior importAudioFile()
-     * always had; every image extension
-     * `importImageFiles()` accepts is collected and imported as one batch
-     * with `imageMode`/`importAsSequence`; `.mid`/`.midi` goes straight to
-     * importMidiFile() with its own "every channel, separate layers, no
-     * picker" default - there's no per-file MIDI option to collect here
-     * yet, matching Installment A's own scope (see importMidi()'s docs).
-     * dropEvent() is the one that
-     * actually decides all of this (via real `AudioSnippetPickerDialog`/
-     * `ImageScalePickerDialog` prompts, the same ones File → Import Audio/
-     * Image themselves show - confirmed with the user: a drop should offer
-     * the same choices those menu actions do), so this method itself stays
-     * non-prompting; `.smproj` goes to openProjectAt(), guarded by
-     * confirmDiscardUnsavedChanges() first - openProjectAt() itself already
-     * refuses (no dialog) while Loop Mode or Recording is active. Every
-     * other extension is silently ignored, not an error - a stray file
-     * dropped by accident shouldn't force anything onto the screen.
+     * always had; every image extension `importImageFiles()` accepts is
+     * collected and imported as one batch with `imageMode`/
+     * `importAsSequence`; a recognized MIDI extension (`.mid`/`.midi`) goes
+     * to importMidiFile() or importMidiSelection() per `midiChoices`' own
+     * entry for that path (`MidiDropChoice::wholeFile` picks which), or -
+     * for a path with no entry there - the same "every channel, whole
+     * file, separate layers, no picker" default importMidi()'s own trivial
+     * case already used before per-file MIDI drop choices existed
+     * (real-world testing pass, 2026-09-29 - previously *every* MIDI drop
+     * hardcoded this default regardless of whether the file actually had a
+     * real channel/snippet choice to make, unlike audio/image drops, which
+     * already prompted correctly). dropEvent() is the one that actually
+     * decides all of this (via real `AudioSnippetPickerDialog`/
+     * `ImageScalePickerDialog`/`MidiImportDialog` prompts, the same ones
+     * File → Import Audio/Image/MIDI themselves show - confirmed with the
+     * user: a drop should offer the same choices those menu actions do),
+     * so this method itself stays non-prompting; `.smproj` goes to
+     * openProjectAt(), guarded by confirmDiscardUnsavedChanges() first -
+     * openProjectAt() itself already refuses (no dialog) while Loop Mode or
+     * Recording is active. Every other extension is silently ignored, not
+     * an error - a stray file dropped by accident shouldn't force anything
+     * onto the screen.
      *
      * A recognized file that fails to import or open reports it via the
      * status bar (non-modal), not a blocking dialog - deliberately gentler
@@ -2249,6 +2270,13 @@ public:
      *        meaningful only when `imageMode` is `ImageScalePickerDialog::
      *        Mode::Polar`. Defaults to `std::nullopt`, the pre-existing
      *        default every test predating this parameter still gets.
+     * @param midiChoices Each recognized-MIDI-extension path among `paths`'
+     *        own resolved import choice (see `MidiDropChoice`'s own docs,
+     *        real-world testing pass 2026-09-29) - a path with no entry
+     *        here imports the whole file, every channel, one layer each
+     *        (`importMidiFile()`'s own pre-existing default), the same
+     *        result the trivial "nothing to choose" case already produced
+     *        before this parameter existed.
      */
     void handleDroppedFiles(
         const std::vector<std::filesystem::path>& paths,
@@ -2256,17 +2284,51 @@ public:
         bool importImagesAsSequence = false,
         const std::map<std::filesystem::path, std::vector<std::size_t>>& audioSnippetSelections = {},
         const std::map<std::filesystem::path, double>& audioSnippetOffsets = {},
-        std::optional<PolarImportParams> imagePolarParams = std::nullopt);
+        std::optional<PolarImportParams> imagePolarParams = std::nullopt,
+        const std::map<std::filesystem::path, MidiDropChoice>& midiChoices = {});
+
+    /**
+     * @brief Pools `id` and writes its Stream and Pool renders as PNG
+     *        files, synchronously and without showing any dialog - kept as
+     *        the direct, blocking, headless-testable entry point (matching
+     *        importAudioFile()'s/importImageFile()'s own reason for
+     *        existing) even though `poolLayer()`'s own interactive slot no
+     *        longer calls this directly - see `poolLayerAsync()`'s own
+     *        docs for what actually backs it now.
+     *
+     * @param id The layer to pool.
+     * @param errorMessage If non-null and this returns `false`, set to a
+     *        human-readable description of what went wrong.
+     * @param streamPngPath If non-null and this returns `true`, set to the
+     *        path the Stream render was written to.
+     * @param poolPngPath If non-null and this returns `true`, set to the
+     *        path the Pool render was written to.
+     * @return `true` on success; `false` if `id` is unknown or has no
+     *         content, or writing either PNG failed.
+     *
+     * Marks hasUnsavedChanges() on success (the layer's content genuinely
+     * changed in place - see `sound_mind::core::poolLayer()`'s docs).
+     */
+    bool poolLayerNow(sound_mind::core::LayerId id, QString* errorMessage = nullptr,
+                       QString* streamPngPath = nullptr, QString* poolPngPath = nullptr);
 
     /**
      * @brief Pools the topmost layer with content and writes its Stream
-     *        and Pool renders as PNG files, synchronously and without
-     *        showing any dialog - kept as the direct, blocking,
-     *        headless-testable entry point (matching importAudioFile()'s/
-     *        importImageFile()'s own reason for existing) even though
-     *        poolTopmostLayer()'s own interactive slot no longer calls this
-     *        directly - see poolTopmostLayerAsync()'s own docs (finding
-     *        #12, Installment G) for what actually backs it now.
+     *        and Pool renders as PNG files - a thin wrapper resolving
+     *        `layerController_->topmostLayerWithContent()` then delegating
+     *        to poolLayerNow(). Kept as its own entry point (rather than
+     *        requiring every caller to resolve the topmost id itself)
+     *        purely for the large number of existing tests already written
+     *        against this exact name/"always topmost" behavior - real-world
+     *        testing pass 2026-09-29 moved the only interactive caller
+     *        (the toolbar's own "Pool Layer" button) to `LayersPanel`'s new
+     *        per-row "Pool" button instead, which calls poolLayer()/
+     *        poolLayerAsync() with a *specific* id, not necessarily the
+     *        topmost one - so this method (and poolTopmostLayerAsync()
+     *        below) no longer has any interactive caller of its own, only
+     *        tests. Flagged here rather than deleted outright, since
+     *        rewriting ~15 existing tests to pass an explicit topmost id
+     *        instead offered no functional benefit.
      *
      * @param errorMessage If non-null and this returns `false`, set to a
      *        human-readable description of what went wrong.
@@ -2276,18 +2338,18 @@ public:
      *        path the Pool render was written to.
      * @return `true` on success; `false` if there was no layer to pool, or
      *         writing either PNG failed.
-     *
-     * Marks hasUnsavedChanges() on success (the layer's content genuinely
-     * changed in place - see `sound_mind::core::poolLayer()`'s docs).
      */
     bool poolTopmostLayerNow(QString* errorMessage = nullptr, QString* streamPngPath = nullptr,
                               QString* poolPngPath = nullptr);
 
     /**
-     * @brief Starts an asynchronous Pool of the topmost layer with content -
-     *        the real work behind the interactive poolTopmostLayer() slot -
-     *        real-world testing pass finding #12 ("a real, non-blocking
-     *        cancel affordance for long operations"), Installment G.
+     * @brief Starts an asynchronous Pool of `id` - the real work behind the
+     *        interactive poolLayer() slot - real-world testing pass finding
+     *        #12 ("a real, non-blocking cancel affordance for long
+     *        operations"), Installment G; generalized from a hardcoded
+     *        "topmost layer" target to an explicit id, real-world testing
+     *        pass 2026-09-29 ("move Pool Layer into the Layers panel, as an
+     *        option available to the currently active layer").
      *
      * Copies the layer's own current content out by value, then runs
      * `sound_mind::core::computePooledContent()` on a `BackgroundTask` with
@@ -2306,8 +2368,10 @@ public:
      * does nothing (beyond reporting it) if the layer no longer exists by
      * then.
      *
+     * @param id The layer to pool.
+     *
      * A no-op (just a status bar message, no dialog) if no project is open,
-     * there's no layer with content to pool, or isPoolRunning() is already
+     * `id` is unknown or has no content, or isPoolRunning() is already
      * `true` - matching importAudioSnippetsAsync()'s own reasoning for the
      * same guard. A separate slot from exportTask_/importTask_, not shared
      * with either - Export never mutates the project at all, and Pool's own
@@ -2318,10 +2382,19 @@ public:
      * isPoolRunning(), the same reason (and pattern) they already refuse
      * while isImportRunning().
      *
-     * Does *not* write the Stream/Pool comparison PNGs
-     * poolTopmostLayerNow() does - that's a debug/verification feature no
-     * interactive caller has ever actually used (poolTopmostLayer() itself
-     * always passes `nullptr` for both).
+     * Does *not* write the Stream/Pool comparison PNGs poolLayerNow() does -
+     * that's a debug/verification feature no interactive caller has ever
+     * actually used (poolLayer() itself always passes `nullptr` for both).
+     */
+    void poolLayerAsync(sound_mind::core::LayerId id);
+
+    /**
+     * @brief Starts an asynchronous Pool of the topmost layer with content -
+     *        a thin wrapper resolving `layerController_->
+     *        topmostLayerWithContent()` then delegating to
+     *        poolLayerAsync(). See poolTopmostLayerNow()'s own docs on why
+     *        this "topmost" convenience entry point is kept despite having
+     *        no interactive caller of its own anymore.
      */
     void poolTopmostLayerAsync();
 
@@ -2728,10 +2801,18 @@ private:
     void updateMindGrainGuardrails();
 
     /**
-     * @brief Enables/disables `smoothNodesAction_` to match whether it's
+     * @brief Shows/hides `smoothNodesAction_` to match whether it's
      *        currently applicable - `v0.Y.58.1`'s "Reduce top-level
      *        buttons" ("Smooth Nodes should only be available when a path
-     *        is Picked or newly created").
+     *        is Picked or newly created"). Originally a gray-out-when-
+     *        inapplicable (`setEnabled()`) treatment; changed to hide
+     *        outright (`setVisible()`) in a follow-up real-world testing
+     *        pass (2026-09-29, confirmed with the user) - unlike the Mind
+     *        Grain guardrail's own gray-out (`updateMindGrainGuardrails()`,
+     *        where Paint stays a commonly-reachable option even when
+     *        temporarily disallowed on one layer), Smooth Nodes is
+     *        essentially never applicable, so a permanently-grayed button
+     *        read as clutter rather than a helpful hint.
      *
      * Applicable whenever either is true: `toolPaletteController_->
      * selectedPath()` has a value (Pick currently has a `PaintOperation`
@@ -2739,10 +2820,10 @@ private:
      * Nodes governs node type for editing *any* path's nodes, not only
      * ones placed via the Path tool), or `toolPaletteController_->
      * isPathPlacementInProgress()` (the Path tool is mid-placement, before
-     * `finishPath()`/`cancelPath()`). Disabled with an explanatory tooltip
-     * otherwise - its own *checked* state (the standing default node type
-     * preference) is left untouched either way, since disabling it only
-     * means "not applicable right now," not "turn this preference off."
+     * `finishPath()`/`cancelPath()`). Hidden otherwise - its own *checked*
+     * state (the standing default node type preference) is left untouched
+     * either way, since hiding it only means "not applicable right now,"
+     * not "turn this preference off."
      *
      * Called from every place either input could have changed: `pan`/
      * `paint`/`pick`/`select`/`path`/`chord` mode switching
@@ -3231,8 +3312,9 @@ private:
     /// `PathController::setDefaultNodeType()`'s own docs), independent of
     /// (and not reset by) which tool mode is currently active. Its own
     /// *checked* state is a standing preference, untouched by tool
-    /// switching; its *enabled* state is gated by
-    /// `updateSmoothNodesGuardrail()` (`v0.Y.58.1`) to whether a path is
+    /// switching; its *visible* state is gated by
+    /// `updateSmoothNodesGuardrail()` (`v0.Y.58.1`, hidden rather than
+    /// merely disabled as of a 2026-09-29 follow-up) to whether a path is
     /// currently Picked or being newly placed.
     QAction* smoothNodesAction_ = nullptr;
 

@@ -34,6 +34,8 @@ private slots:
     void openProjectAtRefusesWhileCompositingForPlayback();
     void poolTopmostLayerNowFailsGracefullyWithNoContent();
     void poolTopmostLayerNowPoolsAnImportedLayer();
+    void poolLayerNowPoolsASpecificNonTopmostLayer();
+    void layersPanelsPoolButtonPoolsTheSelectedLayerViaMainWindow();
     void poolTopmostLayerAsyncRunsInTheBackgroundAndShowsTheCancelButton();
     void poolTopmostLayerAsyncCompletesSuccessfullyAndAppliesTheResult();
     void cancelPoolDiscardsTheComputedResultWithoutApplyingIt();
@@ -127,6 +129,8 @@ private slots:
     void showingOnePlaybackRecordOrLoopPanelHidesTheOtherTwo();
     void configureDevicesButtonInEachOfTheThreePanelsShowsAndRaisesTheSharedPanel();
     void configureMenuContainsEveryConfigurationPanelsOwnToggle();
+    void macroButtonSitsNextToInputOutputAtTheTopRightAndListsAllThreeMacroActions();
+    void composerPanelsToggleIsInTheViewMenuNotOnTheToolbar();
 
     // Audio Import Snippets (v0.Y.19.1)
     void audioSnippetsForFileReturnsOneSnippetForAudioNoLongerThanTheProject();
@@ -163,6 +167,8 @@ private slots:
     void handleDroppedFilesSequencesDroppedImagesWhenRequested();
     void handleDroppedFilesAppliesGivenAudioSnippetSelections();
     void handleDroppedFilesAppliesGivenAudioSnippetOffsets();
+    void handleDroppedFilesAppliesGivenMidiChoice();
+    void handleDroppedFilesWithNoMidiChoiceImportsEveryChannel();
 
     // Layer Time Alignment (v0.Y.21.1)
     void setLayerTranslationChangesTheLayersTranslation();
@@ -247,9 +253,9 @@ private slots:
     void clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject();
     void cancelPathDiscardsInProgressPlacementWithoutCommittingAnything();
     void smoothNodesToggleAffectsSubsequentlyPlacedNodes();
-    void smoothNodesActionIsDisabledWithNoProjectOpen();
-    void smoothNodesActionBecomesEnabledWhilePlacingANewPathAndDisabledAfterFinishing();
-    void smoothNodesActionBecomesEnabledWhileAStrokeIsPickedAndDisabledAfterDeselecting();
+    void smoothNodesActionIsHiddenWithNoProjectOpen();
+    void smoothNodesActionBecomesVisibleWhilePlacingANewPathAndHiddenAfterFinishing();
+    void smoothNodesActionBecomesVisibleWhileAStrokeIsPickedAndHiddenAfterDeselecting();
     void finishPathWithNoNodesPlacedIsANoOp();
     void settingANewProjectResetsPathModeToOff();
     void pastedContentIsPickableAndMovable();

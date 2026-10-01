@@ -399,6 +399,65 @@ void LayersPanelTest::cleanUpPhaseButtonOnlyAppearsForASelectedRowWithContentAnd
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("cleanUpPhaseButton")) == nullptr);
 }
 
+void LayersPanelTest::poolButtonOnlyAppearsForASelectedRowWithContentAndEmitsPoolRequested() {
+    // Real-world testing pass, 2026-09-29: "move Pool Layer into the
+    // Layers panel, as an option available to the currently active layer" -
+    // same "needs real content" gate as clean-up-phase above.
+    auto rows = twoNormalLayers();
+    rows[1].thumbnail = QImage(4, 4, QImage::Format_RGB32);  // "Top" (id 2) has content.
+
+    LayersPanel panel;
+    panel.setLayers(rows);
+    panel.selectLayer(static_cast<LayerId>(2));
+    QSignalSpy spy(&panel, &LayersPanel::poolRequested);
+
+    const auto buttons = panel.findChildren<QPushButton*>(QStringLiteral("poolButton"));
+    QCOMPARE(buttons.size(), 1);
+    buttons.at(0)->click();
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<LayerId>(), static_cast<LayerId>(2));
+
+    panel.selectLayer(static_cast<LayerId>(1));  // "Bottom" - no thumbnail, no button.
+    QTest::qWait(0);
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("poolButton")) == nullptr);
+}
+
+void LayersPanelTest::poolButtonAppearsForASelectedBackgroundRowWithContentUnlikeDuplicateOrCleanUpPhase() {
+    // Unlike duplicate/clean-up-phase (gated on `!locked`), Pool stays
+    // available for a selected, content-bearing Background row - it was
+    // always poolable before this button existed too (whenever it happened
+    // to be topmost, e.g. a single-layer project) - confirmed with the
+    // user as still "an option available to the currently active layer"
+    // even when that layer is Background.
+    LayersPanel::RowData background;
+    background.id = 1;
+    background.type = LayerType::Background;
+    background.thumbnail = QImage(4, 4, QImage::Format_RGB32);
+
+    LayersPanel panel;
+    panel.setLayers({background});
+    panel.selectLayer(static_cast<LayerId>(1));
+
+    QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("poolButton")).size(), 1);
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("duplicateButton")) == nullptr);
+}
+
+void LayersPanelTest::filterAndEqualizerRowsShowNoPoolButtonEvenWhenSelected() {
+    // Filter/Equalizer rows never have stored content of their own to pool
+    // (RowData::thumbnail stays null - see its own docs), so the
+    // `!thumbnail.isNull()` gate alone already excludes them.
+    LayersPanel::RowData filter;
+    filter.id = 1;
+    filter.type = LayerType::Filter;
+
+    LayersPanel panel;
+    panel.setLayers({filter});
+    panel.selectLayer(static_cast<LayerId>(1));
+
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("poolButton")) == nullptr);
+}
+
 void LayersPanelTest::lockedLayersHaveALockIconInsteadOfADragHandle() {
     LayersPanel::RowData background;
     background.id = 1;

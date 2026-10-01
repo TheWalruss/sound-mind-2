@@ -6,6 +6,33 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.19] - 2026-10-01
+
+UI polish, follow-up correction pass: real-world use of the just-shipped
+toolbar/menu reorganization turned up five more fixes.
+
+### Changed
+
+- **"Smooth Nodes" is now hidden, not just grayed out**, except while
+  actively editing a path.
+- **Macro Record/Play/Export Video are now a "Macro" dropdown**, next to
+  Input/Output at the top-right of the menu bar - previously three
+  separate toolbar buttons.
+- **Composer Mode moved into the View menu** - previously its own toolbar
+  button.
+- **Pool Layer moved into the Layers panel**, as a "Pool" (⬇) button on
+  whichever layer is currently selected - previously a toolbar button
+  that always targeted the topmost layer.
+- **Dropping a MIDI file now shows the same import dialog** File → Import
+  MIDI does, when there's a real channel/snippet choice to make - image
+  and audio drops already matched their own menu actions; MIDI didn't.
+
+### Notes
+
+Full regression: `sound-mind-studio` full suite genuinely passing (9 new
+tests), `sound-mind-core` unaffected and unchanged. Doxygen: 0 warnings.
+See `docs/sound-mind-architecture.md`'s Decision #183.
+
 ## [0.1.3.18] - 2026-09-28
 
 UI polish, Installment E: **Configure drop-down.**

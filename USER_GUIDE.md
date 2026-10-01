@@ -120,16 +120,21 @@ Once a project is open, the title bar shows the project's name next to
   **Grid**, **Filter Configuration**, or **MindWaves** to show that
   panel; each is covered in its own section below. Unlike Input/Output,
   any number of these can stay open together.
+- **Macro dropdown** (top-right of the menu bar, next to Input/Output) -
+  **Record Macro**, **Play Macro**, and **Export Macro Video...** - see
+  [What's Not Here Yet](#whats-not-here-yet) below.
 - **File menu** - New/Open/Save/Save As, Import Audio/Image, Export
   Audio/Video.
 - **View menu** - Zoom controls (see [Canvas Navigation](#canvas-navigation)
-  below) and a **Hardware Acceleration** checkbox: turn GPU compute off to
+  below), a **Hardware Acceleration** checkbox: turn GPU compute off to
   compare speed/results against the CPU path, or if you suspect it's
-  causing a problem. Stays as you left it across restarts.
+  causing a problem (stays as you left it across restarts), **Sound
+  Flower** (see [Canvas Navigation](#canvas-navigation) below), and
+  **Composer Mode** (see [What's Not Here Yet](#whats-not-here-yet)
+  below).
 - **Help menu** - Quick Start, Readme, User Guide, and Changelog (each
   opens a styled HTML page in your default browser), plus About Sound
   Mind Studio.
-- **Pool Layer** toolbar button - see [Pooling a Layer](#pooling-a-layer).
 - **Status bar** (bottom) - the left side shows the mouse cursor's
   position while it's over the canvas, both in pixels and in time/
   frequency (e.g. `30, 10 px   |   0.300 s, 523 Hz`), clearing once the
@@ -353,9 +358,11 @@ the same choices the File menu offers: dropped images show the same
 scaling/sequencing picker **File → Import Image...** does; a dropped audio
 file (WAV, MP3, FLAC, Ogg, AIFF, M4A, or Opus) with more than one computed
 snippet shows the same snippet picker **File → Import Audio...** does, one
-picker per such file; a dropped MIDI file (`.mid`/`.midi`) imports the same
-way **File → Import MIDI...** does, with no picker at all; `.smproj` opens
-that project (after confirming if your current project has unsaved
+picker per such file; a dropped MIDI file (`.mid`/`.midi`) shows the same
+channel/snippet picker **File → Import MIDI...** does, whenever the file
+actually has more than one channel or snippet to choose from (skipped,
+same as the menu action, for a file with nothing to choose); `.smproj`
+opens that project (after confirming if your current project has unsaved
 changes). Anything else is ignored. **Cancelling any one of these pickers
 cancels the whole drop** - nothing in it is imported or opened, even files
 unrelated to the dialog you cancelled. If a dropped file fails to import
@@ -418,6 +425,9 @@ stroke paints into) to reveal its full set of controls:
   being completely inaudible; this clears it without touching any cell
   that actually carries sound. A one-time cleanup, not an ongoing effect
   - it doesn't undo.
+- A **Pool** button (⬇), for any selected layer that actually has content
+  (including **Background**, unlike duplicate/clean-up-phase above) - see
+  [Pooling a Layer](#pooling-a-layer).
 - A **delete** button (×), for any layer except the locked one(s) - also
   appears just by hovering over the row, even without selecting it first,
   so it's never more than a click away.
@@ -1302,13 +1312,13 @@ a segment out to wherever the cursor currently is.
   opacity settings), exactly like a freehand stroke.
 - **Cancel** it - **Edit → Cancel Path** discards everything placed so
   far instead.
-- **Smooth Nodes** - the toolbar checkbox next to the Tool dropdown
+- **Smooth Nodes** - a toolbar checkbox next to the Tool dropdown
   controls which node type the *next* click places: unchecked (the
   default) places a sharp-cornered node, checked places a smooth one.
-  Flip it mid-path to mix both kinds in the same path. Only clickable
-  while it means something - while you're placing a new path, or while an
+  Flip it mid-path to mix both kinds in the same path. Only appears while
+  it means something - while you're placing a new path, or while an
   existing one is [Picked](#pick) (freehand-drawn or placed this way,
-  either counts) - greyed out the rest of the time.
+  either counts) - hidden the rest of the time.
 
 A path placed this way becomes a real paint object once finished, exactly
 like a freehand stroke - it's selectable/movable/modifiable/deletable
@@ -1553,12 +1563,15 @@ running, since Recording never touches output.
 
 ## Pooling a Layer
 
-The **Pool Layer** toolbar button runs the topmost visible layer with
-content through a full, lossless round-trip encode - a slower but
-higher-fidelity representation than the fast, approximate one every import
-and recording normally uses. There's no visible difference for most
-material; it matters most before an audio export you want to sound as
-close as possible to the original.
+Select a layer in the Layers panel, then click its own **Pool** (⬇) button
+(next to Duplicate/Clean Up Phase, once selected) to run it through a
+full, lossless round-trip encode - a slower but higher-fidelity
+representation than the fast, approximate one every import and recording
+normally uses. There's no visible difference for most material; it
+matters most before an audio export you want to sound as close as
+possible to the original. Only a layer with real content shows this
+button - a brand-new empty layer, or a Filter/Equalizer layer, has
+nothing to pool.
 
 Pooling runs in the background - you can keep working while it processes,
 and a small **✕** button appears in the status bar to cancel it if you
@@ -1610,7 +1623,7 @@ all twenty designed filter types work now, the Equalizer layer included.
 `docs/sound-mind-roadmap.md` tracks what's actually being built next, in
 order; this guide will grow alongside it.
 
-**Composer Mode** (toggle it from the transport toolbar) has also made a
+**Composer Mode** (toggle it from the **View** menu) has also made a
 real start - each visible layer shows as its own track along the bottom
 of the window, alongside the canvas, with a per-track background choice
 (Clean/Amplitude/Thumbnail) and every paint stroke/fill drawn as a box.
@@ -1618,22 +1631,22 @@ It's read-only for now: you can't yet drag a box to retime it, move it to
 a different track, or edit an object's/track's own settings from there -
 those are all still to come.
 
-**Macro Mode** now covers all three of its original goals. A **Record
-Macro** toggle (on the transport toolbar) captures a timestamped log of
-playback start/stop, layer visibility changes, painting, filter
-configuration changes, and MindWave edits - stopping it reports how many
-events were captured, in the status bar. A **Play Macro** action, next to
-it, replays the most recently recorded one in the Studio itself: it jumps
-the project back to how it looked right before recording began, then
-re-applies each captured action at the same relative moment it originally
-happened. Each replayed action causes a brief, audible restart of
-playback rather than a seamless transition - that's expected. An
-**Export Macro Video...** action, next to that, instead renders the same
-macro straight to an MP4 file - re-compositing the project at each
-captured moment and cutting to the new result instantly, with one
-continuous audio track underneath and no audible restarts in the
-exported file. There's still no panel to inspect what a recorded macro
-actually contains, and it isn't saved with the project.
+**Macro Mode** now covers all three of its original goals, collected
+under the **Macro** dropdown (top-right of the menu bar, next to
+Input/Output). **Record Macro** captures a timestamped log of playback
+start/stop, layer visibility changes, painting, filter configuration
+changes, and MindWave edits - stopping it reports how many events were
+captured, in the status bar. **Play Macro** replays the most recently
+recorded one in the Studio itself: it jumps the project back to how it
+looked right before recording began, then re-applies each captured
+action at the same relative moment it originally happened. Each replayed
+action causes a brief, audible restart of playback rather than a
+seamless transition - that's expected. **Export Macro Video...** instead
+renders the same macro straight to an MP4 file - re-compositing the
+project at each captured moment and cutting to the new result instantly,
+with one continuous audio track underneath and no audible restarts in
+the exported file. There's still no panel to inspect what a recorded
+macro actually contains, and it isn't saved with the project.
 
 **Generators** have taken their first step: a **+ Generate Layer** button
 (in the Layers panel, alongside + Add Layer/+ Add Filter Layer) opens a

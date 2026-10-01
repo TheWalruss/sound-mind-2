@@ -21,6 +21,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
+#include <QHBoxLayout>
 #include <QImage>
 #include <QInputDialog>
 #include <QKeySequence>
@@ -223,6 +224,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(layersPanel_, &LayersPanel::duplicateRequested, this, &MainWindow::duplicateLayer);
     connect(layersPanel_, &LayersPanel::cleanUpPhaseRequested, this, &MainWindow::cleanUpLayerPhase);
     connect(layersPanel_, &LayersPanel::editFilterRequested, this, &MainWindow::editFilterLayer);
+    connect(layersPanel_, &LayersPanel::poolRequested, this, &MainWindow::poolLayer);
     connect(layersPanel_, &LayersPanel::reorderRequested, this, &MainWindow::reorderLayers);
     connect(layersPanel_, &LayersPanel::addLayerRequested, this, &MainWindow::addEmptyLayer);
     connect(layersPanel_, &LayersPanel::addFilterLayerRequested, this, &MainWindow::addFilterLayer);
@@ -690,34 +692,100 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         }
     });
 
-    // The "Input/Output" dropdown itself - reuses each panel's own
+    // The top-right corner of the menu bar hosts two dropdowns side by
+    // side - Input/Output and Macro - via a shared container widget, since
+    // QMenuBar::setCornerWidget() only accepts one widget per corner.
+    // QMenuBar::setCornerWidget() is the roadmap's own documented "default
+    // location... up at the top-right of the menu bar, rather than in the
+    // sidebar" mechanism, not used anywhere else in this codebase; Qt
+    // reparents whatever's passed to it to the menu bar itself when
+    // accepted, so the outer container (not the two buttons individually)
+    // is what needs menuBar() as its own parent. Note for future
+    // cross-platform testing: a native macOS menu bar doesn't render
+    // corner widgets at all - Qt degrades gracefully (the controls simply
+    // don't appear there), not a crash, but worth knowing if this is ever
+    // exercised on that platform.
+    auto* topRightContainer = new QWidget(menuBar());
+    auto* topRightLayout = new QHBoxLayout(topRightContainer);
+    topRightLayout->setContentsMargins(0, 0, 0, 0);
+    topRightLayout->setSpacing(4);
+
+    // The "Input/Output" dropdown - reuses each panel's own
     // toggleViewAction() directly as its three entries (rather than
     // hand-rolled QActions, unlike the Tool dropdown's own
     // panAction_/paintAction_/etc.) precisely because a dock's visibility
     // *is* already a QWidget-backed, self-syncing piece of state - there's
     // no separate "mode" concept like CanvasWidget::ToolMode to manage
-    // alongside it. Placed at the menu bar's own top-right corner, per the
-    // roadmap's own "default location... up at the top-right of the menu
-    // bar, rather than in the sidebar" - QMenuBar::setCornerWidget()'s
-    // documented mechanism for exactly this; not used anywhere else in
-    // this codebase, and Qt reparents the widget to the menu bar itself
-    // when accepted (constructed with menuBar() as its own parent to
-    // match). Note for future cross-platform testing: a native macOS menu
-    // bar doesn't render corner widgets - Qt degrades gracefully (the
-    // control simply doesn't appear there), not a crash, but worth knowing
-    // if this is ever exercised on that platform.
-    auto* ioMenu = new QMenu(menuBar());
+    // alongside it.
+    auto* ioMenu = new QMenu(topRightContainer);
     ioMenu->addAction(playbackPanel_->toggleViewAction());
     ioMenu->addAction(recordPanel_->toggleViewAction());
     ioMenu->addAction(loopPanel_->toggleViewAction());
 
-    auto* ioButton = new QToolButton(menuBar());
+    auto* ioButton = new QToolButton(topRightContainer);
     ioButton->setObjectName(QStringLiteral("inputOutputButton"));
     ioButton->setText(tr("Input/Output"));
     ioButton->setPopupMode(QToolButton::InstantPopup);
     ioButton->setMenu(ioMenu);
     ioButton->setToolTip(tr("Show Playback, Record, or Loop - only one at a time"));
-    menuBar()->setCornerWidget(ioButton, Qt::TopRightCorner);
+    topRightLayout->addWidget(ioButton);
+
+    // The "Macro" dropdown (real-world testing pass, 2026-09-29, confirmed
+    // with the user) - collects Record/Play/Export Video Macro, previously
+    // three separate transportToolBar actions, next to Input/Output at the
+    // top-right rather than under the "Configure" dropdown with the rest of
+    // the panel toggles: these three are one-shot/toggle *actions*, not
+    // dock panels, and (unlike Configure's own seven entries) there's
+    // nothing to leave "open" - grouping them with Input/Output's own
+    // action-oriented, top-right placement fits better than Configure's
+    // panel-toggle one.
+    //
+    // Record Macro (v0.Y.49.1, Macro Mode Installment A) - a plain
+    // checkable QAction, not a toggleViewAction(), since macroRecorder_
+    // isn't a dock panel with its own visibility to track (there's no
+    // inspection UI yet at all - see setMacroRecordingEnabled()'s own
+    // docs).
+    macroRecordAction_ = new QAction(tr("Record &Macro"), this);
+    macroRecordAction_->setCheckable(true);
+    macroRecordAction_->setToolTip(
+        tr("Records a timestamped log of playback start/stop, layer visibility, painting, filter, and MindWave "
+           "changes - nothing exports it yet"));
+    connect(macroRecordAction_, &QAction::toggled, this, &MainWindow::setMacroRecordingEnabled);
+
+    // Play Macro (v0.Y.49.1 Installment B) - no standard shortcut,
+    // matching macroRecordAction_'s own no-shortcut choice; a no-op with
+    // nothing recorded, the same "always present" choice deleteAction_
+    // makes.
+    macroPlayAction_ = new QAction(tr("&Play Macro"), this);
+    macroPlayAction_->setToolTip(
+        tr("Replays the most recently recorded macro - jumps back to the project state right before recording "
+           "began, then re-applies each captured action as playback reaches it"));
+    connect(macroPlayAction_, &QAction::triggered, this, &MainWindow::playMacro);
+
+    // Export Macro Video (v0.Y.49.1 Installment C) - no standard
+    // shortcut, matching macroRecordAction_'s/macroPlayAction_'s own
+    // no-shortcut choice; a no-op (shows a modal, per exportMacroVideoAsync()'s
+    // own docs) with nothing recorded.
+    macroExportVideoAction_ = new QAction(tr("E&xport Macro Video..."), this);
+    macroExportVideoAction_->setToolTip(
+        tr("Renders the most recently recorded macro as an MP4 video, re-compositing the project at each captured "
+           "moment"));
+    connect(macroExportVideoAction_, &QAction::triggered, this, &MainWindow::exportMacroVideo);
+
+    auto* macroMenu = new QMenu(topRightContainer);
+    macroMenu->addAction(macroRecordAction_);
+    macroMenu->addAction(macroPlayAction_);
+    macroMenu->addAction(macroExportVideoAction_);
+
+    auto* macroButton = new QToolButton(topRightContainer);
+    macroButton->setObjectName(QStringLiteral("macroButton"));
+    macroButton->setText(tr("Macro"));
+    macroButton->setPopupMode(QToolButton::InstantPopup);
+    macroButton->setMenu(macroMenu);
+    macroButton->setToolTip(tr("Record, play back, or export a macro of this session's own actions"));
+    topRightLayout->addWidget(macroButton);
+
+    menuBar()->setCornerWidget(topRightContainer, Qt::TopRightCorner);
 
     QMenu* fileMenu = menuBar()->addMenu(tr("&File"));
 
@@ -1044,6 +1112,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
            "outward from the centre. Painting works in polar mode."));
     connect(soundFlowerAction, &QAction::toggled, this, &MainWindow::setSoundFlowerModeEnabled);
 
+    // Composer Mode's own toggle, moved here from a standalone
+    // transportToolBar action - real-world testing pass 2026-09-29,
+    // confirmed with the user.
+    viewMenu->addSeparator();
+    viewMenu->addAction(composerPanel_->toggleViewAction());
+
     // Workflow & Device Polish, Installment D: Documentation links
     // (v0.0.42.4) - each link is reachable from both the Help menu and the
     // Landing Page's own Documentation section (see LandingPage's own
@@ -1087,8 +1161,13 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QToolBar* transportToolBar = addToolBar(tr("Transport"));
     // Plain text actions rather than icons - no icon assets exist yet, and
     // these are unambiguous enough on their own for a first pass.
-    QAction* poolAction = transportToolBar->addAction(tr("Pool Layer"));
-    connect(poolAction, &QAction::triggered, this, &MainWindow::poolTopmostLayer);
+    //
+    // "Pool Layer" used to be its own toolbar button here - real-world
+    // testing pass 2026-09-29 moved it into LayersPanel's own "Pool" (⬇)
+    // button instead, confirmed with the user as "an option available to
+    // the currently active layer" rather than a global action that always
+    // targeted whichever layer happened to be topmost. See
+    // MainWindow::poolLayer()'s own docs.
 
     // Tool dropdown (v0.Y.58.1, "Reduce top-level buttons" UI polish): a
     // single QToolButton/QMenu collapsing what used to be five separate
@@ -1238,40 +1317,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
 
     // Off by default, same reasoning - see historyPanel_'s own docs.
     transportToolBar->addAction(historyPanel_->toggleViewAction());
-    // Off by default, same reasoning - see composerPanel_'s own docs.
-    transportToolBar->addAction(composerPanel_->toggleViewAction());
-
-    // Record Macro (v0.Y.49.1, Macro Mode Installment A) - a plain
-    // checkable QAction, not a toggleViewAction(), since macroRecorder_
-    // isn't a dock panel with its own visibility to track (there's no
-    // inspection UI yet at all - see setMacroRecordingEnabled()'s own
-    // docs). Off by default, same reasoning as every panel toggle above.
-    macroRecordAction_ = transportToolBar->addAction(tr("Record &Macro"));
-    macroRecordAction_->setCheckable(true);
-    macroRecordAction_->setToolTip(
-        tr("Records a timestamped log of playback start/stop, layer visibility, painting, filter, and MindWave "
-           "changes - nothing exports it yet"));
-    connect(macroRecordAction_, &QAction::toggled, this, &MainWindow::setMacroRecordingEnabled);
-
-    // Play Macro (v0.Y.49.1 Installment B) - no standard shortcut,
-    // matching macroRecordAction_'s own no-shortcut choice; a no-op with
-    // nothing recorded, the same "always present" choice deleteAction_
-    // makes.
-    macroPlayAction_ = transportToolBar->addAction(tr("&Play Macro"));
-    macroPlayAction_->setToolTip(
-        tr("Replays the most recently recorded macro - jumps back to the project state right before recording "
-           "began, then re-applies each captured action as playback reaches it"));
-    connect(macroPlayAction_, &QAction::triggered, this, &MainWindow::playMacro);
-
-    // Export Macro Video (v0.Y.49.1 Installment C) - no standard
-    // shortcut, matching macroRecordAction_'s/macroPlayAction_'s own
-    // no-shortcut choice; a no-op (shows a modal, per exportMacroVideoAsync()'s
-    // own docs) with nothing recorded.
-    macroExportVideoAction_ = transportToolBar->addAction(tr("E&xport Macro Video..."));
-    macroExportVideoAction_->setToolTip(
-        tr("Renders the most recently recorded macro as an MP4 video, re-compositing the project at each captured "
-           "moment"));
-    connect(macroExportVideoAction_, &QAction::triggered, this, &MainWindow::exportMacroVideo);
+    // composerPanel_'s own toggle and the three Macro actions now live
+    // elsewhere - see their own construction sites (the View menu, and the
+    // top-right "Macro" dropdown, respectively) for why.
 
     // Zoom's own toolbar, added after transportToolBar (not before) so
     // findChild<QToolBar*>()'s own singular/first-match behavior - already
@@ -1370,12 +1418,15 @@ void MainWindow::dropEvent(QDropEvent* event) {
 
     std::vector<std::filesystem::path> imagePaths;
     std::vector<std::filesystem::path> audioPaths;
+    std::vector<std::filesystem::path> midiPaths;
     for (const auto& path : paths) {
         const std::string extension = lowercasedExtension(path);
         if (isImageExtension(extension)) {
             imagePaths.push_back(path);
         } else if (isAudioExtension(extension)) {
             audioPaths.push_back(path);
+        } else if (extension == ".mid" || extension == ".midi") {
+            midiPaths.push_back(path);
         }
     }
 
@@ -1426,15 +1477,53 @@ void MainWindow::dropEvent(QDropEvent* event) {
         audioSnippetOffsets[path] = dialog.offsetSeconds();
     }
 
+    // Real-world testing pass, 2026-09-29: MIDI drops previously always
+    // hardcoded "every channel, whole file, separate layers, no picker"
+    // regardless of whether the file actually had a real choice to make -
+    // audio/image drops already prompted correctly above. Mirrors
+    // importMidi()'s own "skip the dialog only for the trivial case" logic
+    // exactly.
+    std::map<std::filesystem::path, MidiDropChoice> midiChoices;
+    for (const auto& path : midiPaths) {
+        QString previewError;
+        const auto preview = midiImportPreviewForFile(path, &previewError);
+        if (!preview || (preview->channels.size() <= 1 && preview->snippets.size() <= 1)) {
+            // Unreadable (handleDroppedFiles() will report the real error
+            // when it actually tries to import) or nothing to choose either
+            // way - no picker needed, same as importMidi()'s own logic.
+            continue;
+        }
+        MidiImportDialog dialog(preview->channels, preview->snippets, this);
+        if (dialog.exec() != QDialog::Accepted) {
+            return;
+        }
+        const auto channelNumbers = dialog.selectedChannelNumbers();
+        if (channelNumbers.empty()) {
+            return;
+        }
+        MidiDropChoice choice;
+        choice.separateLayerPerChannel = dialog.separateLayerPerChannel();
+        choice.channelNumbers = channelNumbers;
+        choice.wholeFile = dialog.wholeFile();
+        if (!choice.wholeFile) {
+            choice.snippetIndices = dialog.selectedSnippetIndices();
+            if (choice.snippetIndices.empty()) {
+                return;
+            }
+        }
+        midiChoices[path] = choice;
+    }
+
     handleDroppedFiles(paths, imageMode, importImagesAsSequence, audioSnippetSelections, audioSnippetOffsets,
-                       imagePolarParams);
+                       imagePolarParams, midiChoices);
 }
 
 void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& paths,
                                      ImageScalePickerDialog::Mode imageMode, bool importImagesAsSequence,
                                      const std::map<std::filesystem::path, std::vector<std::size_t>>& audioSnippetSelections,
                                      const std::map<std::filesystem::path, double>& audioSnippetOffsets,
-                                     std::optional<PolarImportParams> imagePolarParams) {
+                                     std::optional<PolarImportParams> imagePolarParams,
+                                     const std::map<std::filesystem::path, MidiDropChoice>& midiChoices) {
     std::vector<std::filesystem::path> imagePaths;
     for (const auto& path : paths) {
         if (isImageExtension(lowercasedExtension(path))) {
@@ -1467,7 +1556,21 @@ void MainWindow::handleDroppedFiles(const std::vector<std::filesystem::path>& pa
         } else if (isImageExtension(extension)) {
             continue;  // already handled above, as a batch.
         } else if (extension == ".mid" || extension == ".midi") {
-            if (!importMidiFile(path, /*separateLayerPerChannel=*/true, &errorMessage)) {
+            const auto choiceIt = midiChoices.find(path);
+            bool ok = false;
+            if (choiceIt == midiChoices.end()) {
+                // No entry - the trivial "nothing to choose" case (or a
+                // caller that predates this parameter) - same default
+                // importMidi()'s own trivial case already uses.
+                ok = importMidiFile(path, /*separateLayerPerChannel=*/true, &errorMessage);
+            } else if (choiceIt->second.wholeFile) {
+                ok = importMidiFile(path, choiceIt->second.separateLayerPerChannel, &errorMessage,
+                                     choiceIt->second.channelNumbers);
+            } else {
+                ok = importMidiSelection(path, choiceIt->second.channelNumbers, choiceIt->second.snippetIndices,
+                                          choiceIt->second.separateLayerPerChannel, &errorMessage);
+            }
+            if (!ok) {
                 statusBar()->showMessage(
                     tr("Could not import \"%1\": %2").arg(QString::fromStdString(path.filename().string()), errorMessage),
                     5000);
@@ -2900,18 +3003,17 @@ void MainWindow::updateMindGrainGuardrails() {
 }
 
 void MainWindow::updateSmoothNodesGuardrail() {
+    // Hidden entirely rather than merely disabled, as of a real-world
+    // testing pass (2026-09-29, confirmed with the user) - a grayed-out
+    // button for something that's essentially never applicable (only while
+    // actively editing a path) was judged more confusing clutter than a
+    // helpful hint, unlike the Mind Grain guardrail's own gray-out-with-
+    // tooltip treatment (updateMindGrainGuardrails()), where Paint stays a
+    // meaningful, commonly-reachable option even when temporarily
+    // disallowed on one particular layer.
     const bool applicable =
         toolPaletteController_->selectedPath().has_value() || toolPaletteController_->isPathPlacementInProgress();
-    smoothNodesAction_->setEnabled(applicable);
-    if (applicable) {
-        // Same "Qt only auto-derives a tooltip once setToolTip() has never
-        // been called" reasoning as paintAction_'s own guardrail above -
-        // has to be spelled out explicitly from here on.
-        smoothNodesAction_->setToolTip(smoothNodesAction_->text());
-    } else {
-        smoothNodesAction_->setToolTip(
-            tr("Only available while a path is Picked, or while the Path tool is placing a new one."));
-    }
+    smoothNodesAction_->setVisible(applicable);
 }
 
 void MainWindow::updateConfiguredDeviceLockState() {
@@ -3835,11 +3937,23 @@ void MainWindow::advanceMacroPlayback(double positionSeconds) {
     playbackController_->play();
 }
 
-void MainWindow::poolTopmostLayer() { poolTopmostLayerAsync(); }
+void MainWindow::poolLayer(sound_mind::core::LayerId id) { poolLayerAsync(id); }
 
 bool MainWindow::poolTopmostLayerNow(QString* errorMessage, QString* streamPngPath, QString* poolPngPath) {
     sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
     if (layer == nullptr) {
+        if (errorMessage != nullptr) {
+            *errorMessage = tr("No layer with content to pool.");
+        }
+        return false;
+    }
+    return poolLayerNow(layer->id(), errorMessage, streamPngPath, poolPngPath);
+}
+
+bool MainWindow::poolLayerNow(sound_mind::core::LayerId id, QString* errorMessage, QString* streamPngPath,
+                                QString* poolPngPath) {
+    sound_mind::core::Layer* layer = layerController_->layerById(id);
+    if (layer == nullptr || !layer->content().has_value()) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No layer with content to pool.");
         }
@@ -3900,6 +4014,20 @@ void MainWindow::poolTopmostLayerAsync() {
     }
 
     sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
+    if (layer == nullptr || !layer->content().has_value()) {
+        QMessageBox::critical(this, tr("Pool Layer Failed"), tr("No layer with content to pool."));
+        return;
+    }
+    poolLayerAsync(layer->id());
+}
+
+void MainWindow::poolLayerAsync(sound_mind::core::LayerId id) {
+    if (isPoolRunning()) {
+        statusBar()->showMessage(tr("Already pooling - wait for it to finish, or cancel it, first."), 5000);
+        return;
+    }
+
+    sound_mind::core::Layer* layer = layerController_->layerById(id);
     if (layer == nullptr || !layer->content().has_value()) {
         QMessageBox::critical(this, tr("Pool Layer Failed"), tr("No layer with content to pool."));
         return;

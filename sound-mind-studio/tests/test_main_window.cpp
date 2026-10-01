@@ -19,6 +19,7 @@
 #include <QImage>
 #include <QLabel>
 #include <QMenu>
+#include <QMenuBar>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -42,6 +43,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/chord_generator_panel.h"
+#include "sound_mind/studio/composer_panel.h"
 #include "sound_mind/studio/configure_devices_panel.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/grid_panel.h"
@@ -66,6 +68,7 @@ using sound_mind::core::PasteOperation;
 using sound_mind::core::PathNodeType;
 using sound_mind::studio::CanvasWidget;
 using sound_mind::studio::ChordGeneratorPanel;
+using sound_mind::studio::ComposerPanel;
 using sound_mind::studio::ConfigureDevicesPanel;
 using sound_mind::studio::ImageScalePickerDialog;
 using sound_mind::studio::GridPanel;
@@ -75,6 +78,7 @@ using sound_mind::studio::LayersPanel;
 using sound_mind::studio::LoopPanel;
 using sound_mind::studio::MainWindow;
 using sound_mind::studio::MidiConfigurationPanel;
+using sound_mind::studio::MidiDropChoice;
 using sound_mind::studio::MindWavesPanel;
 using sound_mind::studio::PlaybackPanel;
 using sound_mind::studio::PlaybackScope;
@@ -901,6 +905,77 @@ void MainWindowTest::poolTopmostLayerNowPoolsAnImportedLayer() {
 
     QFile::remove(streamPngPath);
     QFile::remove(poolPngPath);
+}
+
+void MainWindowTest::poolLayerNowPoolsASpecificNonTopmostLayer() {
+    // Real-world testing pass, 2026-09-29: "move Pool Layer into the
+    // Layers panel, as an option available to the currently active layer" -
+    // proves the generalized, by-id entry point actually targets whichever
+    // layer it's given, not always whatever's topmost (poolTopmostLayerNow()
+    // itself, tested separately above, still covers the "topmost" case).
+    const auto pathA = std::filesystem::temp_directory_path() / "sound-mind-test-pool-by-id-a.wav";
+    const auto pathB = std::filesystem::temp_directory_path() / "sound-mind-test-pool-by-id-b.wav";
+    writeTestWavFile(pathA);
+    writeTestWavFile(pathB);
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(pathA));
+    QVERIFY(window.importAudioFile(pathB));
+    std::filesystem::remove(pathA);
+    std::filesystem::remove(pathB);
+
+    // Bottom-to-top: Background, first import, second import (topmost with
+    // content), Equalizer (topmost overall) - see topmostNonEqualizerLayer()'s
+    // own docs on why Equalizer sits last.
+    const auto& layers = window.project()->layers();
+    QCOMPARE(layers.size(), static_cast<std::size_t>(4));
+    const auto firstImportId = layers.at(1).id();
+
+    QString streamPngPath;
+    QString poolPngPath;
+    const bool ok = window.poolLayerNow(firstImportId, nullptr, &streamPngPath, &poolPngPath);
+
+    QVERIFY(ok);
+    QCOMPARE(window.project()->layerById(firstImportId)->poolContent().has_value(), true);
+    // The topmost-with-content layer (the second import) was left alone -
+    // proving this targeted the specific id given, not whatever's topmost.
+    QCOMPARE(topmostNonEqualizerLayer(*window.project()).poolContent().has_value(), false);
+
+    QFile::remove(streamPngPath);
+    QFile::remove(poolPngPath);
+}
+
+void MainWindowTest::layersPanelsPoolButtonPoolsTheSelectedLayerViaMainWindow() {
+    // End-to-end wiring check: LayersPanel::poolRequested() ->
+    // MainWindow::poolLayer() -> poolLayerAsync(), driving the real embedded
+    // "Pool" (⬇) button rather than calling poolLayer()/poolLayerAsync()
+    // directly.
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-pool-panel-button.wav";
+    writeTestWavFile(path);
+
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    const auto importedLayerId = topmostNonEqualizerLayer(*window.project()).id();
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    layersPanel->selectLayer(importedLayerId);
+    QTest::qWait(0);  // rebuildRows() rebuilds via deleteLater() - see LayersPanelTest's own established pattern.
+
+    auto* poolButton = layersPanel->findChild<QPushButton*>(QStringLiteral("poolButton"));
+    QVERIFY(poolButton != nullptr);
+    auto* cancelButton = window.findChild<QPushButton*>(QStringLiteral("poolCancelButton"));
+    QVERIFY(cancelButton != nullptr);
+
+    poolButton->click();
+    while (!cancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+
+    QCOMPARE(window.project()->layerById(importedLayerId)->poolContent().has_value(), true);
 }
 
 void MainWindowTest::poolTopmostLayerAsyncRunsInTheBackgroundAndShowsTheCancelButton() {
@@ -2555,6 +2630,53 @@ void MainWindowTest::configureMenuContainsEveryConfigurationPanelsOwnToggle() {
     QVERIFY(configureMenu->actions().contains(mindWavesPanel->toggleViewAction()));
 }
 
+void MainWindowTest::macroButtonSitsNextToInputOutputAtTheTopRightAndListsAllThreeMacroActions() {
+    // Real-world testing pass, 2026-09-29: "put the Macro-related buttons
+    // under a Macro drop-down, next to the Input/Output drop-down at the
+    // top-right" - previously three separate transportToolBar actions.
+    const TestMainWindow window;
+    auto* macroButton = window.findChild<QToolButton*>(QStringLiteral("macroButton"));
+    QVERIFY(macroButton != nullptr);
+    auto* ioButton = window.findChild<QToolButton*>(QStringLiteral("inputOutputButton"));
+    QVERIFY(ioButton != nullptr);
+    // "Next to" - both share the same immediate parent (the corner
+    // container), rather than one sitting on the toolbar and the other at
+    // the menu bar's corner.
+    QCOMPARE(macroButton->parentWidget(), ioButton->parentWidget());
+    QCOMPARE(window.menuBar()->cornerWidget(Qt::TopRightCorner), macroButton->parentWidget());
+
+    auto* macroMenu = macroButton->menu();
+    QVERIFY(macroMenu != nullptr);
+    QCOMPARE(macroMenu->actions().size(), 3);
+    QVERIFY(macroMenu->actions().at(0)->text().contains(QStringLiteral("Macro")));  // Record &Macro
+    QVERIFY(macroMenu->actions().at(1)->text().contains(QStringLiteral("Macro")));  // &Play Macro
+    QVERIFY(macroMenu->actions().at(2)->text().contains(QStringLiteral("Macro")));  // Export Macro Video...
+}
+
+void MainWindowTest::composerPanelsToggleIsInTheViewMenuNotOnTheToolbar() {
+    // Real-world testing pass, 2026-09-29: "move the Composer Mode into the
+    // View menu" - previously a standalone transportToolBar action.
+    const TestMainWindow window;
+    auto* composerPanel = window.findChild<ComposerPanel*>();
+    QVERIFY(composerPanel != nullptr);
+    QAction* toggleAction = composerPanel->toggleViewAction();
+    QVERIFY(toggleAction != nullptr);
+
+    auto* toolBar = window.findChild<QToolBar*>();
+    QVERIFY(toolBar != nullptr);
+    QVERIFY(!toolBar->actions().contains(toggleAction));
+
+    QMenu* viewMenu = nullptr;
+    for (QAction* topLevelAction : window.menuBar()->actions()) {
+        if (topLevelAction->text() == QStringLiteral("&View")) {
+            viewMenu = topLevelAction->menu();
+            break;
+        }
+    }
+    QVERIFY(viewMenu != nullptr);
+    QVERIFY(viewMenu->actions().contains(toggleAction));
+}
+
 void MainWindowTest::audioSnippetsForFileReturnsOneSnippetForAudioNoLongerThanTheProject() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-snippets-short.wav";
     writeTestWavFile(path);  // 4 samples - far shorter than any project's own duration.
@@ -3270,6 +3392,46 @@ void MainWindowTest::handleDroppedFilesAppliesGivenAudioSnippetOffsets() {
     std::filesystem::remove(projectPath);
 
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 3);
+}
+
+void MainWindowTest::handleDroppedFilesAppliesGivenMidiChoice() {
+    // Real-world testing pass, 2026-09-29: "drag-drop should give the same
+    // functionality for all import functions" - previously a dropped MIDI
+    // file always hardcoded "every channel" regardless of any choice a
+    // caller (dropEvent(), via a real MidiImportDialog) provided, unlike
+    // image/audio drops, which already honored theirs. This proves
+    // handleDroppedFiles() itself now actually honors a given MidiDropChoice
+    // (only channel 2 of 2), rather than always falling back to its own
+    // "every channel" default.
+    const auto path = writeTwoChannelTestMidiFile();
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    MidiDropChoice choice;
+    choice.wholeFile = true;
+    choice.channelNumbers = {2};
+    choice.separateLayerPerChannel = true;
+    window.handleDroppedFiles({path}, ImageScalePickerDialog::Mode::RescaleToFitProject, /*importAsSequence=*/false,
+                               {}, {}, std::nullopt, {{path, choice}});
+    std::filesystem::remove(path);
+
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(3));  // Background + Equalizer + Ch2 only.
+    QVERIFY(topmostNonEqualizerLayer(*window.project()).name().find("Ch2") != std::string::npos);
+}
+
+void MainWindowTest::handleDroppedFilesWithNoMidiChoiceImportsEveryChannel() {
+    // The pre-existing "nothing to choose" default (a path with no
+    // midiChoices entry, e.g. the trivial-file case importMidi()'s own
+    // dialog-skip logic already handles) still imports every channel, one
+    // layer each - unchanged by this installment.
+    const auto path = writeTwoChannelTestMidiFile();
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.handleDroppedFiles({path});
+    std::filesystem::remove(path);
+
+    QCOMPARE(window.project()->layers().size(), static_cast<std::size_t>(4));  // Background + Equalizer + Ch1 + Ch2.
 }
 
 namespace {
@@ -5180,14 +5342,14 @@ void MainWindowTest::smoothNodesToggleAffectsSubsequentlyPlacedNodes() {
     QCOMPARE(painted->path().nodes().at(1).type, PathNodeType::Smooth);
 }
 
-void MainWindowTest::smoothNodesActionIsDisabledWithNoProjectOpen() {
+void MainWindowTest::smoothNodesActionIsHiddenWithNoProjectOpen() {
     const TestMainWindow window;
     auto* smoothNodesAction = window.findChild<QAction*>(QStringLiteral("smoothNodesAction"));
     QVERIFY(smoothNodesAction != nullptr);
-    QVERIFY(!smoothNodesAction->isEnabled());
+    QVERIFY(!smoothNodesAction->isVisible());
 }
 
-void MainWindowTest::smoothNodesActionBecomesEnabledWhilePlacingANewPathAndDisabledAfterFinishing() {
+void MainWindowTest::smoothNodesActionBecomesVisibleWhilePlacingANewPathAndHiddenAfterFinishing() {
     TestMainWindow window;
     createFreshTestProject(window);
     auto* canvas = window.findChild<CanvasWidget*>();
@@ -5197,21 +5359,21 @@ void MainWindowTest::smoothNodesActionBecomesEnabledWhilePlacingANewPathAndDisab
     QVERIFY(smoothNodesAction != nullptr);
 
     window.setPathModeEnabled(true);
-    QVERIFY(!smoothNodesAction->isEnabled());  // Path mode alone, nothing placed yet.
+    QVERIFY(!smoothNodesAction->isVisible());  // Path mode alone, nothing placed yet.
 
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
-    QVERIFY(smoothNodesAction->isEnabled());  // First node placed - now mid-placement.
+    QVERIFY(smoothNodesAction->isVisible());  // First node placed - now mid-placement.
 
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
-    QVERIFY(smoothNodesAction->isEnabled());  // Still mid-placement.
+    QVERIFY(smoothNodesAction->isVisible());  // Still mid-placement.
 
     window.finishPath();
-    QVERIFY(!smoothNodesAction->isEnabled());  // Committed - nothing Picked, nothing in progress.
+    QVERIFY(!smoothNodesAction->isVisible());  // Committed - nothing Picked, nothing in progress.
 }
 
-void MainWindowTest::smoothNodesActionBecomesEnabledWhileAStrokeIsPickedAndDisabledAfterDeselecting() {
+void MainWindowTest::smoothNodesActionBecomesVisibleWhileAStrokeIsPickedAndHiddenAfterDeselecting() {
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-smooth-nodes-pick.smproj";
     TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
@@ -5230,15 +5392,15 @@ void MainWindowTest::smoothNodesActionBecomesEnabledWhileAStrokeIsPickedAndDisab
     window.setPaintModeEnabled(true);
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
-    QVERIFY(!smoothNodesAction->isEnabled());  // Paint mode, nothing Picked.
+    QVERIFY(!smoothNodesAction->isVisible());  // Paint mode, nothing Picked.
 
     window.setPickModeEnabled(true);
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
-    QVERIFY(smoothNodesAction->isEnabled());  // The stroke is now Picked.
+    QVERIFY(smoothNodesAction->isVisible());  // The stroke is now Picked.
 
     window.setPickModeEnabled(false);
-    QVERIFY(!smoothNodesAction->isEnabled());  // Leaving Pick clears the selection.
+    QVERIFY(!smoothNodesAction->isVisible());  // Leaving Pick clears the selection.
 }
 
 void MainWindowTest::finishPathWithNoNodesPlacedIsANoOp() {

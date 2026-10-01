@@ -129,4 +129,41 @@ private:
     QCheckBox* selectAllSnippetsCheckBox_ = nullptr;
 };
 
+/**
+ * @brief One dropped MIDI file's own resolved import choice - either read
+ *        back from a real `MidiImportDialog` `exec()`'d during a drag-drop,
+ *        or left at its defaults for the trivial "nothing to choose" case
+ *        (matching `MainWindow::importMidi()`'s own "skip the dialog"
+ *        precedent) - real-world testing pass, 2026-09-29 ("drag-drop
+ *        should give the same functionality for all import functions" as
+ *        the equivalent File menu action, which `MainWindow::dropEvent()`'s
+ *        own image/audio handling already did; MIDI drops previously always
+ *        hardcoded `separateLayerPerChannel=true` and skipped this dialog
+ *        entirely, regardless of whether the file actually had a real
+ *        channel/snippet choice to make).
+ *
+ * Mirrors `PolarImportParams`'s own role for image drops (`polar_origin_
+ * dialog.h`): a small, headless-testable bundle `MainWindow::
+ * handleDroppedFiles()` can be handed directly, without needing a real
+ * dialog on the call stack, keeping that method itself unconditionally
+ * headless-testable (see its own docs).
+ */
+struct MidiDropChoice {
+    /// @brief Mirrors `MidiImportDialog::wholeFile()`.
+    bool wholeFile = true;
+
+    /// @brief Mirrors `MidiImportDialog::selectedChannelNumbers()`. Empty
+    ///        (the default) means "every channel" - the same meaning
+    ///        `importMidiChannelsInto()`'s own `channelNumbers` parameter
+    ///        already gives an empty vector.
+    std::vector<int> channelNumbers;
+
+    /// @brief Mirrors `MidiImportDialog::selectedSnippetIndices()` -
+    ///        meaningless (ignored) while `wholeFile` is `true`.
+    std::vector<std::size_t> snippetIndices;
+
+    /// @brief Mirrors `MidiImportDialog::separateLayerPerChannel()`.
+    bool separateLayerPerChannel = true;
+};
+
 }  // namespace sound_mind::studio

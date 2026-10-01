@@ -367,6 +367,27 @@ signals:
      */
     void editFilterRequested(sound_mind::core::LayerId id);
 
+    /**
+     * @brief A row's "Pool" button was clicked - real-world testing pass,
+     *        2026-09-29 ("move Pool Layer into the Layers panel, as an
+     *        option available to the currently active layer", confirmed
+     *        with the user). Only shown for the *selected* row, and only
+     *        when it has real content to pool (`RowData::thumbnail`'s own
+     *        docs on what a null thumbnail means) - unlike
+     *        `editFilterRequested()`, not gated on `Filter`/`Equalizer`
+     *        type at all, and unlike `duplicateRequested()`/
+     *        `cleanUpPhaseRequested()`, not gated on the row being
+     *        unlocked either: `Background` has real content and stays
+     *        poolable, the same as before this button existed (it was
+     *        reachable from a global toolbar button that always targeted
+     *        whichever layer happened to be topmost, including
+     *        `Background` in a single-layer project). `MainWindow`
+     *        responds via `poolLayer()`, replacing the removed toolbar
+     *        button's own `poolTopmostLayer()` entry point.
+     * @param id The layer to pool.
+     */
+    void poolRequested(sound_mind::core::LayerId id);
+
     /// @brief The "+ Add Layer" button was clicked - `MainWindow` responds
     ///        by adding a new, silent, project-sized `Normal` layer (see
     ///        `MainWindow::addEmptyLayer()`'s own docs) and selecting it

@@ -409,6 +409,28 @@ public:
             }
         }
 
+        // Pool (real-world testing pass, 2026-09-29): moved here from a
+        // global toolbar button that always targeted whichever layer
+        // happened to be topmost - confirmed with the user as "an option
+        // available to the currently active layer" instead. Gated on
+        // `isSelected` alone, deliberately *not* also gated on `!locked`
+        // the way duplicate/clean-up-phase above are: `Background` has
+        // real content and was always poolable before (it's poolable
+        // whenever it happens to be topmost, e.g. a single-layer project),
+        // so this button stays available for it too. `Equalizer`/`Filter`
+        // rows never have a thumbnail at all (no stored content of their
+        // own to pool), so the `!thumbnail.isNull()` check alone already
+        // excludes them without needing a separate type check.
+        if (isSelected && !data.thumbnail.isNull()) {
+            auto* poolButton = new QPushButton(QStringLiteral("⬇"));
+            poolButton->setObjectName(QStringLiteral("poolButton"));
+            poolButton->setFlat(true);
+            poolButton->setFixedWidth(22);
+            poolButton->setToolTip(tr("Pool this layer (flatten its content for faster playback)"));
+            connect(poolButton, &QPushButton::clicked, this, [this]() { emit poolRequested(id_); });
+            header->addWidget(poolButton);
+        }
+
         if (!locked) {
             // Real-world testing pass, 2026-09-27: delete stayed one of the
             // redesign's own "revealed once selected" controls above, but
@@ -558,6 +580,7 @@ signals:
     void duplicateRequested(sound_mind::core::LayerId id);
     void cleanUpPhaseRequested(sound_mind::core::LayerId id);
     void editFilterRequested(sound_mind::core::LayerId id);
+    void poolRequested(sound_mind::core::LayerId id);
     void selected(sound_mind::core::LayerId id);
 
 public:
@@ -824,6 +847,7 @@ void LayersPanel::rebuildRows() {
         connect(row, &LayerRowWidget::duplicateRequested, this, &LayersPanel::duplicateRequested);
         connect(row, &LayerRowWidget::cleanUpPhaseRequested, this, &LayersPanel::cleanUpPhaseRequested);
         connect(row, &LayerRowWidget::editFilterRequested, this, &LayersPanel::editFilterRequested);
+        connect(row, &LayerRowWidget::poolRequested, this, &LayersPanel::poolRequested);
         connect(row, &LayerRowWidget::selected, this, &LayersPanel::selectLayer);
 
         // Restores the selection highlight across this refresh, for the
