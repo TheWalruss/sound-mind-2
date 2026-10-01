@@ -613,6 +613,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             &MainWindow::applyFilterConfiguration);
     connect(filterConfigurationPanel_, &FilterConfigurationPanel::saveConvolutionKernelRequested, this,
             &MainWindow::saveConvolutionKernel);
+    connect(filterConfigurationPanel_, &FilterConfigurationPanel::equalizerPreviewToggled, this,
+            &MainWindow::setEqualizerPreviewEnabled);
 
     // Layer-stack lookup/mutation and Layers/Filter Configuration Panel
     // refresh - extracted as its own class (Refactor & Clean Up,
@@ -1723,6 +1725,13 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     layerController_->setProject(&*project_);
     mindWaveController_->setProject(&*project_);
     midiConfigurationPanel_->setProject(&*project_);
+    // EqualizerCurveWidget's own frequency-axis guides need the new
+    // project's own settings; the preview overlay (if currently enabled)
+    // needs refreshing against the new project's own Equalizer layer - see
+    // updateEqualizerPreview()'s own docs on why this stays enabled across
+    // the switch rather than resetting.
+    filterConfigurationPanel_->setProjectSettings(settings);
+    updateEqualizerPreview();
     refreshComposerPanel();
     hasUnsavedChanges_ = false;
     stack_->setCurrentWidget(canvasScrollArea_);
@@ -2823,6 +2832,11 @@ void MainWindow::handleLayerSelectionChanged(std::optional<sound_mind::core::Lay
     // The active layer (paintTargetLayerId()) may have just changed - see
     // updateMindGrainGuardrails()'s own docs.
     updateMindGrainGuardrails();
+    // Keeps "Preview on Canvas" reflecting its own sticky, session-level
+    // state correctly if the Equalizer layer (where that checkbox lives)
+    // is what just got (re)selected - see setEqualizerPreviewEnabled()'s/
+    // FilterConfigurationPanel::setEqualizerPreviewChecked()'s own docs.
+    filterConfigurationPanel_->setEqualizerPreviewChecked(equalizerPreviewEnabled_);
 }
 
 void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
@@ -2837,6 +2851,30 @@ void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfigur
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::FilterConfigurationChanged,
                                 tr("Changed filter configuration"), undoStack_.currentIndex(),
                                 layersPanel_->selectedLayerId());
+    // A no-op unless the Equalizer's own on-canvas preview is currently
+    // enabled and the layer just edited actually was the Equalizer - see
+    // updateEqualizerPreview()'s own docs.
+    updateEqualizerPreview();
+}
+
+void MainWindow::setEqualizerPreviewEnabled(bool enabled) {
+    equalizerPreviewEnabled_ = enabled;
+    updateEqualizerPreview();
+}
+
+void MainWindow::updateEqualizerPreview() {
+    if (!equalizerPreviewEnabled_ || !project_.has_value()) {
+        canvas_->setEqualizerPreview(std::nullopt);
+        return;
+    }
+    const auto equalizerLayer =
+        std::find_if(project_->layers().begin(), project_->layers().end(),
+                     [](const sound_mind::core::Layer& layer) { return layer.type() == sound_mind::core::LayerType::Equalizer; });
+    if (equalizerLayer == project_->layers().end()) {
+        canvas_->setEqualizerPreview(std::nullopt);
+        return;
+    }
+    canvas_->setEqualizerPreview(equalizerLayer->filterConfiguration().frequencyGradient());
 }
 
 void MainWindow::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {

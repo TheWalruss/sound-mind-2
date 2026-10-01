@@ -1101,6 +1101,25 @@ public slots:
     void applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config);
 
     /**
+     * @brief Turns the Equalizer's own on-canvas preview overlay on or
+     *        off - the actual work behind `FilterConfigurationPanel`'s own
+     *        "Preview on Canvas" checkbox (`docs/sound-mind-roadmap.md`'s
+     *        "Equalizer usability", flagged 2026-09-27 from real-world
+     *        use).
+     *
+     * A sticky, session-only preference (like `layersPanel_`'s own
+     * visibility across project switches) - stays on across New/Open
+     * Project and across switching `FilterConfigurationPanel`'s own
+     * selection away from the Equalizer layer and back, re-resolving the
+     * Equalizer layer's own *current* gradient fresh via
+     * updateEqualizerPreview() each time, rather than freezing whatever
+     * gradient happened to be loaded at the moment this was last toggled.
+     *
+     * @param enabled The checkbox's own new checked state.
+     */
+    void setEqualizerPreviewEnabled(bool enabled);
+
+    /**
      * @brief Appends a new, auto-named entry to the current project's own
      *        convolution kernel library and refreshes `filterConfigurationPanel_`'s
      *        own Load Kernel combo - the actual work behind
@@ -2854,6 +2873,25 @@ private:
      */
     void updateConfiguredDeviceLockState();
 
+    /**
+     * @brief Re-resolves the Equalizer layer's own current gradient and
+     *        pushes it (or `std::nullopt`) onto `canvas_->
+     *        setEqualizerPreview()`, matching `equalizerPreviewEnabled_`'s
+     *        own current state - see setEqualizerPreviewEnabled()'s own
+     *        docs.
+     *
+     * A no-op-safe `std::nullopt` push whenever `equalizerPreviewEnabled_`
+     * is `false`, no project is open, or (defensively; shouldn't happen -
+     * `sound_mind::core::Project::createNew()` always adds one) the
+     * project has no `LayerType::Equalizer` layer. Called from
+     * setEqualizerPreviewEnabled() directly, from applyFilterConfiguration()
+     * (so a live edit to the Equalizer's own curve - via either gradient
+     * widget - updates the preview immediately), and from setProject()
+     * (so a fresh project's own Equalizer gradient replaces whatever the
+     * previous project's preview was showing).
+     */
+    void updateEqualizerPreview();
+
     /// @brief Pushes `undoStack_`'s own current descriptions/position into
     ///        `historyPanel_` - `v0.Y.46.1` Installment D ("History
     ///        Panel"). Called wherever `undoStack_` might just have
@@ -3236,6 +3274,11 @@ private:
     ///        event has fired, or playback stops for any reason
     ///        (stopPlayback()).
     bool macroPlaybackActive_ = false;
+
+    /// @brief See setEqualizerPreviewEnabled()'s own docs - a sticky,
+    /// session-only preference, not reset by setProject() (matching
+    /// layersPanel_'s own visibility-persists-across-projects precedent).
+    bool equalizerPreviewEnabled_ = false;
 
     /// @brief Owns the four Paint/Pick/Select/Path tool controllers and
     /// all of their wiring to `canvas_`/`toolConfigurationPanel_` - see its

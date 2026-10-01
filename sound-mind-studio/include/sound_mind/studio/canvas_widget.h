@@ -8,6 +8,7 @@
 #include <QRectF>
 #include <QWidget>
 
+#include "sound_mind/core/gradient.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
@@ -381,6 +382,44 @@ public:
      *        clears the preview.
      */
     void setMindWavePreview(std::optional<sound_mind::core::MindWave> wave);
+
+    /**
+     * @brief Sets (or clears) a live preview of the Equalizer layer's own
+     *        "Cut" curve, overlaid on the spectrogram - `docs/sound-mind-
+     *        roadmap.md`'s "Equalizer usability" ("an optional on-canvas
+     *        preview of the curve's own effect"), flagged 2026-09-27 from
+     *        real-world use. `FilterConfigurationPanel`'s own "Preview on
+     *        Canvas" checkbox, via `MainWindow`, is the only caller.
+     *
+     * Unlike setMindWavePreview()'s own fixed-50%-opacity grayscale wash
+     * (a MindWave field can be anywhere in `[0, 1]`, so a uniform opacity
+     * already lets `0` read as "no visible effect" at the image's own
+     * black end), this builds a `Format_ARGB32` image whose *alpha* -not
+     * just its brightness- varies with each frequency's own Cut amount
+     * (`max(leftOpacity, rightOpacity)` per stop, evaluated once per bin,
+     * same as `EqualizerCurveWidget`'s own formula): no cut draws
+     * perfectly transparent (no visible effect at all), full cut draws a
+     * dark, mostly-opaque wash - a Cut amount of `0` deserves "doesn't
+     * touch the image", not "paints it middling-gray", which a plain
+     * grayscale-at-fixed-opacity image can't express.
+     *
+     * One pixel wide (the Equalizer's own effect is uniform across every
+     * frame - `binCount` tall is all the real resolution there is),
+     * stretched to fill the canvas by `drawImage()` the same cheap way a
+     * 1-D gradient already would be; `binCount` tall, in the exact
+     * row-0-is-highest-frequency orientation `sound_mind::codec::
+     * toGrayscaleImage()`'s own docs establish, so it lines up with the
+     * composite underneath it without any separate flip.
+     *
+     * A no-op (clears any existing preview instead) if `gradient` is
+     * `std::nullopt` or no project is set - there's no canvas geometry to
+     * evaluate it against yet, the same guard setMindWavePreview() already
+     * has.
+     *
+     * @param gradient The Equalizer layer's own current `frequencyGradient()`
+     *        to preview, or `std::nullopt` to clear the preview.
+     */
+    void setEqualizerPreview(std::optional<sound_mind::core::Gradient> gradient);
 
     /**
      * @brief Sets (or clears) the Chord Overlay - the Chord Generator's own
@@ -906,6 +945,12 @@ private:
     ///        every repaint - a default-constructed (null) QImage draws
     ///        nothing.
     QImage mindWavePreviewImage_;
+
+    /// @brief The cached ARGB32 rendering of the Equalizer preview's own
+    ///        per-bin Cut amount, evaluated once in setEqualizerPreview()
+    ///        rather than on every repaint - a default-constructed (null)
+    ///        QImage draws nothing. See setEqualizerPreview()'s own docs.
+    QImage equalizerPreviewImage_;
     bool showBoundingBoxes_ = false;
     bool showPathGeometry_ = false;
     VerticalAxisLabelMode verticalAxisLabelMode_ = VerticalAxisLabelMode::Off;

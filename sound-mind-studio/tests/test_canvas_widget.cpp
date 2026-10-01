@@ -10,6 +10,7 @@
 #include <QtTest/QtTest>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/gradient.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/paint_application.h"
@@ -21,6 +22,7 @@
 #include "sound_mind/studio/canvas_widget.h"
 
 using sound_mind::codec::StreamImage;
+using sound_mind::core::Gradient;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerType;
 using sound_mind::core::MindWave;
@@ -1404,6 +1406,66 @@ void CanvasWidgetTest::settingANewProjectClearsTheMindWavePreview() {
     QVERIFY(withPreview != afterSwitch);
 }
 
+void CanvasWidgetTest::setEqualizerPreviewDrawsASemiTransparentGrayscaleOverlay() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    const QImage before = widget.grab().toImage();
+
+    Gradient gradient;
+    // Full cut at the lowest frequency, none at the highest - see
+    // setEqualizerPreview()'s own docs on why cut, not raw opacity, is
+    // what gets rendered.
+    gradient.setStopValues(0, {0.0f, -96.0f, -96.0f, 1.0f, 1.0f});
+    widget.setEqualizerPreview(gradient);
+    const QImage after = widget.grab().toImage();
+
+    bool foundDifference = false;
+    for (int y = 0; y < 50 && !foundDifference; ++y) {
+        for (int x = 0; x < 100; ++x) {
+            if (before.pixelColor(x, y) != after.pixelColor(x, y)) {
+                foundDifference = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundDifference);
+}
+
+void CanvasWidgetTest::setEqualizerPreviewWithNulloptClearsIt() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    Gradient gradient;
+    gradient.setStopValues(0, {0.0f, -96.0f, -96.0f, 1.0f, 1.0f});
+    widget.setEqualizerPreview(gradient);
+    const QImage withPreview = widget.grab().toImage();
+
+    widget.setEqualizerPreview(std::nullopt);
+    const QImage cleared = widget.grab().toImage();
+
+    QVERIFY(withPreview != cleared);
+}
+
+void CanvasWidgetTest::settingANewProjectClearsTheEqualizerPreview() {
+    const Project firstProject = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&firstProject);
+    widget.resize(100, 50);
+    Gradient gradient;
+    gradient.setStopValues(0, {0.0f, -96.0f, -96.0f, 1.0f, 1.0f});
+    widget.setEqualizerPreview(gradient);
+    const QImage withPreview = widget.grab().toImage();
+
+    const Project secondProject = Project::createNew(mouseConversionTestSettings());
+    widget.setProject(&secondProject);
+    const QImage afterSwitch = widget.grab().toImage();
+
+    QVERIFY(withPreview != afterSwitch);
+}
+
 void CanvasWidgetTest::chordPreviewIsHiddenByDefaultEvenWithDataSet() {
     // Real-world testing pass, 2026-09-20, finding #15: the Chord Overlay
     // shouldn't be visible unconditionally just because setChordPreview()
@@ -1612,6 +1674,34 @@ void CanvasWidgetTest::polarModePaintPressOutsideTheDiskEmitsNothing() {
     QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(2, 2));
 
     QCOMPARE(spy.count(), 0);
+}
+
+void CanvasWidgetTest::polarModeStillDrawsTheEqualizerPreview() {
+    // Same reasoning as polarModeStillDrawsTheMindWavePreview() below - the
+    // Equalizer preview is rendered through the same rectToPolar() path,
+    // not one of the corner/line-based overlays polar mode suppresses.
+    Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 100);
+    widget.setPolarMode(true);
+    const QImage before = widget.grab().toImage();
+
+    Gradient gradient;
+    gradient.setStopValues(0, {0.0f, -96.0f, -96.0f, 1.0f, 1.0f});
+    widget.setEqualizerPreview(gradient);
+    const QImage after = widget.grab().toImage();
+
+    bool foundDifference = false;
+    for (int y = 0; y < 100 && !foundDifference; ++y) {
+        for (int x = 0; x < 100; ++x) {
+            if (before.pixelColor(x, y) != after.pixelColor(x, y)) {
+                foundDifference = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundDifference);
 }
 
 void CanvasWidgetTest::polarModeStillDrawsTheMindWavePreview() {

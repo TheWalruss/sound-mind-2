@@ -6,6 +6,42 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.20] - 2026-10-01
+
+Equalizer usability overhaul: a real vertical EQ widget and an on-canvas
+preview, closing out the `v0.Y.58.1` roadmap item flagged 2026-09-27 from
+real-world use.
+
+### Added
+
+- **A vertical `EqualizerCurveWidget`** sits alongside the Equalizer's own
+  numeric gradient editor, plotting the current Cut curve against
+  frequency-domain guides (gridlines and Hz labels), the same spirit as a
+  hardware/plugin EQ's own frequency-response display. Drag a handle
+  vertically to reposition its frequency; click empty space to add a new
+  stop there; double-click an interior stop to remove it. Fully synced
+  with the existing numeric spin boxes - editing either one updates the
+  other.
+- **A new "Preview on Canvas" checkbox** in the Equalizer section overlays
+  the curve's own effect directly on the spectrogram (darker = more cut),
+  the same way the MindWave Preview already does. The checkbox's own
+  checked state is sticky for the session and restored whenever the
+  Equalizer layer is reselected.
+
+### Fixed
+
+- A stale Doxygen comment on `FilterConfigurationPanel` incorrectly
+  described the Equalizer's gradient editing as "basic, two-endpoint-only"
+  - multi-stop editing has actually worked since `v0.0.45.26`. The
+  roadmap's own "Equalizer usability" item traced its inaccurate premise
+  to this same stale comment; both are now corrected.
+
+### Notes
+
+Full regression: `sound-mind-studio` full suite genuinely passing (19 new
+tests), `sound-mind-core` unaffected and unchanged. Doxygen: 0 warnings.
+See `docs/sound-mind-architecture.md`'s Decision #184.
+
 ## [0.1.3.19] - 2026-10-01
 
 UI polish, follow-up correction pass: real-world use of the just-shipped

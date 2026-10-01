@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -8,6 +9,7 @@
 
 #include "sound_mind/core/convolution_kernel.h"
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/project_settings.h"
 
 class QCheckBox;
 class QComboBox;
@@ -21,6 +23,7 @@ class QWidget;
 
 namespace sound_mind::studio {
 
+class EqualizerCurveWidget;
 class GradientEditorWidget;
 class ToneCurveEditor;
 
@@ -91,15 +94,16 @@ class ToneCurveEditor;
  * `v0.Y.38.1`, only Mix gets a MindWave-binding combo - the other five
  * remain deliberately unbound (see `FilterConfiguration`'s own docs).
  *
- * **A basic, two-endpoint-stop gradient editor for `FrequencyAxisGradient`,
- * not a rich visual one** - `Gradient` always has at least its two
- * endpoint stops (`t=0`, `t=1`); this panel edits exactly those two
- * directly, via plain spin boxes (no draggable visual stop editor -
- * nothing in this codebase has built one yet, for any gradient,
- * anywhere). A richer, draggable editor - and interior stops - are
- * deferred; the Equalizer layer's own specialized "Cut" editor (a later
- * installment of this same milestone) will need its own nicer widget
- * regardless, once built.
+ * **A real, draggable, multi-stop gradient editor for `FrequencyAxisGradient`**
+ * (`GradientEditorWidget`/`GradientBarWidget`, `v0.0.45.26`, real-world
+ * testing pass finding #17) - `Gradient` always has at least its two
+ * endpoint stops (`t=0`, `t=1`), but any number of interior stops can be
+ * added/dragged/removed too, the same shared widget `ToolConfigurationPanel`'s
+ * brush and Fill Selection's own picker use. This superseded an earlier,
+ * genuinely two-endpoint-only plain-spin-box version of this same editor -
+ * see `docs/sound-mind-architecture.md`'s Decision #147 for why that
+ * regression happened and how it was fixed across all three embedding
+ * sites at once.
  *
  * **A real add/drag-point curve editor for `ToneCurve`**
  * (`ToneCurveEditor`, `tone_curve_editor.h`) - confirmed with the user
@@ -150,12 +154,25 @@ class ToneCurveEditor;
  * `LayerType::Equalizer`) hides the `FilterType` combo entirely (the
  * Equalizer is always a `FrequencyAxisGradient` filter - switching it to
  * something else doesn't make sense) and shows a dedicated Cut group
- * instead of the generic Frequency-Axis Gradient one: the same two
- * endpoint stops, but exposing only Left/Right **Cut** per stop (`0` =
+ * instead of the generic Frequency-Axis Gradient one: the same multi-stop
+ * gradient, but exposing only Left/Right **Cut** per stop (`0` =
  * pass-through, `1` = full silence) - intensity is never shown, always
  * written as the silence floor underneath, confirmed with the user ahead
  * of implementation (Decision #61's own already-recorded reasoning for
  * why this needs no new blend math, only a constrained editor).
+ *
+ * **A vertical `EqualizerCurveWidget`, shown alongside the Cut group in
+ * Equalizer mode only** - `docs/sound-mind-roadmap.md`'s "Equalizer
+ * usability" (flagged 2026-09-27 from real-world use): a frequency-axis
+ * curve view, with frequency-domain guides, complementing (not replacing)
+ * `frequencyGradientEditor_`'s own precise numeric editing - see that
+ * class's own docs for the interaction split (this panel keeps both
+ * widgets' gradients in sync, each one's `gradientChanged()` forwarded
+ * onto the other's `setGradient()`, guarded so neither echoes back into
+ * the other). `setProjectSettings()` feeds it the frequency-axis context
+ * it needs for those guides; a "Preview on Canvas" checkbox, also
+ * Equalizer-mode-only, emits equalizerPreviewToggled() for `MainWindow`
+ * to forward onto `CanvasWidget::setEqualizerPreview()`.
  */
 class FilterConfigurationPanel : public QDockWidget {
     Q_OBJECT
@@ -213,6 +230,35 @@ public:
      *        `false` for the normal, generic panel.
      */
     void setEqualizerMode(bool isEqualizer);
+
+    /**
+     * @brief Feeds `equalizerCurveWidget_` the project settings its own
+     *        frequency-axis guides need - `MainWindow` calls this
+     *        whenever a project opens (or closes, with `std::nullopt`),
+     *        the same role `CanvasWidget`'s own project-dependent state
+     *        already has a setter for.
+     * @param settings The current project's own settings, or
+     *        `std::nullopt` if none is open.
+     */
+    void setProjectSettings(std::optional<sound_mind::core::ProjectSettings> settings);
+
+    /**
+     * @brief Syncs the "Preview on Canvas" checkbox's own displayed state
+     *        without emitting equalizerPreviewToggled() - `MainWindow`
+     *        calls this whenever the selection changes, so the checkbox
+     *        keeps reflecting its own sticky, session-level state (see
+     *        `MainWindow::setEqualizerPreviewEnabled()`'s own docs)
+     *        correctly even after switching away from the Equalizer layer
+     *        and back, rather than visually resetting every time.
+     *
+     * The same "loading is a sync from some other source, not a user
+     * edit" reasoning setFilterConfiguration()'s own docs already give -
+     * emitting here would make `MainWindow`'s own wiring indistinguishable
+     * from a real toggle.
+     *
+     * @param checked The new displayed state.
+     */
+    void setEqualizerPreviewChecked(bool checked);
 
     /**
      * @brief Sets which MindWaves each of the five bindable parameters'
@@ -278,6 +324,17 @@ signals:
      */
     void saveConvolutionKernelRequested(int size, std::vector<float> coefficients, bool normalize);
 
+    /**
+     * @brief The Equalizer mode's own "Preview on Canvas" checkbox
+     *        changed - `MainWindow` responds by forwarding this (along
+     *        with the Equalizer layer's own current gradient, whenever
+     *        `enabled` is `true`) to `CanvasWidget::setEqualizerPreview()`.
+     *        Only ever emitted while `setEqualizerMode(true)` is active -
+     *        the checkbox itself is hidden otherwise.
+     * @param enabled The checkbox's own new checked state.
+     */
+    void equalizerPreviewToggled(bool enabled);
+
 private:
     /// @brief Emits filterConfigurationChanged() with the current config_.
     void emitConfigChanged();
@@ -323,6 +380,10 @@ private:
     QWidget* frequencyAxisGradientSection_ = nullptr;
     QLabel* frequencyGradientLabel_ = nullptr;
     GradientEditorWidget* frequencyGradientEditor_ = nullptr;
+    /// @brief Equalizer-mode-only - see this class's own docs.
+    EqualizerCurveWidget* equalizerCurveWidget_ = nullptr;
+    /// @brief Equalizer-mode-only - see equalizerPreviewToggled()'s own docs.
+    QCheckBox* equalizerPreviewCheckBox_ = nullptr;
 
     QGroupBox* uniformBlurGroup_ = nullptr;
     QDoubleSpinBox* blurSigmaSpinBox_ = nullptr;

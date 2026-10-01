@@ -792,7 +792,21 @@ the Opacity fields relabeled **Left Cut**/**Right Cut** - `0` leaves that
 frequency untouched, `1` silences it completely. Unlike the ordinary
 Frequency-Axis Gradient editor, there's no Intensity to set here - the
 Equalizer only ever cuts toward silence, never toward some other target
-loudness.
+loudness. It's a real multi-stop gradient, the same as any other - drag
+the bar to add, move, or remove cut points, not just a single start/end
+value.
+
+Alongside the gradient bar sits a **vertical EQ curve** - a frequency-
+response-style plot of the same curve, oriented to match the canvas
+beside it (highest frequency at the top, lowest at the bottom). Drag a
+point on it up or down to retune which frequency it affects; click empty
+space to add a new point there; double-click an interior point to remove
+it. It's kept in sync with the gradient bar automatically - edit either
+one and the other updates to match. Check **Preview on Canvas** to
+overlay the curve's own effect directly on the spectrogram (darker means
+more cut), so you can see what the Equalizer is about to do before
+committing to it; the checkbox stays checked for the rest of the session
+even if you switch to a different layer and back.
 
 ## Painting
 

@@ -22,6 +22,7 @@
 #include "test_configure_devices_panel.h"
 #include "test_create_project_wizard.h"
 #include "test_device_combo_helpers.h"
+#include "test_equalizer_curve_widget.h"
 #include "test_filter_configuration_panel.h"
 #include "test_generator_dialog.h"
 #include "test_gradient_bar_widget.h"
@@ -189,6 +190,9 @@ int main(int argc, char** argv) {
 
     GradientBarWidgetTest gradientBarWidgetTest;
     status |= QTest::qExec(&gradientBarWidgetTest, argc, argv);
+
+    EqualizerCurveWidgetTest equalizerCurveWidgetTest;
+    status |= QTest::qExec(&equalizerCurveWidgetTest, argc, argv);
 
     GradientEditorWidgetTest gradientEditorWidgetTest;
     status |= QTest::qExec(&gradientEditorWidgetTest, argc, argv);

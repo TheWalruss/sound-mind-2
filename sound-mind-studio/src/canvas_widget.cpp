@@ -95,6 +95,7 @@ void CanvasWidget::setProject(const sound_mind::core::Project* project) {
     // canvas dimensions) means nothing for a different project.
     mindWavePreview_.reset();
     mindWavePreviewImage_ = QImage();
+    equalizerPreviewImage_ = QImage();
     updateGeometry();
     update();
 }
@@ -168,6 +169,37 @@ void CanvasWidget::setMindWavePreview(std::optional<sound_mind::core::MindWave> 
     const auto field = sound_mind::core::evaluateMindWaveField(*mindWavePreview_, config, settings.canvasWidth);
     const auto grayscale = sound_mind::codec::toGrayscaleImage(field, settings.canvasWidth, config.binCount);
     mindWavePreviewImage_ = toQImageView(grayscale).copy();
+    update();
+}
+
+void CanvasWidget::setEqualizerPreview(std::optional<sound_mind::core::Gradient> gradient) {
+    if (!gradient.has_value() || project_ == nullptr) {
+        equalizerPreviewImage_ = QImage();
+        update();
+        return;
+    }
+    const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
+    const std::uint32_t binCount = config.binCount;
+    // One column (the Equalizer's own effect is uniform across every
+    // frame) - toGrayscaleImage()'s own row-0-is-highest-frequency,
+    // bin-major field layout (cellIndex()'s own docs) applies here with a
+    // single-frame "row" per bin. Brightness is `1 - cut`, so a cut
+    // frequency reads as a darkened band once blended over the composite
+    // at a fixed opacity below, the same visual language
+    // setMindWavePreview() already establishes (and the same reason its
+    // own image is plain grayscale, not per-pixel alpha - this reuses that
+    // exact, already-polar-mode-safe mechanism, rather than a separate
+    // alpha-aware path that `sound_mind::codec::rectToPolar()` has no
+    // equivalent for).
+    std::vector<float> field(binCount);
+    for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+        const float t = binCount > 1 ? static_cast<float>(bin) / static_cast<float>(binCount - 1) : 0.0f;
+        const sound_mind::core::GradientStop stop = gradient->evaluate(t);
+        const float cut = std::clamp(std::max(stop.leftOpacity, stop.rightOpacity), 0.0f, 1.0f);
+        field[bin] = 1.0f - cut;
+    }
+    const auto grayscale = sound_mind::codec::toGrayscaleImage(field, 1, binCount);
+    equalizerPreviewImage_ = toQImageView(grayscale).copy();
     update();
 }
 
@@ -394,6 +426,24 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
                 painter.drawImage(disk, toQImageView(polarPreview));
             } else {
                 painter.drawImage(rect(), mindWavePreviewImage_);
+            }
+            painter.setOpacity(1.0);
+        }
+
+        // Equalizer Preview (see setEqualizerPreview()'s own docs) - same
+        // ordering/opacity-reset reasoning as MindWave Preview just above,
+        // drawn after it so a MindWave preview and an Equalizer preview
+        // shown at once both remain visible (over, not instead of, each
+        // other).
+        if (!equalizerPreviewImage_.isNull()) {
+            painter.setOpacity(0.5);
+            if (polarMode_) {
+                const QRectF disk = polarDiskRect();
+                const auto diameter = static_cast<std::uint32_t>(disk.width());
+                const auto polarPreview = sound_mind::codec::rectToPolar(toRgbImage(equalizerPreviewImage_), diameter);
+                painter.drawImage(disk, toQImageView(polarPreview));
+            } else {
+                painter.drawImage(rect(), equalizerPreviewImage_);
             }
             painter.setOpacity(1.0);
         }

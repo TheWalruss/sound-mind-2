@@ -16,6 +16,7 @@
 #include <QVariant>
 #include <QtTest/QtTest>
 
+#include "sound_mind/studio/equalizer_curve_widget.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/gradient_bar_widget.h"
 #include "sound_mind/studio/tone_curve_editor.h"
@@ -25,6 +26,7 @@ using sound_mind::core::DownsampleMode;
 using sound_mind::core::FilterType;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::NamedConvolutionKernel;
+using sound_mind::studio::EqualizerCurveWidget;
 using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::GradientBarWidget;
 using sound_mind::studio::ToneCurveEditor;
@@ -37,6 +39,25 @@ int xPosFor(float t) {
     constexpr double margin = 8.0;
     constexpr double width = 240.0 - 2 * margin;
     return static_cast<int>(margin + static_cast<double>(t) * width);
+}
+
+/// @brief See test_equalizer_curve_widget.cpp's own identical `yPosFor()` -
+/// kept as its own local copy, matching xPosFor()'s own comment on why.
+int eqYPosFor(float t) {
+    constexpr double marginTop = 8.0;
+    constexpr double marginBottom = 8.0;
+    constexpr double height = 240.0 - marginTop - marginBottom;
+    const double bottom = 240.0 - marginBottom;
+    return static_cast<int>(bottom - static_cast<double>(t) * height);
+}
+
+/// @brief See test_equalizer_curve_widget.cpp's own identical `xPosFor()` -
+/// kept as its own local copy, matching xPosFor()'s own comment on why.
+int eqXPosFor(float cut) {
+    constexpr double marginLeft = 48.0;
+    constexpr double marginRight = 8.0;
+    constexpr double width = 160.0 - marginLeft - marginRight;
+    return static_cast<int>(marginLeft + static_cast<double>(cut) * width);
 }
 
 }  // namespace
@@ -290,6 +311,12 @@ void FilterConfigurationPanelTest::equalizerModeHidesTheFilterTypeComboAndSwitch
     QVERIFY(!panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
     QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightIntensitySpinBox"))->isHidden());
+    // Equalizer usability overhaul (v0.1.3.20) - the vertical curve widget
+    // and its own "Preview on Canvas" checkbox are Equalizer-mode-only,
+    // same as the Cut-mode spin boxes above - see setEqualizerMode()'s own
+    // docs.
+    QVERIFY(!panel.findChild<EqualizerCurveWidget*>(QStringLiteral("equalizerCurveWidget"))->isHidden());
+    QVERIFY(!panel.findChild<QCheckBox*>(QStringLiteral("equalizerPreviewCheckBox"))->isHidden());
 }
 
 void FilterConfigurationPanelTest::equalizerModeOffRestoresTheNormalPerTypeGroupAndIntensityFields() {
@@ -302,6 +329,8 @@ void FilterConfigurationPanelTest::equalizerModeOffRestoresTheNormalPerTypeGroup
     QVERIFY(!panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightIntensitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<EqualizerCurveWidget*>(QStringLiteral("equalizerCurveWidget"))->isHidden());
+    QVERIFY(panel.findChild<QCheckBox*>(QStringLiteral("equalizerPreviewCheckBox"))->isHidden());
 }
 
 void FilterConfigurationPanelTest::editingACutSpinBoxWritesOpacityAndForcesIntensityToTheSilenceFloor() {
@@ -340,6 +369,98 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheCutSpinBoxesFro
     QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightOpacitySpinBox"))->value(), 0.4);
     QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().leftOpacity, 0.5f);
     QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().rightOpacity, 0.6f);
+}
+
+// --- Equalizer usability overhaul (v0.1.3.20) ---
+
+void FilterConfigurationPanelTest::editingTheCutSpinBoxesSyncsTheEqualizerCurveWidget() {
+    FilterConfigurationPanel panel;
+    panel.setEqualizerMode(true);
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"));
+    QVERIFY(spinBox != nullptr);
+    auto* curveWidget = panel.findChild<EqualizerCurveWidget*>(QStringLiteral("equalizerCurveWidget"));
+    QVERIFY(curveWidget != nullptr);
+
+    spinBox->setValue(0.75);
+
+    // GradientEditorWidget::gradientChanged's own handler forwards into
+    // equalizerCurveWidget_->setGradient() - see filter_configuration_panel.cpp's
+    // own comment on why this can't loop back.
+    QCOMPARE(curveWidget->gradient().stops().front().leftOpacity, 0.75f);
+}
+
+void FilterConfigurationPanelTest::draggingTheEqualizerCurveWidgetUpdatesConfigEmitsAndSyncsTheGradientBar() {
+    FilterConfigurationPanel panel;
+    panel.setEqualizerMode(true);
+    FilterConfiguration config;
+    config.frequencyGradient().insertStop(0.5f);
+    panel.setFilterConfiguration(config);
+    auto* curveWidget = panel.findChild<EqualizerCurveWidget*>(QStringLiteral("equalizerCurveWidget"));
+    QVERIFY(curveWidget != nullptr);
+    curveWidget->resize(160, 240);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    // Drag the interior stop (t=0.5) toward the top (higher frequency) -
+    // see test_equalizer_curve_widget.cpp's own yPosFor()/xPosFor() for
+    // where its handles land. Cut (x) stays at 0 throughout, matching
+    // mouseMoveEvent()'s own "repositions frequency only" contract.
+    QTest::mousePress(curveWidget, Qt::LeftButton, Qt::NoModifier, QPoint(eqXPosFor(0.0f), eqYPosFor(0.5f)));
+    QTest::mouseMove(curveWidget, QPoint(eqXPosFor(0.0f), eqYPosFor(0.8f)));
+    QTest::mouseRelease(curveWidget, Qt::LeftButton, Qt::NoModifier, QPoint(eqXPosFor(0.0f), eqYPosFor(0.8f)));
+
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(qAbs(curveWidget->gradient().stops()[1].t - 0.8f) < 0.02f);
+    QCOMPARE(panel.filterConfiguration().frequencyGradient().stops()[1].t, curveWidget->gradient().stops()[1].t);
+    // frequencyGradientEditor_'s own GradientBarWidget is kept in sync too
+    // - both widgets' own gradientChanged() forward into the other's
+    // setGradient(), which (deliberately, per each widget's own docs)
+    // carries the gradient itself but not which stop is selected.
+    auto* bar = panel.findChild<GradientBarWidget*>(QStringLiteral("gradientBar"));
+    QVERIFY(bar != nullptr);
+    QCOMPARE(bar->gradient().stops()[1].t, curveWidget->gradient().stops()[1].t);
+}
+
+void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheEqualizerCurveWidgetWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    panel.setEqualizerMode(true);
+    FilterConfiguration config;
+    config.frequencyGradient().setStopValues(0, {0.0f, -96.0f, -96.0f, 0.3f, 0.4f});
+    config.frequencyGradient().setStopValues(1, {1.0f, -96.0f, -96.0f, 0.5f, 0.6f});
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    panel.setFilterConfiguration(config);
+
+    QCOMPARE(spy.count(), 0);
+    auto* curveWidget = panel.findChild<EqualizerCurveWidget*>(QStringLiteral("equalizerCurveWidget"));
+    QVERIFY(curveWidget != nullptr);
+    QCOMPARE(curveWidget->gradient().stops().front().leftOpacity, 0.3f);
+    QCOMPARE(curveWidget->gradient().stops().back().rightOpacity, 0.6f);
+}
+
+void FilterConfigurationPanelTest::togglingThePreviewCheckBoxEmitsEqualizerPreviewToggled() {
+    FilterConfigurationPanel panel;
+    panel.setEqualizerMode(true);
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("equalizerPreviewCheckBox"));
+    QVERIFY(checkBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::equalizerPreviewToggled);
+
+    checkBox->setChecked(true);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.takeFirst().at(0).toBool(), true);
+}
+
+void FilterConfigurationPanelTest::setEqualizerPreviewCheckedSyncsWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    panel.setEqualizerMode(true);
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("equalizerPreviewCheckBox"));
+    QVERIFY(checkBox != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::equalizerPreviewToggled);
+
+    panel.setEqualizerPreviewChecked(true);
+
+    QCOMPARE(spy.count(), 0);
+    QVERIFY(checkBox->isChecked());
 }
 
 // --- v0.Y.31.1 Installment D3: filter-parameter MindWave bindings -----

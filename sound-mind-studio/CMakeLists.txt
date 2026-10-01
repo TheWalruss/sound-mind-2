@@ -37,6 +37,7 @@ add_library(sound-mind-studio-lib
     src/configure_devices_panel.cpp
     src/create_project_wizard.cpp
     src/device_combo_helpers.cpp
+    src/equalizer_curve_widget.cpp
     src/fill_gradient_dialog.cpp
     src/filter_configuration_panel.cpp
     src/generator_dialog.cpp
@@ -88,6 +89,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/configure_devices_panel.h
     include/sound_mind/studio/create_project_wizard.h
     include/sound_mind/studio/device_combo_helpers.h
+    include/sound_mind/studio/equalizer_curve_widget.h
     include/sound_mind/studio/fill_gradient_dialog.h
     include/sound_mind/studio/filter_configuration_panel.h
     include/sound_mind/studio/generator_dialog.h

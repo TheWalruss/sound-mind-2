@@ -70,6 +70,12 @@ private slots:
     void setMindWavePreviewDrawsASemiTransparentGrayscaleOverlay();
     void setMindWavePreviewWithNulloptClearsIt();
     void settingANewProjectClearsTheMindWavePreview();
+
+    // Equalizer usability overhaul (v0.1.3.20).
+    void setEqualizerPreviewDrawsASemiTransparentGrayscaleOverlay();
+    void setEqualizerPreviewWithNulloptClearsIt();
+    void settingANewProjectClearsTheEqualizerPreview();
+    void polarModeStillDrawsTheEqualizerPreview();
     void chordPreviewIsHiddenByDefaultEvenWithDataSet();
     void chordPreviewShowsWhenTheChordGeneratorPanelIsVisible();
     void chordPreviewShowsWhenTheChordStampToolIsActive();

@@ -22,6 +22,7 @@
 #include <QVariant>
 #include <QWidget>
 
+#include "sound_mind/studio/equalizer_curve_widget.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
 #include "sound_mind/studio/tone_curve_editor.h"
 
@@ -156,9 +157,39 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     connect(frequencyGradientEditor_, &GradientEditorWidget::gradientChanged, this,
             [this](const sound_mind::core::Gradient& gradient) {
                 config_.frequencyGradient() = gradient;
+                // Keeps the vertical curve view in sync with every edit
+                // made through the numeric spin boxes - setGradient()
+                // doesn't itself emit gradientChanged(), so this can't
+                // loop back - see EqualizerCurveWidget's own docs.
+                equalizerCurveWidget_->setGradient(gradient);
                 emitConfigChanged();
             });
     frequencyLayout->addWidget(frequencyGradientEditor_);
+
+    // Equalizer-mode-only - see this class's own docs. Lives in the same
+    // container/section as frequencyGradientEditor_ above (both edit the
+    // same config_.frequencyGradient()), but its own visibility is gated
+    // separately in updateVisibleGroup(), on isEqualizerMode_ alone, not
+    // "isEqualizerMode_ || type == FrequencyAxisGradient" the way the rest
+    // of this section is - a plain (non-Equalizer) Frequency-Axis Gradient
+    // Filter layer still gets only the numeric editor, unchanged.
+    equalizerCurveWidget_ = new EqualizerCurveWidget(frequencyGroupContainer);
+    equalizerCurveWidget_->setObjectName(QStringLiteral("equalizerCurveWidget"));
+    connect(equalizerCurveWidget_, &EqualizerCurveWidget::gradientChanged, this,
+            [this](const sound_mind::core::Gradient& gradient) {
+                config_.frequencyGradient() = gradient;
+                frequencyGradientEditor_->setGradient(gradient);
+                emitConfigChanged();
+            });
+    frequencyLayout->addWidget(equalizerCurveWidget_);
+
+    equalizerPreviewCheckBox_ = new QCheckBox(tr("Preview on Canvas"), frequencyGroupContainer);
+    equalizerPreviewCheckBox_->setObjectName(QStringLiteral("equalizerPreviewCheckBox"));
+    equalizerPreviewCheckBox_->setToolTip(
+        tr("Overlay this curve's own effect on the spectrogram - darker means more cut"));
+    connect(equalizerPreviewCheckBox_, &QCheckBox::toggled, this,
+            &FilterConfigurationPanel::equalizerPreviewToggled);
+    frequencyLayout->addWidget(equalizerPreviewCheckBox_);
 
     root->addWidget(frequencyGroupContainer);
 
@@ -932,6 +963,8 @@ void FilterConfigurationPanel::updateVisibleGroup() {
         filterTypeLabel_->setVisible(!isEqualizerMode_);
     }
     frequencyGradientEditor_->setCutMode(isEqualizerMode_);
+    equalizerCurveWidget_->setVisible(isEqualizerMode_);
+    equalizerPreviewCheckBox_->setVisible(isEqualizerMode_);
 
     // In Equalizer mode, frequencyAxisGradientSection_ (now in Cut mode)
     // is the only one shown - config_.type() is always
@@ -965,6 +998,15 @@ void FilterConfigurationPanel::updateVisibleGroup() {
 void FilterConfigurationPanel::setEqualizerMode(bool isEqualizer) {
     isEqualizerMode_ = isEqualizer;
     updateVisibleGroup();
+}
+
+void FilterConfigurationPanel::setProjectSettings(std::optional<sound_mind::core::ProjectSettings> settings) {
+    equalizerCurveWidget_->setProjectSettings(std::move(settings));
+}
+
+void FilterConfigurationPanel::setEqualizerPreviewChecked(bool checked) {
+    const QSignalBlocker blocker(equalizerPreviewCheckBox_);
+    equalizerPreviewCheckBox_->setChecked(checked);
 }
 
 void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
@@ -1021,6 +1063,7 @@ void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::Fi
     // own docs) - no separate QSignalBlocker needed here, matching
     // rebuildMindWaveCombos()'s own reasoning for the same thing.
     frequencyGradientEditor_->setGradient(config_.frequencyGradient());
+    equalizerCurveWidget_->setGradient(config_.frequencyGradient());
 
     blurSigmaSpinBox_->setValue(config_.blurSigma());
     medianSizeSpinBox_->setValue(config_.medianSize());

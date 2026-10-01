@@ -24,6 +24,14 @@ private slots:
     void equalizerModeOffRestoresTheNormalPerTypeGroupAndIntensityFields();
     void editingACutSpinBoxWritesOpacityAndForcesIntensityToTheSilenceFloor();
     void setFilterConfigurationSyncsTheCutSpinBoxesFromOpacityWithoutEmitting();
+
+    // --- Equalizer usability overhaul (v0.1.3.20) ---
+    void editingTheCutSpinBoxesSyncsTheEqualizerCurveWidget();
+    void draggingTheEqualizerCurveWidgetUpdatesConfigEmitsAndSyncsTheGradientBar();
+    void setFilterConfigurationSyncsTheEqualizerCurveWidgetWithoutEmitting();
+    void togglingThePreviewCheckBoxEmitsEqualizerPreviewToggled();
+    void setEqualizerPreviewCheckedSyncsWithoutEmitting();
+
     void freshCombosOfferOnlyNoneUntilSetAvailableMindWavesIsCalled();
     void setAvailableMindWavesPopulatesEveryCombo();
     void changingABindCombosEmitsFilterConfigurationChangedWithTheNewBinding();
