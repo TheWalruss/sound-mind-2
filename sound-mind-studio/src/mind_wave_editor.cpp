@@ -8,11 +8,16 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QVBoxLayout>
 #include <QVariant>
+
+#include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/studio/rotary_dial_widget.h"
+#include "sound_mind/studio/waveform_preview_widget.h"
 
 namespace sound_mind::studio {
 
@@ -67,6 +72,25 @@ constexpr std::array<std::pair<SpatialPattern, const char*>, 4> kSpatialPatterns
     {SpatialPattern::Cellular, "Cellular"},
     {SpatialPattern::DomainWarpedNoise, "Domain-Warped Noise"},
 }};
+
+/// @brief How many samples `updateContinuousPreview()` asks
+/// `reduceMindWaveToSignal()` for - smooth enough for
+/// `WaveformPreviewWidget`'s own `240px`-wide `sizeHint()` without being
+/// wasteful to recompute on every single spin-box/dial edit.
+constexpr std::uint32_t kContinuousPreviewSampleCount = 200;
+
+/// @brief Wraps `dial` and `spinBox` side by side - the same role
+/// `FilterConfigurationPanel`'s/`ToolConfigurationPanel`'s own
+/// `makeBoundFieldRow()` plays for a spin-box-plus-combo pair, duplicated
+/// here rather than shared across translation units (none of the three
+/// expose a header any UI code outside their own translation unit would
+/// reach into).
+QHBoxLayout* makeDialFieldRow(QWidget* dial, QWidget* spinBox) {
+    auto* row = new QHBoxLayout();
+    row->addWidget(dial);
+    row->addWidget(spinBox, 1);
+    return row;
+}
 
 /// @brief A wide-range, general-purpose double spin box - most of this
 /// editor's own fields have no natural bound (a period, a phase, a noise
@@ -355,7 +379,15 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
 
     continuousGroup_ = new QGroupBox(tr("Continuous"), this);
     continuousGroup_->setObjectName(QStringLiteral("continuousGroup"));
-    auto* continuousForm = new QFormLayout(continuousGroup_);
+    auto* continuousLayout = new QVBoxLayout(continuousGroup_);
+
+    // The live shape preview sits above the three dial/spin-box rows - see
+    // updateContinuousPreview()'s own docs for how it's computed.
+    continuousPreviewWidget_ = new WaveformPreviewWidget(continuousGroup_);
+    continuousPreviewWidget_->setObjectName(QStringLiteral("continuousPreviewWidget"));
+    continuousLayout->addWidget(continuousPreviewWidget_);
+
+    auto* continuousForm = new QFormLayout();
 
     continuousShapeSpinBox_ = new QDoubleSpinBox(continuousGroup_);
     continuousShapeSpinBox_->setObjectName(QStringLiteral("continuousShapeSpinBox"));
@@ -363,11 +395,21 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     continuousShapeSpinBox_->setSingleStep(0.05);
     continuousShapeSpinBox_->setDecimals(2);
     continuousShapeSpinBox_->setToolTip(tr("Sweeps from a clean sine cycle (0) toward fractal noise (1)."));
+    continuousShapeDial_ = new RotaryDialWidget(continuousGroup_);
+    continuousShapeDial_->setObjectName(QStringLiteral("continuousShapeDial"));
     connect(continuousShapeSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
         wave_.setContinuousShape(value);
+        const QSignalBlocker blocker(continuousShapeDial_);
+        continuousShapeDial_->setValue(value);
         emitChanged();
     });
-    continuousForm->addRow(tr("Shape:"), continuousShapeSpinBox_);
+    connect(continuousShapeDial_, &RotaryDialWidget::valueChanged, this, [this](double value) {
+        wave_.setContinuousShape(value);
+        const QSignalBlocker blocker(continuousShapeSpinBox_);
+        continuousShapeSpinBox_->setValue(value);
+        emitChanged();
+    });
+    continuousForm->addRow(tr("Shape:"), makeDialFieldRow(continuousShapeDial_, continuousShapeSpinBox_));
 
     continuousSkewSpinBox_ = new QDoubleSpinBox(continuousGroup_);
     continuousSkewSpinBox_->setObjectName(QStringLiteral("continuousSkewSpinBox"));
@@ -375,11 +417,21 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     continuousSkewSpinBox_->setSingleStep(0.05);
     continuousSkewSpinBox_->setDecimals(2);
     continuousSkewSpinBox_->setToolTip(tr("Biases the sine component earlier or later in its cycle - 0.5 is no bias."));
+    continuousSkewDial_ = new RotaryDialWidget(continuousGroup_);
+    continuousSkewDial_->setObjectName(QStringLiteral("continuousSkewDial"));
     connect(continuousSkewSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
         wave_.setContinuousSkew(value);
+        const QSignalBlocker blocker(continuousSkewDial_);
+        continuousSkewDial_->setValue(value);
         emitChanged();
     });
-    continuousForm->addRow(tr("Skew:"), continuousSkewSpinBox_);
+    connect(continuousSkewDial_, &RotaryDialWidget::valueChanged, this, [this](double value) {
+        wave_.setContinuousSkew(value);
+        const QSignalBlocker blocker(continuousSkewSpinBox_);
+        continuousSkewSpinBox_->setValue(value);
+        emitChanged();
+    });
+    continuousForm->addRow(tr("Skew:"), makeDialFieldRow(continuousSkewDial_, continuousSkewSpinBox_));
 
     continuousCharacterSpinBox_ = new QDoubleSpinBox(continuousGroup_);
     continuousCharacterSpinBox_->setObjectName(QStringLiteral("continuousCharacterSpinBox"));
@@ -387,11 +439,23 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     continuousCharacterSpinBox_->setSingleStep(0.05);
     continuousCharacterSpinBox_->setDecimals(2);
     continuousCharacterSpinBox_->setToolTip(tr("Layers fine turbulence on top, independent of Shape."));
+    continuousCharacterDial_ = new RotaryDialWidget(continuousGroup_);
+    continuousCharacterDial_->setObjectName(QStringLiteral("continuousCharacterDial"));
     connect(continuousCharacterSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
         wave_.setContinuousCharacter(value);
+        const QSignalBlocker blocker(continuousCharacterDial_);
+        continuousCharacterDial_->setValue(value);
         emitChanged();
     });
-    continuousForm->addRow(tr("Character:"), continuousCharacterSpinBox_);
+    connect(continuousCharacterDial_, &RotaryDialWidget::valueChanged, this, [this](double value) {
+        wave_.setContinuousCharacter(value);
+        const QSignalBlocker blocker(continuousCharacterSpinBox_);
+        continuousCharacterSpinBox_->setValue(value);
+        emitChanged();
+    });
+    continuousForm->addRow(tr("Character:"), makeDialFieldRow(continuousCharacterDial_, continuousCharacterSpinBox_));
+
+    continuousLayout->addLayout(continuousForm);
 
     root->addWidget(continuousGroup_);
 
@@ -422,16 +486,23 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     {
         const QSignalBlocker shapeBlocker(continuousShapeSpinBox_);
         continuousShapeSpinBox_->setValue(wave_.continuousShape());
+        continuousShapeDial_->setValue(wave_.continuousShape());
         const QSignalBlocker skewBlocker(continuousSkewSpinBox_);
         continuousSkewSpinBox_->setValue(wave_.continuousSkew());
+        continuousSkewDial_->setValue(wave_.continuousSkew());
         const QSignalBlocker characterBlocker(continuousCharacterSpinBox_);
         continuousCharacterSpinBox_->setValue(wave_.continuousCharacter());
+        continuousCharacterDial_->setValue(wave_.continuousCharacter());
     }
 
     updateVisibleGroup();
+    updateContinuousPreview();
 }
 
-void MindWaveEditor::emitChanged() { emit mindWaveChanged(wave_); }
+void MindWaveEditor::emitChanged() {
+    updateContinuousPreview();
+    emit mindWaveChanged(wave_);
+}
 
 void MindWaveEditor::updateVisibleGroup() {
     const GeneratorType type = wave_.type();
@@ -447,6 +518,16 @@ void MindWaveEditor::updateVisibleGroup() {
     drawnGroup_->setVisible(type == GeneratorType::Drawn);
     stepGridGroup_->setVisible(type == GeneratorType::StepGrid);
     continuousGroup_->setVisible(type == GeneratorType::Continuous);
+}
+
+void MindWaveEditor::updateContinuousPreview() {
+    if (wave_.type() != GeneratorType::Continuous) {
+        return;
+    }
+    const sound_mind::codec::StreamCodecConfig config{};
+    const auto samples = sound_mind::core::reduceMindWaveToSignal(
+        wave_, config, kContinuousPreviewSampleCount, wave_.period(), sound_mind::core::ReduceMode::Integrate);
+    continuousPreviewWidget_->setSamples(samples);
 }
 
 void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
@@ -506,8 +587,11 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     fractalRoughnessSpinBox_->setValue(wave_.fractalRoughness());
     fractalIterationsSpinBox_->setValue(wave_.fractalIterations());
     continuousShapeSpinBox_->setValue(wave_.continuousShape());
+    continuousShapeDial_->setValue(wave_.continuousShape());
     continuousSkewSpinBox_->setValue(wave_.continuousSkew());
+    continuousSkewDial_->setValue(wave_.continuousSkew());
     continuousCharacterSpinBox_->setValue(wave_.continuousCharacter());
+    continuousCharacterDial_->setValue(wave_.continuousCharacter());
 
     const int nodeCount = static_cast<int>(wave_.drawnPath().nodes().size());
     drawnStatusLabel_->setText(
@@ -529,6 +613,7 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     }
 
     updateVisibleGroup();
+    updateContinuousPreview();
 }
 
 void MindWaveEditor::rebuildStepGridValueRows(std::size_t count) {

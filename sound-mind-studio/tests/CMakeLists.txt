@@ -47,11 +47,13 @@ add_executable(sound-mind-studio-tests
     test_playback_panel.cpp
     test_record_panel.cpp
     test_recent_projects.cpp
+    test_rotary_dial_widget.cpp
     test_theme.cpp
     test_tone_curve_editor.cpp
     test_tool_configuration_panel.cpp
     test_tool_palette_controller.cpp
     test_undo_stack.cpp
+    test_waveform_preview_widget.cpp
 )
 
 target_link_libraries(sound-mind-studio-tests

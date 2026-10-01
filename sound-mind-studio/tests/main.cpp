@@ -56,6 +56,7 @@
 #include "test_polar_origin_dialog.h"
 #include "test_record_panel.h"
 #include "test_recent_projects.h"
+#include "test_rotary_dial_widget.h"
 #include "test_selection_configuration_panel.h"
 #include "test_selection_controller.h"
 #include "test_theme.h"
@@ -63,6 +64,7 @@
 #include "test_tool_configuration_panel.h"
 #include "test_tool_palette_controller.h"
 #include "test_undo_stack.h"
+#include "test_waveform_preview_widget.h"
 
 int main(int argc, char** argv) {
     // Redirects ini-format QSettings storage (MainWindow's recentProjects_,
@@ -104,6 +106,12 @@ int main(int argc, char** argv) {
 
     RecentProjectsTest recentProjectsTest;
     status |= QTest::qExec(&recentProjectsTest, argc, argv);
+
+    RotaryDialWidgetTest rotaryDialWidgetTest;
+    status |= QTest::qExec(&rotaryDialWidgetTest, argc, argv);
+
+    WaveformPreviewWidgetTest waveformPreviewWidgetTest;
+    status |= QTest::qExec(&waveformPreviewWidgetTest, argc, argv);
 
     ThemeTest themeTest;
     status |= QTest::qExec(&themeTest, argc, argv);

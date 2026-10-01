@@ -16,6 +16,9 @@ class QVBoxLayout;
 
 namespace sound_mind::studio {
 
+class RotaryDialWidget;
+class WaveformPreviewWidget;
+
 /**
  * @brief A plain-widget editor for a single `sound_mind::core::MindWave`'s
  *        own generator type and parameters - `v0.Y.31.1` Installment C2's
@@ -55,8 +58,22 @@ namespace sound_mind::studio {
  * spin box plus one spin box per step (see `rebuildStepGridValueRows()`'s
  * own docs), the confirmed "no rich visual grid editor" scope for this
  * milestone; Installment D adds `GeneratorType::Continuous`'s own group -
- * three plain spin boxes (Shape/Skew/Character), the same "no dials, just
- * fields to type numbers into" bare-bones treatment.
+ * originally three plain spin boxes (Shape/Skew/Character) only.
+ *
+ * **`v0.Y.58.1`'s "MindWave UI/UX uplift" gives Continuous its own real
+ * visual interface**, per `docs/sound-mind-design.md`'s own "Continuous
+ * Controls" ("a classic visual LFO-style interface... the way a modular
+ * synth's shape/slope/smoothness-style function generator does") -
+ * confirmed with the user as *both* of two candidates together, not a
+ * choice between them: a `RotaryDialWidget` knob next to each of the
+ * three spin boxes (the spin boxes themselves stay, unchanged, as the
+ * precise typeable readout - the same "visual complement, not a
+ * replacement" relationship this same milestone's `EqualizerCurveWidget`/
+ * `HarmonicSeriesWidget` already established for their own numeric
+ * siblings), plus a `WaveformPreviewWidget` above all three showing a live
+ * plot of the actual resulting shape - see `updateContinuousPreview()`'s
+ * own docs for how that plot is computed without this class taking on any
+ * `Project`/canvas dependency it didn't already have.
  */
 class MindWaveEditor : public QWidget {
     Q_OBJECT
@@ -124,6 +141,32 @@ private:
     /// @return The step values currently displayed.
     [[nodiscard]] std::vector<double> currentStepGridValues() const;
 
+    /**
+     * @brief Refreshes `continuousPreviewWidget_` from `wave_`'s own
+     *        current state - a no-op while `wave_.type()` isn't
+     *        `GeneratorType::Continuous` (the preview widget is hidden
+     *        along with the rest of `continuousGroup_` then anyway, so
+     *        leaving its last-drawn samples stale is harmless - see
+     *        `updateVisibleGroup()`'s own docs).
+     *
+     * Called from the tail of emitChanged() - covering every one of this
+     * editor's own controls in one place, not just Shape/Skew/Character,
+     * since `GeneratorType::Continuous`'s own formula also reads the
+     * shared Period/Phase/Seed/Noise Scale/Octaves/Persistence fields
+     * every other generator type shows above it (see `MindWave`'s own
+     * `evaluate()` docs) - and once more explicitly at the tail of
+     * setMindWave(), which deliberately never calls emitChanged() itself.
+     *
+     * Builds a self-contained `sound_mind::codec::StreamCodecConfig{}`
+     * (its own defaults, not read from any real project) purely as the
+     * argument `reduceMindWaveToSignal()` requires - this never gives
+     * `MindWaveEditor` a genuine `Project`/canvas dependency, since the
+     * resulting plot is a generic "what does one cycle of this shape look
+     * like," not a canvas-accurate rendering tied to any real project's
+     * own sample rate or frequency range.
+     */
+    void updateContinuousPreview();
+
     sound_mind::core::MindWave wave_;
 
     QComboBox* generatorTypeCombo_ = nullptr;
@@ -180,14 +223,24 @@ private:
     std::vector<QDoubleSpinBox*> stepGridValueSpinBoxes_;
 
     /// @brief `GeneratorType::Continuous`'s own group - `v0.Y.39.1`
-    ///        Installment D. Three plain spin boxes (Shape/Skew/Character),
-    ///        matching this editor's own "no dials or drawing tools, just
-    ///        fields to type numbers into" convention rather than
-    ///        introducing a new slider widget for this one group.
+    ///        Installment D's three spin boxes (Shape/Skew/Character),
+    ///        plus `v0.Y.58.1`'s own `continuousPreviewWidget_`/dial trio -
+    ///        see this class's own docs.
     QGroupBox* continuousGroup_ = nullptr;
     QDoubleSpinBox* continuousShapeSpinBox_ = nullptr;
     QDoubleSpinBox* continuousSkewSpinBox_ = nullptr;
     QDoubleSpinBox* continuousCharacterSpinBox_ = nullptr;
+
+    /// @brief Live plot of `wave_`'s own resulting Continuous shape - see
+    ///        updateContinuousPreview()'s own docs.
+    WaveformPreviewWidget* continuousPreviewWidget_ = nullptr;
+
+    /// @brief One `RotaryDialWidget` per spin box above, each kept in sync
+    ///        with its own paired spin box bidirectionally - see this
+    ///        class's own docs.
+    RotaryDialWidget* continuousShapeDial_ = nullptr;
+    RotaryDialWidget* continuousSkewDial_ = nullptr;
+    RotaryDialWidget* continuousCharacterDial_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

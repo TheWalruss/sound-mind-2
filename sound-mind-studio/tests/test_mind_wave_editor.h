@@ -34,4 +34,8 @@ private slots:
     void switchingToContinuousShowsOnlyItsOwnGroupWithTheDefaultKnobPositions();
     void changingShapeSkewOrCharacterUpdatesAndEmits();
     void loadingAContinuousMindWaveSyncsAllThreeKnobs();
+
+    // MindWave UI/UX uplift - real rotary dials + a live shape preview (v0.Y.58.1).
+    void draggingAContinuousDialUpdatesItsOwnSpinBoxAndEmits();
+    void changingContinuousFieldsUpdatesTheLivePreview();
 };

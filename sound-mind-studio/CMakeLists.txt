@@ -73,6 +73,7 @@ add_library(sound-mind-studio-lib
     src/qt_image_conversion.cpp
     src/record_panel.cpp
     src/recent_projects.cpp
+    src/rotary_dial_widget.cpp
     src/selection_configuration_panel.cpp
     src/selection_controller.cpp
     src/theme.cpp
@@ -80,6 +81,7 @@ add_library(sound-mind-studio-lib
     src/tool_configuration_panel.cpp
     src/tool_palette_controller.cpp
     src/undo_stack.cpp
+    src/waveform_preview_widget.cpp
     include/sound_mind/studio/about_dialog.h
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/canvas_widget.h
@@ -125,6 +127,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/qt_image_conversion.h
     include/sound_mind/studio/record_panel.h
     include/sound_mind/studio/recent_projects.h
+    include/sound_mind/studio/rotary_dial_widget.h
     include/sound_mind/studio/selection_configuration_panel.h
     include/sound_mind/studio/selection_controller.h
     include/sound_mind/studio/theme.h
@@ -132,6 +135,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/tool_configuration_panel.h
     include/sound_mind/studio/tool_palette_controller.h
     include/sound_mind/studio/undo_stack.h
+    include/sound_mind/studio/waveform_preview_widget.h
     assets/app.qrc
 )
 

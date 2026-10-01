@@ -12,6 +12,8 @@
 
 #include "sound_mind/core/path.h"
 #include "sound_mind/studio/mind_wave_editor.h"
+#include "sound_mind/studio/rotary_dial_widget.h"
+#include "sound_mind/studio/waveform_preview_widget.h"
 
 using sound_mind::core::EnvelopeShape;
 using sound_mind::core::GeneratorType;
@@ -24,6 +26,8 @@ using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::SpatialPattern;
 using sound_mind::core::SteppedNoiseShape;
 using sound_mind::studio::MindWaveEditor;
+using sound_mind::studio::RotaryDialWidget;
+using sound_mind::studio::WaveformPreviewWidget;
 
 void MindWaveEditorTest::freshEditorHasTheDefaultMindWave() {
     const MindWaveEditor editor;
@@ -321,6 +325,13 @@ void MindWaveEditorTest::switchingToContinuousShowsOnlyItsOwnGroupWithTheDefault
     QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->value(), 0.0);
     QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousSkewSpinBox"))->value(), 0.5);
     QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousCharacterSpinBox"))->value(), 0.0);
+    // v0.Y.58.1's own MindWave UI/UX uplift - a real RotaryDialWidget next
+    // to each spin box, kept in sync, plus a live WaveformPreviewWidget
+    // above all three - see MindWaveEditor's own docs.
+    QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousShapeDial"))->value(), 0.0);
+    QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousSkewDial"))->value(), 0.5);
+    QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousCharacterDial"))->value(), 0.0);
+    QVERIFY(editor.findChild<WaveformPreviewWidget*>(QStringLiteral("continuousPreviewWidget"))->samples().size() > 0);
 }
 
 void MindWaveEditorTest::changingShapeSkewOrCharacterUpdatesAndEmits() {
@@ -339,6 +350,47 @@ void MindWaveEditorTest::changingShapeSkewOrCharacterUpdatesAndEmits() {
 
     editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousCharacterSpinBox"))->setValue(0.9);
     QCOMPARE(received->continuousCharacter(), 0.9);
+
+    // Each spin-box edit above also keeps its own paired dial in sync.
+    QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousShapeDial"))->value(), 0.7);
+    QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousSkewDial"))->value(), 0.2);
+    QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousCharacterDial"))->value(), 0.9);
+}
+
+void MindWaveEditorTest::draggingAContinuousDialUpdatesItsOwnSpinBoxAndEmits() {
+    MindWaveEditor editor;
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+    combo->setCurrentIndex(combo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::Continuous))));
+    auto* dial = editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousShapeDial"));
+    QVERIFY(dial != nullptr);
+    dial->resize(48, 48);
+    std::optional<MindWave> received;
+    connect(&editor, &MindWaveEditor::mindWaveChanged, [&](const MindWave& wave) { received = wave; });
+
+    // Dragging up by 90px sweeps 0.6 of this dial's own [0, 1] range - see
+    // test_rotary_dial_widget.cpp's own identical `kPixelsPerFullSweep`
+    // (150px per full sweep) for where that number comes from.
+    const QPoint start(24, 24);
+    QTest::mousePress(dial, Qt::LeftButton, Qt::NoModifier, start);
+    QTest::mouseMove(dial, start - QPoint(0, 90));
+    QTest::mouseRelease(dial, Qt::LeftButton, Qt::NoModifier, start - QPoint(0, 90));
+
+    QVERIFY(received.has_value());
+    QVERIFY(qAbs(received->continuousShape() - 0.6) < 0.01);
+    QVERIFY(qAbs(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->value() - 0.6) < 0.01);
+}
+
+void MindWaveEditorTest::changingContinuousFieldsUpdatesTheLivePreview() {
+    MindWaveEditor editor;
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+    combo->setCurrentIndex(combo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::Continuous))));
+    auto* preview = editor.findChild<WaveformPreviewWidget*>(QStringLiteral("continuousPreviewWidget"));
+    QVERIFY(preview != nullptr);
+    const auto flatSamples = preview->samples();
+
+    editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->setValue(1.0);
+
+    QVERIFY(preview->samples() != flatSamples);
 }
 
 void MindWaveEditorTest::loadingAContinuousMindWaveSyncsAllThreeKnobs() {
@@ -355,4 +407,8 @@ void MindWaveEditorTest::loadingAContinuousMindWaveSyncsAllThreeKnobs() {
     QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousSkewSpinBox"))->value(), 0.1);
     QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousCharacterSpinBox"))->value(), 0.8);
     QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("continuousGroup"))->isHidden());
+    QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousShapeDial"))->value(), 0.4);
+    QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousSkewDial"))->value(), 0.1);
+    QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousCharacterDial"))->value(), 0.8);
+    QVERIFY(editor.findChild<WaveformPreviewWidget*>(QStringLiteral("continuousPreviewWidget"))->samples().size() > 0);
 }

@@ -6,6 +6,34 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.22] - 2026-10-01
+
+MindWave UI/UX uplift: real rotary dials and a live shape preview for the
+Continuous generator, closing out `v0.Y.58.1` (UI polish) in full.
+
+### Added
+
+- **A rotary knob dial sits beside each of the Continuous generator's
+  Shape/Skew/Character spin boxes**, in the MindWave editor. Drag a dial
+  up or down to adjust its value by ear; it stays in sync with the spin
+  box next to it in both directions.
+- **A live shape-preview graph** above the three dials plots the actual
+  resulting waveform shape, updating continuously as any of
+  Shape/Skew/Character (or the shared Period/Phase/noise fields above
+  them) change.
+
+### Notes
+
+Investigation beforehand found the roadmap's other claim for this item -
+that nothing exposed MindWave superposition as a user gesture - was
+already stale: a full stack-editing UI has existed in the MindWaves panel
+since `v0.Y.31.1`. Only the Continuous Controls interaction design was
+genuinely still open; corrected in the roadmap.
+
+Full regression: `sound-mind-studio` full suite genuinely passing (15 new
+tests), `sound-mind-core` unaffected and unchanged. Doxygen: 0 warnings.
+See `docs/sound-mind-architecture.md`'s Decision #186.
+
 ## [0.1.3.21] - 2026-10-01
 
 Instrument harmonic-series visual editor + preview thumbnails, closing out

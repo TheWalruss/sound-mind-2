@@ -565,15 +565,17 @@ shape instead of staying fixed.
   **Period** control every other generator type has, one equal-length
   segment per step. There's no visual grid to click on yet - just the
   numbered list of value boxes.
-- **Continuous** offers three plain dials instead of picking a generator
+- **Continuous** offers three controls instead of picking a generator
   type by hand: **Shape** sweeps from a clean sine cycle (`0`) toward
   fractal noise (`1`); **Skew** biases the cycle earlier or later (`0.5`
   is no bias); **Character** layers fine turbulence on top, independent of
-  Shape - it does something even at Shape `0`. This is a best-effort,
-  provisional take on a friendlier way into MindWaves, not a finished
-  design - it may change in a future update. All three dials are saved
-  with your project, so reopening one shows them exactly where you left
-  them.
+  Shape - it does something even at Shape `0`. Each one has both a real
+  turnable dial (drag up/down to adjust by ear) and an exact numeric field
+  beside it - edit either one and the other updates to match. A live
+  preview graph above all three plots the actual resulting shape, updating
+  as you turn any dial or the shared Period/Phase fields above them. All
+  three values are saved with your project, so reopening one shows them
+  exactly where you left them.
 - **Superposition** lets one MindWave combine several others together
   (multiply, add, min, max, or average) - **+ Add Member** starts the
   first one. The rest of Superposition's own controls (**- Remove
@@ -1827,11 +1829,13 @@ what's designed for them:
   has no standalone UI of its own yet - Vibrato/Tremolo above are its only
   current use.
 - **Every generator type the design doc names now exists**, including
-  Drawn, Step Grid, and Continuous (see above) - the MindWaves panel's own
-  editor is still plain numeric fields (or, for Step Grid, a plain list of
-  value boxes; or, for Continuous, three dials) rather than a fully
-  polished interface, and Continuous's own exact formula is an explicitly
-  provisional first attempt, not a finished design.
+  Drawn, Step Grid, and Continuous (see above). Most of the MindWaves
+  panel's own editor is still plain numeric fields (or, for Step Grid, a
+  plain list of value boxes with no visual grid to click on) rather than a
+  fully polished interface - Continuous is the one exception, with real
+  turnable dials and a live shape preview (see above) - and Continuous's
+  own exact formula is still an explicitly provisional first attempt, not
+  a finished design.
 
 The [Path Tool](#path-tool) (see above) only places new paths today; once
 a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,
