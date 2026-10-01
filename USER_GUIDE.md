@@ -848,7 +848,10 @@ panel (off by default) with the brush's own settings:
   removes whichever preset is currently selected (no confirmation - like
   removing a saved MindWave, this never affects anything already painted
   with it). There's no Wizard yet (see "What's Not Here Yet" below) - this
-  is a plain save/load of the panel as it stands.
+  is a plain save/load of the panel as it stands. A saved **Instrument**
+  preset shows a small icon of its own harmonic content next to its name,
+  so you can recognize one at a glance without loading it first; other
+  preset types show no icon.
 - **Tool Type** - **Procedural** (the default), **Instrument**, **Mind
   Shot**, **Mind Grain**, **Heal**, **Soften**, **Smudge**, or
   **Order/Chaos**; picks which set of controls below applies (Tip Shape for
@@ -872,7 +875,10 @@ panel (off by default) with the brush's own settings:
   paints as a single exact-frequency spike rather than a soft geometric
   blob - a stroke's own Falloff/Size still soften and bound it, but only
   along the *time* axis (how the stroke fades in/out as you paint it),
-  not across frequency.
+  not across frequency. Alongside the numeric strength fields sits a
+  **draggable bar chart** of the same series - click or drag any bar to
+  set that harmonic's strength by eye/ear instead of typing a number; the
+  two stay in sync, so editing either one updates the other.
 - **Inharmonicity** (Instrument only) - stretches the harmonic series
   sharp of a pure integer series, the way a real vibrating body's own
   overtones do (a piano string, for instance). `0` (the default) is

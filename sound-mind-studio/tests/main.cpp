@@ -29,6 +29,7 @@
 #include "test_gradient_editor_widget.h"
 #include "test_grid_config.h"
 #include "test_grid_panel.h"
+#include "test_harmonic_series_widget.h"
 #include "test_history_panel.h"
 #include "test_image_scale_picker_dialog.h"
 #include "test_import_export.h"
@@ -175,6 +176,9 @@ int main(int argc, char** argv) {
 
     GridPanelTest gridPanelTest;
     status |= QTest::qExec(&gridPanelTest, argc, argv);
+
+    HarmonicSeriesWidgetTest harmonicSeriesWidgetTest;
+    status |= QTest::qExec(&harmonicSeriesWidgetTest, argc, argv);
 
     HistoryPanelTest historyPanelTest;
     status |= QTest::qExec(&historyPanelTest, argc, argv);

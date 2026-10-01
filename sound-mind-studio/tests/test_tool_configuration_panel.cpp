@@ -9,6 +9,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -23,6 +24,7 @@
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
+#include "sound_mind/studio/harmonic_series_widget.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
 using sound_mind::core::BlendMode;
@@ -51,6 +53,7 @@ using sound_mind::core::ToolConfiguration;
 using sound_mind::core::ToolPresetId;
 using sound_mind::core::ToolType;
 using sound_mind::studio::GradientEditorWidget;
+using sound_mind::studio::HarmonicSeriesWidget;
 using sound_mind::studio::ToolConfigurationPanel;
 
 namespace {
@@ -63,6 +66,27 @@ Clip makeTestClip() {
     clip.rightMagnitudeDb = {-1.0f, -2.0f, -3.0f, -4.0f};
     clip.sharedPhaseRadians = {0.0f, 0.0f, 0.0f, 0.0f};
     return clip;
+}
+
+/// @brief See test_harmonic_series_widget.cpp's own identical `yPosFor()` -
+/// kept as its own local copy, matching test_filter_configuration_panel.cpp's
+/// own `xPosFor()` comment on why. Assumes the widget's own default
+/// `sizeHint()` (`240x100`).
+int harmonicYPosFor(double value) {
+    constexpr double margin = 8.0;
+    constexpr double height = 100.0 - 2 * margin;
+    constexpr double bottom = 100.0 - margin;
+    constexpr double displayMax = 2.0;
+    return static_cast<int>(bottom - (value / displayMax) * height);
+}
+
+/// @brief See test_harmonic_series_widget.cpp's own identical
+/// `xPosForColumn()` - kept as its own local copy, for the same reason.
+int harmonicXPosForColumn(int column, std::size_t count) {
+    constexpr double margin = 8.0;
+    const double width = 240.0 - 2 * margin;
+    const double columnWidth = width / static_cast<double>(count);
+    return static_cast<int>(margin + (static_cast<double>(column) + 0.5) * columnWidth);
 }
 
 }  // namespace
@@ -1388,4 +1412,99 @@ void ToolConfigurationPanelTest::switchingProjectsRefreshesTheToolPresetCombo() 
 
     QCOMPARE(toolPresetCombo->count(), 1);
     QCOMPARE(toolPresetCombo->currentText(), QStringLiteral("From Second Project"));
+}
+
+void ToolConfigurationPanelTest::instrumentPresetsGetAHarmonicThumbnailIconButProceduralPresetsDoNot() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration proceduralConfig;
+    project.addToolPreset("Soft Circle", proceduralConfig);
+    InstrumentConfiguration instrumentConfig;
+    instrumentConfig.setHarmonicStrengths({1.0, 0.5});
+    project.addToolPreset("Warm Pad", instrumentConfig);
+
+    panel.setProject(&project);
+
+    auto* toolPresetCombo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
+    QVERIFY(toolPresetCombo->itemIcon(0).isNull());
+    QVERIFY(!toolPresetCombo->itemIcon(1).isNull());
+}
+
+// --- Instrument harmonic-series visual editor (v0.Y.58.1) ------------------
+
+void ToolConfigurationPanelTest::switchingToolTypeToInstrumentPopulatesTheHarmonicSeriesWidgetWithDefaults() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+
+    auto* harmonicSeriesWidget = panel.findChild<HarmonicSeriesWidget*>(QStringLiteral("harmonicSeriesWidget"));
+    QVERIFY(harmonicSeriesWidget != nullptr);
+    QCOMPARE(harmonicSeriesWidget->harmonicStrengths(), InstrumentConfiguration{}.harmonicStrengths());
+}
+
+void ToolConfigurationPanelTest::draggingTheHarmonicSeriesWidgetUpdatesASpinBoxAndEmits() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    auto* harmonicSeriesWidget = panel.findChild<HarmonicSeriesWidget*>(QStringLiteral("harmonicSeriesWidget"));
+    QVERIFY(harmonicSeriesWidget != nullptr);
+    harmonicSeriesWidget->resize(240, 100);
+    const std::size_t count = harmonicSeriesWidget->harmonicStrengths().size();
+    auto* firstHarmonicSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox1"));
+    QVERIFY(firstHarmonicSpinBox != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    // See test_harmonic_series_widget.cpp's own tests for the widget's own
+    // mouse-handling details in isolation - this test only needs to
+    // confirm the panel reacts correctly to a real click on it.
+    const QPoint pos(harmonicXPosForColumn(0, count), harmonicYPosFor(1.5));
+    QTest::mousePress(harmonicSeriesWidget, Qt::LeftButton, Qt::NoModifier, pos);
+    QTest::mouseRelease(harmonicSeriesWidget, Qt::LeftButton, Qt::NoModifier, pos);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(firstHarmonicSpinBox->value(), 1.5);
+    QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).harmonicStrengths().front(),
+              1.5);
+}
+
+void ToolConfigurationPanelTest::changingAHarmonicStrengthSpinBoxSyncsTheHarmonicSeriesWidget() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    auto* harmonicSeriesWidget = panel.findChild<HarmonicSeriesWidget*>(QStringLiteral("harmonicSeriesWidget"));
+    QVERIFY(harmonicSeriesWidget != nullptr);
+    auto* firstHarmonicSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox1"));
+    QVERIFY(firstHarmonicSpinBox != nullptr);
+
+    firstHarmonicSpinBox->setValue(0.42);
+
+    QCOMPARE(harmonicSeriesWidget->harmonicStrengths().front(), 0.42);
+}
+
+void ToolConfigurationPanelTest::changingHarmonicCountResyncsTheHarmonicSeriesWidget() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    auto* harmonicSeriesWidget = panel.findChild<HarmonicSeriesWidget*>(QStringLiteral("harmonicSeriesWidget"));
+    QVERIFY(harmonicSeriesWidget != nullptr);
+    auto* harmonicCountSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("harmonicCountSpinBox"));
+    const int initialCount = static_cast<int>(harmonicSeriesWidget->harmonicStrengths().size());
+
+    harmonicCountSpinBox->setValue(initialCount + 2);
+
+    QCOMPARE(harmonicSeriesWidget->harmonicStrengths().size(),
+              std::size_t{static_cast<std::size_t>(initialCount) + 2});
+}
+
+void ToolConfigurationPanelTest::loadingAnInstrumentConfigurationSyncsTheHarmonicSeriesWidget() {
+    ToolConfigurationPanel panel;
+    InstrumentConfiguration config;
+    config.setHarmonicStrengths({1.0, 0.7, 0.4});
+
+    panel.setToolConfiguration(config);
+
+    auto* harmonicSeriesWidget = panel.findChild<HarmonicSeriesWidget*>(QStringLiteral("harmonicSeriesWidget"));
+    QVERIFY(harmonicSeriesWidget != nullptr);
+    QCOMPARE(harmonicSeriesWidget->harmonicStrengths(), std::vector<double>({1.0, 0.7, 0.4}));
 }

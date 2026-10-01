@@ -6,6 +6,28 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.3.21] - 2026-10-01
+
+Instrument harmonic-series visual editor + preview thumbnails, closing out
+the second-to-last item in `v0.Y.58.1`.
+
+### Added
+
+- **A draggable harmonic-strength bar chart** sits above the existing
+  per-harmonic numeric fields in the Instrument tool's own configuration
+  panel. Click or drag any bar to set that harmonic's strength directly;
+  it stays in sync with the numeric fields in both directions.
+- **Saved Instrument presets now show a small thumbnail icon** of their
+  own harmonic content next to their name in the Tool Preset dropdown, so
+  one can be recognized at a glance without loading it first. Other
+  preset types are unaffected.
+
+### Notes
+
+Full regression: `sound-mind-studio` full suite genuinely passing (13 new
+tests), `sound-mind-core` unaffected and unchanged. Doxygen: 0 warnings.
+See `docs/sound-mind-architecture.md`'s Decision #185.
+
 ## [0.1.3.20] - 2026-10-01
 
 Equalizer usability overhaul: a real vertical EQ widget and an on-canvas

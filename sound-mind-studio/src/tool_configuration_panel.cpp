@@ -9,12 +9,15 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPixmap>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
+#include <QSize>
 #include <QSpinBox>
 #include <QVariant>
 #include <QVBoxLayout>
@@ -27,6 +30,7 @@
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/stamp_interval_pattern.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
+#include "sound_mind/studio/harmonic_series_widget.h"
 
 namespace sound_mind::studio {
 
@@ -138,6 +142,12 @@ constexpr std::array<std::pair<ToolType, const char*>, 8> kToolTypes{{
 /// unreasonably tall; not a limit `InstrumentConfiguration` itself
 /// enforces (see its own docs).
 constexpr int kMaxHarmonics = 16;
+
+/// @brief `toolPresetCombo_`'s own per-entry Instrument thumbnail icon
+/// size - see `refreshToolPresets()`'s own docs. Wide-but-short, matching
+/// `HarmonicSeriesWidget`'s own wide-but-short `sizeHint()` aspect ratio,
+/// shrunk to a size that reads clearly as a small combo-box icon.
+const QSize kToolPresetThumbnailSize(32, 16);
 
 /// @brief A `None`-plus-library MindWave-binding combo - the same role
 /// `filter_configuration_panel.cpp`'s own `makeMindWaveCombo()` plays,
@@ -329,6 +339,26 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     instrumentLayout->addLayout(instrumentForm);
 
     instrumentLayout->addWidget(new QLabel(tr("Harmonic Strengths (fundamental first):"), instrumentGroup_));
+
+    // Visual complement to the spin boxes below - see HarmonicSeriesWidget's
+    // own docs. Added above the spin boxes, not in place of them: this
+    // widget is for quick, approximate shaping by eye/ear; the spin boxes
+    // remain the precise numeric entry point.
+    harmonicSeriesWidget_ = new HarmonicSeriesWidget(instrumentGroup_);
+    harmonicSeriesWidget_->setObjectName(QStringLiteral("harmonicSeriesWidget"));
+    connect(harmonicSeriesWidget_, &HarmonicSeriesWidget::harmonicStrengthsChanged, this,
+            [this](const std::vector<double>& strengths) {
+                if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
+                    instrument->setHarmonicStrengths(strengths);
+                    for (std::size_t i = 0; i < harmonicStrengthSpinBoxes_.size() && i < strengths.size(); ++i) {
+                        const QSignalBlocker blocker(harmonicStrengthSpinBoxes_[i]);
+                        harmonicStrengthSpinBoxes_[i]->setValue(strengths[i]);
+                    }
+                    emitConfigChanged();
+                }
+            });
+    instrumentLayout->addWidget(harmonicSeriesWidget_);
+
     harmonicStrengthsLayout_ = new QVBoxLayout();
     instrumentLayout->addLayout(harmonicStrengthsLayout_);
 
@@ -574,6 +604,12 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
             const QSignalBlocker blocker(harmonicStrengthSpinBoxes_[i]);
             harmonicStrengthSpinBoxes_[i]->setValue(defaults.harmonicStrengths()[i]);
         }
+        // rebuildHarmonicStrengthRows() above already resynced the bar
+        // chart once, but only to the fresh rows' own placeholder defaults
+        // - this second sync reflects the real InstrumentConfiguration
+        // defaults the loop just applied to the spin boxes (signal-blocked,
+        // so it wouldn't otherwise reach the widget).
+        harmonicSeriesWidget_->setHarmonicStrengths(defaults.harmonicStrengths());
     }
     rebuildMindWaveCombos();
     updateVisibleToolTypeGroup();
@@ -789,14 +825,21 @@ void ToolConfigurationPanel::rebuildHarmonicStrengthRows(std::size_t count) {
         spinBox->setValue(harmonicNumber == 1 ? 1.0 : 0.0);
         spinBox->setPrefix(harmonicNumber == 1 ? tr("Fundamental: ") : tr("Harmonic %1: ").arg(harmonicNumber));
         connect(spinBox, &QDoubleSpinBox::valueChanged, this, [this](double) {
+            const auto strengths = currentHarmonicStrengths();
             if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
-                instrument->setHarmonicStrengths(currentHarmonicStrengths());
+                instrument->setHarmonicStrengths(strengths);
+                // Keeps the bar chart in sync with every edit made through
+                // the spin boxes - setHarmonicStrengths() doesn't itself
+                // emit harmonicStrengthsChanged(), so this can't loop back
+                // - see HarmonicSeriesWidget's own docs.
+                harmonicSeriesWidget_->setHarmonicStrengths(strengths);
                 emitConfigChanged();
             }
         });
         harmonicStrengthsLayout_->addWidget(spinBox);
         harmonicStrengthSpinBoxes_.push_back(spinBox);
     }
+    harmonicSeriesWidget_->setHarmonicStrengths(currentHarmonicStrengths());
 }
 
 std::vector<double> ToolConfigurationPanel::currentHarmonicStrengths() const {
@@ -835,6 +878,11 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
             const QSignalBlocker blocker(harmonicStrengthSpinBoxes_[i]);
             harmonicStrengthSpinBoxes_[i]->setValue(instrument->harmonicStrengths()[i]);
         }
+        // rebuildHarmonicStrengthRows() above already resynced the bar
+        // chart once, but only to the fresh rows' own placeholder defaults
+        // - this second sync reflects the actually-loaded values the loop
+        // just applied to the spin boxes.
+        harmonicSeriesWidget_->setHarmonicStrengths(instrument->harmonicStrengths());
         {
             const QSignalBlocker blocker(inharmonicitySpinBox_);
             inharmonicitySpinBox_->setValue(instrument->inharmonicity());
@@ -1105,8 +1153,14 @@ void ToolConfigurationPanel::refreshToolPresets() {
         toolPresetCombo_->addItem(tr("(none saved yet)"));
         return;
     }
+    toolPresetCombo_->setIconSize(kToolPresetThumbnailSize);
     for (const auto& named : project_->toolPresets()) {
-        toolPresetCombo_->addItem(QString::fromStdString(named.name),
+        QIcon icon;
+        if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(named.config.get())) {
+            icon = QIcon(QPixmap::fromImage(
+                HarmonicSeriesWidget::renderThumbnail(instrument->harmonicStrengths(), kToolPresetThumbnailSize)));
+        }
+        toolPresetCombo_->addItem(icon, QString::fromStdString(named.name),
                                     QVariant::fromValue(static_cast<qulonglong>(named.id)));
     }
     const int index = toolPresetCombo_->findData(previousData);

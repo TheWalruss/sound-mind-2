@@ -30,6 +30,7 @@ class Project;
 namespace sound_mind::studio {
 
 class GradientEditorWidget;
+class HarmonicSeriesWidget;
 
 /**
  * @brief A dockable panel for configuring the current painting tool - see
@@ -72,6 +73,24 @@ class GradientEditorWidget;
  * *shared* controls too. `Clone` still has no real parameters of its own
  * (see `ToolConfiguration`'s own docs) and isn't offered in the selector
  * yet.
+ *
+ * **Instrument's own harmonic series gets a real visual editor too**
+ * (`v0.Y.58.1`'s "Instrument harmonic-series visual editor" item, the
+ * next installment after the Equalizer's own `EqualizerCurveWidget`
+ * closed out the item before it) - `harmonicSeriesWidget_`
+ * (`HarmonicSeriesWidget`) draws `harmonicStrengthSpinBoxes_`'s own
+ * values as a draggable bar chart, bidirectionally synced with those
+ * spin boxes exactly the way `EqualizerCurveWidget`/`GradientEditorWidget`
+ * already sync for the Equalizer's own Cut gradient; dragging a bar sets
+ * that one harmonic's strength directly (no separate "select, then edit
+ * elsewhere" step - a harmonic series is a fixed bank of independent
+ * scalars, not a variable-length stop list, so there's nothing to
+ * select). The same `HarmonicSeriesWidget::renderThumbnail()` that widget
+ * exposes also gives `refreshToolPresets()`'s own `toolPresetCombo_` a
+ * small icon next to every saved `Instrument`-type preset's own name,
+ * showing its harmonic content at a glance - `docs/sound-mind-
+ * roadmap.md`'s own "preview image shown alongside each saved instrument
+ * in its own selection menu."
  *
  * **Needs a live `Project*` for the Mind Shot/Mind Grain pickers**
  * (`setProject()`) - every other control here is purely presentational,
@@ -207,7 +226,11 @@ public:
      *        call it too, after changing the library themselves).
      *
      * Preserves the currently-selected entry, by id, if it still exists;
-     * otherwise leaves nothing selected.
+     * otherwise leaves nothing selected. Each entry whose own saved
+     * `config` is an `InstrumentConfiguration` also gets a small icon
+     * (`HarmonicSeriesWidget::renderThumbnail()`) showing its harmonic
+     * content at a glance - every other preset type shows no icon, the
+     * same way it always has.
      */
     void refreshToolPresets();
 
@@ -474,7 +497,10 @@ private:
     ///        `InstrumentConfiguration` has a different harmonic count
     ///        than the panel currently shows. Preserves each already-
     ///        displayed row's own current value where a row at that index
-    ///        already existed; a newly-added row starts at `1.0`.
+    ///        already existed; a newly-added row starts at `1.0`. Also
+    ///        resyncs `harmonicSeriesWidget_`'s own bar count to match,
+    ///        via the same non-emitting `setHarmonicStrengths()` every
+    ///        other sync in this class uses.
     /// @param count The new number of harmonic strength rows to show.
     void rebuildHarmonicStrengthRows(std::size_t count);
 
@@ -530,6 +556,14 @@ private:
     QSpinBox* harmonicCountSpinBox_ = nullptr;
     QVBoxLayout* harmonicStrengthsLayout_ = nullptr;
     std::vector<QDoubleSpinBox*> harmonicStrengthSpinBoxes_;
+    /// @brief The draggable bar-chart visual complement to
+    ///        `harmonicStrengthSpinBoxes_` above - see
+    ///        `HarmonicSeriesWidget`'s own docs. Kept in sync with the
+    ///        spin boxes bidirectionally, the same
+    ///        `EqualizerCurveWidget`/`GradientEditorWidget` pattern
+    ///        `FilterConfigurationPanel`'s own Equalizer section already
+    ///        established.
+    HarmonicSeriesWidget* harmonicSeriesWidget_ = nullptr;
     QDoubleSpinBox* inharmonicitySpinBox_ = nullptr;
 
     /// @brief Vibrato/tremolo binding controls - `v0.Y.39.1` Installment A.

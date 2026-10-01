@@ -18,6 +18,7 @@ add_executable(sound-mind-studio-tests
     test_gradient_editor_widget.cpp
     test_grid_config.cpp
     test_grid_panel.cpp
+    test_harmonic_series_widget.cpp
     test_history_panel.cpp
     test_image_scale_picker_dialog.cpp
     test_polar_origin_dialog.cpp

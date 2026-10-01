@@ -118,4 +118,12 @@ private slots:
     void deleteCurrentToolPresetRemovesTheSelectedEntryAndRefreshes();
     void refreshToolPresetsPreservesTheCurrentSelection();
     void switchingProjectsRefreshesTheToolPresetCombo();
+    void instrumentPresetsGetAHarmonicThumbnailIconButProceduralPresetsDoNot();
+
+    // Instrument harmonic-series visual editor (v0.Y.58.1).
+    void switchingToolTypeToInstrumentPopulatesTheHarmonicSeriesWidgetWithDefaults();
+    void draggingTheHarmonicSeriesWidgetUpdatesASpinBoxAndEmits();
+    void changingAHarmonicStrengthSpinBoxSyncsTheHarmonicSeriesWidget();
+    void changingHarmonicCountResyncsTheHarmonicSeriesWidget();
+    void loadingAnInstrumentConfigurationSyncsTheHarmonicSeriesWidget();
 };
