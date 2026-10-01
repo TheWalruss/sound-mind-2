@@ -6,6 +6,28 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.4.2] - 2026-10-01
+
+Resonant Instruments, Installment B: a Project-level library for computed
+spectra. `sound-mind-core` only - no user-visible change in this build yet.
+
+### Added
+
+- Internal-only: a new `NamedResonantProfile` Project library (add/
+  remove/find by id, JSON round-trip, backward-compatible with projects
+  saved before this existed) for storing a computed Wave Kernel Signature
+  spectrum (Installment A) permanently, by name - the same shape the
+  existing Mind Shot/Mind Grain/MindWave libraries already have. Not yet
+  reachable from the app - still no brush tip, MindWave type, or UI to
+  create an entry in the first place.
+
+### Notes
+
+Full regression: `sound-mind-core` 211600 assertions (1014 cases)
+passing (9 new), `sound-mind-studio` full suite genuinely passing,
+unaffected. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s
+Decision #188.
+
 ## [0.1.4.1] - 2026-10-01
 
 Resonant Instruments, Installment A: the Laplace-Beltrami/Wave Kernel

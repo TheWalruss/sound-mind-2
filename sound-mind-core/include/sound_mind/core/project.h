@@ -15,6 +15,7 @@
 #include "sound_mind/core/midi_program_mapping.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/core/resonant_profile.h"
 #include "sound_mind/core/tool_preset.h"
 
 namespace sound_mind::core {
@@ -491,6 +492,71 @@ public:
     [[nodiscard]] NamedMindGrain* mindGrainById(MindGrainId id) noexcept;
 
     /**
+     * @brief This project's Resonant Instrument profile library -
+     *        `v0.Y.59.1` Installment B's own permanent, named store of
+     *        computed Wave Kernel Signature spectra (see
+     *        `NamedResonantProfile`'s own docs), the same "peer resource
+     *        library" shape `mindShots()`/`mindGrains()`/`mindWaves()`
+     *        already establish.
+     * @return This project's current Resonant Instrument profile library.
+     */
+    [[nodiscard]] const std::vector<NamedResonantProfile>& resonantProfiles() const noexcept {
+        return resonantProfiles_;
+    }
+
+    /// @brief This project's Resonant Instrument profile library - mutable
+    ///        access, for in-place edits (renaming) that don't change the
+    ///        library's own membership (addResonantProfile() is still how
+    ///        a new entry gets appended).
+    /// @return This project's current Resonant Instrument profile library.
+    [[nodiscard]] std::vector<NamedResonantProfile>& resonantProfiles() noexcept { return resonantProfiles_; }
+
+    /**
+     * @brief Adds a new, named Resonant Instrument profile to this
+     *        project's library.
+     * @param name Display name - see `NamedResonantProfile::name`'s own
+     *        docs on uniqueness being this project's own responsibility,
+     *        not enforced here.
+     * @param spectrum The already-computed spectrum itself (see
+     *        `computeWaveKernelSignature()`, `resonant_instrument.h`).
+     * @return The id assigned to the new entry - see `addLayer()`'s own
+     *         docs for the identical "fresh, project-unique id" pattern.
+     */
+    ResonantProfileId addResonantProfile(std::string name, std::vector<float> spectrum);
+
+    /**
+     * @brief Removes the Resonant Instrument profile with the given id, if
+     *        one exists.
+     *
+     * Does **not** clear any `ResonantInstrumentConfiguration` (or MindWave
+     * binding) that still embeds this entry's own `spectrum` - the same
+     * "a loaded copy is unaffected by its own source library entry being
+     * removed later" reasoning `removeMindShot()`'s own docs already give.
+     *
+     * @param id The Resonant Instrument profile to remove.
+     * @return `true` if an entry with this id was found and removed;
+     *         `false` (no change) if none was.
+     */
+    bool removeResonantProfile(ResonantProfileId id);
+
+    /**
+     * @brief Finds the Resonant Instrument profile library entry with the
+     *        given id, if one exists - the same "small, project-level
+     *        lookup" `layerById()`/`mindShotById()` already provide.
+     * @param id The entry to find.
+     * @return A pointer to that entry, or `nullptr` if no entry with this
+     *         id exists in this project's library.
+     */
+    [[nodiscard]] const NamedResonantProfile* resonantProfileById(ResonantProfileId id) const noexcept;
+
+    /// @brief Mutable overload of resonantProfileById() - for in-place
+    ///        edits (renaming).
+    /// @param id The entry to find.
+    /// @return A mutable pointer to that entry, or `nullptr` if no entry
+    ///         with this id exists in this project's library.
+    [[nodiscard]] NamedResonantProfile* resonantProfileById(ResonantProfileId id) noexcept;
+
+    /**
      * @brief This project's convolution kernel library - `v0.Y.36.1`
      *        (Deferred Filters) Installment B's own permanent, named store
      *        of saved kernels (see `NamedConvolutionKernel`'s own docs),
@@ -675,6 +741,7 @@ private:
     std::vector<NamedMindWave> mindWaves_;
     std::vector<NamedMindShot> mindShots_;
     std::vector<NamedMindGrain> mindGrains_;
+    std::vector<NamedResonantProfile> resonantProfiles_;
     std::vector<NamedConvolutionKernel> convolutionKernels_;
     std::vector<NamedToolPreset> toolPresets_;
     std::vector<MidiProgramMapping> midiProgramMappings_;

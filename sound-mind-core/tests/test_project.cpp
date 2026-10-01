@@ -31,6 +31,7 @@ using sound_mind::core::MidiProgramMapping;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
+using sound_mind::core::ResonantProfileId;
 using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ToolPresetId;
 
@@ -822,6 +823,100 @@ TEST_CASE("A Project saved before Mind Grains existed loads with an empty Mind G
     const Project restored = json.get<Project>();
 
     REQUIRE(restored.mindGrains().empty());
+}
+
+TEST_CASE("A new Project has no Resonant Instrument profiles", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.resonantProfiles().empty());
+}
+
+TEST_CASE("addResonantProfile appends a named profile with a fresh, unique id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+
+    const ResonantProfileId firstId = project.addResonantProfile("Wire Loop", {0.1f, 0.5f, 1.0f});
+    const ResonantProfileId secondId = project.addResonantProfile("Zigzag", {0.2f, 0.8f});
+
+    REQUIRE(firstId != secondId);
+    REQUIRE(project.resonantProfiles().size() == 2);
+    REQUIRE(project.resonantProfiles()[0].id == firstId);
+    REQUIRE(project.resonantProfiles()[0].name == "Wire Loop");
+    REQUIRE(project.resonantProfiles()[0].spectrum == std::vector<float>{0.1f, 0.5f, 1.0f});
+    REQUIRE(project.resonantProfiles()[1].id == secondId);
+    REQUIRE(project.resonantProfiles()[1].name == "Zigzag");
+}
+
+TEST_CASE("resonantProfileById finds the entry with a matching id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const ResonantProfileId id = project.addResonantProfile("Wire Loop", {0.1f, 0.5f, 1.0f});
+
+    const auto* found = project.resonantProfileById(id);
+
+    REQUIRE(found != nullptr);
+    REQUIRE(found->name == "Wire Loop");
+    REQUIRE(found->spectrum == std::vector<float>{0.1f, 0.5f, 1.0f});
+}
+
+TEST_CASE("resonantProfileById returns nullptr for an unknown id", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.resonantProfileById(ResonantProfileId{999}) == nullptr);
+}
+
+TEST_CASE("resonantProfileById's mutable overload allows in-place edits", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const ResonantProfileId id = project.addResonantProfile("Wire Loop", {0.1f, 0.5f, 1.0f});
+
+    auto* found = project.resonantProfileById(id);
+    REQUIRE(found != nullptr);
+    found->name = "Renamed";
+
+    REQUIRE(project.resonantProfileById(id)->name == "Renamed");
+}
+
+TEST_CASE("removeResonantProfile removes the entry with the given id and returns true", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const ResonantProfileId id = project.addResonantProfile("Wire Loop", {0.1f, 0.5f, 1.0f});
+
+    const bool removed = project.removeResonantProfile(id);
+
+    REQUIRE(removed);
+    REQUIRE(project.resonantProfiles().empty());
+}
+
+TEST_CASE("removeResonantProfile returns false and changes nothing for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    project.addResonantProfile("Wire Loop", {0.1f, 0.5f, 1.0f});
+
+    const bool removed = project.removeResonantProfile(ResonantProfileId{999999});
+
+    REQUIRE_FALSE(removed);
+    REQUIRE(project.resonantProfiles().size() == 1);
+}
+
+TEST_CASE("A Project's Resonant Instrument profile library round-trips through JSON", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    const ResonantProfileId id = original.addResonantProfile("Wire Loop", {0.1f, 0.5f, 1.0f});
+
+    const nlohmann::json json = original;
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.resonantProfiles().size() == 1);
+    REQUIRE(restored.resonantProfiles()[0].id == id);
+    REQUIRE(restored.resonantProfiles()[0].name == "Wire Loop");
+    REQUIRE(restored.resonantProfiles()[0].spectrum == std::vector<float>{0.1f, 0.5f, 1.0f});
+}
+
+TEST_CASE("A Project saved before Resonant Instrument profiles existed loads with an empty library",
+          "[core][project]") {
+    // Lenient deserialization, matching Mind Shots'/Mind Grains' own
+    // precedent - a project file saved before v0.Y.59.1 Installment B has
+    // no "resonantProfiles" key at all.
+    Project original = Project::createNew(ProjectSettings{});
+    nlohmann::json json = original;
+    json.erase("resonantProfiles");
+
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.resonantProfiles().empty());
 }
 
 TEST_CASE("A Project loads from JSON missing mindWaves (a project saved before v0.Y.31.1 "

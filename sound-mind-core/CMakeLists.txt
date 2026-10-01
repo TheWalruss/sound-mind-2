@@ -63,6 +63,7 @@ add_library(sound-mind-core
     src/loudness_analysis.cpp
     src/stamp_interval_pattern.cpp
     src/resonant_instrument.cpp
+    src/resonant_profile.cpp
 )
 
 target_include_directories(sound-mind-core

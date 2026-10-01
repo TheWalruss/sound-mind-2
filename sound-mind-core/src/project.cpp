@@ -71,6 +71,7 @@ Project::Project(const Project& other)
       mindWaves_(other.mindWaves_),
       mindShots_(other.mindShots_),
       mindGrains_(other.mindGrains_),
+      resonantProfiles_(other.resonantProfiles_),
       convolutionKernels_(other.convolutionKernels_),
       toolPresets_(other.toolPresets_),
       midiProgramMappings_(other.midiProgramMappings_) {
@@ -85,6 +86,7 @@ Project& Project::operator=(const Project& other) {
         mindWaves_ = other.mindWaves_;
         mindShots_ = other.mindShots_;
         mindGrains_ = other.mindGrains_;
+        resonantProfiles_ = other.resonantProfiles_;
         convolutionKernels_ = other.convolutionKernels_;
         toolPresets_ = other.toolPresets_;
         midiProgramMappings_ = other.midiProgramMappings_;
@@ -306,6 +308,43 @@ NamedMindGrain* Project::mindGrainById(MindGrainId id) noexcept {
     return nullptr;
 }
 
+ResonantProfileId Project::addResonantProfile(std::string name, std::vector<float> spectrum) {
+    const auto maxId = std::max_element(
+        resonantProfiles_.begin(), resonantProfiles_.end(),
+        [](const NamedResonantProfile& a, const NamedResonantProfile& b) { return a.id < b.id; });
+    const ResonantProfileId newId = (maxId == resonantProfiles_.end() ? ResonantProfileId{0} : maxId->id) + 1;
+    resonantProfiles_.push_back(NamedResonantProfile{newId, std::move(name), std::move(spectrum)});
+    return newId;
+}
+
+bool Project::removeResonantProfile(ResonantProfileId id) {
+    const auto it = std::find_if(resonantProfiles_.begin(), resonantProfiles_.end(),
+                                   [id](const NamedResonantProfile& named) { return named.id == id; });
+    if (it == resonantProfiles_.end()) {
+        return false;
+    }
+    resonantProfiles_.erase(it);
+    return true;
+}
+
+const NamedResonantProfile* Project::resonantProfileById(ResonantProfileId id) const noexcept {
+    for (const NamedResonantProfile& named : resonantProfiles_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
+NamedResonantProfile* Project::resonantProfileById(ResonantProfileId id) noexcept {
+    for (NamedResonantProfile& named : resonantProfiles_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
 ConvolutionKernelId Project::addConvolutionKernel(std::string name, int size, std::vector<float> coefficients,
                                                    bool normalize) {
     const auto maxId = std::max_element(
@@ -462,6 +501,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"mindWaves", project.mindWaves_},
         {"mindShots", project.mindShots_},
         {"mindGrains", project.mindGrains_},
+        {"resonantProfiles", project.resonantProfiles_},
         {"convolutionKernels", project.convolutionKernels_},
         {"toolPresets", project.toolPresets_},
         {"midiProgramMappings", project.midiProgramMappings_},
@@ -502,6 +542,16 @@ void from_json(const nlohmann::json& json, Project& project) {
     if (json.contains("mindGrains")) {
         for (const auto& namedJson : json.at("mindGrains")) {
             project.mindGrains_.push_back(namedJson.get<NamedMindGrain>());
+        }
+    }
+
+    // Lenient, same reasoning - didn't exist before v0.Y.59.1 Installment
+    // B; a project saved before it had no Resonant Instrument profiles to
+    // lose.
+    project.resonantProfiles_.clear();
+    if (json.contains("resonantProfiles")) {
+        for (const auto& namedJson : json.at("resonantProfiles")) {
+            project.resonantProfiles_.push_back(namedJson.get<NamedResonantProfile>());
         }
     }
 
