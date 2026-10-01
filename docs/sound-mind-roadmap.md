@@ -962,15 +962,29 @@ A pass over controls that shipped functional but plain, once the rest of the des
 
 **Moved ahead of Performance Validation & Hardening, 2026-09-27** - previously `v0.Y.59.1`, second in the phase. Rationale: polish the surfaces a real tester will actually touch before spending the (real-hardware-dependent) effort validating performance against them, so performance work measures the UI beta testers will actually see, not an interim version of it.
 
-### v0.Y.59.1 - Performance Validation & Hardening
+### v0.Y.59.1 - Resonant Instruments
 
-By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. **Narrower than this entry's own original scope, now that `v0.Y.30.1` moved GPU compute enablement ahead of Phase 4**: the DX12 compute path itself already exists by this point, built and validated on this laptop's own Adreno GPU - what's left here is validating it (and the ~100 ms / ~250 ms latency targets generally) for real, on actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding), extending GPU acceleration to whichever operations `v0.Y.30.1` didn't already cover if profiling still shows a need, and hardening what's there rather than building it fresh. Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
+Another method to generate brushes/sounds: Wave Kernel Signatures.
+
+1. Extend the Curve structure to support branching, so the user can draw curves, trees, and graphs.
+2. With a Curve selected, the user selects the option to create a "Resonant Instrument".
+3. Calculate the Laplace-Beltrami operator (LBO) for the selected curve.
+4. Integrate Wave Kernel Signature over the whole shape and store the resulting global geometrical spectrum (the "WKS curve").
+5. The user can now use the spectrum profile as a brush tip, a new type that is very similar to existing types. The brush tip shall have a scalar parameter that sets the fall-off rate, so the user can decide whether their resonant instrument has a long sustain or if it short.
+6. Also make the WKS curve available as a MindWave.
+
+Another idea (deferred until a later roadmap point) is to use WKS as a virtual instrument by letting the user place a marker (pickup or stroke) on the drawn curve at point x, and calculate WKS(x, e) for just that point. Moving the point smoothly shifts the resulting sound (higher tones in areas with small details, deep tones in coarser areas), giving an organic and dynamic sound sweep as the user moves the pickup. Perhaps it is also tractable to calculate the WKS when the pickup is off the actual curve, letting it behave like a virtual theremin by integrating WKS over all parts of the shape but in proportion to the distance to the marker.
+
+
+### v0.Y.60.1 - Performance Validation & Hardening
+
+By now Phase 2's I/O pipeline has been re-checked at the end of every phase; this milestone is the capstone, not the first look. **Narrower than this  entry's own original scope, now that `v0.Y.30.1` moved GPU compute enablement ahead of Phase 4**: the DX12 compute path itself already exists by this point, built and validated on this laptop's own Adreno GPU - what's left here is validating it (and the ~100 ms / ~250 ms latency targets generally) for real, on actual desktop Nvidia/AMD hardware (the Adreno-isn't-representative caveat from `tech-stack-decisions.md` finally gets addressed properly - needs real desktop GPU access, which is a dependency outside pure coding), extending GPU acceleration to whichever operations `v0.Y.30.1` didn't already cover if profiling still shows a need, and hardening what's there rather than building it fresh. Tablet and MIDI-controller input, if not already picked up incidentally. A full pass reconciling Doxygen output, `sound-mind-architecture.md`, and the test suite against each other end to end, per `CLAUDE.md`'s documentation policy.
 
 **Demo:** the full design-doc feature set, exercised together, meeting the latency targets on real desktop GPU hardware.
 
 **Moved after UI polish, 2026-09-27** - previously `v0.Y.58.1`, first in the phase; see that milestone's own note for why. **Methodology to be elaborated when this milestone is actually reached** - flagged here rather than detailed now, since specific validation ideas for it haven't been written down yet.
 
-### Beta Readiness Loop (`v0.Y.60.1` onward) - open-ended, until beta-ready
+### Beta Readiness Loop (`v0.Y.61.1` onward) - open-ended, until beta-ready
 
 **Replaces the single, fixed "Refactor & Clean Up" milestone this phase previously closed with** (re-sequenced 2026-09-27, per direct instruction). This close to shipping, cleanup, performance, and UI work all feed each other too directly to sequence as one pass each: a refactor can surface a performance win invisible before the decomposition; a performance fix can change what a control needs to expose or explain; a UI-refinement pass can turn up rough edges only real interactive use reveals. So this isn't one milestone - it's a repeating cycle of refactoring, performance optimization, and UI refinement, each iteration's own focus decided by what the previous iteration actually found, continuing for as many `Z` installments as it takes (`v0.Y.60.1`, `v0.Y.61.1`, ...) until the product is genuinely judged ready for beta testing - not a fixed, pre-planned count. This generalizes Sequencing principle #6's "insert a checkpoint once it's concretely useful, not planned in advance" reasoning from UI alone to all three categories at once, this close to a real release.
 
