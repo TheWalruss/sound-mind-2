@@ -48,6 +48,7 @@ add_executable(sound-mind-core-tests
     test_generator.cpp
     test_loudness_analysis.cpp
     test_stamp_interval_pattern.cpp
+    test_resonant_instrument.cpp
 )
 
 target_link_libraries(sound-mind-core-tests

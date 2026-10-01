@@ -5,6 +5,7 @@
 # JUCE's audio device I/O - not the full data model yet.
 
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(Eigen3 CONFIG REQUIRED)
 
 # JUCE tier: the free Starter license, as of v0.0.4.1 - see
 # docs/sound-mind-architecture.md's Decisions Made for the reasoning and
@@ -61,6 +62,7 @@ add_library(sound-mind-core
     src/generator.cpp
     src/loudness_analysis.cpp
     src/stamp_interval_pattern.cpp
+    src/resonant_instrument.cpp
 )
 
 target_include_directories(sound-mind-core
@@ -87,6 +89,15 @@ target_link_libraries(sound-mind-core
         # against it - matches sound-mind-gpu's own stated goal of
         # isolating the DirectX 12 specifics from everything above it.
         sound-mind-gpu
+        # Eigen3, PRIVATE: resonant_instrument.cpp's own generalized
+        # eigensolver is the only thing in sound-mind-core that needs it -
+        # resonant_instrument.h exposes no Eigen type of its own (plain
+        # std::vector<float>/CurveGraph only), so nothing downstream needs
+        # to know about it either, the same encapsulation sound-mind-gpu
+        # above already establishes. See docs/tech-stack-decisions.md for
+        # why Eigen specifically (a battle-tested sparse/dense generalized
+        # eigensolver, not a hand-rolled one).
+        Eigen3::Eigen
 )
 
 target_compile_features(sound-mind-core PUBLIC cxx_std_23)

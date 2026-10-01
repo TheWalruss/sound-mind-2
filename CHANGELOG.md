@@ -6,6 +6,30 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.4.1] - 2026-10-01
+
+Resonant Instruments, Installment A: the Laplace-Beltrami/Wave Kernel
+Signature math core, opening the next roadmap milestone after UI polish.
+`sound-mind-core` only - no user-visible change in this build yet.
+
+### Added
+
+- Internal-only: a new `CurveGraph`/`CurveNode` structure (a branching-
+  capable graph, separate from `Path`), `curveGraphFromPath()` (resamples
+  any existing Path into one), and `computeWaveKernelSignature()` (the
+  actual spectral math) in `sound-mind-core`. Not yet reachable from the
+  app - no brush tip, MindWave type, or UI exists for this yet.
+
+### Notes
+
+New dependency: Eigen (linear algebra), for the generalized eigensolver
+this computation needs. See `docs/tech-stack-decisions.md`.
+
+Full regression: `sound-mind-core` 211577 assertions (1005 cases)
+passing (13 new), `sound-mind-studio` full suite genuinely passing,
+unaffected. Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s
+Decision #187.
+
 ## [0.1.3.22] - 2026-10-01
 
 MindWave UI/UX uplift: real rotary dials and a live shape preview for the

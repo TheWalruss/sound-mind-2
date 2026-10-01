@@ -965,9 +965,9 @@ A pass over controls that shipped functional but plain, once the rest of the des
 
 ### v0.Y.59.1 - Resonant Instruments
 
-Another method to generate brushes/sounds: Wave Kernel Signatures.
+Another method to generate brushes/sounds: Wave Kernel Signatures. **Status as of 2026-10-01: Installment A done, four installments remain (tracked below).**
 
-1. Extend the Curve structure to support branching, so the user can draw curves, trees, and graphs.
+1. ~~Extend the Curve structure to support branching, so the user can draw curves, trees, and graphs.~~ **Scoped down, confirmed with the user**: a new, separate `CurveGraph` structure (not a generalized `Path`) so every existing `Path` consumer stays untouched; a plain `Path` can already feed it via `curveGraphFromPath()` (Installment A), so the branching *drawing tool* itself - letting someone build a real tree/graph by hand, as opposed to just resampling an existing linear stroke - is its own, later installment, not a prerequisite for the rest of this list.
 2. With a Curve selected, the user selects the option to create a "Resonant Instrument".
 3. Calculate the Laplace-Beltrami operator (LBO) for the selected curve.
 4. Integrate Wave Kernel Signature over the whole shape and store the resulting global geometrical spectrum (the "WKS curve").
@@ -975,6 +975,9 @@ Another method to generate brushes/sounds: Wave Kernel Signatures.
 6. Also make the WKS curve available as a MindWave.
 
 Another idea (deferred until a later roadmap point) is to use WKS as a virtual instrument by letting the user place a marker (pickup or stroke) on the drawn curve at point x, and calculate WKS(x, e) for just that point. Moving the point smoothly shifts the resulting sound (higher tones in areas with small details, deep tones in coarser areas), giving an organic and dynamic sound sweep as the user moves the pickup. Perhaps it is also tractable to calculate the WKS when the pickup is off the actual curve, letting it behave like a virtual theremin by integrating WKS over all parts of the shape but in proportion to the distance to the marker.
+
+- ✅ **Installment A: Curve graph + Laplace-Beltrami + Wave Kernel Signature core math.** Fixed in `v0.1.4.1`, see `docs/sound-mind-architecture.md`'s Decision #187. `sound-mind-core`-only, no Studio UI yet (matching `v0.Y.31.1` MindWaves v1 Installment A's own "Core-only, no UI, no binding" precedent) - a new `CurveGraph`/`CurveNode` structure (item 1 above, scoped down as described there), `curveGraphFromPath()` to resample any existing `Path` into one, and `computeWaveKernelSignature()` (items 3-4) computing the discrete Laplace-Beltrami operator and the aggregated whole-shape WKS spectrum via a new Eigen dependency (`docs/tech-stack-decisions.md`).
+- **Still ahead**: the branching curve editor (the deferred half of item 1), the actual "select a Curve, create a Resonant Instrument" Studio workflow and a `NamedResonantProfile` Project-level library (item 2, confirmed as a shared resource both the brush tip and the MindWave generator reference by id), the `ResonantInstrumentConfiguration` brush tip (item 5), and the new MindWave generator type (item 6). The virtual-theremin pickup idea stays deferred, per its own paragraph above.
 
 
 ### v0.Y.60.1 - Performance Validation & Hardening
