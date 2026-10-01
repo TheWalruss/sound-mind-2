@@ -104,6 +104,13 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config) {
         json["vibratoDepthSemitones"] = instrument->vibratoDepthSemitones();
         writeOptionalMindWaveId(json, "tremoloMindWaveId", instrument->tremoloMindWave());
         json["tremoloDepth"] = instrument->tremoloDepth();
+    } else if (const auto* resonant = dynamic_cast<const ResonantInstrumentConfiguration*>(&config)) {
+        writeCommonToolConfigurationFields(json, config);
+        if (const auto sourceId = resonant->sourceResonantProfileId(); sourceId.has_value()) {
+            json["sourceResonantProfileId"] = *sourceId;
+        }
+        json["spectrum"] = resonant->spectrum();
+        json["fallOffRate"] = resonant->fallOffRate();
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(&config)) {
         writeCommonToolConfigurationFields(json, config);
         if (const auto sourceId = mindShot->sourceMindShotId(); sourceId.has_value()) {
@@ -168,6 +175,17 @@ std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::jso
         instrument->setTremoloMindWave(readOptionalMindWaveId(json, "tremoloMindWaveId"));
         instrument->setTremoloDepth(json.value("tremoloDepth", 0.3));
         config = std::move(instrument);
+    } else if (type == ToolType::ResonantInstrument) {
+        auto resonant = std::make_unique<ResonantInstrumentConfiguration>();
+        // "sourceResonantProfileId" is UI-only metadata, same as MindShot's
+        // own "sourceMindShotId".
+        const std::optional<ResonantProfileId> sourceId =
+            json.contains("sourceResonantProfileId")
+                ? std::optional(json.at("sourceResonantProfileId").get<ResonantProfileId>())
+                : std::nullopt;
+        resonant->setSpectrum(sourceId, json.at("spectrum").get<std::vector<float>>());
+        resonant->setFallOffRate(json.at("fallOffRate").get<double>());
+        config = std::move(resonant);
     } else if (type == ToolType::MindShot) {
         auto mindShot = std::make_unique<MindShotConfiguration>();
         // "sourceMindShotId" is UI-only metadata (see its own docs) -

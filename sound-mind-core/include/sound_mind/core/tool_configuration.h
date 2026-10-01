@@ -12,6 +12,7 @@
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
+#include "sound_mind/core/resonant_profile.h"
 
 namespace sound_mind::core {
 
@@ -30,17 +31,19 @@ using MindWaveId = std::uint64_t;
  *        see `docs/sound-mind-design.md`'s "Tool Configuration".
  *
  * @note Only `Procedural`, (as of `v0.Y.32.1`, Sound Mind Instruments)
- *       `Instrument`, (as of `v0.Y.33.1`) `MindShot`/`MindGrain`, and (as of
+ *       `Instrument`, (as of `v0.Y.33.1`) `MindShot`/`MindGrain`, (as of
  *       `v0.Y.34.1`) `Heal`/`Soften` (Installment A)/`Smudge`/`OrderChaos`
- *       (Installment B) exist as real, paintable tools so far - `Clone`
- *       remains this milestone's own final, not-yet-started installment.
- *       Adding a value here ahead of its own tool actually working is
- *       deliberate groundwork for the Tool Configuration Panel/Wizard's
- *       dynamic-per-type UI, not a claim that tool is usable.
+ *       (Installment B), and (as of `v0.Y.59.1` Installment D) `ResonantInstrument`
+ *       exist as real, paintable tools so far - `Clone` remains this
+ *       milestone's own final, not-yet-started installment. Adding a value
+ *       here ahead of its own tool actually working is deliberate
+ *       groundwork for the Tool Configuration Panel/Wizard's dynamic-per-
+ *       type UI, not a claim that tool is usable.
  */
 enum class ToolType {
     Procedural,
     Instrument,
+    ResonantInstrument,
     MindShot,
     MindGrain,
     Smudge,
@@ -54,6 +57,7 @@ enum class ToolType {
 NLOHMANN_JSON_SERIALIZE_ENUM(ToolType, {
     {ToolType::Procedural, "procedural"},
     {ToolType::Instrument, "instrument"},
+    {ToolType::ResonantInstrument, "resonantInstrument"},
     {ToolType::MindShot, "mindShot"},
     {ToolType::MindGrain, "mindGrain"},
     {ToolType::Smudge, "smudge"},
@@ -757,6 +761,124 @@ private:
     double vibratoDepthSemitones_ = 0.5;
     std::optional<MindWaveId> tremoloMindWave_;
     double tremoloDepth_ = 0.3;
+};
+
+/**
+ * @brief A Resonant Instrument brush - `v0.Y.59.1` Installment D, per
+ *        `docs/sound-mind-roadmap.md`'s "Resonant Instruments" own item 5
+ *        ("The user can now use the spectrum profile as a brush tip, a
+ *        new type that is very similar to existing types").
+ *
+ * **"Very similar to existing types" means `InstrumentConfiguration`
+ * specifically** - confirmed with the user back in Installment A's own
+ * scoping pass as a new, sibling subtype rather than extending
+ * `InstrumentConfiguration` itself, since a computed Wave Kernel Signature
+ * spectrum (large, generated, no per-partial hand-editing concept) is
+ * conceptually distinct enough from `InstrumentConfiguration`'s own small,
+ * hand-tunable `harmonicStrengths()` (built around vibrato/tremolo/
+ * inharmonicity, none of which make sense applied to a computed profile)
+ * to warrant its own type. The synthesis itself, though, *is* literally
+ * `applyInstrumentPaintOperation()`'s own per-partial-harmonic assembly,
+ * reused via `applyResonantInstrumentPaintOperation()` (`paint_application.h`)
+ * reading `spectrum()` in place of `harmonicStrengths()` - see that
+ * function's own docs for exactly how `spectrum()`'s own values (a
+ * continuous, Gaussian-smoothed envelope over energy - see
+ * `computeWaveKernelSignature()`'s own docs - not a list of discrete,
+ * physically-exact partial frequencies to reproduce individually) and
+ * `fallOffRate()` (a dimension `InstrumentConfiguration` doesn't have at
+ * all) both feed in.
+ *
+ * **Embeds a snapshot of `spectrum()`, not a live reference** - the same
+ * "config holds its own copy" shape `MindShotConfiguration::clip()`
+ * already establishes (`sourceMindShotId()`'s own docs), for the
+ * identical reason: a `NamedResonantProfile` library entry can be removed
+ * or never existed in the first place (a configuration loaded from a
+ * project saved on a machine where it was since deleted) without breaking
+ * anything already painted with it.
+ */
+class ResonantInstrumentConfiguration : public ToolConfiguration {
+public:
+    /// @brief Constructs a configuration with no Resonant Instrument
+    ///        profile selected yet (an empty `spectrum()`) - paints
+    ///        nothing until `setSpectrum()` is called with a real
+    ///        profile, the same "nothing happens by accident" default
+    ///        convention `MindShotConfiguration`'s own empty-`clip()`
+    ///        default follows.
+    ResonantInstrumentConfiguration() = default;
+
+    [[nodiscard]] ToolType type() const noexcept override { return ToolType::ResonantInstrument; }
+
+    [[nodiscard]] std::unique_ptr<ToolConfiguration> clone() const override {
+        return std::make_unique<ResonantInstrumentConfiguration>(*this);
+    }
+
+    /// @brief Which library entry `spectrum()` was last set from, if any -
+    ///        for UI purposes only (so a Tool Configuration Panel showing
+    ///        this configuration can highlight the right entry in its own
+    ///        Resonant Instrument picker); never consulted by painting
+    ///        itself, which only ever reads `spectrum()` directly.
+    /// @return The source entry's own id, or `std::nullopt` if
+    ///         `spectrum()` was never set from a library entry.
+    [[nodiscard]] std::optional<ResonantProfileId> sourceResonantProfileId() const noexcept {
+        return sourceResonantProfileId_;
+    }
+
+    /**
+     * @brief Sets which computed spectrum this configuration paints -
+     *        snapshotting `spectrum` directly (see this class's own docs
+     *        on why).
+     * @param sourceId The library entry `spectrum` was copied from, for
+     *        `sourceResonantProfileId()`'s own UI-only purpose;
+     *        `std::nullopt` if unknown/not applicable.
+     * @param spectrum The spectrum to paint, copied in.
+     */
+    void setSpectrum(std::optional<ResonantProfileId> sourceId, std::vector<float> spectrum) {
+        sourceResonantProfileId_ = sourceId;
+        spectrum_ = std::move(spectrum);
+    }
+
+    /// @brief The computed spectrum this configuration paints - see
+    ///        `computeWaveKernelSignature()`'s own docs
+    ///        (`resonant_instrument.h`) for exactly what these values mean
+    ///        and why every one is already in `[0, 1]`.
+    /// @return The current spectrum; empty until `setSpectrum()` is
+    ///         called.
+    [[nodiscard]] const std::vector<float>& spectrum() const noexcept { return spectrum_; }
+
+    /**
+     * @brief How quickly this Resonant Instrument's own loudness decays
+     *        across the course of a stroke - `docs/sound-mind-roadmap.md`'s
+     *        own "a scalar parameter that sets the fall-off rate, so the
+     *        user can decide whether their resonant instrument has a long
+     *        sustain or if it short."
+     *
+     * Applied as `exp(-fallOffRate * pathT)`, where `pathT` is the
+     * stamp's own `0..1` progress along the *whole stroke* (the same
+     * pathT every other per-stroke modulation in this codebase already
+     * samples - see `InstrumentConfiguration`'s own vibrato/tremolo docs)
+     * - treating the moment a stroke begins as the instant the curve is
+     * "struck," ringing out and decaying across however long the stroke
+     * itself runs, the same physical metaphor a real plucked/struck
+     * resonant object follows. `0` (the default) means no decay at all -
+     * full, constant sustain for the whole stroke, the same "nothing
+     * happens by accident" convention every other optional shaping
+     * parameter in this codebase defaults to.
+     *
+     * @return The current fall-off rate; not clamped or validated here,
+     *         but intended to be non-negative (a negative value would
+     *         make the sound grow *louder* over the stroke instead, an
+     *         unusual but not force-prevented choice).
+     */
+    [[nodiscard]] double fallOffRate() const noexcept { return fallOffRate_; }
+
+    /// @brief Sets the fall-off rate - see fallOffRate()'s own docs.
+    /// @param rate The new rate.
+    void setFallOffRate(double rate) noexcept { fallOffRate_ = rate; }
+
+private:
+    std::optional<ResonantProfileId> sourceResonantProfileId_;
+    std::vector<float> spectrum_;
+    double fallOffRate_ = 0.0;
 };
 
 /**

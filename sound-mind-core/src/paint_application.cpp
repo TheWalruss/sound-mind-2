@@ -664,6 +664,91 @@ void applyInstrumentPaintOperation(const PaintOperation& operation, const Instru
     }
 }
 
+/// @brief Resonant Instrument's own stamp - `v0.Y.59.1` Installment D, per
+/// `ResonantInstrumentConfiguration`'s own docs (`tool_configuration.h`).
+///
+/// Literally `applyInstrumentPaintOperation()`'s own per-partial assembly
+/// above, reused with two differences rather than a second, independently-
+/// written copy of the same loop: `toolConfig.spectrum()` takes
+/// `harmonicStrengths()`'s own role (partial `n`'s strength is
+/// `spectrum()[n-1]`, still at a plain integer-multiple frequency
+/// `n * fundamentalHz` - the spectrum's own computed, non-uniform shape is
+/// what gives this its distinct timbre, not an inharmonic partial
+/// *frequency* grid, which `computeWaveKernelSignature()`'s own already-
+/// aggregated, Gaussian-smoothed result isn't suited to drive directly -
+/// see that function's own docs), and every partial's strength is further
+/// scaled by `exp(-fallOffRate() * sample.pathT)` - see
+/// `ResonantInstrumentConfiguration::fallOffRate()`'s own docs for the
+/// "struck once at the stroke's own start, ringing out across it"
+/// metaphor this implements. No inharmonicity, vibrato, or tremolo here -
+/// unlike `InstrumentConfiguration`, a Resonant Instrument's own spectral
+/// character already comes entirely from its source curve's own shape,
+/// and neither has an obvious analogue for one yet; left for a future
+/// installment, the same narrower-than-the-full-design-doc scope
+/// `InstrumentConfiguration`'s own first installment already chose for
+/// its noise component/body resonance/ADSR envelope.
+void applyResonantInstrumentPaintOperation(const PaintOperation& operation,
+                                            const ResonantInstrumentConfiguration& toolConfig,
+                                            const std::vector<StrokeSample>& samples,
+                                            sound_mind::codec::StreamImage& content,
+                                            const MindWaveResolver& resolveMindWave) {
+    const PaintParameterMindWaves mindWaves = resolvePaintParameterMindWaves(toolConfig, resolveMindWave, content.config);
+
+    const std::vector<float>& spectrum = toolConfig.spectrum();
+    if (spectrum.empty()) {
+        return;
+    }
+
+    const float maxFrequencyHz =
+        std::min(content.config.maxFrequencyHz, static_cast<float>(content.config.sampleRateHz) / 2.0f);
+
+    for (const StrokeSample& sample : samples) {
+        const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);
+        const double frameRadius = timeToFrameIndex(toolConfig.size() * params.sizeScale, content.config) -
+                                    timeToFrameIndex(0.0, content.config);
+        if (frameRadius <= 0.0) {
+            continue;
+        }
+
+        const GradientStop target = operation.path().gradient().evaluate(params.gradientT);
+        const double frameCenter = timeToFrameIndex(sample.point.timeSeconds, content.config);
+        const auto frameLow = std::max(0, static_cast<int>(std::floor(frameCenter - frameRadius)));
+        const auto frameHigh =
+            std::min(static_cast<int>(content.frameCount) - 1, static_cast<int>(std::ceil(frameCenter + frameRadius)));
+
+        const double decayMultiplier = std::exp(-toolConfig.fallOffRate() * static_cast<double>(sample.pathT));
+
+        const double fundamentalHz = sample.point.frequencyHz;
+        for (std::size_t partialIndex = 0; partialIndex < spectrum.size(); ++partialIndex) {
+            const double strength = static_cast<double>(spectrum[partialIndex]) * decayMultiplier;
+            if (strength <= 0.0) {
+                continue;
+            }
+            const double n = static_cast<double>(partialIndex + 1);
+            const double partialHz = n * fundamentalHz;
+            if (partialHz > static_cast<double>(maxFrequencyHz)) {
+                continue;
+            }
+            const int bin =
+                static_cast<int>(std::round(frequencyToBinIndex(static_cast<float>(partialHz), content.config)));
+            if (bin < 0 || bin >= static_cast<int>(content.config.binCount)) {
+                continue;
+            }
+
+            for (int frame = frameLow; frame <= frameHigh; ++frame) {
+                const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
+                const float weight = falloffWeight(std::abs(normalizedDt), toolConfig.falloff()) *
+                                      static_cast<float>(strength) * params.opacityMultiplier;
+                if (weight <= 0.0f) {
+                    continue;
+                }
+                const std::size_t index = cellIndex(bin, frame, content.frameCount);
+                blendTowardStop(content.leftMagnitudeDb[index], content.rightMagnitudeDb[index], target, weight);
+            }
+        }
+    }
+}
+
 /// @brief `clip`, with every row shifted along its own bin (frequency) axis
 /// by `binDelta` (fractional; linearly interpolated between the two nearest
 /// source rows) - `v0.Y.55.1`'s own pitch-shift primitive for Mind Shot/
@@ -1594,6 +1679,8 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
                                        resolveMindWave);
     } else if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(&toolConfig)) {
         applyInstrumentPaintOperation(operation, *instrument, samples, content, resolveMindWave);
+    } else if (const auto* resonant = dynamic_cast<const ResonantInstrumentConfiguration*>(&toolConfig)) {
+        applyResonantInstrumentPaintOperation(operation, *resonant, samples, content, resolveMindWave);
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(&toolConfig)) {
         applyMindShotPaintOperation(*mindShot, samples, content);
     } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(&toolConfig)) {

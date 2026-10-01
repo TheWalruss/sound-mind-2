@@ -3362,6 +3362,12 @@ void MainWindow::createResonantInstrumentFromPickedPathNamed(const std::string& 
         *curve, sound_mind::core::frequencyToTimeScaleFor(project_->settings()), kResonantInstrumentNodeCount);
     const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonantInstrumentSpectrumSize);
     project_->addResonantProfile(name, spectrum);
+    // Unlike captureMindShot()/captureMindGrain() (wired through
+    // SelectionController's own mindShotCaptured()/mindGrainCaptured()
+    // signals, connected once in ToolPaletteController's own constructor),
+    // this capture writes directly to project_ from MainWindow - so the
+    // panel's own picker needs an explicit nudge here instead.
+    toolConfigurationPanel_->refreshResonantProfiles();
     statusBar()->showMessage(tr("Created Resonant Instrument \"%1\".").arg(QString::fromStdString(name)), 5000);
 }
 

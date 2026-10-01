@@ -49,6 +49,8 @@ using sound_mind::core::MindWaveBindingFrame;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
+using sound_mind::core::ResonantInstrumentConfiguration;
+using sound_mind::core::ResonantProfileId;
 using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
@@ -126,9 +128,10 @@ constexpr std::array<std::pair<BlendMode, const char*>, 7> kBlendModes = {{
     {BlendMode::Add, "Add"},
 }};
 
-constexpr std::array<std::pair<ToolType, const char*>, 8> kToolTypes{{
+constexpr std::array<std::pair<ToolType, const char*>, 9> kToolTypes{{
     {ToolType::Procedural, "Procedural"},
     {ToolType::Instrument, "Instrument"},
+    {ToolType::ResonantInstrument, "Resonant Instrument"},
     {ToolType::MindShot, "Mind Shot"},
     {ToolType::MindGrain, "Mind Grain"},
     {ToolType::Heal, "Heal"},
@@ -363,6 +366,37 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     instrumentLayout->addLayout(harmonicStrengthsLayout_);
 
     root->addWidget(instrumentGroup_);
+
+    // --- Resonant Instrument's own group - v0.Y.59.1 Installment D --------
+    resonantInstrumentGroup_ = new QWidget(container);
+    resonantInstrumentGroup_->setObjectName(QStringLiteral("resonantInstrumentGroup"));
+    auto* resonantInstrumentForm = new QFormLayout(resonantInstrumentGroup_);
+    resonantInstrumentForm->setContentsMargins(0, 0, 0, 0);
+
+    resonantProfileCombo_ = new QComboBox(resonantInstrumentGroup_);
+    resonantProfileCombo_->setObjectName(QStringLiteral("resonantProfileCombo"));
+    resonantProfileCombo_->addItem(tr("(none captured yet)"));
+    connect(resonantProfileCombo_, &QComboBox::currentIndexChanged, this,
+            &ToolConfigurationPanel::handleResonantProfileComboChanged);
+    resonantInstrumentForm->addRow(tr("Resonant Profile:"), resonantProfileCombo_);
+
+    fallOffRateSpinBox_ = new QDoubleSpinBox(resonantInstrumentGroup_);
+    fallOffRateSpinBox_->setObjectName(QStringLiteral("fallOffRateSpinBox"));
+    fallOffRateSpinBox_->setRange(0.0, 20.0);
+    fallOffRateSpinBox_->setSingleStep(0.1);
+    fallOffRateSpinBox_->setDecimals(2);
+    fallOffRateSpinBox_->setToolTip(
+        tr("How quickly loudness decays across the stroke, as if struck once at its own start - 0 is full, "
+           "constant sustain."));
+    connect(fallOffRateSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+        if (auto* resonant = dynamic_cast<ResonantInstrumentConfiguration*>(config_.get())) {
+            resonant->setFallOffRate(value);
+            emitConfigChanged();
+        }
+    });
+    resonantInstrumentForm->addRow(tr("Fall-Off Rate:"), fallOffRateSpinBox_);
+
+    root->addWidget(resonantInstrumentGroup_);
 
     // --- Mind Shot's own group --------------------------------------------
     mindShotGroup_ = new QWidget(container);
@@ -643,6 +677,18 @@ void ToolConfigurationPanel::changeToolType(ToolType type) {
             instrument->setTremoloMindWave(static_cast<MindWaveId>(rawId));
         }
         replacement = std::move(instrument);
+    } else if (type == ToolType::ResonantInstrument) {
+        auto resonant = std::make_unique<ResonantInstrumentConfiguration>();
+        // Same "carry over whatever's currently shown in the combo"
+        // reasoning as MindShot's own branch below.
+        if (const QVariant data = resonantProfileCombo_->currentData(); data.isValid() && project_ != nullptr) {
+            const auto id = static_cast<ResonantProfileId>(data.toULongLong());
+            if (const auto* named = project_->resonantProfileById(id)) {
+                resonant->setSpectrum(id, named->spectrum);
+            }
+        }
+        resonant->setFallOffRate(fallOffRateSpinBox_->value());
+        replacement = std::move(resonant);
     } else if (type == ToolType::MindShot) {
         auto mindShot = std::make_unique<MindShotConfiguration>();
         // Selects whatever mindShotCombo_ currently shows, if it's a real
@@ -748,6 +794,7 @@ void ToolConfigurationPanel::updateVisibleToolTypeGroup() {
     const ToolType type = config_->type();
     proceduralGroup_->setVisible(type == ToolType::Procedural);
     instrumentGroup_->setVisible(type == ToolType::Instrument);
+    resonantInstrumentGroup_->setVisible(type == ToolType::ResonantInstrument);
     mindShotGroup_->setVisible(type == ToolType::MindShot);
     mindGrainGroup_->setVisible(type == ToolType::MindGrain);
     orderChaosGroup_->setVisible(type == ToolType::OrderChaos);
@@ -895,6 +942,15 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
             const QSignalBlocker blocker(tremoloDepthSpinBox_);
             tremoloDepthSpinBox_->setValue(instrument->tremoloDepth());
         }
+    } else if (const auto* resonant = dynamic_cast<const ResonantInstrumentConfiguration*>(config_.get())) {
+        const QSignalBlocker blocker(resonantProfileCombo_);
+        int index = -1;
+        if (const auto sourceId = resonant->sourceResonantProfileId(); sourceId.has_value()) {
+            index = resonantProfileCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(*sourceId)));
+        }
+        resonantProfileCombo_->setCurrentIndex(index >= 0 ? index : 0);
+        const QSignalBlocker fallOffRateBlocker(fallOffRateSpinBox_);
+        fallOffRateSpinBox_->setValue(resonant->fallOffRate());
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(config_.get())) {
         const QSignalBlocker blocker(mindShotCombo_);
         int index = -1;
@@ -1033,6 +1089,7 @@ void ToolConfigurationPanel::setProject(sound_mind::core::Project* project) {
     project_ = project;
     refreshMindShots();
     refreshMindGrains();
+    refreshResonantProfiles();
     refreshToolPresets();
 }
 
@@ -1072,6 +1129,43 @@ void ToolConfigurationPanel::handleMindShotComboChanged(int index) {
         mindShot->setClip(id, named->clip);
         mindShot->setFundamentalFrequencyHz(named->fundamentalFrequencyHz);
         mindShot->setStartTimeOffsetSeconds(named->startTimeOffsetSeconds);
+        emitConfigChanged();
+    }
+}
+
+void ToolConfigurationPanel::refreshResonantProfiles() {
+    // Same reasoning as refreshMindShots()'s own identical structure.
+    const QVariant previousData = resonantProfileCombo_->currentData();
+
+    const QSignalBlocker blocker(resonantProfileCombo_);
+    resonantProfileCombo_->clear();
+    if (project_ == nullptr || project_->resonantProfiles().empty()) {
+        resonantProfileCombo_->addItem(tr("(none captured yet)"));
+        return;
+    }
+    for (const auto& named : project_->resonantProfiles()) {
+        resonantProfileCombo_->addItem(QString::fromStdString(named.name),
+                                        QVariant::fromValue(static_cast<qulonglong>(named.id)));
+    }
+    const int index = resonantProfileCombo_->findData(previousData);
+    resonantProfileCombo_->setCurrentIndex(index >= 0 ? index : 0);
+}
+
+void ToolConfigurationPanel::handleResonantProfileComboChanged(int index) {
+    if (project_ == nullptr) {
+        return;
+    }
+    const QVariant data = resonantProfileCombo_->itemData(index);
+    if (!data.isValid()) {
+        return;  // The "(none captured yet)" placeholder.
+    }
+    const auto id = static_cast<ResonantProfileId>(data.toULongLong());
+    const auto* named = project_->resonantProfileById(id);
+    if (named == nullptr) {
+        return;
+    }
+    if (auto* resonant = dynamic_cast<ResonantInstrumentConfiguration*>(config_.get())) {
+        resonant->setSpectrum(id, named->spectrum);
         emitConfigChanged();
     }
 }
@@ -1159,6 +1253,14 @@ void ToolConfigurationPanel::refreshToolPresets() {
         if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(named.config.get())) {
             icon = QIcon(QPixmap::fromImage(
                 HarmonicSeriesWidget::renderThumbnail(instrument->harmonicStrengths(), kToolPresetThumbnailSize)));
+        } else if (const auto* resonant = dynamic_cast<const ResonantInstrumentConfiguration*>(named.config.get())) {
+            // Reuses the exact same bar-chart renderer Instrument presets
+            // use above - a computed spectrum is, visually, just another
+            // per-partial strength array (see ResonantInstrumentConfiguration's
+            // own docs), so the same thumbnail language applies unchanged.
+            const std::vector<double> spectrumAsDouble(resonant->spectrum().begin(), resonant->spectrum().end());
+            icon = QIcon(
+                QPixmap::fromImage(HarmonicSeriesWidget::renderThumbnail(spectrumAsDouble, kToolPresetThumbnailSize)));
         }
         toolPresetCombo_->addItem(icon, QString::fromStdString(named.name),
                                     QVariant::fromValue(static_cast<qulonglong>(named.id)));

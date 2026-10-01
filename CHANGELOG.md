@@ -6,6 +6,31 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.4.4] - 2026-10-01
+
+Resonant Instruments, Installment D: the brush tip is paintable.
+
+### Added
+
+- **Resonant Instrument** is now a selectable Tool Type in the Tool
+  Configuration panel. Pick a captured profile from its own drop-down and
+  paint with it - the spectrum's own shape becomes a series of partials
+  above the stroke's pitch, the same spirit as the existing Instrument
+  tool's harmonic series, but computed from a curve instead of hand-typed.
+- **Fall-Off Rate** controls how quickly loudness decays across the
+  stroke, as if the curve were struck once at the start and left to ring
+  out - `0` (the default) is full sustain for the whole stroke.
+- Saved Resonant Instrument presets (in the Tool Preset dropdown) now show
+  a thumbnail icon of their own spectral content, the same as Instrument
+  presets already do.
+
+### Notes
+
+Full regression: `sound-mind-core` 221630 assertions (1025 cases)
+passing (11 new), `sound-mind-studio` full suite genuinely passing (7
+new tests), Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s
+Decision #190.
+
 ## [0.1.4.3] - 2026-10-01
 
 Resonant Instruments, Installment C: the Studio capture workflow.

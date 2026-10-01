@@ -5308,6 +5308,16 @@ void MainWindowTest::createResonantInstrumentFromPickedPathNamedAddsANamedEntryT
     QVERIFY(!window.project()->resonantProfiles().front().spectrum.empty());
     // A capture never logs an Operation - it's a read, not an edit.
     QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    // Unlike captureMindShot()/captureMindGrain(), this capture writes
+    // directly to project_ rather than through a signal
+    // ToolConfigurationPanel already listens to - confirms the explicit
+    // refreshResonantProfiles() call actually reaches the panel's picker.
+    auto* toolConfigPanel = window.findChild<ToolConfigurationPanel*>();
+    QVERIFY(toolConfigPanel != nullptr);
+    auto* resonantProfileCombo = toolConfigPanel->findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    QVERIFY(resonantProfileCombo != nullptr);
+    QCOMPARE(resonantProfileCombo->count(), 1);
+    QCOMPARE(resonantProfileCombo->itemText(0), QStringLiteral("Wire Loop"));
 }
 
 void MainWindowTest::createResonantInstrumentFromPickedPathNamedIsANoOpWithNothingPicked() {

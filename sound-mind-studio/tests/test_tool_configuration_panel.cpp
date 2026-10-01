@@ -45,6 +45,8 @@ using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
+using sound_mind::core::ResonantInstrumentConfiguration;
+using sound_mind::core::ResonantProfileId;
 using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
@@ -701,6 +703,120 @@ void ToolConfigurationPanelTest::switchingToolTypeAwayFromAndBackPreservesTheBin
 }
 
 // --- Mind Shots (v0.Y.33.1 Installment A) -----------------------------------
+
+// --- Resonant Instruments (v0.Y.59.1 Installment D) -------------------------
+
+void ToolConfigurationPanelTest::switchingToolTypeToResonantInstrumentShowsItsOwnGroupAndHidesProcedural() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
+    auto* resonantInstrumentGroup = panel.findChild<QWidget*>(QStringLiteral("resonantInstrumentGroup"));
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonant Instrument")));
+
+    QCOMPARE(panel.toolConfiguration().type(), ToolType::ResonantInstrument);
+    QVERIFY(proceduralGroup->isHidden());
+    QVERIFY(!resonantInstrumentGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::setProjectPopulatesTheResonantProfileCombo() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addResonantProfile("Wire Loop", {0.1f, 0.5f});
+    project.addResonantProfile("Zigzag", {0.2f, 0.8f});
+
+    panel.setProject(&project);
+
+    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    QVERIFY(resonantProfileCombo != nullptr);
+    QCOMPARE(resonantProfileCombo->count(), 2);
+    QCOMPARE(resonantProfileCombo->itemText(0), QStringLiteral("Wire Loop"));
+    QCOMPARE(resonantProfileCombo->itemText(1), QStringLiteral("Zigzag"));
+}
+
+void ToolConfigurationPanelTest::refreshResonantProfilesAddsNewEntriesAndPreservesTheCurrentSelection() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addResonantProfile("Wire Loop", {0.1f, 0.5f});
+    panel.setProject(&project);
+    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    QCOMPARE(resonantProfileCombo->currentText(), QStringLiteral("Wire Loop"));
+
+    project.addResonantProfile("Zigzag", {0.2f, 0.8f});
+    panel.refreshResonantProfiles();
+
+    QCOMPARE(resonantProfileCombo->count(), 2);
+    // The previously-selected entry stays selected across the refresh.
+    QCOMPARE(resonantProfileCombo->currentText(), QStringLiteral("Wire Loop"));
+}
+
+void ToolConfigurationPanelTest::refreshResonantProfilesShowsThePlaceholderWhenTheLibraryIsEmpty() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+
+    panel.setProject(&project);
+
+    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    QCOMPARE(resonantProfileCombo->count(), 1);
+    QCOMPARE(resonantProfileCombo->itemData(0).isValid(), false);
+}
+
+void ToolConfigurationPanelTest::selectingAResonantProfileEmitsToolConfigurationChangedWithItsSpectrum() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addResonantProfile("Wire Loop", {0.1f, 0.5f});
+    const ResonantProfileId secondId = project.addResonantProfile("Zigzag", {0.2f, 0.8f});
+    panel.setProject(&project);
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonant Instrument")));
+    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    resonantProfileCombo->setCurrentIndex(resonantProfileCombo->findText(QStringLiteral("Zigzag")));
+
+    QCOMPARE(spy.count(), 1);
+    const auto& resonant = dynamic_cast<const ResonantInstrumentConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(resonant.sourceResonantProfileId(), std::optional<ResonantProfileId>(secondId));
+    QCOMPARE(resonant.spectrum(), std::vector<float>({0.2f, 0.8f}));
+}
+
+void ToolConfigurationPanelTest::changingFallOffRateEmitsToolConfigurationChanged() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonant Instrument")));
+    auto* fallOffRateSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("fallOffRateSpinBox"));
+    QVERIFY(fallOffRateSpinBox != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    fallOffRateSpinBox->setValue(3.5);
+
+    QCOMPARE(spy.count(), 1);
+    const auto& resonant = dynamic_cast<const ResonantInstrumentConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(resonant.fallOffRate(), 3.5);
+}
+
+void ToolConfigurationPanelTest::loadingAResonantInstrumentConfigurationSyncsToolTypeAndThePickerSelection() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    project.addResonantProfile("Wire Loop", {0.1f, 0.5f});
+    const ResonantProfileId secondId = project.addResonantProfile("Zigzag", {0.2f, 0.8f});
+    panel.setProject(&project);
+
+    ResonantInstrumentConfiguration config;
+    config.setSpectrum(secondId, {0.2f, 0.8f});
+    config.setFallOffRate(2.0);
+    panel.setToolConfiguration(config);
+
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    auto* fallOffRateSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("fallOffRateSpinBox"));
+    auto* resonantInstrumentGroup = panel.findChild<QWidget*>(QStringLiteral("resonantInstrumentGroup"));
+
+    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Resonant Instrument"));
+    QCOMPARE(resonantProfileCombo->currentText(), QStringLiteral("Zigzag"));
+    QCOMPARE(fallOffRateSpinBox->value(), 2.0);
+    QVERIFY(!resonantInstrumentGroup->isHidden());
+}
 
 void ToolConfigurationPanelTest::switchingToolTypeToMindShotShowsItsOwnGroupAndHidesProcedural() {
     ToolConfigurationPanel panel;
@@ -1422,12 +1538,16 @@ void ToolConfigurationPanelTest::instrumentPresetsGetAHarmonicThumbnailIconButPr
     InstrumentConfiguration instrumentConfig;
     instrumentConfig.setHarmonicStrengths({1.0, 0.5});
     project.addToolPreset("Warm Pad", instrumentConfig);
+    ResonantInstrumentConfiguration resonantConfig;
+    resonantConfig.setSpectrum(std::nullopt, {0.3f, 0.9f});
+    project.addToolPreset("Wire Loop", resonantConfig);
 
     panel.setProject(&project);
 
     auto* toolPresetCombo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
     QVERIFY(toolPresetCombo->itemIcon(0).isNull());
     QVERIFY(!toolPresetCombo->itemIcon(1).isNull());
+    QVERIFY(!toolPresetCombo->itemIcon(2).isNull());
 }
 
 // --- Instrument harmonic-series visual editor (v0.Y.58.1) ------------------

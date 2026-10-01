@@ -51,6 +51,7 @@ using sound_mind::core::StampMode;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ProceduralConfiguration;
+using sound_mind::core::ResonantInstrumentConfiguration;
 using sound_mind::core::timeToFrameIndex;
 
 namespace {
@@ -220,6 +221,17 @@ Path makeSingleTapPath(double timeSeconds, double frequencyHz, float intensity, 
     path.gradient().setStopValues(0, stop);
     path.gradient().setStopValues(1, stop);
     return path;
+}
+
+std::unique_ptr<ResonantInstrumentConfiguration> makeResonantInstrumentTool(std::vector<float> spectrum,
+                                                                              double fallOffRate, double size,
+                                                                              float falloff) {
+    auto config = std::make_unique<ResonantInstrumentConfiguration>();
+    config->setSpectrum(std::nullopt, std::move(spectrum));
+    config->setFallOffRate(fallOffRate);
+    config->setSize(size);
+    config->setFalloff(falloff);
+    return config;
 }
 
 std::unique_ptr<MindGrainConfiguration> makeMindGrainTool(LayerId sourceLayer, TimeFrequencyRect bounds) {
@@ -1291,6 +1303,131 @@ TEST_CASE("applyPaintOperation with an InstrumentConfiguration skips a non-posit
 
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == 0.0f);
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, secondHarmonicBin)] == -10.0f);
+}
+
+TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration stamps one bin-exact spike per spectrum "
+          "partial",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    const PaintOperation op(1, LayerId{1}, path, makeResonantInstrumentTool({1.0f, 0.5f}, 0.0, 0.05, 0.0f));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int fundamentalBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    const int secondPartialBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(2000.0f, config))));
+
+    // Strength 1.0, starting from 0 dB: a full blend to the target.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == -10.0f);
+    // Strength 0.5: exactly half the blend.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, secondPartialBin)] == Catch::Approx(-5.0f));
+    // No frequency-axis blending - the bin immediately next to the
+    // fundamental's own exact bin is untouched.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin + 1)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration skips a partial stretched past the "
+          "configured frequency range",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();  // maxFrequencyHz == 20000.0f.
+    StreamImage content = makeBlankContent(config, 100);
+    // Fundamental at 15000 Hz: partial 1 (15000 Hz) is in range, partial 2
+    // (30000 Hz) is well past maxFrequencyHz - it must be skipped
+    // entirely, not clamped and stacked onto the top bin.
+    const Path path = makeSingleTapPath(0.3, 15000.0, -10.0f, 1.0f);
+
+    const PaintOperation op(1, LayerId{1}, path, makeResonantInstrumentTool({1.0f, 1.0f}, 0.0, 0.05, 0.0f));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int topBin = static_cast<int>(config.binCount) - 1;
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, topBin)] == 0.0f);
+}
+
+TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration skips a non-positive-strength partial",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    const PaintOperation op(1, LayerId{1}, path, makeResonantInstrumentTool({0.0f, 1.0f}, 0.0, 0.05, 0.0f));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int fundamentalBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    const int secondPartialBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(2000.0f, config))));
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin)] == 0.0f);
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, secondPartialBin)] == -10.0f);
+}
+
+TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration paints nothing with an empty spectrum",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    const PaintOperation op(1, LayerId{1}, path, makeResonantInstrumentTool({}, 0.0, 0.05, 0.0f));
+    applyPaintOperation(op, 2000.0, content);
+
+    for (const float value : content.leftMagnitudeDb) {
+        REQUIRE(value == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration's fallOffRate decays strength across the "
+          "stroke",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    // A straight, constant-frequency path spanning most of the content's
+    // own 1-second duration - long enough that pathT clearly differs
+    // between its own start and end, relative to a small brush radius, so
+    // each end is stamped almost exclusively by samples near its own
+    // local pathT.
+    Path path;
+    PathNode startNode;
+    startNode.anchor = TimeFrequencyPoint{0.1, 1000.0};
+    startNode.type = PathNodeType::Corner;
+    path.addNode(startNode);
+    PathNode endNode;
+    endNode.anchor = TimeFrequencyPoint{0.9, 1000.0};
+    endNode.type = PathNodeType::Corner;
+    path.addNode(endNode);
+    auto stop = path.gradient().stops().front();
+    stop.leftIntensity = -10.0f;
+    stop.rightIntensity = -10.0f;
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    path.gradient().setStopValues(0, stop);
+    path.gradient().setStopValues(1, stop);
+
+    // A hard edge (falloff 0) and a small radius keep each measurement
+    // frame below from being blended across a wide span of pathT values.
+    const PaintOperation op(1, LayerId{1}, path, makeResonantInstrumentTool({1.0f}, 5.0, 0.01, 0.0f));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int fundamentalBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    const int startFrame = static_cast<int>(std::lround(timeToFrameIndex(0.1, config)));
+    const int endFrame = static_cast<int>(std::lround(timeToFrameIndex(0.9, config)));
+
+    const float startValue = content.leftMagnitudeDb[pixelIndex(content, startFrame, fundamentalBin)];
+    const float endValue = content.leftMagnitudeDb[pixelIndex(content, endFrame, fundamentalBin)];
+
+    // Near pathT == 0: exp(-5 * 0) == 1 - essentially undecayed, a strong
+    // blend toward the target.
+    REQUIRE(startValue < -9.0f);
+    // Near pathT == 1: exp(-5 * 1) ~= 0.0067 - barely any blend at all,
+    // but not literally zero (some decayed strength still reaches it).
+    REQUIRE(endValue < 0.0f);
+    REQUIRE(endValue > -1.0f);
 }
 
 TEST_CASE("applyPaintOperation with a MindShotConfiguration blits the clip centered on the stamp position, verbatim",

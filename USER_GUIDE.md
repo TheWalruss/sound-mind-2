@@ -851,15 +851,17 @@ panel (off by default) with the brush's own settings:
   removing a saved MindWave, this never affects anything already painted
   with it). There's no Wizard yet (see "What's Not Here Yet" below) - this
   is a plain save/load of the panel as it stands. A saved **Instrument**
-  preset shows a small icon of its own harmonic content next to its name,
-  so you can recognize one at a glance without loading it first; other
-  preset types show no icon.
-- **Tool Type** - **Procedural** (the default), **Instrument**, **Mind
-  Shot**, **Mind Grain**, **Heal**, **Soften**, **Smudge**, or
-  **Order/Chaos**; picks which set of controls below applies (Tip Shape for
-  Procedural, Harmonics/Inharmonicity for Instrument, a picker for Mind
-  Shot/Mind Grain, an Amount slider for Order/Chaos - Heal/Soften/Smudge add
-  no controls of their own at all, see their own entries below). The panel
+  or **Resonant Instrument** preset shows a small icon of its own
+  harmonic/spectral content next to its name, so you can recognize one at
+  a glance without loading it first; other preset types show no icon.
+- **Tool Type** - **Procedural** (the default), **Instrument**,
+  **Resonant Instrument**, **Mind Shot**, **Mind Grain**, **Heal**,
+  **Soften**, **Smudge**, or **Order/Chaos**; picks which set of controls
+  below applies (Tip Shape for Procedural, Harmonics/Inharmonicity for
+  Instrument, a picker and Fall-Off Rate for Resonant Instrument, a picker
+  for Mind Shot/Mind Grain, an Amount slider for Order/Chaos -
+  Heal/Soften/Smudge add no controls of their own at all, see their own
+  entries below). The panel
   also hides whichever of the shared controls below (Falloff, Brush Size,
   Stamp Mode, Stamp Interval, Color, Opacity, Blend Mode) the selected type
   doesn't actually use - see each control's own entry for which types hide
@@ -895,6 +897,18 @@ panel (off by default) with the brush's own settings:
   of the depth value. This tracks the stroke's own position along itself,
   not real elapsed time, so the same MindWave shape always plays out fully
   over any one stroke, however long or short it is.
+- **Resonant Profile**/**Fall-Off Rate** (Resonant Instrument only) - a
+  drop-down of every Resonant Instrument you've captured so far (see
+  [Pick](#pick)'s own "Create Resonant Instrument from Picked Path..."),
+  empty until you capture your first one. Paints the captured spectrum as
+  a series of partials above the stroke's own pitch, the same spirit as
+  Instrument's own harmonic series, but with each partial's own strength
+  coming from the curve's own shape instead of hand-typed numbers.
+  **Fall-Off Rate** controls how quickly loudness decays across the
+  stroke, as if the curve were struck once at the stroke's own start and
+  left to ring out - `0` (the default) is full, constant sustain for the
+  whole stroke; higher values make it fade out faster as you keep
+  painting.
 - **Mind Shot** (Mind Shot only) - a drop-down of every Mind Shot you've
   captured so far (see [Selection and Fill](#selection-and-fill)'s own
   "Capture as Mind Shot"), empty until you capture your first one.
@@ -1317,10 +1331,10 @@ selection to a plain, axis-aligned rectangle.
   to "Resonant Instrument 1", "Resonant Instrument 2", and so on), then
   analyzes whichever path/stroke is currently Picked and stores the result
   permanently under that name - a confirmation appears in the status bar.
-  **Not yet paintable or usable anywhere else** - there's no brush tip or
-  MindWave type that reads a saved one back out yet (see "What's Not Here
-  Yet" below); this is the capture step alone, ahead of the rest of that
-  feature.
+  Pick **Resonant Instrument** as the Tool Type in
+  [Painting](#painting)'s Tool Configuration panel and select it from the
+  drop-down there to paint with it (see "Resonant Profile"/"Fall-Off
+  Rate" there).
 - **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
   actually dragging (a plain click) on the canvas while in Select mode.
 
@@ -1706,24 +1720,27 @@ rather than drawn incorrectly - a proper polar-aware redraw for each
 remains future work, since each is built from straight lines that don't
 translate onto a disk without their own dedicated redesign.
 
-**Resonant Instruments** have taken their very first step: **Edit →
-Create Resonant Instrument from Picked Path...** (see
-[Pick](#pick)/[Selection](#selection) above) analyzes a picked path's own
-shape and stores the result permanently, under a name you choose. That's
-all that exists so far - there's no brush tip or MindWave type that reads
-one of these back out yet, no panel listing what you've captured, and no
-way to draw a branching curve/tree (only an ordinary linear path/stroke
-can be analyzed today). All of that is still to come.
+**Resonant Instruments** are now paintable: **Edit → Create Resonant
+Instrument from Picked Path...** (see [Pick](#pick) above) analyzes a
+picked path's own shape and stores the result permanently, under a name
+you choose, and **Resonant Instrument** (see [Painting](#painting) below)
+paints with it. Still missing: a MindWave type that reads a saved profile
+back out as a modulation source, a panel listing everything you've
+captured (the Tool Configuration panel's own picker is the only place
+they show up so far), and a way to draw a branching curve/tree (only an
+ordinary linear path/stroke can be analyzed today).
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:
 
 - Only **Procedural**, **Instrument** (harmonic series, inharmonicity, and
   MindWave-driven vibrato/tremolo - no noise component, body resonance, or
-  ADSR envelope yet), **Mind Shot** (capture-and-restamp), **Mind Grain**
-  (a live reference, updating immediately everywhere it's used the moment
-  its own source is repainted), **Heal** (temporal blur), **Soften**
-  (radial blur), **Smudge**
+  ADSR envelope yet), **Resonant Instrument** (a computed spectrum in place
+  of a hand-typed harmonic series, plus a single fall-off-rate decay - no
+  vibrato/tremolo or inharmonicity of its own yet), **Mind Shot**
+  (capture-and-restamp), **Mind Grain** (a live reference, updating
+  immediately everywhere it's used the moment its own source is
+  repainted), **Heal** (temporal blur), **Soften** (radial blur), **Smudge**
   (a simple per-stamp directional smear, not a real stateful "brush load"
   carried across the whole stroke the way a classic paint program's own
   Smudge tool works), and **Order/Chaos** (concrete permutation/reordering

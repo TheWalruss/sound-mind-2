@@ -57,6 +57,15 @@ private slots:
     void loadingAConfigurationSyncsTheBindingFrameCombo();
     void switchingToolTypeAwayFromAndBackPreservesTheBindingFrame();
 
+    // Resonant Instruments (v0.Y.59.1 Installment D).
+    void switchingToolTypeToResonantInstrumentShowsItsOwnGroupAndHidesProcedural();
+    void setProjectPopulatesTheResonantProfileCombo();
+    void refreshResonantProfilesAddsNewEntriesAndPreservesTheCurrentSelection();
+    void refreshResonantProfilesShowsThePlaceholderWhenTheLibraryIsEmpty();
+    void selectingAResonantProfileEmitsToolConfigurationChangedWithItsSpectrum();
+    void changingFallOffRateEmitsToolConfigurationChanged();
+    void loadingAResonantInstrumentConfigurationSyncsToolTypeAndThePickerSelection();
+
     // Mind Shots (v0.Y.33.1 Installment A).
     void switchingToolTypeToMindShotShowsItsOwnGroupAndHidesProcedural();
     void setProjectPopulatesTheMindShotCombo();

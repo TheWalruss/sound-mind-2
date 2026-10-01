@@ -1664,6 +1664,14 @@ public slots:
      * afterward has no effect on the new library entry. A no-op if
      * nothing is currently Picked or no project is open.
      *
+     * Explicitly calls `toolConfigurationPanel_->refreshResonantProfiles()`
+     * afterward - unlike `captureMindShot()`/`captureMindGrain()` (wired
+     * through `SelectionController`'s own `mindShotCaptured()`/
+     * `mindGrainCaptured()` signals, connected once in
+     * `ToolPaletteController`'s own constructor), this capture writes
+     * directly to `project_` from here, so no such signal already exists
+     * to pick this one up automatically.
+     *
      * @param name Display name for the new library entry.
      */
     void createResonantInstrumentFromPickedPathNamed(const std::string& name);
