@@ -56,6 +56,7 @@
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/core/resonant_instrument.h"
 #include "sound_mind/studio/about_dialog.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
@@ -100,6 +101,20 @@ const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
 /// Installment A ("Layers Panel & Editing Enhancements v2"), confirmed
 /// with the user.
 constexpr float kLayerOpacityNudgeStep = 0.05f;
+
+/// @brief How many `CurveGraph` nodes createResonantInstrumentFromPickedPath()
+/// resamples a Picked path into - generous enough to let a reasonably
+/// detailed hand-drawn curve's own real shape actually influence the
+/// resulting spectrum (`computeWaveKernelSignature()`'s own eigenmode
+/// count is bounded by this), while staying small enough for the dense
+/// generalized eigensolve to stay effectively instant.
+constexpr std::size_t kResonantInstrumentNodeCount = 128;
+
+/// @brief How many samples createResonantInstrumentFromPickedPath() asks
+/// `computeWaveKernelSignature()` for - the stored `NamedResonantProfile::spectrum`'s
+/// own resolution, generous enough for a smooth-looking profile without
+/// an excessively large saved project file.
+constexpr std::size_t kResonantInstrumentSpectrumSize = 64;
 
 /// @brief Converts a plain std::string device-name list (as the engines'
 /// availableXDeviceNames() methods return) into the QStringList a device
@@ -974,6 +989,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // deleteAction/Cut/Copy/Paste all make.
     QAction* usePickedPathAsMindWaveShapeAction = editMenu->addAction(tr("Use Picked Path as MindWave &Shape"));
     connect(usePickedPathAsMindWaveShapeAction, &QAction::triggered, this, &MainWindow::usePickedPathAsMindWaveShape);
+
+    // Resonant Instruments (v0.Y.59.1 Installment C) - same "always
+    // present, no-op with nothing suitable Picked" treatment as the
+    // MindWave-shape action right above, since both share the same input
+    // (a Picked path/curve), just producing a new named library entry
+    // instead of overwriting part of an existing MindWave.
+    QAction* createResonantInstrumentAction = editMenu->addAction(tr("Create &Resonant Instrument from Picked Path..."));
+    connect(createResonantInstrumentAction, &QAction::triggered, this, &MainWindow::createResonantInstrumentFromPickedPath);
 
     editMenu->addSeparator();
 
@@ -3310,6 +3333,36 @@ void MainWindow::usePickedPathAsMindWaveShape() {
         return;
     }
     mindWaveController_->setDrawnPath(*mindWaveId, *curve);
+}
+
+void MainWindow::createResonantInstrumentFromPickedPath() {
+    if (!project_.has_value() || !toolPaletteController_->selectedPath().has_value()) {
+        return;
+    }
+    bool ok = false;
+    const QString defaultName = tr("Resonant Instrument %1").arg(project_->resonantProfiles().size() + 1);
+    const QString name =
+        QInputDialog::getText(this, tr("Create Resonant Instrument"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
+    if (!ok || name.trimmed().isEmpty()) {
+        return;
+    }
+    createResonantInstrumentFromPickedPathNamed(name.trimmed().toStdString());
+}
+
+void MainWindow::createResonantInstrumentFromPickedPathNamed(const std::string& name) {
+    if (!project_.has_value()) {
+        return;
+    }
+    const auto curve = toolPaletteController_->selectedPath();
+    if (!curve.has_value()) {
+        return;
+    }
+
+    const auto graph = sound_mind::core::curveGraphFromPath(
+        *curve, sound_mind::core::frequencyToTimeScaleFor(project_->settings()), kResonantInstrumentNodeCount);
+    const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonantInstrumentSpectrumSize);
+    project_->addResonantProfile(name, spectrum);
+    statusBar()->showMessage(tr("Created Resonant Instrument \"%1\".").arg(QString::fromStdString(name)), 5000);
 }
 
 void MainWindow::copySelection() { toolPaletteController_->copySelection(); }

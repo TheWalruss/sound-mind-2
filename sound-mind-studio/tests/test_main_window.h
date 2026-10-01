@@ -250,6 +250,11 @@ private slots:
     void captureMindShotAddsANamedEntryToTheProjectsMindShotLibrary();
     void captureMindShotWithDetailsStoresFundamentalFrequencyAndStartTimeOffset();
     void captureMindShotIsANoOpWithNoSelection();
+
+    // Resonant Instruments - Installment C: Studio capture workflow (v0.Y.59.1).
+    void createResonantInstrumentFromPickedPathNamedAddsANamedEntryToTheLibrary();
+    void createResonantInstrumentFromPickedPathNamedIsANoOpWithNothingPicked();
+    void createResonantInstrumentFromPickedPathIsANoOpWithNothingPicked();
     void clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject();
     void cancelPathDiscardsInProgressPlacementWithoutCommittingAnything();
     void smoothNodesToggleAffectsSubsequentlyPlacedNodes();

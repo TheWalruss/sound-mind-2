@@ -1618,6 +1618,57 @@ public slots:
     void usePickedPathAsMindWaveShape();
 
     /**
+     * @brief Computes a Wave Kernel Signature spectrum from whichever
+     *        path/curve is currently Picked and stores it as a new, named
+     *        entry in the project's Resonant Instrument profile library -
+     *        `docs/sound-mind-roadmap.md`'s "Resonant Instruments"
+     *        (`v0.Y.59.1`) own item 2 ("With a Curve selected, the user
+     *        selects the option to create a 'Resonant Instrument'"), the
+     *        actual work behind the Edit menu's "Create Resonant
+     *        Instrument from Picked Path..." action.
+     *
+     * **The workflow, in full**: draw or place a path as an ordinary paint
+     * stroke, switch to Pick and click it (the same "stay in Pick, don't
+     * switch back to Select" workflow usePickedPathAsMindWaveShape()'s own
+     * docs describe), then choose Edit → Create Resonant Instrument from
+     * Picked Path - prompts for a name (`QInputDialog`, the same plain
+     * "just needs a name" mechanism `ToolConfigurationPanel::
+     * saveCurrentAsToolPreset()` already uses, not the richer
+     * `MindCaptureDialog` Mind Shot/Mind Grain use, since neither of their
+     * own extra fields - a fundamental frequency, a start-time offset -
+     * means anything for a computed spectrum). A no-op unless something is
+     * currently Picked (`ToolPaletteController::selectedPath()`), or the
+     * name prompt is cancelled/left empty.
+     *
+     * Shows the name prompt, then delegates the actual computation/storage
+     * to createResonantInstrumentFromPickedPathNamed() - see that method's
+     * own docs on why tests call it directly instead of this one (the
+     * same `captureMindShot()`/`captureMindShotWithDetails()` split this
+     * codebase already establishes for every modal-dialog-showing action).
+     */
+    void createResonantInstrumentFromPickedPath();
+
+    /**
+     * @brief The dialog-free half of createResonantInstrumentFromPickedPath()
+     * - see `captureMindShotWithDetails()`'s own identical docs on why
+     * this exists (so tests never have to call the real, modal-dialog-
+     * showing slot directly).
+     *
+     * Resamples the picked `Path` into a `CurveGraph`
+     * (`curveGraphFromPath()`, `kResonantInstrumentNodeCount` nodes) and
+     * computes its own aggregated spectrum (`computeWaveKernelSignature()`,
+     * `kResonantInstrumentSpectrumSize` samples) - both in `resonant_
+     * instrument.h` - then stores the result via
+     * `Project::addResonantProfile()`. A permanent snapshot, the same as
+     * `captureMindShot()`'s own `Clip` capture: editing the source path
+     * afterward has no effect on the new library entry. A no-op if
+     * nothing is currently Picked or no project is open.
+     *
+     * @param name Display name for the new library entry.
+     */
+    void createResonantInstrumentFromPickedPathNamed(const std::string& name);
+
+    /**
      * @brief Copies the current selection's own pixels onto the clipboard -
      *        the actual work behind the Edit menu's Copy action. Delegates
      *        to `SelectionController::copySelection()`; a no-op if there's

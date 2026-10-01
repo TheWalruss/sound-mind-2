@@ -5273,6 +5273,65 @@ void MainWindowTest::captureMindShotIsANoOpWithNoSelection() {
     QVERIFY(window.project()->mindShots().empty());
 }
 
+void MainWindowTest::createResonantInstrumentFromPickedPathNamedAddsANamedEntryToTheLibrary() {
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "sound-mind-test-create-resonant-instrument.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(100, 50);
+    // A real drag, not a single click - a single click's own Path has only
+    // one node (PaintController's own degenerate-stroke special case),
+    // which curveGraphFromPath() treats as too degenerate to resample (see
+    // test_resonant_instrument.cpp's own tests on why).
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QTest::mouseMove(canvas, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+
+    // PickController::pick()'s own hit test is bounding-box-based (plus
+    // brush padding), so a click anywhere within the drag's own extent -
+    // not necessarily exactly on the curve itself - selects it.
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+
+    window.createResonantInstrumentFromPickedPathNamed("Wire Loop");
+
+    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
+    QCOMPARE(window.project()->resonantProfiles().front().name, std::string("Wire Loop"));
+    QVERIFY(!window.project()->resonantProfiles().front().spectrum.empty());
+    // A capture never logs an Operation - it's a read, not an edit.
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+}
+
+void MainWindowTest::createResonantInstrumentFromPickedPathNamedIsANoOpWithNothingPicked() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.createResonantInstrumentFromPickedPathNamed("Should Not Be Created");
+
+    QVERIFY(window.project()->resonantProfiles().empty());
+}
+
+void MainWindowTest::createResonantInstrumentFromPickedPathIsANoOpWithNothingPicked() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    // The real, modal-dialog-showing slot - safe to call directly here
+    // since the "nothing Picked" guard returns before the dialog would
+    // ever show, the same reasoning captureMindShotIsANoOpWithNoSelection()
+    // already relies on.
+    window.createResonantInstrumentFromPickedPath();
+
+    QVERIFY(window.project()->resonantProfiles().empty());
+}
+
 void MainWindowTest::clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject() {
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-path-tool.smproj";
     TestMainWindow window;

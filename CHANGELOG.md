@@ -6,6 +6,29 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.4.3] - 2026-10-01
+
+Resonant Instruments, Installment C: the Studio capture workflow.
+
+### Added
+
+- **Edit → Create Resonant Instrument from Picked Path...** analyzes
+  whichever path/stroke is currently Picked and stores its own computed
+  spectrum permanently, under a name you choose (prompted via a small
+  dialog, defaulting to "Resonant Instrument 1", "Resonant Instrument 2",
+  and so on). A confirmation appears in the status bar.
+
+### Notes
+
+**Not yet paintable or usable anywhere else** - there's no brush tip or
+MindWave type that reads a saved profile back out yet, and no panel lists
+what's been captured. This is the capture step alone; see `docs/sound-
+mind-roadmap.md` for what's still ahead.
+
+Full regression: `sound-mind-studio` full suite genuinely passing (3 new
+tests), `sound-mind-core` unaffected and unchanged. Doxygen: 0 warnings.
+See `docs/sound-mind-architecture.md`'s Decision #189.
+
 ## [0.1.4.2] - 2026-10-01
 
 Resonant Instruments, Installment B: a Project-level library for computed

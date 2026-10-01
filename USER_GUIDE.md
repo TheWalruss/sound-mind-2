@@ -1312,6 +1312,15 @@ selection to a plain, axis-aligned rectangle.
   above for what Fundamental Frequency/Start-Time Offset do (identical
   either way). Also always references the selection's own full bounding
   box, same as Mind Shot above.
+- **Create Resonant Instrument from Picked Path...** - **Edit → Create
+  Resonant Instrument from Picked Path...** prompts for a name (defaulting
+  to "Resonant Instrument 1", "Resonant Instrument 2", and so on), then
+  analyzes whichever path/stroke is currently Picked and stores the result
+  permanently under that name - a confirmation appears in the status bar.
+  **Not yet paintable or usable anywhere else** - there's no brush tip or
+  MindWave type that reads a saved one back out yet (see "What's Not Here
+  Yet" below); this is the capture step alone, ahead of the rest of that
+  feature.
 - **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
   actually dragging (a plain click) on the canvas while in Select mode.
 
@@ -1696,6 +1705,15 @@ Pick/Selection highlight are still hidden while the polar view is active
 rather than drawn incorrectly - a proper polar-aware redraw for each
 remains future work, since each is built from straight lines that don't
 translate onto a disk without their own dedicated redesign.
+
+**Resonant Instruments** have taken their very first step: **Edit →
+Create Resonant Instrument from Picked Path...** (see
+[Pick](#pick)/[Selection](#selection) above) analyzes a picked path's own
+shape and stores the result permanently, under a name you choose. That's
+all that exists so far - there's no brush tip or MindWave type that reads
+one of these back out yet, no panel listing what you've captured, and no
+way to draw a branching curve/tree (only an ordinary linear path/stroke
+can be analyzed today). All of that is still to come.
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:
