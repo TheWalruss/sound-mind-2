@@ -6,6 +6,30 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.4.6] - 2026-10-02
+
+Resonant Instruments, Installment F: the branching curve editor - this milestone is now complete.
+
+### Added
+
+- **Branching Curve editor**: build a real tree/graph by hand, not just a
+  single line, for a Resonant Instrument's own source curve. Draw a trunk
+  stroke as an ordinary paint stroke, Pick it, then **Edit → Start
+  Branching Curve from Picked Path**. To grow a branch: Pick a precise
+  point on the trunk (or any already-added branch), draw a new stroke,
+  Pick it, then **Edit → Add Picked Path as Branch**. Repeat for as many
+  branches as wanted, then **Edit → Create Resonant Instrument from
+  Picked Graph...** to finalize the whole tree into a new library entry.
+  **Edit → Cancel Branching Curve** abandons a session part-way through.
+
+### Notes
+
+Full regression: `sound-mind-core` 221662 assertions (1037 cases)
+passing (5 new), `sound-mind-studio` full suite genuinely passing (16
+new tests), Doxygen: 0 warnings. See `docs/sound-mind-architecture.md`'s
+Decision #192. Closes out the `v0.Y.59.1` (Resonant Instruments)
+milestone in full.
+
 ## [0.1.4.5] - 2026-10-01
 
 Resonant Instruments, Installment E: a MindWave generator fed by a captured profile.

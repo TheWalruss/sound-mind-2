@@ -5342,6 +5342,200 @@ void MainWindowTest::createResonantInstrumentFromPickedPathIsANoOpWithNothingPic
     QVERIFY(window.project()->resonantProfiles().empty());
 }
 
+void MainWindowTest::startBranchingCurveFromPickedPathBeginsASessionWithTheTrunk() {
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "sound-mind-test-branching-curve-trunk.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(150, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+    QTest::mouseMove(canvas, QPoint(50, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(50, 30));
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
+
+    window.startBranchingCurveFromPickedPath();
+    // A session with only the trunk already finalizes to exactly the same
+    // kind of result createResonantInstrumentFromPickedPathNamed() already
+    // produces for a lone stroke - confirming the trunk was actually
+    // captured, without needing to inspect branchCurveSession_'s own
+    // private state directly.
+    window.createResonantInstrumentFromPickedGraphNamed("Trunk Only");
+
+    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
+    QCOMPARE(window.project()->resonantProfiles().front().name, std::string("Trunk Only"));
+    QVERIFY(!window.project()->resonantProfiles().front().spectrum.empty());
+}
+
+void MainWindowTest::startBranchingCurveFromPickedPathIsANoOpWithNothingPicked() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.startBranchingCurveFromPickedPath();
+    window.addPickedPathAsBranch();
+    window.createResonantInstrumentFromPickedGraphNamed("Should Not Be Created");
+
+    QVERIFY(window.project()->resonantProfiles().empty());
+}
+
+void MainWindowTest::pickingAPointOnTheTrunkThenAddingABranchGraftsItOn() {
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "sound-mind-test-branching-curve-graft.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(150, 50);
+
+    // Trunk stroke, then Branch stroke, in two clearly separate regions so
+    // PickController's own bounding-box hit test never has to disambiguate
+    // between them.
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+    QTest::mouseMove(canvas, QPoint(50, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(50, 30));
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(90, 10));
+    QTest::mouseMove(canvas, QPoint(130, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(130, 30));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+
+    // Pick the trunk, start the session.
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
+    window.startBranchingCurveFromPickedPath();
+
+    // Re-pick the trunk at a specific point - now that a session is
+    // active, this arms a graft candidate (noteBranchCurveGraftCandidate(),
+    // wired alongside every pickStrokeStarted the same way for every
+    // ordinary Pick click, active session or not).
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(35, 25));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(35, 25));
+
+    // Pick the branch stroke instead - its own OperationId isn't one of
+    // the session's own branches yet, so this must NOT clobber the graft
+    // armed just above.
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(110, 20));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(110, 20));
+
+    window.addPickedPathAsBranch();
+    window.createResonantInstrumentFromPickedGraphNamed("Branching Wire");
+
+    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
+    QCOMPARE(window.project()->resonantProfiles().front().name, std::string("Branching Wire"));
+    QVERIFY(!window.project()->resonantProfiles().front().spectrum.empty());
+    // A capture never logs an Operation - both strokes drawn above are the
+    // only two entries.
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
+}
+
+void MainWindowTest::addPickedPathAsBranchIsANoOpWithNoPendingGraft() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-branching-curve-nograft.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(150, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+    QTest::mouseMove(canvas, QPoint(50, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(50, 30));
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
+    window.startBranchingCurveFromPickedPath();
+
+    // No re-pick in between - nothing armed a graft candidate yet, so
+    // adding the same (still-Picked) stroke again as a "branch" must
+    // refuse rather than silently appending an ungrafted second entry.
+    window.addPickedPathAsBranch();
+    window.createResonantInstrumentFromPickedGraphNamed("Trunk Still Only");
+
+    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
+    QVERIFY(!window.project()->resonantProfiles().front().spectrum.empty());
+}
+
+void MainWindowTest::cancelBranchingCurveDiscardsTheSession() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-branching-curve-cancel.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(150, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+    QTest::mouseMove(canvas, QPoint(50, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(50, 30));
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
+    window.startBranchingCurveFromPickedPath();
+
+    window.cancelBranchingCurve();
+    window.createResonantInstrumentFromPickedGraphNamed("Should Not Be Created");
+
+    QVERIFY(window.project()->resonantProfiles().empty());
+}
+
+void MainWindowTest::createResonantInstrumentFromPickedGraphNamedBuildsFromEveryBranchAndEndsTheSession() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-branching-curve-ends.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->setFixedSize(150, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(10, 10));
+    QTest::mouseMove(canvas, QPoint(50, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(50, 30));
+
+    window.setPaintModeEnabled(false);
+    window.setPickModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
+    window.startBranchingCurveFromPickedPath();
+
+    window.createResonantInstrumentFromPickedGraphNamed("First Tree");
+    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
+
+    // The session ended - finalizing again (with nothing newly started)
+    // must be a no-op, not a second, empty-ish entry.
+    window.createResonantInstrumentFromPickedGraphNamed("Should Not Be Created");
+
+    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
+}
+
+void MainWindowTest::createResonantInstrumentFromPickedGraphNamedIsANoOpWithNoSessionActive() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+
+    window.createResonantInstrumentFromPickedGraphNamed("Should Not Be Created");
+
+    QVERIFY(window.project()->resonantProfiles().empty());
+}
+
 void MainWindowTest::clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject() {
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-path-tool.smproj";
     TestMainWindow window;

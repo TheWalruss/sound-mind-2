@@ -60,6 +60,81 @@ CurvePoint lerp(const CurvePoint& a, const CurvePoint& b, double t) {
     return CurvePoint{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t};
 }
 
+/// @brief The arc-length-resampling half of `curveGraphFromPath()`, shared
+/// verbatim with `curveGraphFromBranches()` (one call per branch) - see
+/// `curveGraphFromPath()`'s own docs for the dense-Bezier-then-resample
+/// technique itself, unchanged here. Appends exactly `nodeCount` new nodes
+/// (chained node-to-node) to `graph` and returns the first one's own index;
+/// `std::nullopt`, appending nothing, if `path` has fewer than 2 nodes of
+/// its own.
+std::optional<std::size_t> appendResampledChain(CurveGraph& graph, const Path& path, double frequencyToTimeScale,
+                                                 std::size_t nodeCount) {
+    const auto& nodes = path.nodes();
+    if (nodes.size() < 2) {
+        return std::nullopt;
+    }
+
+    std::vector<CurvePoint> dense;
+    const std::size_t segmentCount = nodes.size() - 1;
+    for (std::size_t i = 0; i < segmentCount; ++i) {
+        const PathNode& start = nodes[i];
+        const PathNode& end = nodes[i + 1];
+        const TimeFrequencyPoint p0 = start.anchor;
+        const TimeFrequencyPoint p1 = start.handleOut.value_or(start.anchor);
+        const TimeFrequencyPoint p2 = end.handleIn.value_or(end.anchor);
+        const TimeFrequencyPoint p3 = end.anchor;
+        if (i == 0) {
+            dense.push_back(normalize(p0, frequencyToTimeScale));
+        }
+        for (int step = 1; step <= kDenseStepsPerSegment; ++step) {
+            const double t = static_cast<double>(step) / static_cast<double>(kDenseStepsPerSegment);
+            dense.push_back(normalize(evaluateCubicBezier(p0, p1, p2, p3, t), frequencyToTimeScale));
+        }
+    }
+
+    std::vector<double> cumulative(dense.size(), 0.0);
+    for (std::size_t i = 1; i < dense.size(); ++i) {
+        cumulative[i] = cumulative[i - 1] + distanceBetween(dense[i - 1], dense[i]);
+    }
+    const double total = cumulative.back();
+
+    const std::size_t firstIndex = graph.nodes().size();
+    std::size_t segment = 0;
+    for (std::size_t j = 0; j < nodeCount; ++j) {
+        const double target = total * static_cast<double>(j) / static_cast<double>(nodeCount - 1);
+        while (segment + 2 < dense.size() && cumulative[segment + 1] < target) {
+            ++segment;
+        }
+        const double segmentStart = cumulative[segment];
+        const double segmentEnd = cumulative[segment + 1];
+        const double localT = segmentEnd > segmentStart ? (target - segmentStart) / (segmentEnd - segmentStart) : 0.0;
+        graph.addNode(lerp(dense[segment], dense[segment + 1], std::clamp(localT, 0.0, 1.0)));
+        if (j > 0) {
+            graph.addEdge(firstIndex + j - 1, firstIndex + j);
+        }
+    }
+    return firstIndex;
+}
+
+/// @brief The index, among `graph`'s own nodes `[firstIndex, firstIndex +
+/// count)`, whose position is closest to `point` - used by
+/// `curveGraphFromBranches()` to find exactly where along a parent
+/// branch's own already-resampled chain a child branch's `graftPoint`
+/// actually lands.
+std::size_t nearestNodeInRange(const CurveGraph& graph, std::size_t firstIndex, std::size_t count,
+                                const CurvePoint& point) {
+    std::size_t nearest = firstIndex;
+    double nearestDistance = distanceBetween(graph.nodes()[firstIndex].position, point);
+    for (std::size_t i = firstIndex + 1; i < firstIndex + count; ++i) {
+        const double distance = distanceBetween(graph.nodes()[i].position, point);
+        if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearest = i;
+        }
+    }
+    return nearest;
+}
+
 }  // namespace
 
 std::size_t CurveGraph::addNode(CurvePoint position) {
@@ -82,52 +157,28 @@ bool CurveGraph::addEdge(std::size_t a, std::size_t b) {
 
 CurveGraph curveGraphFromPath(const Path& path, double frequencyToTimeScale, std::size_t targetNodeCount) {
     CurveGraph graph;
-    const auto& nodes = path.nodes();
-    if (nodes.size() < 2) {
-        return graph;
-    }
-    const std::size_t nodeCount = std::max<std::size_t>(2, targetNodeCount);
+    appendResampledChain(graph, path, frequencyToTimeScale, std::max<std::size_t>(2, targetNodeCount));
+    return graph;
+}
 
-    // Dense Bézier evaluation - see this function's own docs.
-    std::vector<CurvePoint> dense;
-    const std::size_t segmentCount = nodes.size() - 1;
-    for (std::size_t i = 0; i < segmentCount; ++i) {
-        const PathNode& start = nodes[i];
-        const PathNode& end = nodes[i + 1];
-        const TimeFrequencyPoint p0 = start.anchor;
-        const TimeFrequencyPoint p1 = start.handleOut.value_or(start.anchor);
-        const TimeFrequencyPoint p2 = end.handleIn.value_or(end.anchor);
-        const TimeFrequencyPoint p3 = end.anchor;
-        if (i == 0) {
-            dense.push_back(normalize(p0, frequencyToTimeScale));
-        }
-        for (int step = 1; step <= kDenseStepsPerSegment; ++step) {
-            const double t = static_cast<double>(step) / static_cast<double>(kDenseStepsPerSegment);
-            dense.push_back(normalize(evaluateCubicBezier(p0, p1, p2, p3, t), frequencyToTimeScale));
-        }
-    }
+CurveGraph curveGraphFromBranches(const std::vector<BranchGraft>& branches, double frequencyToTimeScale,
+                                   std::size_t targetNodeCountPerBranch) {
+    CurveGraph graph;
+    const std::size_t nodeCount = std::max<std::size_t>(2, targetNodeCountPerBranch);
 
-    // Cumulative arc length, then resample at nodeCount evenly-spaced
-    // target lengths - see this function's own docs.
-    std::vector<double> cumulative(dense.size(), 0.0);
-    for (std::size_t i = 1; i < dense.size(); ++i) {
-        cumulative[i] = cumulative[i - 1] + distanceBetween(dense[i - 1], dense[i]);
-    }
-    const double total = cumulative.back();
-
-    std::size_t segment = 0;
-    for (std::size_t j = 0; j < nodeCount; ++j) {
-        const double target = total * static_cast<double>(j) / static_cast<double>(nodeCount - 1);
-        while (segment + 2 < dense.size() && cumulative[segment + 1] < target) {
-            ++segment;
+    std::vector<std::optional<std::size_t>> firstNodeOfBranch(branches.size());
+    for (std::size_t i = 0; i < branches.size(); ++i) {
+        firstNodeOfBranch[i] = appendResampledChain(graph, branches[i].path, frequencyToTimeScale, nodeCount);
+        if (!firstNodeOfBranch[i].has_value()) {
+            continue;  // Too degenerate a stroke (<2 Path nodes) to include.
         }
-        const double segmentStart = cumulative[segment];
-        const double segmentEnd = cumulative[segment + 1];
-        const double localT = segmentEnd > segmentStart ? (target - segmentStart) / (segmentEnd - segmentStart) : 0.0;
-        graph.addNode(lerp(dense[segment], dense[segment + 1], std::clamp(localT, 0.0, 1.0)));
-        if (j > 0) {
-            graph.addEdge(j - 1, j);
+        const auto& parent = branches[i].parentIndex;
+        if (!parent.has_value() || *parent >= i || !firstNodeOfBranch[*parent].has_value()) {
+            continue;  // The trunk, or a malformed/skipped graft - see BranchGraft's own docs.
         }
+        const std::size_t parentNode = nearestNodeInRange(graph, *firstNodeOfBranch[*parent], nodeCount,
+                                                           normalize(branches[i].graftPoint, frequencyToTimeScale));
+        graph.addEdge(parentNode, *firstNodeOfBranch[i]);
     }
     return graph;
 }

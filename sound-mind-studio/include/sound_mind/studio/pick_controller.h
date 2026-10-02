@@ -283,6 +283,20 @@ public:
     [[nodiscard]] std::optional<sound_mind::core::BlendMode> selectedPasteBlendMode() const;
 
     /**
+     * @brief The currently-selected object's own stable identity -
+     *        `BranchCurveSession`'s own `noteGraftCandidate()`/`addBranch()`
+     *        use this (not `selectedPath()`'s returned value) to recognize
+     *        the *same* stroke being re-Picked across several clicks, since
+     *        a `Path` has no identity of its own to compare by value
+     *        reliably.
+     * @return The selected `Operation::id()`, or `std::nullopt` if nothing
+     *         is currently selected.
+     */
+    [[nodiscard]] std::optional<sound_mind::core::OperationId> selectedOperationId() const noexcept {
+        return pickedOperationId_;
+    }
+
+    /**
      * @brief Continues an in-progress drag, live-previewing the selected
      *        object translated by how far the cursor has moved since
      *        pick(). A no-op if nothing is selected.

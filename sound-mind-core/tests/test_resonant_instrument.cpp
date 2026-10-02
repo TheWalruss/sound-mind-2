@@ -9,8 +9,10 @@
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/resonant_instrument.h"
 
+using sound_mind::core::BranchGraft;
 using sound_mind::core::computeWaveKernelSignature;
 using sound_mind::core::CurveGraph;
+using sound_mind::core::curveGraphFromBranches;
 using sound_mind::core::curveGraphFromPath;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
@@ -134,6 +136,84 @@ TEST_CASE("curveGraphFromPath clamps targetNodeCount up to at least 2", "[core][
     const CurveGraph graph = curveGraphFromPath(path, 1.0, 1);
 
     REQUIRE(graph.nodes().size() == 2);
+}
+
+TEST_CASE("curveGraphFromBranches returns an empty graph for no branches", "[core][resonant_instrument]") {
+    const CurveGraph graph = curveGraphFromBranches({}, 1.0, 5);
+
+    REQUIRE(graph.nodes().empty());
+}
+
+TEST_CASE("curveGraphFromBranches with a single trunk matches curveGraphFromPath", "[core][resonant_instrument]") {
+    const Path path = straightLinePath(10.0);
+    BranchGraft trunk;
+    trunk.path = path;
+
+    const CurveGraph graph = curveGraphFromBranches({trunk}, 1.0, 5);
+
+    REQUIRE(graph.nodes().size() == 5);
+    for (std::size_t i = 0; i < 5; ++i) {
+        const double expectedX = 10.0 * static_cast<double>(i) / 4.0;
+        REQUIRE(graph.nodes()[i].position.x == Catch::Approx(expectedX).margin(1e-6));
+    }
+}
+
+TEST_CASE("curveGraphFromBranches welds a child branch onto its parent's nearest node",
+          "[core][resonant_instrument]") {
+    BranchGraft trunk;
+    trunk.path = straightLinePath(10.0);  // Resampled to 5 nodes at x = 0, 2.5, 5, 7.5, 10.
+
+    BranchGraft child;
+    child.path = straightLinePath(2.0);
+    child.parentIndex = 0;
+    child.graftPoint = TimeFrequencyPoint{5.0, 0.0};  // Nearest to the trunk's own middle node (index 2).
+
+    const CurveGraph graph = curveGraphFromBranches({trunk, child}, 1.0, 5);
+
+    REQUIRE(graph.nodes().size() == 10);  // 5 trunk nodes + 5 child nodes.
+    // The child's own first node (index 5) is welded onto the trunk's
+    // middle node (index 2), on top of the child's own internal chain
+    // edge to its second node (index 6).
+    REQUIRE(graph.nodes()[5].neighbors.size() == 2);
+    REQUIRE(std::find(graph.nodes()[5].neighbors.begin(), graph.nodes()[5].neighbors.end(), std::size_t{2}) !=
+            graph.nodes()[5].neighbors.end());
+    REQUIRE(std::find(graph.nodes()[2].neighbors.begin(), graph.nodes()[2].neighbors.end(), std::size_t{5}) !=
+            graph.nodes()[2].neighbors.end());
+}
+
+TEST_CASE("curveGraphFromBranches skips a graft whose parentIndex is invalid or forward-referencing",
+          "[core][resonant_instrument]") {
+    BranchGraft trunk;
+    trunk.path = straightLinePath(10.0);
+
+    BranchGraft selfReferencing;
+    selfReferencing.path = straightLinePath(2.0);
+    selfReferencing.parentIndex = 1;  // Points at itself - not an earlier entry.
+
+    const CurveGraph graph = curveGraphFromBranches({trunk, selfReferencing}, 1.0, 5);
+
+    REQUIRE(graph.nodes().size() == 10);
+    // Its own open chain only (1 neighbor at each end, 2 in the middle) -
+    // no stray graft edge onto the trunk.
+    REQUIRE(graph.nodes()[5].neighbors.size() == 1);
+    REQUIRE(graph.nodes()[9].neighbors.size() == 1);
+    REQUIRE(graph.nodes()[2].neighbors.size() == 2);  // Unaffected - still just its own trunk-chain neighbors.
+}
+
+TEST_CASE("curveGraphFromBranches skips a graft onto a too-degenerate (skipped) parent",
+          "[core][resonant_instrument]") {
+    BranchGraft degenerateTrunk;
+    degenerateTrunk.path = Path{};  // Fewer than 2 nodes - contributes nothing.
+
+    BranchGraft child;
+    child.path = straightLinePath(2.0);
+    child.parentIndex = 0;
+    child.graftPoint = TimeFrequencyPoint{0.0, 0.0};
+
+    const CurveGraph graph = curveGraphFromBranches({degenerateTrunk, child}, 1.0, 5);
+
+    REQUIRE(graph.nodes().size() == 5);  // Only the child's own 5 nodes - the degenerate trunk added none.
+    REQUIRE(graph.nodes().front().neighbors.size() == 1);  // Open chain, no stray graft edge.
 }
 
 TEST_CASE("computeWaveKernelSignature returns an all-zero spectrum of the requested size for degenerate graphs",

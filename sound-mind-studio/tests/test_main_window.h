@@ -255,6 +255,15 @@ private slots:
     void createResonantInstrumentFromPickedPathNamedAddsANamedEntryToTheLibrary();
     void createResonantInstrumentFromPickedPathNamedIsANoOpWithNothingPicked();
     void createResonantInstrumentFromPickedPathIsANoOpWithNothingPicked();
+
+    // Resonant Instruments - Branching Curve editor (v0.Y.59.1, item 1's deferred half).
+    void startBranchingCurveFromPickedPathBeginsASessionWithTheTrunk();
+    void startBranchingCurveFromPickedPathIsANoOpWithNothingPicked();
+    void pickingAPointOnTheTrunkThenAddingABranchGraftsItOn();
+    void addPickedPathAsBranchIsANoOpWithNoPendingGraft();
+    void cancelBranchingCurveDiscardsTheSession();
+    void createResonantInstrumentFromPickedGraphNamedBuildsFromEveryBranchAndEndsTheSession();
+    void createResonantInstrumentFromPickedGraphNamedIsANoOpWithNoSessionActive();
     void clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject();
     void cancelPathDiscardsInProgressPlacementWithoutCommittingAnything();
     void smoothNodesToggleAffectsSubsequentlyPlacedNodes();

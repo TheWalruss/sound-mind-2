@@ -5,6 +5,7 @@ add_executable(sound-mind-studio-tests
     test_about_dialog.cpp
     test_audio_snippet_picker_dialog.cpp
     test_axis_labels.cpp
+    test_branch_curve_session.cpp
     test_canvas_widget.cpp
     test_chord_generator_controller.cpp
     test_chord_generator_panel.cpp

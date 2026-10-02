@@ -1341,6 +1341,22 @@ selection to a plain, axis-aligned rectangle.
   [Painting](#painting)'s Tool Configuration panel and select it from the
   drop-down there to paint with it (see "Resonant Profile"/"Fall-Off
   Rate" there).
+- **Branching Curve editor** - build a real tree/graph for a Resonant
+  Instrument, instead of just one straight stroke. Draw a trunk stroke
+  as an ordinary paint stroke, switch to Pick and click it, then **Edit
+  → Start Branching Curve from Picked Path**. To grow a branch: click a
+  precise point on the trunk (or on any already-added branch) - this
+  arms that point as the next branch's own attachment point. Switch to
+  Paint and draw a new stroke, switch back to Pick and click it, then
+  **Edit → Add Picked Path as Branch**. Repeat as many times as you
+  like, grafting new branches onto the trunk or onto earlier branches.
+  When the tree is complete, **Edit → Create Resonant Instrument from
+  Picked Graph...** prompts for a name and stores the whole tree's own
+  spectrum, the same way Create Resonant Instrument from Picked Path
+  does for a single curve. **Edit → Cancel Branching Curve** abandons an
+  in-progress tree without saving anything, if you want to start over.
+  Every branch past the trunk needs its own attachment point clicked
+  first - adding a branch with no point armed does nothing.
 - **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
   actually dragging (a plain click) on the canvas while in Select mode.
 
@@ -1726,15 +1742,17 @@ rather than drawn incorrectly - a proper polar-aware redraw for each
 remains future work, since each is built from straight lines that don't
 translate onto a disk without their own dedicated redesign.
 
-**Resonant Instruments** are now paintable: **Edit → Create Resonant
-Instrument from Picked Path...** (see [Pick](#pick) above) analyzes a
-picked path's own shape and stores the result permanently, under a name
-you choose, and **Resonant Instrument** (see [Painting](#painting) below)
-paints with it. Still missing: a MindWave type that reads a saved profile
-back out as a modulation source, a panel listing everything you've
-captured (the Tool Configuration panel's own picker is the only place
-they show up so far), and a way to draw a branching curve/tree (only an
-ordinary linear path/stroke can be analyzed today).
+**Resonant Instruments** are now complete end to end: **Edit → Create
+Resonant Instrument from Picked Path...** (see [Pick](#pick) above)
+analyzes a picked path's own shape and stores the result permanently,
+under a name you choose; **Resonant Instrument** (see [Painting](#painting)
+below) paints with it; a **Resonant** MindWave generator (see
+[MindWaves](#mindwaves) above) reads a saved profile back out as a
+modulation source; and the Branching Curve editor
+(see [Pick](#pick) above) lets you build a real tree/graph by hand
+instead of only an ordinary linear path/stroke. Still missing: a panel
+listing everything you've captured (the Tool Configuration panel's own
+picker is the only place they show up so far).
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:

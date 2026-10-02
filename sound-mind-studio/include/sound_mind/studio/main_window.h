@@ -23,6 +23,7 @@
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
+#include "sound_mind/studio/branch_curve_session.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/chord_generator_panel.h"
 #include "sound_mind/studio/configure_devices_panel.h"
@@ -1677,6 +1678,110 @@ public slots:
     void createResonantInstrumentFromPickedPathNamed(const std::string& name);
 
     /**
+     * @brief Starts a new `BranchCurveSession`, using whatever's currently
+     *        Picked as its own trunk - the first step of the Branching
+     *        Curve editor (`docs/sound-mind-roadmap.md`'s "Resonant
+     *        Instruments" item 1's own deferred half: "letting someone
+     *        build a real tree/graph by hand... rather than only
+     *        resampling an existing linear stroke"), the actual work
+     *        behind the Edit menu's "Start Branching Curve from Picked
+     *        Path" action.
+     *
+     * **The workflow, in full**: draw a trunk stroke as an ordinary paint
+     * stroke, switch to Pick and click it, then choose this action. To
+     * grow a branch: click a precise point on the trunk (or any already-
+     * added branch) - every Pick click, while a session is active, is
+     * reported to `branchCurveSession_` via `noteBranchCurveGraftCandidate()`
+     * (see its own docs); draw a new stroke there, Pick it, then choose
+     * Edit → Add Picked Path as Branch (`addPickedPathAsBranch()`).
+     * Repeat for as many branches as wanted, then Edit → Create Resonant
+     * Instrument from Picked Graph... (`createResonantInstrumentFromPickedGraph()`)
+     * finalizes the whole tree. A no-op unless something is currently
+     * Picked.
+     *
+     * Starting a session discards any previous one's own gathered
+     * branches entirely - the same "starting fresh always wins" rule
+     * `PaintController::beginStroke()`'s own docs establish for an
+     * already-in-progress stroke, applied here to a whole session instead
+     * of a single stroke.
+     */
+    void startBranchingCurveFromPickedPath();
+
+    /**
+     * @brief Adds whatever's currently Picked as a new branch of the
+     *        in-progress `branchCurveSession_`, grafted wherever the most
+     *        recent qualifying Pick click landed - the actual work behind
+     *        the Edit menu's "Add Picked Path as Branch" action. See
+     *        `startBranchingCurveFromPickedPath()`'s own docs for the
+     *        workflow this fits into.
+     *
+     * A no-op (per `BranchCurveSession::addBranch()`'s own docs) unless a
+     * session is currently active, something is currently Picked, *and* a
+     * graft candidate is currently armed (`branchCurveSession_.hasPendingGraft()`)
+     * - every branch past the trunk must be explicitly grafted onto an
+     * already-added branch first; there is no "just append it loosely, not
+     * connected to anything" fallback.
+     */
+    void addPickedPathAsBranch();
+
+    /**
+     * @brief Discards the in-progress `branchCurveSession_` entirely,
+     *        without finalizing it - the actual work behind the Edit
+     *        menu's "Cancel Branching Curve" action, for abandoning a
+     *        tree part-way through rather than being forced to finish or
+     *        restart from the trunk. A no-op if no session is active.
+     */
+    void cancelBranchingCurve();
+
+    /**
+     * @brief Computes a Wave Kernel Signature spectrum from the whole
+     *        in-progress `branchCurveSession_` (every branch gathered so
+     *        far, trunk included) and stores it as a new, named entry in
+     *        the project's Resonant Instrument profile library - the
+     *        genuinely branching counterpart to
+     *        createResonantInstrumentFromPickedPath() above, via
+     *        `curveGraphFromBranches()` instead of `curveGraphFromPath()`.
+     *        The actual work behind the Edit menu's "Create Resonant
+     *        Instrument from Picked Graph..." action.
+     *
+     * Prompts for a name the same way createResonantInstrumentFromPickedPath()
+     * does, then delegates to createResonantInstrumentFromPickedGraphNamed() -
+     * see that method's own docs on why tests call it directly instead of
+     * this one. A no-op unless a session is currently active, or the name
+     * prompt is cancelled/left empty.
+     */
+    void createResonantInstrumentFromPickedGraph();
+
+    /**
+     * @brief The dialog-free half of createResonantInstrumentFromPickedGraph() -
+     *        see `createResonantInstrumentFromPickedPathNamed()`'s own
+     *        identical docs on why this exists.
+     *
+     * Builds the branching `CurveGraph` via `curveGraphFromBranches()`
+     * (`branchCurveSession_.branches()`, `kResonantInstrumentNodeCount`
+     * nodes per branch) and computes its own aggregated spectrum
+     * (`computeWaveKernelSignature()`, `kResonantInstrumentSpectrumSize`
+     * samples), then stores the result via `Project::addResonantProfile()`
+     * and ends the session - a no-op (not ending the session) if no
+     * session is currently active or no project is open.
+     *
+     * @param name Display name for the new library entry.
+     */
+    void createResonantInstrumentFromPickedGraphNamed(const std::string& name);
+
+    /**
+     * @brief Reports a Pick click to `branchCurveSession_`, if one is
+     *        currently active - called from every place `ToolPaletteController::
+     *        beginPick()` already is, right alongside it, so ordinary Pick
+     *        behavior needs no change of its own to support this (see
+     *        `BranchCurveSession::noteGraftCandidate()`'s own docs on why
+     *        an unrelated click is always a safe no-op).
+     * @param point The click position, in the same raw `TimeFrequencyPoint`
+     *        space the click was already being forwarded in.
+     */
+    void noteBranchCurveGraftCandidate(sound_mind::core::TimeFrequencyPoint point);
+
+    /**
      * @brief Copies the current selection's own pixels onto the clipboard -
      *        the actual work behind the Edit menu's Copy action. Delegates
      *        to `SelectionController::copySelection()`; a no-op if there's
@@ -3305,6 +3410,18 @@ private:
     ///        construction. `clear()`ed in setProject() - see that
     ///        method's own body.
     UndoStack undoStack_;
+
+    /// @brief The in-progress Branching Curve editor's own state, if any -
+    ///        see `BranchCurveSession`'s own docs and
+    ///        `startBranchingCurveFromPickedPath()`'s for the workflow.
+    ///        Owned by value, the same reasoning `undoStack_` above
+    ///        already gives - a plain value type, nothing else needs to
+    ///        own it. Not reset in setProject() - unlike `undoStack_`'s
+    ///        own history, an in-progress branching curve has nothing
+    ///        project-specific about its own gathered `Path`s to go stale,
+    ///        though switching projects mid-session is an unusual enough
+    ///        thing to do that it isn't specifically tested for either.
+    BranchCurveSession branchCurveSession_;
 
     /// @brief Records a timestamped macro while active - `v0.Y.49.1`
     ///        (Macro Mode). Owned by value, the same reasoning undoStack_

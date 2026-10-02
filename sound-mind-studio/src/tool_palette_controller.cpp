@@ -272,6 +272,10 @@ std::optional<sound_mind::core::Path> ToolPaletteController::selectedPath() cons
     return pickController_->selectedPath();
 }
 
+std::optional<sound_mind::core::OperationId> ToolPaletteController::selectedOperationId() const {
+    return pickController_->selectedOperationId();
+}
+
 bool ToolPaletteController::isPathPlacementInProgress() const { return pathController_->isPlacementInProgress(); }
 
 std::optional<sound_mind::core::BlendMode> ToolPaletteController::selectedPasteBlendMode() const {

@@ -522,6 +522,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(canvas_, &CanvasWidget::pickStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
         if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
             toolPaletteController_->beginPick(*layerId, point);
+            noteBranchCurveGraftCandidate(point);
         }
     });
     connect(canvas_, &CanvasWidget::selectStrokeStarted, this,
@@ -997,6 +998,25 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // instead of overwriting part of an existing MindWave.
     QAction* createResonantInstrumentAction = editMenu->addAction(tr("Create &Resonant Instrument from Picked Path..."));
     connect(createResonantInstrumentAction, &QAction::triggered, this, &MainWindow::createResonantInstrumentFromPickedPath);
+
+    // Resonant Instruments - Branching Curve editor (v0.Y.59.1, the
+    // deferred half of item 1) - same "always present, no-op with nothing
+    // suitable Picked/no session active" treatment as every action above.
+    // See startBranchingCurveFromPickedPath()'s own docs for the full
+    // workflow these three fit into.
+    QAction* startBranchingCurveAction = editMenu->addAction(tr("Start Branching Curve from Picked Path"));
+    connect(startBranchingCurveAction, &QAction::triggered, this, &MainWindow::startBranchingCurveFromPickedPath);
+
+    QAction* addBranchAction = editMenu->addAction(tr("Add Picked Path as &Branch"));
+    connect(addBranchAction, &QAction::triggered, this, &MainWindow::addPickedPathAsBranch);
+
+    QAction* cancelBranchingCurveAction = editMenu->addAction(tr("Cancel Branching Curve"));
+    connect(cancelBranchingCurveAction, &QAction::triggered, this, &MainWindow::cancelBranchingCurve);
+
+    QAction* createResonantInstrumentFromGraphAction =
+        editMenu->addAction(tr("Create Resonant Instrument from Picked &Graph..."));
+    connect(createResonantInstrumentFromGraphAction, &QAction::triggered, this,
+            &MainWindow::createResonantInstrumentFromPickedGraph);
 
     editMenu->addSeparator();
 
@@ -3369,6 +3389,78 @@ void MainWindow::createResonantInstrumentFromPickedPathNamed(const std::string& 
     // panel's own picker needs an explicit nudge here instead.
     toolConfigurationPanel_->refreshResonantProfiles();
     statusBar()->showMessage(tr("Created Resonant Instrument \"%1\".").arg(QString::fromStdString(name)), 5000);
+}
+
+void MainWindow::startBranchingCurveFromPickedPath() {
+    const auto path = toolPaletteController_->selectedPath();
+    const auto operationId = toolPaletteController_->selectedOperationId();
+    if (!path.has_value() || !operationId.has_value()) {
+        return;
+    }
+    branchCurveSession_.start(*path, *operationId);
+    statusBar()->showMessage(
+        tr("Branching Curve started - Pick a point on it, draw a branch, Pick it, then Add Picked Path as Branch."),
+        5000);
+}
+
+void MainWindow::addPickedPathAsBranch() {
+    const auto path = toolPaletteController_->selectedPath();
+    const auto operationId = toolPaletteController_->selectedOperationId();
+    if (!path.has_value() || !operationId.has_value()) {
+        return;
+    }
+    if (branchCurveSession_.addBranch(*path, *operationId)) {
+        statusBar()->showMessage(
+            tr("Branch added (%1 total). Pick a graft point for the next one, or finalize as a Resonant Instrument.")
+                .arg(branchCurveSession_.branches().size()),
+            5000);
+    }
+}
+
+void MainWindow::cancelBranchingCurve() { branchCurveSession_.end(); }
+
+void MainWindow::createResonantInstrumentFromPickedGraph() {
+    if (!project_.has_value() || !branchCurveSession_.isActive()) {
+        return;
+    }
+    bool ok = false;
+    const QString defaultName = tr("Resonant Instrument %1").arg(project_->resonantProfiles().size() + 1);
+    const QString name =
+        QInputDialog::getText(this, tr("Create Resonant Instrument"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
+    if (!ok || name.trimmed().isEmpty()) {
+        return;
+    }
+    createResonantInstrumentFromPickedGraphNamed(name.trimmed().toStdString());
+}
+
+void MainWindow::createResonantInstrumentFromPickedGraphNamed(const std::string& name) {
+    if (!project_.has_value() || !branchCurveSession_.isActive()) {
+        return;
+    }
+
+    const auto graph = sound_mind::core::curveGraphFromBranches(
+        branchCurveSession_.branches(), sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
+        kResonantInstrumentNodeCount);
+    const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonantInstrumentSpectrumSize);
+    project_->addResonantProfile(name, spectrum);
+    branchCurveSession_.end();
+    // See createResonantInstrumentFromPickedPathNamed()'s own identical
+    // comment - this capture writes directly to project_ too.
+    toolConfigurationPanel_->refreshResonantProfiles();
+    statusBar()->showMessage(tr("Created Resonant Instrument \"%1\" from the branching curve.")
+                                  .arg(QString::fromStdString(name)),
+                              5000);
+}
+
+void MainWindow::noteBranchCurveGraftCandidate(sound_mind::core::TimeFrequencyPoint point) {
+    if (!branchCurveSession_.isActive()) {
+        return;
+    }
+    const auto operationId = toolPaletteController_->selectedOperationId();
+    if (!operationId.has_value()) {
+        return;
+    }
+    branchCurveSession_.noteGraftCandidate(*operationId, point);
 }
 
 void MainWindow::copySelection() { toolPaletteController_->copySelection(); }

@@ -281,6 +281,15 @@ public:
     ///         is Picked.
     [[nodiscard]] std::optional<sound_mind::core::Path> selectedPath() const;
 
+    /// @brief The currently Picked object's own stable identity, if any -
+    ///        forwards to `PickController::selectedOperationId()`. The
+    ///        Branching Curve session's own way to recognize the same
+    ///        stroke being re-Picked across several clicks - see
+    ///        `BranchCurveSession`'s own docs.
+    /// @return The selected `Operation::id()`, or `std::nullopt` if
+    ///         nothing is currently Picked.
+    [[nodiscard]] std::optional<sound_mind::core::OperationId> selectedOperationId() const;
+
     /// @brief Whether the Path tool is currently mid-placement (a first
     ///        node placed, no `finishPath()`/`cancelPath()` yet) - forwards
     ///        to `PathController::isPlacementInProgress()`. Half of the

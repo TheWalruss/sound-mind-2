@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 #include <vector>
 
 #include "sound_mind/core/path.h"
@@ -67,13 +68,13 @@ struct CurveNode {
  * single `t` in `[0, 1]`"), stays completely untouched by this feature.
  * `curveGraphFromPath()` below is the bridge: any already-drawn `Path`
  * (freehand-captured or placed with the Path tool, it makes no
- * difference) can be used as a Resonant Instrument's own source curve
- * today, without first needing a dedicated branching-curve editor - that
- * richer drawing tool, letting someone build a real tree/graph by hand
- * rather than only a plain line, is deferred to a later installment.
- * `CurveNode::neighbors` already supports that once it exists (a node can
- * already carry any number of neighbors, not just two) - no further
- * change to this type itself will be needed when that editor arrives.
+ * difference) can be used as a Resonant Instrument's own source curve,
+ * no branching-curve editor required. `curveGraphFromBranches()` is the
+ * genuinely branching entry point - see its own docs - built on exactly
+ * the same per-branch resampling, with one extra cross-branch edge per
+ * graft point. `CurveNode::neighbors` needed no change at all to support
+ * either one: a node could already carry any number of neighbors, not
+ * just two.
  *
  * Purely a plain data structure - no Bézier curvature, no gradient, no
  * paint semantics of any kind, unlike `Path`. Every edge is a straight
@@ -144,6 +145,77 @@ private:
  */
 [[nodiscard]] CurveGraph curveGraphFromPath(const Path& path, double frequencyToTimeScale,
                                              std::size_t targetNodeCount);
+
+/**
+ * @brief One stroke of a hand-drawn branching curve, plus where it grafts
+ *        onto whichever earlier stroke it grew from - `curveGraphFromBranches()`'s
+ *        own input, and the Studio-side "Branching Curve" session's own
+ *        accumulated state (`docs/sound-mind-roadmap.md`'s "Resonant
+ *        Instruments" item 1, the deferred branching-curve editor).
+ */
+struct BranchGraft {
+    /// @brief This stroke's own curve, in the same `Path` form every other
+    ///        freehand/Path-tool stroke already uses.
+    Path path;
+
+    /// @brief Index, into whichever `std::vector<BranchGraft>` this entry
+    ///        belongs to, of the earlier stroke this one grows out of -
+    ///        `std::nullopt` for the trunk (the one stroke with nothing to
+    ///        graft onto). Must refer to an earlier entry (a smaller
+    ///        index) if present; `curveGraphFromBranches()` silently skips
+    ///        a graft that doesn't, the same "malformed input degrades
+    ///        gracefully, never throws" convention `addEdge()`'s own docs
+    ///        already establish.
+    std::optional<std::size_t> parentIndex;
+
+    /// @brief Where, along `parentIndex`'s own curve, this stroke grafts
+    ///        on - the point the user clicked while Picking the parent
+    ///        stroke, in the same raw `TimeFrequencyPoint` space `path`'s
+    ///        own anchors already use (normalized the same way `path` is,
+    ///        via `frequencyToTimeScale`, once `curveGraphFromBranches()`
+    ///        locates the parent's own nearest resampled node to it).
+    ///        Ignored when `parentIndex` is `std::nullopt`.
+    TimeFrequencyPoint graftPoint;
+};
+
+/**
+ * @brief Resamples every stroke in `branches` into its own linear chain of
+ *        `targetNodeCountPerBranch` nodes (exactly `curveGraphFromPath()`'s
+ *        own resampling, run once per stroke), then welds each non-trunk
+ *        stroke onto its own parent with one extra edge at the closest
+ *        resampled node to its own `graftPoint` - the genuinely branching
+ *        counterpart to `curveGraphFromPath()`, assembling a real tree (or,
+ *        if a later installment ever lets a stroke graft onto more than
+ *        one parent, a general graph) out of individually-drawn strokes
+ *        rather than resampling a single existing `Path`.
+ *
+ * Each stroke keeps its own independent internal resampling - grafting
+ * never merges two nodes into one or re-threads a stroke's own interior
+ * nodes - so the result is `branches.size()` separate open chains, plus
+ * one additional cross-chain edge per graft. This is already exactly the
+ * shape `computeWaveKernelSignature()` needs: that function's own
+ * discretization is purely edge-local (no special case for how many edges
+ * meet at a node), so a node gaining one extra neighbor from a graft is no
+ * different, as far as the Laplace-Beltrami assembly is concerned, from
+ * any other node along a chain.
+ *
+ * @param branches Every stroke, trunk first - see `BranchGraft`'s own docs
+ *        on ordering (`parentIndex` must point to an earlier entry).
+ *        A stroke with fewer than 2 `Path` nodes of its own contributes no
+ *        nodes at all (the same too-degenerate-to-resample case
+ *        `curveGraphFromPath()` already handles), and anything that was
+ *        meant to graft onto it is silently skipped instead of grafting
+ *        onto nothing.
+ * @param frequencyToTimeScale The same per-project normalization scale
+ *        `curveGraphFromPath()` already takes.
+ * @param targetNodeCountPerBranch How many nodes to resample *each* stroke
+ *        down to; clamped up to `2` if given less, same as
+ *        `curveGraphFromPath()`.
+ * @return The assembled branching graph; empty if `branches` is empty or
+ *         every entry was too degenerate to include.
+ */
+[[nodiscard]] CurveGraph curveGraphFromBranches(const std::vector<BranchGraft>& branches, double frequencyToTimeScale,
+                                                 std::size_t targetNodeCountPerBranch);
 
 /**
  * @brief Computes `graph`'s own aggregated, whole-shape Wave Kernel

@@ -16,6 +16,7 @@
 #include "test_about_dialog.h"
 #include "test_audio_snippet_picker_dialog.h"
 #include "test_axis_labels.h"
+#include "test_branch_curve_session.h"
 #include "test_canvas_widget.h"
 #include "test_chord_generator_controller.h"
 #include "test_chord_generator_panel.h"
@@ -181,6 +182,9 @@ int main(int argc, char** argv) {
 
     AxisLabelsTest axisLabelsTest;
     status |= QTest::qExec(&axisLabelsTest, argc, argv);
+
+    BranchCurveSessionTest branchCurveSessionTest;
+    status |= QTest::qExec(&branchCurveSessionTest, argc, argv);
 
     GridPanelTest gridPanelTest;
     status |= QTest::qExec(&gridPanelTest, argc, argv);
