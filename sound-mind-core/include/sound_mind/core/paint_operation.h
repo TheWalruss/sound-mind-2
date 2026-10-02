@@ -54,7 +54,7 @@ public:
     /// @return This operation's own tool configuration.
     [[nodiscard]] const ToolConfiguration& config() const noexcept { return *config_; }
 
-    /// @copydoc Operation::translatedCopy()
+    /// @copydoc sound_mind::core::Operation::translatedCopy()
     [[nodiscard]] std::unique_ptr<Operation> translatedCopy(
         OperationId newId, double deltaTimeSeconds, double deltaFrequencyBins,
         const sound_mind::codec::StreamCodecConfig& config) const override {

@@ -1040,7 +1040,9 @@ INPUT                  = sound-mind-codec/include \
                          sound-mind-gpu/include \
                          sound-mind-gpu/src \
                          sound-mind-studio/include \
-                         sound-mind-studio/src
+                         sound-mind-studio/src \
+                         sound-mind-benchmark/include \
+                         sound-mind-benchmark/src
 
 # This tag can be used to specify the character encoding of the source files
 # that Doxygen parses. Internally Doxygen uses the UTF-8 encoding. Doxygen uses

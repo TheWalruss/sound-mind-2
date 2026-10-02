@@ -77,3 +77,6 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# sound-mind-benchmark's own per-machine output (see docs/sound-mind-benchmarking.md)
+benchmark-results/

@@ -992,7 +992,9 @@ By now Phase 2's I/O pipeline has been re-checked at the end of every phase; thi
 
 **Demo:** the full design-doc feature set, exercised together, meeting the latency targets on real desktop GPU hardware.
 
-**Moved after UI polish, 2026-09-27** - previously `v0.Y.58.1`, first in the phase; see that milestone's own note for why. **Methodology to be elaborated when this milestone is actually reached** - flagged here rather than detailed now, since specific validation ideas for it haven't been written down yet.
+**Moved after UI polish, 2026-09-27** - previously `v0.Y.58.1`, first in the phase; see that milestone's own note for why.
+
+**Methodology, Installment A - the benchmark suite itself.** Settled in `v0.1.6.1`, ahead of the rest of this milestone being reached in sequence (requested directly by the user as the next step after Resonant Instruments shipped, to start the performance-hardening pass early rather than waiting for every other Phase 6 milestone first). `sound-mind-benchmark` is a new developer-only tool - see `docs/sound-mind-benchmarking.md` for the full scenario catalog, JSON schema, and how to run it - that measures a representative subset of Core operations (filters at varying kernel sizes, paint operations at varying stroke counts, MindWave generators at varying field sizes, compositing at varying layer counts/blend modes, all at varying canvas sizes) and writes the results to a JSON report. It also doubles as the first concrete dependency for `docs/sound-mind-design.md`'s "Performance Hints" section (the Studio-side filter-speed-badges/Help-menu-tuning-advice idea) - still unimplemented, but no longer blocked on "what would the data even look like." **Still ahead**: actually running this suite with intent to find and fix real bottlenecks, the real-desktop-GPU validation this milestone's own description calls for, and the Studio-side consumption of a report once one exists.
 
 ### Beta Readiness Loop (`v0.Y.61.1` onward) - open-ended, until beta-ready
 

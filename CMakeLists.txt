@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(SoundMind
-    VERSION 0.1.5.1
+    VERSION 0.1.6.1
     DESCRIPTION "Sound Mind Studio: a spectrogram-as-image DAW and graphics studio"
     LANGUAGES CXX C
 )
@@ -36,6 +36,12 @@ add_subdirectory(sound-mind-codec)
 add_subdirectory(sound-mind-gpu)
 add_subdirectory(sound-mind-core)
 add_subdirectory(sound-mind-studio)
+# A developer-only measurement tool, not part of the shipped app (no
+# install() rule of its own, not linked into any packaged artifact) - see
+# docs/sound-mind-benchmarking.md. Depends only on sound-mind-core (which
+# already pulls in sound-mind-codec PUBLIC - see that target's own docs),
+# so it can come after sound-mind-studio without reordering anything above.
+add_subdirectory(sound-mind-benchmark)
 
 # Not yet scaffolded: sound-mind-vst (deferred until the standalone Studio
 # is fully operational, per sound-mind-design.md's own resolved decision).

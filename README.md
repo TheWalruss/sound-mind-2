@@ -52,4 +52,8 @@ Regenerate the Doxygen code documentation (requires Doxygen on `PATH`):
 cmake --build build/debug --target docs
 ```
 
+A developer-only performance benchmarking tool also lives here
+(`sound-mind-benchmark` - not part of the shipped app) - see
+`docs/sound-mind-benchmarking.md`.
+
 See `CHANGELOG.md` for what's actually implemented so far.

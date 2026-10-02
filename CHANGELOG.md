@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.6.1] - 2026-10-02
+
+New developer-only `sound-mind-benchmark` tool, starting the performance-hardening pass that follows Resonant Instruments - `docs/sound-mind-benchmarking.md`'s own "Methodology, Installment A" in `docs/sound-mind-roadmap.md`'s `v0.Y.60.1`. Purely internal; no user-visible behavior change, nothing shipped in the packaged app.
+
+### Added
+
+- `sound-mind-benchmark` - a new CMake module/executable that times a representative battery of Core operations (filters across kernel sizes, paint strokes across stroke counts, MindWave generators across field sizes, layer compositing across layer counts/blend modes, all across varied canvas sizes) and writes the results to a JSON report. GPU-eligible operations are automatically re-measured with the GPU path forced off, for a direct GPU-vs-CPU comparison. See `docs/sound-mind-benchmarking.md` for the full scenario catalog and JSON schema, and `docs/sound-mind-architecture.md`'s Decision #195 for the architecture behind it.
+- `docs/sound-mind-design.md`'s new "Performance Hints" section records, as an aspirational (not yet implemented) design concept, how the Studio could eventually consume a benchmark report to badge slow operations and offer tuning advice.
+
+### Notes
+
+Not part of the shipped app (no `install()` rule, not linked into any packaged artifact) - run manually by a developer via `./build/release/sound-mind-benchmark/sound-mind-benchmark.exe`.
+
 ## [0.1.5.1] - 2026-10-02
 
 Note Grid: Key/Scale/Temperament/Octave filtering, plus a full note checklist.
