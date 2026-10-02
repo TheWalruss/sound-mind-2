@@ -1020,11 +1020,77 @@ struct LocalMagnitudeSnapshot {
     std::vector<float> left;
     std::vector<float> right;
 
+    /// @brief A standard 2D summed-area table (prefix sum) over `left`/
+    ///        `right`, `(binSpan + 1) x (frameSpan + 1)` - one extra
+    ///        all-zero row and column (index `0` along each axis) so every
+    ///        real cell's own inclusive-exclusive box-sum formula
+    ///        (`boxSum()`'s own docs) never needs a special case at the
+    ///        snapshot's own low edge. `double`, not `float` - `boxSum()`'s
+    ///        own subtraction of two large, nearly-equal partial sums (for
+    ///        a box near the snapshot's own far edge) would otherwise lose
+    ///        meaningful precision at `float`'s own ~7-digit range, the
+    ///        same reasoning this codebase's own other accumulation-heavy
+    ///        math (e.g. `fractalBrownianMotion1D()`) already uses `double`
+    ///        for. `v0.1.6.5` (`docs/sound-mind-roadmap.md`'s `v0.Y.60.1`
+    ///        Installment E) - replaces `blurredNeighborhoodStop()`'s own
+    ///        previous `O((2*frameWindow+1) * (2*binWindow+1))`-per-pixel
+    ///        brute-force box sum (confirmed, via the benchmark suite, to
+    ///        be `SoftenConfiguration`'s own dominant cost - isotropic,
+    ///        unlike `HealConfiguration`'s frame-only window, so its own
+    ///        window area grows quadratically with brush size) with an
+    ///        `O(1)`-per-pixel lookup after this one `O(frameSpan * binSpan)`
+    ///        table build.
+    std::vector<double> leftSat;
+    std::vector<double> rightSat;
+
     [[nodiscard]] std::size_t indexOf(int frame, int bin) const noexcept {
         return static_cast<std::size_t>(bin - binLow) * static_cast<std::size_t>(frameSpan) +
                static_cast<std::size_t>(frame - frameLow);
     }
+
+    /// @brief `satIndex(r, c)`'s own flat offset into `leftSat`/`rightSat`,
+    ///        `r` a bin-axis row and `c` a frame-axis column, both already
+    ///        1-based (`0` is the table's own all-zero border) - never
+    ///        called with `r > binSpan`/`c > frameSpan`.
+    [[nodiscard]] std::size_t satIndex(int r, int c) const noexcept {
+        return static_cast<std::size_t>(r) * static_cast<std::size_t>(frameSpan + 1) + static_cast<std::size_t>(c);
+    }
+
+    /// @brief The sum of `left`'s (or `right`'s) own cells over
+    ///        `[frameLowInclusive, frameHighInclusive] x [binLowInclusive,
+    ///        binHighInclusive]` (every bound already clamped to this
+    ///        snapshot's own extent by the caller), via the standard
+    ///        inclusion-exclusion summed-area-table formula - `O(1)`
+    ///        regardless of the box's own size.
+    /// @param sat `leftSat` or `rightSat`.
+    [[nodiscard]] double boxSum(const std::vector<double>& sat, int frameLowInclusive, int frameHighInclusive,
+                                 int binLowInclusive, int binHighInclusive) const noexcept {
+        const int r1 = binLowInclusive - binLow;
+        const int r2 = binHighInclusive - binLow;
+        const int c1 = frameLowInclusive - frameLow;
+        const int c2 = frameHighInclusive - frameLow;
+        return sat[satIndex(r2 + 1, c2 + 1)] - sat[satIndex(r1, c2 + 1)] - sat[satIndex(r2 + 1, c1)] +
+               sat[satIndex(r1, c1)];
+    }
 };
+
+/// @brief Builds `field`'s own summed-area table into `sat` - shared by
+/// `captureLocalSnapshot()`'s own two channels (left/right), since the
+/// prefix-sum recurrence itself doesn't care which channel it's summing.
+void buildSummedAreaTable(const std::vector<float>& field, int frameSpan, int binSpan, std::vector<double>& sat) {
+    sat.assign(static_cast<std::size_t>(frameSpan + 1) * static_cast<std::size_t>(binSpan + 1), 0.0);
+    const std::size_t satRowStride = static_cast<std::size_t>(frameSpan + 1);
+    for (int r = 1; r <= binSpan; ++r) {
+        for (int c = 1; c <= frameSpan; ++c) {
+            const double value = field[static_cast<std::size_t>(r - 1) * static_cast<std::size_t>(frameSpan) +
+                                        static_cast<std::size_t>(c - 1)];
+            sat[static_cast<std::size_t>(r) * satRowStride + static_cast<std::size_t>(c)] =
+                value + sat[static_cast<std::size_t>(r - 1) * satRowStride + static_cast<std::size_t>(c)] +
+                sat[static_cast<std::size_t>(r) * satRowStride + static_cast<std::size_t>(c - 1)] -
+                sat[static_cast<std::size_t>(r - 1) * satRowStride + static_cast<std::size_t>(c - 1)];
+        }
+    }
+}
 
 LocalMagnitudeSnapshot captureLocalSnapshot(const sound_mind::codec::StreamImage& content, int frameLow,
                                              int frameHigh, int binLow, int binHigh) {
@@ -1045,6 +1111,8 @@ LocalMagnitudeSnapshot captureLocalSnapshot(const sound_mind::codec::StreamImage
             snapshot.right[dstIndex] = content.rightMagnitudeDb[srcIndex];
         }
     }
+    buildSummedAreaTable(snapshot.left, snapshot.frameSpan, snapshot.binSpan, snapshot.leftSat);
+    buildSummedAreaTable(snapshot.right, snapshot.frameSpan, snapshot.binSpan, snapshot.rightSat);
     return snapshot;
 }
 
@@ -1062,23 +1130,14 @@ GradientStop blurredNeighborhoodStop(const LocalMagnitudeSnapshot& snapshot, int
     const int frameHigh = std::min(snapshot.frameLow + snapshot.frameSpan - 1, frame + frameWindow);
     const int binLow = std::max(snapshot.binLow, bin - binWindow);
     const int binHigh = std::min(snapshot.binLow + snapshot.binSpan - 1, bin + binWindow);
-
-    float leftSum = 0.0f;
-    float rightSum = 0.0f;
-    int count = 0;
-    for (int f = frameLow; f <= frameHigh; ++f) {
-        for (int b = binLow; b <= binHigh; ++b) {
-            const std::size_t index = snapshot.indexOf(f, b);
-            leftSum += snapshot.left[index];
-            rightSum += snapshot.right[index];
-            ++count;
-        }
-    }
+    const int count = (frameHigh - frameLow + 1) * (binHigh - binLow + 1);
 
     GradientStop stop;
     if (count > 0) {
-        stop.leftIntensity = leftSum / static_cast<float>(count);
-        stop.rightIntensity = rightSum / static_cast<float>(count);
+        const double leftSum = snapshot.boxSum(snapshot.leftSat, frameLow, frameHigh, binLow, binHigh);
+        const double rightSum = snapshot.boxSum(snapshot.rightSat, frameLow, frameHigh, binLow, binHigh);
+        stop.leftIntensity = static_cast<float>(leftSum / count);
+        stop.rightIntensity = static_cast<float>(rightSum / count);
     }
     stop.leftOpacity = opacitySource.leftOpacity;
     stop.rightOpacity = opacitySource.rightOpacity;

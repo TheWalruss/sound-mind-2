@@ -331,6 +331,50 @@ std::vector<float> medianBlur2DVarying(const std::vector<float>& grid, std::uint
     return result;
 }
 
+/// @brief `medianBlur2D()` above, preferring the GPU when available -
+/// `v0.1.6.6` (`docs/sound-mind-roadmap.md`'s `v0.Y.60.1` Installment F).
+/// The benchmark suite found this unbound (scalar `medianSize`) case had
+/// no GPU path at all, confirmed to scale ~quadratically with kernel size
+/// (`O(windowSize^2)` per cell, both to gather the window and for
+/// `std::nth_element()`'s own average-case cost) - the worst single
+/// scaling offender the findings pass turned up. `sound-mind-gpu` already
+/// ships a working `medianBlur2DVarying()` kernel for the MindWave-bound
+/// per-cell case (`v0.Y.31.1` Installment D2) - rather than writing a new
+/// kernel, this builds a uniform (every cell the same) size array and
+/// dispatches through that existing, already-tested kernel, the most
+/// direct win available (no CPU-side algorithmic change - a true O(1)-
+/// per-pixel median, unlike a mean, has no straightforward summed-area-
+/// table-style trick, since a median isn't additive/subtractive the way a
+/// sum is - see `blurredNeighborhoodStop()`'s own summed-area-table fix,
+/// `v0.Y.60.1` Installment E, for the contrasting case where one exists).
+///
+/// **The GPU path's own `windowSize` is clamped to `31`** (matching
+/// `medianBlur2DVarying()`'s/`ComputeDevice::medianBlur2DVarying()`'s own
+/// existing hardware-driven limit - that kernel gathers a window into a
+/// fixed-size local array before sorting, so an unbounded size risks a
+/// real out-of-bounds write, not just a slow one), **but the CPU fallback
+/// below is `medianBlur2D()` itself, unclamped** - deliberately not routed
+/// through `medianBlur2DVarying()`'s own (also-clamped) CPU path, so a
+/// `medianSize` configured beyond the GPU kernel's own hard limit (already
+/// well beyond `FilterConfiguration::medianSize()`'s own realistic Studio
+/// UI range, so a narrow edge case in practice) still behaves exactly as
+/// it did before this installment whenever the GPU path isn't actually
+/// taken - this fix's own "CPU-only behavior is unchanged" contract holds
+/// for every `medianSize`, not just the realistic range.
+std::vector<float> medianBlur2DGpuOrCpu(const std::vector<float>& grid, std::uint32_t binCount,
+                                        std::uint32_t frameCount, int size) {
+    if (auto* device = detail::gpuComputeDeviceOrNull()) {
+        try {
+            const int windowSize = std::min(31, std::max(3, size | 1));
+            const std::vector<float> sizePerCell(grid.size(), static_cast<float>(windowSize));
+            return device->medianBlur2DVarying(grid, frameCount, binCount, sizePerCell);
+        } catch (const std::exception&) {
+            // Fall through to the CPU path below.
+        }
+    }
+    return medianBlur2D(grid, binCount, frameCount, size);
+}
+
 /// @brief `medianBlur2DVarying()` above, preferring the GPU when
 /// available - Installment D2's own dispatch point.
 std::vector<float> medianBlur2DVaryingGpuOrCpu(const std::vector<float>& grid, std::uint32_t binCount,
@@ -1690,7 +1734,7 @@ StreamImage applyFilter(const StreamImage& composite, const FilterConfiguration&
             }
             return applyPerChannelGridFilter(
                 composite, [&config](const std::vector<float>& grid, std::uint32_t bins, std::uint32_t frames) {
-                    return medianBlur2D(grid, bins, frames, config.medianSize());
+                    return medianBlur2DGpuOrCpu(grid, bins, frames, config.medianSize());
                 });
         case FilterType::DirectionalBlur:
             if (mindWaves.directionalBlurLength != nullptr || mindWaves.directionalBlurAngle != nullptr) {

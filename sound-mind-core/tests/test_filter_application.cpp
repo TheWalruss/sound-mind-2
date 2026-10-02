@@ -362,6 +362,51 @@ TEST_CASE("applyFilter's EdgePreservingBlur preserves a real step edge instead o
     }
 }
 
+TEST_CASE("applyFilter's EdgePreservingBlur agrees with itself whether or not the GPU is available "
+          "(v0.1.6.6, v0.Y.60.1 Installment F)",
+          "[core][filter_application][gpu]") {
+    // The benchmark suite found EdgePreservingBlur's own unbound (scalar
+    // medianSize) case had no GPU path at all, despite sound-mind-gpu
+    // already shipping a working medianBlur2DVarying() kernel for the
+    // MindWave-bound per-cell case (v0.Y.31.1 Installment D2) - wiring the
+    // scalar case through that same kernel (a uniform per-cell size array)
+    // is this installment's own fix. Same "bigger, varied grid, cross-
+    // checked against its own CPU fallback" shape as UniformBlur's own
+    // identical test above.
+    constexpr std::uint32_t binCount = 6;
+    constexpr std::uint32_t frameCount = 10;
+    StreamImage composite;
+    composite.config.binCount = binCount;
+    composite.frameCount = frameCount;
+    composite.leftMagnitudeDb.resize(std::size_t{binCount} * frameCount);
+    composite.rightMagnitudeDb.resize(std::size_t{binCount} * frameCount);
+    for (std::size_t i = 0; i < composite.leftMagnitudeDb.size(); ++i) {
+        composite.leftMagnitudeDb[i] = -50.0f + 40.0f * std::sin(static_cast<float>(i) * 0.7f);
+        composite.rightMagnitudeDb[i] = -30.0f + 20.0f * std::cos(static_cast<float>(i) * 1.3f);
+    }
+    composite.sharedPhaseRadians.assign(composite.leftMagnitudeDb.size(), 0.0f);
+
+    FilterConfiguration config;
+    config.setType(FilterType::EdgePreservingBlur);
+    config.setMedianSize(5);
+
+    const auto gpuFiltered = applyFilter(composite, config, ProjectSettings{});
+    std::vector<float> cpuLeft;
+    std::vector<float> cpuRight;
+    {
+        GpuComputeForcedOffGuard forceCpu;
+        const auto cpuFiltered = applyFilter(composite, config, ProjectSettings{});
+        cpuLeft = cpuFiltered.leftMagnitudeDb;
+        cpuRight = cpuFiltered.rightMagnitudeDb;
+    }
+
+    REQUIRE(gpuFiltered.leftMagnitudeDb.size() == cpuLeft.size());
+    for (std::size_t i = 0; i < cpuLeft.size(); ++i) {
+        CHECK(gpuFiltered.leftMagnitudeDb[i] == Catch::Approx(cpuLeft[i]).margin(0.01));
+        CHECK(gpuFiltered.rightMagnitudeDb[i] == Catch::Approx(cpuRight[i]).margin(0.01));
+    }
+}
+
 // ---------------------------------------------------------------------------
 // DirectionalBlur (motion blur) - Installment B.
 // ---------------------------------------------------------------------------

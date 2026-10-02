@@ -1949,6 +1949,44 @@ TEST_CASE("applyPaintOperation with a SoftenConfiguration blends the stamp's own
             Catch::Approx(20.0f / 9.0f).margin(0.001));
 }
 
+TEST_CASE("applyPaintOperation with a SoftenConfiguration's own box average stays correct for a blur window far "
+          "larger than a 3x3 neighborhood, clamped against the frame axis's own canvas edges at full width "
+          "(v0.1.6.5, v0.Y.60.1 Installment E)",
+          "[core][paint_application]") {
+    // A deliberately huge size (100x makeSoftenTool(0.01)'s own frameRadius
+    // of 1.0, so frameRadius=100) - comfortably larger than this 100-frame
+    // test canvas in both directions from any pixel at all, so every
+    // touched pixel's own blur window clamps to the *entire* frame range
+    // [0, 99] regardless of where in it that pixel sits (the time axis is
+    // linear, so this clamping is exact, unlike the log-scale frequency
+    // axis's own asymmetric-then-averaged bin radius - see
+    // localBinRadius()'s own docs). This exercises the summed-area-table
+    // optimization's own edge-clamping at real scale on the axis that
+    // matters most for it (canvas width, typically far larger than bin
+    // count), not just the existing small-window (3x3) tests' single
+    // interior case.
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const int centerFrame = 50;
+    const int centerBin = 50;
+    // One spike, off-center on the frame axis (still reached by the
+    // full-width frame window) but close enough in bin to stay inside
+    // the bin window's own more modest reach.
+    content.leftMagnitudeDb[pixelIndex(content, 10, 55)] = 20.0f;
+    const float centerFreq = binIndexToFrequency(static_cast<float>(centerBin), config);
+
+    const Path path = makeSingleTapPath(0.5, centerFreq, 0.0f, 1.0f);
+    const PaintOperation op(1, LayerId{1}, path, makeSoftenTool(1.0));
+    applyPaintOperation(op, 2000.0, content);
+
+    // 20.0 spread over a 100-frame x 71-bin window (bins [15, 85] - the
+    // bin axis's own asymmetric-then-averaged radius, per localBinRadius()'s
+    // own docs, reaches this far at this size/frequencyToTimeScale/center
+    // frequency combination) = 20 / 7100.
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, centerBin)] ==
+            Catch::Approx(20.0f / 7100.0f).margin(0.0001));
+}
+
 TEST_CASE("applyPaintOperation with a SoftenConfiguration pulls in a neighboring bin's value too - isotropic, "
           "unlike Heal",
           "[core][paint_application]") {

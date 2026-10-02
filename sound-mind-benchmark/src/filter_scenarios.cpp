@@ -154,7 +154,11 @@ void appendOneBaselineCasePerFilterType(std::vector<BenchmarkCase>& cases) {
     }};
 
     for (const FilterType type : kEveryFilterType) {
-        const bool isUniformBlur = type == FilterType::UniformBlur;
+        // v0.1.6.6 (v0.Y.60.1 Installment F) wired EdgePreservingBlur's own
+        // unbound case through the existing medianBlur2DVarying() GPU
+        // kernel (a uniform per-cell size array) - gpuEligible now, not
+        // CPU-only.
+        const bool isGpuEligible = type == FilterType::UniformBlur || type == FilterType::EdgePreservingBlur;
         cases.push_back(makeFilterCase(
             "baseline", type, kMediumCanvas,
             [type](FilterConfiguration& config) {
@@ -183,7 +187,7 @@ void appendOneBaselineCasePerFilterType(std::vector<BenchmarkCase>& cases) {
                     config.setConvolveAmount(1.0f);
                 }
             },
-            isUniformBlur));
+            isGpuEligible));
     }
 }
 
@@ -203,9 +207,9 @@ void appendKernelSizeSweeps(std::vector<BenchmarkCase>& cases) {
     // medianSize=25 was clocked at 20+ minutes for its 5 sample runs and is
     // not needed to make the point that large median windows are expensive.
     for (const int size : {3, 7, 11}) {
-        cases.push_back(makeFilterCase("EdgePreservingBlur medianSize=" + std::to_string(size),
-                                        FilterType::EdgePreservingBlur, kMediumCanvas,
-                                        [size](FilterConfiguration& config) { config.setMedianSize(size); }, false));
+        cases.push_back(makeFilterCase(
+            "EdgePreservingBlur medianSize=" + std::to_string(size), FilterType::EdgePreservingBlur, kMediumCanvas,
+            [size](FilterConfiguration& config) { config.setMedianSize(size); }, /*gpuEligible=*/true));
     }
     for (const int length : {5, 15, 35}) {
         cases.push_back(makeFilterCase("DirectionalBlur length=" + std::to_string(length),

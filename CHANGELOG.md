@@ -6,6 +6,30 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.6.6] - 2026-10-02
+
+`EdgePreservingBlur` (median filter) - a GPU path for the unbound case - `v0.Y.60.1` Installment F, closing out the benchmark suite's own findings pass (Installments B-F). Performance-only; output is unchanged.
+
+### Changed
+
+- The `EdgePreservingBlur` filter (median blur) now dispatches to the GPU when available, reusing the existing GPU kernel already built for its MindWave-bound sibling - previously CPU-only, and the single worst scaling offender the benchmark suite found (~quadratic cost with kernel size). See `docs/sound-mind-architecture.md`'s Decision #200.
+
+### Notes
+
+Purely internal; no new user-facing capability, no change to how the filter looks or behaves. This is the last of the five benchmark-findings fixes (`v0.1.6.2`-`v0.1.6.6`) - the suite will be re-run and compared against the `2026-10-02` baseline next, per the roadmap's own `v0.Y.60.1` entry.
+
+## [0.1.6.5] - 2026-10-02
+
+Paint brushes Soften/Smudge/Heal - a summed-area table replaces a brute-force box blur - `v0.Y.60.1` Installment E, the fourth fix from the benchmark suite's own findings pass. Performance-only; output is unchanged.
+
+### Fixed
+
+- The Soften brush (247ms/stroke in the benchmark, far above every peer brush) recomputed its own local blur-window average from scratch, by brute-force summation, for every single painted pixel - genuinely quadratic cost in brush size, since Soften's own window spans both axes (unlike Heal's time-axis-only window). Replaced with a summed-area table built once per stamp, making each pixel's own box average O(1) regardless of window size. Heal benefits too (a smaller win - its own window was only linear, not quadratic, in cost). Smudge needed no change - it already used a cheaper, unrelated 1D sampling approach. See `docs/sound-mind-architecture.md`'s Decision #199.
+
+### Notes
+
+Purely internal; no new user-facing capability, no change to how any of the three brushes looks or behaves.
+
 ## [0.1.6.4] - 2026-10-02
 
 MindWave `Fractal` generator - a GPU fast path - `v0.Y.60.1` Installment D, the third fix from the benchmark suite's own findings pass. Performance-only; output is unchanged (within floating-point tolerance).
