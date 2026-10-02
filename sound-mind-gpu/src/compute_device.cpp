@@ -643,7 +643,8 @@ std::vector<float> ComputeDevice::directionalBlur2DVarying(const std::vector<flo
 
 AmplitudePhaseSignal ComputeDevice::mixAmplitudePhaseSignal(const AmplitudePhaseSignal& running,
                                                              const AmplitudePhaseSignal& layer, float layerGain,
-                                                             const std::vector<float>& mindWaveField) const {
+                                                             const std::vector<float>& mindWaveField,
+                                                             int blendMode) const {
     const std::size_t cellCount = running.leftMagnitudeDb.size();
     const bool sameShape = running.rightMagnitudeDb.size() == cellCount && running.phaseRadians.size() == cellCount &&
                             layer.leftMagnitudeDb.size() == cellCount && layer.rightMagnitudeDb.size() == cellCount &&
@@ -683,17 +684,19 @@ AmplitudePhaseSignal ComputeDevice::mixAmplitudePhaseSignal(const AmplitudePhase
     const ComPtr<ID3D12Resource> readbackPhase = createReadbackBuffer(device_.Get(), bufferSize);
 
     // Root parameter indices match mix_amplitude_phase_signal.hlsl's own
-    // root signature string order: 0 = constants (b0: cell count, gain),
-    // 1-3 = running's own left/right/phase SRVs (t0-t2), 4-6 = layer's
-    // own left/right/phase SRVs (t3-t5), 7 = the MindWaveField SRV (t6 -
+    // root signature string order: 0 = constants (b0: cell count, gain,
+    // blend mode - the third added in v0.1.6.2, Installment B), 1-3 =
+    // running's own left/right/phase SRVs (t0-t2), 4-6 = layer's own
+    // left/right/phase SRVs (t3-t5), 7 = the MindWaveField SRV (t6 -
     // v0.Y.31.1 Installment C1, a per-cell gain multiplier alongside the
     // scalar gain above), 8-10 = the three output UAVs (u0-u2).
     recorder.list->SetComputeRootSignature(pipeline.rootSignature.Get());
     struct Constants {
         UINT cellCount;
         float gain;
-    } constants{static_cast<UINT>(cellCount), layerGain};
-    recorder.list->SetComputeRoot32BitConstants(0, 2, &constants, 0);
+        UINT blendMode;
+    } constants{static_cast<UINT>(cellCount), layerGain, static_cast<UINT>(blendMode)};
+    recorder.list->SetComputeRoot32BitConstants(0, 3, &constants, 0);
     recorder.list->SetComputeRootShaderResourceView(1, runningLeft->GetGPUVirtualAddress());
     recorder.list->SetComputeRootShaderResourceView(2, runningRight->GetGPUVirtualAddress());
     recorder.list->SetComputeRootShaderResourceView(3, runningPhase->GetGPUVirtualAddress());

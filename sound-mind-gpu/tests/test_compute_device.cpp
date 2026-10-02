@@ -112,8 +112,105 @@ float referenceLinearToDb(float amplitude) { return 20.0f * std::log10(std::max(
 /// field alongside the scalar gain.
 std::vector<float> uniformField(std::size_t count) { return std::vector<float>(count, 1.0f); }
 
+/// @brief The same seven ordinal values `sound_mind::core::BlendMode`
+/// declares, duplicated here (not included - `sound-mind-gpu` has no
+/// dependency on `sound-mind-core`) purely for readable test names;
+/// `ComputeDevice::mixAmplitudePhaseSignal()`'s own `blendMode` parameter
+/// is a plain `int` using this exact numbering.
+enum class ReferenceBlendMode : int {
+    Normal = 0,
+    Overwrite = 1,
+    Multiply = 2,
+    Screen = 3,
+    Overlay = 4,
+    Difference = 5,
+    Add = 6,
+};
+
+/// @brief The `-96..0` dB display range `sound_mind::core::blend_mode_
+/// application.cpp`'s own `dbToUnit()`/`unitToDb()` normalize into for
+/// every mode but `Normal`/`Overwrite` - duplicated here for the same
+/// module-independence reason every other reference helper in this file
+/// already is.
+constexpr float kMinDb = -96.0f;
+constexpr float kMaxDb = 0.0f;
+constexpr float kMinComplexMagnitude = 1e-6f;
+
+float referenceDbToUnit(float db) {
+    const float clamped = std::clamp(db, kMinDb, kMaxDb);
+    return (clamped - kMinDb) / (kMaxDb - kMinDb);
+}
+
+float referenceUnitToDb(float unit) { return kMinDb + unit * (kMaxDb - kMinDb); }
+
+/// @brief One mode's own amplitude formula, in `referenceDbToUnit()`-
+/// normalized space - a verbatim port of `sound_mind::core::
+/// blendAmplitudeUnit()` (an anonymous-namespace helper in
+/// `blend_mode_application.cpp`, not itself exported - duplicated rather
+/// than shared, same module-independence reason as every other reference
+/// helper here). Never called for `Normal`/`Overwrite`.
+float referenceBlendAmplitudeUnit(ReferenceBlendMode mode, float base, float overlay) {
+    switch (mode) {
+        case ReferenceBlendMode::Multiply:
+            return base * overlay;
+        case ReferenceBlendMode::Screen:
+            return 1.0f - (1.0f - base) * (1.0f - overlay);
+        case ReferenceBlendMode::Overlay:
+            return (base < 0.5f) ? (2.0f * base * overlay) : (1.0f - 2.0f * (1.0f - base) * (1.0f - overlay));
+        case ReferenceBlendMode::Difference:
+            return std::abs(base - overlay);
+        case ReferenceBlendMode::Add:
+            return base + overlay;
+        case ReferenceBlendMode::Normal:
+        case ReferenceBlendMode::Overwrite:
+            break;
+    }
+    return overlay;
+}
+
+/// @brief One mode's own phase formula - a verbatim port of
+/// `sound_mind::core::blendPhaseComplex()`, same duplication reasoning as
+/// `referenceBlendAmplitudeUnit()` above.
+std::complex<float> referenceBlendPhaseComplex(ReferenceBlendMode mode, std::complex<float> baseZ,
+                                                 std::complex<float> overlayZ, float basePhase, float overlayPhase,
+                                                 float baseUnit, float outUnit) {
+    switch (mode) {
+        case ReferenceBlendMode::Multiply:
+            return outUnit * std::complex<float>(std::cos(basePhase + overlayPhase), std::sin(basePhase + overlayPhase));
+        case ReferenceBlendMode::Screen: {
+            const std::complex<float> sum = baseZ + overlayZ;
+            const float phi = (std::abs(sum) > kMinComplexMagnitude) ? std::arg(sum) : basePhase;
+            return outUnit * std::complex<float>(std::cos(phi), std::sin(phi));
+        }
+        case ReferenceBlendMode::Overlay: {
+            float phi;
+            if (baseUnit < 0.5f) {
+                phi = basePhase + overlayPhase;
+            } else {
+                const std::complex<float> sum = baseZ + overlayZ;
+                phi = (std::abs(sum) > kMinComplexMagnitude) ? std::arg(sum) : basePhase;
+            }
+            return outUnit * std::complex<float>(std::cos(phi), std::sin(phi));
+        }
+        case ReferenceBlendMode::Difference:
+            return baseZ - overlayZ;
+        case ReferenceBlendMode::Add:
+            return baseZ + overlayZ;
+        case ReferenceBlendMode::Normal:
+        case ReferenceBlendMode::Overwrite:
+            break;
+    }
+    return overlayZ;
+}
+
+/// @brief `sound_mind::core::applyBlendedCell()`'s own per-cell formula,
+/// generalized to this file's own flat-array `AmplitudePhaseSignal` shape -
+/// the independent CPU reference every `mixAmplitudePhaseSignal()` mode
+/// gets checked against. `mode` defaults to `Normal`, preserving every
+/// pre-existing call site's own exact meaning unchanged.
 AmplitudePhaseSignal referenceMix(const AmplitudePhaseSignal& running, const AmplitudePhaseSignal& layer, float gain,
-                                    const std::vector<float>& mindWaveField) {
+                                    const std::vector<float>& mindWaveField,
+                                    ReferenceBlendMode mode = ReferenceBlendMode::Normal) {
     AmplitudePhaseSignal result;
     const std::size_t count = running.leftMagnitudeDb.size();
     result.leftMagnitudeDb.resize(count);
@@ -121,21 +218,70 @@ AmplitudePhaseSignal referenceMix(const AmplitudePhaseSignal& running, const Amp
     result.phaseRadians.resize(count);
     for (std::size_t i = 0; i < count; ++i) {
         const float cellGain = gain * mindWaveField[i];
-        const float layerLeftLinear = referenceDbToLinear(layer.leftMagnitudeDb[i]) * cellGain;
-        const float layerRightLinear = referenceDbToLinear(layer.rightMagnitudeDb[i]) * cellGain;
-        const std::complex<float> layerDirection(std::cos(layer.phaseRadians[i]), std::sin(layer.phaseRadians[i]));
 
-        const float runningLeftLinear = referenceDbToLinear(running.leftMagnitudeDb[i]);
-        const float runningRightLinear = referenceDbToLinear(running.rightMagnitudeDb[i]);
-        const std::complex<float> runningDirection(std::cos(running.phaseRadians[i]), std::sin(running.phaseRadians[i]));
+        if (mode == ReferenceBlendMode::Normal) {
+            const float layerLeftLinear = referenceDbToLinear(layer.leftMagnitudeDb[i]) * cellGain;
+            const float layerRightLinear = referenceDbToLinear(layer.rightMagnitudeDb[i]) * cellGain;
+            const std::complex<float> layerDirection(std::cos(layer.phaseRadians[i]), std::sin(layer.phaseRadians[i]));
 
-        const std::complex<float> newLeft = runningLeftLinear * runningDirection + layerLeftLinear * layerDirection;
-        const std::complex<float> newRight = runningRightLinear * runningDirection + layerRightLinear * layerDirection;
+            const float runningLeftLinear = referenceDbToLinear(running.leftMagnitudeDb[i]);
+            const float runningRightLinear = referenceDbToLinear(running.rightMagnitudeDb[i]);
+            const std::complex<float> runningDirection(std::cos(running.phaseRadians[i]),
+                                                          std::sin(running.phaseRadians[i]));
 
-        result.leftMagnitudeDb[i] = referenceLinearToDb(std::abs(newLeft));
-        result.rightMagnitudeDb[i] = referenceLinearToDb(std::abs(newRight));
-        const std::complex<float> mid = (newLeft + newRight) / 2.0f;
-        result.phaseRadians[i] = (std::abs(mid) > 0.0f) ? std::arg(mid) : 0.0f;
+            const std::complex<float> newLeft = runningLeftLinear * runningDirection + layerLeftLinear * layerDirection;
+            const std::complex<float> newRight =
+                runningRightLinear * runningDirection + layerRightLinear * layerDirection;
+
+            result.leftMagnitudeDb[i] = referenceLinearToDb(std::abs(newLeft));
+            result.rightMagnitudeDb[i] = referenceLinearToDb(std::abs(newRight));
+            const std::complex<float> mid = (newLeft + newRight) / 2.0f;
+            result.phaseRadians[i] = (std::abs(mid) > 0.0f) ? std::arg(mid) : 0.0f;
+            continue;
+        }
+
+        if (mode == ReferenceBlendMode::Overwrite) {
+            result.leftMagnitudeDb[i] = running.leftMagnitudeDb[i] * (1.0f - cellGain) + layer.leftMagnitudeDb[i] * cellGain;
+            result.rightMagnitudeDb[i] =
+                running.rightMagnitudeDb[i] * (1.0f - cellGain) + layer.rightMagnitudeDb[i] * cellGain;
+            const std::complex<float> baseZ(std::cos(running.phaseRadians[i]), std::sin(running.phaseRadians[i]));
+            const std::complex<float> overlayZ(std::cos(layer.phaseRadians[i]), std::sin(layer.phaseRadians[i]));
+            const std::complex<float> resultZ = (1.0f - cellGain) * baseZ + cellGain * overlayZ;
+            result.phaseRadians[i] =
+                (std::abs(resultZ) > kMinComplexMagnitude) ? std::arg(resultZ) : layer.phaseRadians[i];
+            continue;
+        }
+
+        // Multiply/Screen/Overlay/Difference/Add.
+        const float baseLeftUnit = referenceDbToUnit(running.leftMagnitudeDb[i]);
+        const float baseRightUnit = referenceDbToUnit(running.rightMagnitudeDb[i]);
+        const float overlayLeftUnit = referenceDbToUnit(layer.leftMagnitudeDb[i]);
+        const float overlayRightUnit = referenceDbToUnit(layer.rightMagnitudeDb[i]);
+
+        const float blendedLeftUnit =
+            std::clamp(referenceBlendAmplitudeUnit(mode, baseLeftUnit, overlayLeftUnit), 0.0f, 1.0f);
+        const float blendedRightUnit =
+            std::clamp(referenceBlendAmplitudeUnit(mode, baseRightUnit, overlayRightUnit), 0.0f, 1.0f);
+
+        const float finalLeftUnit = baseLeftUnit * (1.0f - cellGain) + blendedLeftUnit * cellGain;
+        const float finalRightUnit = baseRightUnit * (1.0f - cellGain) + blendedRightUnit * cellGain;
+
+        const float baseAvgUnit = (baseLeftUnit + baseRightUnit) / 2.0f;
+        const float overlayAvgUnit = (overlayLeftUnit + overlayRightUnit) / 2.0f;
+        const float outUnit = (finalLeftUnit + finalRightUnit) / 2.0f;
+        const std::complex<float> baseZ =
+            baseAvgUnit * std::complex<float>(std::cos(running.phaseRadians[i]), std::sin(running.phaseRadians[i]));
+        const std::complex<float> overlayZ =
+            overlayAvgUnit * std::complex<float>(std::cos(layer.phaseRadians[i]), std::sin(layer.phaseRadians[i]));
+
+        const std::complex<float> blendedZ = referenceBlendPhaseComplex(
+            mode, baseZ, overlayZ, running.phaseRadians[i], layer.phaseRadians[i], baseAvgUnit, outUnit);
+        const std::complex<float> resultZ = (1.0f - cellGain) * baseZ + cellGain * blendedZ;
+        result.phaseRadians[i] =
+            (std::abs(resultZ) > kMinComplexMagnitude) ? std::arg(resultZ) : running.phaseRadians[i];
+
+        result.leftMagnitudeDb[i] = referenceUnitToDb(finalLeftUnit);
+        result.rightMagnitudeDb[i] = referenceUnitToDb(finalRightUnit);
     }
     return result;
 }
@@ -788,6 +934,78 @@ TEST_CASE("mixAmplitudePhaseSignal matches an independent CPU reference implemen
         CHECK(actual.rightMagnitudeDb[i] == Catch::Approx(expected.rightMagnitudeDb[i]).margin(0.02));
         CHECK(actual.phaseRadians[i] == Catch::Approx(expected.phaseRadians[i]).margin(0.02));
     }
+}
+
+TEST_CASE("mixAmplitudePhaseSignal matches the independent CPU reference for every non-Normal blend mode",
+          "[gpu][compute_device][mix_amplitude_phase_signal][blend_mode]") {
+    // v0.1.6.2 - GPU paths for the remaining blend modes (the benchmark
+    // suite's own finding that only Normal was ever GPU-accelerated,
+    // docs/sound-mind-roadmap.md's v0.Y.60.1 Installment B). Same
+    // real-shaped random data as the Normal-mode test above, reused
+    // across all six other modes via Catch2's own SECTION, rather than
+    // six near-identical TEST_CASEs.
+    constexpr std::size_t count = 200;
+    AmplitudePhaseSignal running;
+    AmplitudePhaseSignal layer;
+    running.leftMagnitudeDb.resize(count);
+    running.rightMagnitudeDb.resize(count);
+    running.phaseRadians.resize(count);
+    layer.leftMagnitudeDb.resize(count);
+    layer.rightMagnitudeDb.resize(count);
+    layer.phaseRadians.resize(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        running.leftMagnitudeDb[i] = -96.0f + 80.0f * static_cast<float>((i * 13 + 3) % 97) / 96.0f;
+        running.rightMagnitudeDb[i] = -96.0f + 80.0f * static_cast<float>((i * 19 + 7) % 89) / 88.0f;
+        running.phaseRadians[i] = -3.0f + 6.0f * static_cast<float>((i * 5 + 1) % 61) / 60.0f;
+        layer.leftMagnitudeDb[i] = -96.0f + 96.0f * static_cast<float>((i * 29 + 2) % 83) / 82.0f;
+        layer.rightMagnitudeDb[i] = -96.0f + 96.0f * static_cast<float>((i * 31 + 4) % 79) / 78.0f;
+        layer.phaseRadians[i] = -3.0f + 6.0f * static_cast<float>((i * 7 + 9) % 53) / 52.0f;
+    }
+    constexpr float gain = 0.6f;
+    std::vector<float> field(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        field[i] = static_cast<float>((i * 11 + 3) % 100) / 99.0f;
+    }
+
+    const auto checkMode = [&](ReferenceBlendMode mode) {
+        const auto expected = referenceMix(running, layer, gain, field, mode);
+        const auto actual = sharedDevice().mixAmplitudePhaseSignal(running, layer, gain, field, static_cast<int>(mode));
+
+        REQUIRE(actual.leftMagnitudeDb.size() == expected.leftMagnitudeDb.size());
+        for (std::size_t i = 0; i < count; ++i) {
+            CHECK(actual.leftMagnitudeDb[i] == Catch::Approx(expected.leftMagnitudeDb[i]).margin(0.02));
+            CHECK(actual.rightMagnitudeDb[i] == Catch::Approx(expected.rightMagnitudeDb[i]).margin(0.02));
+            CHECK(actual.phaseRadians[i] == Catch::Approx(expected.phaseRadians[i]).margin(0.02));
+        }
+    };
+
+    SECTION("Overwrite") { checkMode(ReferenceBlendMode::Overwrite); }
+    SECTION("Multiply") { checkMode(ReferenceBlendMode::Multiply); }
+    SECTION("Screen") { checkMode(ReferenceBlendMode::Screen); }
+    SECTION("Overlay") { checkMode(ReferenceBlendMode::Overlay); }
+    SECTION("Difference") { checkMode(ReferenceBlendMode::Difference); }
+    SECTION("Add") { checkMode(ReferenceBlendMode::Add); }
+}
+
+TEST_CASE("mixAmplitudePhaseSignal defaults to Normal when blendMode is omitted, matching pre-v0.1.6.2 call sites",
+          "[gpu][compute_device][mix_amplitude_phase_signal][blend_mode]") {
+    AmplitudePhaseSignal silentRunning;
+    silentRunning.leftMagnitudeDb = {-96.0f};
+    silentRunning.rightMagnitudeDb = {-96.0f};
+    silentRunning.phaseRadians = {0.0f};
+
+    AmplitudePhaseSignal layer;
+    layer.leftMagnitudeDb = {0.0f};
+    layer.rightMagnitudeDb = {0.0f};
+    layer.phaseRadians = {0.0f};
+
+    const auto withoutExplicitMode = sharedDevice().mixAmplitudePhaseSignal(silentRunning, layer, 1.0f, uniformField(1));
+    const auto withExplicitNormal = sharedDevice().mixAmplitudePhaseSignal(silentRunning, layer, 1.0f, uniformField(1),
+                                                                            static_cast<int>(ReferenceBlendMode::Normal));
+
+    CHECK(withoutExplicitMode.leftMagnitudeDb[0] == withExplicitNormal.leftMagnitudeDb[0]);
+    CHECK(withoutExplicitMode.rightMagnitudeDb[0] == withExplicitNormal.rightMagnitudeDb[0]);
+    CHECK(withoutExplicitMode.phaseRadians[0] == withExplicitNormal.phaseRadians[0]);
 }
 
 TEST_CASE("mixAmplitudePhaseSignal is measurably faster than the CPU reference on a large signal",

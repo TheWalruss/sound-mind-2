@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.6.2] - 2026-10-02
+
+GPU paths for the remaining blend modes - `v0.Y.60.1` Installment B, the first fix from the benchmark suite's own findings pass. Performance-only; output is unchanged (bit-for-bit equivalent within floating-point tolerance), just faster when a GPU is available.
+
+### Changed
+
+- Layer compositing now dispatches to the GPU for every blend mode (`Overwrite`/`Multiply`/`Screen`/`Overlay`/`Difference`/`Add`, not just `Normal`) when one's available - the benchmark suite's own blend-mode sweep found every non-Normal mode was measuring ~1.00x GPU-vs-CPU (i.e. not actually accelerated) before this. See `docs/sound-mind-architecture.md`'s Decision #196.
+- Fixed a related GPU-vs-CPU correctness gap this same change's own new tests caught before it shipped: a layer that doesn't fully cover the canvas (narrower content, a translated/rescaled timeline) could composite slightly differently on GPU than CPU for the newly-accelerated modes. Also tightens `Normal`'s own already-correct GPU output to be exact rather than a negligible approximation.
+
+### Notes
+
+Purely internal; no new user-facing capability, nothing changes about what blend modes a layer can already be set to.
+
 ## [0.1.6.1] - 2026-10-02
 
 New developer-only `sound-mind-benchmark` tool, starting the performance-hardening pass that follows Resonant Instruments - `docs/sound-mind-benchmarking.md`'s own "Methodology, Installment A" in `docs/sound-mind-roadmap.md`'s `v0.Y.60.1`. Purely internal; no user-visible behavior change, nothing shipped in the packaged app.

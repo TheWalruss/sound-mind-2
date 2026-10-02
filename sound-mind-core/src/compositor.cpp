@@ -387,6 +387,34 @@ sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
     return placed;
 }
 
+/// @brief `1.0` for every cell `placeLayerForGpuMix()` actually placed real
+/// content into, `0.0` everywhere else - v0.1.6.2's own fix for a real
+/// GPU-vs-CPU mismatch the new non-Normal blend-mode kernel work turned up
+/// (caught by this milestone's own new compositor GPU-agreement test,
+/// `v0.Y.60.1` Installment B): `placeLayerForGpuMix()`'s own "fill unplaced
+/// cells with `silenceFloorDb`" shortcut was already an approximation for
+/// `Normal` (negligible - adding a ~-96dB linear contribution is
+/// imperceptibly different from adding nothing), but every other blend
+/// mode's own formula operates in normalized `[0, 1]` unit space with an
+/// explicit multiplicative/crossfade step, where a fake near-silent
+/// `overlay` value is *not* a no-op (`Multiply(base, ~0)` pulls the result
+/// toward black, not toward `base` unchanged). Multiplying this mask into
+/// `mindWaveField` before the GPU call (rather than threading a fourth
+/// buffer through the shader's own root signature) forces `cellGain` to
+/// exactly `0` at every unplaced cell - which every mode's own formula
+/// already reduces to "leave `base` unchanged" for, the same semantics the
+/// CPU path's own `onUnplaced` no-op already has.
+std::vector<float> buildPlacedMask(const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
+                                     std::uint32_t canvasWidth) {
+    std::vector<float> mask(std::size_t{config.binCount} * canvasWidth, 0.0f);
+    forEachPlacedCell(
+        layer, config, canvasWidth,
+        [&](std::uint32_t /*bin*/, std::uint32_t /*outputColumn*/, std::size_t /*sourceCell*/, std::size_t outputCell) {
+            mask[outputCell] = 1.0f;
+        });
+    return mask;
+}
+
 /// @brief `mixLayerInto()` above, preferring the GPU when available -
 /// `compositeProject()`'s own general-path dispatch point, confirmed with
 /// the user ahead of implementation. Falls back to the CPU
@@ -397,14 +425,21 @@ sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
 /// is treated as a transient failure to degrade past, not a fatal error,
 /// also confirmed with the user.
 ///
-/// As of `v0.Y.37.1` (Deferred Blend Modes), the GPU is only ever
-/// attempted for `BlendMode::Normal` - `ComputeDevice::
-/// mixAmplitudePhaseSignal()`'s own HLSL kernel only ever implements
-/// Normal's own linear-amplitude-sum formula (see its own docs); every
-/// other blend mode always takes the CPU path below, matching this
-/// codebase's established "CPU first, GPU deferred" precedent for new
-/// filter/blend math (confirmed with the user as this milestone's own
-/// scope).
+/// As of `v0.Y.37.1` (Deferred Blend Modes) through `v0.1.6.1`, the GPU
+/// was only ever attempted for `BlendMode::Normal` - `ComputeDevice::
+/// mixAmplitudePhaseSignal()`'s own HLSL kernel only ever implemented
+/// Normal's own linear-amplitude-sum formula; every other blend mode took
+/// the CPU path below, matching this codebase's established "CPU first,
+/// GPU deferred" precedent for new filter/blend math (confirmed with the
+/// user as that milestone's own scope). **As of `v0.1.6.2`** (the
+/// benchmark suite's own finding that this left every non-Normal blend
+/// mode un-accelerated - `docs/sound-mind-roadmap.md`'s `v0.Y.60.1`
+/// Installment B), the kernel ports every mode's own formula from
+/// `applyBlendedCell()`/`blend_mode_application.cpp` and GPU dispatch is
+/// attempted for every `BlendMode` value, selected by
+/// `mixAmplitudePhaseSignal()`'s own new `blendMode` parameter
+/// (`static_cast<int>(layer.blendMode())`, using that enum's own ordinal
+/// values - see that method's own docs).
 ///
 /// @param opacityMindWave `layer`'s own bound opacity MindWave, or
 ///        `nullptr` if unbound - forwarded to `mixLayerInto()`'s own
@@ -414,27 +449,32 @@ sound_mind::gpu::AmplitudePhaseSignal placeLayerForGpuMix(const Layer& layer,
 ///        the GPU path (confirmed with the user: a new field buffer
 ///        alongside the existing scalar gain, not a replacement for it -
 ///        `v0.Y.31.1` Installment C1's own answer to designing this
-///        evaluation GPU-aware from the start).
+///        evaluation GPU-aware from the start). **As of `v0.1.6.2`**, this
+///        field also gets `buildPlacedMask()`'s own mask multiplied into
+///        it before the GPU call - see that function's own docs for why
+///        every blend mode but `Normal` needed it.
 void mixLayerIntoGpuOrCpu(StreamImage& running, const Layer& layer, const sound_mind::codec::StreamCodecConfig& config,
                            std::uint32_t canvasWidth, float silenceFloorDb, const MindWave* opacityMindWave) {
-    if (layer.blendMode() == BlendMode::Normal) {
-        if (auto* device = detail::gpuComputeDeviceOrNull()) {
-            try {
-                sound_mind::gpu::AmplitudePhaseSignal runningSignal;
-                runningSignal.leftMagnitudeDb = running.leftMagnitudeDb;
-                runningSignal.rightMagnitudeDb = running.rightMagnitudeDb;
-                runningSignal.phaseRadians = running.sharedPhaseRadians;
-                const auto layerSignal = placeLayerForGpuMix(layer, config, canvasWidth, silenceFloorDb);
-                const auto mindWaveField = buildMindWaveField(opacityMindWave, config, canvasWidth);
-                const auto mixed =
-                    device->mixAmplitudePhaseSignal(runningSignal, layerSignal, layer.opacity(), mindWaveField);
-                running.leftMagnitudeDb = mixed.leftMagnitudeDb;
-                running.rightMagnitudeDb = mixed.rightMagnitudeDb;
-                running.sharedPhaseRadians = mixed.phaseRadians;
-                return;
-            } catch (const std::exception&) {
-                // Fall through to the CPU path below.
+    if (auto* device = detail::gpuComputeDeviceOrNull()) {
+        try {
+            sound_mind::gpu::AmplitudePhaseSignal runningSignal;
+            runningSignal.leftMagnitudeDb = running.leftMagnitudeDb;
+            runningSignal.rightMagnitudeDb = running.rightMagnitudeDb;
+            runningSignal.phaseRadians = running.sharedPhaseRadians;
+            const auto layerSignal = placeLayerForGpuMix(layer, config, canvasWidth, silenceFloorDb);
+            auto mindWaveField = buildMindWaveField(opacityMindWave, config, canvasWidth);
+            const auto placedMask = buildPlacedMask(layer, config, canvasWidth);
+            for (std::size_t i = 0; i < mindWaveField.size(); ++i) {
+                mindWaveField[i] *= placedMask[i];
             }
+            const auto mixed = device->mixAmplitudePhaseSignal(runningSignal, layerSignal, layer.opacity(),
+                                                                 mindWaveField, static_cast<int>(layer.blendMode()));
+            running.leftMagnitudeDb = mixed.leftMagnitudeDb;
+            running.rightMagnitudeDb = mixed.rightMagnitudeDb;
+            running.sharedPhaseRadians = mixed.phaseRadians;
+            return;
+        } catch (const std::exception&) {
+            // Fall through to the CPU path below.
         }
     }
     mixLayerInto(running, layer, config, canvasWidth, opacityMindWave);

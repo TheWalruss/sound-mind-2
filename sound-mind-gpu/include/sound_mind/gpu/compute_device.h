@@ -360,6 +360,17 @@ public:
      *        caller with no MindWave binding passes an all-`1.0` array
      *        (no effect), matching `layerGain`'s own "not clamped or
      *        validated" scalar contract extended to a per-cell one.
+     * @param blendMode Which blend mode to apply, using the exact same
+     *        ordinal values `sound_mind::core::BlendMode`'s own enumerators
+     *        declare (`0` = `Normal`, `1` = `Overwrite`, `2` = `Multiply`,
+     *        `3` = `Screen`, `4` = `Overlay`, `5` = `Difference`, `6` =
+     *        `Add`) - a plain `int`, not that enum itself, since
+     *        `sound-mind-gpu` has no dependency on `sound-mind-core` (same
+     *        reasoning as `mindWaveField` above). Defaults to `0` (`Normal`),
+     *        preserving every call site written before `v0.1.6.2` exactly.
+     *        The HLSL kernel ports `sound_mind::core::applyBlendedCell()`'s
+     *        own per-mode amplitude/phase formulas verbatim - see that
+     *        function's own docs for the exact math each value selects.
      * @return The updated composite, same shape as `running`.
      * @throws std::runtime_error if `running`'s, `layer`'s, and
      *         `mindWaveField`'s own arrays aren't all the same size, or if
@@ -367,7 +378,8 @@ public:
      */
     [[nodiscard]] AmplitudePhaseSignal mixAmplitudePhaseSignal(const AmplitudePhaseSignal& running,
                                                                 const AmplitudePhaseSignal& layer, float layerGain,
-                                                                const std::vector<float>& mindWaveField) const;
+                                                                const std::vector<float>& mindWaveField,
+                                                                int blendMode = 0) const;
 
 private:
     /// @brief Wraps an already-successfully-created device/queue/fence

@@ -704,6 +704,56 @@ TEST_CASE("compositeProject agrees with itself whether or not the GPU is availab
     }
 }
 
+TEST_CASE("compositeProject agrees with itself whether or not the GPU is available, for every non-Normal blend mode "
+          "(v0.1.6.2, v0.Y.60.1 Installment B)",
+          "[core][compositor][gpu]") {
+    // The benchmark suite's own blend-mode sweep found GPU dispatch was
+    // only ever attempted for BlendMode::Normal through v0.1.6.1 - every
+    // other mode always took the CPU path, so there was nothing for a
+    // GPU-vs-CPU agreement test to even check for them until now. Same
+    // three-layer scenario and reasoning as the Normal-mode test above,
+    // just with the second layer's own blend mode varied.
+    auto buildProject = [](BlendMode secondLayerBlendMode) {
+        Project project = Project::createNew(testSettings());
+        project.layers()[0].setContent(
+            makeContent({-6.0f, -14.0f, -30.0f}, {-9.0f, -18.0f, -40.0f}, {0.3f, -0.6f, 1.1f}));
+        project.layers()[0].setOpacity(0.8f);
+        project.layers()[0].setBalance(0.3f);
+        Layer second(0, "Second", LayerType::Normal);
+        second.setContent(makeContent({-3.0f, -50.0f}, {-5.0f, -60.0f}, {-1.2f, 0.9f}));
+        second.setOpacity(0.5f);
+        second.setBalance(0.7f);
+        second.setTranslationColumns(1);
+        second.setBlendMode(secondLayerBlendMode);
+        project.addLayer(std::move(second));
+        return project;
+    };
+
+    const auto checkMode = [&](BlendMode mode) {
+        const auto gpuComposite = compositeProject(buildProject(mode));
+        std::optional<StreamImage> cpuComposite;
+        {
+            GpuComputeForcedOffGuard forceCpu;
+            cpuComposite = compositeProject(buildProject(mode));
+        }
+
+        REQUIRE(gpuComposite.has_value());
+        REQUIRE(cpuComposite.has_value());
+        REQUIRE(gpuComposite->leftMagnitudeDb.size() == cpuComposite->leftMagnitudeDb.size());
+        for (std::size_t i = 0; i < cpuComposite->leftMagnitudeDb.size(); ++i) {
+            CHECK(gpuComposite->leftMagnitudeDb[i] == Catch::Approx(cpuComposite->leftMagnitudeDb[i]).margin(0.01));
+            CHECK(gpuComposite->rightMagnitudeDb[i] == Catch::Approx(cpuComposite->rightMagnitudeDb[i]).margin(0.01));
+        }
+    };
+
+    SECTION("Overwrite") { checkMode(BlendMode::Overwrite); }
+    SECTION("Multiply") { checkMode(BlendMode::Multiply); }
+    SECTION("Screen") { checkMode(BlendMode::Screen); }
+    SECTION("Overlay") { checkMode(BlendMode::Overlay); }
+    SECTION("Difference") { checkMode(BlendMode::Difference); }
+    SECTION("Add") { checkMode(BlendMode::Add); }
+}
+
 TEST_CASE("compositeProject skips a hidden layer's own contribution", "[core][compositor]") {
     Project project = Project::createNew(testSettings());
     project.layers()[0].setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
