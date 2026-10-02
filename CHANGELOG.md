@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.6.7] - 2026-10-02
+
+Benchmark-suite follow-up: `Fractal` MindWave scenarios now marked `gpuEligible` (Installment D's own GPU fast path was already live but unreported by the suite's own GPU-vs-CPU comparison), plus a versioning correction - `v0.1.6.6` below was never actually set in `CMakeLists.txt` at commit time (an oversight caught while re-running the benchmark suite for this same commit); recorded here rather than silently rewritten, per this project's own "never describe the past differently than it happened" convention.
+
+### Fixed
+
+- `sound-mind-benchmark`'s `Fractal` baseline and field-size-sweep cases are now marked `gpuEligible`, so a future run reports both the GPU and CPU-forced timings for them, matching every other GPU-eligible case - previously under-reported as CPU-only even though `v0.1.6.4`'s own GPU fast path was already active for them.
+
+### Notes
+
+**Findings-pass closeout results** (re-running the benchmark suite and comparing against the `2026-10-02` `v0.1.6.1` baseline, per the roadmap's own `v0.Y.60.1` closing step): every one of Installments B-F measurably moved its own number. `Fractal` generator 23.9x faster (medium field); field-size sweep 3.5x-21.0x across small/medium/large. `Drawn` generator 3.3x faster. `Soften` brush 49.4x faster (247ms -> 5.0ms); `Heal` a modest 1.08x; `Smudge` unchanged, as expected. `EdgePreservingBlur` 1.08x-5.70x faster depending on kernel size (the GPU kernel's own per-thread insertion-sort cost grows with window size too, shrinking the win at the largest sizes - a real, newly-visible nuance, not a flaw in the fix). Every non-Normal blend mode went from 1.00x (no acceleration at all) to 1.18x-3.34x. Full comparison recorded in memory note `benchmark-comparison-2026-10-02-post-fixes`.
+
 ## [0.1.6.6] - 2026-10-02
 
 `EdgePreservingBlur` (median filter) - a GPU path for the unbound case - `v0.Y.60.1` Installment F, closing out the benchmark suite's own findings pass (Installments B-F). Performance-only; output is unchanged.

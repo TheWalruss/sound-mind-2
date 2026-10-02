@@ -62,7 +62,14 @@ Path makeDrawnShapePath() {
     return path;
 }
 
-BenchmarkCase makeMindWaveCase(std::string name, const MindWave& wave, const FieldSize& size) {
+/// @param gpuEligible Whether this case's own generator type has a real
+///        GPU-accelerated field path - `GeneratorType::Fractal` only, as
+///        of `v0.1.6.4` (`evaluateMindWaveField()`'s own unwarped,
+///        non-superposition-stacked fast path) - see
+///        `MindWave::tryEvaluateFractalFieldOnGpu()`'s own docs. Every
+///        other generator type stays CPU-only, so defaults to `false`.
+BenchmarkCase makeMindWaveCase(std::string name, const MindWave& wave, const FieldSize& size,
+                                bool gpuEligible = false) {
     auto waveCopy = std::make_shared<MindWave>(wave);
     auto config = std::make_shared<StreamCodecConfig>(codecConfigFor(size));
     const std::uint32_t canvasWidth = size.canvasWidth;
@@ -72,7 +79,7 @@ BenchmarkCase makeMindWaveCase(std::string name, const MindWave& wave, const Fie
     parameters["binCount"] = size.binCount;
     parameters["canvasWidth"] = size.canvasWidth;
 
-    return BenchmarkCase{std::move(name), "mindWave", std::move(parameters), false,
+    return BenchmarkCase{std::move(name), "mindWave", std::move(parameters), gpuEligible,
                           [waveCopy, config, canvasWidth]() {
                               const auto field = evaluateMindWaveField(*waveCopy, *config, canvasWidth);
                               static_cast<void>(field);
@@ -100,7 +107,7 @@ void appendOneBaselineCasePerGeneratorType(std::vector<BenchmarkCase>& cases) {
         } else if (type == GeneratorType::Resonance) {
             wave.setResonanceSpectrum(std::nullopt, {0.2f, 0.5f, 1.0f, 0.6f, 0.3f, 0.1f});
         }
-        cases.push_back(makeMindWaveCase("baseline", wave, kMediumField));
+        cases.push_back(makeMindWaveCase("baseline", wave, kMediumField, /*gpuEligible=*/type == GeneratorType::Fractal));
     }
 }
 
@@ -112,7 +119,7 @@ void appendFractalFieldSizeSweep(std::vector<BenchmarkCase>& cases) {
     wave.setType(GeneratorType::Fractal);
     wave.setFractalIterations(6);
     for (const FieldSize& size : kFieldSizeSweep) {
-        cases.push_back(makeMindWaveCase("Fractal", wave, size));
+        cases.push_back(makeMindWaveCase("Fractal", wave, size, /*gpuEligible=*/true));
     }
 }
 
