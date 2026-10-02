@@ -23,7 +23,7 @@ using sound_mind::core::PathNodeType;
 using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::ReduceMode;
 using sound_mind::core::reduceMindWaveToSignal;
-using sound_mind::core::ResonantProfileId;
+using sound_mind::core::ResonanceProfileId;
 using sound_mind::core::SpatialPattern;
 using sound_mind::core::SteppedNoiseShape;
 using sound_mind::core::SuperpositionBlendMode;
@@ -1089,21 +1089,21 @@ TEST_CASE("evaluateMindWaveField's own values all fall within [0, 1]", "[core][m
     }
 }
 
-// --- v0.Y.59.1 Installment E: Resonant generator -----------------------
+// --- v0.Y.59.1 Installment E: Resonance generator -----------------------
 
-TEST_CASE("A fresh MindWave has no Resonant spectrum yet", "[core][mind_wave]") {
+TEST_CASE("A fresh MindWave has no Resonance spectrum yet", "[core][mind_wave]") {
     const MindWave wave;
-    REQUIRE(wave.resonantSpectrum().empty());
-    REQUIRE(wave.sourceResonantProfileId() == std::nullopt);
+    REQUIRE(wave.resonanceSpectrum().empty());
+    REQUIRE(wave.sourceResonanceProfileId() == std::nullopt);
 }
 
-TEST_CASE("A Resonant MindWave returns each spectrum sample's own value verbatim across one period",
+TEST_CASE("A Resonance MindWave returns each spectrum sample's own value verbatim across one period",
           "[core][mind_wave]") {
     MindWave wave;
-    wave.setType(GeneratorType::Resonant);
+    wave.setType(GeneratorType::Resonance);
     wave.setAxis(MindWaveAxis::Time);
     wave.setPeriod(4.0);
-    wave.setResonantSpectrum(std::nullopt, {0.1f, 0.4f, 0.6f, 0.9f});
+    wave.setResonanceSpectrum(std::nullopt, {0.1f, 0.4f, 0.6f, 0.9f});
     const auto config = testConfig();
 
     REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, config) == Catch::Approx(0.1f));
@@ -1114,59 +1114,59 @@ TEST_CASE("A Resonant MindWave returns each spectrum sample's own value verbatim
     REQUIRE(wave.evaluate(TimeFrequencyPoint{4.0, 1000.0}, config) == Catch::Approx(0.1f));
 }
 
-TEST_CASE("A Resonant MindWave's own phase offset shifts which sample is currently active", "[core][mind_wave]") {
+TEST_CASE("A Resonance MindWave's own phase offset shifts which sample is currently active", "[core][mind_wave]") {
     MindWave wave;
-    wave.setType(GeneratorType::Resonant);
+    wave.setType(GeneratorType::Resonance);
     wave.setAxis(MindWaveAxis::Time);
     wave.setPeriod(4.0);
-    wave.setResonantSpectrum(std::nullopt, {0.1f, 0.4f, 0.6f, 0.9f});
+    wave.setResonanceSpectrum(std::nullopt, {0.1f, 0.4f, 0.6f, 0.9f});
     wave.setPhaseRadians(std::numbers::pi_v<double>);  // Half a cycle - shifts two samples ahead of four.
 
     REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, testConfig()) == Catch::Approx(0.6f));
 }
 
-TEST_CASE("An empty Resonant spectrum evaluates to neutral 0.5 rather than indexing an empty vector",
+TEST_CASE("An empty Resonance spectrum evaluates to neutral 0.5 rather than indexing an empty vector",
           "[core][mind_wave]") {
     MindWave wave;
-    wave.setType(GeneratorType::Resonant);
-    wave.setResonantSpectrum(std::nullopt, {});
+    wave.setType(GeneratorType::Resonance);
+    wave.setResonanceSpectrum(std::nullopt, {});
     REQUIRE(wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, testConfig()) == Catch::Approx(0.5f));
 }
 
-TEST_CASE("A Resonant MindWave round-trips its own spectrum and source id through JSON", "[core][mind_wave]") {
+TEST_CASE("A Resonance MindWave round-trips its own spectrum and source id through JSON", "[core][mind_wave]") {
     MindWave original;
-    original.setType(GeneratorType::Resonant);
-    original.setResonantSpectrum(ResonantProfileId{7}, {0.2f, 0.4f, 0.8f});
+    original.setType(GeneratorType::Resonance);
+    original.setResonanceSpectrum(ResonanceProfileId{7}, {0.2f, 0.4f, 0.8f});
 
     const nlohmann::json json = original;
     const MindWave restored = json.get<MindWave>();
 
-    REQUIRE(restored.type() == GeneratorType::Resonant);
-    REQUIRE(restored.resonantSpectrum() == std::vector<float>{0.2f, 0.4f, 0.8f});
-    REQUIRE(restored.sourceResonantProfileId() == ResonantProfileId{7});
+    REQUIRE(restored.type() == GeneratorType::Resonance);
+    REQUIRE(restored.resonanceSpectrum() == std::vector<float>{0.2f, 0.4f, 0.8f});
+    REQUIRE(restored.sourceResonanceProfileId() == ResonanceProfileId{7});
 }
 
-TEST_CASE("A Resonant MindWave's sourceResonantProfileId round-trips as nullopt when never set",
+TEST_CASE("A Resonance MindWave's sourceResonanceProfileId round-trips as nullopt when never set",
           "[core][mind_wave]") {
     MindWave original;
-    original.setType(GeneratorType::Resonant);
-    original.setResonantSpectrum(std::nullopt, {0.5f});
+    original.setType(GeneratorType::Resonance);
+    original.setResonanceSpectrum(std::nullopt, {0.5f});
 
     const nlohmann::json json = original;
     const MindWave restored = json.get<MindWave>();
 
-    REQUIRE(restored.sourceResonantProfileId() == std::nullopt);
+    REQUIRE(restored.sourceResonanceProfileId() == std::nullopt);
 }
 
-TEST_CASE("A MindWave loads from JSON missing resonantSpectrum (saved before v0.Y.59.1 Installment E) with an "
+TEST_CASE("A MindWave loads from JSON missing resonanceSpectrum (saved before v0.Y.59.1 Installment E) with an "
           "empty spectrum",
           "[core][mind_wave]") {
     MindWave config;
     nlohmann::json json = config;
-    json.erase("resonantSpectrum");
+    json.erase("resonanceSpectrum");
 
     const MindWave restored = json.get<MindWave>();
 
-    REQUIRE(restored.resonantSpectrum().empty());
-    REQUIRE(restored.sourceResonantProfileId() == std::nullopt);
+    REQUIRE(restored.resonanceSpectrum().empty());
+    REQUIRE(restored.sourceResonanceProfileId() == std::nullopt);
 }

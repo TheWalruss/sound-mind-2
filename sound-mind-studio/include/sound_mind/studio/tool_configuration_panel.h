@@ -216,23 +216,23 @@ public:
     void refreshMindGrains();
 
     /**
-     * @brief Repopulates the Resonant Instrument picker from `project`'s
-     *        own current `resonantProfiles()` - `v0.Y.59.1` Installment D,
+     * @brief Repopulates the Resonance picker from `project`'s
+     *        own current `resonanceProfiles()` - `v0.Y.59.1` Installment D,
      *        the same "call whenever that library might have changed out
      *        from under this panel" role `refreshMindShots()`/
      *        `refreshMindGrains()` already establish (`setProject()`
      *        already calls this itself for a project switch; a fresh
-     *        `Edit -> Create Resonant Instrument from Picked Path...`
+     *        `Edit -> Create Resonance from Picked Path...`
      *        capture is the other trigger, from `MainWindow`).
      *
      * Preserves the currently-selected entry, by id, if it still exists;
      * otherwise leaves nothing selected. Purely a display refresh, like
      * refreshMindShots() - never itself changes `config_`, so an already-
-     * configured `ResonantInstrumentConfiguration`'s own `spectrum()` is
+     * configured `ResonanceConfiguration`'s own `spectrum()` is
      * unaffected either way (it's a snapshot, not a live reference into
      * this library - see that class's own docs).
      */
-    void refreshResonantProfiles();
+    void refreshResonanceProfiles();
 
     /**
      * @brief Repopulates the Tool Preset picker from `project`'s own
@@ -246,7 +246,7 @@ public:
      *
      * Preserves the currently-selected entry, by id, if it still exists;
      * otherwise leaves nothing selected. Each entry whose own saved
-     * `config` is an `InstrumentConfiguration`/`ResonantInstrumentConfiguration`
+     * `config` is an `InstrumentConfiguration`/`ResonanceConfiguration`
      * also gets a small icon (`HarmonicSeriesWidget::renderThumbnail()`)
      * showing its harmonic/spectral content at a glance - every other
      * preset type shows no icon, the same way it always has.
@@ -462,14 +462,14 @@ private:
     /// @param index The combo's own newly-selected row.
     void handleMindShotComboChanged(int index);
 
-    /// @brief `resonantProfileCombo_`'s own `currentIndexChanged` handler:
-    ///        if `config_` is currently a `ResonantInstrumentConfiguration`,
+    /// @brief `resonanceProfileCombo_`'s own `currentIndexChanged` handler:
+    ///        if `config_` is currently a `ResonanceConfiguration`,
     ///        sets its spectrum from the newly-selected library entry and
     ///        emits toolConfigurationChanged() - a no-op (no config_
     ///        update) if the selection is the placeholder "no entries"
     ///        item, or `project_` is `nullptr`.
     /// @param index The combo's own newly-selected row.
-    void handleResonantProfileComboChanged(int index);
+    void handleResonanceProfileComboChanged(int index);
 
     /// @brief `mindGrainCombo_`'s own `currentIndexChanged` handler: if
     ///        `config_` is currently a `MindGrainConfiguration`, sets its
@@ -605,13 +605,15 @@ private:
     ///        see `setAvailableMindWaves()`'s own docs.
     std::vector<std::pair<sound_mind::core::MindWaveId, QString>> availableMindWaves_;
 
-    /// @brief `ResonantInstrumentConfiguration`'s own controls - `v0.Y.59.1`
+    /// @brief `ResonanceConfiguration`'s own controls - `v0.Y.59.1`
     ///        Installment D - shown only while `config_->type() ==
-    ///        ToolType::ResonantInstrument`, see
+    ///        ToolType::Resonance`, see
     ///        updateVisibleToolTypeGroup()'s own docs.
-    QWidget* resonantInstrumentGroup_ = nullptr;
-    QComboBox* resonantProfileCombo_ = nullptr;
-    QDoubleSpinBox* fallOffRateSpinBox_ = nullptr;
+    QWidget* resonanceGroup_ = nullptr;
+    QComboBox* resonanceProfileCombo_ = nullptr;
+    QDoubleSpinBox* decayRateSpinBox_ = nullptr;
+    QDoubleSpinBox* frequencyScaleSpinBox_ = nullptr;
+    QDoubleSpinBox* timeSpanSpinBox_ = nullptr;
 
     /// @brief `MindShotConfiguration`'s own controls, shown only while
     ///        `config_->type() == ToolType::MindShot` - see

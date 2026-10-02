@@ -1621,17 +1621,17 @@ public slots:
     /**
      * @brief Computes a Wave Kernel Signature spectrum from whichever
      *        path/curve is currently Picked and stores it as a new, named
-     *        entry in the project's Resonant Instrument profile library -
+     *        entry in the project's Resonance profile library -
      *        `docs/sound-mind-roadmap.md`'s "Resonant Instruments"
      *        (`v0.Y.59.1`) own item 2 ("With a Curve selected, the user
-     *        selects the option to create a 'Resonant Instrument'"), the
-     *        actual work behind the Edit menu's "Create Resonant
-     *        Instrument from Picked Path..." action.
+     *        selects the option to create a 'Resonance'"), the
+     *        actual work behind the Edit menu's "Create Resonance from
+     *        Picked Path..." action.
      *
      * **The workflow, in full**: draw or place a path as an ordinary paint
      * stroke, switch to Pick and click it (the same "stay in Pick, don't
      * switch back to Select" workflow usePickedPathAsMindWaveShape()'s own
-     * docs describe), then choose Edit → Create Resonant Instrument from
+     * docs describe), then choose Edit → Create Resonance from
      * Picked Path - prompts for a name (`QInputDialog`, the same plain
      * "just needs a name" mechanism `ToolConfigurationPanel::
      * saveCurrentAsToolPreset()` already uses, not the richer
@@ -1642,30 +1642,30 @@ public slots:
      * name prompt is cancelled/left empty.
      *
      * Shows the name prompt, then delegates the actual computation/storage
-     * to createResonantInstrumentFromPickedPathNamed() - see that method's
+     * to createResonanceFromPickedPathNamed() - see that method's
      * own docs on why tests call it directly instead of this one (the
      * same `captureMindShot()`/`captureMindShotWithDetails()` split this
      * codebase already establishes for every modal-dialog-showing action).
      */
-    void createResonantInstrumentFromPickedPath();
+    void createResonanceFromPickedPath();
 
     /**
-     * @brief The dialog-free half of createResonantInstrumentFromPickedPath()
+     * @brief The dialog-free half of createResonanceFromPickedPath()
      * - see `captureMindShotWithDetails()`'s own identical docs on why
      * this exists (so tests never have to call the real, modal-dialog-
      * showing slot directly).
      *
      * Resamples the picked `Path` into a `CurveGraph`
-     * (`curveGraphFromPath()`, `kResonantInstrumentNodeCount` nodes) and
+     * (`curveGraphFromPath()`, `kResonanceNodeCount` nodes) and
      * computes its own aggregated spectrum (`computeWaveKernelSignature()`,
-     * `kResonantInstrumentSpectrumSize` samples) - both in `resonant_
+     * `kResonanceSpectrumSize` samples) - both in `resonant_
      * instrument.h` - then stores the result via
-     * `Project::addResonantProfile()`. A permanent snapshot, the same as
+     * `Project::addResonanceProfile()`. A permanent snapshot, the same as
      * `captureMindShot()`'s own `Clip` capture: editing the source path
      * afterward has no effect on the new library entry. A no-op if
      * nothing is currently Picked or no project is open.
      *
-     * Explicitly calls `toolConfigurationPanel_->refreshResonantProfiles()`
+     * Explicitly calls `toolConfigurationPanel_->refreshResonanceProfiles()`
      * afterward - unlike `captureMindShot()`/`captureMindGrain()` (wired
      * through `SelectionController`'s own `mindShotCaptured()`/
      * `mindGrainCaptured()` signals, connected once in
@@ -1675,7 +1675,7 @@ public slots:
      *
      * @param name Display name for the new library entry.
      */
-    void createResonantInstrumentFromPickedPathNamed(const std::string& name);
+    void createResonanceFromPickedPathNamed(const std::string& name);
 
     /**
      * @brief Starts a new `BranchCurveSession`, using whatever's currently
@@ -1694,8 +1694,8 @@ public slots:
      * reported to `branchCurveSession_` via `noteBranchCurveGraftCandidate()`
      * (see its own docs); draw a new stroke there, Pick it, then choose
      * Edit → Add Picked Path as Branch (`addPickedPathAsBranch()`).
-     * Repeat for as many branches as wanted, then Edit → Create Resonant
-     * Instrument from Picked Graph... (`createResonantInstrumentFromPickedGraph()`)
+     * Repeat for as many branches as wanted, then Edit → Create Resonance
+     * from Picked Graph... (`createResonanceFromPickedGraph()`)
      * finalizes the whole tree. A no-op unless something is currently
      * Picked.
      *
@@ -1737,37 +1737,37 @@ public slots:
      * @brief Computes a Wave Kernel Signature spectrum from the whole
      *        in-progress `branchCurveSession_` (every branch gathered so
      *        far, trunk included) and stores it as a new, named entry in
-     *        the project's Resonant Instrument profile library - the
+     *        the project's Resonance profile library - the
      *        genuinely branching counterpart to
-     *        createResonantInstrumentFromPickedPath() above, via
+     *        createResonanceFromPickedPath() above, via
      *        `curveGraphFromBranches()` instead of `curveGraphFromPath()`.
-     *        The actual work behind the Edit menu's "Create Resonant
-     *        Instrument from Picked Graph..." action.
+     *        The actual work behind the Edit menu's "Create Resonance
+     *        from Picked Graph..." action.
      *
-     * Prompts for a name the same way createResonantInstrumentFromPickedPath()
-     * does, then delegates to createResonantInstrumentFromPickedGraphNamed() -
+     * Prompts for a name the same way createResonanceFromPickedPath()
+     * does, then delegates to createResonanceFromPickedGraphNamed() -
      * see that method's own docs on why tests call it directly instead of
      * this one. A no-op unless a session is currently active, or the name
      * prompt is cancelled/left empty.
      */
-    void createResonantInstrumentFromPickedGraph();
+    void createResonanceFromPickedGraph();
 
     /**
-     * @brief The dialog-free half of createResonantInstrumentFromPickedGraph() -
-     *        see `createResonantInstrumentFromPickedPathNamed()`'s own
+     * @brief The dialog-free half of createResonanceFromPickedGraph() -
+     *        see `createResonanceFromPickedPathNamed()`'s own
      *        identical docs on why this exists.
      *
      * Builds the branching `CurveGraph` via `curveGraphFromBranches()`
-     * (`branchCurveSession_.branches()`, `kResonantInstrumentNodeCount`
+     * (`branchCurveSession_.branches()`, `kResonanceNodeCount`
      * nodes per branch) and computes its own aggregated spectrum
-     * (`computeWaveKernelSignature()`, `kResonantInstrumentSpectrumSize`
-     * samples), then stores the result via `Project::addResonantProfile()`
+     * (`computeWaveKernelSignature()`, `kResonanceSpectrumSize`
+     * samples), then stores the result via `Project::addResonanceProfile()`
      * and ends the session - a no-op (not ending the session) if no
      * session is currently active or no project is open.
      *
      * @param name Display name for the new library entry.
      */
-    void createResonantInstrumentFromPickedGraphNamed(const std::string& name);
+    void createResonanceFromPickedGraphNamed(const std::string& name);
 
     /**
      * @brief Reports a Pick click to `branchCurveSession_`, if one is

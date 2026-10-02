@@ -252,9 +252,9 @@ private slots:
     void captureMindShotIsANoOpWithNoSelection();
 
     // Resonant Instruments - Installment C: Studio capture workflow (v0.Y.59.1).
-    void createResonantInstrumentFromPickedPathNamedAddsANamedEntryToTheLibrary();
-    void createResonantInstrumentFromPickedPathNamedIsANoOpWithNothingPicked();
-    void createResonantInstrumentFromPickedPathIsANoOpWithNothingPicked();
+    void createResonanceFromPickedPathNamedAddsANamedEntryToTheLibrary();
+    void createResonanceFromPickedPathNamedIsANoOpWithNothingPicked();
+    void createResonanceFromPickedPathIsANoOpWithNothingPicked();
 
     // Resonant Instruments - Branching Curve editor (v0.Y.59.1, item 1's deferred half).
     void startBranchingCurveFromPickedPathBeginsASessionWithTheTrunk();
@@ -262,8 +262,8 @@ private slots:
     void pickingAPointOnTheTrunkThenAddingABranchGraftsItOn();
     void addPickedPathAsBranchIsANoOpWithNoPendingGraft();
     void cancelBranchingCurveDiscardsTheSession();
-    void createResonantInstrumentFromPickedGraphNamedBuildsFromEveryBranchAndEndsTheSession();
-    void createResonantInstrumentFromPickedGraphNamedIsANoOpWithNoSessionActive();
+    void createResonanceFromPickedGraphNamedBuildsFromEveryBranchAndEndsTheSession();
+    void createResonanceFromPickedGraphNamedIsANoOpWithNoSessionActive();
     void clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject();
     void cancelPathDiscardsInProgressPlacementWithoutCommittingAnything();
     void smoothNodesToggleAffectsSubsequentlyPlacedNodes();

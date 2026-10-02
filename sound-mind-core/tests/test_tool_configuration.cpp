@@ -20,8 +20,8 @@ using sound_mind::core::MindWaveBindingFrame;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
-using sound_mind::core::ResonantInstrumentConfiguration;
-using sound_mind::core::ResonantProfileId;
+using sound_mind::core::ResonanceConfiguration;
+using sound_mind::core::ResonanceProfileId;
 using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
@@ -437,82 +437,88 @@ TEST_CASE("An InstrumentConfiguration loads from JSON missing vibrato/tremolo fi
     REQUIRE(instrument.tremoloDepth() == 0.3);
 }
 
-TEST_CASE("A fresh ResonantInstrumentConfiguration is ResonantInstrument with no spectrum yet",
+TEST_CASE("A fresh ResonanceConfiguration is Resonance with no spectrum yet, falloff fixed at 0",
           "[core][tool_configuration]") {
-    const ResonantInstrumentConfiguration config;
-    REQUIRE(config.type() == ToolType::ResonantInstrument);
+    const ResonanceConfiguration config;
+    REQUIRE(config.type() == ToolType::Resonance);
     REQUIRE(config.spectrum().empty());
-    REQUIRE(config.sourceResonantProfileId() == std::nullopt);
-    REQUIRE(config.fallOffRate() == 0.0);
+    REQUIRE(config.sourceResonanceProfileId() == std::nullopt);
+    REQUIRE(config.decayRate() == 0.0);
+    // Confirmed with the user: no per-stamp UI control of its own for
+    // this tool, so falloff() is fixed at a hard edge (0) rather than
+    // inheriting the base class's own 0.5 default.
+    REQUIRE(config.falloff() == 0.0f);
+    REQUIRE(config.frequencyScale() == 2.0);
+    REQUIRE(config.timeSpan() == 0.2);
 }
 
-TEST_CASE("ResonantInstrumentConfiguration's setSpectrum() sets both the spectrum and its own source id",
+TEST_CASE("ResonanceConfiguration's setSpectrum() sets both the spectrum and its own source id",
           "[core][tool_configuration]") {
-    ResonantInstrumentConfiguration config;
+    ResonanceConfiguration config;
 
-    config.setSpectrum(ResonantProfileId{7}, {0.2f, 0.8f, 0.5f});
+    config.setSpectrum(ResonanceProfileId{7}, {0.2f, 0.8f, 0.5f});
 
     REQUIRE(config.spectrum() == std::vector<float>{0.2f, 0.8f, 0.5f});
-    REQUIRE(config.sourceResonantProfileId() == ResonantProfileId{7});
+    REQUIRE(config.sourceResonanceProfileId() == ResonanceProfileId{7});
 }
 
-TEST_CASE("ResonantInstrumentConfiguration's fall-off rate can be changed", "[core][tool_configuration]") {
-    ResonantInstrumentConfiguration config;
-    config.setFallOffRate(2.5);
-    REQUIRE(config.fallOffRate() == 2.5);
+TEST_CASE("ResonanceConfiguration's fall-off rate can be changed", "[core][tool_configuration]") {
+    ResonanceConfiguration config;
+    config.setDecayRate(2.5);
+    REQUIRE(config.decayRate() == 2.5);
 }
 
-TEST_CASE("A ResonantInstrumentConfiguration's clone() is an independent, equal copy",
+TEST_CASE("A ResonanceConfiguration's clone() is an independent, equal copy",
           "[core][tool_configuration]") {
-    ResonantInstrumentConfiguration config;
+    ResonanceConfiguration config;
     config.setName("Wire Loop");
-    config.setSpectrum(ResonantProfileId{3}, {0.1f, 0.4f, 0.9f});
-    config.setFallOffRate(1.5);
+    config.setSpectrum(ResonanceProfileId{3}, {0.1f, 0.4f, 0.9f});
+    config.setDecayRate(1.5);
 
     const std::unique_ptr<ToolConfiguration> clone = config.clone();
-    REQUIRE(clone->type() == ToolType::ResonantInstrument);
+    REQUIRE(clone->type() == ToolType::Resonance);
     REQUIRE(clone->name() == "Wire Loop");
-    const auto& clonedResonant = dynamic_cast<const ResonantInstrumentConfiguration&>(*clone);
+    const auto& clonedResonant = dynamic_cast<const ResonanceConfiguration&>(*clone);
     REQUIRE(clonedResonant.spectrum() == std::vector<float>{0.1f, 0.4f, 0.9f});
-    REQUIRE(clonedResonant.sourceResonantProfileId() == ResonantProfileId{3});
-    REQUIRE(clonedResonant.fallOffRate() == 1.5);
+    REQUIRE(clonedResonant.sourceResonanceProfileId() == ResonanceProfileId{3});
+    REQUIRE(clonedResonant.decayRate() == 1.5);
 
-    config.setFallOffRate(9.0);
-    REQUIRE(clonedResonant.fallOffRate() == 1.5);
+    config.setDecayRate(9.0);
+    REQUIRE(clonedResonant.decayRate() == 1.5);
 }
 
-TEST_CASE("A ResonantInstrumentConfiguration round-trips through JSON", "[core][tool_configuration]") {
-    ResonantInstrumentConfiguration config;
+TEST_CASE("A ResonanceConfiguration round-trips through JSON", "[core][tool_configuration]") {
+    ResonanceConfiguration config;
     config.setName("Wire Loop");
-    config.setSpectrum(ResonantProfileId{11}, {0.2f, 0.6f, 1.0f, 0.3f});
-    config.setFallOffRate(0.8);
+    config.setSpectrum(ResonanceProfileId{11}, {0.2f, 0.6f, 1.0f, 0.3f});
+    config.setDecayRate(0.8);
     config.setFalloff(0.4f);
     config.setSize(0.75);
 
     const nlohmann::json json = config;
     const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
 
-    REQUIRE(roundTripped->type() == ToolType::ResonantInstrument);
+    REQUIRE(roundTripped->type() == ToolType::Resonance);
     REQUIRE(roundTripped->name() == "Wire Loop");
-    const auto& resonant = dynamic_cast<const ResonantInstrumentConfiguration&>(*roundTripped);
+    const auto& resonant = dynamic_cast<const ResonanceConfiguration&>(*roundTripped);
     REQUIRE(resonant.spectrum() == std::vector<float>{0.2f, 0.6f, 1.0f, 0.3f});
-    REQUIRE(resonant.sourceResonantProfileId() == ResonantProfileId{11});
-    REQUIRE(resonant.fallOffRate() == 0.8);
+    REQUIRE(resonant.sourceResonanceProfileId() == ResonanceProfileId{11});
+    REQUIRE(resonant.decayRate() == 0.8);
     REQUIRE(roundTripped->falloff() == 0.4f);
     REQUIRE(roundTripped->size() == 0.75);
 }
 
-TEST_CASE("A ResonantInstrumentConfiguration's sourceResonantProfileId round-trips as nullopt when never set",
+TEST_CASE("A ResonanceConfiguration's sourceResonanceProfileId round-trips as nullopt when never set",
           "[core][tool_configuration]") {
-    ResonantInstrumentConfiguration config;
+    ResonanceConfiguration config;
     config.setSpectrum(std::nullopt, {0.5f});
     nlohmann::json json = config;
-    json.erase("sourceResonantProfileId");  // Not written in the first place, but confirm the read side too.
+    json.erase("sourceResonanceProfileId");  // Not written in the first place, but confirm the read side too.
 
     const std::unique_ptr<ToolConfiguration> roundTripped = toolConfigurationFromJson(json);
 
-    const auto& resonant = dynamic_cast<const ResonantInstrumentConfiguration&>(*roundTripped);
-    REQUIRE(resonant.sourceResonantProfileId() == std::nullopt);
+    const auto& resonant = dynamic_cast<const ResonanceConfiguration&>(*roundTripped);
+    REQUIRE(resonant.sourceResonanceProfileId() == std::nullopt);
 }
 
 TEST_CASE("A fresh MindShotConfiguration is MindShot with no Mind Shot selected", "[core][tool_configuration]") {

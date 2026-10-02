@@ -6,7 +6,7 @@
 #include <QWidget>
 
 #include "sound_mind/core/mind_wave.h"
-#include "sound_mind/core/resonant_profile.h"
+#include "sound_mind/core/resonance_profile.h"
 
 class QComboBox;
 class QDoubleSpinBox;
@@ -108,29 +108,29 @@ public:
     void setMindWave(const sound_mind::core::MindWave& wave);
 
     /**
-     * @brief Sets which Resonant Instrument profiles `resonantProfileCombo_`
+     * @brief Sets which Resonance profiles `resonanceProfileCombo_`
      *        offers - `v0.Y.59.1` Installment E, the same "purely
      *        presentational, fed plain data rather than a live `Project`
      *        reference" shape `ToolConfigurationPanel::setAvailableMindWaves()`
      *        already establishes for an analogous picker, just carrying the
-     *        full `NamedResonantProfile` (not only id/name) since selecting
+     *        full `NamedResonanceProfile` (not only id/name) since selecting
      *        one must immediately snapshot its own `spectrum` into `wave_`
-     *        - see `setResonantSpectrum()`'s own docs on why a snapshot,
+     *        - see `setResonanceSpectrum()`'s own docs on why a snapshot,
      *        not a live reference.
      *
      * `MindWavesPanel` calls this on all three of its own embedded
      * `MindWaveEditor`s identically, fed from `MindWaveController`'s own
-     * `project_->resonantProfiles()` - the same propagation
+     * `project_->resonanceProfiles()` - the same propagation
      * `setAvailableMindWaves()` already has for the vibrato/tremolo-style
      * bindings elsewhere in this codebase, just not plumbed through this
      * particular class until now since nothing inside a MindWave editor
      * needed a library picker before.
      *
-     * @param profiles The project's current Resonant Instrument profile
+     * @param profiles The project's current Resonance profile
      *        library; may be empty (the picker then shows only its own
      *        "(none captured yet)" placeholder).
      */
-    void setAvailableResonantProfiles(const std::vector<sound_mind::core::NamedResonantProfile>& profiles);
+    void setAvailableResonanceProfiles(const std::vector<sound_mind::core::NamedResonanceProfile>& profiles);
 
 signals:
     /// @brief Emitted whenever any control changes.
@@ -268,13 +268,13 @@ private:
     RotaryDialWidget* continuousSkewDial_ = nullptr;
     RotaryDialWidget* continuousCharacterDial_ = nullptr;
 
-    /// @brief `GeneratorType::Resonant`'s own group - `v0.Y.59.1`
-    ///        Installment E. A single picker (`resonantProfileCombo_`); see
-    ///        `setAvailableResonantProfiles()`'s own docs for
+    /// @brief `GeneratorType::Resonance`'s own group - `v0.Y.59.1`
+    ///        Installment E. A single picker (`resonanceProfileCombo_`); see
+    ///        `setAvailableResonanceProfiles()`'s own docs for
     ///        `availableResonantProfiles_`'s own role.
-    QGroupBox* resonantGroup_ = nullptr;
-    QComboBox* resonantProfileCombo_ = nullptr;
-    std::vector<sound_mind::core::NamedResonantProfile> availableResonantProfiles_;
+    QGroupBox* resonanceGroup_ = nullptr;
+    QComboBox* resonanceProfileCombo_ = nullptr;
+    std::vector<sound_mind::core::NamedResonanceProfile> availableResonantProfiles_;
 };
 
 }  // namespace sound_mind::studio

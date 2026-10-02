@@ -44,5 +44,5 @@ private slots:
     void selectingARowWithAnExistingWarpSourcePopulatesTheCheckboxStrengthAndEditor();
 
     // Resonant Instruments Installment E (v0.Y.59.1).
-    void setAvailableResonantProfilesForwardsToAllThreeEmbeddedEditors();
+    void setAvailableResonanceProfilesForwardsToAllThreeEmbeddedEditors();
 };

@@ -39,7 +39,7 @@ namespace sound_mind::studio {
  * ago.
  *
  * Finalizing (building the actual `CurveGraph` via `curveGraphFromBranches()`
- * and storing it as a `NamedResonantProfile`) is `MainWindow`'s own job,
+ * and storing it as a `NamedResonanceProfile`) is `MainWindow`'s own job,
  * not this class's - `branches()` hands over exactly the `BranchGraft`
  * list that function already takes.
  */

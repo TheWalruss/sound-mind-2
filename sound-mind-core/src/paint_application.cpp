@@ -664,31 +664,35 @@ void applyInstrumentPaintOperation(const PaintOperation& operation, const Instru
     }
 }
 
-/// @brief Resonant Instrument's own stamp - `v0.Y.59.1` Installment D, per
-/// `ResonantInstrumentConfiguration`'s own docs (`tool_configuration.h`).
+/// @brief Resonance's own stamp - `v0.Y.59.1` Installment D, per
+/// `ResonanceConfiguration`'s own docs (`tool_configuration.h`).
 ///
-/// Literally `applyInstrumentPaintOperation()`'s own per-partial assembly
-/// above, reused with two differences rather than a second, independently-
-/// written copy of the same loop: `toolConfig.spectrum()` takes
-/// `harmonicStrengths()`'s own role (partial `n`'s strength is
-/// `spectrum()[n-1]`, still at a plain integer-multiple frequency
-/// `n * fundamentalHz` - the spectrum's own computed, non-uniform shape is
-/// what gives this its distinct timbre, not an inharmonic partial
-/// *frequency* grid, which `computeWaveKernelSignature()`'s own already-
-/// aggregated, Gaussian-smoothed result isn't suited to drive directly -
-/// see that function's own docs), and every partial's strength is further
-/// scaled by `exp(-fallOffRate() * sample.pathT)` - see
-/// `ResonantInstrumentConfiguration::fallOffRate()`'s own docs for the
+/// `applyInstrumentPaintOperation()`'s own per-partial assembly above,
+/// reused with `toolConfig.spectrum()` taking `harmonicStrengths()`'s own
+/// role, except for one deliberate departure real-world testing surfaced
+/// (2026-10-02): the original version mapped spectrum index `i` straight
+/// onto harmonic `i + 1` (`partialHz = (i + 1) * fundamentalHz`) - with a
+/// 64-entry spectrum, that reaches the *64th* harmonic, over 6 octaves
+/// above the painted pitch, and a WKS spectrum (unlike a hand-tuned
+/// harmonic series) routinely has real energy up at those high indices -
+/// so painting in the middle of the canvas could land its own loudest
+/// content near the very top of the encoded range. `toolConfig.
+/// frequencyScale()` replaces that unbounded linear mapping with a
+/// bounded, log-spaced one instead - see its own docs for the exact
+/// formula; index `0` still always lands exactly on the painted pitch.
+/// Every partial's strength is further scaled by
+/// `exp(-decayRate() * sample.pathT)` - see
+/// `ResonanceConfiguration::decayRate()`'s own docs for the
 /// "struck once at the stroke's own start, ringing out across it"
 /// metaphor this implements. No inharmonicity, vibrato, or tremolo here -
-/// unlike `InstrumentConfiguration`, a Resonant Instrument's own spectral
+/// unlike `InstrumentConfiguration`, a Resonance's own spectral
 /// character already comes entirely from its source curve's own shape,
 /// and neither has an obvious analogue for one yet; left for a future
 /// installment, the same narrower-than-the-full-design-doc scope
 /// `InstrumentConfiguration`'s own first installment already chose for
 /// its noise component/body resonance/ADSR envelope.
-void applyResonantInstrumentPaintOperation(const PaintOperation& operation,
-                                            const ResonantInstrumentConfiguration& toolConfig,
+void applyResonancePaintOperation(const PaintOperation& operation,
+                                            const ResonanceConfiguration& toolConfig,
                                             const std::vector<StrokeSample>& samples,
                                             sound_mind::codec::StreamImage& content,
                                             const MindWaveResolver& resolveMindWave) {
@@ -698,13 +702,19 @@ void applyResonantInstrumentPaintOperation(const PaintOperation& operation,
     if (spectrum.empty()) {
         return;
     }
+    // Index i / (size - 1), the fraction of frequencyScale() each step
+    // climbs - floored at 1 so a single-entry spectrum (index 0 is
+    // always the only, and therefore both first and last, entry) divides
+    // cleanly instead of by zero; its own numerator (0) makes the actual
+    // ratio 0 regardless, landing it exactly on the fundamental either way.
+    const double spectrumSpanDenominator = static_cast<double>(std::max<std::size_t>(1, spectrum.size() - 1));
 
     const float maxFrequencyHz =
         std::min(content.config.maxFrequencyHz, static_cast<float>(content.config.sampleRateHz) / 2.0f);
 
     for (const StrokeSample& sample : samples) {
         const StampParameters params = resolveStampParameters(mindWaves, sample, content.config);
-        const double frameRadius = timeToFrameIndex(toolConfig.size() * params.sizeScale, content.config) -
+        const double frameRadius = timeToFrameIndex(toolConfig.timeSpan() * params.sizeScale, content.config) -
                                     timeToFrameIndex(0.0, content.config);
         if (frameRadius <= 0.0) {
             continue;
@@ -716,7 +726,7 @@ void applyResonantInstrumentPaintOperation(const PaintOperation& operation,
         const auto frameHigh =
             std::min(static_cast<int>(content.frameCount) - 1, static_cast<int>(std::ceil(frameCenter + frameRadius)));
 
-        const double decayMultiplier = std::exp(-toolConfig.fallOffRate() * static_cast<double>(sample.pathT));
+        const double decayMultiplier = std::exp(-toolConfig.decayRate() * static_cast<double>(sample.pathT));
 
         const double fundamentalHz = sample.point.frequencyHz;
         for (std::size_t partialIndex = 0; partialIndex < spectrum.size(); ++partialIndex) {
@@ -724,8 +734,9 @@ void applyResonantInstrumentPaintOperation(const PaintOperation& operation,
             if (strength <= 0.0) {
                 continue;
             }
-            const double n = static_cast<double>(partialIndex + 1);
-            const double partialHz = n * fundamentalHz;
+            const double octavesAboveFundamental =
+                toolConfig.frequencyScale() * static_cast<double>(partialIndex) / spectrumSpanDenominator;
+            const double partialHz = fundamentalHz * std::pow(2.0, octavesAboveFundamental);
             if (partialHz > static_cast<double>(maxFrequencyHz)) {
                 continue;
             }
@@ -1679,8 +1690,8 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
                                        resolveMindWave);
     } else if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(&toolConfig)) {
         applyInstrumentPaintOperation(operation, *instrument, samples, content, resolveMindWave);
-    } else if (const auto* resonant = dynamic_cast<const ResonantInstrumentConfiguration*>(&toolConfig)) {
-        applyResonantInstrumentPaintOperation(operation, *resonant, samples, content, resolveMindWave);
+    } else if (const auto* resonant = dynamic_cast<const ResonanceConfiguration*>(&toolConfig)) {
+        applyResonancePaintOperation(operation, *resonant, samples, content, resolveMindWave);
     } else if (const auto* mindShot = dynamic_cast<const MindShotConfiguration*>(&toolConfig)) {
         applyMindShotPaintOperation(*mindShot, samples, content);
     } else if (const auto* mindGrain = dynamic_cast<const MindGrainConfiguration*>(&toolConfig)) {

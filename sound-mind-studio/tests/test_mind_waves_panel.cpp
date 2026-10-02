@@ -13,13 +13,13 @@
 #include <QSpinBox>
 #include <QtTest/QtTest>
 
-#include "sound_mind/core/resonant_profile.h"
+#include "sound_mind/core/resonance_profile.h"
 #include "sound_mind/studio/mind_wave_editor.h"
 #include "sound_mind/studio/mind_waves_panel.h"
 
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
-using sound_mind::core::NamedResonantProfile;
+using sound_mind::core::NamedResonanceProfile;
 using sound_mind::core::SuperpositionBlendMode;
 using sound_mind::studio::MindWaveEditor;
 using sound_mind::studio::MindWavesPanel;
@@ -535,17 +535,17 @@ void MindWavesPanelTest::setPreviewImagesPreservesTheCurrentSelectionAndDoesNotE
     QCOMPARE(*panel.selectedMindWaveId(), MindWaveId{2});
 }
 
-void MindWavesPanelTest::setAvailableResonantProfilesForwardsToAllThreeEmbeddedEditors() {
+void MindWavesPanelTest::setAvailableResonanceProfilesForwardsToAllThreeEmbeddedEditors() {
     MindWavesPanel panel;
-    const std::vector<NamedResonantProfile> profiles{NamedResonantProfile{1, "Profile One", {0.1F, 0.2F}}};
+    const std::vector<NamedResonanceProfile> profiles{NamedResonanceProfile{1, "Profile One", {0.1F, 0.2F}}};
 
-    panel.setAvailableResonantProfiles(profiles);
+    panel.setAvailableResonanceProfiles(profiles);
 
     for (const QString& objectName :
          {QStringLiteral("mindWaveEditor"), QStringLiteral("stackMemberEditor"), QStringLiteral("warpSourceEditor")}) {
         auto* editor = panel.findChild<MindWaveEditor*>(objectName);
         QVERIFY(editor != nullptr);
-        auto* combo = editor->findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+        auto* combo = editor->findChild<QComboBox*>(QStringLiteral("resonanceProfileCombo"));
         QVERIFY(combo != nullptr);
         QCOMPARE(combo->count(), 1);
         QCOMPARE(combo->itemText(0), QStringLiteral("Profile One"));

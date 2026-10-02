@@ -39,7 +39,7 @@ private slots:
     void draggingAContinuousDialUpdatesItsOwnSpinBoxAndEmits();
     void changingContinuousFieldsUpdatesTheLivePreview();
 
-    // Resonant Instruments Installment E: Resonant generator (v0.Y.59.1).
+    // Resonant Instruments Installment E: Resonance generator (v0.Y.59.1).
     void switchingToResonantShowsOnlyItsOwnGroup();
     void settingAvailableResonantProfilesWithNoneShowsThePlaceholder();
     void selectingAResonantProfileUpdatesTheWaveAndEmits();

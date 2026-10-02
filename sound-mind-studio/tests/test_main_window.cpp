@@ -5273,7 +5273,7 @@ void MainWindowTest::captureMindShotIsANoOpWithNoSelection() {
     QVERIFY(window.project()->mindShots().empty());
 }
 
-void MainWindowTest::createResonantInstrumentFromPickedPathNamedAddsANamedEntryToTheLibrary() {
+void MainWindowTest::createResonanceFromPickedPathNamedAddsANamedEntryToTheLibrary() {
     const auto projectPath =
         std::filesystem::temp_directory_path() / "sound-mind-test-create-resonant-instrument.smproj";
     TestMainWindow window;
@@ -5301,35 +5301,35 @@ void MainWindowTest::createResonantInstrumentFromPickedPathNamedAddsANamedEntryT
     QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
 
-    window.createResonantInstrumentFromPickedPathNamed("Wire Loop");
+    window.createResonanceFromPickedPathNamed("Wire Loop");
 
-    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
-    QCOMPARE(window.project()->resonantProfiles().front().name, std::string("Wire Loop"));
-    QVERIFY(!window.project()->resonantProfiles().front().spectrum.empty());
+    QCOMPARE(window.project()->resonanceProfiles().size(), std::size_t{1});
+    QCOMPARE(window.project()->resonanceProfiles().front().name, std::string("Wire Loop"));
+    QVERIFY(!window.project()->resonanceProfiles().front().spectrum.empty());
     // A capture never logs an Operation - it's a read, not an edit.
     QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
     // Unlike captureMindShot()/captureMindGrain(), this capture writes
     // directly to project_ rather than through a signal
     // ToolConfigurationPanel already listens to - confirms the explicit
-    // refreshResonantProfiles() call actually reaches the panel's picker.
+    // refreshResonanceProfiles() call actually reaches the panel's picker.
     auto* toolConfigPanel = window.findChild<ToolConfigurationPanel*>();
     QVERIFY(toolConfigPanel != nullptr);
-    auto* resonantProfileCombo = toolConfigPanel->findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    auto* resonantProfileCombo = toolConfigPanel->findChild<QComboBox*>(QStringLiteral("resonanceProfileCombo"));
     QVERIFY(resonantProfileCombo != nullptr);
     QCOMPARE(resonantProfileCombo->count(), 1);
     QCOMPARE(resonantProfileCombo->itemText(0), QStringLiteral("Wire Loop"));
 }
 
-void MainWindowTest::createResonantInstrumentFromPickedPathNamedIsANoOpWithNothingPicked() {
+void MainWindowTest::createResonanceFromPickedPathNamedIsANoOpWithNothingPicked() {
     TestMainWindow window;
     createFreshTestProject(window);
 
-    window.createResonantInstrumentFromPickedPathNamed("Should Not Be Created");
+    window.createResonanceFromPickedPathNamed("Should Not Be Created");
 
-    QVERIFY(window.project()->resonantProfiles().empty());
+    QVERIFY(window.project()->resonanceProfiles().empty());
 }
 
-void MainWindowTest::createResonantInstrumentFromPickedPathIsANoOpWithNothingPicked() {
+void MainWindowTest::createResonanceFromPickedPathIsANoOpWithNothingPicked() {
     TestMainWindow window;
     createFreshTestProject(window);
 
@@ -5337,9 +5337,9 @@ void MainWindowTest::createResonantInstrumentFromPickedPathIsANoOpWithNothingPic
     // since the "nothing Picked" guard returns before the dialog would
     // ever show, the same reasoning captureMindShotIsANoOpWithNoSelection()
     // already relies on.
-    window.createResonantInstrumentFromPickedPath();
+    window.createResonanceFromPickedPath();
 
-    QVERIFY(window.project()->resonantProfiles().empty());
+    QVERIFY(window.project()->resonanceProfiles().empty());
 }
 
 void MainWindowTest::startBranchingCurveFromPickedPathBeginsASessionWithTheTrunk() {
@@ -5364,15 +5364,15 @@ void MainWindowTest::startBranchingCurveFromPickedPathBeginsASessionWithTheTrunk
 
     window.startBranchingCurveFromPickedPath();
     // A session with only the trunk already finalizes to exactly the same
-    // kind of result createResonantInstrumentFromPickedPathNamed() already
+    // kind of result createResonanceFromPickedPathNamed() already
     // produces for a lone stroke - confirming the trunk was actually
     // captured, without needing to inspect branchCurveSession_'s own
     // private state directly.
-    window.createResonantInstrumentFromPickedGraphNamed("Trunk Only");
+    window.createResonanceFromPickedGraphNamed("Trunk Only");
 
-    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
-    QCOMPARE(window.project()->resonantProfiles().front().name, std::string("Trunk Only"));
-    QVERIFY(!window.project()->resonantProfiles().front().spectrum.empty());
+    QCOMPARE(window.project()->resonanceProfiles().size(), std::size_t{1});
+    QCOMPARE(window.project()->resonanceProfiles().front().name, std::string("Trunk Only"));
+    QVERIFY(!window.project()->resonanceProfiles().front().spectrum.empty());
 }
 
 void MainWindowTest::startBranchingCurveFromPickedPathIsANoOpWithNothingPicked() {
@@ -5381,9 +5381,9 @@ void MainWindowTest::startBranchingCurveFromPickedPathIsANoOpWithNothingPicked()
 
     window.startBranchingCurveFromPickedPath();
     window.addPickedPathAsBranch();
-    window.createResonantInstrumentFromPickedGraphNamed("Should Not Be Created");
+    window.createResonanceFromPickedGraphNamed("Should Not Be Created");
 
-    QVERIFY(window.project()->resonantProfiles().empty());
+    QVERIFY(window.project()->resonanceProfiles().empty());
 }
 
 void MainWindowTest::pickingAPointOnTheTrunkThenAddingABranchGraftsItOn() {
@@ -5431,11 +5431,11 @@ void MainWindowTest::pickingAPointOnTheTrunkThenAddingABranchGraftsItOn() {
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(110, 20));
 
     window.addPickedPathAsBranch();
-    window.createResonantInstrumentFromPickedGraphNamed("Branching Wire");
+    window.createResonanceFromPickedGraphNamed("Branching Wire");
 
-    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
-    QCOMPARE(window.project()->resonantProfiles().front().name, std::string("Branching Wire"));
-    QVERIFY(!window.project()->resonantProfiles().front().spectrum.empty());
+    QCOMPARE(window.project()->resonanceProfiles().size(), std::size_t{1});
+    QCOMPARE(window.project()->resonanceProfiles().front().name, std::string("Branching Wire"));
+    QVERIFY(!window.project()->resonanceProfiles().front().spectrum.empty());
     // A capture never logs an Operation - both strokes drawn above are the
     // only two entries.
     QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
@@ -5465,10 +5465,10 @@ void MainWindowTest::addPickedPathAsBranchIsANoOpWithNoPendingGraft() {
     // adding the same (still-Picked) stroke again as a "branch" must
     // refuse rather than silently appending an ungrafted second entry.
     window.addPickedPathAsBranch();
-    window.createResonantInstrumentFromPickedGraphNamed("Trunk Still Only");
+    window.createResonanceFromPickedGraphNamed("Trunk Still Only");
 
-    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
-    QVERIFY(!window.project()->resonantProfiles().front().spectrum.empty());
+    QCOMPARE(window.project()->resonanceProfiles().size(), std::size_t{1});
+    QVERIFY(!window.project()->resonanceProfiles().front().spectrum.empty());
 }
 
 void MainWindowTest::cancelBranchingCurveDiscardsTheSession() {
@@ -5492,12 +5492,12 @@ void MainWindowTest::cancelBranchingCurveDiscardsTheSession() {
     window.startBranchingCurveFromPickedPath();
 
     window.cancelBranchingCurve();
-    window.createResonantInstrumentFromPickedGraphNamed("Should Not Be Created");
+    window.createResonanceFromPickedGraphNamed("Should Not Be Created");
 
-    QVERIFY(window.project()->resonantProfiles().empty());
+    QVERIFY(window.project()->resonanceProfiles().empty());
 }
 
-void MainWindowTest::createResonantInstrumentFromPickedGraphNamedBuildsFromEveryBranchAndEndsTheSession() {
+void MainWindowTest::createResonanceFromPickedGraphNamedBuildsFromEveryBranchAndEndsTheSession() {
     const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-branching-curve-ends.smproj";
     TestMainWindow window;
     QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
@@ -5517,23 +5517,23 @@ void MainWindowTest::createResonantInstrumentFromPickedGraphNamedBuildsFromEvery
     QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 20));
     window.startBranchingCurveFromPickedPath();
 
-    window.createResonantInstrumentFromPickedGraphNamed("First Tree");
-    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
+    window.createResonanceFromPickedGraphNamed("First Tree");
+    QCOMPARE(window.project()->resonanceProfiles().size(), std::size_t{1});
 
     // The session ended - finalizing again (with nothing newly started)
     // must be a no-op, not a second, empty-ish entry.
-    window.createResonantInstrumentFromPickedGraphNamed("Should Not Be Created");
+    window.createResonanceFromPickedGraphNamed("Should Not Be Created");
 
-    QCOMPARE(window.project()->resonantProfiles().size(), std::size_t{1});
+    QCOMPARE(window.project()->resonanceProfiles().size(), std::size_t{1});
 }
 
-void MainWindowTest::createResonantInstrumentFromPickedGraphNamedIsANoOpWithNoSessionActive() {
+void MainWindowTest::createResonanceFromPickedGraphNamedIsANoOpWithNoSessionActive() {
     TestMainWindow window;
     createFreshTestProject(window);
 
-    window.createResonantInstrumentFromPickedGraphNamed("Should Not Be Created");
+    window.createResonanceFromPickedGraphNamed("Should Not Be Created");
 
-    QVERIFY(window.project()->resonantProfiles().empty());
+    QVERIFY(window.project()->resonanceProfiles().empty());
 }
 
 void MainWindowTest::clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject() {

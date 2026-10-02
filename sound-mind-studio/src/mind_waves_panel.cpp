@@ -26,7 +26,7 @@ namespace {
 using sound_mind::core::GeneratorType;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
-using sound_mind::core::NamedResonantProfile;
+using sound_mind::core::NamedResonanceProfile;
 using sound_mind::core::SuperpositionBlendMode;
 
 /// @brief A short display name for `type` - used as a row's own type
@@ -482,10 +482,10 @@ void MindWavesPanel::setPreviewImages(const std::map<MindWaveId, QImage>& previe
     setMindWaves(currentRows_);
 }
 
-void MindWavesPanel::setAvailableResonantProfiles(const std::vector<NamedResonantProfile>& profiles) {
-    mindWaveEditor_->setAvailableResonantProfiles(profiles);
-    stackMemberEditor_->setAvailableResonantProfiles(profiles);
-    warpSourceEditor_->setAvailableResonantProfiles(profiles);
+void MindWavesPanel::setAvailableResonanceProfiles(const std::vector<NamedResonanceProfile>& profiles) {
+    mindWaveEditor_->setAvailableResonanceProfiles(profiles);
+    stackMemberEditor_->setAvailableResonanceProfiles(profiles);
+    warpSourceEditor_->setAvailableResonanceProfiles(profiles);
 }
 
 void MindWavesPanel::clearSelection() {

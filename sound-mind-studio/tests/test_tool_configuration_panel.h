@@ -58,13 +58,19 @@ private slots:
     void switchingToolTypeAwayFromAndBackPreservesTheBindingFrame();
 
     // Resonant Instruments (v0.Y.59.1 Installment D).
-    void switchingToolTypeToResonantInstrumentShowsItsOwnGroupAndHidesProcedural();
+    void switchingToolTypeToResonanceShowsItsOwnGroupAndHidesProcedural();
     void setProjectPopulatesTheResonantProfileCombo();
-    void refreshResonantProfilesAddsNewEntriesAndPreservesTheCurrentSelection();
-    void refreshResonantProfilesShowsThePlaceholderWhenTheLibraryIsEmpty();
+    void refreshResonanceProfilesAddsNewEntriesAndPreservesTheCurrentSelection();
+    void refreshResonanceProfilesShowsThePlaceholderWhenTheLibraryIsEmpty();
     void selectingAResonantProfileEmitsToolConfigurationChangedWithItsSpectrum();
-    void changingFallOffRateEmitsToolConfigurationChanged();
-    void loadingAResonantInstrumentConfigurationSyncsToolTypeAndThePickerSelection();
+    void changingDecayRateEmitsToolConfigurationChanged();
+    void loadingAResonanceConfigurationSyncsToolTypeAndThePickerSelection();
+    // Real-world testing pass, 2026-10-02: falloff fixed at 0, dedicated
+    // Frequency Scale/Time Span controls replacing the shared Falloff/Size.
+    void switchingToolTypeToResonanceFixesFalloffAtZeroRegardlessOfThePriorTool();
+    void changingFrequencyScaleEmitsToolConfigurationChanged();
+    void changingTimeSpanEmitsToolConfigurationChanged();
+    void loadingAResonanceConfigurationSyncsFrequencyScaleAndTimeSpan();
 
     // Mind Shots (v0.Y.33.1 Installment A).
     void switchingToolTypeToMindShotShowsItsOwnGroupAndHidesProcedural();
@@ -108,6 +114,7 @@ private slots:
     void softenHidesIntensityAndStampControls();
     void smudgeHidesIntensityAndStampControls();
     void orderChaosHidesIntensityAndStampControls();
+    void resonanceHidesFalloffAndSizeButKeepsStampControlsAndGradientEditor();
     void switchingFromHealBackToProceduralPreservesTheOriginalStampMode();
 
     // Blend Mode (v0.Y.37.1).

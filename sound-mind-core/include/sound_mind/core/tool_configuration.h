@@ -12,7 +12,7 @@
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
-#include "sound_mind/core/resonant_profile.h"
+#include "sound_mind/core/resonance_profile.h"
 
 namespace sound_mind::core {
 
@@ -33,8 +33,9 @@ using MindWaveId = std::uint64_t;
  * @note Only `Procedural`, (as of `v0.Y.32.1`, Sound Mind Instruments)
  *       `Instrument`, (as of `v0.Y.33.1`) `MindShot`/`MindGrain`, (as of
  *       `v0.Y.34.1`) `Heal`/`Soften` (Installment A)/`Smudge`/`OrderChaos`
- *       (Installment B), and (as of `v0.Y.59.1` Installment D) `ResonantInstrument`
- *       exist as real, paintable tools so far - `Clone` remains this
+ *       (Installment B), and (as of `v0.Y.59.1` Installment D) `Resonance`
+ *       (renamed from `ResonantInstrument`, real-world testing pass,
+ *       2026-10-02) exist as real, paintable tools so far - `Clone` remains this
  *       milestone's own final, not-yet-started installment. Adding a value
  *       here ahead of its own tool actually working is deliberate
  *       groundwork for the Tool Configuration Panel/Wizard's dynamic-per-
@@ -43,7 +44,7 @@ using MindWaveId = std::uint64_t;
 enum class ToolType {
     Procedural,
     Instrument,
-    ResonantInstrument,
+    Resonance,
     MindShot,
     MindGrain,
     Smudge,
@@ -57,7 +58,7 @@ enum class ToolType {
 NLOHMANN_JSON_SERIALIZE_ENUM(ToolType, {
     {ToolType::Procedural, "procedural"},
     {ToolType::Instrument, "instrument"},
-    {ToolType::ResonantInstrument, "resonantInstrument"},
+    {ToolType::Resonance, "resonance"},
     {ToolType::MindShot, "mindShot"},
     {ToolType::MindGrain, "mindGrain"},
     {ToolType::Smudge, "smudge"},
@@ -764,7 +765,7 @@ private:
 };
 
 /**
- * @brief A Resonant Instrument brush - `v0.Y.59.1` Installment D, per
+ * @brief A Resonance brush - `v0.Y.59.1` Installment D, per
  *        `docs/sound-mind-roadmap.md`'s "Resonant Instruments" own item 5
  *        ("The user can now use the spectrum profile as a brush tip, a
  *        new type that is very similar to existing types").
@@ -779,48 +780,57 @@ private:
  * inharmonicity, none of which make sense applied to a computed profile)
  * to warrant its own type. The synthesis itself, though, *is* literally
  * `applyInstrumentPaintOperation()`'s own per-partial-harmonic assembly,
- * reused via `applyResonantInstrumentPaintOperation()` (`paint_application.h`)
+ * reused via `applyResonancePaintOperation()` (`paint_application.h`)
  * reading `spectrum()` in place of `harmonicStrengths()` - see that
  * function's own docs for exactly how `spectrum()`'s own values (a
  * continuous, Gaussian-smoothed envelope over energy - see
  * `computeWaveKernelSignature()`'s own docs - not a list of discrete,
  * physically-exact partial frequencies to reproduce individually) and
- * `fallOffRate()` (a dimension `InstrumentConfiguration` doesn't have at
+ * `decayRate()` (a dimension `InstrumentConfiguration` doesn't have at
  * all) both feed in.
  *
  * **Embeds a snapshot of `spectrum()`, not a live reference** - the same
  * "config holds its own copy" shape `MindShotConfiguration::clip()`
  * already establishes (`sourceMindShotId()`'s own docs), for the
- * identical reason: a `NamedResonantProfile` library entry can be removed
+ * identical reason: a `NamedResonanceProfile` library entry can be removed
  * or never existed in the first place (a configuration loaded from a
  * project saved on a machine where it was since deleted) without breaking
  * anything already painted with it.
  */
-class ResonantInstrumentConfiguration : public ToolConfiguration {
+class ResonanceConfiguration : public ToolConfiguration {
 public:
-    /// @brief Constructs a configuration with no Resonant Instrument
-    ///        profile selected yet (an empty `spectrum()`) - paints
-    ///        nothing until `setSpectrum()` is called with a real
-    ///        profile, the same "nothing happens by accident" default
-    ///        convention `MindShotConfiguration`'s own empty-`clip()`
-    ///        default follows.
-    ResonantInstrumentConfiguration() = default;
+    /// @brief Constructs a configuration with no Resonance profile
+    ///        selected yet (an empty `spectrum()`) - paints nothing until
+    ///        `setSpectrum()` is called with a real profile, the same
+    ///        "nothing happens by accident" default convention
+    ///        `MindShotConfiguration`'s own empty-`clip()` default
+    ///        follows.
+    ///
+    ///        Fixes `falloff()` at `0` (a hard edge) rather than the base
+    ///        class's own `0.5` default - confirmed with the user: a
+    ///        Resonance brush has no per-stamp UI control of its own for
+    ///        it (see this class's own docs on why "radial fall-off"
+    ///        doesn't map onto this tool the way it does for
+    ///        `ProceduralConfiguration`/`InstrumentConfiguration`), so it
+    ///        needs a single fixed, sensible value instead of silently
+    ///        inheriting a default meant for a tool type that exposes it.
+    ResonanceConfiguration() { setFalloff(0.0f); }
 
-    [[nodiscard]] ToolType type() const noexcept override { return ToolType::ResonantInstrument; }
+    [[nodiscard]] ToolType type() const noexcept override { return ToolType::Resonance; }
 
     [[nodiscard]] std::unique_ptr<ToolConfiguration> clone() const override {
-        return std::make_unique<ResonantInstrumentConfiguration>(*this);
+        return std::make_unique<ResonanceConfiguration>(*this);
     }
 
     /// @brief Which library entry `spectrum()` was last set from, if any -
     ///        for UI purposes only (so a Tool Configuration Panel showing
     ///        this configuration can highlight the right entry in its own
-    ///        Resonant Instrument picker); never consulted by painting
+    ///        Resonance Profile picker); never consulted by painting
     ///        itself, which only ever reads `spectrum()` directly.
     /// @return The source entry's own id, or `std::nullopt` if
     ///         `spectrum()` was never set from a library entry.
-    [[nodiscard]] std::optional<ResonantProfileId> sourceResonantProfileId() const noexcept {
-        return sourceResonantProfileId_;
+    [[nodiscard]] std::optional<ResonanceProfileId> sourceResonanceProfileId() const noexcept {
+        return sourceResonanceProfileId_;
     }
 
     /**
@@ -828,12 +838,12 @@ public:
      *        snapshotting `spectrum` directly (see this class's own docs
      *        on why).
      * @param sourceId The library entry `spectrum` was copied from, for
-     *        `sourceResonantProfileId()`'s own UI-only purpose;
+     *        `sourceResonanceProfileId()`'s own UI-only purpose;
      *        `std::nullopt` if unknown/not applicable.
      * @param spectrum The spectrum to paint, copied in.
      */
-    void setSpectrum(std::optional<ResonantProfileId> sourceId, std::vector<float> spectrum) {
-        sourceResonantProfileId_ = sourceId;
+    void setSpectrum(std::optional<ResonanceProfileId> sourceId, std::vector<float> spectrum) {
+        sourceResonanceProfileId_ = sourceId;
         spectrum_ = std::move(spectrum);
     }
 
@@ -846,39 +856,102 @@ public:
     [[nodiscard]] const std::vector<float>& spectrum() const noexcept { return spectrum_; }
 
     /**
-     * @brief How quickly this Resonant Instrument's own loudness decays
+     * @brief How quickly this Resonance brush's own loudness decays
      *        across the course of a stroke - `docs/sound-mind-roadmap.md`'s
      *        own "a scalar parameter that sets the fall-off rate, so the
      *        user can decide whether their resonant instrument has a long
-     *        sustain or if it short."
+     *        sustain or if it short," renamed from `decayRate` (real-
+     *        world testing pass, 2026-10-02) once the shared, per-stamp
+     *        `falloff()` was fixed at `0` and hidden from this tool's own
+     *        panel - keeping the old name next to "Falloff" invited
+     *        exactly the confusion it caused: one is a whole-stroke decay
+     *        envelope, the other a single stamp's own radial edge shape,
+     *        and nothing about the two names said so.
      *
-     * Applied as `exp(-fallOffRate * pathT)`, where `pathT` is the
-     * stamp's own `0..1` progress along the *whole stroke* (the same
-     * pathT every other per-stroke modulation in this codebase already
-     * samples - see `InstrumentConfiguration`'s own vibrato/tremolo docs)
-     * - treating the moment a stroke begins as the instant the curve is
-     * "struck," ringing out and decaying across however long the stroke
-     * itself runs, the same physical metaphor a real plucked/struck
-     * resonant object follows. `0` (the default) means no decay at all -
-     * full, constant sustain for the whole stroke, the same "nothing
-     * happens by accident" convention every other optional shaping
-     * parameter in this codebase defaults to.
+     * Applied as `exp(-decayRate * pathT)`, where `pathT` is the stamp's
+     * own `0..1` progress along the *whole stroke* (the same pathT every
+     * other per-stroke modulation in this codebase already samples - see
+     * `InstrumentConfiguration`'s own vibrato/tremolo docs) - treating the
+     * moment a stroke begins as the instant the curve is "struck," ringing
+     * out and decaying across however long the stroke itself runs, the
+     * same physical metaphor a real plucked/struck resonant object
+     * follows. `0` (the default) means no decay at all - full, constant
+     * sustain for the whole stroke, the same "nothing happens by
+     * accident" convention every other optional shaping parameter in this
+     * codebase defaults to.
      *
-     * @return The current fall-off rate; not clamped or validated here,
-     *         but intended to be non-negative (a negative value would
-     *         make the sound grow *louder* over the stroke instead, an
-     *         unusual but not force-prevented choice).
+     * @return The current decay rate; not clamped or validated here, but
+     *         intended to be non-negative (a negative value would make
+     *         the sound grow *louder* over the stroke instead, an unusual
+     *         but not force-prevented choice).
      */
-    [[nodiscard]] double fallOffRate() const noexcept { return fallOffRate_; }
+    [[nodiscard]] double decayRate() const noexcept { return decayRate_; }
 
-    /// @brief Sets the fall-off rate - see fallOffRate()'s own docs.
+    /// @brief Sets the decay rate - see decayRate()'s own docs.
     /// @param rate The new rate.
-    void setFallOffRate(double rate) noexcept { fallOffRate_ = rate; }
+    void setDecayRate(double rate) noexcept { decayRate_ = rate; }
+
+    /**
+     * @brief How many octaves above the painted pitch this brush's own
+     *        spectrum spreads across - real-world testing pass,
+     *        2026-10-02: painting with a spectrum that had real energy at
+     *        high indices used to land far above the stroke (up to the
+     *        64th harmonic, 6 octaves up, under the original "spectrum
+     *        index `i` is harmonic `i + 1`" mapping) - this replaces that
+     *        unbounded mapping with one bounded, user-controlled span.
+     *
+     * Spectrum index `i` (`0`-based, `0` to `spectrum().size() - 1`) maps
+     * to `fundamentalHz * 2^(frequencyScale * i / (spectrum().size() - 1))` -
+     * index `0` always lands exactly on the painted pitch, unchanged;
+     * index `spectrum().size() - 1` lands `frequencyScale` octaves above
+     * it. A dedicated parameter rather than reusing the shared `size()`
+     * for double duty (confirmed with the user, after first proposing the
+     * dual-purpose version): a stamp's own time-axis length and a
+     * spectrum's own frequency spread are independent artistic choices,
+     * and conflating them into one "Brush Size" dial would recreate the
+     * exact kind of ambiguity this same testing pass already flagged
+     * `falloff()`/`decayRate()` for.
+     *
+     * @return The current span, in octaves; not clamped or validated
+     *         here, but intended to be non-negative.
+     */
+    [[nodiscard]] double frequencyScale() const noexcept { return frequencyScale_; }
+
+    /// @brief Sets the frequency span - see frequencyScale()'s own docs.
+    /// @param octaves The new span, in octaves.
+    void setFrequencyScale(double octaves) noexcept { frequencyScale_ = octaves; }
+
+    /**
+     * @brief This brush's own stamp radius, in the same seconds-
+     *        equivalent normalized space `ToolConfiguration::size()`
+     *        already documents - a dedicated field rather than reusing
+     *        `size()` itself, so a Resonance brush's own "how wide is one
+     *        stamp in time" choice stays independent of
+     *        `frequencyScale()`'s own "how wide is the spectrum in
+     *        frequency" choice (see that method's own docs on why they
+     *        were split apart rather than combined).
+     *
+     * Scaled by a bound `sizeMindWave()`'s own `sizeScale`, exactly the
+     * same mechanism `size()` itself is scaled by for every other tool
+     * type - animating this field over a stroke works identically to
+     * animating `size()` elsewhere.
+     *
+     * @return The stamp's radius, in seconds-equivalent units; not
+     *         clamped or validated here.
+     */
+    [[nodiscard]] double timeSpan() const noexcept { return timeSpan_; }
+
+    /// @brief Sets the stamp radius - see timeSpan()'s own docs.
+    /// @param timeSpan The new radius, in seconds-equivalent units;
+    ///        intended to be positive, not clamped or validated here.
+    void setTimeSpan(double timeSpan) noexcept { timeSpan_ = timeSpan; }
 
 private:
-    std::optional<ResonantProfileId> sourceResonantProfileId_;
+    std::optional<ResonanceProfileId> sourceResonanceProfileId_;
     std::vector<float> spectrum_;
-    double fallOffRate_ = 0.0;
+    double decayRate_ = 0.0;
+    double frequencyScale_ = 2.0;
+    double timeSpan_ = 0.2;
 };
 
 /**

@@ -102,19 +102,19 @@ const char* kExportVideoFileFilter = "MP4 Video (*.mp4)";
 /// with the user.
 constexpr float kLayerOpacityNudgeStep = 0.05f;
 
-/// @brief How many `CurveGraph` nodes createResonantInstrumentFromPickedPath()
+/// @brief How many `CurveGraph` nodes createResonanceFromPickedPath()
 /// resamples a Picked path into - generous enough to let a reasonably
 /// detailed hand-drawn curve's own real shape actually influence the
 /// resulting spectrum (`computeWaveKernelSignature()`'s own eigenmode
 /// count is bounded by this), while staying small enough for the dense
 /// generalized eigensolve to stay effectively instant.
-constexpr std::size_t kResonantInstrumentNodeCount = 128;
+constexpr std::size_t kResonanceNodeCount = 128;
 
-/// @brief How many samples createResonantInstrumentFromPickedPath() asks
-/// `computeWaveKernelSignature()` for - the stored `NamedResonantProfile::spectrum`'s
+/// @brief How many samples createResonanceFromPickedPath() asks
+/// `computeWaveKernelSignature()` for - the stored `NamedResonanceProfile::spectrum`'s
 /// own resolution, generous enough for a smooth-looking profile without
 /// an excessively large saved project file.
-constexpr std::size_t kResonantInstrumentSpectrumSize = 64;
+constexpr std::size_t kResonanceSpectrumSize = 64;
 
 /// @brief Converts a plain std::string device-name list (as the engines'
 /// availableXDeviceNames() methods return) into the QStringList a device
@@ -996,8 +996,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // MindWave-shape action right above, since both share the same input
     // (a Picked path/curve), just producing a new named library entry
     // instead of overwriting part of an existing MindWave.
-    QAction* createResonantInstrumentAction = editMenu->addAction(tr("Create &Resonant Instrument from Picked Path..."));
-    connect(createResonantInstrumentAction, &QAction::triggered, this, &MainWindow::createResonantInstrumentFromPickedPath);
+    QAction* createResonanceAction = editMenu->addAction(tr("Create &Resonance from Picked Path..."));
+    connect(createResonanceAction, &QAction::triggered, this, &MainWindow::createResonanceFromPickedPath);
 
     // Resonant Instruments - Branching Curve editor (v0.Y.59.1, the
     // deferred half of item 1) - same "always present, no-op with nothing
@@ -1013,10 +1013,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* cancelBranchingCurveAction = editMenu->addAction(tr("Cancel Branching Curve"));
     connect(cancelBranchingCurveAction, &QAction::triggered, this, &MainWindow::cancelBranchingCurve);
 
-    QAction* createResonantInstrumentFromGraphAction =
-        editMenu->addAction(tr("Create Resonant Instrument from Picked &Graph..."));
-    connect(createResonantInstrumentFromGraphAction, &QAction::triggered, this,
-            &MainWindow::createResonantInstrumentFromPickedGraph);
+    QAction* createResonanceFromGraphAction =
+        editMenu->addAction(tr("Create Resonance from Picked &Graph..."));
+    connect(createResonanceFromGraphAction, &QAction::triggered, this,
+            &MainWindow::createResonanceFromPickedGraph);
 
     editMenu->addSeparator();
 
@@ -3355,21 +3355,21 @@ void MainWindow::usePickedPathAsMindWaveShape() {
     mindWaveController_->setDrawnPath(*mindWaveId, *curve);
 }
 
-void MainWindow::createResonantInstrumentFromPickedPath() {
+void MainWindow::createResonanceFromPickedPath() {
     if (!project_.has_value() || !toolPaletteController_->selectedPath().has_value()) {
         return;
     }
     bool ok = false;
-    const QString defaultName = tr("Resonant Instrument %1").arg(project_->resonantProfiles().size() + 1);
+    const QString defaultName = tr("Resonance %1").arg(project_->resonanceProfiles().size() + 1);
     const QString name =
-        QInputDialog::getText(this, tr("Create Resonant Instrument"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
+        QInputDialog::getText(this, tr("Create Resonance"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
     if (!ok || name.trimmed().isEmpty()) {
         return;
     }
-    createResonantInstrumentFromPickedPathNamed(name.trimmed().toStdString());
+    createResonanceFromPickedPathNamed(name.trimmed().toStdString());
 }
 
-void MainWindow::createResonantInstrumentFromPickedPathNamed(const std::string& name) {
+void MainWindow::createResonanceFromPickedPathNamed(const std::string& name) {
     if (!project_.has_value()) {
         return;
     }
@@ -3379,16 +3379,16 @@ void MainWindow::createResonantInstrumentFromPickedPathNamed(const std::string& 
     }
 
     const auto graph = sound_mind::core::curveGraphFromPath(
-        *curve, sound_mind::core::frequencyToTimeScaleFor(project_->settings()), kResonantInstrumentNodeCount);
-    const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonantInstrumentSpectrumSize);
-    project_->addResonantProfile(name, spectrum);
+        *curve, sound_mind::core::frequencyToTimeScaleFor(project_->settings()), kResonanceNodeCount);
+    const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
+    project_->addResonanceProfile(name, spectrum);
     // Unlike captureMindShot()/captureMindGrain() (wired through
     // SelectionController's own mindShotCaptured()/mindGrainCaptured()
     // signals, connected once in ToolPaletteController's own constructor),
     // this capture writes directly to project_ from MainWindow - so the
     // panel's own picker needs an explicit nudge here instead.
-    toolConfigurationPanel_->refreshResonantProfiles();
-    statusBar()->showMessage(tr("Created Resonant Instrument \"%1\".").arg(QString::fromStdString(name)), 5000);
+    toolConfigurationPanel_->refreshResonanceProfiles();
+    statusBar()->showMessage(tr("Created Resonance \"%1\".").arg(QString::fromStdString(name)), 5000);
 }
 
 void MainWindow::startBranchingCurveFromPickedPath() {
@@ -3411,7 +3411,7 @@ void MainWindow::addPickedPathAsBranch() {
     }
     if (branchCurveSession_.addBranch(*path, *operationId)) {
         statusBar()->showMessage(
-            tr("Branch added (%1 total). Pick a graft point for the next one, or finalize as a Resonant Instrument.")
+            tr("Branch added (%1 total). Pick a graft point for the next one, or finalize as a Resonance.")
                 .arg(branchCurveSession_.branches().size()),
             5000);
     }
@@ -3419,35 +3419,35 @@ void MainWindow::addPickedPathAsBranch() {
 
 void MainWindow::cancelBranchingCurve() { branchCurveSession_.end(); }
 
-void MainWindow::createResonantInstrumentFromPickedGraph() {
+void MainWindow::createResonanceFromPickedGraph() {
     if (!project_.has_value() || !branchCurveSession_.isActive()) {
         return;
     }
     bool ok = false;
-    const QString defaultName = tr("Resonant Instrument %1").arg(project_->resonantProfiles().size() + 1);
+    const QString defaultName = tr("Resonance %1").arg(project_->resonanceProfiles().size() + 1);
     const QString name =
-        QInputDialog::getText(this, tr("Create Resonant Instrument"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
+        QInputDialog::getText(this, tr("Create Resonance"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
     if (!ok || name.trimmed().isEmpty()) {
         return;
     }
-    createResonantInstrumentFromPickedGraphNamed(name.trimmed().toStdString());
+    createResonanceFromPickedGraphNamed(name.trimmed().toStdString());
 }
 
-void MainWindow::createResonantInstrumentFromPickedGraphNamed(const std::string& name) {
+void MainWindow::createResonanceFromPickedGraphNamed(const std::string& name) {
     if (!project_.has_value() || !branchCurveSession_.isActive()) {
         return;
     }
 
     const auto graph = sound_mind::core::curveGraphFromBranches(
         branchCurveSession_.branches(), sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
-        kResonantInstrumentNodeCount);
-    const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonantInstrumentSpectrumSize);
-    project_->addResonantProfile(name, spectrum);
+        kResonanceNodeCount);
+    const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
+    project_->addResonanceProfile(name, spectrum);
     branchCurveSession_.end();
-    // See createResonantInstrumentFromPickedPathNamed()'s own identical
+    // See createResonanceFromPickedPathNamed()'s own identical
     // comment - this capture writes directly to project_ too.
-    toolConfigurationPanel_->refreshResonantProfiles();
-    statusBar()->showMessage(tr("Created Resonant Instrument \"%1\" from the branching curve.")
+    toolConfigurationPanel_->refreshResonanceProfiles();
+    statusBar()->showMessage(tr("Created Resonance \"%1\" from the branching curve.")
                                   .arg(QString::fromStdString(name)),
                               5000);
 }

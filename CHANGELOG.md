@@ -6,6 +6,42 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.4.7] - 2026-10-02
+
+Resonant Instruments post-milestone fix: renamed to Resonance, a real positioning bug fixed, Falloff/Decay Rate/Brush Size untangled.
+
+### Fixed
+
+- **Painting with a Resonance brush no longer lands far above the painted
+  pitch.** A spectrum with real energy at high indices used to reach as
+  far as the 64th harmonic - over 6 octaves up - which could push a
+  stroke's own loudest content almost off the top of the canvas. The
+  spectrum's own frequency span is now bounded and controlled by a new
+  **Frequency Scale** setting (in octaves above the painted pitch).
+
+### Changed
+
+- **"Resonant Instrument" is now called "Resonance"** everywhere in the
+  app - the Tool Type dropdown, the Edit menu's capture actions ("Create
+  Resonance from Picked Path/Graph..."), and the MindWave generator type.
+- **"Fall-Off Rate" is now called "Decay Rate"** - same behavior (how
+  quickly loudness decays across a stroke), just a clearer name now that
+  it sits next to controls it was easy to confuse it with.
+- **The Falloff dial is removed from the Resonance panel** - fixed at a
+  hard edge internally, since it never mapped onto this tool the way it
+  does for Procedural/Instrument.
+- **Brush Size is replaced by two independent controls for Resonance**:
+  **Frequency Scale** (the fix above) and **Time Span** (this brush's own
+  stamp duration - what Brush Size used to control for this tool).
+
+### Notes
+
+See `docs/sound-mind-architecture.md`'s Decision #193 for the full
+reasoning. Project files saved with the previous "Resonant Instrument"
+tool type/field names will not load - this feature shipped only in
+`v0.1.4.1`-`v0.1.4.6`, all within this same development stretch, so no
+compatibility shim was added.
+
 ## [0.1.4.6] - 2026-10-02
 
 Resonant Instruments, Installment F: the branching curve editor - this milestone is now complete.

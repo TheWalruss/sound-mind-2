@@ -51,7 +51,7 @@ using sound_mind::core::StampMode;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 using sound_mind::core::ProceduralConfiguration;
-using sound_mind::core::ResonantInstrumentConfiguration;
+using sound_mind::core::ResonanceConfiguration;
 using sound_mind::core::timeToFrameIndex;
 
 namespace {
@@ -223,14 +223,16 @@ Path makeSingleTapPath(double timeSeconds, double frequencyHz, float intensity, 
     return path;
 }
 
-std::unique_ptr<ResonantInstrumentConfiguration> makeResonantInstrumentTool(std::vector<float> spectrum,
-                                                                              double fallOffRate, double size,
-                                                                              float falloff) {
-    auto config = std::make_unique<ResonantInstrumentConfiguration>();
+std::unique_ptr<ResonanceConfiguration> makeResonanceTool(std::vector<float> spectrum, double decayRate,
+                                                            double timeSpan, double frequencyScale) {
+    auto config = std::make_unique<ResonanceConfiguration>();
     config->setSpectrum(std::nullopt, std::move(spectrum));
-    config->setFallOffRate(fallOffRate);
-    config->setSize(size);
-    config->setFalloff(falloff);
+    config->setDecayRate(decayRate);
+    config->setTimeSpan(timeSpan);
+    config->setFrequencyScale(frequencyScale);
+    // falloff() is left at the constructor's own fixed 0 (a hard edge) -
+    // ResonanceConfiguration no longer exposes it as independently
+    // configurable (real-world testing pass, 2026-10-02).
     return config;
 }
 
@@ -1305,14 +1307,19 @@ TEST_CASE("applyPaintOperation with an InstrumentConfiguration skips a non-posit
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, secondHarmonicBin)] == -10.0f);
 }
 
-TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration stamps one bin-exact spike per spectrum "
+TEST_CASE("applyPaintOperation with a ResonanceConfiguration stamps one bin-exact spike per spectrum "
           "partial",
           "[core][paint_application]") {
     const auto config = makeTestConfig();
     StreamImage content = makeBlankContent(config, 100);
     const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
 
-    const PaintOperation op(1, LayerId{1}, path, makeResonantInstrumentTool({1.0f, 0.5f}, 0.0, 0.05, 0.0f));
+    // frequencyScale 1.0 with a 2-entry spectrum: the second (and last)
+    // entry's own octavesAboveFundamental is `1.0 * 1 / (2 - 1) == 1.0`,
+    // i.e. exactly one octave up - 2000 Hz - the same bin-exact spot a
+    // literal "2nd harmonic" would have landed at before this test's own
+    // frequency-span rework.
+    const PaintOperation op(1, LayerId{1}, path, makeResonanceTool({1.0f, 0.5f}, 0.0, 0.05, 1.0));
     applyPaintOperation(op, 2000.0, content);
 
     const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
@@ -1330,7 +1337,7 @@ TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration stamps one
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, fundamentalBin + 1)] == 0.0f);
 }
 
-TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration skips a partial stretched past the "
+TEST_CASE("applyPaintOperation with a ResonanceConfiguration skips a partial stretched past the "
           "configured frequency range",
           "[core][paint_application]") {
     const auto config = makeTestConfig();  // maxFrequencyHz == 20000.0f.
@@ -1340,7 +1347,7 @@ TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration skips a pa
     // entirely, not clamped and stacked onto the top bin.
     const Path path = makeSingleTapPath(0.3, 15000.0, -10.0f, 1.0f);
 
-    const PaintOperation op(1, LayerId{1}, path, makeResonantInstrumentTool({1.0f, 1.0f}, 0.0, 0.05, 0.0f));
+    const PaintOperation op(1, LayerId{1}, path, makeResonanceTool({1.0f, 1.0f}, 0.0, 0.05, 1.0));
     applyPaintOperation(op, 2000.0, content);
 
     const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
@@ -1348,13 +1355,13 @@ TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration skips a pa
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, topBin)] == 0.0f);
 }
 
-TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration skips a non-positive-strength partial",
+TEST_CASE("applyPaintOperation with a ResonanceConfiguration skips a non-positive-strength partial",
           "[core][paint_application]") {
     const auto config = makeTestConfig();
     StreamImage content = makeBlankContent(config, 100);
     const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
 
-    const PaintOperation op(1, LayerId{1}, path, makeResonantInstrumentTool({0.0f, 1.0f}, 0.0, 0.05, 0.0f));
+    const PaintOperation op(1, LayerId{1}, path, makeResonanceTool({0.0f, 1.0f}, 0.0, 0.05, 1.0));
     applyPaintOperation(op, 2000.0, content);
 
     const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
@@ -1367,13 +1374,13 @@ TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration skips a no
     REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, secondPartialBin)] == -10.0f);
 }
 
-TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration paints nothing with an empty spectrum",
+TEST_CASE("applyPaintOperation with a ResonanceConfiguration paints nothing with an empty spectrum",
           "[core][paint_application]") {
     const auto config = makeTestConfig();
     StreamImage content = makeBlankContent(config, 100);
     const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
 
-    const PaintOperation op(1, LayerId{1}, path, makeResonantInstrumentTool({}, 0.0, 0.05, 0.0f));
+    const PaintOperation op(1, LayerId{1}, path, makeResonanceTool({}, 0.0, 0.05, 1.0));
     applyPaintOperation(op, 2000.0, content);
 
     for (const float value : content.leftMagnitudeDb) {
@@ -1381,7 +1388,7 @@ TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration paints not
     }
 }
 
-TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration's fallOffRate decays strength across the "
+TEST_CASE("applyPaintOperation with a ResonanceConfiguration's decayRate decays strength across the "
           "stroke",
           "[core][paint_application]") {
     const auto config = makeTestConfig();
@@ -1410,7 +1417,7 @@ TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration's fallOffR
 
     // A hard edge (falloff 0) and a small radius keep each measurement
     // frame below from being blended across a wide span of pathT values.
-    const PaintOperation op(1, LayerId{1}, path, makeResonantInstrumentTool({1.0f}, 5.0, 0.01, 0.0f));
+    const PaintOperation op(1, LayerId{1}, path, makeResonanceTool({1.0f}, 5.0, 0.01, 1.0));
     applyPaintOperation(op, 2000.0, content);
 
     const int fundamentalBin =
@@ -1428,6 +1435,60 @@ TEST_CASE("applyPaintOperation with a ResonantInstrumentConfiguration's fallOffR
     // but not literally zero (some decayed strength still reaches it).
     REQUIRE(endValue < 0.0f);
     REQUIRE(endValue > -1.0f);
+}
+
+TEST_CASE("applyPaintOperation with a ResonanceConfiguration bounds the spectrum's own top index at "
+          "frequencyScale octaves above the fundamental, not an unbounded literal harmonic",
+          "[core][paint_application]") {
+    // Real-world testing pass, 2026-10-02: a spectrum with real energy at
+    // high indices used to land far above the painted pitch (up to the
+    // 64th harmonic under the old "index i is harmonic i+1" mapping).
+    // frequencyScale 2.0 with a 5-entry spectrum bounds the top index
+    // (4) to exactly 2 octaves above the fundamental - 4x, not 5x.
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    const PaintOperation op(1, LayerId{1}, path,
+                             makeResonanceTool({0.0f, 0.0f, 0.0f, 0.0f, 1.0f}, 0.0, 0.05, 2.0));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int twoOctavesUpBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(4000.0f, config))));
+    // The old, unbounded mapping would have placed the 5th entry at the
+    // 5th harmonic (5000 Hz) instead - confirm that bin stayed untouched.
+    const int oldUnboundedBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(5000.0f, config))));
+
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, twoOctavesUpBin)] == -10.0f);
+    if (oldUnboundedBin != twoOctavesUpBin) {
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, centerFrame, oldUnboundedBin)] == 0.0f);
+    }
+}
+
+TEST_CASE("applyPaintOperation with a ResonanceConfiguration uses timeSpan(), not the shared size(), "
+          "for its own stamp radius",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeSingleTapPath(0.3, 1000.0, -10.0f, 1.0f);
+
+    auto tool = makeResonanceTool({1.0f}, 0.0, 0.2, 1.0);
+    // The shared, inherited size() is set to something tiny - if the
+    // apply function still read it instead of timeSpan(), the stamp
+    // would stay confined to a single frame instead of spreading across
+    // timeSpan()'s own much wider 0.2-second radius.
+    tool->setSize(0.0001);
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
+    applyPaintOperation(op, 2000.0, content);
+
+    const int fundamentalBin =
+        static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int oneFrameAway = centerFrame + 1;
+    REQUIRE(oneFrameAway < static_cast<int>(content.frameCount));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, oneFrameAway, fundamentalBin)] != 0.0f);
 }
 
 TEST_CASE("applyPaintOperation with a MindShotConfiguration blits the clip centered on the stamp position, verbatim",

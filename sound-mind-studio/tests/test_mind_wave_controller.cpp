@@ -410,13 +410,13 @@ void MindWaveControllerTest::refreshMindWavesPanelPushesResonantProfilesIntoTheM
     Fixture fixture;
     Project project = Project::createNew(testSettings());
     fixture.controller.setProject(&project);
-    project.addResonantProfile("Profile One", {0.1F, 0.2F});
+    project.addResonanceProfile("Profile One", {0.1F, 0.2F});
 
     fixture.controller.refreshMindWavesPanel();
 
     auto* editor = fixture.mindWavesPanel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"));
     QVERIFY(editor != nullptr);
-    auto* combo = editor->findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    auto* combo = editor->findChild<QComboBox*>(QStringLiteral("resonanceProfileCombo"));
     QVERIFY(combo != nullptr);
     QCOMPARE(combo->count(), 1);
     QCOMPARE(combo->itemText(0), QStringLiteral("Profile One"));

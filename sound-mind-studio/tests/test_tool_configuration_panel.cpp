@@ -45,8 +45,8 @@ using sound_mind::core::OrderChaosConfiguration;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
-using sound_mind::core::ResonantInstrumentConfiguration;
-using sound_mind::core::ResonantProfileId;
+using sound_mind::core::ResonanceConfiguration;
+using sound_mind::core::ResonanceProfileId;
 using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
 using sound_mind::core::StampMode;
@@ -706,57 +706,57 @@ void ToolConfigurationPanelTest::switchingToolTypeAwayFromAndBackPreservesTheBin
 
 // --- Resonant Instruments (v0.Y.59.1 Installment D) -------------------------
 
-void ToolConfigurationPanelTest::switchingToolTypeToResonantInstrumentShowsItsOwnGroupAndHidesProcedural() {
+void ToolConfigurationPanelTest::switchingToolTypeToResonanceShowsItsOwnGroupAndHidesProcedural() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     auto* proceduralGroup = panel.findChild<QWidget*>(QStringLiteral("proceduralGroup"));
-    auto* resonantInstrumentGroup = panel.findChild<QWidget*>(QStringLiteral("resonantInstrumentGroup"));
+    auto* resonanceGroup = panel.findChild<QWidget*>(QStringLiteral("resonanceGroup"));
 
-    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonant Instrument")));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonance")));
 
-    QCOMPARE(panel.toolConfiguration().type(), ToolType::ResonantInstrument);
+    QCOMPARE(panel.toolConfiguration().type(), ToolType::Resonance);
     QVERIFY(proceduralGroup->isHidden());
-    QVERIFY(!resonantInstrumentGroup->isHidden());
+    QVERIFY(!resonanceGroup->isHidden());
 }
 
 void ToolConfigurationPanelTest::setProjectPopulatesTheResonantProfileCombo() {
     ToolConfigurationPanel panel;
     Project project = Project::createNew(ProjectSettings{});
-    project.addResonantProfile("Wire Loop", {0.1f, 0.5f});
-    project.addResonantProfile("Zigzag", {0.2f, 0.8f});
+    project.addResonanceProfile("Wire Loop", {0.1f, 0.5f});
+    project.addResonanceProfile("Zigzag", {0.2f, 0.8f});
 
     panel.setProject(&project);
 
-    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonanceProfileCombo"));
     QVERIFY(resonantProfileCombo != nullptr);
     QCOMPARE(resonantProfileCombo->count(), 2);
     QCOMPARE(resonantProfileCombo->itemText(0), QStringLiteral("Wire Loop"));
     QCOMPARE(resonantProfileCombo->itemText(1), QStringLiteral("Zigzag"));
 }
 
-void ToolConfigurationPanelTest::refreshResonantProfilesAddsNewEntriesAndPreservesTheCurrentSelection() {
+void ToolConfigurationPanelTest::refreshResonanceProfilesAddsNewEntriesAndPreservesTheCurrentSelection() {
     ToolConfigurationPanel panel;
     Project project = Project::createNew(ProjectSettings{});
-    project.addResonantProfile("Wire Loop", {0.1f, 0.5f});
+    project.addResonanceProfile("Wire Loop", {0.1f, 0.5f});
     panel.setProject(&project);
-    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonanceProfileCombo"));
     QCOMPARE(resonantProfileCombo->currentText(), QStringLiteral("Wire Loop"));
 
-    project.addResonantProfile("Zigzag", {0.2f, 0.8f});
-    panel.refreshResonantProfiles();
+    project.addResonanceProfile("Zigzag", {0.2f, 0.8f});
+    panel.refreshResonanceProfiles();
 
     QCOMPARE(resonantProfileCombo->count(), 2);
     // The previously-selected entry stays selected across the refresh.
     QCOMPARE(resonantProfileCombo->currentText(), QStringLiteral("Wire Loop"));
 }
 
-void ToolConfigurationPanelTest::refreshResonantProfilesShowsThePlaceholderWhenTheLibraryIsEmpty() {
+void ToolConfigurationPanelTest::refreshResonanceProfilesShowsThePlaceholderWhenTheLibraryIsEmpty() {
     ToolConfigurationPanel panel;
     Project project = Project::createNew(ProjectSettings{});
 
     panel.setProject(&project);
 
-    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonanceProfileCombo"));
     QCOMPARE(resonantProfileCombo->count(), 1);
     QCOMPARE(resonantProfileCombo->itemData(0).isValid(), false);
 }
@@ -764,58 +764,121 @@ void ToolConfigurationPanelTest::refreshResonantProfilesShowsThePlaceholderWhenT
 void ToolConfigurationPanelTest::selectingAResonantProfileEmitsToolConfigurationChangedWithItsSpectrum() {
     ToolConfigurationPanel panel;
     Project project = Project::createNew(ProjectSettings{});
-    project.addResonantProfile("Wire Loop", {0.1f, 0.5f});
-    const ResonantProfileId secondId = project.addResonantProfile("Zigzag", {0.2f, 0.8f});
+    project.addResonanceProfile("Wire Loop", {0.1f, 0.5f});
+    const ResonanceProfileId secondId = project.addResonanceProfile("Zigzag", {0.2f, 0.8f});
     panel.setProject(&project);
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
-    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonant Instrument")));
-    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonance")));
+    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonanceProfileCombo"));
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
     resonantProfileCombo->setCurrentIndex(resonantProfileCombo->findText(QStringLiteral("Zigzag")));
 
     QCOMPARE(spy.count(), 1);
-    const auto& resonant = dynamic_cast<const ResonantInstrumentConfiguration&>(panel.toolConfiguration());
-    QCOMPARE(resonant.sourceResonantProfileId(), std::optional<ResonantProfileId>(secondId));
+    const auto& resonant = dynamic_cast<const ResonanceConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(resonant.sourceResonanceProfileId(), std::optional<ResonanceProfileId>(secondId));
     QCOMPARE(resonant.spectrum(), std::vector<float>({0.2f, 0.8f}));
 }
 
-void ToolConfigurationPanelTest::changingFallOffRateEmitsToolConfigurationChanged() {
+void ToolConfigurationPanelTest::changingDecayRateEmitsToolConfigurationChanged() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
-    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonant Instrument")));
-    auto* fallOffRateSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("fallOffRateSpinBox"));
-    QVERIFY(fallOffRateSpinBox != nullptr);
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonance")));
+    auto* decayRateSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("decayRateSpinBox"));
+    QVERIFY(decayRateSpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
-    fallOffRateSpinBox->setValue(3.5);
+    decayRateSpinBox->setValue(3.5);
 
     QCOMPARE(spy.count(), 1);
-    const auto& resonant = dynamic_cast<const ResonantInstrumentConfiguration&>(panel.toolConfiguration());
-    QCOMPARE(resonant.fallOffRate(), 3.5);
+    const auto& resonant = dynamic_cast<const ResonanceConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(resonant.decayRate(), 3.5);
 }
 
-void ToolConfigurationPanelTest::loadingAResonantInstrumentConfigurationSyncsToolTypeAndThePickerSelection() {
+void ToolConfigurationPanelTest::loadingAResonanceConfigurationSyncsToolTypeAndThePickerSelection() {
     ToolConfigurationPanel panel;
     Project project = Project::createNew(ProjectSettings{});
-    project.addResonantProfile("Wire Loop", {0.1f, 0.5f});
-    const ResonantProfileId secondId = project.addResonantProfile("Zigzag", {0.2f, 0.8f});
+    project.addResonanceProfile("Wire Loop", {0.1f, 0.5f});
+    const ResonanceProfileId secondId = project.addResonanceProfile("Zigzag", {0.2f, 0.8f});
     panel.setProject(&project);
 
-    ResonantInstrumentConfiguration config;
+    ResonanceConfiguration config;
     config.setSpectrum(secondId, {0.2f, 0.8f});
-    config.setFallOffRate(2.0);
+    config.setDecayRate(2.0);
     panel.setToolConfiguration(config);
 
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
-    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonantProfileCombo"));
-    auto* fallOffRateSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("fallOffRateSpinBox"));
-    auto* resonantInstrumentGroup = panel.findChild<QWidget*>(QStringLiteral("resonantInstrumentGroup"));
+    auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonanceProfileCombo"));
+    auto* decayRateSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("decayRateSpinBox"));
+    auto* resonanceGroup = panel.findChild<QWidget*>(QStringLiteral("resonanceGroup"));
 
-    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Resonant Instrument"));
+    QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Resonance"));
     QCOMPARE(resonantProfileCombo->currentText(), QStringLiteral("Zigzag"));
-    QCOMPARE(fallOffRateSpinBox->value(), 2.0);
-    QVERIFY(!resonantInstrumentGroup->isHidden());
+    QCOMPARE(decayRateSpinBox->value(), 2.0);
+    QVERIFY(!resonanceGroup->isHidden());
+}
+
+void ToolConfigurationPanelTest::switchingToolTypeToResonanceFixesFalloffAtZeroRegardlessOfThePriorTool() {
+    ToolConfigurationPanel panel;  // Fresh - already Procedural.
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    auto* falloffSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"));
+    // Procedural's own default falloff is 0.5 - give it a distinctly
+    // different, non-zero value so a carried-over value would be obvious.
+    falloffSpinBox->setValue(0.9);
+
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonance")));
+
+    // changeToolType()'s own generic "every shared field carries over"
+    // rule has one deliberate exception for Resonance - see its own
+    // comment on why unconditionally copying the outgoing falloff() would
+    // otherwise silently undo ResonanceConfiguration's own fixed-at-0
+    // constructor default.
+    const auto& resonant = dynamic_cast<const ResonanceConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(resonant.falloff(), 0.0f);
+}
+
+void ToolConfigurationPanelTest::changingFrequencyScaleEmitsToolConfigurationChanged() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonance")));
+    auto* frequencyScaleSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("frequencyScaleSpinBox"));
+    QVERIFY(frequencyScaleSpinBox != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    frequencyScaleSpinBox->setValue(3.5);
+
+    QCOMPARE(spy.count(), 1);
+    const auto& resonant = dynamic_cast<const ResonanceConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(resonant.frequencyScale(), 3.5);
+}
+
+void ToolConfigurationPanelTest::changingTimeSpanEmitsToolConfigurationChanged() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonance")));
+    auto* timeSpanSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("timeSpanSpinBox"));
+    QVERIFY(timeSpanSpinBox != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    timeSpanSpinBox->setValue(0.5);
+
+    QCOMPARE(spy.count(), 1);
+    const auto& resonant = dynamic_cast<const ResonanceConfiguration&>(panel.toolConfiguration());
+    QCOMPARE(resonant.timeSpan(), 0.5);
+}
+
+void ToolConfigurationPanelTest::loadingAResonanceConfigurationSyncsFrequencyScaleAndTimeSpan() {
+    ToolConfigurationPanel panel;
+    ResonanceConfiguration config;
+    config.setFrequencyScale(4.0);
+    config.setTimeSpan(0.3);
+
+    panel.setToolConfiguration(config);
+
+    auto* frequencyScaleSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("frequencyScaleSpinBox"));
+    auto* timeSpanSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("timeSpanSpinBox"));
+    QCOMPARE(frequencyScaleSpinBox->value(), 4.0);
+    QCOMPARE(timeSpanSpinBox->value(), 0.3);
 }
 
 void ToolConfigurationPanelTest::switchingToolTypeToMindShotShowsItsOwnGroupAndHidesProcedural() {
@@ -1314,6 +1377,27 @@ void ToolConfigurationPanelTest::smudgeHidesIntensityAndStampControls() {
     QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
 }
 
+void ToolConfigurationPanelTest::resonanceHidesFalloffAndSizeButKeepsStampControlsAndGradientEditor() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonance")));
+
+    // Superseded by the dedicated Frequency Scale/Time Span controls in
+    // resonanceGroup_ - see updateSharedControlVisibility()'s own docs.
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    // Not a FixedStampPlacementConfiguration - stamps along the stroke
+    // the same adjustable way Instrument does.
+    QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
+    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    // Still reads the gradient for its own target color/intensity.
+    QVERIFY(!panel.findChild<GradientEditorWidget*>(QStringLiteral("gradientEditor"))->isHidden());
+    // sizeMindWaveCombo_ stays with the broader gate, not the narrower
+    // Falloff/Size one - it still works for Resonance, modulating
+    // timeSpan() instead of the now-hidden plain size() field.
+    QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("sizeMindWaveCombo"))->isHidden());
+}
+
 void ToolConfigurationPanelTest::orderChaosHidesIntensityAndStampControls() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
@@ -1538,7 +1622,7 @@ void ToolConfigurationPanelTest::instrumentPresetsGetAHarmonicThumbnailIconButPr
     InstrumentConfiguration instrumentConfig;
     instrumentConfig.setHarmonicStrengths({1.0, 0.5});
     project.addToolPreset("Warm Pad", instrumentConfig);
-    ResonantInstrumentConfiguration resonantConfig;
+    ResonanceConfiguration resonantConfig;
     resonantConfig.setSpectrum(std::nullopt, {0.3f, 0.9f});
     project.addToolPreset("Wire Loop", resonantConfig);
 

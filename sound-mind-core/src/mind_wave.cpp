@@ -495,16 +495,16 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
             result = shaped + continuousCharacter_ * kContinuousCharacterAmplitude * turbulence;
             break;
         }
-        case GeneratorType::Resonant: {
-            if (resonantSpectrum_.empty()) {
+        case GeneratorType::Resonance: {
+            if (resonanceSpectrum_.empty()) {
                 result = 0.5;  // Nothing to index - see stepGridValues()'s own identical "nothing to index" case.
                 break;
             }
             double p = (axisPosition / safePeriod) + phaseRadians_ / (2.0 * std::numbers::pi_v<double>);
             p -= std::floor(p);
-            const int safeSampleCount = static_cast<int>(resonantSpectrum_.size());
+            const int safeSampleCount = static_cast<int>(resonanceSpectrum_.size());
             const int index = std::clamp(static_cast<int>(p * safeSampleCount), 0, safeSampleCount - 1);
-            result = static_cast<double>(resonantSpectrum_[static_cast<std::size_t>(index)]);
+            result = static_cast<double>(resonanceSpectrum_[static_cast<std::size_t>(index)]);
             break;
         }
     }
@@ -597,12 +597,12 @@ void to_json(nlohmann::json& json, const MindWave& mindWave) {
     json["continuousShape"] = mindWave.continuousShape();
     json["continuousSkew"] = mindWave.continuousSkew();
     json["continuousCharacter"] = mindWave.continuousCharacter();
-    json["resonantSpectrum"] = mindWave.resonantSpectrum();
-    // "sourceResonantProfileId" is UI-only metadata (see its own docs) -
+    json["resonanceSpectrum"] = mindWave.resonanceSpectrum();
+    // "sourceResonanceProfileId" is UI-only metadata (see its own docs) -
     // only written if present, the same "only if present" convention
-    // ResonantInstrumentConfiguration's own identical field already uses.
-    if (const auto sourceId = mindWave.sourceResonantProfileId(); sourceId.has_value()) {
-        json["sourceResonantProfileId"] = *sourceId;
+    // ResonanceConfiguration's own identical field already uses.
+    if (const auto sourceId = mindWave.sourceResonanceProfileId(); sourceId.has_value()) {
+        json["sourceResonanceProfileId"] = *sourceId;
     }
 }
 
@@ -668,15 +668,15 @@ void from_json(const nlohmann::json& json, MindWave& mindWave) {
     mindWave.setContinuousSkew(json.value("continuousSkew", 0.5));
     mindWave.setContinuousCharacter(json.value("continuousCharacter", 0.0));
 
-    // resonantSpectrum/sourceResonantProfileId were added in v0.Y.59.1
+    // resonanceSpectrum/sourceResonanceProfileId were added in v0.Y.59.1
     // Installment E, after MindWave had already shipped - loaded leniently,
     // falling back to an empty spectrum/unknown source (the same "nothing
     // captured yet" state a fresh MindWave already has).
-    const std::optional<ResonantProfileId> sourceResonantProfileId =
-        json.contains("sourceResonantProfileId")
-            ? std::optional(json.at("sourceResonantProfileId").get<ResonantProfileId>())
+    const std::optional<ResonanceProfileId> sourceResonanceProfileId =
+        json.contains("sourceResonanceProfileId")
+            ? std::optional(json.at("sourceResonanceProfileId").get<ResonanceProfileId>())
             : std::nullopt;
-    mindWave.setResonantSpectrum(sourceResonantProfileId, json.value("resonantSpectrum", std::vector<float>{}));
+    mindWave.setResonanceSpectrum(sourceResonanceProfileId, json.value("resonanceSpectrum", std::vector<float>{}));
 }
 
 void to_json(nlohmann::json& json, const NamedMindWave& namedMindWave) {

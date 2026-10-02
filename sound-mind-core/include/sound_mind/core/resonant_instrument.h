@@ -68,7 +68,7 @@ struct CurveNode {
  * single `t` in `[0, 1]`"), stays completely untouched by this feature.
  * `curveGraphFromPath()` below is the bridge: any already-drawn `Path`
  * (freehand-captured or placed with the Path tool, it makes no
- * difference) can be used as a Resonant Instrument's own source curve,
+ * difference) can be used as a Resonance brush's own source curve,
  * no branching-curve editor required. `curveGraphFromBranches()` is the
  * genuinely branching entry point - see its own docs - built on exactly
  * the same per-branch resampling, with one extra cross-branch edge per

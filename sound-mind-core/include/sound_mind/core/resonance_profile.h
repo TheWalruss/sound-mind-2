@@ -8,16 +8,16 @@
 
 namespace sound_mind::core {
 
-/// @brief Opaque identifier for a `NamedResonantProfile` within a Project -
+/// @brief Opaque identifier for a `NamedResonanceProfile` within a Project -
 /// see `MindShotId`'s own docs for the same pattern, applied here instead
-/// to a Resonant Instrument's own computed spectrum.
-using ResonantProfileId = std::uint64_t;
+/// to a Resonance's own computed spectrum.
+using ResonanceProfileId = std::uint64_t;
 
 /**
  * @brief A named, permanently-stored Wave Kernel Signature spectrum in a
  *        Project's own library - `docs/sound-mind-roadmap.md`'s "Resonant
  *        Instruments" (`v0.Y.59.1`) own items 2-4 ("With a Curve selected,
- *        the user selects the option to create a 'Resonant Instrument'...
+ *        the user selects the option to create a 'Resonance'...
  *        store the resulting global geometrical spectrum").
  *
  * Holds only the already-computed `spectrum` itself
@@ -31,12 +31,12 @@ using ResonantProfileId = std::uint64_t;
  * answer anyway (unlike a Mind Grain's cheap live re-sample), so there is
  * no "stay in sync with the source" behavior worth keeping a reference
  * for. A later edit to the curve that produced this entry simply has no
- * effect on it - creating a new, updated Resonant Instrument from the
- * edited curve is its own fresh `addResonantProfile()` call, the same way
+ * effect on it - creating a new, updated Resonance from the
+ * edited curve is its own fresh `addResonanceProfile()` call, the same way
  * a changed Mind Shot source requires a fresh capture, not an in-place
  * update of the old one.
  *
- * Fed by *two* separate downstream consumers - a `ResonantInstrumentConfiguration`
+ * Fed by *two* separate downstream consumers - a `ResonanceConfiguration`
  * brush tip and a MindWave generator type (both still to come, in a later
  * installment) - each referencing one of these library entries by id
  * rather than independently computing and storing their own copy, the
@@ -44,11 +44,11 @@ using ResonantProfileId = std::uint64_t;
  * `mindWaves()` already establish for exactly this "more than one feature
  * needs the same computed/captured thing" situation.
  */
-struct NamedResonantProfile {
+struct NamedResonanceProfile {
     /// @brief This entry's identity within its Project - assigned by
-    ///        `Project::addResonantProfile()`, not meant to be picked by
+    ///        `Project::addResonanceProfile()`, not meant to be picked by
     ///        hand.
-    ResonantProfileId id = 0;
+    ResonanceProfileId id = 0;
 
     /// @brief Display name. `Project` is responsible for keeping names
     ///        unique within itself, the same division `Layer::name()`'s
@@ -65,10 +65,10 @@ struct NamedResonantProfile {
 };
 
 /// @brief Serializes a named resonant profile to its JSON representation.
-void to_json(nlohmann::json& json, const NamedResonantProfile& namedProfile);
+void to_json(nlohmann::json& json, const NamedResonanceProfile& namedProfile);
 
 /// @brief Parses a named resonant profile from its JSON representation.
 /// @throws nlohmann::json::exception on malformed or missing required data.
-void from_json(const nlohmann::json& json, NamedResonantProfile& namedProfile);
+void from_json(const nlohmann::json& json, NamedResonanceProfile& namedProfile);
 
 }  // namespace sound_mind::core

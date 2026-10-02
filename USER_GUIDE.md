@@ -576,10 +576,10 @@ shape instead of staying fixed.
   as you turn any dial or the shared Period/Phase fields above them. All
   three values are saved with your project, so reopening one shows them
   exactly where you left them.
-- **Resonant** repeats a captured Resonant Instrument profile's own spectrum
+- **Resonance** repeats a captured Resonance profile's own spectrum
   shape once per period, the same way Step Grid repeats a hand-typed list -
-  a **Resonant Profile** drop-down picks which captured profile to use (see
-  [Pick](#pick)'s "Create Resonant Instrument from Picked Path..." for how
+  a **Resonance Profile** drop-down picks which captured profile to use (see
+  [Pick](#pick)'s "Create Resonance from Picked Path..." for how
   to capture one). With nothing picked yet, or nothing captured in the
   project at all, the generator produces a flat neutral value instead.
 - **Superposition** lets one MindWave combine several others together
@@ -857,14 +857,15 @@ panel (off by default) with the brush's own settings:
   removing a saved MindWave, this never affects anything already painted
   with it). There's no Wizard yet (see "What's Not Here Yet" below) - this
   is a plain save/load of the panel as it stands. A saved **Instrument**
-  or **Resonant Instrument** preset shows a small icon of its own
+  or **Resonance** preset shows a small icon of its own
   harmonic/spectral content next to its name, so you can recognize one at
   a glance without loading it first; other preset types show no icon.
 - **Tool Type** - **Procedural** (the default), **Instrument**,
-  **Resonant Instrument**, **Mind Shot**, **Mind Grain**, **Heal**,
+  **Resonance**, **Mind Shot**, **Mind Grain**, **Heal**,
   **Soften**, **Smudge**, or **Order/Chaos**; picks which set of controls
   below applies (Tip Shape for Procedural, Harmonics/Inharmonicity for
-  Instrument, a picker and Fall-Off Rate for Resonant Instrument, a picker
+  Instrument, a picker plus Decay Rate/Frequency Scale/Time Span for
+  Resonance, a picker
   for Mind Shot/Mind Grain, an Amount slider for Order/Chaos -
   Heal/Soften/Smudge add no controls of their own at all, see their own
   entries below). The panel
@@ -903,18 +904,27 @@ panel (off by default) with the brush's own settings:
   of the depth value. This tracks the stroke's own position along itself,
   not real elapsed time, so the same MindWave shape always plays out fully
   over any one stroke, however long or short it is.
-- **Resonant Profile**/**Fall-Off Rate** (Resonant Instrument only) - a
-  drop-down of every Resonant Instrument you've captured so far (see
-  [Pick](#pick)'s own "Create Resonant Instrument from Picked Path..."),
+- **Resonance Profile** (Resonance only) - a
+  drop-down of every Resonance profile you've captured so far (see
+  [Pick](#pick)'s own "Create Resonance from Picked Path..."),
   empty until you capture your first one. Paints the captured spectrum as
   a series of partials above the stroke's own pitch, the same spirit as
   Instrument's own harmonic series, but with each partial's own strength
-  coming from the curve's own shape instead of hand-typed numbers.
-  **Fall-Off Rate** controls how quickly loudness decays across the
-  stroke, as if the curve were struck once at the stroke's own start and
-  left to ring out - `0` (the default) is full, constant sustain for the
-  whole stroke; higher values make it fade out faster as you keep
-  painting.
+  coming from the curve's own shape instead of hand-typed numbers. Unlike
+  every other paintable tool, Resonance has no Falloff dial of its own
+  (fixed at a hard edge) and replaces the shared Brush Size with two
+  controls of its own:
+  - **Decay Rate** controls how quickly loudness decays across the
+    stroke, as if the curve were struck once at the stroke's own start and
+    left to ring out - `0` (the default) is full, constant sustain for the
+    whole stroke; higher values make it fade out faster as you keep
+    painting.
+  - **Frequency Scale** controls how many octaves above the painted pitch
+    the spectrum spreads - the bottom of the spectrum always stays
+    exactly on the pitch you painted; a larger value stretches the rest
+    of it further upward.
+  - **Time Span** controls this brush's own stamp duration, the same role
+    Brush Size plays for every other tool.
 - **Mind Shot** (Mind Shot only) - a drop-down of every Mind Shot you've
   captured so far (see [Selection and Fill](#selection-and-fill)'s own
   "Capture as Mind Shot"), empty until you capture your first one.
@@ -1332,17 +1342,17 @@ selection to a plain, axis-aligned rectangle.
   above for what Fundamental Frequency/Start-Time Offset do (identical
   either way). Also always references the selection's own full bounding
   box, same as Mind Shot above.
-- **Create Resonant Instrument from Picked Path...** - **Edit → Create
-  Resonant Instrument from Picked Path...** prompts for a name (defaulting
-  to "Resonant Instrument 1", "Resonant Instrument 2", and so on), then
+- **Create Resonance from Picked Path...** - **Edit → Create
+  Resonance from Picked Path...** prompts for a name (defaulting
+  to "Resonance 1", "Resonance 2", and so on), then
   analyzes whichever path/stroke is currently Picked and stores the result
   permanently under that name - a confirmation appears in the status bar.
-  Pick **Resonant Instrument** as the Tool Type in
+  Pick **Resonance** as the Tool Type in
   [Painting](#painting)'s Tool Configuration panel and select it from the
-  drop-down there to paint with it (see "Resonant Profile"/"Fall-Off
-  Rate" there).
-- **Branching Curve editor** - build a real tree/graph for a Resonant
-  Instrument, instead of just one straight stroke. Draw a trunk stroke
+  drop-down there to paint with it (see "Resonance Profile"/"Decay
+  Rate"/"Frequency Scale"/"Time Span" there).
+- **Branching Curve editor** - build a real tree/graph for a Resonance
+  brush, instead of just one straight stroke. Draw a trunk stroke
   as an ordinary paint stroke, switch to Pick and click it, then **Edit
   → Start Branching Curve from Picked Path**. To grow a branch: click a
   precise point on the trunk (or on any already-added branch) - this
@@ -1350,9 +1360,9 @@ selection to a plain, axis-aligned rectangle.
   Paint and draw a new stroke, switch back to Pick and click it, then
   **Edit → Add Picked Path as Branch**. Repeat as many times as you
   like, grafting new branches onto the trunk or onto earlier branches.
-  When the tree is complete, **Edit → Create Resonant Instrument from
+  When the tree is complete, **Edit → Create Resonance from
   Picked Graph...** prompts for a name and stores the whole tree's own
-  spectrum, the same way Create Resonant Instrument from Picked Path
+  spectrum, the same way Create Resonance from Picked Path
   does for a single curve. **Edit → Cancel Branching Curve** abandons an
   in-progress tree without saving anything, if you want to start over.
   Every branch past the trunk needs its own attachment point clicked
@@ -1742,25 +1752,25 @@ rather than drawn incorrectly - a proper polar-aware redraw for each
 remains future work, since each is built from straight lines that don't
 translate onto a disk without their own dedicated redesign.
 
-**Resonant Instruments** are now complete end to end: **Edit → Create
-Resonant Instrument from Picked Path...** (see [Pick](#pick) above)
-analyzes a picked path's own shape and stores the result permanently,
-under a name you choose; **Resonant Instrument** (see [Painting](#painting)
-below) paints with it; a **Resonant** MindWave generator (see
-[MindWaves](#mindwaves) above) reads a saved profile back out as a
-modulation source; and the Branching Curve editor
-(see [Pick](#pick) above) lets you build a real tree/graph by hand
-instead of only an ordinary linear path/stroke. Still missing: a panel
-listing everything you've captured (the Tool Configuration panel's own
-picker is the only place they show up so far).
+**Resonance** (formerly "Resonant Instrument") is now complete end to
+end: **Edit → Create Resonance from Picked Path...** (see [Pick](#pick)
+above) analyzes a picked path's own shape and stores the result
+permanently, under a name you choose; **Resonance** (see
+[Painting](#painting) below) paints with it; a **Resonance** MindWave
+generator (see [MindWaves](#mindwaves) above) reads a saved profile back
+out as a modulation source; and the Branching Curve editor (see
+[Pick](#pick) above) lets you build a real tree/graph by hand instead of
+only an ordinary linear path/stroke. Still missing: a panel listing
+everything you've captured (the Tool Configuration panel's own picker is
+the only place they show up so far).
 
 Painting (see [Painting](#painting) above) exists, but only a fraction of
 what's designed for it:
 
 - Only **Procedural**, **Instrument** (harmonic series, inharmonicity, and
   MindWave-driven vibrato/tremolo - no noise component, body resonance, or
-  ADSR envelope yet), **Resonant Instrument** (a computed spectrum in place
-  of a hand-typed harmonic series, plus a single fall-off-rate decay - no
+  ADSR envelope yet), **Resonance** (a computed spectrum in place
+  of a hand-typed harmonic series, plus a single decay-rate decay - no
   vibrato/tremolo or inharmonicity of its own yet), **Mind Shot**
   (capture-and-restamp), **Mind Grain** (a live reference, updating
   immediately everywhere it's used the moment its own source is
