@@ -18,6 +18,7 @@
 #include "test_axis_labels.h"
 #include "test_branch_curve_session.h"
 #include "test_canvas_widget.h"
+#include "test_checklist_dialog.h"
 #include "test_chord_generator_controller.h"
 #include "test_chord_generator_panel.h"
 #include "test_configure_devices_panel.h"
@@ -86,6 +87,9 @@ int main(int argc, char** argv) {
 
     CanvasWidgetTest canvasWidgetTest;
     status |= QTest::qExec(&canvasWidgetTest, argc, argv);
+
+    CheckListDialogTest checkListDialogTest;
+    status |= QTest::qExec(&checkListDialogTest, argc, argv);
 
     ChordGeneratorControllerTest chordGeneratorControllerTest;
     status |= QTest::qExec(&chordGeneratorControllerTest, argc, argv);

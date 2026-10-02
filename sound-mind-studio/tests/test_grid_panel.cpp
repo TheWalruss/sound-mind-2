@@ -1,6 +1,8 @@
 #include "test_grid_panel.h"
 
 #include <optional>
+#include <set>
+#include <vector>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -9,6 +11,7 @@
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/music_theory.h"
 #include "sound_mind/studio/grid_config.h"
 #include "sound_mind/studio/grid_panel.h"
 
@@ -160,6 +163,151 @@ void GridPanelTest::changingTheFrequencyGridDashStyleEmitsFrequencyGridConfigCha
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(panel.frequencyGridConfig().lineStyle, Qt::DashLine);
+}
+
+void GridPanelTest::freshPanelDefaultsToEqual12ChromaticWithKeyAndScaleEnabled() {
+    const GridPanel panel;
+    QCOMPARE(panel.frequencyGridConfig().noteGridTemperament, sound_mind::core::Temperament::Equal12);
+    QCOMPARE(panel.frequencyGridConfig().noteGridScale, sound_mind::core::ScaleType::Chromatic);
+    QVERIFY(panel.frequencyGridConfig().noteGridExcludedSteps.empty());
+    QVERIFY(panel.frequencyGridConfig().noteGridExcludedOctaves.empty());
+    auto* keyCombo = panel.findChild<QComboBox*>(QStringLiteral("keyCombo"));
+    auto* scaleCombo = panel.findChild<QComboBox*>(QStringLiteral("scaleCombo"));
+    QVERIFY(keyCombo != nullptr);
+    QVERIFY(scaleCombo != nullptr);
+    QVERIFY(keyCombo->isEnabled());
+    QVERIFY(scaleCombo->isEnabled());
+}
+
+void GridPanelTest::changingTemperamentToANonKeyScaleOneDisablesKeyAndScaleCombosAndEmits() {
+    GridPanel panel;
+    auto* temperamentCombo = panel.findChild<QComboBox*>(QStringLiteral("temperamentCombo"));
+    auto* keyCombo = panel.findChild<QComboBox*>(QStringLiteral("keyCombo"));
+    auto* scaleCombo = panel.findChild<QComboBox*>(QStringLiteral("scaleCombo"));
+    QVERIFY(temperamentCombo != nullptr);
+    QSignalSpy spy(&panel, &GridPanel::frequencyGridConfigChanged);
+
+    temperamentCombo->setCurrentIndex(temperamentCombo->findText(QStringLiteral("19-TET")));
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.frequencyGridConfig().noteGridTemperament, sound_mind::core::Temperament::Equal19);
+    QVERIFY(!keyCombo->isEnabled());
+    QVERIFY(!scaleCombo->isEnabled());
+    // 19-TET has no Key/Scale filtering at all - nothing should be
+    // excluded just from switching to it.
+    QVERIFY(panel.frequencyGridConfig().noteGridExcludedSteps.empty());
+}
+
+void GridPanelTest::changingTemperamentBackToAKeyScaleOneReEnablesTheCombos() {
+    GridPanel panel;
+    auto* temperamentCombo = panel.findChild<QComboBox*>(QStringLiteral("temperamentCombo"));
+    auto* keyCombo = panel.findChild<QComboBox*>(QStringLiteral("keyCombo"));
+    auto* scaleCombo = panel.findChild<QComboBox*>(QStringLiteral("scaleCombo"));
+    temperamentCombo->setCurrentIndex(temperamentCombo->findText(QStringLiteral("19-TET")));
+    QVERIFY(!keyCombo->isEnabled());
+
+    temperamentCombo->setCurrentIndex(temperamentCombo->findText(QStringLiteral("24-TET (Quarter Tone)")));
+
+    QVERIFY(keyCombo->isEnabled());
+    QVERIFY(scaleCombo->isEnabled());
+    QCOMPARE(panel.frequencyGridConfig().noteGridTemperament, sound_mind::core::Temperament::Equal24);
+}
+
+void GridPanelTest::changingScaleToMajorExcludesEveryNonScaleStepAndEmits() {
+    GridPanel panel;
+    auto* scaleCombo = panel.findChild<QComboBox*>(QStringLiteral("scaleCombo"));
+    QVERIFY(scaleCombo != nullptr);
+    QSignalSpy spy(&panel, &GridPanel::frequencyGridConfigChanged);
+
+    scaleCombo->setCurrentIndex(scaleCombo->findText(QStringLiteral("Major (Ionian)")));
+
+    QCOMPARE(spy.count(), 1);
+    // Key defaults to C - C Major excludes the 5 non-scale steps (the
+    // "black keys"), leaving 7 included, under Equal12's own `step == 0
+    // is A` convention: C Major = {C, D, E, F, G, A, B} = steps {3, 5, 7,
+    // 8, 10, 0, 2} - the excluded ones are the other five.
+    const auto& excluded = panel.frequencyGridConfig().noteGridExcludedSteps;
+    QCOMPARE(excluded.size(), std::size_t{5});
+    for (const int includedStep : {3, 5, 7, 8, 10, 0, 2}) {
+        QVERIFY(excluded.count(includedStep) == 0);
+    }
+}
+
+void GridPanelTest::changingKeyWithAMajorScaleRecomputesTheExcludedStepsForTheNewRoot() {
+    GridPanel panel;
+    auto* keyCombo = panel.findChild<QComboBox*>(QStringLiteral("keyCombo"));
+    auto* scaleCombo = panel.findChild<QComboBox*>(QStringLiteral("scaleCombo"));
+    scaleCombo->setCurrentIndex(scaleCombo->findText(QStringLiteral("Major (Ionian)")));
+    QSignalSpy spy(&panel, &GridPanel::frequencyGridConfigChanged);
+
+    keyCombo->setCurrentIndex(keyCombo->findText(QStringLiteral("G")));
+
+    QCOMPARE(spy.count(), 1);
+    // G Major = {G, A, B, C, D, E, F#}, step-mapped (Equal12's own
+    // `step == 0 is A` convention, so F natural = step 8, F# = step 9):
+    // F natural is now excluded (G Major has F#, not F natural) where it
+    // wasn't for C Major above, and F# is now included where it was
+    // excluded for C Major.
+    QVERIFY(panel.frequencyGridConfig().noteGridExcludedSteps.count(8) > 0);
+    QVERIFY(panel.frequencyGridConfig().noteGridExcludedSteps.count(9) == 0);
+}
+
+void GridPanelTest::changingScaleToChromaticClearsEveryExclusion() {
+    GridPanel panel;
+    auto* scaleCombo = panel.findChild<QComboBox*>(QStringLiteral("scaleCombo"));
+    scaleCombo->setCurrentIndex(scaleCombo->findText(QStringLiteral("Major (Ionian)")));
+    QVERIFY(!panel.frequencyGridConfig().noteGridExcludedSteps.empty());
+
+    scaleCombo->setCurrentIndex(scaleCombo->findText(QStringLiteral("Chromatic")));
+
+    QVERIFY(panel.frequencyGridConfig().noteGridExcludedSteps.empty());
+}
+
+void GridPanelTest::changingTemperamentResetsExcludedStepsButLeavesExcludedOctavesAlone() {
+    GridPanel panel;
+    auto* temperamentCombo = panel.findChild<QComboBox*>(QStringLiteral("temperamentCombo"));
+    auto* scaleCombo = panel.findChild<QComboBox*>(QStringLiteral("scaleCombo"));
+    scaleCombo->setCurrentIndex(scaleCombo->findText(QStringLiteral("Major (Ionian)")));
+    QVERIFY(!panel.frequencyGridConfig().noteGridExcludedSteps.empty());
+    panel.applyOctaveSelection({false, true});  // Excludes octave -1 only.
+    QVERIFY(!panel.frequencyGridConfig().noteGridExcludedOctaves.empty());
+
+    // Switching to a non-Key/Scale temperament and back should reset the
+    // step exclusions (a Major-scale selection re-applied fresh) without
+    // touching the unrelated octave exclusion at all.
+    temperamentCombo->setCurrentIndex(temperamentCombo->findText(QStringLiteral("19-TET")));
+    QVERIFY(panel.frequencyGridConfig().noteGridExcludedSteps.empty());
+    QVERIFY(!panel.frequencyGridConfig().noteGridExcludedOctaves.empty());
+
+    temperamentCombo->setCurrentIndex(temperamentCombo->findText(QStringLiteral("12-TET")));
+    QVERIFY(!panel.frequencyGridConfig().noteGridExcludedSteps.empty());  // Major re-applied.
+    QVERIFY(!panel.frequencyGridConfig().noteGridExcludedOctaves.empty());  // Untouched throughout.
+}
+
+void GridPanelTest::applyNoteSelectionExcludesUncheckedStepsAndEmits() {
+    GridPanel panel;
+    QSignalSpy spy(&panel, &GridPanel::frequencyGridConfigChanged);
+
+    std::vector<bool> checked(12, true);
+    checked[0] = false;  // Excludes step 0 (A).
+    panel.applyNoteSelection(checked);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.frequencyGridConfig().noteGridExcludedSteps, std::set<int>{0});
+}
+
+void GridPanelTest::applyOctaveSelectionExcludesUncheckedOctavesAndEmits() {
+    GridPanel panel;
+    QSignalSpy spy(&panel, &GridPanel::frequencyGridConfigChanged);
+
+    // This panel's own fixed Octaves range starts at -1 (see
+    // grid_panel.cpp's own kMinOctave) - index 1 is octave 0.
+    std::vector<bool> checked(12, true);
+    checked[1] = false;
+    panel.applyOctaveSelection(checked);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.frequencyGridConfig().noteGridExcludedOctaves, std::set<int>{0});
 }
 
 void GridPanelTest::changingTheTimingGridModeToIntervalEnablesTheIntervalSpinBoxAndEmits() {

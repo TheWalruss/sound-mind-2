@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include <QDockWidget>
 
 #include "sound_mind/studio/axis_labels.h"
@@ -77,6 +79,41 @@ public:
     /// @return `true` if Snap to Grid is on; `false` otherwise.
     [[nodiscard]] bool snapToGridEnabled() const noexcept { return snapToGridEnabled_; }
 
+    /**
+     * @brief Applies a Notes checklist result directly - the dialog-free
+     *        half of showNotesDialog(), so tests never have to invoke the
+     *        real, modal-dialog-showing slot directly (the same
+     *        `captureMindShot()`/`captureMindShotWithDetails()` split
+     *        this codebase already establishes for every modal-dialog-
+     *        showing action - see that pair's own docs).
+     *
+     * Replaces `frequencyGridConfig().noteGridExcludedSteps` entirely
+     * from whichever entries are `false` here - the same "every entry
+     * checked by default means no exclusions" convention
+     * `showNotesDialog()` itself seeds the real dialog with.
+     *
+     * @param checkedStates One entry per step-within-octave, in order
+     *        (`0` to `stepsPerOctave(frequencyGridConfig().noteGridTemperament) - 1`) -
+     *        a shorter list than that leaves the missing tail's own
+     *        steps untouched (neither excluded nor re-included).
+     */
+    void applyNoteSelection(const std::vector<bool>& checkedStates);
+
+    /**
+     * @brief Applies an Octaves checklist result directly - see
+     *        `applyNoteSelection()`'s own docs for why this exists
+     *        alongside showOctavesDialog().
+     *
+     * Replaces `frequencyGridConfig().noteGridExcludedOctaves` entirely
+     * from whichever entries are `false` here.
+     *
+     * @param checkedStates One entry per octave number, in order,
+     *        starting from this panel's own fixed minimum octave (`-1`,
+     *        matching `showOctavesDialog()`'s own range) - a shorter
+     *        list leaves the missing tail's own octaves untouched.
+     */
+    void applyOctaveSelection(const std::vector<bool>& checkedStates);
+
 signals:
     /// @brief The "Vertical axis" combo box changed.
     /// @param mode The newly selected mode.
@@ -121,6 +158,44 @@ private:
     ///        source is off (and silently ignored).
     void updateFrequencyGridControlsEnabled();
 
+    /// @brief Enables/disables keyCombo_/scaleCombo_ to match whether
+    ///        `frequencyGridConfig_.noteGridTemperament` currently
+    ///        supports Key/Scale filtering at all - see
+    ///        `sound_mind::core::supportsKeyAndScale()`'s own docs.
+    ///        Called after every Temperament combo change.
+    void updateKeyAndScaleControlsEnabled();
+
+    /// @brief Replaces `frequencyGridConfig_.noteGridExcludedSteps` with
+    ///        whichever steps `noteGridKey`/`noteGridScale` currently
+    ///        resolve to under `noteGridTemperament` - discarding any
+    ///        previous manual edit to the list entirely (confirmed with
+    ///        the user: a higher-level Key/Scale selection always wins
+    ///        over whatever the Notes checklist dialog last left behind).
+    ///        A no-op (leaves noteGridExcludedSteps untouched) while
+    ///        `noteGridTemperament` doesn't support Key/Scale filtering -
+    ///        the caller is still responsible for emptying it directly
+    ///        when a Temperament change itself is what's being handled.
+    void applyKeyAndScaleToExcludedSteps();
+
+    /// @brief Opens a `CheckListDialog` listing every step-within-octave
+    ///        for the current temperament (labeled by pitch class name
+    ///        where `supportsKeyAndScale()` makes one available, plain
+    ///        step numbers otherwise), seeded from
+    ///        `frequencyGridConfig_.noteGridExcludedSteps` - on Accept,
+    ///        replaces that set from whichever boxes end up unchecked.
+    ///        The actual work behind the Frequency Grid's own "Notes..."
+    ///        button.
+    void showNotesDialog();
+
+    /// @brief Opens a `CheckListDialog` listing a fixed, generous octave
+    ///        range (matching this panel's own note-grid computation's
+    ///        own covered span), seeded from
+    ///        `frequencyGridConfig_.noteGridExcludedOctaves` - on Accept,
+    ///        replaces that set from whichever boxes end up unchecked.
+    ///        The actual work behind the Frequency Grid's own
+    ///        "Octaves..." button.
+    void showOctavesDialog();
+
     /// @brief Enables/disables timingGridIntervalSpinBox_/
     ///        timingGridSubdivisionCombo_ to match timingGridModeCombo_'s
     ///        own current selection - called after every Timing Grid
@@ -143,6 +218,11 @@ private:
 
     FrequencyGridConfig frequencyGridConfig_;
     QCheckBox* noteGridCheckBox_ = nullptr;
+    QComboBox* temperamentCombo_ = nullptr;
+    QComboBox* keyCombo_ = nullptr;
+    QComboBox* scaleCombo_ = nullptr;
+    QPushButton* notesButton_ = nullptr;
+    QPushButton* octavesButton_ = nullptr;
     QCheckBox* harmonicSeriesCheckBox_ = nullptr;
     QDoubleSpinBox* harmonicFundamentalSpinBox_ = nullptr;
     QCheckBox* customFrequenciesCheckBox_ = nullptr;

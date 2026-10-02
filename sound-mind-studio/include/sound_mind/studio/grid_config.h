@@ -1,11 +1,13 @@
 #pragma once
 
 #include <optional>
+#include <set>
 #include <vector>
 
 #include <QColor>
 #include <Qt>
 
+#include "sound_mind/core/music_theory.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project_settings.h"
 
@@ -38,8 +40,51 @@ namespace sound_mind::studio {
  */
 struct FrequencyGridConfig {
     /// @brief Every semitone (12-TET, against `ProjectSettings::referenceHz`)
-    /// within the project's encoded frequency range.
+    /// within the project's encoded frequency range - narrowed by
+    /// `noteGridTemperament`/`noteGridExcludedSteps`/`noteGridExcludedOctaves`
+    /// below (all defaulting to "no narrowing at all", so a freshly-enabled
+    /// note grid behaves exactly as it always has: every 12-TET semitone,
+    /// every octave).
     bool noteGridEnabled = false;
+
+    /// @brief Which tuning system the note grid's own lines are computed
+    /// in - `docs/sound-mind-architecture.md`'s own Decision on the Note
+    /// Grid's Key/Scale/Temperament filtering. Defaults to standard 12-TET,
+    /// this codebase's own long-standing default.
+    sound_mind::core::Temperament noteGridTemperament = sound_mind::core::Temperament::Equal12;
+
+    /// @brief The note grid's own Key (root) selector - only meaningful
+    /// while `sound_mind::core::supportsKeyAndScale(noteGridTemperament)`
+    /// is `true`, and only actually narrows anything while
+    /// `noteGridScale` isn't `Chromatic` (every root sounds identical for
+    /// a scale with no missing degrees).
+    sound_mind::core::PitchClass noteGridKey = sound_mind::core::PitchClass::C;
+
+    /// @brief The note grid's own Scale (interval pattern) selector - see
+    /// `noteGridKey`'s own docs. `Chromatic` (the default) is "no
+    /// restriction": every pitch class, regardless of `noteGridKey`.
+    sound_mind::core::ScaleType noteGridScale = sound_mind::core::ScaleType::Chromatic;
+
+    /// @brief Which step-within-octave indices (`[0, stepsPerOctave(
+    /// noteGridTemperament))`) are *excluded* from the note grid - an
+    /// exclusion set, not an inclusion one, so the default (empty - no
+    /// exclusions) is "every step included", matching this grid's own
+    /// pre-filtering behavior exactly. Recomputed from scratch (every
+    /// previous manual edit here discarded) whenever `noteGridTemperament`
+    /// changes (the old indices mean something different, or nothing at
+    /// all, under a different step count) or whenever `noteGridKey`/
+    /// `noteGridScale` changes while Key/Scale filtering is available -
+    /// confirmed with the user: a higher-level selection always wins over
+    /// a lower-level one it would otherwise contradict.
+    std::set<int> noteGridExcludedSteps;
+
+    /// @brief Which scientific-pitch-notation octave numbers are
+    /// *excluded* from the note grid - the same "exclusion set, empty
+    /// means no narrowing" shape `noteGridExcludedSteps` already
+    /// establishes, independent of pitch class (a step excluded here is
+    /// excluded in every octave; an octave excluded here removes every
+    /// step within it, regardless of which are otherwise included).
+    std::set<int> noteGridExcludedOctaves;
 
     /// @brief Every integer multiple of `harmonicFundamentalHz` within the
     /// project's encoded frequency range.

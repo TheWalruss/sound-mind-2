@@ -9,6 +9,7 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -18,7 +19,21 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "sound_mind/core/music_theory.h"
+#include "sound_mind/studio/checklist_dialog.h"
+
 namespace sound_mind::studio {
+
+using sound_mind::core::PitchClass;
+using sound_mind::core::pitchClassName;
+using sound_mind::core::pitchClassesInScale;
+using sound_mind::core::ScaleType;
+using sound_mind::core::scaleTypeName;
+using sound_mind::core::stepsPerOctave;
+using sound_mind::core::stepWithinOctaveForPitchClass;
+using sound_mind::core::supportsKeyAndScale;
+using sound_mind::core::Temperament;
+using sound_mind::core::temperamentName;
 
 namespace {
 
@@ -52,6 +67,86 @@ constexpr std::array<std::pair<double, const char*>, 6> kTempoSubdivisions{{
     {0.25, "Sixteenth"},
     {0.125, "Thirty-second"},
 }};
+
+/// @brief Every `Temperament` this panel offers, in the order the
+/// Temperament combo lists them - `Equal12` first, matching this
+/// codebase's own long-standing default.
+constexpr std::array<Temperament, 13> kTemperaments{{
+    Temperament::Equal12,
+    Temperament::Equal15,
+    Temperament::Equal17,
+    Temperament::Equal19,
+    Temperament::Equal22,
+    Temperament::Equal24,
+    Temperament::Equal31,
+    Temperament::Equal34,
+    Temperament::Equal41,
+    Temperament::Equal53,
+    Temperament::Equal72,
+    Temperament::QuarterCommaMeantone,
+    Temperament::Pythagorean,
+}};
+
+/// @brief Every `ScaleType` this panel's own Scale combo offers, in
+/// display order - `Chromatic` ("no restriction") first.
+constexpr std::array<ScaleType, 15> kScaleTypes{{
+    ScaleType::Chromatic,
+    ScaleType::Major,
+    ScaleType::Dorian,
+    ScaleType::Phrygian,
+    ScaleType::Lydian,
+    ScaleType::Mixolydian,
+    ScaleType::Minor,
+    ScaleType::Locrian,
+    ScaleType::HarmonicMinor,
+    ScaleType::MelodicMinor,
+    ScaleType::MajorPentatonic,
+    ScaleType::MinorPentatonic,
+    ScaleType::Blues,
+    ScaleType::WholeTone,
+    ScaleType::Octatonic,
+}};
+
+/// @brief Every `PitchClass`, `C` through `B`, in display order for the
+/// Key combo.
+constexpr std::array<PitchClass, 12> kPitchClasses{{
+    PitchClass::C, PitchClass::CSharp, PitchClass::D, PitchClass::DSharp, PitchClass::E, PitchClass::F,
+    PitchClass::FSharp, PitchClass::G, PitchClass::GSharp, PitchClass::A, PitchClass::ASharp, PitchClass::B,
+}};
+
+/// @brief The fixed octave range the "Octaves..." dialog lists -
+/// `kMinEqual12Step`/`kMaxEqual12Step`'s own span (`grid_config.cpp`,
+/// the widest range the note grid's own computation ever actually walks)
+/// converted to scientific-pitch-notation octave numbers. `GridPanel`
+/// has no `ProjectSettings` of its own to derive a narrower, project-
+/// specific range from - see this class's own "purely presentational"
+/// docs - so this is deliberately generous rather than exact.
+constexpr int kMinOctave = -1;
+constexpr int kMaxOctave = 10;
+
+/// @brief `step`'s own display label for the Notes checklist dialog,
+/// under `temperament` - a pitch class name (`"C"`, `"A#"`, ...) where
+/// `supportsKeyAndScale(temperament)` makes one available (a quarter-tone
+/// step under `Equal24` - one that isn't a multiple of
+/// `stepsPerOctave/12` - is labeled relative to the nearest pitch class
+/// below it instead, e.g. `"A (+1/4)"`, since it has no letter name of
+/// its own), or a plain step number otherwise (see
+/// `sound_mind::core::Temperament`'s own docs on why those have no
+/// standard note-name mapping at all).
+QString noteGridStepLabel(Temperament temperament, int step) {
+    if (!supportsKeyAndScale(temperament)) {
+        return QStringLiteral("Step %1").arg(step);
+    }
+    const int divisionsPerSemitone = stepsPerOctave(temperament) / 12;
+    const int semitoneIndex = step / divisionsPerSemitone;
+    const int remainder = step - semitoneIndex * divisionsPerSemitone;
+    // stepWithinOctaveForPitchClass()'s own inverse: which PitchClass
+    // lands on step `semitoneIndex * divisionsPerSemitone`, given pitch
+    // class A itself lands on step 0.
+    const auto pitchClass = static_cast<PitchClass>((semitoneIndex + 9) % 12);
+    const QString name = QString::fromStdString(pitchClassName(pitchClass));
+    return remainder == 0 ? name : QStringLiteral("%1 (+%2/%3)").arg(name).arg(remainder).arg(divisionsPerSemitone);
+}
 
 }  // namespace
 
@@ -102,6 +197,64 @@ GridPanel::GridPanel(QWidget* parent) : QDockWidget(tr("Grid"), parent) {
         emitFrequencyGridConfigChanged();
     });
     frequencyForm->addRow(noteGridCheckBox_);
+
+    temperamentCombo_ = new QComboBox(frequencyGroup);
+    temperamentCombo_->setObjectName(QStringLiteral("temperamentCombo"));
+    for (const Temperament temperament : kTemperaments) {
+        temperamentCombo_->addItem(QString::fromStdString(temperamentName(temperament)),
+                                     QVariant::fromValue(static_cast<int>(temperament)));
+    }
+    connect(temperamentCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        frequencyGridConfig_.noteGridTemperament = static_cast<Temperament>(temperamentCombo_->itemData(index).toInt());
+        // A different step count (or none at all) means the old excluded
+        // steps either mean something different or nothing at all -
+        // always starts fresh, then re-applies Key/Scale on top if the
+        // new temperament still supports them (see
+        // applyKeyAndScaleToExcludedSteps()'s own docs). Excluded octaves
+        // are untouched - octave numbering is temperament-independent.
+        frequencyGridConfig_.noteGridExcludedSteps.clear();
+        applyKeyAndScaleToExcludedSteps();
+        updateKeyAndScaleControlsEnabled();
+        emitFrequencyGridConfigChanged();
+    });
+    frequencyForm->addRow(tr("Temperament:"), temperamentCombo_);
+
+    keyCombo_ = new QComboBox(frequencyGroup);
+    keyCombo_->setObjectName(QStringLiteral("keyCombo"));
+    for (const PitchClass pitchClass : kPitchClasses) {
+        keyCombo_->addItem(QString::fromStdString(pitchClassName(pitchClass)),
+                             QVariant::fromValue(static_cast<int>(pitchClass)));
+    }
+    connect(keyCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        frequencyGridConfig_.noteGridKey = static_cast<PitchClass>(keyCombo_->itemData(index).toInt());
+        applyKeyAndScaleToExcludedSteps();
+        emitFrequencyGridConfigChanged();
+    });
+    frequencyForm->addRow(tr("Key:"), keyCombo_);
+
+    scaleCombo_ = new QComboBox(frequencyGroup);
+    scaleCombo_->setObjectName(QStringLiteral("scaleCombo"));
+    for (const ScaleType scale : kScaleTypes) {
+        scaleCombo_->addItem(QString::fromStdString(scaleTypeName(scale)), QVariant::fromValue(static_cast<int>(scale)));
+    }
+    connect(scaleCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        frequencyGridConfig_.noteGridScale = static_cast<ScaleType>(scaleCombo_->itemData(index).toInt());
+        applyKeyAndScaleToExcludedSteps();
+        emitFrequencyGridConfigChanged();
+    });
+    frequencyForm->addRow(tr("Scale:"), scaleCombo_);
+
+    auto* noteOctaveButtonsRow = new QHBoxLayout();
+    notesButton_ = new QPushButton(tr("Notes..."), frequencyGroup);
+    notesButton_->setObjectName(QStringLiteral("notesButton"));
+    connect(notesButton_, &QPushButton::clicked, this, &GridPanel::showNotesDialog);
+    noteOctaveButtonsRow->addWidget(notesButton_);
+
+    octavesButton_ = new QPushButton(tr("Octaves..."), frequencyGroup);
+    octavesButton_->setObjectName(QStringLiteral("octavesButton"));
+    connect(octavesButton_, &QPushButton::clicked, this, &GridPanel::showOctavesDialog);
+    noteOctaveButtonsRow->addWidget(octavesButton_);
+    frequencyForm->addRow(noteOctaveButtonsRow);
 
     harmonicSeriesCheckBox_ = new QCheckBox(tr("Harmonic series"), frequencyGroup);
     harmonicSeriesCheckBox_->setObjectName(QStringLiteral("harmonicSeriesCheckBox"));
@@ -275,6 +428,7 @@ GridPanel::GridPanel(QWidget* parent) : QDockWidget(tr("Grid"), parent) {
     root->addStretch();
 
     updateFrequencyGridControlsEnabled();
+    updateKeyAndScaleControlsEnabled();
     updateTimingGridControlsEnabled();
 
     auto* scrollArea = new QScrollArea(this);
@@ -299,6 +453,87 @@ void GridPanel::updateCustomFrequenciesFromText() {
 void GridPanel::updateFrequencyGridControlsEnabled() {
     harmonicFundamentalSpinBox_->setEnabled(harmonicSeriesCheckBox_->isChecked());
     customFrequenciesLineEdit_->setEnabled(customFrequenciesCheckBox_->isChecked());
+}
+
+void GridPanel::updateKeyAndScaleControlsEnabled() {
+    const bool enabled = supportsKeyAndScale(frequencyGridConfig_.noteGridTemperament);
+    keyCombo_->setEnabled(enabled);
+    scaleCombo_->setEnabled(enabled);
+}
+
+void GridPanel::applyKeyAndScaleToExcludedSteps() {
+    if (!supportsKeyAndScale(frequencyGridConfig_.noteGridTemperament)) {
+        return;
+    }
+    const auto includedPitchClasses =
+        pitchClassesInScale(frequencyGridConfig_.noteGridKey, frequencyGridConfig_.noteGridScale);
+    std::set<int> includedSteps;
+    for (const PitchClass pitchClass : includedPitchClasses) {
+        includedSteps.insert(stepWithinOctaveForPitchClass(frequencyGridConfig_.noteGridTemperament, pitchClass));
+    }
+    frequencyGridConfig_.noteGridExcludedSteps.clear();
+    const int divisions = stepsPerOctave(frequencyGridConfig_.noteGridTemperament);
+    for (int step = 0; step < divisions; ++step) {
+        if (includedSteps.count(step) == 0) {
+            frequencyGridConfig_.noteGridExcludedSteps.insert(step);
+        }
+    }
+}
+
+void GridPanel::showNotesDialog() {
+    const int divisions = stepsPerOctave(frequencyGridConfig_.noteGridTemperament);
+    QStringList labels;
+    std::vector<bool> initiallyChecked;
+    labels.reserve(divisions);
+    initiallyChecked.reserve(static_cast<std::size_t>(divisions));
+    for (int step = 0; step < divisions; ++step) {
+        labels.append(noteGridStepLabel(frequencyGridConfig_.noteGridTemperament, step));
+        initiallyChecked.push_back(frequencyGridConfig_.noteGridExcludedSteps.count(step) == 0);
+    }
+
+    CheckListDialog dialog(tr("Notes"), labels, initiallyChecked, this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    applyNoteSelection(dialog.checkedStates());
+}
+
+void GridPanel::showOctavesDialog() {
+    QStringList labels;
+    std::vector<bool> initiallyChecked;
+    for (int octave = kMinOctave; octave <= kMaxOctave; ++octave) {
+        labels.append(tr("Octave %1").arg(octave));
+        initiallyChecked.push_back(frequencyGridConfig_.noteGridExcludedOctaves.count(octave) == 0);
+    }
+
+    CheckListDialog dialog(tr("Octaves"), labels, initiallyChecked, this);
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    applyOctaveSelection(dialog.checkedStates());
+}
+
+void GridPanel::applyNoteSelection(const std::vector<bool>& checkedStates) {
+    for (std::size_t step = 0; step < checkedStates.size(); ++step) {
+        if (checkedStates[step]) {
+            frequencyGridConfig_.noteGridExcludedSteps.erase(static_cast<int>(step));
+        } else {
+            frequencyGridConfig_.noteGridExcludedSteps.insert(static_cast<int>(step));
+        }
+    }
+    emitFrequencyGridConfigChanged();
+}
+
+void GridPanel::applyOctaveSelection(const std::vector<bool>& checkedStates) {
+    for (std::size_t i = 0; i < checkedStates.size(); ++i) {
+        const int octave = kMinOctave + static_cast<int>(i);
+        if (checkedStates[i]) {
+            frequencyGridConfig_.noteGridExcludedOctaves.erase(octave);
+        } else {
+            frequencyGridConfig_.noteGridExcludedOctaves.insert(octave);
+        }
+    }
+    emitFrequencyGridConfigChanged();
 }
 
 void GridPanel::updateTimingGridControlsEnabled() {

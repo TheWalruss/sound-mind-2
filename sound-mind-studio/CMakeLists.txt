@@ -31,6 +31,7 @@ add_library(sound-mind-studio-lib
     src/axis_labels.cpp
     src/branch_curve_session.cpp
     src/canvas_widget.cpp
+    src/checklist_dialog.cpp
     src/chord_generator_controller.cpp
     src/chord_generator_panel.cpp
     src/color_conversion.cpp
@@ -87,6 +88,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/audio_snippet_picker_dialog.h
     include/sound_mind/studio/branch_curve_session.h
     include/sound_mind/studio/canvas_widget.h
+    include/sound_mind/studio/checklist_dialog.h
     include/sound_mind/studio/chord_generator_controller.h
     include/sound_mind/studio/chord_generator_panel.h
     include/sound_mind/studio/color_conversion.h

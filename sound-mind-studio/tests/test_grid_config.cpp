@@ -144,6 +144,74 @@ void GridConfigTest::frequencyGridLinesHzCombinesAndDeduplicatesMultipleSources(
     QVERIFY(qAbs(lines[0] - 440.0) < 0.01);
 }
 
+void GridConfigTest::frequencyGridLinesHzNoteGridExcludedStepsRemovesThatPitchClassInEveryOctave() {
+    FrequencyGridConfig config;
+    config.noteGridEnabled = true;
+    // Step 0 is A under Equal12's own `step == 0 is the reference (A)`
+    // convention - excluding it should remove every A across every
+    // octave, leaving A#4 (~466.16 Hz) as the only line in this range.
+    config.noteGridExcludedSteps.insert(0);
+    ProjectSettings settings = testSettings();
+    settings.minFrequencyHz = 430.0f;
+    settings.maxFrequencyHz = 470.0f;
+
+    const auto lines = frequencyGridLinesHz(config, settings);
+
+    QCOMPARE(lines.size(), std::size_t{1});
+    QVERIFY(qAbs(lines[0] - 466.1638) < 0.01);
+}
+
+void GridConfigTest::frequencyGridLinesHzNoteGridExcludedOctavesRemovesEveryStepInThatOctave() {
+    FrequencyGridConfig config;
+    config.noteGridEnabled = true;
+    config.noteGridExcludedOctaves.insert(4);  // A4 and A#4 above are both in octave 4.
+    ProjectSettings settings = testSettings();
+    settings.minFrequencyHz = 430.0f;
+    settings.maxFrequencyHz = 470.0f;
+
+    const auto lines = frequencyGridLinesHz(config, settings);
+
+    QVERIFY(lines.empty());
+}
+
+void GridConfigTest::frequencyGridLinesHzNoteGridRespectsAlternateEqualTemperamentStepCount() {
+    FrequencyGridConfig config;
+    config.noteGridEnabled = true;
+    config.noteGridTemperament = sound_mind::core::Temperament::Equal24;
+    ProjectSettings settings = testSettings();
+    settings.minFrequencyHz = 430.0f;
+    settings.maxFrequencyHz = 470.0f;
+
+    const auto lines = frequencyGridLinesHz(config, settings);
+
+    // Equal24 has twice as many steps per octave as Equal12 - the same
+    // 430-470 Hz window that held 2 Equal12 lines above should now hold
+    // roughly double (A4, a quarter-tone above A4, A#4, and whichever
+    // falls just past it).
+    QVERIFY(lines.size() >= 3);
+    QVERIFY(qAbs(lines.front() - 440.0) < 0.01);
+}
+
+void GridConfigTest::frequencyGridLinesHzNoteGridRespectsNamedHistoricalTuning() {
+    FrequencyGridConfig config;
+    config.noteGridEnabled = true;
+    config.noteGridTemperament = sound_mind::core::Temperament::Pythagorean;
+    ProjectSettings settings = testSettings();
+    settings.minFrequencyHz = 430.0f;
+    settings.maxFrequencyHz = 475.0f;
+
+    const auto lines = frequencyGridLinesHz(config, settings);
+
+    // A4 itself is still exactly the reference regardless of temperament;
+    // Pythagorean's own A#4 sits at a different Hz value than Equal12's
+    // (~466.16 Hz) - a real, measurable difference confirming the
+    // temperament actually changed the computed frequency, not just
+    // which steps are walked.
+    QCOMPARE(lines.size(), std::size_t{2});
+    QVERIFY(qAbs(lines[0] - 440.0) < 0.01);
+    QVERIFY(qAbs(lines[1] - 466.1638) > 0.5);
+}
+
 void GridConfigTest::timingGridLinesSecondsReturnsNothingWhenNotActive() {
     const TimingGridConfig config;
     QVERIFY(timingGridLinesSeconds(config, testSettings(), 10.0).empty());
@@ -193,6 +261,19 @@ void GridConfigTest::nearestFrequencyGridLineHzSnapsToTheNearestSemitone() {
 
     QVERIFY(snapped.has_value());
     QVERIFY(qAbs(*snapped - 440.0) < 0.01);
+}
+
+void GridConfigTest::nearestFrequencyGridLineHzSkipsAnExcludedStepInFavorOfTheNextNearest() {
+    FrequencyGridConfig config;
+    config.noteGridEnabled = true;
+    config.noteGridExcludedSteps.insert(0);  // Excludes every A, including A4 itself.
+
+    // 450 Hz is still closer to (now-excluded) A4 than to A#4, so the
+    // nearest surviving line should be A#4 (~466.16 Hz), not A4.
+    const auto snapped = nearestFrequencyGridLineHz(450.0, config, testSettings());
+
+    QVERIFY(snapped.has_value());
+    QVERIFY(qAbs(*snapped - 466.1638) < 0.01);
 }
 
 void GridConfigTest::nearestFrequencyGridLineHzSnapsToTheNearestHarmonic() {

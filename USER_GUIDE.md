@@ -1510,8 +1510,32 @@ Grid** checkbox at the bottom.
 **Frequency Grid** draws horizontal reference lines across the canvas -
 any combination of these can be on at once:
 
-- **Note grid** - one line per semitone (12-TET), against the project's
-  own tuning reference.
+- **Note grid** - one line per semitone, against the project's own tuning
+  reference, narrowed by:
+  - **Temperament** - the tuning system: 12-TET (the default) plus
+    15/17/19/22/24/31/34/41/53/72-TET, Quarter-Comma Meantone, and
+    Pythagorean. Only 12-TET, 24-TET, Meantone, and Pythagorean have a
+    standard 12-notes-per-octave structure for the Key/Scale filter below
+    to mean anything against - picking any other temperament grays Key
+    and Scale out, and the **Notes...** dialog shows plain numbered steps
+    instead of letter names for it.
+  - **Key**/**Scale** - picking a Scale other than Chromatic (Major,
+    Dorian, Phrygian, Lydian, Mixolydian, Minor, Locrian, Harmonic Minor,
+    Melodic Minor, Major/Minor Pentatonic, Blues, Whole Tone, or
+    Octatonic) restricts the grid to that scale's own notes, rooted at
+    whichever Key you pick - e.g. Key C + Scale Major shows only C Major's
+    own seven notes. Changing either one recomputes which notes are
+    included from scratch, discarding any changes you made in the Notes
+    dialog below it.
+  - **Notes...** - opens a checklist of every note the current
+    Temperament has (one row per semitone for 12-TET, more for a finer
+    temperament), with Select All/Deselect All - check or uncheck
+    individual notes directly, on top of (or instead of) a Key/Scale
+    pick. Stays as you left it until Temperament, Key, or Scale next
+    changes.
+  - **Octaves...** - the same kind of checklist, for which octaves
+    appear; unchecking one removes every note in it, regardless of which
+    notes are otherwise included.
 - **Harmonic series** - one line per integer multiple of a **Fundamental**
   you set (in Hz).
 - **Custom frequencies** - a **Frequencies (Hz)** field you type your own

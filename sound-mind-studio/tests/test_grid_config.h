@@ -20,6 +20,12 @@ private slots:
     void frequencyGridLinesHzCustomFrequenciesAreFilteredToTheProjectsOwnRange();
     void frequencyGridLinesHzCombinesAndDeduplicatesMultipleSources();
 
+    // Note Grid Key/Scale/Temperament/Octave filtering.
+    void frequencyGridLinesHzNoteGridExcludedStepsRemovesThatPitchClassInEveryOctave();
+    void frequencyGridLinesHzNoteGridExcludedOctavesRemovesEveryStepInThatOctave();
+    void frequencyGridLinesHzNoteGridRespectsAlternateEqualTemperamentStepCount();
+    void frequencyGridLinesHzNoteGridRespectsNamedHistoricalTuning();
+
     void timingGridLinesSecondsReturnsNothingWhenNotActive();
     void timingGridLinesSecondsIntervalModeCoversTheWholeDuration();
     void timingGridLinesSecondsTempoModeDerivesStepFromTheProjectsOwnBpm();
@@ -29,6 +35,7 @@ private slots:
     void nearestFrequencyGridLineHzSnapsToTheNearestHarmonic();
     void nearestFrequencyGridLineHzSnapsToTheNearestCustomFrequency();
     void nearestFrequencyGridLineHzPicksTheGloballyNearestAcrossCombinedSources();
+    void nearestFrequencyGridLineHzSkipsAnExcludedStepInFavorOfTheNextNearest();
 
     void nearestTimingGridLineSecondsReturnsNulloptWhenNotActive();
     void nearestTimingGridLineSecondsSnapsToTheNearestIntervalMultiple();

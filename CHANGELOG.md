@@ -6,6 +6,33 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.5.1] - 2026-10-02
+
+Note Grid: Key/Scale/Temperament/Octave filtering, plus a full note checklist.
+
+### Added
+
+- **Temperament** - the Note Grid's own tuning system is now a drop-down:
+  12-TET (the default, unchanged) plus 15/17/19/22/24/31/34/41/53/72-TET,
+  Quarter-Comma Meantone, and Pythagorean.
+- **Key**/**Scale** - restricts the Note Grid to a chosen scale's own
+  notes (Major, Dorian, Phrygian, Lydian, Mixolydian, Minor, Locrian,
+  Harmonic Minor, Melodic Minor, Major/Minor Pentatonic, Blues, Whole
+  Tone, Octatonic, or Chromatic for no restriction), rooted at a chosen
+  Key. Only available for 12-TET, 24-TET, Meantone, and Pythagorean -
+  the other temperaments have no standard note-name mapping for a
+  scale to mean anything against, so Key/Scale gray out and the Notes
+  dialog below shows plain numbered steps instead.
+- **Notes...** - a checklist of every note the current temperament has,
+  with Select All/Deselect All, for picking specific notes directly (on
+  top of, or instead of, a Key/Scale pick).
+- **Octaves...** - the same kind of checklist, for which octaves appear.
+
+### Notes
+
+See `docs/sound-mind-architecture.md`'s Decision #194 for the full
+reasoning behind how Scale/Key/Temperament/Octave interact.
+
 ## [0.1.4.7] - 2026-10-02
 
 Resonant Instruments post-milestone fix: renamed to Resonance, a real positioning bug fixed, Falloff/Decay Rate/Brush Size untangled.

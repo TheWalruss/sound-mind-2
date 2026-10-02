@@ -423,7 +423,7 @@ Overlay grids are visual reference lines drawn on the canvas — they never affe
 
 Horizontal reference lines, each marking one specific frequency — spanning across the time axis, since the canvas's own convention runs time left-to-right and frequency bottom-to-top (see [Axis Labels](#axis-labels) below) — built from any combination of:
 
-- a **note grid**, anchored to a tuning reference (concert pitch at 440 Hz by default, with common alternate historical and philosophical tunings available as presets);
+- a **note grid**, anchored to a tuning reference (concert pitch at 440 Hz by default, with common alternate historical and philosophical tunings available as presets), further narrowed by a **Key**/**Scale** filter (restricting which notes of a 12-note-per-octave tuning appear to those in a chosen scale, e.g. C Major), a plain checklist of specific notes to include, and which octaves to include;
 - a **harmonic series** grid, at integer multiples of a chosen fundamental;
 - **custom frequencies**, entered directly or loaded from a preset set (e.g. commonly-cited reference-tone frequency sets some users like to work against).
 

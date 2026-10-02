@@ -4,21 +4,69 @@
 #include <cmath>
 #include <limits>
 
+#include "sound_mind/core/music_theory.h"
+
 namespace sound_mind::studio {
 
 namespace {
 
-/// @brief The MIDI note range every semitone-enumerating loop here walks -
-/// wide enough that `settings`' own frequency range does the real
-/// filtering, matching `axis_labels.cpp`'s own `Notes` tick loop.
-constexpr int kMinMidiNote = 0;
-constexpr int kMaxMidiNote = 135;
+/// @brief The step range every note-grid-enumerating loop here walks, at
+/// standard 12-TET's own 12 steps/octave - wide enough that `settings`'
+/// own frequency range does the real filtering, matching
+/// `axis_labels.cpp`'s own `Notes` tick loop (`kMinMidiNote`/
+/// `kMaxMidiNote` there). Scaled by `stepsPerOctave/12` for any other
+/// temperament, so every temperament covers the same real frequency span
+/// regardless of how many steps its own octave has - see
+/// `noteGridFrequencies()`'s own docs.
+constexpr int kMinEqual12Step = 0 - 69;
+constexpr int kMaxEqual12Step = 135 - 69;
 
-/// @brief `midi`'s own frequency, against `referenceHz` - the same
-/// formula `axis_labels.cpp`'s own `Notes` tick loop uses (MIDI note 69
-/// is always A4, regardless of `referenceHz`'s own value).
-double frequencyForMidiNote(int midi, double referenceHz) {
-    return referenceHz * std::pow(2.0, (midi - 69) / 12.0);
+/// @brief Floor-mod, not C++'s own truncate-toward-zero `%` - keeps the
+/// result in `[0, modulus)` even for a negative `value`.
+int floorMod(int value, int modulus) {
+    const int remainder = value % modulus;
+    return remainder < 0 ? remainder + modulus : remainder;
+}
+
+/// @brief Every note-grid line `config` currently activates, within
+/// `[minFrequencyHz, maxFrequencyHz]`, honoring `config.noteGridTemperament`'s
+/// own step count and `config.noteGridExcludedSteps`/
+/// `config.noteGridExcludedOctaves` - shared by collectFrequencyGridLines()
+/// (the full grid) and nearestFrequencyGridLineHz() (which just needs the
+/// closest one), so both always agree on exactly which notes are
+/// currently included.
+///
+/// Walks every step across `kMinEqual12Step`/`kMaxEqual12Step` scaled by
+/// `stepsPerOctave/12` - cheap even for the densest temperament here
+/// (`Equal72`'s own ~810 steps across the scaled range is still a handful
+/// of microseconds of floating-point work, negligible next to a mouse-
+/// drag's own Snap to Grid call), so there's no need for a closed-form
+/// "nearest step" shortcut the way a single, unfiltered 12-TET lookup
+/// once used - the exclusion sets make a closed-form shortcut
+/// meaningfully harder to get right than iterating does.
+std::vector<double> noteGridFrequencies(const FrequencyGridConfig& config, double referenceHz, double minFrequencyHz,
+                                           double maxFrequencyHz) {
+    std::vector<double> lines;
+    const int divisions = sound_mind::core::stepsPerOctave(config.noteGridTemperament);
+    const int minStep = static_cast<int>(std::floor(kMinEqual12Step * divisions / 12.0));
+    const int maxStep = static_cast<int>(std::ceil(kMaxEqual12Step * divisions / 12.0));
+    for (int step = minStep; step <= maxStep; ++step) {
+        const int stepWithinOctave = floorMod(step, divisions);
+        if (config.noteGridExcludedSteps.count(stepWithinOctave) > 0) {
+            continue;
+        }
+        const double frequencyHz =
+            sound_mind::core::frequencyForTemperamentStep(config.noteGridTemperament, step, referenceHz);
+        if (frequencyHz < minFrequencyHz || frequencyHz > maxFrequencyHz) {
+            continue;
+        }
+        const int octave = sound_mind::core::octaveNumberForFrequency(frequencyHz, referenceHz);
+        if (config.noteGridExcludedOctaves.count(octave) > 0) {
+            continue;
+        }
+        lines.push_back(frequencyHz);
+    }
+    return lines;
 }
 
 /// @brief Appends every note-grid/harmonic-series/custom-frequency line
@@ -34,12 +82,8 @@ std::vector<double> collectFrequencyGridLines(const FrequencyGridConfig& config,
     }
 
     if (config.noteGridEnabled) {
-        for (int midi = kMinMidiNote; midi <= kMaxMidiNote; ++midi) {
-            const double frequencyHz = frequencyForMidiNote(midi, referenceHz);
-            if (frequencyHz >= minFrequencyHz && frequencyHz <= maxFrequencyHz) {
-                lines.push_back(frequencyHz);
-            }
-        }
+        const auto noteLines = noteGridFrequencies(config, referenceHz, minFrequencyHz, maxFrequencyHz);
+        lines.insert(lines.end(), noteLines.begin(), noteLines.end());
     }
 
     if (config.harmonicSeriesEnabled && config.harmonicFundamentalHz > 0.0) {
@@ -119,11 +163,11 @@ std::optional<double> nearestFrequencyGridLineHz(double frequencyHz, const Frequ
         }
     };
 
-    if (config.noteGridEnabled && settings.referenceHz > 0.0 && frequencyHz > 0.0) {
-        const double midi = 69.0 + 12.0 * std::log2(frequencyHz / settings.referenceHz);
-        const int nearestMidi =
-            static_cast<int>(std::clamp(std::lround(midi), static_cast<long>(kMinMidiNote), static_cast<long>(kMaxMidiNote)));
-        consider(frequencyForMidiNote(nearestMidi, settings.referenceHz));
+    if (config.noteGridEnabled && settings.referenceHz > 0.0) {
+        for (const double candidate : noteGridFrequencies(config, settings.referenceHz, settings.minFrequencyHz,
+                                                              settings.maxFrequencyHz)) {
+            consider(candidate);
+        }
     }
 
     if (config.harmonicSeriesEnabled && config.harmonicFundamentalHz > 0.0) {
