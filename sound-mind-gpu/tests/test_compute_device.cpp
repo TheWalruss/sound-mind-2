@@ -286,6 +286,54 @@ AmplitudePhaseSignal referenceMix(const AmplitudePhaseSignal& running, const Amp
     return result;
 }
 
+// Verbatim ports of mind_wave.cpp's own anonymous-namespace
+// hashUint32()/hashCoord()/hashCoord2D()/hashToUnitSigned() and the
+// recursive midpointDisplacement() itself - the independent CPU reference
+// ComputeDevice::fractalField()'s own tests check against. Duplicated
+// (not shared - sound-mind-gpu has no dependency on sound-mind-core) the
+// same way every other reference helper in this file already is.
+std::uint32_t referenceHashUint32(std::uint32_t value) {
+    value ^= value >> 16;
+    value *= 0x7feb352dU;
+    value ^= value >> 15;
+    value *= 0x846ca68bU;
+    value ^= value >> 16;
+    return value;
+}
+
+std::uint32_t referenceHashCoord(int coordinate, std::uint32_t seed) {
+    return referenceHashUint32(static_cast<std::uint32_t>(coordinate) * 0x9e3779b1U ^ referenceHashUint32(seed));
+}
+
+std::uint32_t referenceHashCoord2D(int x, int y, std::uint32_t seed) {
+    return referenceHashUint32(referenceHashCoord(x, seed) ^
+                                referenceHashUint32(static_cast<std::uint32_t>(y) * 0x85ebca6bU));
+}
+
+double referenceHashToUnitSigned(std::uint32_t h) {
+    return (static_cast<double>(h) / static_cast<double>(0xFFFFFFFFU)) * 2.0 - 1.0;
+}
+
+double referenceMidpointDisplacement(double t, double left, double right, double leftValue, double rightValue,
+                                       int remainingDepth, int level, std::uint32_t nodeIndex, double roughness,
+                                       std::uint32_t seed) {
+    if (remainingDepth <= 0) {
+        const double span = right - left;
+        const double localT = span > 0.0 ? (t - left) / span : 0.0;
+        return leftValue + (rightValue - leftValue) * localT;
+    }
+    const double mid = (left + right) / 2.0;
+    const double amplitude = std::pow(roughness, static_cast<double>(level + 1));
+    const std::uint32_t midHash = referenceHashCoord2D(static_cast<int>(nodeIndex), level, seed);
+    const double midValue = (leftValue + rightValue) / 2.0 + referenceHashToUnitSigned(midHash) * amplitude;
+    if (t < mid) {
+        return referenceMidpointDisplacement(t, left, mid, leftValue, midValue, remainingDepth - 1, level + 1,
+                                               nodeIndex * 2, roughness, seed);
+    }
+    return referenceMidpointDisplacement(t, mid, right, midValue, rightValue, remainingDepth - 1, level + 1,
+                                           nodeIndex * 2 + 1, roughness, seed);
+}
+
 }  // namespace
 
 TEST_CASE("create() succeeds, on a hardware adapter or WARP", "[gpu][compute_device]") {
@@ -1041,6 +1089,87 @@ TEST_CASE("mixAmplitudePhaseSignal is measurably faster than the CPU reference o
     REQUIRE(gpuResult.leftMagnitudeDb.size() == cpuResult.leftMagnitudeDb.size());
     for (std::size_t i = 0; i < count; i += 4999) {  // Spot-check - correctness is this file's own other tests' job.
         CHECK(gpuResult.leftMagnitudeDb[i] == Catch::Approx(cpuResult.leftMagnitudeDb[i]).margin(0.02));
+    }
+
+    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
+                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
+    CHECK(gpuDuration < cpuDuration);
+}
+
+// ---------------------------------------------------------------------------
+// fractalField
+// ---------------------------------------------------------------------------
+
+TEST_CASE("fractalField returns an empty vector for empty input, without dispatching anything",
+          "[gpu][compute_device][fractal_field]") {
+    const auto result = sharedDevice().fractalField({}, 8, 0.5f, 1);
+    CHECK(result.empty());
+}
+
+TEST_CASE("fractalField returns the flat midpoint for every cell when iterations is 0",
+          "[gpu][compute_device][fractal_field]") {
+    // remainingDepth <= 0 is midpointDisplacement()'s own base case -
+    // leftValue/rightValue both start at 0.5, so the interpolation between
+    // them is 0.5 regardless of t.
+    const auto result = sharedDevice().fractalField({0.0f, 0.25f, 0.5f, 0.75f, 1.0f}, 0, 0.5f, 1);
+
+    REQUIRE(result.size() == 5);
+    for (float value : result) {
+        CHECK(value == Catch::Approx(0.5f));
+    }
+}
+
+TEST_CASE("fractalField matches an independent CPU reference implementation, across varied t/iterations/roughness/seed",
+          "[gpu][compute_device][fractal_field]") {
+    constexpr std::size_t count = 300;
+    std::vector<float> tValues(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        tValues[i] = static_cast<float>(i) / static_cast<float>(count);
+    }
+
+    const auto checkCase = [&](int iterations, float roughness, std::uint32_t seed) {
+        const auto actual = sharedDevice().fractalField(tValues, iterations, roughness, seed);
+        REQUIRE(actual.size() == count);
+        for (std::size_t i = 0; i < count; ++i) {
+            const double expected = referenceMidpointDisplacement(tValues[i], 0.0, 1.0, 0.5, 0.5, iterations, 0, 0,
+                                                                     static_cast<double>(roughness), seed);
+            CHECK(actual[i] == Catch::Approx(static_cast<float>(expected)).margin(0.01));
+        }
+    };
+
+    checkCase(1, 0.5f, 1);
+    checkCase(4, 0.5f, 1);
+    checkCase(8, 0.5f, 1);
+    checkCase(8, 0.8f, 42);
+    checkCase(12, 0.3f, 9999);
+}
+
+TEST_CASE("fractalField is measurably faster than the CPU reference on a large field",
+          "[gpu][compute_device][fractal_field][performance]") {
+    constexpr std::size_t count = 500000;
+    std::vector<float> tValues(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        tValues[i] = static_cast<float>(i % count) / static_cast<float>(count);
+    }
+    constexpr int iterations = 8;
+    constexpr float roughness = 0.5f;
+    constexpr std::uint32_t seed = 7;
+
+    const auto cpuStart = std::chrono::steady_clock::now();
+    std::vector<float> cpuResult(count);
+    for (std::size_t i = 0; i < count; ++i) {
+        cpuResult[i] = static_cast<float>(
+            referenceMidpointDisplacement(tValues[i], 0.0, 1.0, 0.5, 0.5, iterations, 0, 0, roughness, seed));
+    }
+    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
+
+    const auto gpuStart = std::chrono::steady_clock::now();
+    const auto gpuResult = sharedDevice().fractalField(tValues, iterations, roughness, seed);
+    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
+
+    REQUIRE(gpuResult.size() == cpuResult.size());
+    for (std::size_t i = 0; i < count; i += 4999) {  // Spot-check - correctness is this file's own other tests' job.
+        CHECK(gpuResult[i] == Catch::Approx(cpuResult[i]).margin(0.02));
     }
 
     INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "

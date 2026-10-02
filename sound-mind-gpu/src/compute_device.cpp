@@ -730,4 +730,46 @@ AmplitudePhaseSignal ComputeDevice::mixAmplitudePhaseSignal(const AmplitudePhase
     return result;
 }
 
+std::vector<float> ComputeDevice::fractalField(const std::vector<float>& tValues, int iterations, float roughness,
+                                                std::uint32_t seed) const {
+    if (tValues.empty()) {
+        return {};
+    }
+
+    const UINT cellCount = static_cast<UINT>(tValues.size());
+    const UINT64 bufferSize = static_cast<UINT64>(tValues.size()) * sizeof(float);
+
+    const ComputePipeline pipeline = loadComputePipeline(device_.Get(), "fractal_field.cso");
+    CommandRecorder recorder = createCommandRecorder(device_.Get(), pipeline.pipelineState.Get());
+
+    const ComPtr<ID3D12Resource> tValuesBuffer = createUploadBuffer(device_.Get(), tValues.data(), bufferSize);
+    const ComPtr<ID3D12Resource> outputBuffer = createUavBuffer(device_.Get(), bufferSize);
+    const ComPtr<ID3D12Resource> readbackBuffer = createReadbackBuffer(device_.Get(), bufferSize);
+
+    // Root parameter indices match fractal_field.hlsl's own root signature
+    // string order: 0 = constants (b0: cell count, iterations, roughness,
+    // seed), 1 = the TValues SRV (t0), 2 = the output UAV (u0).
+    recorder.list->SetComputeRootSignature(pipeline.rootSignature.Get());
+    struct Constants {
+        UINT cellCount;
+        UINT iterations;
+        float roughness;
+        UINT seed;
+    } constants{cellCount, static_cast<UINT>(std::max(0, iterations)), roughness, seed};
+    recorder.list->SetComputeRoot32BitConstants(0, 4, &constants, 0);
+    recorder.list->SetComputeRootShaderResourceView(1, tValuesBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootUnorderedAccessView(2, outputBuffer->GetGPUVirtualAddress());
+
+    const UINT threadGroupCount = (cellCount + 63) / 64;
+    recorder.list->Dispatch(threadGroupCount, 1, 1);
+
+    const D3D12_RESOURCE_BARRIER barrier = transitionBarrier(
+        outputBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    recorder.list->ResourceBarrier(1, &barrier);
+    recorder.list->CopyBufferRegion(readbackBuffer.Get(), 0, outputBuffer.Get(), 0, bufferSize);
+
+    executeAndWait(recorder.list.Get());
+    return readBackFloats(readbackBuffer.Get(), tValues.size());
+}
+
 }  // namespace sound_mind::gpu

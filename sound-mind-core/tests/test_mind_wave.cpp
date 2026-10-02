@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/gpu_compute_availability.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/path.h"
@@ -776,6 +777,72 @@ TEST_CASE("A Drawn MindWave with a zero-width recorded domain span evaluates to 
     REQUIRE(wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, testConfig()) == Catch::Approx(0.5f));
 }
 
+TEST_CASE("A Drawn MindWave gives the same result across repeated evaluate() calls with the same path",
+          "[core][mind_wave]") {
+    // v0.1.6.3 (docs/sound-mind-roadmap.md's v0.Y.60.1 Installment C) caches
+    // the path's own tessellated polyline across evaluate() calls (the
+    // benchmark suite found Drawn's own per-evaluation re-tessellation was
+    // this generator's single biggest cost) - this is the baseline
+    // correctness check that reusing the cache doesn't change the answer.
+    MindWave wave;
+    wave.setType(GeneratorType::Drawn);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setDrawnPath(cornerPath({TimeFrequencyPoint{0.0, 100.0}, TimeFrequencyPoint{2.0, 300.0}}));
+    wave.setPeriod(2.0);
+
+    const float first = wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, testConfig());
+    const float second = wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, testConfig());
+    const float third = wave.evaluate(TimeFrequencyPoint{1.5, 1000.0}, testConfig());
+
+    CHECK(first == second);
+    CHECK(first != Catch::Approx(third));  // A genuinely different query point along the same cached path.
+}
+
+TEST_CASE("A Drawn MindWave's own cached polyline is invalidated by setDrawnPath(), not reused from a prior path",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Drawn);
+    wave.setAxis(MindWaveAxis::Time);
+    // A plain straight line first - evaluate() once to force the polyline
+    // cache to actually build (not just default-construct) before replacing
+    // the path.
+    wave.setDrawnPath(cornerPath({TimeFrequencyPoint{0.0, 100.0}, TimeFrequencyPoint{2.0, 300.0}}));
+    wave.setPeriod(2.0);
+    const float straightLineResult = wave.evaluate(TimeFrequencyPoint{1.0, 1000.0}, testConfig());
+    REQUIRE(straightLineResult == Catch::Approx(0.5f).margin(0.001));  // Halfway along a straight line.
+
+    // Replace it with the same zigzag path (and expected result) as "A Drawn
+    // MindWave's first-crossing rule..." above - a shape a stale, reused
+    // polyline from the first (straight-line) path could not possibly
+    // reproduce, since the two have structurally different geometry, not
+    // just different endpoints.
+    wave.setDrawnPath(cornerPath({TimeFrequencyPoint{0.0, 0.0}, TimeFrequencyPoint{2.0, 100.0},
+                                   TimeFrequencyPoint{1.0, 300.0}}));
+    wave.setPeriod(1.0);
+    const float zigzagResult = wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, testConfig());
+
+    CHECK(zigzagResult == Catch::Approx(25.0f / 300.0f).margin(0.005));
+}
+
+TEST_CASE("A copy of a Drawn MindWave evaluates correctly, independent of the original's own cached polyline",
+          "[core][mind_wave]") {
+    MindWave original;
+    original.setType(GeneratorType::Drawn);
+    original.setAxis(MindWaveAxis::Time);
+    original.setDrawnPath(cornerPath({TimeFrequencyPoint{0.0, 100.0}, TimeFrequencyPoint{2.0, 300.0}}));
+    original.setPeriod(2.0);
+    const float originalFirst = original.evaluate(TimeFrequencyPoint{1.0, 1000.0}, testConfig());  // Builds the cache.
+
+    const MindWave copy = original;  // Copies drawnPath_ - and whatever cache state sits alongside it.
+    const float copyResult = copy.evaluate(TimeFrequencyPoint{1.0, 1000.0}, testConfig());
+
+    CHECK(copyResult == originalFirst);
+
+    // The original's own cache must still agree with itself after the copy.
+    const float originalSecond = original.evaluate(TimeFrequencyPoint{1.0, 1000.0}, testConfig());
+    CHECK(originalSecond == originalFirst);
+}
+
 TEST_CASE("A Drawn MindWave round-trips its own path through JSON", "[core][mind_wave]") {
     MindWave original;
     original.setType(GeneratorType::Drawn);
@@ -1071,6 +1138,100 @@ TEST_CASE("evaluateMindWaveField returns one value per bin/frame cell, matching 
                 wave.evaluate(TimeFrequencyPoint{sound_mind::core::frameIndexToTime(frame, config), frequencyHz},
                               config);
             REQUIRE(field[sound_mind::core::cellIndex(bin, frame, canvasWidth)] == Catch::Approx(expected));
+        }
+    }
+}
+
+namespace {
+
+/// @brief Restores normal GPU availability when it goes out of scope -
+/// the same `GpuComputeForcedOffGuard` precedent `test_compositor.cpp`/
+/// `test_filter_application.cpp` already each establish independently in
+/// their own file.
+struct GpuComputeForcedOffGuard {
+    GpuComputeForcedOffGuard() { sound_mind::core::setGpuComputeForcedOffForTesting(true); }
+    ~GpuComputeForcedOffGuard() { sound_mind::core::setGpuComputeForcedOffForTesting(false); }
+};
+
+}  // namespace
+
+TEST_CASE("evaluateMindWaveField's own GPU fast path for a plain Fractal MindWave agrees with the CPU-forced result "
+          "(v0.1.6.4, v0.Y.60.1 Installment D)",
+          "[core][mind_wave][gpu]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Fractal);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setPeriod(3.0);
+    wave.setFractalIterations(6);
+    wave.setFractalRoughness(0.6);
+    wave.setSeed(42);
+    const auto config = testConfig();
+    constexpr std::uint32_t canvasWidth = 37;  // Not a multiple of 64 - exercises a partial last GPU thread group.
+
+    const auto gpuField = sound_mind::core::evaluateMindWaveField(wave, config, canvasWidth);
+    std::vector<float> cpuField;
+    {
+        GpuComputeForcedOffGuard forceCpu;
+        cpuField = sound_mind::core::evaluateMindWaveField(wave, config, canvasWidth);
+    }
+
+    REQUIRE(gpuField.size() == cpuField.size());
+    for (std::size_t i = 0; i < cpuField.size(); ++i) {
+        CHECK(gpuField[i] == Catch::Approx(cpuField[i]).margin(0.01));
+    }
+}
+
+TEST_CASE("evaluateMindWaveField's own Fractal GPU fast path declines (falls back to the per-cell CPU path) when a "
+          "warp source is bound, and the result still matches evaluate() exactly as before",
+          "[core][mind_wave][gpu]") {
+    MindWave warpSource;
+    warpSource.setType(GeneratorType::Periodic);
+
+    MindWave wave;
+    wave.setType(GeneratorType::Fractal);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setFractalIterations(4);
+    wave.setWarpSource(warpSource);
+    wave.setWarpStrength(0.5);
+    const auto config = testConfig();
+    constexpr std::uint32_t canvasWidth = 5;
+
+    const auto field = sound_mind::core::evaluateMindWaveField(wave, config, canvasWidth);
+
+    REQUIRE(field.size() == std::size_t{config.binCount} * canvasWidth);
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), config);
+        for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {
+            const float expected = wave.evaluate(
+                TimeFrequencyPoint{sound_mind::core::frameIndexToTime(frame, config), frequencyHz}, config);
+            CHECK(field[sound_mind::core::cellIndex(bin, frame, canvasWidth)] == Catch::Approx(expected));
+        }
+    }
+}
+
+TEST_CASE("evaluateMindWaveField's own Fractal GPU fast path declines when a superposition stack is present, and "
+          "the result still matches evaluate() exactly as before",
+          "[core][mind_wave][gpu]") {
+    MindWave member;
+    member.setType(GeneratorType::Periodic);
+
+    MindWave wave;
+    wave.setType(GeneratorType::Fractal);
+    wave.setAxis(MindWaveAxis::Time);
+    wave.setFractalIterations(4);
+    wave.setSuperpositionStack({member});
+    const auto config = testConfig();
+    constexpr std::uint32_t canvasWidth = 5;
+
+    const auto field = sound_mind::core::evaluateMindWaveField(wave, config, canvasWidth);
+
+    REQUIRE(field.size() == std::size_t{config.binCount} * canvasWidth);
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), config);
+        for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {
+            const float expected = wave.evaluate(
+                TimeFrequencyPoint{sound_mind::core::frameIndexToTime(frame, config), frequencyHz}, config);
+            CHECK(field[sound_mind::core::cellIndex(bin, frame, canvasWidth)] == Catch::Approx(expected));
         }
     }
 }

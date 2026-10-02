@@ -665,7 +665,10 @@ public:
 
     /// @brief Sets the drawn curve - see `drawnPath()`'s own docs.
     /// @param path The new curve.
-    void setDrawnPath(Path path) { drawnPath_ = std::move(path); }
+    void setDrawnPath(Path path) {
+        drawnPath_ = std::move(path);
+        drawnPolylineCache_.reset();
+    }
 
     /**
      * @brief The explicit, hand-authored discrete values a
@@ -902,6 +905,13 @@ public:
      */
     [[nodiscard]] float evaluate(TimeFrequencyPoint point, const sound_mind::codec::StreamCodecConfig& config) const;
 
+    /// @brief Grants `evaluateMindWaveField()` access to
+    ///        `tryEvaluateFractalFieldOnGpu()` (private below) - its own
+    ///        GPU fast path, not meant to be called from anywhere else.
+    friend std::vector<float> evaluateMindWaveField(const MindWave& wave,
+                                                     const sound_mind::codec::StreamCodecConfig& config,
+                                                     std::uint32_t canvasWidth);
+
 private:
     GeneratorType type_ = GeneratorType::Periodic;
     PeriodicWaveform periodicWaveform_ = PeriodicWaveform::Sine;
@@ -930,12 +940,78 @@ private:
     std::vector<MindWave> warpSourceStack_;
     double warpStrength_ = 1.0;
     Path drawnPath_;
+    /// @brief `drawnPath_`'s own tessellated polyline, lazily built by
+    ///        `evaluate()`'s own `GeneratorType::Drawn` case and reused
+    ///        across every subsequent call until `setDrawnPath()` resets it
+    ///        - `v0.1.6.3` (`docs/sound-mind-roadmap.md`'s `v0.Y.60.1`
+    ///        Installment C). Re-tessellating this same, unchanging curve
+    ///        on every single `evaluate()` call (once per cell, for a full
+    ///        field) was this generator's own dominant cost, confirmed by
+    ///        the benchmark suite's own findings pass - `tessellateOpenPath()`
+    ///        depends only on `drawnPath_` itself, not on `axis_` or the
+    ///        `StreamCodecConfig` passed to `evaluate()`, so a single cache
+    ///        invalidated only by `setDrawnPath()` is exactly as valid for
+    ///        every later call as the first. `mutable` since `evaluate()`
+    ///        is otherwise `const` - this is a pure memoization of an
+    ///        already-deterministic function of `drawnPath_`, not a change
+    ///        to this object's own observable state. Copied along with
+    ///        `drawnPath_` by this class's own defaulted copy operations -
+    ///        correct as-is, since a fresh copy's own `drawnPath_` is
+    ///        identical to the source's at the moment of copying, so
+    ///        whatever polyline was already cached (if any) is still valid
+    ///        for it too.
+    /// @note Not thread-safe for concurrent `evaluate()` calls against the
+    ///       *same* `MindWave` instance (an unsynchronized read-modify-write
+    ///       of this cache) - matching every other mutable-adjacent cache in
+    ///       this codebase, evaluating one instance is assumed single-
+    ///       threaded at a time; evaluating *different* instances
+    ///       concurrently is unaffected.
+    mutable std::optional<std::vector<TimeFrequencyPoint>> drawnPolylineCache_;
     std::vector<double> stepGridValues_ = {0.25, 0.5, 0.75, 1.0};
     double continuousShape_ = 0.0;
     double continuousSkew_ = 0.5;
     double continuousCharacter_ = 0.0;
     std::optional<ResonanceProfileId> sourceResonanceProfileId_;
     std::vector<float> resonanceSpectrum_;
+
+    /// @brief `evaluateMindWaveField()`'s own GPU fast path for
+    ///        `GeneratorType::Fractal` - `v0.1.6.4`
+    ///        (`docs/sound-mind-roadmap.md`'s `v0.Y.60.1` Installment D).
+    ///        One batched `sound_mind::gpu::ComputeDevice::fractalField()`
+    ///        dispatch for the whole field, rather than this generator's
+    ///        own per-cell CPU cost (`midpointDisplacement()`, confirmed by
+    ///        the benchmark suite to scale linearly but expensively with
+    ///        field size, with no shared state across cells to cache the
+    ///        way `GeneratorType::Drawn`'s own fix did).
+    ///
+    /// Scoped to the plain, unwarped, no-superposition-stack case only:
+    /// `hasWarpSource()` makes each cell's own axis position depend on
+    /// another MindWave's own per-cell field (potentially itself
+    /// expensive, and not necessarily resolvable without its own per-cell
+    /// CPU evaluation), and a non-empty `superpositionStack()` needs its
+    /// own members folded in per cell after this method's own formula
+    /// (`evaluate()`'s own post-`switch` loop) - neither is something this
+    /// one-dispatch fast path attempts to replicate, so both return
+    /// `std::nullopt` rather than producing a silently incomplete result.
+    /// A warped or superposition-stacked Fractal MindWave falls back to
+    /// the existing per-cell CPU path exactly as before this installment,
+    /// not a regression, just not (yet) accelerated. Likewise returns
+    /// `std::nullopt` if `type_` isn't `Fractal`, or no GPU device is
+    /// available, or the GPU call itself throws (a lost device
+    /// mid-session) - every case `evaluateMindWaveField()` should treat
+    /// identically to "fall back to the per-cell loop". Clamps each
+    /// result to `[0, 1]` itself, matching `evaluate()`'s own final clamp
+    /// (bypassed entirely by this fast path, since it never calls
+    /// `evaluate()` per cell).
+    /// @param config Supplies the bin/frequency mapping `axis_ ==
+    ///        MindWaveAxis::Frequency` needs, and the time mapping
+    ///        `axis_ == MindWaveAxis::Time` needs.
+    /// @param canvasWidth How many frame columns the field spans.
+    /// @return One value per `[bin][frame]` cell (`evaluateMindWaveField()`'s
+    ///         own row-major, bin-major layout), or `std::nullopt` if this
+    ///         fast path doesn't apply - see above.
+    [[nodiscard]] std::optional<std::vector<float>> tryEvaluateFractalFieldOnGpu(
+        const sound_mind::codec::StreamCodecConfig& config, std::uint32_t canvasWidth) const;
 };
 
 /**

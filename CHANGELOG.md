@@ -6,6 +6,30 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.6.4] - 2026-10-02
+
+MindWave `Fractal` generator - a GPU fast path - `v0.Y.60.1` Installment D, the third fix from the benchmark suite's own findings pass. Performance-only; output is unchanged (within floating-point tolerance).
+
+### Changed
+
+- A plain (unwarped, not part of a superposition stack) `Fractal` MindWave now evaluates its whole field in one GPU dispatch when a GPU is available, rather than one CPU call per cell - the benchmark suite found this generator's own cost scaled linearly but expensively with field size, with no GPU path at all until now. Falls back to the existing CPU path automatically whenever the fast path doesn't apply (warped, nested in a superposition stack, or no GPU available). See `docs/sound-mind-architecture.md`'s Decision #198.
+
+### Notes
+
+Purely internal; no new user-facing capability, no change to how a Fractal MindWave looks or sounds.
+
+## [0.1.6.3] - 2026-10-02
+
+MindWave `Drawn` generator - caching the tessellated polyline - `v0.Y.60.1` Installment C, the second fix from the benchmark suite's own findings pass. Performance-only; output is unchanged.
+
+### Fixed
+
+- `Drawn` MindWaves (a hand-drawn curve sampled as a waveform) re-tessellated their own captured curve from scratch on *every single evaluation* - over a million times for one full field - despite the tessellation depending only on the curve itself, not where it was being queried. This was the single biggest cost in the generator, making it the slowest of all 9 MindWave types in the benchmark suite's own findings. Now cached, rebuilt only when the curve itself actually changes. See `docs/sound-mind-architecture.md`'s Decision #197.
+
+### Notes
+
+Purely internal; no new user-facing capability, no change to how a Drawn MindWave looks, sounds, or is created.
+
 ## [0.1.6.2] - 2026-10-02
 
 GPU paths for the remaining blend modes - `v0.Y.60.1` Installment B, the first fix from the benchmark suite's own findings pass. Performance-only; output is unchanged (bit-for-bit equivalent within floating-point tolerance), just faster when a GPU is available.

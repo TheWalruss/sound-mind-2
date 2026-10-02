@@ -5,6 +5,7 @@
 #include <limits>
 #include <numbers>
 
+#include "gpu_compute_access.h"
 #include "sound_mind/core/paint_application.h"
 
 namespace sound_mind::core {
@@ -255,13 +256,25 @@ double drawnPathOutputOf(const TimeFrequencyPoint& point, MindWaveAxis axis) {
 /// @brief `GeneratorType::Drawn`'s own evaluation - see `MindWave::
 /// drawnPath()`'s own docs for the full mechanism (looping via `period()`/
 /// `phaseRadians`, first-crossing rule, bounding-box output normalization).
+/// @param polylineCache `MindWave::drawnPolylineCache_` - lazily filled
+///        with `tessellateOpenPath(path)`'s own result on first use and
+///        reused on every later call, since that tessellation depends only
+///        on `path` itself (not `axis`/`config`) - see that member's own
+///        docs for why this is always valid until `setDrawnPath()` resets
+///        it. `v0.1.6.3` (`v0.Y.60.1` Installment C) - previously
+///        re-tessellated on every single call, this generator's own
+///        dominant cost for a full field evaluation.
 float evaluateDrawnPath(const Path& path, MindWaveAxis axis, double axisPosition, double safePeriod,
-                         double phaseRadians, const sound_mind::codec::StreamCodecConfig& config) {
+                         double phaseRadians, const sound_mind::codec::StreamCodecConfig& config,
+                         std::optional<std::vector<TimeFrequencyPoint>>& polylineCache) {
     if (path.nodes().size() < 2) {
         return 0.5f;  // Nothing captured yet - see drawnPath()'s own docs.
     }
 
-    const std::vector<TimeFrequencyPoint> polyline = tessellateOpenPath(path);
+    if (!polylineCache.has_value()) {
+        polylineCache = tessellateOpenPath(path);
+    }
+    const std::vector<TimeFrequencyPoint>& polyline = *polylineCache;
     const double domainStart = drawnPathDomainOf(polyline.front(), axis, config);
     const double domainEnd = drawnPathDomainOf(polyline.back(), axis, config);
     if (domainStart == domainEnd) {
@@ -466,8 +479,8 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
             break;
         }
         case GeneratorType::Drawn:
-            result = static_cast<double>(
-                evaluateDrawnPath(drawnPath_, axis_, axisPosition, safePeriod, phaseRadians_, config));
+            result = static_cast<double>(evaluateDrawnPath(drawnPath_, axis_, axisPosition, safePeriod, phaseRadians_,
+                                                            config, drawnPolylineCache_));
             break;
         case GeneratorType::StepGrid: {
             if (stepGridValues_.empty()) {
@@ -523,8 +536,54 @@ float mindWaveValueAt(const MindWave& wave, std::uint32_t bin, std::uint32_t fra
     return wave.evaluate(point, config);
 }
 
+std::optional<std::vector<float>> MindWave::tryEvaluateFractalFieldOnGpu(
+    const sound_mind::codec::StreamCodecConfig& config, std::uint32_t canvasWidth) const {
+    if (type_ != GeneratorType::Fractal || hasWarpSource() || !superpositionStack_.empty()) {
+        return std::nullopt;
+    }
+    sound_mind::gpu::ComputeDevice* device = sound_mind::core::detail::gpuComputeDeviceOrNull();
+    if (device == nullptr) {
+        return std::nullopt;
+    }
+
+    // Each cell's own t = axisPosition / safePeriod, folded into [0, 1) -
+    // GeneratorType::Fractal's own case in evaluate() above, computed here
+    // without a warp delta (ruled out above) so it depends only on (bin,
+    // frame), exactly like every other unwarped generator's own axisPosition.
+    const double safePeriod = std::max(kMinimumPeriod, period_);
+    const std::size_t cellCount = std::size_t{config.binCount} * canvasWidth;
+    std::vector<float> tValues(cellCount);
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {
+            const double axisPosition =
+                (axis_ == MindWaveAxis::Time)
+                    ? frameIndexToTime(frame, config)
+                    : static_cast<double>(
+                          frequencyToBinIndex(binIndexToFrequency(static_cast<float>(bin), config), config));
+            double p = axisPosition / safePeriod;
+            p -= std::floor(p);
+            tValues[cellIndex(bin, frame, canvasWidth)] = static_cast<float>(p);
+        }
+    }
+
+    try {
+        std::vector<float> result = device->fractalField(tValues, std::max(0, fractalIterations_),
+                                                           static_cast<float>(fractalRoughness_), seed_);
+        for (float& value : result) {
+            value = std::clamp(value, 0.0f, 1.0f);  // Matches evaluate()'s own final clamp.
+        }
+        return result;
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
+
 std::vector<float> evaluateMindWaveField(const MindWave& wave, const sound_mind::codec::StreamCodecConfig& config,
                                           std::uint32_t canvasWidth) {
+    if (auto gpuField = wave.tryEvaluateFractalFieldOnGpu(config, canvasWidth)) {
+        return std::move(*gpuField);
+    }
+
     std::vector<float> field(std::size_t{config.binCount} * canvasWidth);
     for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
         for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {

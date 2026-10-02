@@ -381,6 +381,43 @@ public:
                                                                 const std::vector<float>& mindWaveField,
                                                                 int blendMode = 0) const;
 
+    /**
+     * @brief `sound_mind::core`'s own recursive-midpoint-displacement
+     *        `GeneratorType::Fractal` MindWave generator, evaluated for a
+     *        whole field in one dispatch - `v0.1.6.4`,
+     *        `docs/sound-mind-roadmap.md`'s `v0.Y.60.1` Installment D.
+     *        `sound_mind::core::midpointDisplacement()`'s own tail-
+     *        recursive algorithm (`mind_wave.cpp`), ported verbatim to an
+     *        iterative HLSL loop (see this class's own `.hlsl` file).
+     *
+     * `sound-mind-gpu` has no dependency on `sound-mind-core`/`MindWave`
+     * itself (same reasoning as `mixAmplitudePhaseSignal()`'s own
+     * `mindWaveField`/`blendMode` parameters), so the caller resolves each
+     * cell's own loop position (`axisPosition / period`, already folded
+     * into `[0, 1)`) into `tValues` itself before calling this - the exact
+     * same value `MindWave::evaluate()`'s own `GeneratorType::Fractal` case
+     * computes per cell on the CPU path.
+     *
+     * @param tValues Each cell's own already-resolved loop position, in
+     *        `[0, 1)` (not validated/clamped here - an out-of-range value
+     *        is handled the same way `midpointDisplacement()`'s own CPU
+     *        implementation handles one, since the formula is identical).
+     * @param iterations How many recursion levels to unroll - see
+     *        `MindWave::fractalIterations()`'s own docs. Not clamped;
+     *        `0` returns the flat midpoint (`0.5`) for every cell, matching
+     *        the CPU path's own base case exactly.
+     * @param roughness Each recursion level's own amplitude shrink factor -
+     *        see `MindWave::fractalRoughness()`'s own docs.
+     * @param seed The hash seed - see `MindWave::seed()`'s own docs.
+     * @return One result per entry in `tValues`, same order - each in
+     *         `[0, 1]` for the same reason the CPU path's own result is
+     *         (a weighted average of two endpoints that start at `0.5`
+     *         and are only ever displaced by a bounded, decaying amount).
+     * @throws std::runtime_error if any D3D12 call fails.
+     */
+    [[nodiscard]] std::vector<float> fractalField(const std::vector<float>& tValues, int iterations, float roughness,
+                                                   std::uint32_t seed) const;
+
 private:
     /// @brief Wraps an already-successfully-created device/queue/fence
     ///        triple - `create()`'s own private constructor; use
