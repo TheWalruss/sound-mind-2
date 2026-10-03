@@ -294,6 +294,25 @@ public:
     ///         with this id exists.
     [[nodiscard]] Layer* layerById(LayerId id) noexcept;
 
+    /**
+     * @brief `id`'s own position in `layers()`'s own bottom-to-top order.
+     *
+     * `v0.1.7.1` (`docs/sound-mind-roadmap.md`'s targeted-invalidation
+     * raster cache) - `CompositePrefixCache::invalidateFrom()` takes a
+     * stack position, not a `LayerId` (the cache itself has no `Project`
+     * reference to resolve one from), so a caller that only has a
+     * `LayerId` in hand (every Studio controller already does) needs this
+     * to convert before calling it.
+     *
+     * @param id The layer to find.
+     * @return That layer's own `0`-based index, bottom of the stack
+     *         first, or `std::nullopt` if no layer with this id exists -
+     *         the same "not found" contract `layerById()` itself uses,
+     *         `std::nullopt` rather than that function's own `nullptr`
+     *         only because there's no pointer here to be null.
+     */
+    [[nodiscard]] std::optional<std::size_t> layerIndexById(LayerId id) const noexcept;
+
     /// @brief This project's single, project-wide operation log.
     /// @return The operation log this project currently holds.
     [[nodiscard]] const OperationLog& operationLog() const noexcept { return operationLog_; }

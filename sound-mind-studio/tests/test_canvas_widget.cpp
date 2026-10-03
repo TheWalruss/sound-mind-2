@@ -24,6 +24,7 @@
 using sound_mind::codec::StreamImage;
 using sound_mind::core::Gradient;
 using sound_mind::core::Layer;
+using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveAxis;
@@ -129,6 +130,86 @@ void CanvasWidgetTest::rendersALayersContentInsteadOfThePlaceholder() {
     QCOMPARE(centerPixel.red(), 255);
     QCOMPARE(centerPixel.green(), 0);
     QVERIFY(centerPixel.blue() > 120 && centerPixel.blue() < 135);
+}
+
+void CanvasWidgetTest::reusesACachedCompositeUntilInvalidateCompositeFromIsToldAboutAChange() {
+    // v0.1.7.1 (docs/sound-mind-roadmap.md's targeted-invalidation raster
+    // cache) - mirrors sound-mind-core's own "proves the cache really did
+    // reuse its own stored prefix" test, here through CanvasWidget's own
+    // public surface.
+    ProjectSettings settings;
+    settings.canvasWidth = 2;
+    Project project = Project::createNew(settings);
+
+    StreamImage redContent;
+    redContent.config.binCount = 2;
+    redContent.frameCount = 2;
+    redContent.leftMagnitudeDb.assign(4, 0.0f);
+    redContent.rightMagnitudeDb.assign(4, -96.0f);
+    redContent.sharedPhaseRadians.assign(4, 0.0f);
+
+    Layer layer(0, "Imported", LayerType::Normal);
+    layer.setContent(redContent);
+    const LayerId layerId = project.addLayer(std::move(layer));
+    const auto layerIndex = project.layerIndexById(layerId);
+    QVERIFY(layerIndex.has_value());
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(20, 20);
+
+    const QColor before = widget.grab().toImage().pixelColor(10, 10);
+    QCOMPARE(before.red(), 255);
+
+    // Mutate the live layer's own content directly, without telling the
+    // widget - the opposite of a real edit (which would call
+    // invalidateCompositeFrom()).
+    StreamImage greenContent = redContent;
+    greenContent.leftMagnitudeDb.assign(4, -96.0f);
+    greenContent.rightMagnitudeDb.assign(4, 0.0f);
+    project.layerById(layerId)->setContent(greenContent);
+
+    const QColor stillStale = widget.grab().toImage().pixelColor(10, 10);
+    QCOMPARE(stillStale.red(), before.red());
+    QCOMPARE(stillStale.green(), before.green());
+
+    widget.invalidateCompositeFrom(*layerIndex);
+    const QColor updated = widget.grab().toImage().pixelColor(10, 10);
+    QCOMPARE(updated.red(), 0);
+    QCOMPARE(updated.green(), 255);
+}
+
+void CanvasWidgetTest::invalidateCompositeAllForcesARecomputeEvenWithoutAKnownIndex() {
+    ProjectSettings settings;
+    settings.canvasWidth = 2;
+    Project project = Project::createNew(settings);
+
+    StreamImage redContent;
+    redContent.config.binCount = 2;
+    redContent.frameCount = 2;
+    redContent.leftMagnitudeDb.assign(4, 0.0f);
+    redContent.rightMagnitudeDb.assign(4, -96.0f);
+    redContent.sharedPhaseRadians.assign(4, 0.0f);
+
+    Layer layer(0, "Imported", LayerType::Normal);
+    layer.setContent(redContent);
+    const LayerId layerId = project.addLayer(std::move(layer));
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(20, 20);
+    const QColor before = widget.grab().toImage().pixelColor(10, 10);
+    QCOMPARE(before.red(), 255);
+
+    StreamImage greenContent = redContent;
+    greenContent.leftMagnitudeDb.assign(4, -96.0f);
+    greenContent.rightMagnitudeDb.assign(4, 0.0f);
+    project.layerById(layerId)->setContent(greenContent);
+
+    widget.invalidateCompositeAll();
+    const QColor updated = widget.grab().toImage().pixelColor(10, 10);
+    QCOMPARE(updated.red(), 0);
+    QCOMPARE(updated.green(), 255);
 }
 
 void CanvasWidgetTest::skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt() {

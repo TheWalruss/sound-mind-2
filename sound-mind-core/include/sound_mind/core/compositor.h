@@ -253,4 +253,163 @@ public:
 [[nodiscard]] std::optional<sound_mind::codec::StreamImage> compositeProject(
     const Project& project, const std::function<bool()>& shouldCancel = nullptr, bool respectMute = false);
 
+/**
+ * @brief Per-layer-stack-position memo for compositeProjectCached() -
+ *        `v0.1.7.1`, `docs/sound-mind-architecture.md`'s own "Compositing
+ *        Pipeline" sketch, finally implemented (`docs/sound-mind-roadmap.md`'s
+ *        "actually building the targeted-invalidation raster cache",
+ *        the deeper-optimization follow-up scoped out of the benchmark
+ *        findings pass, `v0.1.6.2`-`v0.1.6.7`).
+ *
+ * The benchmark suite's own layer-count sweep found compositing 50 layers
+ * costs ~600ms even with the GPU - every single layer is re-placed,
+ * re-blended, and every Filter layer's own `applyFilter()` re-run, from
+ * scratch, on *every* `compositeProject()` call, even when only one layer
+ * near the top actually changed since the last call. This cache makes
+ * that the common case cheap: editing layer *i* only needs refolding from
+ * layer *i* upward - everything below it already has a known-good,
+ * reusable intermediate result.
+ *
+ * **What's cached**: one `StreamImage` (plus whether anything had been
+ * mixed into it yet) per layer stack position - `prefixAt(i)`, were it
+ * public, would be "the composite of layers `[0, i]`, inclusive,
+ * bottom-to-top". It is not public; only `compositeProjectCached()`
+ * reads or writes it (declared a `friend` below) - nothing else should
+ * need to.
+ *
+ * **Invalidation is explicit, not automatic** - `Layer`'s own setters
+ * have no notification hook (`docs/sound-mind-architecture.md`'s own
+ * Core Data Model section stops short of designing one), so a caller
+ * that changes a layer's own content or properties must call
+ * `invalidateFrom()` itself, naming that layer's own current stack
+ * position - `Project::layerIndexById()` resolves a `LayerId` to one.
+ * **Structural changes need no explicit call**: adding, removing, or
+ * reordering a layer changes the project's own layer-id order, which
+ * `compositeProjectCached()` itself detects (comparing against the order
+ * it saw last time) and treats as "invalidate everything" automatically -
+ * same for `respectMute` changing, or the composite's own output
+ * `binCount`/`canvasWidth` changing. A MindWave's own value changing has
+ * no such automatic signal (nothing here tracks which layers/filter
+ * parameters bind to which MindWave id), so a caller must call
+ * `invalidateAll()` itself when one is edited - deliberately coarse,
+ * matching `docs/sound-mind-architecture.md`'s own "a rect-level dirty
+ * region... whole-layer invalidation granularity avoids that entirely"
+ * reasoning for Filter layers' own non-local effects, extended here to
+ * MindWave bindings for the same reason (precise reverse-dependency
+ * tracking would cost real complexity for a relatively infrequent edit).
+ *
+ * **`FilterType::DynamicSpeckle` is never cached** - its own docs
+ * already commit it to "genuinely fresh randomness on every
+ * recomposite, not seed-deterministic"; caching its output would freeze
+ * that randomness, a real behavior change. `compositeProjectCached()`
+ * stops writing into this cache from a `DynamicSpeckle` Filter layer's
+ * own stack position onward (every call upward from there always
+ * recomputes fresh, exactly like the uncached `compositeProject()`
+ * already does for it).
+ *
+ * **A memory/speed tradeoff, not a correctness one** - storing one full
+ * `StreamImage` per layer costs real memory for a large canvas and/or
+ * many layers (a canvas's own `binCount * canvasWidth * 3 floats`,
+ * times however many layers exist). `compositeProjectCached()` checks
+ * this against a fixed budget (`compositor.cpp`'s own `kCompositeCacheMaxBytes`,
+ * currently `4 GiB`) before storing anything; past it, caching is simply
+ * skipped for that call (every layer refolds from scratch, exactly like
+ * `compositeProject()` - never wrong, just not faster). **Validated via
+ * the benchmark suite, not a unit test**: exercising the actual
+ * multi-gigabyte threshold cheaply isn't practical in a fast unit test
+ * (the returned composite itself would need to be allocated at that
+ * scale just to call this function once) - `sound-mind-benchmark`'s own
+ * `compositing` category's `cachedEditTopLayer,layerCount=50` case is
+ * the regression check instead: it caught `kCompositeCacheMaxBytes`'s
+ * own first, too-low value (`512 MiB`) measuring *no* speedup at all
+ * over the uncached path, since that scenario's `52`-layer medium-canvas
+ * project (`Project::createNew()`'s own Background/Equalizer plus the
+ * 50 requested) narrowly exceeded it - see `compositor.cpp`'s own
+ * corrected comment for the arithmetic.
+ *
+ * @note Not thread-safe, and not meant to be shared across threads - the
+ *       same "UI/main thread owns cache invalidation/recompute" model
+ *       `docs/sound-mind-architecture.md`'s own Threading & Real-Time
+ *       Model section already establishes. A playback composite (which
+ *       already runs on a background thread, over its own `Project`
+ *       copy) does not use this cache - see `compositeProjectCached()`'s
+ *       own docs.
+ */
+class CompositePrefixCache {
+public:
+    CompositePrefixCache() noexcept = default;
+
+    /// @brief Marks every cached prefix at or above `layerIndex` as
+    ///        stale - call after changing that layer's own content or
+    ///        any of its properties (opacity, balance, blend mode,
+    ///        translation, rescale, visibility, mute, opacity MindWave
+    ///        binding, or - for a Filter layer - its own
+    ///        `FilterConfiguration`).
+    /// @param layerIndex The changed layer's own current position in
+    ///        `Project::layers()` - see `Project::layerIndexById()`.
+    void invalidateFrom(std::size_t layerIndex) noexcept;
+
+    /// @brief Marks everything stale - call after editing any MindWave's
+    ///        own value (generator type, parameters, superposition
+    ///        stack, or warp source) anywhere in the project's library.
+    ///        Structural changes (adding/removing/reordering a layer)
+    ///        and a `respectMute`/output-shape change don't need this -
+    ///        `compositeProjectCached()` detects those on its own.
+    void invalidateAll() noexcept;
+
+private:
+    friend std::optional<sound_mind::codec::StreamImage> compositeProjectCached(
+        const Project& project, CompositePrefixCache& cache, const std::function<bool()>& shouldCancel,
+        bool respectMute);
+
+    struct Entry {
+        sound_mind::codec::StreamImage image;
+        bool anyMixedIn = false;
+    };
+
+    std::vector<std::optional<Entry>> prefixes_;
+    std::vector<LayerId> lastLayerOrder_;
+    bool lastRespectMute_ = false;
+    std::uint32_t lastBinCount_ = 0;
+    std::uint32_t lastCanvasWidth_ = 0;
+};
+
+/**
+ * @brief `compositeProject()` above, reusing `cache`'s own previously
+ *        computed prefixes wherever they're still valid - see
+ *        `CompositePrefixCache`'s own docs for the full contract
+ *        (invalidation, `DynamicSpeckle`'s own exemption, the memory
+ *        budget). Produces exactly the same result `compositeProject()`
+ *        itself would for the same `project`/`respectMute`, just
+ *        potentially faster - `docs/sound-mind-architecture.md`'s own
+ *        "the raster cache is purely an optimization" invariant.
+ *
+ * Always uses the general per-layer fold, never `compositeProject()`'s
+ * own single-contributor fast path - a `CompositePrefixCache` already
+ * reduces an unchanged single-layer project's own repeated call to a
+ * single lookup, which the fast path (a scalar gain shift plus a
+ * placement copy) can't beat, so there's nothing to gain by also
+ * special-casing it here, only the fast path's own added code size.
+ *
+ * `shouldCancel` is consulted only for layers actually being freshly
+ * folded this call - a layer whose own cached prefix is being reused
+ * does no new work, so there's nothing for it to cancel.
+ *
+ * @param project The project to composite - see `compositeProject()`'s
+ *        own docs.
+ * @param cache The prefix cache to read from and update.
+ * @param shouldCancel See `compositeProject()`'s own docs.
+ * @param respectMute See `compositeProject()`'s own docs. Changing this
+ *        between calls on the same `cache` is detected automatically
+ *        (treated as a structural change - see `CompositePrefixCache`'s
+ *        own docs) rather than silently reusing a prefix computed under
+ *        the other setting.
+ * @return The combined `StreamImage`, or `std::nullopt` - see
+ *         `compositeProject()`'s own docs.
+ * @throws CompositeCancelled - see `compositeProject()`'s own docs.
+ */
+[[nodiscard]] std::optional<sound_mind::codec::StreamImage> compositeProjectCached(
+    const Project& project, CompositePrefixCache& cache, const std::function<bool()>& shouldCancel = nullptr,
+    bool respectMute = false);
+
 }  // namespace sound_mind::core

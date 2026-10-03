@@ -6,6 +6,26 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.7.1] - 2026-10-03
+
+The targeted-invalidation raster cache `docs/sound-mind-architecture.md`'s own "Compositing Pipeline" sketch described but never implemented - editing one layer in a many-layer project no longer recomposites the entire visible stack from scratch. A new feature (hence the `Z` bump), not a pure performance fix like `v0.1.6.2`-`v0.1.6.7` - there's new public Core API (`Project::layerIndexById()`, `CompositePrefixCache`, `compositeProjectCached()`) and new Studio-side cache-invalidation call sites, even though the *visible* behavior is unchanged.
+
+### Added
+
+- `sound_mind::core::CompositePrefixCache`/`compositeProjectCached()`: a per-layer-stack-position composite cache. Editing layer *i* only needs `invalidateFrom(i)`; the next recomposite reuses every cached layer below *i* and only re-folds from *i* upward. Structural changes (add/remove/reorder a layer, a `respectMute`/output-shape change) are detected automatically; a MindWave value edit still needs an explicit `invalidateAll()`. `FilterType::DynamicSpeckle` layers are permanently exempt from caching (their own randomness is deliberately fresh every recomposite, never seed-deterministic). Bounded by a `4 GiB` memory budget - past it, caching is simply skipped for that call, never incorrect, just not faster. See `docs/sound-mind-architecture.md`'s Decision #201.
+- `Project::layerIndexById(LayerId)`: resolves a layer id to its current 0-based stack position - the lookup `CompositePrefixCache::invalidateFrom()` needs.
+- `CanvasWidget::invalidateCompositeFrom()`/`invalidateCompositeAll()`, wired into `LayerController`'s every content/property-mutating method and every structural one - the canvas now skips recompositing (and, when nothing at all changed since the last paint, even the RGB conversion step) on the overwhelming majority of repaints.
+
+### Fixed
+
+- `MindWaveController::mindWavesChanged` now explicitly triggers a canvas repaint - a latent, separate, pre-existing gap (harmless before this cache existed, since some other repaint usually masked it in practice) that this installment's own correctness requirements surfaced.
+
+### Notes
+
+**Benchmark-confirmed**: `sound-mind-benchmark`'s new `cachedEditTopLayer` compositing cases measure a 50-layer project's own top-layer-edit recomposite at a flat ~20ms regardless of layer count (1/5/20/50), vs. the cold path's 367ms/1.67s/6.89s/17.34s - 18.5x/81.1x/343.4x/854.5x faster respectively (this session's own Debug-build numbers; absolute times aren't representative of Release performance, but the before/after ratio, measured under the same build both sides, is). This directly confirms the "many layers" latency finding (Decision #195 / `docs/sound-mind-roadmap.md`'s `v0.Y.60.1`) is now addressed for the layer-*stack* half of that finding - the *within-a-layer* half (`applyFilter()`'s `UniformBlur` case, operation-log replay) remains open, tracked in the roadmap.
+
+**A real bug caught by this installment's own first benchmark run, before shipping**: the cache's memory budget was initially set to `512 MiB`, silently disabling caching for exactly this 50-layer scenario (a benchmark "medium" canvas, plus `Project::createNew()`'s own always-present Background/Equalizer layers, narrowly exceeds it) - the first run showed `layerCount=50` with *zero* speedup before the budget was corrected to `4 GiB` and re-measured. See Decision #201's own writeup.
+
 ## [0.1.6.7] - 2026-10-02
 
 Benchmark-suite follow-up: `Fractal` MindWave scenarios now marked `gpuEligible` (Installment D's own GPU fast path was already live but unreported by the suite's own GPU-vs-CPU comparison), plus a versioning correction - `v0.1.6.6` below was never actually set in `CMakeLists.txt` at commit time (an oversight caught while re-running the benchmark suite for this same commit); recorded here rather than silently rewritten, per this project's own "never describe the past differently than it happened" convention.

@@ -38,12 +38,15 @@ constexpr double kMinZoomFactor = 0.05;
 constexpr double kMaxZoomFactor = 16.0;
 
 /// @brief The project's own real multi-layer composite (see
-/// `sound_mind::core::compositeProject()`'s own docs), converted to
+/// `sound_mind::core::compositeProjectCached()`'s own docs), converted to
 /// displayable pixels - `docs/sound-mind-roadmap.md`'s `v0.Y.27.1`
 /// (Multi-layer Compositing), replacing the single-topmost-layer
-/// placeholder every render path here used before it.
-[[nodiscard]] std::optional<sound_mind::codec::RgbImage> renderComposite(const sound_mind::core::Project& project) {
-    const auto composite = sound_mind::core::compositeProject(project);
+/// placeholder every render path here used before it. `v0.1.7.1` moved
+/// this from the uncached `compositeProject()` to `compositeProjectCached()` -
+/// see `CanvasWidget::compositeCache_`'s own docs.
+[[nodiscard]] std::optional<sound_mind::codec::RgbImage> renderComposite(
+    const sound_mind::core::Project& project, sound_mind::core::CompositePrefixCache& cache) {
+    const auto composite = sound_mind::core::compositeProjectCached(project, cache);
     if (!composite.has_value()) {
         return std::nullopt;
     }
@@ -79,6 +82,14 @@ CanvasWidget::CanvasWidget(QWidget* parent) : QWidget(parent) {
 
 void CanvasWidget::setProject(const sound_mind::core::Project* project) {
     project_ = project;
+    // A different project's own layers mean nothing cached here still
+    // applies - compositeProjectCached()'s own structural-signature check
+    // would already catch this (a different layer-id list), but resetting
+    // explicitly here is simpler than relying on it, and also resets
+    // currentComposite()'s own generation-based "nothing changed" shortcut,
+    // which that signature check alone wouldn't touch.
+    compositeCache_.invalidateAll();
+    ++compositeGeneration_;
     // A previous project's own zoom level means nothing for a different
     // one (a coincidentally-similar canvas size aside) - the same
     // "session-only UI state resets on project switch" precedent
@@ -352,12 +363,36 @@ void CanvasWidget::wheelEvent(QWheelEvent* event) {
     event->accept();
 }
 
+std::optional<sound_mind::codec::RgbImage> CanvasWidget::currentComposite() {
+    if (project_ == nullptr) {
+        return std::nullopt;
+    }
+    if (lastRenderedGeneration_ == compositeGeneration_) {
+        return lastRenderedComposite_;
+    }
+    lastRenderedComposite_ = renderComposite(*project_, compositeCache_);
+    lastRenderedGeneration_ = compositeGeneration_;
+    return lastRenderedComposite_;
+}
+
+void CanvasWidget::invalidateCompositeFrom(std::size_t layerIndex) {
+    compositeCache_.invalidateFrom(layerIndex);
+    ++compositeGeneration_;
+    update();
+}
+
+void CanvasWidget::invalidateCompositeAll() {
+    compositeCache_.invalidateAll();
+    ++compositeGeneration_;
+    update();
+}
+
 void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
 
     if (project_ != nullptr) {
-        if (const auto rendered = renderComposite(*project_); rendered.has_value()) {
+        if (const auto rendered = currentComposite(); rendered.has_value()) {
             if (polarMode_) {
                 // Sound Flower (v0.Y.53.1) - see setPolarMode()'s own docs.
                 const QRectF disk = polarDiskRect();

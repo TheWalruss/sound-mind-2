@@ -199,6 +199,15 @@ Layer* Project::layerById(LayerId id) noexcept {
     return nullptr;
 }
 
+std::optional<std::size_t> Project::layerIndexById(LayerId id) const noexcept {
+    for (std::size_t i = 0; i < layers_.size(); ++i) {
+        if (layers_[i].id() == id) {
+            return i;
+        }
+    }
+    return std::nullopt;
+}
+
 MindWaveId Project::addMindWave(std::string name, MindWave wave) {
     const auto maxId = std::max_element(mindWaves_.begin(), mindWaves_.end(),
                                           [](const NamedMindWave& a, const NamedMindWave& b) { return a.id < b.id; });

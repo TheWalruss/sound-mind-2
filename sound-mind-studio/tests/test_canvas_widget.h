@@ -9,6 +9,8 @@ private slots:
     void sizeHintFallsBackWithNoProject();
     void sizeHintMatchesProjectCanvasDimensions();
     void rendersALayersContentInsteadOfThePlaceholder();
+    void reusesACachedCompositeUntilInvalidateCompositeFromIsToldAboutAChange();
+    void invalidateCompositeAllForcesARecomputeEvenWithoutAKnownIndex();
     void skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt();
     void reflectsALayersTranslationColumns();
     void drawsAPlayheadLineAtTheGivenFraction();

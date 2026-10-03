@@ -21,6 +21,8 @@ using sound_mind::codec::toRgbImage;
 using sound_mind::core::BlendMode;
 using sound_mind::core::CompositeCancelled;
 using sound_mind::core::compositeProject;
+using sound_mind::core::CompositePrefixCache;
+using sound_mind::core::compositeProjectCached;
 using sound_mind::core::FilterConfiguration;
 using sound_mind::core::FilterType;
 using sound_mind::core::frameIndexToTime;
@@ -1163,4 +1165,163 @@ TEST_CASE("compositeProject segments the stack by Filter layers - a Normal layer
     // two are clearly distinguishable.
     CHECK(composite->leftMagnitudeDb[0] > -1.0f);
     CHECK(composite->leftMagnitudeDb[0] < 5.0f);
+}
+
+// ---------------------------------------------------------------------------
+// compositeProjectCached / CompositePrefixCache - v0.1.7.1
+// (docs/sound-mind-roadmap.md's targeted-invalidation raster cache)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("compositeProjectCached with a fresh cache matches compositeProject() exactly",
+          "[core][compositor][cache]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+    Layer top(0, "Top", LayerType::Normal);
+    top.setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
+    project.addLayer(std::move(top));
+
+    const auto fresh = compositeProject(project);
+    CompositePrefixCache cache;
+    const auto cached = compositeProjectCached(project, cache);
+
+    REQUIRE(fresh.has_value());
+    REQUIRE(cached.has_value());
+    CHECK(cached->leftMagnitudeDb == fresh->leftMagnitudeDb);
+    CHECK(cached->rightMagnitudeDb == fresh->rightMagnitudeDb);
+    CHECK(cached->sharedPhaseRadians == fresh->sharedPhaseRadians);
+}
+
+TEST_CASE("compositeProjectCached reuses a lower layer's own cached prefix without re-reading it, until "
+          "invalidateFrom() names it",
+          "[core][compositor][cache]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    Layer bottom(0, "Bottom", LayerType::Normal);
+    bottom.setContent(makeContent({-30.0f, -30.0f, -30.0f}, {-30.0f, -30.0f, -30.0f}, {0.0f, 0.0f, 0.0f}));
+    const auto bottomId = project.addLayer(std::move(bottom));
+
+    Layer top(0, "Top", LayerType::Normal);
+    top.setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
+    project.addLayer(std::move(top));
+
+    const auto bottomIndex = project.layerIndexById(bottomId);
+    REQUIRE(bottomIndex.has_value());
+
+    CompositePrefixCache cache;
+    const auto first = compositeProjectCached(project, cache);
+    REQUIRE(first.has_value());
+
+    // Mutate the bottom layer's own content *without* telling the cache -
+    // the opposite of a real edit (which would call invalidateFrom()).
+    project.layerById(bottomId)->setContent(
+        makeContent({40.0f, 40.0f, 40.0f}, {40.0f, 40.0f, 40.0f}, {0.0f, 0.0f, 0.0f}));
+    const auto stillStale = compositeProjectCached(project, cache);
+    REQUIRE(stillStale.has_value());
+    // Proves the cache really did reuse its own stored prefix rather than
+    // reading the (now different) live layer content again - if it had,
+    // this would no longer match `first`.
+    CHECK(stillStale->leftMagnitudeDb == first->leftMagnitudeDb);
+
+    cache.invalidateFrom(*bottomIndex);
+    const auto updated = compositeProjectCached(project, cache);
+    const auto freshOnMutated = compositeProject(project);
+    REQUIRE(updated.has_value());
+    REQUIRE(freshOnMutated.has_value());
+    CHECK(updated->leftMagnitudeDb == freshOnMutated->leftMagnitudeDb);
+    CHECK(updated->leftMagnitudeDb != first->leftMagnitudeDb);
+}
+
+TEST_CASE("compositeProjectCached never freezes a DynamicSpeckle Filter layer's own randomness",
+          "[core][compositor][cache]") {
+    // Mirrors test_filter_application.cpp's own identical "produces a
+    // genuinely different pattern from one call to the next" test, here
+    // confirming caching doesn't change that - a real risk, since this
+    // is specifically a cache whose whole point is reusing a layer's own
+    // prior output.
+    ProjectSettings settings = testSettings();
+    settings.canvasWidth = 400;
+    settings.binCount = 1;
+    Project project = Project::createNew(settings);
+
+    std::vector<float> flat(400, -40.0f);
+    std::vector<float> phase(400, 0.0f);
+    project.layers()[0].setContent(makeContent(flat, flat, phase));
+
+    FilterConfiguration speckle;
+    speckle.setType(FilterType::DynamicSpeckle);
+    speckle.setSpeckleDensity(0.5f);
+    speckle.setSpeckleIntensity(1.0f);
+    Layer filterLayer(0, "Speckle", LayerType::Filter);
+    filterLayer.setFilterConfiguration(speckle);
+    project.addLayer(std::move(filterLayer));
+
+    CompositePrefixCache cache;
+    const auto first = compositeProjectCached(project, cache);
+    const auto second = compositeProjectCached(project, cache);
+
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+    CHECK(first->leftMagnitudeDb != second->leftMagnitudeDb);
+}
+
+TEST_CASE("compositeProjectCached detects a layer reorder on its own and recomputes correctly",
+          "[core][compositor][cache]") {
+    // BlendMode::Overwrite (unlike Normal) is order-sensitive - whichever
+    // of A/B ends up higher in the stack wins at each cell - so swapping
+    // their order is actually observable in the result, not just in the
+    // cache's own bookkeeping.
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    Layer a(0, "A", LayerType::Normal);
+    a.setContent(makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
+    a.setBlendMode(BlendMode::Overwrite);
+    const auto aId = project.addLayer(std::move(a));
+
+    Layer b(0, "B", LayerType::Normal);
+    b.setContent(makeContent({5.0f, 5.0f, 5.0f}, {5.0f, 5.0f, 5.0f}, {0.0f, 0.0f, 0.0f}));
+    b.setBlendMode(BlendMode::Overwrite);
+    const auto bId = project.addLayer(std::move(b));
+
+    CompositePrefixCache cache;
+    const auto beforeReorder = compositeProjectCached(project, cache);
+    REQUIRE(beforeReorder.has_value());
+
+    // Swap A and B's own stack order - a structural change the cache
+    // should detect on its own, with no explicit invalidate*() call.
+    const auto backgroundId = project.layers().front().id();
+    const auto equalizerId = project.layers().back().id();
+    REQUIRE(project.reorderLayers({backgroundId, bId, aId, equalizerId}));
+
+    const auto afterReorder = compositeProjectCached(project, cache);
+    const auto freshAfterReorder = compositeProject(project);
+    REQUIRE(afterReorder.has_value());
+    REQUIRE(freshAfterReorder.has_value());
+    CHECK(afterReorder->leftMagnitudeDb == freshAfterReorder->leftMagnitudeDb);
+    // And the reorder genuinely changed the result - A (now on top) wins
+    // instead of B, confirming this test exercises a real, observable
+    // difference, not just "nothing crashed".
+    CHECK(afterReorder->leftMagnitudeDb != beforeReorder->leftMagnitudeDb);
+}
+
+TEST_CASE("compositeProjectCached detects a respectMute change on its own and recomputes correctly",
+          "[core][compositor][cache]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+    const auto topId = project.addLayer(Layer(0, "Top", LayerType::Normal));
+    project.layerById(topId)->setContent(
+        makeContent({-10.0f, -10.0f, -10.0f}, {-10.0f, -10.0f, -10.0f}, {0.0f, 0.0f, 0.0f}));
+    project.layerById(topId)->setMuted(true);
+
+    CompositePrefixCache cache;
+    const auto respectingNothing = compositeProjectCached(project, cache, nullptr, /*respectMute=*/false);
+    REQUIRE(respectingNothing.has_value());
+
+    const auto respectingMute = compositeProjectCached(project, cache, nullptr, /*respectMute=*/true);
+    const auto freshRespectingMute = compositeProject(project, nullptr, /*respectMute=*/true);
+    REQUIRE(respectingMute.has_value());
+    REQUIRE(freshRespectingMute.has_value());
+    CHECK(respectingMute->leftMagnitudeDb == freshRespectingMute->leftMagnitudeDb);
+    CHECK(respectingMute->leftMagnitudeDb != respectingNothing->leftMagnitudeDb);
 }

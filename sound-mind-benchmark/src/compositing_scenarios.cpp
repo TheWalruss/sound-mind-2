@@ -17,6 +17,8 @@ namespace {
 using sound_mind::codec::StreamImage;
 using sound_mind::core::BlendMode;
 using sound_mind::core::compositeProject;
+using sound_mind::core::CompositePrefixCache;
+using sound_mind::core::compositeProjectCached;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
@@ -94,6 +96,36 @@ void appendLayerCountSweep(std::vector<BenchmarkCase>& cases) {
     }
 }
 
+/// @brief The `CompositePrefixCache` validation case for Decision #201's own
+/// "many layers, edit one" claim - directly comparable against
+/// `appendLayerCountSweep()`'s own cold `compositeProject()` numbers at the
+/// same layer counts. The cache is warmed once (every prefix populated),
+/// then each timed call invalidates only the topmost layer's own cached
+/// prefix and recomposites - the realistic "user edits the layer they're
+/// looking at, every layer beneath it is untouched" case, and the same
+/// amount of work on every repeated call (satisfying `BenchmarkCase::run`'s
+/// own "idempotent" contract), since re-invalidating an already-invalidated
+/// top entry before each call is a no-op on top of the real recompute.
+void appendCachedEditTopLayerSweep(std::vector<BenchmarkCase>& cases) {
+    for (const int layerCount : {1, 5, 20, 50}) {
+        auto project = makeProjectWithLayers(layerCount, BlendMode::Normal);
+        auto cache = std::make_shared<CompositePrefixCache>();
+        static_cast<void>(compositeProjectCached(*project, *cache));
+        const std::size_t topIndex = project->layers().size() - 1;
+
+        nlohmann::json parameters;
+        parameters["layerCount"] = layerCount;
+        parameters["scenario"] = "warmCacheEditTopLayer";
+
+        cases.push_back(BenchmarkCase{"cachedEditTopLayer,layerCount=" + std::to_string(layerCount), "compositing",
+                                       std::move(parameters), /*gpuEligible=*/true, [project, cache, topIndex]() {
+                                           cache->invalidateFrom(topIndex);
+                                           const auto result = compositeProjectCached(*project, *cache);
+                                           static_cast<void>(result);
+                                       }});
+    }
+}
+
 /// @brief Every `BlendMode`, at a fixed, moderate layer count - answers
 /// "did the user choose an expensive blend mode", per
 /// `docs/sound-mind-benchmarking.md`'s own "Scenario catalog".
@@ -116,6 +148,7 @@ std::vector<BenchmarkCase> buildCompositingScenarios() {
     std::vector<BenchmarkCase> cases;
     appendLayerCountSweep(cases);
     appendBlendModeSweep(cases);
+    appendCachedEditTopLayerSweep(cases);
     return cases;
 }
 

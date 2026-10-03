@@ -1740,10 +1740,14 @@ expected, so you know what's actually driving it.
 - **Layers and blend modes**: every layer that's visible and has
   content contributes to the composite the canvas and Playback show
   (see [Compositing](#compositing) above), and every blend mode -
-  Normal included - uses the GPU when it's available. More visible
-  layers still means more work per edit, though, so a project with a
-  very large number of layers will recomposite more slowly than a
-  simple one regardless of acceleration.
+  Normal included - uses the GPU when it's available. Editing one
+  layer in a project with many others is fast regardless of how many
+  layers there are - only that layer (and anything stacked above it)
+  actually needs recompositing; everything below it is reused from the
+  previous composite. Adding, removing, or reordering a layer, muting/
+  unmuting, or editing a MindWave used anywhere in the project still
+  recomposites the whole stack, so those will cost more on a project
+  with a very large number of layers, regardless of acceleration.
 - **MindWaves**: a plain **Fractal**-type MindWave (see
   [MindWaves](#mindwaves) above) evaluates on the GPU when Hardware
   Acceleration is on, and scales well to large canvases as a result. If

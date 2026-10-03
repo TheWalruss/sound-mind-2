@@ -66,6 +66,7 @@ An initial version of the `EdgePreservingBlur`/`Convolve` sweeps used `{3, 9, 25
 
 - **Layer-count sweep**: `{1, 5, 20, 50}` layers, `Normal` blend mode, GPU-eligible (`compositeProject()`'s per-layer mixing is one of the two GPU-eligible call sites in the whole codebase).
 - **Blend-mode sweep**: all 7 `BlendMode`s at a fixed, moderate layer count (10) - answers "did the user choose an expensive blend mode," GPU-eligible.
+- **`compositeProjectCached()` warm-cache sweep** (`appendCachedEditTopLayerSweep()`, `v0.1.7.1`): the same `{1, 5, 20, 50}` layer counts as the layer-count sweep above, but each case warms a `CompositePrefixCache` once, then times only `invalidateFrom(topIndex)` + `compositeProjectCached()` per call - the realistic "edit the layer you're looking at, every layer beneath it is untouched" case, directly comparable against the cold layer-count sweep's own numbers at the same `layerCount`. This is also the permanent regression check for `CompositePrefixCache`'s own memory budget being set sensibly - see `docs/sound-mind-architecture.md`'s Decision #201 for a real case where `layerCount=50` silently stopped benefiting from the cache at all once this budget was too small, caught by this exact sweep.
 
 Every compositing case uses deterministic pseudo-random per-layer content (seeded differently per layer) rather than identical layers, since some blend modes (`Difference`, in particular) would otherwise degenerate into trivially cheap, branch-predictable work no real layered project would ever actually produce.
 

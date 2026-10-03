@@ -181,6 +181,25 @@ TEST_CASE("layerById's mutable overload allows in-place edits", "[core][project]
     CHECK(project.layers().front().opacity() == 0.5f);
 }
 
+TEST_CASE("layerIndexById finds a layer's own 0-based, bottom-to-top stack position", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto newId = project.addLayer(Layer(999, "Imported", LayerType::Normal));
+
+    const auto index = project.layerIndexById(newId);
+
+    REQUIRE(index.has_value());
+    // addLayer() inserts below the Equalizer (always present, on top, by
+    // default - see its own docs), not at the very end of the stack.
+    CHECK(*index == project.layers().size() - 2);
+    CHECK(project.layers()[*index].id() == newId);
+}
+
+TEST_CASE("layerIndexById returns std::nullopt for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+
+    CHECK_FALSE(project.layerIndexById(LayerId{999}).has_value());
+}
+
 TEST_CASE("removeLayer removes the layer with the given id and returns true", "[core][project]") {
     Project project = Project::createNew(ProjectSettings{});
     const auto newId = project.addLayer(Layer(999, "Imported", LayerType::Normal));

@@ -579,6 +579,17 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(toolPaletteController_, &ToolPaletteController::contentChanged, this,
             [this](sound_mind::core::LayerId layer) {
                 hasUnsavedChanges_ = true;
+                // v0.1.7.1 (docs/sound-mind-roadmap.md's targeted-
+                // invalidation raster cache) - every kind of content
+                // commit this signal fires for (paint, fill, cut, paste,
+                // apply filter to selection, chord stamps, path strokes)
+                // changed this one layer's own content, so the canvas's
+                // own cached composite only needs refolding from here up.
+                if (project_.has_value()) {
+                    if (const auto index = project_->layerIndexById(layer)) {
+                        canvas_->invalidateCompositeFrom(*index);
+                    }
+                }
                 // `layer`'s own thumbnail cache entry is discarded and
                 // freshly re-rendered - every other layer's own cached
                 // thumbnail is reused as-is (see LayerController::
@@ -655,6 +666,17 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         // reflect it too, the same reasoning layerController_'s own
         // layersChanged() connection already gives.
         refreshHistoryPanel();
+        // v0.1.7.1 (docs/sound-mind-roadmap.md's targeted-invalidation
+        // raster cache) - a MindWave's own value can feed any number of
+        // layers' opacity or Filter layers' own parameters, with nothing
+        // here tracking which, so a coarse "everything's stale" is this
+        // cache's own deliberate answer for this one case - see
+        // CanvasWidget::invalidateCompositeAll()'s own docs. Also fixes a
+        // real, if minor, pre-existing gap: before this cache existed,
+        // nothing here ever told the canvas to actually repaint after a
+        // MindWave edit either - only some *other*, unrelated repaint
+        // happened to make a bound layer's updated field visible.
+        canvas_->invalidateCompositeAll();
     });
 
     // A permanent (not showMessage()'s own temporary-message) label in the

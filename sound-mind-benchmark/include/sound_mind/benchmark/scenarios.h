@@ -33,7 +33,11 @@ namespace sound_mind::benchmark {
 /// @brief Every compositing-related `BenchmarkCase` -
 ///        `sound_mind::core::compositeProject()` across a layer-count
 ///        sweep (GPU-eligible, so each count also doubles as a GPU-vs-CPU
-///        comparison) and a blend-mode sweep at a fixed layer count.
+///        comparison), a blend-mode sweep at a fixed layer count, and a
+///        `sound_mind::core::compositeProjectCached()` sweep at the same
+///        layer counts (a warmed cache, re-timing only a single top-layer
+///        edit's own recomposite) - directly comparable against the first
+///        sweep's own cold numbers at the same `layerCount`.
 [[nodiscard]] std::vector<BenchmarkCase> buildCompositingScenarios();
 
 }  // namespace sound_mind::benchmark

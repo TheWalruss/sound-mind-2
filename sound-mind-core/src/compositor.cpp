@@ -724,4 +724,174 @@ std::optional<StreamImage> compositeProject(const Project& project, const std::f
     return result;
 }
 
+void CompositePrefixCache::invalidateFrom(std::size_t layerIndex) noexcept {
+    for (std::size_t i = layerIndex; i < prefixes_.size(); ++i) {
+        prefixes_[i].reset();
+    }
+}
+
+void CompositePrefixCache::invalidateAll() noexcept {
+    prefixes_.clear();
+    lastLayerOrder_.clear();
+}
+
+namespace {
+
+/// @brief The byte budget `compositeProjectCached()` won't knowingly
+/// cache past - see `CompositePrefixCache`'s own docs on why exceeding
+/// it just means "skip caching this call", never a correctness problem.
+///
+/// **Corrected from an initial `512 MiB`, found too tight by this
+/// feature's own first benchmark run**: at a "medium" benchmark canvas
+/// (512 bins x 2000 frames, ~11.7 MiB per cached layer), `512 MiB` runs
+/// out at ~44 layers - but `Project::createNew()` always carries a
+/// Background and an Equalizer layer in addition to whatever a caller
+/// adds, so a benchmark/user scenario asking for "50 layers" is actually
+/// 52 `Project::layers()` entries, just over that line - silently
+/// disabling caching for exactly the headline "many layers" case this
+/// feature exists for (confirmed: the benchmark's own `layerCount=50`
+/// cached-edit case measured no speedup at all over the uncached path
+/// before this fix). `4 GiB` instead fits ~350 layers at this same medium
+/// canvas, and ~44 layers even at the benchmark's own "large" canvas
+/// size (1024 bins x 8000 frames, ~93.75 MiB/layer) - a generous, but
+/// still bounded, fraction of a modern desktop's RAM; past either limit,
+/// this still only ever degrades to "not cached," never incorrect.
+constexpr std::size_t kCompositeCacheMaxBytes = 4ull * 1024 * 1024 * 1024;
+
+}  // namespace
+
+std::optional<StreamImage> compositeProjectCached(const Project& project, CompositePrefixCache& cache,
+                                                     const std::function<bool()>& shouldCancel, bool respectMute) {
+    const auto& layers = project.layers();
+
+    // Pre-pass - see compositeProject()'s own identical reasoning for
+    // binCount. anyFilterLayer/single-contributor-fast-path don't matter
+    // here - see compositeProjectCached()'s own docs on why this always
+    // uses the general fold.
+    std::uint32_t binCount = 0;
+    bool anyContributor = false;
+    for (const Layer& layer : layers) {
+        if (!layer.visible() || (respectMute && layer.muted())) {
+            continue;
+        }
+        if (isFilterLayerType(layer.type())) {
+            continue;
+        }
+        if (layer.content().has_value()) {
+            anyContributor = true;
+            binCount = std::max(binCount, layer.content()->config.binCount);
+        }
+    }
+    if (!anyContributor) {
+        cache.invalidateAll();
+        return std::nullopt;
+    }
+
+    const auto& settings = project.settings();
+    auto config = streamCodecConfigFor(settings);
+    if (binCount > 0) {
+        config.binCount = binCount;
+    }
+    const std::uint32_t canvasWidth = settings.canvasWidth;
+    const float silenceFloorDb = linearAmplitudeToDb(0.0f);
+
+    // Structural signature check - see CompositePrefixCache's own docs
+    // on why a reorder/add/remove/respectMute/output-shape change needs
+    // no explicit invalidateAll() call from the caller: any of them
+    // changes one of these four values, caught here instead.
+    std::vector<LayerId> currentOrder;
+    currentOrder.reserve(layers.size());
+    for (const Layer& layer : layers) {
+        currentOrder.push_back(layer.id());
+    }
+    const bool structureChanged = currentOrder != cache.lastLayerOrder_ || respectMute != cache.lastRespectMute_ ||
+                                    config.binCount != cache.lastBinCount_ || canvasWidth != cache.lastCanvasWidth_;
+    if (structureChanged) {
+        cache.prefixes_.assign(layers.size(), std::nullopt);
+        cache.lastLayerOrder_ = currentOrder;
+        cache.lastRespectMute_ = respectMute;
+        cache.lastBinCount_ = config.binCount;
+        cache.lastCanvasWidth_ = canvasWidth;
+    } else if (cache.prefixes_.size() != layers.size()) {
+        // Defensive only - the order-vector comparison above should
+        // already have caught any size change (a different layer count
+        // always means a different id list too); kept in case that
+        // invariant is ever violated by a future change here.
+        cache.prefixes_.assign(layers.size(), std::nullopt);
+    }
+
+    // Memory budget - see CompositePrefixCache's own docs. Skips caching
+    // entirely for this call rather than partially (storing only the
+    // first few layers' own prefixes and not the rest would make
+    // "is this cached" depend on index, a correctness trap no simpler
+    // than just not caching at all this call).
+    const std::size_t cellCount = std::size_t{config.binCount} * canvasWidth;
+    const std::size_t bytesPerImage = cellCount * 3 * sizeof(float);
+    const bool cachingAffordable = layers.empty() || bytesPerImage == 0 ||
+                                     (kCompositeCacheMaxBytes / bytesPerImage) >= layers.size();
+    if (!cachingAffordable) {
+        cache.prefixes_.assign(layers.size(), std::nullopt);
+    }
+
+    // Resume from the highest still-valid cached prefix, if any.
+    std::size_t resumeIndex = 0;
+    StreamImage result;
+    bool anyMixedIn = false;
+    bool haveResumePoint = false;
+    for (std::size_t i = cache.prefixes_.size(); i-- > 0;) {
+        if (cache.prefixes_[i].has_value()) {
+            result = cache.prefixes_[i]->image;
+            anyMixedIn = cache.prefixes_[i]->anyMixedIn;
+            resumeIndex = i + 1;
+            haveResumePoint = true;
+            break;
+        }
+    }
+    if (!haveResumePoint) {
+        result.config = config;
+        result.frameCount = canvasWidth;
+        result.sampleCount = static_cast<std::uint64_t>(canvasWidth) * config.hopLength;
+        result.leftMagnitudeDb.assign(cellCount, silenceFloorDb);
+        result.rightMagnitudeDb.assign(cellCount, silenceFloorDb);
+        result.sharedPhaseRadians.assign(cellCount, 0.0f);
+    }
+
+    // A DynamicSpeckle Filter layer's own fresh-every-call randomness
+    // (see CompositePrefixCache's own docs) means nothing at or above
+    // its own stack position may ever be cached. haveResumePoint can
+    // only be true here at an index strictly below any DynamicSpeckle
+    // layer's own position in the first place - this function never
+    // stores a prefix at or past one (see the loop below), so one could
+    // never have been found above.
+    bool seenDynamicSpeckle = false;
+
+    for (std::size_t i = resumeIndex; i < layers.size(); ++i) {
+        const Layer& layer = layers[i];
+        if (shouldCancel && shouldCancel()) {
+            throw CompositeCancelled{};
+        }
+        if (layer.visible() && !(respectMute && layer.muted())) {
+            if (isFilterLayerType(layer.type())) {
+                if (layer.filterConfiguration().type() == FilterType::DynamicSpeckle) {
+                    seenDynamicSpeckle = true;
+                }
+                if (anyMixedIn) {
+                    result = applyFilter(result, layer.filterConfiguration(), settings,
+                                          resolveFilterParameterMindWaves(layer.filterConfiguration(), project));
+                }
+            } else if (layer.content().has_value()) {
+                mixLayerIntoGpuOrCpu(result, layer, config, canvasWidth, silenceFloorDb,
+                                      resolveOpacityMindWave(layer, project));
+                anyMixedIn = true;
+            }
+        }
+
+        if (!seenDynamicSpeckle) {
+            cache.prefixes_[i] = CompositePrefixCache::Entry{result, anyMixedIn};
+        }
+    }
+
+    return result;
+}
+
 }  // namespace sound_mind::core

@@ -8,6 +8,7 @@
 #include <QRectF>
 #include <QWidget>
 
+#include "sound_mind/core/compositor.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/path.h"
@@ -95,6 +96,39 @@ public:
      *        it's destroyed.
      */
     void setProject(const sound_mind::core::Project* project);
+
+    /**
+     * @brief Marks this widget's own cached composite stale from
+     *        `layerIndex` upward - `v0.1.7.1`
+     *        (`docs/sound-mind-roadmap.md`'s targeted-invalidation
+     *        raster cache). Call after changing a layer's own content
+     *        or any of its properties (opacity, balance, blend mode,
+     *        translation, rescale, visibility, mute, opacity MindWave
+     *        binding, or - for a Filter layer - its own
+     *        `FilterConfiguration`) - see `sound_mind::core::
+     *        CompositePrefixCache::invalidateFrom()`'s own docs for
+     *        exactly what this does and doesn't catch automatically.
+     *        Also schedules a repaint, the same as `update()` alone
+     *        already did at every one of this call's own call sites
+     *        before this cache existed.
+     * @param layerIndex The changed layer's own current position in
+     *        `sound_mind::core::Project::layers()` - see
+     *        `sound_mind::core::Project::layerIndexById()`.
+     */
+    void invalidateCompositeFrom(std::size_t layerIndex);
+
+    /**
+     * @brief Marks this widget's own cached composite entirely stale -
+     *        call after editing any MindWave's own value anywhere in
+     *        the project's library (see `sound_mind::core::
+     *        CompositePrefixCache::invalidateAll()`'s own docs for why
+     *        this one case needs an explicit call no narrower than
+     *        "everything"). A structural change (adding/removing/
+     *        reordering a layer) doesn't need this - it's already
+     *        detected automatically, the same as for `invalidateCompositeFrom()`.
+     *        Also schedules a repaint.
+     */
+    void invalidateCompositeAll();
 
     /**
      * @brief Sets (or clears) the playhead line's horizontal position and
@@ -917,7 +951,41 @@ private:
     ///        paintEvent().
     void drawChordPreview(QPainter& painter) const;
 
+    /// @brief `paintEvent()`'s own composite lookup - returns
+    ///        `lastRenderedComposite_` directly, computing nothing at
+    ///        all, if `compositeGeneration_` hasn't changed since it was
+    ///        last computed; otherwise computes fresh via
+    ///        `renderComposite()` (which still benefits from
+    ///        `compositeCache_`'s own finer-grained reuse even on a
+    ///        cache miss here) and remembers the result. A no-op
+    ///        returning `std::nullopt` if `project_` is `nullptr`.
+    [[nodiscard]] std::optional<sound_mind::codec::RgbImage> currentComposite();
+
     const sound_mind::core::Project* project_ = nullptr;
+    /// @brief `v0.1.7.1` (`docs/sound-mind-roadmap.md`'s targeted-
+    ///        invalidation raster cache) - see `invalidateCompositeFrom()`/
+    ///        `invalidateCompositeAll()`'s own docs.
+    sound_mind::core::CompositePrefixCache compositeCache_;
+    /// @brief Bumped by `invalidateCompositeFrom()`/`invalidateCompositeAll()` -
+    ///        `renderComposite()`'s own "did anything actually change
+    ///        since the last paint" signal, letting it skip even the
+    ///        (now usually cheap, but not free) `compositeProjectCached()`
+    ///        call and RGB conversion entirely when nothing did -
+    ///        `docs/sound-mind-architecture.md`'s own finding that the
+    ///        overwhelming majority of repaints (the playhead's own ~30
+    ///        fps tick, every mouse-move while a paint stroke is in
+    ///        progress, every overlay-only change) don't touch layer
+    ///        content or properties at all.
+    std::uint64_t compositeGeneration_ = 0;
+    /// @brief The last `renderComposite()` result, paired with the
+    ///        `compositeGeneration_` value it was computed at - see
+    ///        `compositeGeneration_`'s own docs. `lastRenderedGeneration_`
+    ///        starts deliberately different from `compositeGeneration_`'s
+    ///        own initial `0`, so the very first paint always computes
+    ///        fresh rather than (wrongly) treating "nothing cached yet"
+    ///        as "nothing changed yet".
+    std::optional<sound_mind::codec::RgbImage> lastRenderedComposite_;
+    std::uint64_t lastRenderedGeneration_ = static_cast<std::uint64_t>(-1);
     std::optional<double> playheadFraction_;
     /// @brief See setPolarMode()'s own docs.
     bool polarMode_ = false;

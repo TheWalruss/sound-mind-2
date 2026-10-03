@@ -523,6 +523,20 @@ private:
     ///         `layersPanel_`, or the selected id no longer exists.
     [[nodiscard]] std::optional<std::size_t> selectedLayerIndex() const;
 
+    /// @brief Resolves `id` to its own current stack position and tells
+    ///        `canvas_` to invalidate its own cached composite from there
+    ///        up - `v0.1.7.1` (`docs/sound-mind-roadmap.md`'s targeted-
+    ///        invalidation raster cache). A no-op if no project is set or
+    ///        `id` no longer resolves to a real layer - the same
+    ///        "already-handled, not an error" tolerance every `apply*()`
+    ///        method here already has for its own `layerById()` lookup.
+    ///        Called alongside (never instead of) `canvas_->update()` at
+    ///        every `apply*()` site that changes a layer's own content or
+    ///        properties - `CanvasWidget::invalidateCompositeFrom()`'s
+    ///        own docs cover why a structural change (add/remove/reorder)
+    ///        doesn't need this.
+    void invalidateComposite(sound_mind::core::LayerId id);
+
     /// @brief The actual visibility+mute mutation + side effects, shared
     ///        by cycleLayerVisibilityState() and its own pushed
     ///        UndoCommand's undo()/redo() callbacks - see the class's own

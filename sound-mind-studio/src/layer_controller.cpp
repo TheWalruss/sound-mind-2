@@ -191,7 +191,7 @@ void LayerController::applyVisibilityAndMute(sound_mind::core::LayerId id, bool 
     layer->setMuted(muted);
     emit layersChanged();
     playbackController_->invalidate();  // "topmost layer with content" may have changed.
-    canvas_->update();
+    invalidateComposite(id);
     refreshLayersPanel();
 }
 
@@ -230,7 +230,7 @@ void LayerController::applyOpacity(sound_mind::core::LayerId id, float opacity) 
     }
     layer->setOpacity(opacity);
     emit layersChanged();
-    canvas_->update();
+    invalidateComposite(id);
     refreshLayersPanel();
 }
 
@@ -255,7 +255,7 @@ void LayerController::applyBalance(sound_mind::core::LayerId id, float balance) 
     }
     layer->setBalance(balance);
     emit layersChanged();
-    canvas_->update();
+    invalidateComposite(id);
     refreshLayersPanel();
 }
 
@@ -281,7 +281,7 @@ void LayerController::applyOpacityMindWave(sound_mind::core::LayerId id,
     }
     layer->setOpacityMindWave(mindWaveId);
     emit layersChanged();
-    canvas_->update();
+    invalidateComposite(id);
     refreshLayersPanel();
 }
 
@@ -308,7 +308,7 @@ void LayerController::applyTranslation(sound_mind::core::LayerId id, std::int64_
     }
     layer->setTranslationColumns(translationColumns);
     emit layersChanged();
-    canvas_->update();
+    invalidateComposite(id);
     refreshLayersPanel();
 }
 
@@ -334,7 +334,7 @@ void LayerController::applyRescale(sound_mind::core::LayerId id, double rescaleF
     }
     layer->setRescaleFactor(rescaleFactor);
     emit layersChanged();
-    canvas_->update();
+    invalidateComposite(id);
     refreshLayersPanel();
 }
 
@@ -359,7 +359,7 @@ void LayerController::applyBlendMode(sound_mind::core::LayerId id, sound_mind::c
     }
     layer->setBlendMode(mode);
     emit layersChanged();
-    canvas_->update();
+    invalidateComposite(id);
     refreshLayersPanel();
 }
 
@@ -427,7 +427,7 @@ void LayerController::deleteLayer(sound_mind::core::LayerId id) {
         loudnessProfileCache_.erase(id);
         emit layersChanged();
         playbackController_->invalidate();
-        canvas_->update();
+        canvas_->invalidateCompositeAll();  // Removing a layer is structural - see that method's own docs.
         refreshLayersPanel();
     }
 }
@@ -450,7 +450,7 @@ void LayerController::duplicateLayer(sound_mind::core::LayerId id) {
     const sound_mind::core::LayerId newId = project_->addLayer(std::move(copy));
     emit layersChanged();
     playbackController_->invalidate();
-    canvas_->update();
+    canvas_->invalidateCompositeAll();  // Adding a layer is structural - see that method's own docs.
     refreshLayersPanel();
     layersPanel_->selectLayer(newId);
 }
@@ -473,7 +473,7 @@ void LayerController::cleanUpLayerPhase(sound_mind::core::LayerId id) {
 
     emit layersChanged();
     playbackController_->invalidate();
-    canvas_->update();
+    invalidateComposite(id);
     refreshLayersPanel(id);
 }
 
@@ -492,6 +492,15 @@ std::optional<std::size_t> LayerController::selectedLayerIndex() const {
         return std::nullopt;
     }
     return static_cast<std::size_t>(std::distance(layers.begin(), it));
+}
+
+void LayerController::invalidateComposite(sound_mind::core::LayerId id) {
+    if (project_ == nullptr) {
+        return;
+    }
+    if (const auto index = project_->layerIndexById(id)) {
+        canvas_->invalidateCompositeFrom(*index);
+    }
 }
 
 void LayerController::selectLayerAbove() {
@@ -583,7 +592,7 @@ void LayerController::addEmptyLayer(sound_mind::codec::StreamImage placeholderCo
     const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
     emit layersChanged();
     playbackController_->invalidate();
-    canvas_->update();
+    canvas_->invalidateCompositeAll();  // Adding a layer is structural - see that method's own docs.
     refreshLayersPanel();
     // Selected immediately - ready to paint into without an extra click,
     // the whole point of adding it in the first place.
@@ -601,7 +610,7 @@ void LayerController::addFilterLayer() {
     const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
     emit layersChanged();
     playbackController_->invalidate();
-    canvas_->update();
+    canvas_->invalidateCompositeAll();  // Adding a layer is structural - see that method's own docs.
     refreshLayersPanel();
     // Selected immediately - ready to configure in FilterConfigurationPanel
     // without an extra click, the same reasoning addEmptyLayer()'s own
@@ -618,7 +627,7 @@ void LayerController::addGeneratedLayer(const sound_mind::core::GeneratorConfigu
     const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
     emit layersChanged();
     playbackController_->invalidate();
-    canvas_->update();
+    canvas_->invalidateCompositeAll();  // Adding a layer is structural - see that method's own docs.
     refreshLayersPanel();
     // Selected immediately - the same "ready to work with, no extra
     // click" reasoning addEmptyLayer()'s/addFilterLayer()'s own docs
@@ -675,7 +684,7 @@ void LayerController::applyFilterConfigurationTo(sound_mind::core::LayerId id,
     layer->setFilterConfiguration(config);
     emit layersChanged();
     playbackController_->invalidate();
-    canvas_->update();
+    invalidateComposite(id);
 }
 
 void LayerController::reorderLayers(const std::vector<sound_mind::core::LayerId>& newOrderBottomToTop) {
@@ -704,7 +713,7 @@ void LayerController::reorderLayers(const std::vector<sound_mind::core::LayerId>
 
     if (project_->reorderLayers(newOrderBottomToTop)) {
         emit layersChanged();
-        canvas_->update();
+        canvas_->invalidateCompositeAll();  // Reordering is structural - see that method's own docs.
     }
     // Refreshed either way - even a rejected reorder needs the panel
     // snapped back to the authoritative order (see LayersPanel::
