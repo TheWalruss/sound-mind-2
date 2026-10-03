@@ -30,7 +30,8 @@ in-app behavior is correct and this guide is due an update.
 19. [Pooling a Layer](#pooling-a-layer)
 20. [Exporting](#exporting)
 21. [Saving and Project Files](#saving-and-project-files)
-22. [What's Not Here Yet](#whats-not-here-yet)
+22. [Performance](#performance)
+23. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -1708,6 +1709,51 @@ without the other breaks the project.
 
 Closing the window, opening a different project, or starting a new one
 while you have unsaved changes prompts you to save first.
+
+## Performance
+
+Most editing stays responsive on an ordinary machine, but a few things
+genuinely cost more than others. None of this is a setting you need to
+tune up front - it's here for when something feels slower than
+expected, so you know what's actually driving it.
+
+- **Hardware Acceleration** (the checkbox in the **View** menu, also
+  mentioned under [The Main Window](#the-main-window)) lets several of
+  the heavier operations below run on the GPU instead of the CPU when
+  one's available. It's on by default and safe to leave there. GPU
+  acceleration tends to help more the bigger the operation is - a large
+  canvas, a strong blur, many layers - and can occasionally be a wash
+  (or even slightly slower) for something small and cheap, since
+  dispatching work to the GPU at all has its own fixed cost. Turn it
+  off if you want to compare speed or results against the CPU path
+  directly, or if you suspect it's causing a visual problem; it stays
+  as you left it across restarts.
+- **Filters**: **Uniform Blur** and **Edge-Preserving Blur** (see
+  [Filter Layers](#filter-layers) above) both use the GPU when
+  Hardware Acceleration is on. For Uniform Blur, a larger **Sigma**
+  costs more either way, but GPU acceleration scales with it well - the
+  bigger the blur, the more it helps. **Edge-Preserving Blur** doesn't
+  scale quite as cleanly: a larger **Size** costs more on the CPU *and*
+  the GPU, and the GPU's own advantage shrinks the bigger Size gets - so
+  if Edge-Preserving Blur feels slow, reaching for a smaller Size helps
+  more than toggling Hardware Acceleration does.
+- **Layers and blend modes**: every layer that's visible and has
+  content contributes to the composite the canvas and Playback show
+  (see [Compositing](#compositing) above), and every blend mode -
+  Normal included - uses the GPU when it's available. More visible
+  layers still means more work per edit, though, so a project with a
+  very large number of layers will recomposite more slowly than a
+  simple one regardless of acceleration.
+- **MindWaves**: a plain **Fractal**-type MindWave (see
+  [MindWaves](#mindwaves) above) evaluates on the GPU when Hardware
+  Acceleration is on, and scales well to large canvases as a result. If
+  you combine a Fractal MindWave with **Warp**, or use one as a
+  **Superposition** member, it falls back to evaluating on the CPU
+  instead - still correct, just not GPU-accelerated in that combination
+  yet.
+- **Painting**: the **Heal** and **Soften** brushes blend each stroke
+  toward a local average of the surrounding content - both stay fast
+  regardless of how large you set the brush's own **Size**.
 
 ## What's Not Here Yet
 
