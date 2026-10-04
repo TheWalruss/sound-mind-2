@@ -9,6 +9,7 @@
 #include <QString>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/tool_configuration.h"
@@ -65,6 +66,26 @@ public:
      *        paintable until a real one is set again).
      */
     void setProject(sound_mind::core::Project* project);
+
+    /**
+     * @brief Invalidates every layer's own cached paint-content replay -
+     *        `v0.1.8.1` (`docs/sound-mind-roadmap.md`'s within-a-layer
+     *        operation-replay cache). Call whenever any MindWave's own
+     *        value changes anywhere in the project's library (an
+     *        `InstrumentConfiguration`'s vibrato/tremolo binding, or a
+     *        `FilterOperation`'s own bound parameter, might be using it)
+     *        - see `sound_mind::core::PaintContentCache`'s own docs for
+     *        why this is deliberately coarse (every layer, not just ones
+     *        actually bound to the edited MindWave).
+     *
+     * Does *not* force an immediate rebuild of anything - only the *next*
+     * `rebuildLayerContent()` call for each layer, whenever that happens
+     * for any reason, replays fully rather than reusing a stale cached
+     * result. `baseContent_` (the pre-paint snapshots themselves) is
+     * untouched - nothing about a layer's own pre-paint state changes
+     * just because a MindWave's value did.
+     */
+    void invalidateContentCaches();
 
     /// @brief The tool configuration new strokes are painted with.
     /// @return The configuration currently in effect.
@@ -170,13 +191,26 @@ public:
      * @brief Undoes the most recent active operation and rebuilds every
      *        layer painting has touched so far this session, emitting
      *        contentChanged() for each - a no-op if canUndo() is `false`.
+     *
+     * Invalidates every layer's own `sound_mind::core::PaintContentCache`
+     * first (`v0.1.8.1`) - deliberately, not an oversight: undo moves the
+     * active-operation boundary in a way that can affect any layer's own
+     * history, and this method's own loop already rebuilds *every*
+     * painted layer regardless of whether undo specifically touched it,
+     * so forcing each of those rebuilds to replay fully (exactly the
+     * pre-`v0.1.8.1` cost) keeps undo's own correctness contract - in
+     * particular, a Mind Grain stroke's source re-sampling on literally
+     * any undo, not just ones that directly touch its own source layer -
+     * bit-for-bit unchanged. This cache's own speed benefit is for the
+     * hot path (painting new strokes), not undo/redo.
      */
     void undo();
 
     /// @brief Redoes the most recently undone operation and rebuilds
     ///        every layer painting has touched so far this session,
     ///        emitting contentChanged() for each - a no-op if canRedo()
-    ///        is `false`.
+    ///        is `false`. Invalidates every layer's own `PaintContentCache`
+    ///        first, same reasoning as undo()'s own docs.
     void redo();
 
     /**
@@ -230,6 +264,16 @@ public:
      * painted - see `sound_mind::core::isLayerAbove()`'s own docs), so it's
      * bounded by the stack's own height and can never cycle back down to a
      * layer already visited on its way up.
+     *
+     * **As of `v0.1.8.1`, reuses a per-layer `sound_mind::core::
+     * PaintContentCache` wherever it's still valid** (see that class's
+     * own docs) - replaying only newly-appended operations on top of a
+     * cached intermediate result, rather than this layer's *entire*
+     * history from `base`, whenever possible. A Mind Grain cascade
+     * target's own cache is explicitly invalidated right before it's
+     * rebuilt here (see this method's own cascade paragraph below) -
+     * `PaintContentCache`'s own docs cover why that's needed and what it
+     * narrows relative to `MindGrainConfiguration`'s pre-`v0.1.8.1` docs.
      *
      * @param layer Which layer to rebuild.
      */
@@ -300,6 +344,10 @@ private:
     sound_mind::core::Path previewPath_;
 
     std::unordered_map<sound_mind::core::LayerId, sound_mind::codec::StreamImage> baseContent_;
+    /// @brief `v0.1.8.1` (`docs/sound-mind-roadmap.md`'s within-a-layer
+    ///        operation-replay cache) - see `rebuildLayerContent()`'s/
+    ///        `invalidateContentCaches()`'s own docs.
+    std::unordered_map<sound_mind::core::LayerId, sound_mind::core::PaintContentCache> contentCache_;
 };
 
 }  // namespace sound_mind::studio

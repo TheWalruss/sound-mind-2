@@ -41,9 +41,11 @@ using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
+using sound_mind::core::PaintContentCache;
 using sound_mind::core::PrincipalMode;
 using sound_mind::core::NoteEvent;
 using sound_mind::core::rebuildPaintedContent;
+using sound_mind::core::rebuildPaintedContentCached;
 using sound_mind::core::SequenceOperation;
 using sound_mind::core::SmudgeConfiguration;
 using sound_mind::core::SoftenConfiguration;
@@ -2404,6 +2406,125 @@ TEST_CASE("rebuildPaintedContent with no operations returns an unchanged copy of
     const StreamImage rebuilt = rebuildPaintedContent(base, {}, 2000.0);
 
     REQUIRE(rebuilt.leftMagnitudeDb[42] == -33.0f);
+}
+
+TEST_CASE("rebuildPaintedContentCached with a fresh cache matches rebuildPaintedContent() exactly",
+          "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    const StreamImage base = makeBlankContent(config, 100);
+
+    const Path firstStroke = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);
+    const PaintOperation first(1, LayerId{1}, firstStroke, makeCircleTool(0.05, 0.0f));
+    const Path secondStroke = makeUniformHorizontalPath(0.1, 0.5, 2000.0, -20.0f, 1.0f);
+    const PaintOperation second(2, LayerId{1}, secondStroke, makeCircleTool(0.05, 0.0f));
+    const std::vector<const Operation*> operations = {&first, &second};
+
+    const StreamImage expected = rebuildPaintedContent(base, operations, 2000.0);
+
+    PaintContentCache cache;
+    const StreamImage actual = rebuildPaintedContentCached(base, operations, 2000.0, cache);
+
+    REQUIRE(actual.leftMagnitudeDb == expected.leftMagnitudeDb);
+    REQUIRE(actual.rightMagnitudeDb == expected.rightMagnitudeDb);
+}
+
+TEST_CASE(
+    "rebuildPaintedContentCached reuses its own cached prefix without re-reading base, when operations only grow "
+    "at the end",
+    "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage base = makeBlankContent(config, 100);
+    // A marker cell that a full replay from `base` would pick up, but a
+    // correctly-caching prefix reuse would not - see this test's own name.
+    base.leftMagnitudeDb[7] = -1.0f;
+
+    const Path firstStroke = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);
+    const PaintOperation first(1, LayerId{1}, firstStroke, makeCircleTool(0.05, 0.0f));
+
+    PaintContentCache cache;
+    const StreamImage firstResult = rebuildPaintedContentCached(base, {&first}, 2000.0, cache);
+    REQUIRE(firstResult.leftMagnitudeDb[7] == -1.0f);
+
+    // Mutate base directly, bypassing the cache entirely - a caller that
+    // (incorrectly) re-read base on this next call would see this.
+    base.leftMagnitudeDb[7] = -99.0f;
+
+    const Path secondStroke = makeUniformHorizontalPath(0.1, 0.5, 2000.0, -20.0f, 1.0f);
+    const PaintOperation second(2, LayerId{1}, secondStroke, makeCircleTool(0.05, 0.0f));
+    const std::vector<const Operation*> operations = {&first, &second};
+    const StreamImage secondResult = rebuildPaintedContentCached(base, operations, 2000.0, cache);
+
+    // Still reflects the OLD base, proving the cached prefix (computed
+    // against it before the mutation) was reused rather than base being
+    // re-read.
+    REQUIRE(secondResult.leftMagnitudeDb[7] == -1.0f);
+
+    // The new, appended operation's own effect is still genuinely present.
+    const int centerFrame = static_cast<int>(std::lround(timeToFrameIndex(0.3, config)));
+    const int centerBin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(2000.0f, config))));
+    REQUIRE(secondResult.leftMagnitudeDb[pixelIndex(secondResult, centerFrame, centerBin)] == -20.0f);
+}
+
+TEST_CASE(
+    "rebuildPaintedContentCached falls back to a full replay when the operations list doesn't extend its own "
+    "cached prefix",
+    "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    const StreamImage base = makeBlankContent(config, 100);
+
+    const Path firstStroke = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);
+    const PaintOperation first(1, LayerId{1}, firstStroke, makeCircleTool(0.05, 0.0f));
+    const Path secondStroke = makeUniformHorizontalPath(0.1, 0.5, 2000.0, -20.0f, 1.0f);
+    const PaintOperation second(2, LayerId{1}, secondStroke, makeCircleTool(0.05, 0.0f));
+
+    PaintContentCache cache;
+    static_cast<void>(rebuildPaintedContentCached(base, {&first, &second}, 2000.0, cache));
+
+    // A different second operation - e.g. the shape an undo-then-fresh-
+    // stroke, or a Pick supersede, would produce. Not a simple extension
+    // of the cached [first, second] prefix.
+    const Path thirdStroke = makeUniformHorizontalPath(0.1, 0.5, 3000.0, -30.0f, 1.0f);
+    const PaintOperation third(3, LayerId{1}, thirdStroke, makeCircleTool(0.05, 0.0f));
+    const std::vector<const Operation*> mismatched = {&first, &third};
+
+    const StreamImage actual = rebuildPaintedContentCached(base, mismatched, 2000.0, cache);
+    const StreamImage expected = rebuildPaintedContent(base, mismatched, 2000.0);
+
+    REQUIRE(actual.leftMagnitudeDb == expected.leftMagnitudeDb);
+
+    // Shrinking back to just the first operation (an undo) must also fall
+    // back correctly, not error or return something stale.
+    const StreamImage shrunkActual = rebuildPaintedContentCached(base, {&first}, 2000.0, cache);
+    const StreamImage shrunkExpected = rebuildPaintedContent(base, {&first}, 2000.0);
+    REQUIRE(shrunkActual.leftMagnitudeDb == shrunkExpected.leftMagnitudeDb);
+}
+
+TEST_CASE(
+    "rebuildPaintedContentCached's invalidateAll() forces a fresh replay even when operations would otherwise "
+    "extend the cached prefix",
+    "[core][paint_application]") {
+    const auto config = makeTestConfig();
+    StreamImage base = makeBlankContent(config, 100);
+    base.leftMagnitudeDb[7] = -1.0f;
+
+    const Path firstStroke = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);
+    const PaintOperation first(1, LayerId{1}, firstStroke, makeCircleTool(0.05, 0.0f));
+
+    PaintContentCache cache;
+    static_cast<void>(rebuildPaintedContentCached(base, {&first}, 2000.0, cache));
+
+    base.leftMagnitudeDb[7] = -99.0f;
+    cache.invalidateAll();
+
+    const Path secondStroke = makeUniformHorizontalPath(0.1, 0.5, 2000.0, -20.0f, 1.0f);
+    const PaintOperation second(2, LayerId{1}, secondStroke, makeCircleTool(0.05, 0.0f));
+    const std::vector<const Operation*> operations = {&first, &second};
+    const StreamImage result = rebuildPaintedContentCached(base, operations, 2000.0, cache);
+
+    // Unlike the "reuses its own cached prefix" test above, this now
+    // reflects the MUTATED base - invalidateAll() genuinely discarded the
+    // stale cache rather than being a no-op.
+    REQUIRE(result.leftMagnitudeDb[7] == -99.0f);
 }
 
 TEST_CASE("applyPaintOperation's Procedural circle stamp keeps an equal bin-radius regardless of its own "

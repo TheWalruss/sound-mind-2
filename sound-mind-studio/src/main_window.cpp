@@ -677,6 +677,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         // MindWave edit either - only some *other*, unrelated repaint
         // happened to make a bound layer's updated field visible.
         canvas_->invalidateCompositeAll();
+        // v0.1.8.1 (docs/sound-mind-roadmap.md's within-a-layer operation-
+        // replay cache) - the same coarse reasoning as the composite
+        // invalidation just above, extended to a layer's own painted
+        // content: an InstrumentConfiguration's vibrato/tremolo, or a
+        // FilterOperation's own bound parameter, might be using this
+        // MindWave too, with nothing here tracking which layer's paint
+        // history actually does.
+        toolPaletteController_->invalidateContentCaches();
     });
 
     // A permanent (not showMessage()'s own temporary-message) label in the

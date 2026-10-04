@@ -20,6 +20,13 @@ void PaintController::setProject(sound_mind::core::Project* project) {
     strokePoints_.clear();
     previewPath_ = sound_mind::core::Path{};
     baseContent_.clear();
+    contentCache_.clear();
+}
+
+void PaintController::invalidateContentCaches() {
+    for (auto& [layerId, cache] : contentCache_) {
+        cache.invalidateAll();
+    }
 }
 
 void PaintController::beginStroke(sound_mind::core::LayerId targetLayer, sound_mind::core::TimeFrequencyPoint point) {
@@ -135,6 +142,7 @@ void PaintController::undo() {
         return;
     }
     project_->operationLog().undo();
+    invalidateContentCaches();
     for (const auto& [layerId, base] : baseContent_) {
         rebuildLayerContent(layerId);
     }
@@ -145,6 +153,7 @@ void PaintController::redo() {
         return;
     }
     project_->operationLog().redo();
+    invalidateContentCaches();
     for (const auto& [layerId, base] : baseContent_) {
         rebuildLayerContent(layerId);
     }
@@ -212,9 +221,9 @@ void PaintController::rebuildLayerContentAndCascade(sound_mind::core::LayerId la
 
     const auto activeOperations = project_->operationLog().activeOperationsTargeting(layer);
     const sound_mind::core::ProjectSettings settings = project_->settings();
-    sound_mind::codec::StreamImage rebuilt = sound_mind::core::rebuildPaintedContent(
+    sound_mind::codec::StreamImage rebuilt = sound_mind::core::rebuildPaintedContentCached(
         baseContent_.at(layer), activeOperations, sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
-        resolveLayerContent, resolveMindWave, &settings);
+        contentCache_[layer], resolveLayerContent, resolveMindWave, &settings);
     target->setContent(std::move(rebuilt));
 
     emit contentChanged(layer);
@@ -222,9 +231,16 @@ void PaintController::rebuildLayerContentAndCascade(sound_mind::core::LayerId la
     // Cascade immediately to every layer with a Mind Grain stroke sourced
     // from this one - see rebuildLayerContent()'s own docs. `visited`
     // already guards against re-rebuilding a layer reachable through more
-    // than one dependency chain (a diamond).
+    // than one dependency chain (a diamond). Each dependent's own
+    // PaintContentCache is explicitly invalidated first (v0.1.8.1) - its
+    // own active operations haven't necessarily changed (the Mind Grain
+    // stroke itself is still the same pointer, same position), but what
+    // it *resolves to* just did, since `layer`'s own content is what it
+    // reads live - see sound_mind::core::PaintContentCache's own docs on
+    // why this explicit call is needed here specifically.
     for (const sound_mind::core::LayerId dependent :
          sound_mind::core::layersWithMindGrainOperationsSourcedFrom(*project_, layer)) {
+        contentCache_[dependent].invalidateAll();
         rebuildLayerContentAndCascade(dependent, visited);
     }
 }

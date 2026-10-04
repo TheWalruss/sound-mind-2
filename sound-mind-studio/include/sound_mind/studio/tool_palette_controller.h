@@ -219,6 +219,13 @@ public:
     ///        `PaintController::redo()`.
     void redo();
 
+    /// @brief Invalidates every layer's own cached paint-content replay -
+    ///        `v0.1.8.1` - forwards to
+    ///        `PaintController::invalidateContentCaches()`. Call whenever
+    ///        any MindWave's own value changes anywhere in the project's
+    ///        library - see that method's own docs.
+    void invalidateContentCaches();
+
     /// @brief Deletes the currently Picked object - forwards to
     ///        `PickController::deleteSelection()`.
     void deleteSelection();

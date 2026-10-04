@@ -27,11 +27,13 @@ private slots:
     void beginStrokeRefusesSilentlyWhenTheMindGrainToolIsNotAllowedOnTheTargetLayer();
     void beginStrokeStartsNormallyWhenTheMindGrainToolIsAllowedOnTheTargetLayer();
     void endStrokeWithAMindGrainToolPaintsFromTheSourceLayersCurrentContent();
-    void rebuildLayerContentRereadsTheSourceLayersCurrentContentEachTime();
+    void rebuildLayerContentRereadsTheSourceLayersCurrentContentAfterInvalidateContentCaches();
+    void rebuildLayerContentDoesNotRereadTheSourceLayersCurrentContentWithoutInvalidateContentCaches();
     void paintingOnASourceLayerImmediatelyCascadesToDependentMindGrainLayers();
     void cascadeVisitsEachDependentLayerOnlyOncePerRebuild();
 
     // MindWaves v2 Installment A: Instrument vibrato/tremolo (v0.Y.39.1).
     void endStrokeWithAnInstrumentToolBoundToATremoloMindWaveResolvesItAgainstTheProject();
-    void rebuildLayerContentRereadsTheTremoloMindWaveLibraryEachTime();
+    void rebuildLayerContentRereadsTheTremoloMindWaveLibraryAfterInvalidateContentCaches();
+    void rebuildLayerContentDoesNotRereadTheTremoloMindWaveLibraryWithoutInvalidateContentCaches();
 };

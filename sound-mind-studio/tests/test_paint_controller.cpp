@@ -389,7 +389,7 @@ void PaintControllerTest::endStrokeWithAMindGrainToolPaintsFromTheSourceLayersCu
     QVERIFY(anyPaintedFromSource);
 }
 
-void PaintControllerTest::rebuildLayerContentRereadsTheSourceLayersCurrentContentEachTime() {
+void PaintControllerTest::rebuildLayerContentRereadsTheSourceLayersCurrentContentAfterInvalidateContentCaches() {
     Project project = Project::createNew(testSettings());
     const LayerId lower = addBlankNormalLayer(project);
     const LayerId upper = addBlankNormalLayer(project);
@@ -410,13 +410,20 @@ void PaintControllerTest::rebuildLayerContentRereadsTheSourceLayersCurrentConten
         QVERIFY(!anyNonZero);
     }
 
-    // The source layer is repainted directly (as if a fresh stroke had
-    // just been drawn there) - the existing Mind Grain stroke on `upper`
-    // must reflect it on its *own* next rebuild, without upper's own
-    // stroke ever being redrawn.
+    // The source layer's content is replaced directly (bypassing
+    // PaintController entirely - e.g. a fresh import into it, not a
+    // paint-triggered rebuild PaintController would already know about).
+    // v0.1.8.1's own PaintContentCache means `upper`'s own next rebuild no
+    // longer notices this on its own (see PaintContentCache's own docs on
+    // why - its own operations list hasn't changed, so without being told
+    // otherwise, it reuses what it already has) - a caller that knows a
+    // source layer changed through some path PaintController wasn't
+    // already driving must say so explicitly, the same way MainWindow's
+    // own mindWavesChanged handler does for the MindWave case below.
     auto sourceContent = *project.layerById(lower)->content();
     std::fill(sourceContent.leftMagnitudeDb.begin(), sourceContent.leftMagnitudeDb.end(), -9.0f);
     project.layerById(lower)->setContent(sourceContent);
+    controller.invalidateContentCaches();
 
     controller.rebuildLayerContent(upper);
 
@@ -424,6 +431,39 @@ void PaintControllerTest::rebuildLayerContentRereadsTheSourceLayersCurrentConten
     const bool anyFromNewSource = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
                                                [](float value) { return value == -9.0f; });
     QVERIFY(anyFromNewSource);
+}
+
+void PaintControllerTest::rebuildLayerContentDoesNotRereadTheSourceLayersCurrentContentWithoutInvalidateContentCaches() {
+    // The deliberate narrowing the test above's own comment describes,
+    // confirmed with the user: unlike before v0.1.8.1, a Mind Grain
+    // stroke no longer re-samples its source on *every* rebuild of its
+    // own layer, only when told to (explicitly, or via the existing Mind
+    // Grain cascade - see paintingOnASourceLayerImmediatelyCascadesToDependentMindGrainLayers()
+    // below for that path). A regression guard, not just documentation -
+    // if this starts failing, PaintContentCache's own fast path stopped
+    // being a cache and became correctness-breaking staleness instead.
+    Project project = Project::createNew(testSettings());
+    const LayerId lower = addBlankNormalLayer(project);
+    const LayerId upper = addBlankNormalLayer(project);
+    PaintController controller;
+    controller.setProject(&project);
+    auto config = std::make_unique<MindGrainConfiguration>();
+    config->setReference(std::nullopt, lower, TimeFrequencyRect{0.0, 1.0, 20.0, 2020.0});
+    controller.setToolConfiguration(std::move(config));
+    controller.beginStroke(upper, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    auto sourceContent = *project.layerById(lower)->content();
+    std::fill(sourceContent.leftMagnitudeDb.begin(), sourceContent.leftMagnitudeDb.end(), -9.0f);
+    project.layerById(lower)->setContent(sourceContent);
+    // No invalidateContentCaches() call this time.
+
+    controller.rebuildLayerContent(upper);
+
+    const auto& content = *project.layerById(upper)->content();
+    const bool anyFromNewSource = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                               [](float value) { return value == -9.0f; });
+    QVERIFY(!anyFromNewSource);
 }
 
 void PaintControllerTest::paintingOnASourceLayerImmediatelyCascadesToDependentMindGrainLayers() {
@@ -533,7 +573,7 @@ void PaintControllerTest::endStrokeWithAnInstrumentToolBoundToATremoloMindWaveRe
     QVERIFY(!anyPainted);
 }
 
-void PaintControllerTest::rebuildLayerContentRereadsTheTremoloMindWaveLibraryEachTime() {
+void PaintControllerTest::rebuildLayerContentRereadsTheTremoloMindWaveLibraryAfterInvalidateContentCaches() {
     Project project = Project::createNew(testSettings());
     const LayerId layerId = addBlankNormalLayer(project);
     const auto tremoloId = project.addMindWave("Tremolo", alwaysBaselineWave());
@@ -560,11 +600,46 @@ void PaintControllerTest::rebuildLayerContentRereadsTheTremoloMindWaveLibraryEac
     // reshaped it in the MindWaves panel) - no new stroke is drawn, just a
     // fresh rebuild of the existing one, per the "live reference, not a
     // snapshot" contract MindWaveResolver's own docs establish.
+    // v0.1.8.1's own PaintContentCache needs an explicit
+    // invalidateContentCaches() call told about this, the same as
+    // MainWindow's own mindWavesChanged handler already does in
+    // production (PaintController alone, as this test uses it, has no
+    // way to find out on its own that a MindWave somewhere changed).
     project.mindWaveById(tremoloId)->wave.setPhaseRadians(0.0);  // Baseline -> ceiling.
+    controller.invalidateContentCaches();
     controller.rebuildLayerContent(layerId);
 
     const auto& content = *project.layerById(layerId)->content();
     const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
                                          [](float value) { return value != 0.0f; });
     QVERIFY(anyPainted);
+}
+
+void PaintControllerTest::rebuildLayerContentDoesNotRereadTheTremoloMindWaveLibraryWithoutInvalidateContentCaches() {
+    // The deliberate narrowing the test above's own comment describes -
+    // a regression guard, not just documentation: if this starts
+    // failing, PaintContentCache's own fast path stopped being a cache
+    // and became correctness-breaking staleness instead.
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto tremoloId = project.addMindWave("Tremolo", alwaysBaselineWave());
+
+    PaintController controller;
+    controller.setProject(&project);
+    auto config = makeOpaqueInstrumentTool();
+    config->setTremoloDepth(1.0);
+    config->setTremoloMindWave(tremoloId);
+    controller.setToolConfiguration(std::move(config));
+
+    controller.beginStroke(layerId, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+
+    project.mindWaveById(tremoloId)->wave.setPhaseRadians(0.0);  // Baseline -> ceiling.
+    // No invalidateContentCaches() call this time.
+    controller.rebuildLayerContent(layerId);
+
+    const auto& content = *project.layerById(layerId)->content();
+    const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                                         [](float value) { return value != 0.0f; });
+    QVERIFY(!anyPainted);
 }

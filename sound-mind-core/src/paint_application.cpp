@@ -1803,4 +1803,36 @@ sound_mind::codec::StreamImage rebuildPaintedContent(const sound_mind::codec::St
     return result;
 }
 
+void PaintContentCache::invalidateAll() noexcept {
+    lastOperations_.clear();
+    hasResult_ = false;
+}
+
+sound_mind::codec::StreamImage rebuildPaintedContentCached(const sound_mind::codec::StreamImage& base,
+                                                             const std::vector<const Operation*>& operations,
+                                                             double frequencyToTimeScale, PaintContentCache& cache,
+                                                             const LayerContentResolver& resolveLayerContent,
+                                                             const MindWaveResolver& resolveMindWave,
+                                                             const ProjectSettings* settings) {
+    const bool prefixMatches = cache.hasResult_ && operations.size() >= cache.lastOperations_.size() &&
+                                 std::equal(cache.lastOperations_.begin(), cache.lastOperations_.end(),
+                                            operations.begin());
+
+    sound_mind::codec::StreamImage result;
+    if (prefixMatches) {
+        const std::vector<const Operation*> suffix(
+            operations.begin() + static_cast<std::ptrdiff_t>(cache.lastOperations_.size()), operations.end());
+        result = rebuildPaintedContent(cache.lastResult_, suffix, frequencyToTimeScale, resolveLayerContent,
+                                         resolveMindWave, settings);
+    } else {
+        result = rebuildPaintedContent(base, operations, frequencyToTimeScale, resolveLayerContent, resolveMindWave,
+                                         settings);
+    }
+
+    cache.lastOperations_.assign(operations.begin(), operations.end());
+    cache.lastResult_ = result;
+    cache.hasResult_ = true;
+    return result;
+}
+
 }  // namespace sound_mind::core

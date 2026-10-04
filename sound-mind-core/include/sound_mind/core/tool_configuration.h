@@ -1114,11 +1114,20 @@ private:
  * content at paint-application time (via a caller-supplied
  * `LayerContentResolver`), the same way `NamedMindGrain`'s own docs
  * describe. **How "live" this actually is, in this installment**: a
- * grain-painted layer only re-samples its source the next time *that*
- * layer's own content is rebuilt for any reason (a new stroke there,
- * undo/redo, project load) - not the instant the source layer changes
- * elsewhere. Confirmed with the user as this installment's own scope,
- * over a full, immediately-reactive cross-layer rebuild cascade.
+ * grain-painted layer re-samples its source the next time *that* source
+ * layer's own content actually changes (a new stroke there, undo/redo,
+ * project load) - not the instant it happens, and not merely because the
+ * grain-painted layer *itself* was rebuilt for some unrelated reason (see
+ * `PaintController::rebuildLayerContentAndCascade()`'s own cascade, which
+ * is what actually delivers this - `v0.1.8.1`'s own `PaintContentCache`
+ * narrowed this from an earlier, broader "...or for any reason at all"
+ * phrasing once that cache made the distinction observable: before it
+ * existed, *every* rebuild of the grain-painted layer replayed its whole
+ * history from scratch regardless of why, which happened to also
+ * re-sample the source as a side effect - never a deliberate feature,
+ * and not preserved once that full-replay-always behavior went away).
+ * Confirmed with the user as this installment's own scope, over a full,
+ * immediately-reactive cross-layer rebuild cascade.
  *
  * **Only paintable on a layer above `sourceLayerId()`** - see
  * `isLayerAbove()`'s own docs for where this is actually enforced (stroke

@@ -242,6 +242,8 @@ void ToolPaletteController::undo() { paintController_->undo(); }
 
 void ToolPaletteController::redo() { paintController_->redo(); }
 
+void ToolPaletteController::invalidateContentCaches() { paintController_->invalidateContentCaches(); }
+
 void ToolPaletteController::deleteSelection() { pickController_->deleteSelection(); }
 
 void ToolPaletteController::bringToFront() { pickController_->bringToFront(); }

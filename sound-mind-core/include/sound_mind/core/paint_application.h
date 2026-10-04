@@ -534,4 +534,132 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
                                                                      const MindWaveResolver& resolveMindWave = {},
                                                                      const ProjectSettings* settings = nullptr);
 
+/**
+ * @brief A one-layer-deep memo for rebuildPaintedContentCached() - `v0.1.8.1`,
+ *        the within-a-single-layer half of the "many layers"/"many
+ *        operations" benchmark finding `docs/sound-mind-roadmap.md`'s
+ *        `v0.1.7.1` raster cache already addressed for the layer-*stack*
+ *        half (`CompositePrefixCache`, `compositor.h`). That cache made
+ *        editing one layer cheap regardless of how many *other* layers
+ *        exist; this one makes editing a layer with a long paint history
+ *        cheap regardless of how many *earlier operations* it already
+ *        has - `rebuildLayerContentAndCascade()`/`rebuildPaintedContent()`
+ *        previously replayed a layer's *entire* operation history from its
+ *        own pre-paint `base`, from scratch, on every single new stroke
+ *        (genuinely `O(n^2)` total cost for `n` strokes on one layer).
+ *
+ * **What's cached**: exactly one `(operations, result)` pair - the most
+ * recent call's own operation list and the `StreamImage` it produced.
+ * Unlike `CompositePrefixCache` (one entry *per layer stack position*),
+ * there's no equivalent "position" within one layer's own linear
+ * operation history worth indexing separately - a single remembered
+ * state is enough to make the overwhelmingly common case (append one more
+ * operation, replay just that one) cheap, and anything else (undo,
+ * redo-past-a-fresh-append, a Pick supersede, a Pick reorder) simply falls
+ * back to a full replay, exactly like before this cache existed.
+ *
+ * **The fast path**: when the next call's own `operations` is exactly the
+ * cached list plus more appended at the end (same pointers, same order,
+ * for the shared prefix - `Operation`s are owned by the `OperationLog`
+ * they came from and never move once logged, so pointer identity is a
+ * valid, cheap stand-in for "is this the same operation"), only the new
+ * suffix is replayed - on top of the cached `StreamImage`, not `base` -
+ * via a second, ordinary rebuildPaintedContent() call. **The fallback
+ * path**: any other relationship between the two lists (shorter, a
+ * different element anywhere in the shared-length prefix, or no cached
+ * entry yet) replays everything from `base`, exactly as
+ * rebuildPaintedContent() alone always has - `never wrong, just not
+ * faster`, the same invariant `CompositePrefixCache`'s own docs establish
+ * for its memory budget.
+ *
+ * **`MindGrainConfiguration`'s own "live" read needs an explicit
+ * `invalidateAll()`, same shape as `CompositePrefixCache`'s MindWave-edit
+ * case**: a Mind Grain stroke resolves its source layer's *current*
+ * content at whatever moment it's actually (re)applied (see
+ * `LayerContentResolver`'s own docs) - if that stroke is already part of
+ * a cached prefix, a later, unrelated edit to the *same* layer would
+ * reuse the cached result rather than re-sampling it. **Confirmed with
+ * the user**: this narrows `MindGrainConfiguration`'s own previously-
+ * documented "refreshes on any rebuild, for any reason" contract (see its
+ * own class docs) to "refreshes when its source layer's content actually
+ * changes" - still fully correct for that, since
+ * `PaintController::rebuildLayerContentAndCascade()`'s own existing Mind
+ * Grain cascade (unchanged by this cache) already explicitly invalidates
+ * a dependent layer's cache right before forcing its rebuild, every time
+ * its source's content changes. The narrowed case this gives up - an
+ * *unrelated* edit to a grain-using layer also happening to refresh its
+ * own grain sample, a side effect of "always replay everything" rather
+ * than a deliberate feature - was never reachable except by the source
+ * changing through some path other than a paint-triggered rebuild (e.g.
+ * a direct import into the source layer), already a narrow edge case
+ * before this cache existed.
+ *
+ * **MindWave-bound operations (an `InstrumentConfiguration`'s vibrato/
+ * tremolo, a `FilterOperation`'s bound parameter) need no equivalent
+ * per-operation handling** - unlike Mind Grain, nothing about *when* a
+ * bound MindWave's value last changed is narrowed: `PaintController`'s
+ * own `invalidateContentCaches()` is called on every MindWave edit,
+ * unconditionally, for every layer - so by the time any layer's cache is
+ * next consulted for any reason, it was already cleared if a relevant (or
+ * irrelevant - deliberately coarse, matching `CompositePrefixCache`'s own
+ * "whole-layer invalidation granularity" reasoning for the exact same
+ * class of problem) edit happened since.
+ *
+ * @note Not thread-safe, and not meant to be shared across threads - same
+ *       "UI/main thread owns cache invalidation/recompute" model as
+ *       `CompositePrefixCache`.
+ */
+class PaintContentCache {
+public:
+    PaintContentCache() noexcept = default;
+
+    /// @brief Discards the cached operation list and result - the next
+    ///        call to rebuildPaintedContentCached() with this cache
+    ///        replays fully from `base`, regardless of how its own
+    ///        `operations` relates to whatever was cached before.
+    ///        See this class's own docs for when a caller needs this
+    ///        (a Mind Grain cascade target, or any layer after a MindWave
+    ///        edit).
+    void invalidateAll() noexcept;
+
+private:
+    friend sound_mind::codec::StreamImage rebuildPaintedContentCached(
+        const sound_mind::codec::StreamImage& base, const std::vector<const Operation*>& operations,
+        double frequencyToTimeScale, PaintContentCache& cache, const LayerContentResolver& resolveLayerContent,
+        const MindWaveResolver& resolveMindWave, const ProjectSettings* settings);
+
+    std::vector<const Operation*> lastOperations_;
+    sound_mind::codec::StreamImage lastResult_;
+    bool hasResult_ = false;
+};
+
+/**
+ * @brief rebuildPaintedContent() above, reusing `cache`'s own previously
+ *        computed result whenever `operations` is exactly its own cached
+ *        list plus more appended at the end - see `PaintContentCache`'s
+ *        own docs for the full contract (the fast/fallback path split,
+ *        the Mind Grain narrowing, the MindWave-edit handling). Produces
+ *        exactly the same result rebuildPaintedContent() itself would for
+ *        the same `base`/`operations`/resolvers, just potentially faster.
+ *
+ * @param base See rebuildPaintedContent()'s own docs. Only actually read
+ *        when the fallback (full replay) path is taken - a caller that
+ *        always passes the same, unchanging `base` for a given `cache`
+ *        (the normal case - see `PaintController::baseContent_`'s own
+ *        docs) needs nothing special; this parameter exists at all only
+ *        because the fallback path still needs *some* base to replay
+ *        from when the fast path doesn't apply.
+ * @param operations See rebuildPaintedContent()'s own docs.
+ * @param frequencyToTimeScale See rebuildPaintedContent()'s own docs.
+ * @param cache The cache to read from and update.
+ * @param resolveLayerContent See rebuildPaintedContent()'s own docs.
+ * @param resolveMindWave See rebuildPaintedContent()'s own docs.
+ * @param settings See rebuildPaintedContent()'s own docs.
+ * @return See rebuildPaintedContent()'s own docs.
+ */
+[[nodiscard]] sound_mind::codec::StreamImage rebuildPaintedContentCached(
+    const sound_mind::codec::StreamImage& base, const std::vector<const Operation*>& operations,
+    double frequencyToTimeScale, PaintContentCache& cache, const LayerContentResolver& resolveLayerContent = {},
+    const MindWaveResolver& resolveMindWave = {}, const ProjectSettings* settings = nullptr);
+
 }  // namespace sound_mind::core

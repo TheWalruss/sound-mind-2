@@ -1748,6 +1748,17 @@ expected, so you know what's actually driving it.
   unmuting, or editing a MindWave used anywhere in the project still
   recomposites the whole stack, so those will cost more on a project
   with a very large number of layers, regardless of acceleration.
+- **Painting**: adding a new stroke to a layer with a long painting
+  history is fast regardless of how many earlier strokes that layer
+  already has - only the new stroke itself is actually (re)painted, on
+  top of what was already there. Undo and redo are the exception -
+  both re-paint a layer's whole history to guarantee correctness, so
+  they'll cost more the more that layer has been painted on. A Mind
+  Grain stroke re-samples its source layer whenever that source's own
+  content actually changes, not on every unrelated edit to the layer
+  it's painted on - still correct for the common case (the source
+  changing), just not refreshed by something unrelated happening to
+  the grain-painted layer itself.
 - **MindWaves**: a plain **Fractal**-type MindWave (see
   [MindWaves](#mindwaves) above) evaluates on the GPU when Hardware
   Acceleration is on, and scales well to large canvases as a result. If

@@ -6,6 +6,23 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.8.1] - 2026-10-04
+
+The within-a-layer half of the "many layers"/"many operations" benchmark finding `v0.1.7.1` left open: painting a new stroke onto a layer with a long history no longer replays that layer's *entire* operation history from scratch. A new feature (hence the `Z` bump, matching `v0.1.7.1`'s own reasoning) - new public Core API and new Studio-side public methods - even though visible behavior is unchanged except for one confirmed, narrow contract change (see Fixed/Notes below).
+
+### Added
+
+- `sound_mind::core::PaintContentCache`/`rebuildPaintedContentCached()`: a one-entry-deep memo for a layer's own operation replay. Appending one more operation only replays that operation on top of the cached result; anything else (undo, redo past a fresh append, a Pick supersede or reorder) falls back to a full replay, detected automatically. See `docs/sound-mind-architecture.md`'s Decision #202.
+- `PaintController::invalidateContentCaches()` (forwarded through `ToolPaletteController::invalidateContentCaches()`), called from `MainWindow`'s `mindWavesChanged` handler alongside the existing composite-cache invalidation - a MindWave edit invalidates every layer's own paint-content cache too, the same deliberately coarse granularity `v0.1.7.1`'s compositing cache already uses for Filter layers.
+
+### Changed
+
+- **`MindGrainConfiguration`'s own "live" contract is narrower**: a Mind Grain stroke now re-samples its source layer when that source's content actually changes (via the existing, unchanged cascade mechanism), not merely because *some other*, unrelated edit happened to rebuild the grain-painted layer itself. Confirmed with the user before implementing - the broader "any reason" behavior was always an accidental side effect of full-replay-always, never a deliberate feature, and is no longer true now that replay is cached. `tool_configuration.h`'s own docs updated to describe the new, narrower (and still fully correct) guarantee.
+
+### Fixed
+
+- A real test regression caught by the full suite before shipping: two pre-existing tests asserted the exact "always re-reads live state" behavior this installment deliberately narrows. Renamed and updated to explicitly call `invalidateContentCaches()` (matching what a real caller now must do), with new negative counterparts confirming the narrowed behavior as a deliberate regression guard.
+
 ## [0.1.7.1] - 2026-10-03
 
 The targeted-invalidation raster cache `docs/sound-mind-architecture.md`'s own "Compositing Pipeline" sketch described but never implemented - editing one layer in a many-layer project no longer recomposites the entire visible stack from scratch. A new feature (hence the `Z` bump), not a pure performance fix like `v0.1.6.2`-`v0.1.6.7` - there's new public Core API (`Project::layerIndexById()`, `CompositePrefixCache`, `compositeProjectCached()`) and new Studio-side cache-invalidation call sites, even though the *visible* behavior is unchanged.
