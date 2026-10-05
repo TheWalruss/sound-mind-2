@@ -61,6 +61,11 @@ list:
 - **Open Project...** - browse to an existing `.smproj` file.
 - **Recent Projects** - your most recently opened projects, click one to
   reopen it directly.
+- **Device Configuration** - the same input/output device, gain, and
+  "Test" controls [Configure Devices](#configure-devices) offers once a
+  project is open, available here too - so you can pick and test your
+  audio devices before creating or opening anything. Either copy of
+  these controls stays in sync with the other automatically.
 - **Documentation** - Quick Start, Readme, User Guide, Changelog, and
   About - the same five links the Help menu offers once a project is
   open, available here too.
@@ -389,11 +394,13 @@ layer while playback is stopped, switching to a single live `X dB`
 reading at the current position once Playback or Loop starts, and
 freezing at whatever it last showed while paused. This is shown whether
 or not the row is selected. An unselected row shows only that preview,
-the loudness indicator (if any), and a **visibility button** (●/◐/○) -
-click it to cycle the layer through
-**Visible** (seen and heard), **Muted** (still shown on the canvas, but
-silent during playback), and **Invisible** (excluded from both, same as
-turning visibility off always worked); **click a row's name to select it**
+the loudness indicator (if any), and a **visibility button** (an open
+eye/crossed-out speaker/closed eye icon) - click it to cycle the layer
+through
+**Visible** (open eye - seen and heard), **Muted** (crossed-out speaker -
+still shown on the canvas, but silent during playback), and **Invisible**
+(closed eye - excluded from both, same as turning visibility off always
+worked); **click a row's name to select it**
 (see [Painting](#painting) below - the selected layer is the one a brush
 stroke paints into) to reveal its full set of controls:
 
@@ -442,6 +449,12 @@ Double-clicking a row's name renames it, whether the row is currently
 selected or not. A layer whose opacity is bound to a MindWave shows a
 smaller, indented row directly beneath it, with that MindWave's own
 grayscale preview.
+
+**Right-click any layer's row** for **Hide other layers** - hides every
+other layer in the project, remembering each one's own exact prior state
+(a layer that was already Muted comes back Muted, not fully Visible).
+Once used, the same menu also offers **Unhide other layers**, restoring
+them all in one step; both are undoable as a single step too.
 
 **Keyboard shortcuts** (Edit menu) work without touching the mouse:
 **Page Up**/**Page Down** select the layer above/below the currently
@@ -529,6 +542,12 @@ shape instead of staying fixed.
 - **+ Add MindWave** creates a new one with a sensible default (a plain,
   audible sine wave) and selects it. Double-click a MindWave's name to
   rename it; the **×** button deletes it.
+- Every MindWave-binding drop-down (a layer's own Opacity MindWave, any
+  Instrument/Filter parameter binding) also offers **Create New
+  MindWave...** at the bottom of its list - picking it creates a new
+  MindWave the same way **+ Add MindWave** does, binds it immediately,
+  and brings this panel into view so you can shape it right away, without
+  switching over to this panel first.
 - Every row shows a small grayscale mini-preview of its own field,
   always on - regardless of selection, and independent of the Preview
   toggle below (which does something different - see its own entry). The
@@ -1646,7 +1665,11 @@ Open **Configure Devices** from the **Configure Devices** button inside
 the Playback, Record, or Loop panel (it's the same shared panel either
 way, off by default) - it's the *only* place input and output devices are
 chosen; Playback, Recording, and Loop Mode all use whatever's set here
-rather than having pickers of their own.
+rather than having pickers of their own. The same controls are also
+available on the [start screen](#starting-out)'s own **Device
+Configuration** section, before any project exists - the two stay in
+sync with each other automatically, so it doesn't matter which one you
+actually use.
 
 - **Refresh Devices** re-scans for newly connected devices.
 - **Input**: pick the active input device - applies to both Recording and

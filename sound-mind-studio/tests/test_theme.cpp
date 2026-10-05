@@ -32,3 +32,14 @@ void ThemeTest::studioStyleSheetGivesACheckedPushButtonAVisiblyDistinctStyle() {
     const QString style = studioStyleSheet();
     QVERIFY(style.contains(QStringLiteral("QPushButton:checked")));
 }
+
+void ThemeTest::studioStyleSheetDoesNotSuppressTheDockWidgetCloseIcon() {
+    // Real-world testing pass finding (v0.Y.62.1 Installment D): this QSS
+    // used to set `titlebar-close-icon: none`, making every dock panel's
+    // native close (X) button invisible even though every panel already
+    // has QDockWidget::DockWidgetClosable - a regression guard against
+    // reintroducing that specific override, not against QDockWidget
+    // styling in general.
+    const QString style = studioStyleSheet();
+    QVERIFY(!style.contains(QStringLiteral("titlebar-close-icon"), Qt::CaseInsensitive));
+}

@@ -225,3 +225,30 @@ void ConfigureDevicesPanelTest::setOutputDeviceSelectionEnabledTogglesTheOutputC
     panel.setOutputDeviceSelectionEnabled(true);
     QVERIFY(outputCombo->isEnabled());
 }
+
+void ConfigureDevicesPanelTest::setSelectedInputDeviceSelectsItWithoutEmittingInputDeviceChanged() {
+    // v0.Y.62.1 Installment H - the sync mechanism MainWindow uses to keep
+    // this panel's own combo matching the Landing Page's own
+    // DeviceConfigurationWidget instance whenever either one changes.
+    ConfigureDevicesPanel panel;
+    panel.setInputDevices({QStringLiteral("Mic A"), QStringLiteral("Mic B")});
+    QSignalSpy spy(&panel, &ConfigureDevicesPanel::inputDeviceChanged);
+
+    panel.setSelectedInputDevice(QStringLiteral("Mic B"));
+
+    QCOMPARE(spy.count(), 0);
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("inputDeviceCombo"));
+    QCOMPARE(combo->currentText(), QStringLiteral("Mic B"));
+}
+
+void ConfigureDevicesPanelTest::setSelectedOutputDeviceSelectsItWithoutEmittingOutputDeviceChanged() {
+    ConfigureDevicesPanel panel;
+    panel.setOutputDevices({QStringLiteral("Speakers A"), QStringLiteral("Speakers B")});
+    QSignalSpy spy(&panel, &ConfigureDevicesPanel::outputDeviceChanged);
+
+    panel.setSelectedOutputDevice(QStringLiteral("Speakers B"));
+
+    QCOMPARE(spy.count(), 0);
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
+    QCOMPARE(combo->currentText(), QStringLiteral("Speakers B"));
+}

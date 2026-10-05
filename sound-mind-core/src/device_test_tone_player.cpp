@@ -50,6 +50,12 @@ bool DeviceTestTonePlayer::isPlaying() const noexcept { return playing_.load(std
 
 bool DeviceTestTonePlayer::isDeviceAvailable() const noexcept { return deviceAvailable_; }
 
+void DeviceTestTonePlayer::setGain(float gain) noexcept {
+    gain_.store(std::clamp(gain, 0.0f, kMaxGain), std::memory_order_relaxed);
+}
+
+float DeviceTestTonePlayer::gain() const noexcept { return gain_.load(std::memory_order_relaxed); }
+
 void DeviceTestTonePlayer::processBlock(float* const* outputChannelData, int numOutputChannels,
                                          int numSamples) noexcept {
     if (numOutputChannels <= 0 || outputChannelData == nullptr || numSamples <= 0) {
@@ -64,8 +70,9 @@ void DeviceTestTonePlayer::processBlock(float* const* outputChannelData, int num
     }
 
     const double increment = kTwoPi * static_cast<double>(kToneFrequencyHz) / kSampleRateHz;
+    const float gain = gain_.load(std::memory_order_relaxed);
     for (int i = 0; i < numSamples; ++i) {
-        const float sample = kToneAmplitude * static_cast<float>(std::sin(phase_));
+        const float sample = kToneAmplitude * gain * static_cast<float>(std::sin(phase_));
         for (int channel = 0; channel < numOutputChannels; ++channel) {
             outputChannelData[channel][i] = sample;
         }

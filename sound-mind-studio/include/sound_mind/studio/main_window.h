@@ -633,13 +633,17 @@ public slots:
     void toggleRecording();
 
     /**
-     * @brief Re-queries available input/output devices and refreshes
-     *        `configureDevicesPanel_`'s own device pickers - the only ones
-     *        left in the app (real-world testing pass, 2026-09-20, finding
-     *        #7) - the actual work behind its own "Refresh Devices" button
-     *        (`v0.0.42.1`). Never opens or closes a device itself - see
-     *        `sound_mind::core::availableAudioDeviceNames()`'s own docs
-     *        for how a fresh scan already works without one.
+     * @brief Re-queries available input/output devices and refreshes both
+     *        `configureDevicesPanel_`'s own device pickers **and**
+     *        `landingPage_->deviceConfiguration()`'s own (`v0.Y.62.1`
+     *        Installment H - two independent `DeviceConfigurationWidget`
+     *        instances, see its own class docs) - the only pickers left
+     *        in the app otherwise (real-world testing pass, 2026-09-20,
+     *        finding #7) - the actual work behind either instance's own
+     *        "Refresh Devices" button (`v0.0.42.1`). Never opens or closes
+     *        a device itself - see `sound_mind::core::
+     *        availableAudioDeviceNames()`'s own docs for how a fresh scan
+     *        already works without one.
      */
     void refreshConfiguredDevices();
 
@@ -651,6 +655,13 @@ public slots:
      *        picker in the app (real-world testing pass, 2026-09-20,
      *        finding #7; see `ConfigureDevicesPanel`'s own class docs on
      *        why this applies to both engines at once).
+     *
+     * **As of `v0.Y.62.1` Installment H**, also syncs the *other*
+     * `DeviceConfigurationWidget` instance's own displayed selection
+     * (`configureDevicesPanel_`'s own, or `landingPage_->deviceConfiguration()`'s
+     * own - whichever didn't originate this call) via
+     * `setSelectedInputDevice()`, which blocks its own signal, so this is
+     * always safe to call on both unconditionally.
      * @param deviceName The device to prefer, or empty for the system
      *        default.
      */
@@ -662,25 +673,35 @@ public slots:
     /// picker (`v0.0.42.1`) - now the only output device picker in the app
     /// (real-world testing pass, 2026-09-20, finding #7). See
     /// setConfiguredInputDevice()'s own docs for the same "applies to both
-    /// engines at once" reasoning.
+    /// engines at once" reasoning, and (`v0.Y.62.1` Installment H) the same
+    /// "sync both DeviceConfigurationWidget instances unconditionally" one.
     /// @param deviceName The device to prefer, or empty for the system
     ///        default.
     void setConfiguredOutputDevice(const QString& deviceName);
 
     /// @brief Sets `recordEngine_`'s and `loopEngine_`'s (if a project is
     /// open) own input gain - the actual work behind the Configure Devices
-    /// panel's own input gain slider (`v0.0.42.1`).
+    /// panel's own input gain slider (`v0.0.42.1`). As of `v0.Y.62.1`
+    /// Installment H, also syncs the Landing Page's own
+    /// `DeviceConfigurationWidget` instance's displayed gain - see
+    /// setConfiguredInputDevice()'s own docs on this same dual-sync shape.
     /// @param percent `[0, ConfigureDevicesPanel::kMaxGainPercent]` (200) -
     ///        `100` is unity gain.
     void setConfiguredInputGain(int percent);
 
-    /// @brief Sets `playbackController_`'s own output gain - the actual
-    /// work behind the Configure Devices panel's own output gain slider
-    /// (`v0.0.42.1`). Forwards straight to setPlaybackVolume() (the same
-    /// underlying `PlaybackController::setVolume()`) - `PlaybackPanel`'s
-    /// own, now-removed volume slider used to need syncing here too (real-
-    /// world testing pass, 2026-09-20, finding #7: it was a pure duplicate
-    /// of this same gain).
+    /// @brief Sets `playbackController_`'s own output gain, **and**
+    /// `deviceTestTonePlayer_`'s own gain (`v0.Y.62.1` Installment A) - the
+    /// actual work behind the Configure Devices panel's own output gain
+    /// slider (`v0.0.42.1`). The former forwards straight to
+    /// setPlaybackVolume() (the same underlying `PlaybackController::
+    /// setVolume()`) - `PlaybackPanel`'s own, now-removed volume slider
+    /// used to need syncing here too (real-world testing pass, 2026-09-20,
+    /// finding #7: it was a pure duplicate of this same gain). The latter
+    /// fixes a second real-world-testing-pass finding (2026-10-04): the
+    /// "Test" tone used to always play at a fixed amplitude, entirely
+    /// ignoring this slider, since `DeviceTestTonePlayer` is deliberately
+    /// independent of `PlaybackController`/`PlaybackEngine` (see its own
+    /// class docs) and so was never reached by it at all.
     /// @param percent `[0, ConfigureDevicesPanel::kMaxGainPercent]` (200).
     void setConfiguredOutputGain(int percent);
 
@@ -695,6 +716,12 @@ public slots:
      * starts `testInputLevelTimer_` polling its `currentInputLevel()` into
      * the panel's own level meter; stopping does the reverse.
      *
+     * **As of `v0.Y.62.1` Installment H**, may be triggered by either
+     * `DeviceConfigurationWidget` instance (the dock's own, or the
+     * Landing Page's own); both own "Test" buttons are kept checked/
+     * unchecked in sync regardless of which one the user actually
+     * clicked, and both own level meters reset together on stop.
+     *
      * @param testing `true` to start testing, `false` to stop.
      */
     void toggleTestInputDevice(bool testing);
@@ -706,7 +733,9 @@ public slots:
      *
      * Forwards to `deviceTestTonePlayer_`'s own start()/stop(), against
      * whatever device `configureDevicesPanel_`'s own output picker
-     * currently names.
+     * currently names. See toggleTestInputDevice()'s own docs on keeping
+     * both `DeviceConfigurationWidget` instances' own "Test" buttons in
+     * sync (`v0.Y.62.1` Installment H).
      *
      * @param testing `true` to start playing the test tone, `false` to
      *        stop.
@@ -797,6 +826,28 @@ public slots:
      * @param id The layer to cycle.
      */
     void cycleLayerVisibilityState(sound_mind::core::LayerId id);
+
+    /// @brief Hides every layer except `keepVisible` - the Layers Panel's
+    ///        own right-click "Hide other layers" (`v0.Y.62.1`
+    ///        Installment F). Forwards straight to
+    ///        `LayerController::hideOtherLayers()`; `hasUnsavedChanges()`
+    ///        and the History/Composer panels already refresh via the
+    ///        same `LayerController::layersChanged()` connection every
+    ///        other layer-visibility mutator here relies on, so there's
+    ///        nothing extra to do here. Deliberately not recorded as a
+    ///        Macro event (unlike cycleLayerVisibilityState()) - doing so
+    ///        correctly would need `MacroEventType` to carry a whole list
+    ///        of affected layers, not just one id; out of scope for this
+    ///        installment.
+    /// @param keepVisible The right-clicked layer's own id.
+    void hideOtherLayers(sound_mind::core::LayerId keepVisible);
+
+    /// @brief Restores every layer hideOtherLayers() last hid - the
+    ///        Layers Panel's own right-click "Unhide other layers"
+    ///        (`v0.Y.62.1` Installment F). Forwards straight to
+    ///        `LayerController::unhideOtherLayers()` - see
+    ///        hideOtherLayers()'s own docs on bookkeeping/Macro scope.
+    void unhideOtherLayers();
 
     /**
      * @brief Sets the opacity of the layer with the given id - the actual
@@ -2971,15 +3022,33 @@ private:
      *   explanatory tooltip (still shown despite being disabled - the Tool
      *   dropdown's own menu has `setToolTipsVisible(true)`), whenever the
      *   configured tool is a Mind Grain not usable on the *active* layer
-     *   specifically; force-deactivates Paint mode first
-     *   (`setPaintModeEnabled(false)`) if it was currently checked, falling
-     *   back to Pan via setExclusiveToolMode()'s own fallback, so a user
-     *   can never be left with Paint mode still active on a now-disabled
-     *   entry. Re-enabled, tooltip cleared, otherwise.
+     *   specifically, **or** (`v0.Y.62.1` Installment C, a real-world
+     *   testing pass finding) the active layer is a Filter/Equalizer type
+     *   at all, regardless of which tool is configured - neither can ever
+     *   hold paintable content (`PaintController::beginStroke()`'s own
+     *   guard already refuses silently; this is what actually tells the
+     *   user *why*, rather than leaving the Tool Configuration panel
+     *   showing controls for a layer that's quietly unpaintable). Force-
+     *   deactivates Paint mode first (`setPaintModeEnabled(false)`) if it
+     *   was currently checked, falling back to Pan via
+     *   setExclusiveToolMode()'s own fallback, so a user can never be left
+     *   with Paint mode still active on a now-disabled entry. Re-enabled,
+     *   tooltip cleared, otherwise. The Filter/Equalizer-type check takes
+     *   priority in the tooltip's own wording when both conditions
+     *   happen to hold at once (it's the more fundamental of the two -
+     *   true regardless of which tool is configured).
      *
-     * A no-op-safe default (nothing disabled/marked) whenever no project is
-     * open, no layer is active yet, or the configured tool isn't a Mind
-     * Grain at all.
+     * A no-op-safe default (nothing disabled/marked for the Mind-Grain-
+     * ordering half) whenever no project is open, no layer is active yet,
+     * or the configured tool isn't a Mind Grain at all - the Filter/
+     * Equalizer-type check runs unconditionally whenever a layer is
+     * active, independent of which tool is configured.
+     *
+     * **Worth revisiting**: this method's own name now undersells its
+     * scope (two independent guardrails, not just Mind Grain's), kept as-
+     * is for this installment to avoid a wider rename across every call
+     * site - flagged here rather than silently living with a misleading
+     * name forever.
      */
     void updateMindGrainGuardrails();
 
@@ -3018,11 +3087,12 @@ private:
 
     /**
      * @brief Enables/disables Configure Devices' own input and output
-     *        device pickers to match whether an engine currently has that
-     *        device actually open - preserves the "locked while running"
-     *        safety behavior `RecordPanel`'s/`LoopPanel`'s own now-removed
-     *        device pickers used to provide locally (real-world testing
-     *        pass, 2026-09-20, finding #7).
+     *        device pickers (both `DeviceConfigurationWidget` instances,
+     *        as of `v0.Y.62.1` Installment H) to match whether an engine
+     *        currently has that device actually open - preserves the
+     *        "locked while running" safety behavior `RecordPanel`'s/
+     *        `LoopPanel`'s own now-removed device pickers used to provide
+     *        locally (real-world testing pass, 2026-09-20, finding #7).
      *
      * Input is locked while either `recordEngine_` or `loopEngine_` is
      * active - both share the panel's own one input device/gain (see

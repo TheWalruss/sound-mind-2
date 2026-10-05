@@ -10,4 +10,5 @@ private slots:
     void studioStyleSheetContainsBothBrandColors();
     void studioWindowIconIsNotNull();
     void studioStyleSheetGivesACheckedPushButtonAVisiblyDistinctStyle();
+    void studioStyleSheetDoesNotSuppressTheDockWidgetCloseIcon();
 };

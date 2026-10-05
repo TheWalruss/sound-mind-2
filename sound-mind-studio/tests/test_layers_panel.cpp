@@ -79,12 +79,29 @@ void LayersPanelTest::setLayersReplacesThePreviousRows() {
     QCOMPARE(nameLabels.at(0)->text(), QStringLiteral("Only"));
 }
 
-void LayersPanelTest::visibilityButtonEmitsVisibilityCycleRequestedAndShowsTheCorrectGlyphPerState() {
+namespace {
+/// @brief Rasterizes a `QPushButton`'s own icon at a fixed size, as a
+/// `QImage` - `QPixmap::operator==()` only ever compares cache keys (two
+/// independently-drawn, pixel-identical pixmaps still compare unequal),
+/// while `QImage::operator==()` does a real content comparison - the
+/// only robust way to assert "this button's icon actually changed/is
+/// still the same" across LayersPanel::visibilityIconFor()'s own three,
+/// independently-drawn icons (not exposed outside layers_panel.cpp, so
+/// this test can only observe them through the button they're set on).
+QImage iconImage(const QPushButton& button) { return button.icon().pixmap(QSize(18, 18)).toImage(); }
+}  // namespace
+
+void LayersPanelTest::visibilityButtonEmitsVisibilityCycleRequestedAndShowsTheCorrectIconPerState() {
     // v0.Y.46.1 Installment B ("Layers Panel & Editing Enhancements v2") -
     // replaced the old plain on/off visibilityToggled() signal with a
     // 3-way cycle (Visible -> Muted -> Invisible); the button itself
     // doesn't compute the next state (LayerController does) - it just
     // requests a cycle and displays whatever RowData it's next given.
+    // `v0.Y.62.1` Installment E replaced the three text glyphs this test
+    // used to check with hand-drawn icons - compared here as rasterized
+    // images (see iconImage()'s own docs) rather than by exact pixel
+    // content, so this stays a meaningful "did it actually change
+    // per state" check without pinning down the icons' own exact look.
     // A single, purpose-built row - twoNormalLayers()'s own "Top" starts
     // invisible, which would make the first assertion below misleading.
     LayersPanel::RowData row;
@@ -100,7 +117,8 @@ void LayersPanelTest::visibilityButtonEmitsVisibilityCycleRequestedAndShowsTheCo
 
     auto buttons = panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton"));
     QCOMPARE(buttons.size(), 1);
-    QCOMPARE(buttons.at(0)->text(), QStringLiteral("●"));  // Visible, unmuted.
+    QVERIFY(!buttons.at(0)->icon().isNull());
+    const QImage visibleUnmutedIcon = iconImage(*buttons.at(0));
     buttons.at(0)->click();
 
     QCOMPARE(spy.count(), 1);
@@ -110,14 +128,17 @@ void LayersPanelTest::visibilityButtonEmitsVisibilityCycleRequestedAndShowsTheCo
     panel.setLayers({row});
     QTest::qWait(0);  // rebuildRows() rebuilds via deleteLater() - see setLayersReplacesThePreviousRows().
     buttons = panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton"));
-    QCOMPARE(buttons.at(0)->text(), QStringLiteral("◐"));
+    const QImage mutedIcon = iconImage(*buttons.at(0));
+    QVERIFY(mutedIcon != visibleUnmutedIcon);
 
     row.visible = false;
     row.muted = false;  // Simulates Muted -> Invisible.
     panel.setLayers({row});
     QTest::qWait(0);
     buttons = panel.findChildren<QPushButton*>(QStringLiteral("visibilityButton"));
-    QCOMPARE(buttons.at(0)->text(), QStringLiteral("○"));
+    const QImage invisibleIcon = iconImage(*buttons.at(0));
+    QVERIFY(invisibleIcon != visibleUnmutedIcon);
+    QVERIFY(invisibleIcon != mutedIcon);
 }
 
 void LayersPanelTest::backgroundVisibilityButtonIsDisabled() {
@@ -721,8 +742,40 @@ void LayersPanelTest::freshRowsOfferOnlyNoneUntilSetAvailableMindWavesIsCalled()
 
     const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
     QCOMPARE(combos.size(), 1);
-    QCOMPARE(combos.at(0)->count(), 1);
+    QCOMPARE(combos.at(0)->count(), 2);  // None + "Create New MindWave...".
     QCOMPARE(combos.at(0)->currentText(), QStringLiteral("None"));
+}
+
+void LayersPanelTest::selectingCreateNewMindWaveCallsTheCallbackAndRewritesTheItemInPlace() {
+    // v0.Y.62.1 Installment G.
+    LayersPanel panel;
+    int callCount = 0;
+    panel.setCreateMindWaveCallback([&callCount]() -> std::pair<MindWaveId, QString> {
+        ++callCount;
+        return {MindWaveId{42}, QStringLiteral("Fresh Wave")};
+    });
+    panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    QTest::qWait(0);
+
+    const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
+    QCOMPARE(combos.size(), 1);
+    auto* combo = combos.at(0);
+    QCOMPARE(combo->itemText(combo->count() - 1), QStringLiteral("Create New MindWave..."));
+    int emitCount = 0;
+    std::optional<MindWaveId> receivedMindWaveId;
+    connect(&panel, &LayersPanel::opacityMindWaveChanged, [&](LayerId, std::optional<MindWaveId> mindWaveId) {
+        ++emitCount;
+        receivedMindWaveId = mindWaveId;
+    });
+
+    combo->setCurrentIndex(combo->count() - 1);  // "Create New MindWave...".
+
+    QCOMPARE(callCount, 1);
+    QCOMPARE(combo->currentText(), QStringLiteral("Fresh Wave"));
+    QCOMPARE(emitCount, 1);
+    QCOMPARE(receivedMindWaveId, std::optional<MindWaveId>(MindWaveId{42}));
 }
 
 void LayersPanelTest::setAvailableMindWavesPopulatesEveryRowsComboImmediately() {
@@ -746,7 +799,7 @@ void LayersPanelTest::setAvailableMindWavesPopulatesEveryRowsComboImmediately() 
 
     const auto combos = panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
     QCOMPARE(combos.size(), 1);
-    QCOMPARE(combos.at(0)->count(), 3);  // None + two MindWaves.
+    QCOMPARE(combos.at(0)->count(), 4);  // None + two MindWaves + "Create New MindWave...".
     QCOMPARE(combos.at(0)->itemText(1), QStringLiteral("Slow Pulse"));
     QCOMPARE(combos.at(0)->itemText(2), QStringLiteral("Fast Pulse"));
 }

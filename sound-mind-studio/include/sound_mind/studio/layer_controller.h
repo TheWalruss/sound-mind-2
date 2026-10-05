@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -177,6 +178,63 @@ public:
      * @param id The layer to cycle.
      */
     void cycleLayerVisibilityState(sound_mind::core::LayerId id);
+
+    /**
+     * @brief Hides every layer except `keepVisible` - the Layers Panel's
+     *        own right-click "Hide other layers" (`v0.Y.62.1` Installment
+     *        F, a real-world testing pass finding).
+     *
+     * Each affected layer's own prior `visible()`/`muted()` pair is
+     * recorded first (not just forced to a fixed "was visible, unmuted"
+     * assumption - a layer already `Muted` before this call stays
+     * `Muted`, not forced to fully `Visible`, once unhideOtherLayers()
+     * restores it) and then set to `Invisible`, via the same
+     * applyVisibilityAndMute() every other visibility mutator here uses.
+     * A no-op if `keepVisible` is the only layer in the project (nothing
+     * to hide) or no project is set.
+     *
+     * canUnhideOtherLayers() becomes `true` after this call -
+     * `layersPanel_->setUnhideOtherLayersAvailable(true)` is what
+     * actually makes the context menu's own "Unhide other layers" entry
+     * available. **Undoable** as a single combined entry covering every
+     * affected layer, not one entry per layer - undoing restores every
+     * layer's own recorded state in one step, matching how it was
+     * applied.
+     *
+     * @param keepVisible The layer to leave untouched; every other layer
+     *        in the project is hidden.
+     */
+    void hideOtherLayers(sound_mind::core::LayerId keepVisible);
+
+    /**
+     * @brief Restores every layer hideOtherLayers() last hid back to its
+     *        own recorded pre-hide `visible()`/`muted()` pair - the
+     *        Layers Panel's own right-click "Unhide other layers"
+     *        (`v0.Y.62.1` Installment F), only ever available
+     *        (canUnhideOtherLayers() `true`) immediately after a
+     *        hideOtherLayers() call that hasn't itself been undone or
+     *        already reversed by a prior unhideOtherLayers() call.
+     *
+     * A direct restore of the recorded snapshot, not a step through the
+     * ordinary undo stack - deliberately available regardless of how
+     * many *other*, unrelated edits happened in between, so a user who
+     * did other work after hiding everyone else can still bring them all
+     * back in one click without needing to undo that other work too.
+     *
+     * canUnhideOtherLayers() becomes `false` again after this call - a
+     * second call does nothing until another hideOtherLayers() call
+     * makes it available again. A no-op if canUnhideOtherLayers() is
+     * already `false`. **Undoable** as a single combined entry, same
+     * shape as hideOtherLayers()'s own.
+     */
+    void unhideOtherLayers();
+
+    /// @brief Whether unhideOtherLayers() would currently do anything.
+    /// @return `true` immediately after a hideOtherLayers() call that
+    ///         hasn't itself been undone or already reversed by a prior
+    ///         unhideOtherLayers() call; `false` otherwise (including
+    ///         right after setProject(), which clears this).
+    [[nodiscard]] bool canUnhideOtherLayers() const noexcept;
 
     /// @brief Sets the opacity of the layer with the given id. Repaints
     ///        the canvas, then refreshes the Layers Panel. Does nothing if
@@ -637,6 +695,13 @@ private:
     /// @brief See loudnessProfileFor()'s own docs - discarded per-id the
     ///        same way, same call sites, as thumbnailCache_.
     std::unordered_map<sound_mind::core::LayerId, std::vector<float>> loudnessProfileCache_;
+
+    /// @brief Every layer hideOtherLayers() last hid, with its own
+    ///        recorded pre-hide `(visible, muted)` pair - see
+    ///        hideOtherLayers()'s/unhideOtherLayers()'s/
+    ///        canUnhideOtherLayers()'s own docs. `std::nullopt` whenever
+    ///        canUnhideOtherLayers() would report `false`.
+    std::optional<std::vector<std::tuple<sound_mind::core::LayerId, bool, bool>>> hiddenOthersSnapshot_;
 };
 
 }  // namespace sound_mind::studio

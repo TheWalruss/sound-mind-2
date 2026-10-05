@@ -194,6 +194,67 @@ struct BalanceGainsDb {
     return evaluateMindWaveField(*opacityMindWave, config, canvasWidth);
 }
 
+/// @brief Applies `layer`'s own filter to `composite`, then blends the
+/// result back toward `composite` itself (the pre-filter value) by
+/// `layer`'s own opacity (MindWave-modulated where bound) - the single
+/// call both compositeProject()'s and compositeProjectCached()'s own
+/// per-layer folds make for a Filter-type layer, so the fix for a real-
+/// world testing pass finding (`v0.Y.62.1` Installment B) lives in
+/// exactly one place: `applyFilter()` itself has no "layer opacity"
+/// concept at all (it transforms the running composite in place), so
+/// without this, a Filter layer's own Opacity slider/Opacity MindWave
+/// binding - shown and settable for it, same as any other layer type -
+/// silently had zero effect on the rendered output.
+///
+/// Skips the extra copy-and-blend pass entirely when opacity is `1.0`
+/// and no MindWave is bound (the default, overwhelmingly common case) -
+/// exactly `applyFilter()`'s own prior, unblended behavior, at no added
+/// cost. Otherwise reuses `applyBlendedCell(BlendMode::Overwrite, ...)` -
+/// a plain linear crossfade of the raw dB/phase values between the pre-
+/// and post-filter cell - rather than inventing new blend math: this is
+/// exactly "how much of the filtered result replaces the original,"
+/// which is `Overwrite`'s own already-tested semantic.
+///
+/// @param composite The running composite immediately before this
+///        layer's own filter - consumed (moved from where possible).
+/// @param layer The Filter layer to apply.
+/// @param project Resolves `layer.opacityMindWave()` against its own
+///        library - see `resolveOpacityMindWave()`'s own docs.
+/// @param settings Passed through to `applyFilter()` - see its own docs.
+/// @param config Supplies `binCount` - see `mindWaveGainAt()`'s own docs.
+/// @param canvasWidth The composite's own width, in columns.
+/// @return The filtered (and, where applicable, opacity-blended)
+///         composite.
+[[nodiscard]] StreamImage applyFilterRespectingOpacity(StreamImage composite, const Layer& layer,
+                                                          const Project& project, const ProjectSettings& settings,
+                                                          const sound_mind::codec::StreamCodecConfig& config,
+                                                          std::uint32_t canvasWidth) {
+    const MindWave* opacityMindWave = resolveOpacityMindWave(layer, project);
+    if (layer.opacity() == 1.0f && opacityMindWave == nullptr) {
+        return applyFilter(composite, layer.filterConfiguration(), settings,
+                            resolveFilterParameterMindWaves(layer.filterConfiguration(), project));
+    }
+
+    const StreamImage preFilter = composite;
+    StreamImage filtered = applyFilter(composite, layer.filterConfiguration(), settings,
+                                         resolveFilterParameterMindWaves(layer.filterConfiguration(), project));
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        for (std::uint32_t x = 0; x < canvasWidth; ++x) {
+            const std::size_t cell = cellIndex(bin, x, canvasWidth);
+            const float gain = layer.opacity() * mindWaveGainAt(opacityMindWave, bin, x, config);
+            const BlendedCell base{preFilter.leftMagnitudeDb[cell], preFilter.rightMagnitudeDb[cell],
+                                     preFilter.sharedPhaseRadians[cell]};
+            const BlendedCell overlay{filtered.leftMagnitudeDb[cell], filtered.rightMagnitudeDb[cell],
+                                        filtered.sharedPhaseRadians[cell]};
+            const BlendedCell blended = applyBlendedCell(BlendMode::Overwrite, base, overlay, gain);
+            filtered.leftMagnitudeDb[cell] = blended.leftMagnitudeDb;
+            filtered.rightMagnitudeDb[cell] = blended.rightMagnitudeDb;
+            filtered.sharedPhaseRadians[cell] = blended.phaseRadians;
+        }
+    }
+    return filtered;
+}
+
 /// @brief The width a `sourceWidth`-wide sequence rescales to under
 /// `rescaleFactor` - shared by `sourceColumnFor()` (bin-space placement,
 /// below) and `renderLayer()` (RGB-pixel-space `resampleHorizontally()`'s
@@ -708,8 +769,8 @@ std::optional<StreamImage> compositeProject(const Project& project, const std::f
         }
         if (isFilterLayerType(layer.type())) {
             if (anyMixedIn) {
-                result = applyFilter(result, layer.filterConfiguration(), settings,
-                                      resolveFilterParameterMindWaves(layer.filterConfiguration(), project));
+                result = applyFilterRespectingOpacity(std::move(result), layer, project, settings, config,
+                                                        canvasWidth);
             }
             continue;
         }
@@ -876,8 +937,8 @@ std::optional<StreamImage> compositeProjectCached(const Project& project, Compos
                     seenDynamicSpeckle = true;
                 }
                 if (anyMixedIn) {
-                    result = applyFilter(result, layer.filterConfiguration(), settings,
-                                          resolveFilterParameterMindWaves(layer.filterConfiguration(), project));
+                    result = applyFilterRespectingOpacity(std::move(result), layer, project, settings, config,
+                                                            canvasWidth);
                 }
             } else if (layer.content().has_value()) {
                 mixLayerIntoGpuOrCpu(result, layer, config, canvasWidth, silenceFloorDb,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -314,6 +315,32 @@ public:
      */
     void setActiveLayer(sound_mind::core::LayerId layer);
 
+    /**
+     * @brief Sets the callback every MindWave-binding combo here
+     *        (`vibratoMindWaveCombo_`/`tremoloMindWaveCombo_`/
+     *        `opacityMindWaveCombo_`/`sizeMindWaveCombo_`/
+     *        `colorMindWaveCombo_`) calls when its own "Create New
+     *        MindWave..." entry is chosen - `v0.Y.62.1` Installment G.
+     *
+     * A plain injected callback, not a signal, deliberately: the combo's
+     * own existing `currentIndexChanged` handler needs the new
+     * MindWave's own id/name back *synchronously*, before it runs its
+     * own "apply whatever got selected" logic (see `makeMindWaveCombo()`'s
+     * own docs for exactly how), which a fire-and-forget signal can't
+     * give it. This panel still knows nothing about `Project`/
+     * `MindWaveController` beyond this one callback - `MainWindow` is
+     * what actually creates one and shows/raises the MindWaves panel,
+     * matching `setActiveLayer()`'s own "only other piece of live
+     * project state" precedent for this otherwise purely presentational
+     * class.
+     *
+     * @param callback Called with no arguments; returns the newly
+     *        created MindWave's own id and display name. `nullptr` (the
+     *        default - nothing set yet) makes every "Create New
+     *        MindWave..." entry a silent no-op rather than crashing.
+     */
+    void setCreateMindWaveCallback(std::function<std::pair<sound_mind::core::MindWaveId, QString>()> callback);
+
 signals:
     /// @brief Emitted whenever any parameter control changes.
     /// @param config The panel's own new, complete configuration.
@@ -559,7 +586,53 @@ private:
     /// @param boundId The id to preselect, or `std::nullopt` for "None".
     void populateMindWaveCombo(QComboBox* combo, std::optional<sound_mind::core::MindWaveId> boundId);
 
+    /**
+     * @brief Constructs a `None`-plus-library MindWave-binding combo,
+     *        wired to call `resolveCreateMindWaveSentinel()` on its own
+     *        `currentIndexChanged` - `v0.Y.62.1` Installment G. A private
+     *        member (not a free function) specifically because it needs
+     *        to reach `createMindWaveCallback_`, unlike before this
+     *        installment.
+     *
+     * Connecting that resolver here, in the combo's own constructor,
+     * rather than in each individual call site's own `currentIndexChanged`
+     * handler, is what lets every one of this panel's five MindWave
+     * combos share one "Create New MindWave..." implementation at all:
+     * Qt invokes multiple slots connected to the same signal in
+     * connection order, so this resolver (connected here, first) always
+     * runs *before* each call site's own existing handler (connected
+     * immediately afterward, at that call site) - by the time that
+     * second handler reads `combo->itemData(index)`, the sentinel item
+     * has already been rewritten in place to the real new id, if that's
+     * what was just picked. See `resolveCreateMindWaveSentinel()`'s own
+     * docs for the rewrite itself.
+     *
+     * @param parent The combo's own parent widget.
+     * @param objectName The combo's own object name (for tests/QSS).
+     * @return The constructed, wired, but not-yet-populated combo -
+     *         `populateMindWaveCombo()` is still a separate call.
+     */
+    QComboBox* makeMindWaveCombo(QWidget* parent, const QString& objectName);
+
+    /**
+     * @brief If `index`'s own item in `combo` is the "Create New
+     *        MindWave..." sentinel `populateMindWaveCombo()` always adds
+     *        last, calls `createMindWaveCallback_` and rewrites that same
+     *        item in place (`setItemData()`/`setItemText()`) to reference
+     *        the real id/name it returns - `v0.Y.62.1` Installment G. A
+     *        no-op, for every other item (including a no-op
+     *        `createMindWaveCallback_`, which never happens through
+     *        normal `MainWindow` wiring but keeps this panel safe to use
+     *        standalone, e.g. in tests, without one set).
+     * @param combo The combo `index` belongs to.
+     * @param index The just-selected index.
+     */
+    void resolveCreateMindWaveSentinel(QComboBox* combo, int index);
+
     std::unique_ptr<sound_mind::core::ToolConfiguration> config_;
+
+    /// @brief See setCreateMindWaveCallback()'s own docs.
+    std::function<std::pair<sound_mind::core::MindWaveId, QString>()> createMindWaveCallback_;
 
     /// @brief `v0.Y.55.1`'s own second prerequisite - see
     ///        `refreshToolPresets()`'s own docs. Reads from `project_`,

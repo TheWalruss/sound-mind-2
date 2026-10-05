@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <utility>
@@ -280,6 +281,42 @@ public:
      */
     void setLiveLoudnessDisplay(sound_mind::core::LayerId id, const QString& text);
 
+    /**
+     * @brief Sets whether the right-click context menu's own "Unhide
+     *        other layers" entry is available - `v0.Y.62.1` Installment
+     *        F, mirroring `LayerController::canUnhideOtherLayers()`'s own
+     *        state exactly (that method is the actual source of truth;
+     *        this just reflects it into the menu `MainWindow`/
+     *        `LayerController` otherwise has no reason to reach into).
+     *
+     * Purely a flag read the next time the context menu is built (right-
+     * click) - doesn't rebuild or show anything on its own.
+     *
+     * @param available Whether to offer the entry.
+     */
+    void setUnhideOtherLayersAvailable(bool available);
+
+    /**
+     * @brief Sets the callback the per-row "Opacity MindWave" combo
+     *        calls when its own "Create New MindWave..." entry is chosen
+     *        - `v0.Y.62.1` Installment G, the same role and reasoning
+     *        `ToolConfigurationPanel::setCreateMindWaveCallback()`'s own
+     *        docs give (a plain injected callback, not a signal,
+     *        specifically so the combo's own existing selection-changed
+     *        handling can use the real new id synchronously).
+     *
+     * Threaded into every `LayerRowWidget` `rebuildRows()` constructs
+     * from here on, including ones already showing - call before the
+     * next `setLayers()`/structural change if a row built before this
+     * was called needs it too (ordinarily set once, at construction,
+     * well before any real row exists).
+     *
+     * @param callback Called with no arguments; returns the newly
+     *        created MindWave's own id and display name. `nullptr` (the
+     *        default) makes the entry a silent no-op.
+     */
+    void setCreateMindWaveCallback(std::function<std::pair<sound_mind::core::MindWaveId, QString>()> callback);
+
 signals:
     /// @brief The current selection changed - a row was clicked,
     ///        selectLayer() was called, or clearSelection() was called.
@@ -302,6 +339,19 @@ signals:
     /// `LayerController::cycleLayerVisibilityState()` does, reading the
     /// layer's own current state directly.
     void visibilityCycleRequested(sound_mind::core::LayerId id);
+
+    /// @brief The right-click context menu's own "Hide other layers"
+    ///        entry was chosen - `v0.Y.62.1` Installment F.
+    /// @param keepVisible The right-clicked layer's own id - every other
+    ///        layer should be hidden.
+    void hideOtherLayersRequested(sound_mind::core::LayerId keepVisible);
+
+    /// @brief The right-click context menu's own "Unhide other layers"
+    ///        entry was chosen - `v0.Y.62.1` Installment F. Only ever
+    ///        offered (see setUnhideOtherLayersAvailable()'s own docs)
+    ///        when there's actually something to restore, so this
+    ///        carries no payload of its own.
+    void unhideOtherLayersRequested();
 
     /// @brief A row's opacity slider changed.
     void opacityChanged(sound_mind::core::LayerId id, float opacity);
@@ -428,6 +478,25 @@ private slots:
     ///        the display back to `currentRows_`.
     void handleRowsMoved();
 
+    /**
+     * @brief `list_`'s `customContextMenuRequested` handler - builds and
+     *        shows the right-click menu (`v0.Y.62.1` Installment F).
+     *
+     * Only ever offers "Hide other layers"/"Unhide other layers" when
+     * right-clicking on an actual row (`list_->itemAt(pos)` resolves to
+     * one) - right-clicking empty space in the list shows nothing, the
+     * same "no dead placeholder UI" precedent setDisallowedLayers()'s own
+     * docs already establish elsewhere in this class. "Unhide other
+     * layers" is additionally gated on `unhideOtherLayersAvailable_` (see
+     * setUnhideOtherLayersAvailable()'s own docs) - hidden from the menu
+     * entirely, not merely disabled, when there's nothing to restore.
+     *
+     * @param pos The right-click position, in `list_`'s own viewport
+     *        coordinates (as `customContextMenuRequested` already gives
+     *        it).
+     */
+    void showContextMenu(const QPoint& pos);
+
 private:
     /// @brief Rebuilds every row widget from `currentRows_`/
     ///        `availableMindWaves_` - the shared body setLayers() and
@@ -436,6 +505,12 @@ private:
     void rebuildRows();
 
     QListWidget* list_ = nullptr;
+
+    /// @brief See setUnhideOtherLayersAvailable()'s own docs.
+    bool unhideOtherLayersAvailable_ = false;
+
+    /// @brief See setCreateMindWaveCallback()'s own docs.
+    std::function<std::pair<sound_mind::core::MindWaveId, QString>()> createMindWaveCallback_;
 
     /// @brief The rows as of the last setLayers() call, bottom-to-top -
     /// used to rebuild the list display when an invalid drag is rejected,

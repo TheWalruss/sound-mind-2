@@ -4,12 +4,9 @@
 #include <QString>
 #include <QStringList>
 
-class QComboBox;
-class QProgressBar;
-class QPushButton;
-class QSlider;
-
 namespace sound_mind::studio {
+
+class DeviceConfigurationWidget;
 
 /**
  * @brief A dockable panel consolidating input/output device selection,
@@ -59,6 +56,14 @@ namespace sound_mind::studio {
  * back to the one shared place all three panels' own device/gain
  * preferences already live, now that `transportToolBar` no longer carries
  * a standalone toggle for it directly.
+ *
+ * **A thin wrapper around one `DeviceConfigurationWidget`, as of
+ * `v0.Y.62.1` Installment H** - every method/signal here just forwards
+ * 1:1 to/from it. The actual controls were extracted into that class so
+ * `LandingPage` could embed an independent second instance of the exact
+ * same controls directly, letting a user pick/test devices before a
+ * project is even open - see that class's own docs for why two
+ * instances can coexist and how `MainWindow` keeps them in sync.
  */
 class ConfigureDevicesPanel : public QDockWidget {
     Q_OBJECT
@@ -85,6 +90,19 @@ public:
     ///        setInputDevices()'s own docs.
     /// @param deviceNames Real device names, in listed order.
     void setOutputDevices(const QStringList& deviceNames);
+
+    /// @brief See `DeviceConfigurationWidget::setSelectedInputDevice()`'s
+    ///        own docs.
+    /// @param deviceName The device to select - falls back to
+    ///        "(System Default)" if not currently among this combo's own
+    ///        items.
+    void setSelectedInputDevice(const QString& deviceName);
+
+    /// @brief See `DeviceConfigurationWidget::setSelectedOutputDevice()`'s
+    ///        own docs.
+    /// @param deviceName The device to select - see setSelectedInputDevice()'s
+    ///        own docs.
+    void setSelectedOutputDevice(const QString& deviceName);
 
     /// @brief Sets the input gain slider's displayed position without
     ///        emitting inputGainPercentChanged() - for `MainWindow` to sync
@@ -184,14 +202,7 @@ signals:
     void testOutputToggled(bool testing);
 
 private:
-    QComboBox* inputDeviceCombo_ = nullptr;
-    QSlider* inputGainSlider_ = nullptr;
-    QPushButton* testInputButton_ = nullptr;
-    QProgressBar* inputLevelBar_ = nullptr;
-
-    QComboBox* outputDeviceCombo_ = nullptr;
-    QSlider* outputGainSlider_ = nullptr;
-    QPushButton* testOutputButton_ = nullptr;
+    DeviceConfigurationWidget* widget_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

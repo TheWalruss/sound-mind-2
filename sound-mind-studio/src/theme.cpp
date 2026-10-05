@@ -145,12 +145,17 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
     border-color: #FEC100;
 }
 
-/* Forward-looking - no QDockWidget exists yet (arrives with the Layers
- * Panel milestone, v0.Y.13.1), but styling it now costs nothing and needs
- * no revisiting once it does. */
 QDockWidget {
     color: #f0e6d8;
-    titlebar-close-icon: none;
+    /* No titlebar-close-icon override (real-world testing pass finding,
+     * v0.Y.62.1 Installment D): this QSS was first written before any
+     * real QDockWidget existed in the app ("styling it now costs
+     * nothing"), speculatively setting the close icon to `none` - which
+     * made every dock panel's close (X) button invisible once real dock
+     * panels actually arrived, even though every one of them already has
+     * QDockWidget::DockWidgetClosable (explicitly or via Qt's own
+     * default). Leaving this unset lets Qt's own native close icon
+     * render, same as every other platform-drawn titlebar control here. */
 }
 QDockWidget::title {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #b53c00, stop:1 #d4a000);

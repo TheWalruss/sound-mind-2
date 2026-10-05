@@ -165,15 +165,18 @@ void MindWaveController::refreshMindWavesPanel() {
     toolConfigurationPanel_->setAvailableMindWaves(availableForBinding);
 }
 
-void MindWaveController::addMindWave() {
+MindWaveId MindWaveController::addMindWave() {
     if (project_ == nullptr) {
-        return;
+        return MindWaveId{0};
     }
     const QString name = nextDefaultName(project_->mindWaves());
     const MindWaveId id = project_->addMindWave(name.toStdString(), MindWave{});
     emit mindWavesChanged();
     refreshMindWavesPanel();
     mindWavesPanel_->selectMindWave(id);
+    mindWavesPanel_->show();
+    mindWavesPanel_->raise();
+    return id;
 }
 
 void MindWaveController::removeMindWave(MindWaveId id) {

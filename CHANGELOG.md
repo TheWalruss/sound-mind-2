@@ -6,6 +6,28 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.9.1] - 2026-10-05
+
+Real-world testing pass #2: eight findings from a second tester's hands-on use, executed immediately (confirmed with the user) rather than only triaged. A mix of audio/compositor bugs, UI-plumbing gaps, and two small new features - see `docs/sound-mind-architecture.md`'s Decision #203 for the full writeup of each.
+
+### Added
+
+- A "Device Configuration" section on the Landing Page - input/output devices can now be selected and tested before a project is even created or opened. The actual controls (`DeviceConfigurationWidget`) are shared with the existing Configure Devices dock panel; both stay in sync with each other.
+- The Layers panel's right-click menu gained "Hide other layers" (hides every layer except the one clicked, preserving each one's own exact prior visible/muted state) and, once used, "Unhide other layers" (restores them in one step).
+- Every MindWave-binding dropdown (Tool Configuration's vibrato/tremolo/opacity/size/color, every Filter Configuration parameter, a layer's own Opacity MindWave) gained a "Create New MindWave..." entry - creates a new MindWave, binds it immediately, and brings the MindWaves panel into view so it can be configured right away.
+
+### Fixed
+
+- The Configure Devices panel's "Test" tone for the output device now actually respects the gain slider - it previously always played at a fixed volume regardless of the slider's position.
+- A Filter layer's own Opacity slider and Opacity MindWave binding now actually affect the rendered output - previously silently had zero effect, since the compositor's Filter-layer code path had no "layer opacity" concept at all.
+- Selecting a Filter or Equalizer layer now correctly disables the Paint tool with an explanatory tooltip, instead of leaving the Tool Configuration panel looking like painting is still possible on the previously-selected layer.
+- Every dock panel's native close (X) button is visible again - the app's own theme was accidentally hiding it.
+- The Layers panel's Visible/Mute/Invisible indicator is now a real open-eye/crossed-speaker/closed-eye icon instead of a small, easily-missed dot glyph.
+
+### Notes
+
+Bumped `Z` (`0.1.8.1` -> `0.1.9.1`) - genuinely new public API across several classes, not a pure bug-fix pass, even though most of the eight findings individually read as fixes.
+
 ## [0.1.8.1] - 2026-10-04
 
 The within-a-layer half of the "many layers"/"many operations" benchmark finding `v0.1.7.1` left open: painting a new stroke onto a layer with a long history no longer replays that layer's *entire* operation history from scratch. A new feature (hence the `Z` bump, matching `v0.1.7.1`'s own reasoning) - new public Core API and new Studio-side public methods - even though visible behavior is unchanged except for one confirmed, narrow contract change (see Fixed/Notes below).

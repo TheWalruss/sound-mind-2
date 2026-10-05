@@ -52,6 +52,48 @@ TEST_CASE("processBlock outputs a non-silent, identical-on-both-channels tone on
                        [](float s) { return std::abs(s) <= DeviceTestTonePlayer::kToneAmplitude + 1e-5f; }));
 }
 
+TEST_CASE("setGain() scales the test tone's own output amplitude", "[device_test_tone_player]") {
+    DeviceTestTonePlayer player(AudioDeviceMode::None);
+    player.setGain(0.5f);
+    player.start("");
+
+    std::vector<float> left(2048, 0.0f);
+    float* outputChannels[1] = {left.data()};
+    player.processBlock(outputChannels, 1, static_cast<int>(left.size()));
+
+    CHECK(std::any_of(left.begin(), left.end(), [](float s) { return s != 0.0f; }));
+    CHECK(std::all_of(left.begin(), left.end(), [](float s) {
+        return std::abs(s) <= DeviceTestTonePlayer::kToneAmplitude * 0.5f + 1e-5f;
+    }));
+}
+
+TEST_CASE("setGain() of 0 silences the test tone entirely", "[device_test_tone_player]") {
+    DeviceTestTonePlayer player(AudioDeviceMode::None);
+    player.setGain(0.0f);
+    player.start("");
+
+    std::vector<float> left(2048, 1.0f);
+    float* outputChannels[1] = {left.data()};
+    player.processBlock(outputChannels, 1, static_cast<int>(left.size()));
+
+    CHECK(std::all_of(left.begin(), left.end(), [](float s) { return s == 0.0f; }));
+}
+
+TEST_CASE("setGain() clamps to [0, kMaxGain], matching PlaybackEngine::setVolume()'s own convention",
+          "[device_test_tone_player]") {
+    DeviceTestTonePlayer player(AudioDeviceMode::None);
+    player.setGain(-1.0f);
+    CHECK(player.gain() == 0.0f);
+    player.setGain(DeviceTestTonePlayer::kMaxGain + 1.0f);
+    CHECK(player.gain() == DeviceTestTonePlayer::kMaxGain);
+}
+
+TEST_CASE("gain() defaults to 1.0 - every pre-existing caller's exact prior behavior, unchanged",
+          "[device_test_tone_player]") {
+    const DeviceTestTonePlayer player(AudioDeviceMode::None);
+    CHECK(player.gain() == 1.0f);
+}
+
 TEST_CASE("stop() silences subsequent processBlock() calls", "[device_test_tone_player]") {
     DeviceTestTonePlayer player(AudioDeviceMode::None);
     player.start("");

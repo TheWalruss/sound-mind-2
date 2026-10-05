@@ -468,10 +468,51 @@ void ToolConfigurationPanelTest::setAvailableMindWavesPopulatesBothVibratoAndTre
     for (const auto& comboName : {QStringLiteral("vibratoMindWaveCombo"), QStringLiteral("tremoloMindWaveCombo")}) {
         auto* combo = panel.findChild<QComboBox*>(comboName);
         QVERIFY(combo != nullptr);
-        QCOMPARE(combo->count(), 3);  // None + two MindWaves.
+        QCOMPARE(combo->count(), 4);  // None + two MindWaves + "Create New MindWave...".
         QCOMPARE(combo->itemText(1), QStringLiteral("Slow Pulse"));
         QCOMPARE(combo->itemText(2), QStringLiteral("Fast Pulse"));
+        QCOMPARE(combo->itemText(3), QStringLiteral("Create New MindWave..."));
     }
+}
+
+void ToolConfigurationPanelTest::selectingCreateNewMindWaveCallsTheCallbackAndRewritesTheItemInPlace() {
+    // v0.Y.62.1 Installment G.
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    int callCount = 0;
+    panel.setCreateMindWaveCallback([&callCount]() -> std::pair<MindWaveId, QString> {
+        ++callCount;
+        return {MindWaveId{42}, QStringLiteral("Fresh Wave")};
+    });
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("vibratoMindWaveCombo"));
+    QCOMPARE(combo->itemText(combo->count() - 1), QStringLiteral("Create New MindWave..."));
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+
+    combo->setCurrentIndex(combo->count() - 1);  // "Create New MindWave...".
+
+    QCOMPARE(callCount, 1);
+    QCOMPARE(combo->currentText(), QStringLiteral("Fresh Wave"));
+    QCOMPARE(combo->itemData(combo->currentIndex()).toULongLong(), static_cast<qulonglong>(42));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).vibratoMindWave(),
+              std::optional<MindWaveId>(MindWaveId{42}));
+}
+
+void ToolConfigurationPanelTest::selectingCreateNewMindWaveWithNoCallbackSetIsASilentNoOp() {
+    // No setCreateMindWaveCallback() call at all - must not crash, and
+    // must leave the sentinel item exactly as it was (the rewrite this
+    // callback would otherwise do simply never happens).
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("vibratoMindWaveCombo"));
+
+    combo->setCurrentIndex(combo->count() - 1);  // "Create New MindWave...".
+
+    QCOMPARE(combo->currentText(), QStringLiteral("Create New MindWave..."));
 }
 
 void ToolConfigurationPanelTest::changingVibratoDepthEmitsToolConfigurationChanged() {
@@ -569,9 +610,10 @@ void ToolConfigurationPanelTest::setAvailableMindWavesPopulatesTheOpacitySizeAnd
          {QStringLiteral("opacityMindWaveCombo"), QStringLiteral("sizeMindWaveCombo"), QStringLiteral("colorMindWaveCombo")}) {
         auto* combo = panel.findChild<QComboBox*>(comboName);
         QVERIFY(combo != nullptr);
-        QCOMPARE(combo->count(), 3);  // None + two MindWaves.
+        QCOMPARE(combo->count(), 4);  // None + two MindWaves + "Create New MindWave...".
         QCOMPARE(combo->itemText(1), QStringLiteral("Slow Pulse"));
         QCOMPARE(combo->itemText(2), QStringLiteral("Fast Pulse"));
+        QCOMPARE(combo->itemText(3), QStringLiteral("Create New MindWave..."));
     }
 }
 

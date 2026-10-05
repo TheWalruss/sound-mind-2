@@ -1,6 +1,7 @@
 #include "sound_mind/studio/tool_configuration_panel.h"
 
 #include <array>
+#include <limits>
 #include <optional>
 #include <utility>
 
@@ -152,17 +153,11 @@ constexpr int kMaxHarmonics = 16;
 /// shrunk to a size that reads clearly as a small combo-box icon.
 const QSize kToolPresetThumbnailSize(32, 16);
 
-/// @brief A `None`-plus-library MindWave-binding combo - the same role
-/// `filter_configuration_panel.cpp`'s own `makeMindWaveCombo()` plays,
-/// duplicated here rather than shared across the two panels (neither
-/// exposes a header any UI code outside its own translation unit would
-/// reach into).
-QComboBox* makeMindWaveCombo(QWidget* parent, const QString& objectName) {
-    auto* combo = new QComboBox(parent);
-    combo->setObjectName(objectName);
-    combo->setToolTip(QObject::tr("Bind this parameter to a MindWave"));
-    return combo;
-}
+/// @brief The "Create New MindWave..." entry's own item data - never a
+/// real `MindWaveId` (`Project::addMindWave()` always assigns `>= 1`),
+/// and distinct from `0` ("None") too - see `resolveCreateMindWaveSentinel()`'s
+/// own docs. `v0.Y.62.1` Installment G.
+constexpr qulonglong kCreateNewMindWaveSentinel = std::numeric_limits<qulonglong>::max();
 
 /// @brief Wraps `spinBox` and `combo` side by side - see
 /// `filter_configuration_panel.cpp`'s own identical `makeBoundFieldRow()`.
@@ -1286,7 +1281,39 @@ void ToolConfigurationPanel::populateMindWaveCombo(QComboBox* combo, std::option
             selectedIndex = combo->count() - 1;
         }
     }
+    // Always last, after every real entry - v0.Y.62.1 Installment G.
+    combo->addItem(tr("Create New MindWave..."), QVariant::fromValue(kCreateNewMindWaveSentinel));
     combo->setCurrentIndex(selectedIndex);
+}
+
+QComboBox* ToolConfigurationPanel::makeMindWaveCombo(QWidget* parent, const QString& objectName) {
+    auto* combo = new QComboBox(parent);
+    combo->setObjectName(objectName);
+    combo->setToolTip(tr("Bind this parameter to a MindWave"));
+    connect(combo, &QComboBox::currentIndexChanged, this,
+            [this, combo](int index) { resolveCreateMindWaveSentinel(combo, index); });
+    return combo;
+}
+
+void ToolConfigurationPanel::resolveCreateMindWaveSentinel(QComboBox* combo, int index) {
+    if (combo->itemData(index).toULongLong() != kCreateNewMindWaveSentinel) {
+        return;
+    }
+    if (!createMindWaveCallback_) {
+        return;
+    }
+    const auto [newId, newName] = createMindWaveCallback_();
+    if (newId == MindWaveId{0}) {
+        return;  // No project set - see MindWaveController::addMindWave()'s own docs.
+    }
+    const QSignalBlocker blocker(combo);
+    combo->setItemData(index, QVariant::fromValue(static_cast<qulonglong>(newId)));
+    combo->setItemText(index, newName);
+}
+
+void ToolConfigurationPanel::setCreateMindWaveCallback(
+    std::function<std::pair<MindWaveId, QString>()> callback) {
+    createMindWaveCallback_ = std::move(callback);
 }
 
 void ToolConfigurationPanel::rebuildMindWaveCombos() {

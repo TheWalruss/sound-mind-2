@@ -8,6 +8,7 @@ class LandingPageTest : public QObject {
 private slots:
     void showsTheEmbeddedLogo();
     void newProjectButtonEmitsNewProjectRequested();
+    void deviceConfigurationEmbedsAFunctioningDeviceConfigurationWidget();
     void openProjectButtonEmitsOpenProjectRequested();
     void setRecentProjectsWithNoPathsShowsNoClickableEntries();
     void setRecentProjectsCreatesEntriesThatEmitTheirPath();

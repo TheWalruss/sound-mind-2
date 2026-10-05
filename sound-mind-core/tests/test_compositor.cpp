@@ -1021,6 +1021,101 @@ TEST_CASE("compositeProject applies a Filter layer's own filter to everything be
     CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
 }
 
+TEST_CASE("compositeProject blends a Filter layer's own filtered result toward the pre-filter composite by its "
+          "own opacity - v0.Y.62.1 Installment B, a real-world testing pass fix",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());  // canvasWidth = 3, binCount = 1.
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    FilterConfiguration filterConfig;
+    filterConfig.setType(FilterType::FrequencyAxisGradient);
+    filterConfig.frequencyGradient().setStopValues(0, {0.0f, 0.0f, 0.0f, 1.0f, 1.0f});  // Force both to 0 dB.
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(filterConfig);
+    filterLayer.setOpacity(0.5f);
+    project.addLayer(std::move(filterLayer));
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    // A plain linear crossfade of the raw dB values between the pre-filter
+    // -20dB and the fully-filtered 0dB, per applyBlendedCell(Overwrite,
+    // ...)'s own documented formula - halfway between the two at opacity
+    // 0.5. Before this fix, applyFilter() had no opacity concept at all,
+    // so this would have measured 0dB (the filter always fully applied)
+    // regardless of the opacity set here.
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(-10.0f).margin(0.01));
+    CHECK(composite->rightMagnitudeDb[0] == Catch::Approx(-10.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject's Filter opacity blend reproduces the filtered result exactly at opacity 1 - "
+          "the default, and this fix's own prior behavior, unchanged",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    FilterConfiguration filterConfig;
+    filterConfig.setType(FilterType::FrequencyAxisGradient);
+    filterConfig.frequencyGradient().setStopValues(0, {0.0f, 0.0f, 0.0f, 1.0f, 1.0f});
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(filterConfig);
+    project.addLayer(std::move(filterLayer));  // opacity left at its own default, 1.0.
+
+    const auto composite = compositeProject(project);
+
+    REQUIRE(composite.has_value());
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProject applies a Filter layer's own MindWave-bound Opacity per cell",
+          "[core][compositor][mind_wave]") {
+    Project project = Project::createNew(testSettings());  // canvasWidth = 3, binCount = 1.
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    FilterConfiguration filterConfig;
+    filterConfig.setType(FilterType::FrequencyAxisGradient);
+    filterConfig.frequencyGradient().setStopValues(0, {0.0f, 0.0f, 0.0f, 1.0f, 1.0f});  // Force both to 0 dB.
+    const auto config = streamCodecConfigFor(project.settings());
+    const MindWaveId id = project.addMindWave("Test", threeColumnSquareWave(config));
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(filterConfig);
+    filterLayer.setOpacityMindWave(id);
+    project.addLayer(std::move(filterLayer));
+
+    const auto composite = compositeProject(project);
+    REQUIRE(composite.has_value());
+
+    // Columns 0/2: threeColumnSquareWave()'s own "high" columns (gain
+    // 1.0 - fully filtered, 0dB). Column 1: its own "low" column (gain
+    // 0.0 - fully reverts to the pre-filter -20dB).
+    CHECK(composite->leftMagnitudeDb[0] == Catch::Approx(0.0f).margin(0.01));
+    CHECK(composite->leftMagnitudeDb[1] == Catch::Approx(-20.0f).margin(0.01));
+    CHECK(composite->leftMagnitudeDb[2] == Catch::Approx(0.0f).margin(0.01));
+}
+
+TEST_CASE("compositeProjectCached's Filter opacity blend matches compositeProject() exactly",
+          "[core][compositor]") {
+    Project project = Project::createNew(testSettings());
+    project.layers()[0].setContent(makeContent({-20.0f, -20.0f, -20.0f}, {-20.0f, -20.0f, -20.0f}, {0.0f, 0.0f, 0.0f}));
+
+    FilterConfiguration filterConfig;
+    filterConfig.setType(FilterType::FrequencyAxisGradient);
+    filterConfig.frequencyGradient().setStopValues(0, {0.0f, 0.0f, 0.0f, 1.0f, 1.0f});
+    Layer filterLayer(0, "Filter", LayerType::Filter);
+    filterLayer.setFilterConfiguration(filterConfig);
+    filterLayer.setOpacity(0.5f);
+    project.addLayer(std::move(filterLayer));
+
+    const auto expected = compositeProject(project);
+    CompositePrefixCache cache;
+    const auto actual = compositeProjectCached(project, cache);
+
+    REQUIRE(expected.has_value());
+    REQUIRE(actual.has_value());
+    CHECK(actual->leftMagnitudeDb == expected->leftMagnitudeDb);
+    CHECK(actual->rightMagnitudeDb == expected->rightMagnitudeDb);
+}
+
 TEST_CASE("compositeProject throws CompositeCancelled once shouldCancel starts returning true",
           "[core][compositor][cancellation]") {
     // Project::createNew() already seeds Background + Equalizer (itself a

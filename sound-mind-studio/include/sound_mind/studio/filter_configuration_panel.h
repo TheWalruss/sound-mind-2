@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -279,6 +280,15 @@ public:
      */
     void setAvailableMindWaves(const std::vector<std::pair<sound_mind::core::MindWaveId, QString>>& mindWaves);
 
+    /// @brief See `ToolConfigurationPanel::setCreateMindWaveCallback()`'s
+    ///        own docs - identical role, for this panel's own ~22
+    ///        MindWave-binding combos. `v0.Y.62.1` Installment G.
+    /// @param callback Called with no arguments; returns the newly
+    ///        created MindWave's own id and display name. `nullptr` (the
+    ///        default) makes every "Create New MindWave..." entry a
+    ///        silent no-op.
+    void setCreateMindWaveCallback(std::function<std::pair<sound_mind::core::MindWaveId, QString>()> callback);
+
     /**
      * @brief Sets which saved convolution kernels the Load Kernel combo can
      *        offer - `MainWindow`'s own answer to keeping this panel in
@@ -351,6 +361,15 @@ private:
     ///        added), not just the original five.
     void rebuildMindWaveCombos();
 
+    /// @brief See `ToolConfigurationPanel::makeMindWaveCombo()`'s own
+    ///        docs - identical role/reasoning, for this panel's own
+    ///        combos. `v0.Y.62.1` Installment G.
+    QComboBox* makeMindWaveCombo(QWidget* parent, const QString& objectName);
+
+    /// @brief See `ToolConfigurationPanel::resolveCreateMindWaveSentinel()`'s
+    ///        own docs - identical behavior.
+    void resolveCreateMindWaveSentinel(QComboBox* combo, int index);
+
     /**
      * @brief Destroys and recreates `convolveKernelSpinBoxes_` for a new
      *        `size` x `size` kernel, laid out in `convolveKernelGridLayout_`,
@@ -373,6 +392,9 @@ private:
 
     sound_mind::core::FilterConfiguration config_;
     bool isEqualizerMode_ = false;
+
+    /// @brief See setCreateMindWaveCallback()'s own docs.
+    std::function<std::pair<sound_mind::core::MindWaveId, QString>()> createMindWaveCallback_;
 
     QComboBox* filterTypeCombo_ = nullptr;
     QLabel* filterTypeLabel_ = nullptr;

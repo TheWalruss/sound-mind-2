@@ -1,12 +1,15 @@
 #include "test_landing_page.h"
 
+#include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
+#include "sound_mind/studio/device_configuration_widget.h"
 #include "sound_mind/studio/landing_page.h"
 
+using sound_mind::studio::DeviceConfigurationWidget;
 using sound_mind::studio::LandingPage;
 
 void LandingPageTest::showsTheEmbeddedLogo() {
@@ -16,6 +19,24 @@ void LandingPageTest::showsTheEmbeddedLogo() {
     auto* logoLabel = page.findChild<QLabel*>(QStringLiteral("logoLabel"));
     QVERIFY(logoLabel != nullptr);
     QVERIFY(logoLabel->pixmap().isNull() == false);
+}
+
+void LandingPageTest::deviceConfigurationEmbedsAFunctioningDeviceConfigurationWidget() {
+    // v0.Y.62.1 Installment H - lets a user pick/test audio devices
+    // before even creating or opening a project.
+    LandingPage page;
+    DeviceConfigurationWidget* embedded = page.deviceConfiguration();
+    QVERIFY(embedded != nullptr);
+    QCOMPARE(embedded->parentWidget() != nullptr && page.isAncestorOf(embedded), true);
+
+    // A real, functioning instance, not just a non-null pointer - its own
+    // signal/setter contract still works once embedded here.
+    embedded->setInputDevices({QStringLiteral("Mic A")});
+    QSignalSpy spy(embedded, &DeviceConfigurationWidget::inputDeviceChanged);
+    auto* combo = embedded->findChild<QComboBox*>(QStringLiteral("inputDeviceCombo"));
+    QVERIFY(combo != nullptr);
+    combo->setCurrentIndex(1);
+    QCOMPARE(spy.count(), 1);
 }
 
 void LandingPageTest::newProjectButtonEmitsNewProjectRequested() {

@@ -3,17 +3,27 @@
 #include <algorithm>
 
 #include <array>
+#include <functional>
+#include <limits>
 #include <utility>
 
+#include <QAction>
 #include <QApplication>
+#include <QColor>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QEnterEvent>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QListWidget>
+#include <QMenu>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPen>
 #include <QPixmap>
+#include <QPolygonF>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSlider>
@@ -68,17 +78,82 @@ QString typeTagText(LayerType type) {
     return QString();
 }
 
-/// @brief The visibility button's own glyph for the current (`visible`,
-/// `muted`) pair - `v0.Y.46.1` Installment B ("Layers Panel & Editing
-/// Enhancements v2"). "Visible"/"Invisible" reuse the exact glyphs the
-/// pre-Installment-B binary toggle already used; "Muted" (a new middle
-/// state - still shown on the canvas, excluded from audio playback) gets
-/// its own, distinct half-filled glyph.
-QString visibilityGlyphFor(bool visible, bool muted) {
+/// @brief The visibility button's own icon size, in pixels - small enough
+/// to sit comfortably in the row header, large enough for the eye/
+/// speaker shapes below to actually read as what they are.
+constexpr int kVisibilityIconSize = 18;
+
+/// @brief Hand-drawn via `QPainter` rather than a `QIcon::fromTheme()`/
+/// resource-file lookup - real-world testing pass finding (`v0.Y.62.1`
+/// Installment E): the pre-existing `●`/`◐`/`○` glyphs were too small and
+/// their meaning too obscure, but this codebase has no icon-rendering
+/// precedent beyond Unicode-glyph button text to build on (no `.qrc`
+/// icon set, no `QIcon::fromTheme()` usage anywhere), and font-rendered
+/// emoji (an eye/speaker emoji character) would render inconsistently
+/// across platforms/fonts rather than matching this app's own fixed dark
+/// theme. A plain `QPixmap` + `QPainter` keeps these crisp at any size
+/// and in the app's own palette, with no new asset pipeline.
+/// @param paint Draws onto `size x size`, already antialiased, with
+///        `pen`/`brush` already set to the theme's own `#f0e6d8` - only
+///        needs to draw the shape itself.
+[[nodiscard]] QIcon drawnVisibilityIcon(const std::function<void(QPainter&, int)>& paint) {
+    QPixmap pixmap(kVisibilityIconSize, kVisibilityIconSize);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    const QColor strokeColor(QStringLiteral("#f0e6d8"));
+    painter.setPen(QPen(strokeColor, 1.6));
+    painter.setBrush(strokeColor);
+    paint(painter, kVisibilityIconSize);
+    return QIcon(pixmap);
+}
+
+/// @brief The visibility button's own icon for the current (`visible`,
+/// `muted`) pair - `v0.Y.62.1` Installment E, replacing the pre-existing
+/// `●`/`◐`/`○` text glyphs (see `drawnVisibilityIcon()`'s own docs for
+/// why these are hand-drawn rather than a theme/resource icon). An open
+/// eye for "visible and audible," a closed eye for "hidden entirely," and
+/// a crossed-out speaker for the new (`v0.Y.46.1` Installment B) "shown
+/// but silent" middle state - directly naming what each state actually
+/// *does*, rather than a brightness metaphor (`●`/`◐`/`○`) that gave no
+/// hint which of "visible," "audible," or both, each step actually
+/// toggled.
+[[nodiscard]] QIcon visibilityIconFor(bool visible, bool muted) {
     if (!visible) {
-        return QStringLiteral("○");
+        // Closed eye: a single curved eyelid line, no pupil - deliberately
+        // not just the open eye's own outline redrawn thinner, so the two
+        // remain unambiguous even at a glance.
+        return drawnVisibilityIcon([](QPainter& painter, int size) {
+            painter.setBrush(Qt::NoBrush);
+            QPainterPath path;
+            path.moveTo(size * 0.12, size * 0.5);
+            path.quadTo(size * 0.5, size * 0.5 + size * 0.22, size * 0.88, size * 0.5);
+            painter.drawPath(path);
+        });
     }
-    return muted ? QStringLiteral("◐") : QStringLiteral("●");
+    if (muted) {
+        // A speaker shape (a small rectangle feeding a triangular horn)
+        // with a diagonal line crossed through the whole icon.
+        return drawnVisibilityIcon([](QPainter& painter, int size) {
+            QPolygonF speaker;
+            speaker << QPointF(size * 0.14, size * 0.38) << QPointF(size * 0.32, size * 0.38)
+                    << QPointF(size * 0.56, size * 0.18) << QPointF(size * 0.56, size * 0.82)
+                    << QPointF(size * 0.32, size * 0.62) << QPointF(size * 0.14, size * 0.62);
+            painter.drawPolygon(speaker);
+            painter.drawLine(QPointF(size * 0.08, size * 0.84), QPointF(size * 0.86, size * 0.12));
+        });
+    }
+    // Open eye: an almond outline with a filled pupil.
+    return drawnVisibilityIcon([](QPainter& painter, int size) {
+        painter.setBrush(Qt::NoBrush);
+        QPainterPath path;
+        path.moveTo(size * 0.1, size * 0.5);
+        path.quadTo(size * 0.5, size * 0.5 - size * 0.32, size * 0.9, size * 0.5);
+        path.quadTo(size * 0.5, size * 0.5 + size * 0.32, size * 0.1, size * 0.5);
+        painter.drawPath(path);
+        painter.setBrush(QColor(QStringLiteral("#f0e6d8")));
+        painter.drawEllipse(QPointF(size * 0.5, size * 0.5), size * 0.11, size * 0.11);
+    });
 }
 
 /// @brief The visibility button's own tooltip for the current (`visible`,
@@ -92,6 +167,33 @@ QString visibilityTooltipFor(bool visible, bool muted) {
         return QObject::tr("Muted - shown on the canvas, silent in playback - click to hide");
     }
     return QObject::tr("Visible and audible - click to mute (still shown, silent in playback)");
+}
+
+/// @brief See `tool_configuration_panel.cpp`'s own identical constant -
+/// duplicated for the same "no shared header to reach into" reason.
+/// `v0.Y.62.1` Installment G.
+constexpr qulonglong kCreateNewMindWaveSentinel = std::numeric_limits<qulonglong>::max();
+
+/// @brief See `ToolConfigurationPanel::resolveCreateMindWaveSentinel()`'s
+/// own docs - identical behavior, as a free function here (`LayerRowWidget`
+/// has no private panel-level state the way the two dock panels' own
+/// member-function versions reach into - the callback is threaded
+/// straight into the row's own constructor instead, see its own docs).
+void resolveCreateMindWaveSentinel(QComboBox* combo, int index,
+                                    const std::function<std::pair<MindWaveId, QString>()>& createMindWaveCallback) {
+    if (combo->itemData(index).toULongLong() != kCreateNewMindWaveSentinel) {
+        return;
+    }
+    if (!createMindWaveCallback) {
+        return;
+    }
+    const auto [newId, newName] = createMindWaveCallback();
+    if (newId == MindWaveId{0}) {
+        return;  // No project set - see MindWaveController::addMindWave()'s own docs.
+    }
+    const QSignalBlocker blocker(combo);
+    combo->setItemData(index, QVariant::fromValue(static_cast<qulonglong>(newId)));
+    combo->setItemText(index, newName);
 }
 
 /// @brief The row header's own fixed height, in pixels - tall enough for a
@@ -213,7 +315,8 @@ class LayerRowWidget : public QWidget {
 public:
     LayerRowWidget(const LayersPanel::RowData& data, QListWidget* list,
                    const std::vector<std::pair<MindWaveId, QString>>& availableMindWaves, bool disallowedForMindGrain,
-                   bool isSelected, QWidget* parent = nullptr)
+                   bool isSelected, const std::function<std::pair<MindWaveId, QString>()>& createMindWaveCallback,
+                   QWidget* parent = nullptr)
         : QWidget(parent), id_(data.id), isSelected_(isSelected) {
         auto* outer = new QVBoxLayout(this);
         outer->setContentsMargins(2, 1, 2, 1);
@@ -265,12 +368,14 @@ public:
         // on/off toggle - v0.Y.46.1 Installment B ("Layers Panel & Editing
         // Enhancements v2"). Plain (non-checkable) and click-driven, since
         // QPushButton's own checkable/toggled machinery is inherently
-        // binary; the button's own glyph/tooltip are derived fresh from
+        // binary; the button's own icon/tooltip are derived fresh from
         // data.visible/data.muted on every rebuild (LayersPanel::
         // rebuildRows() already reconstructs every row on any state
         // change), so nothing here needs to track or compute the next
         // state itself.
-        auto* visibilityButton = new QPushButton(visibilityGlyphFor(data.visible, data.muted));
+        auto* visibilityButton = new QPushButton();
+        visibilityButton->setIcon(visibilityIconFor(data.visible, data.muted));
+        visibilityButton->setIconSize(QSize(kVisibilityIconSize, kVisibilityIconSize));
         visibilityButton->setObjectName(QStringLiteral("visibilityButton"));
         visibilityButton->setFlat(true);
         visibilityButton->setFixedWidth(22);
@@ -505,7 +610,13 @@ public:
                     selectedIndex = mindWaveCombo->count() - 1;
                 }
             }
+            // Always last, after every real entry - v0.Y.62.1 Installment G.
+            mindWaveCombo->addItem(tr("Create New MindWave..."), QVariant::fromValue(kCreateNewMindWaveSentinel));
             mindWaveCombo->setCurrentIndex(selectedIndex);
+            connect(mindWaveCombo, &QComboBox::currentIndexChanged, this,
+                    [mindWaveCombo, createMindWaveCallback](int index) {
+                        resolveCreateMindWaveSentinel(mindWaveCombo, index, createMindWaveCallback);
+                    });
             connect(mindWaveCombo, &QComboBox::currentIndexChanged, this, [this, mindWaveCombo](int index) {
                 const auto rawId = mindWaveCombo->itemData(index).toULongLong();
                 emit opacityMindWaveChanged(
@@ -725,6 +836,8 @@ LayersPanel::LayersPanel(QWidget* parent) : QDockWidget(tr("Layers"), parent) {
     list_->setDropIndicatorShown(true);
     list_->setDragDropMode(QListWidget::InternalMove);
     connect(list_->model(), &QAbstractItemModel::rowsMoved, this, &LayersPanel::handleRowsMoved);
+    list_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(list_, &QListWidget::customContextMenuRequested, this, &LayersPanel::showContextMenu);
     layout->addWidget(list_, 1);
 
     // Wrapped in a real QScrollArea, matching every other multi-field dock
@@ -823,7 +936,8 @@ void LayersPanel::rebuildRows() {
         list_->addItem(item);
         const bool disallowedForMindGrain =
             std::find(disallowedLayers_.begin(), disallowedLayers_.end(), it->id) != disallowedLayers_.end();
-        auto* row = new LayerRowWidget(*it, list_, availableMindWaves_, disallowedForMindGrain, selected);
+        auto* row =
+            new LayerRowWidget(*it, list_, availableMindWaves_, disallowedForMindGrain, selected, createMindWaveCallback_);
         // Built from the actual widget's own preferred size (which now
         // varies with selected/collapsed state and locked/Background type -
         // see LayerRowWidget's own docs) rather than a single hardcoded
@@ -956,6 +1070,29 @@ void LayersPanel::handleRowsMoved() {
     currentRows_ = std::move(reordered);
 
     emit reorderRequested(newOrderBottomToTop);
+}
+
+void LayersPanel::setUnhideOtherLayersAvailable(bool available) { unhideOtherLayersAvailable_ = available; }
+
+void LayersPanel::setCreateMindWaveCallback(std::function<std::pair<MindWaveId, QString>()> callback) {
+    createMindWaveCallback_ = std::move(callback);
+}
+
+void LayersPanel::showContextMenu(const QPoint& pos) {
+    QListWidgetItem* item = list_->itemAt(pos);
+    if (item == nullptr || item->data(kChildRowRole).toBool()) {
+        return;  // Empty space, or a MindWave child row - nothing to offer.
+    }
+    const auto id = static_cast<sound_mind::core::LayerId>(item->data(Qt::UserRole).toULongLong());
+
+    QMenu menu(this);
+    QAction* hideOthers = menu.addAction(tr("Hide other layers"));
+    connect(hideOthers, &QAction::triggered, this, [this, id]() { emit hideOtherLayersRequested(id); });
+    if (unhideOtherLayersAvailable_) {
+        QAction* unhideOthers = menu.addAction(tr("Unhide other layers"));
+        connect(unhideOthers, &QAction::triggered, this, [this]() { emit unhideOtherLayersRequested(); });
+    }
+    menu.exec(list_->viewport()->mapToGlobal(pos));
 }
 
 }  // namespace sound_mind::studio

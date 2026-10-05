@@ -63,6 +63,7 @@
 #include "sound_mind/studio/color_conversion.h"
 #include "sound_mind/studio/composer_panel.h"
 #include "sound_mind/studio/create_project_wizard.h"
+#include "sound_mind/studio/device_configuration_widget.h"
 #include "sound_mind/studio/fill_gradient_dialog.h"
 #include "sound_mind/studio/generator_dialog.h"
 #include "sound_mind/studio/history_panel.h"
@@ -228,6 +229,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     layersPanel_->hide();  // nothing to show until setProject() - see refreshLayersPanel()'s docs.
     addDockWidget(Qt::RightDockWidgetArea, layersPanel_);
     connect(layersPanel_, &LayersPanel::visibilityCycleRequested, this, &MainWindow::cycleLayerVisibilityState);
+    connect(layersPanel_, &LayersPanel::hideOtherLayersRequested, this, &MainWindow::hideOtherLayers);
+    connect(layersPanel_, &LayersPanel::unhideOtherLayersRequested, this, &MainWindow::unhideOtherLayers);
     connect(layersPanel_, &LayersPanel::opacityChanged, this, &MainWindow::setLayerOpacity);
     connect(layersPanel_, &LayersPanel::balanceChanged, this, &MainWindow::setLayerBalance);
     connect(layersPanel_, &LayersPanel::translationChanged, this, &MainWindow::setLayerTranslation);
@@ -363,8 +366,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     configureDevicesPanel_ = new ConfigureDevicesPanel(this);
     configureDevicesPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, configureDevicesPanel_);
-    configureDevicesPanel_->setInputDevices(toQStringList(recordEngine_.availableInputDeviceNames()));
-    configureDevicesPanel_->setOutputDevices(toQStringList(playbackController_->availableOutputDeviceNames()));
     connect(configureDevicesPanel_, &ConfigureDevicesPanel::refreshRequested, this,
             &MainWindow::refreshConfiguredDevices);
     connect(configureDevicesPanel_, &ConfigureDevicesPanel::inputDeviceChanged, this,
@@ -379,6 +380,32 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             &MainWindow::toggleTestInputDevice);
     connect(configureDevicesPanel_, &ConfigureDevicesPanel::testOutputToggled, this,
             &MainWindow::toggleTestOutputDevice);
+
+    // v0.Y.62.1 Installment H - the Landing Page's own embedded
+    // DeviceConfigurationWidget is a second, independent instance of the
+    // exact same controls (see its own docs); wired identically to the
+    // dock's own, so either one can be used interchangeably and both stay
+    // in sync. refreshConfiguredDevices() (below) is what actually keeps
+    // both populated with the same device list from here on - this is
+    // just the first population plus the same signal forwarding the dock
+    // already has.
+    auto* landingDeviceConfig = landingPage_->deviceConfiguration();
+    connect(landingDeviceConfig, &DeviceConfigurationWidget::refreshRequested, this,
+            &MainWindow::refreshConfiguredDevices);
+    connect(landingDeviceConfig, &DeviceConfigurationWidget::inputDeviceChanged, this,
+            &MainWindow::setConfiguredInputDevice);
+    connect(landingDeviceConfig, &DeviceConfigurationWidget::outputDeviceChanged, this,
+            &MainWindow::setConfiguredOutputDevice);
+    connect(landingDeviceConfig, &DeviceConfigurationWidget::inputGainPercentChanged, this,
+            &MainWindow::setConfiguredInputGain);
+    connect(landingDeviceConfig, &DeviceConfigurationWidget::outputGainPercentChanged, this,
+            &MainWindow::setConfiguredOutputGain);
+    connect(landingDeviceConfig, &DeviceConfigurationWidget::testInputToggled, this,
+            &MainWindow::toggleTestInputDevice);
+    connect(landingDeviceConfig, &DeviceConfigurationWidget::testOutputToggled, this,
+            &MainWindow::toggleTestOutputDevice);
+
+    refreshConfiguredDevices();
 
     testInputLevelTimer_ = new QTimer(this);
     testInputLevelTimer_->setInterval(100);  // same cadence as recordDrainTimer_ - see its own docs.
@@ -686,6 +713,25 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         // history actually does.
         toolPaletteController_->invalidateContentCaches();
     });
+
+    // "Create New MindWave..." (v0.Y.62.1 Installment G) - one shared
+    // callback, injected into every MindWave-binding dropdown's own
+    // owning panel: creates the entry (also showing/raising the
+    // MindWaves panel - see MindWaveController::addMindWave()'s own
+    // docs) and looks up its freshly-assigned display name, so the
+    // combo that asked for it can show something meaningful rather than
+    // a bare id.
+    const auto createMindWaveCallback = [this]() -> std::pair<sound_mind::core::MindWaveId, QString> {
+        const sound_mind::core::MindWaveId id = mindWaveController_->addMindWave();
+        if (id == sound_mind::core::MindWaveId{0} || !project_.has_value()) {
+            return {id, QString()};
+        }
+        const auto* named = project_->mindWaveById(id);
+        return {id, named != nullptr ? QString::fromStdString(named->name) : QString()};
+    };
+    toolConfigurationPanel_->setCreateMindWaveCallback(createMindWaveCallback);
+    filterConfigurationPanel_->setCreateMindWaveCallback(createMindWaveCallback);
+    layersPanel_->setCreateMindWaveCallback(createMindWaveCallback);
 
     // A permanent (not showMessage()'s own temporary-message) label in the
     // status bar's normal (left-hand) area - see cursorPositionLabel_'s
@@ -1718,6 +1764,9 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     configureDevicesPanel_->setInputLevel(0.0f);
     configureDevicesPanel_->setTestingInput(false);
     configureDevicesPanel_->setTestingOutput(false);
+    landingPage_->deviceConfiguration()->setInputLevel(0.0f);
+    landingPage_->deviceConfiguration()->setTestingInput(false);
+    landingPage_->deviceConfiguration()->setTestingOutput(false);
     playbackController_->stop();
     playbackPanel_->setDuration(0.0);
     canvas_->setPlayheadFraction(std::nullopt);
@@ -2801,6 +2850,12 @@ void MainWindow::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
                                 tr("Changed layer visibility"), undoStack_.currentIndex(), id);
 }
 
+void MainWindow::hideOtherLayers(sound_mind::core::LayerId keepVisible) {
+    layerController_->hideOtherLayers(keepVisible);
+}
+
+void MainWindow::unhideOtherLayers() { layerController_->unhideOtherLayers(); }
+
 void MainWindow::setLayerOpacity(sound_mind::core::LayerId id, float opacity) {
     layerController_->setLayerOpacity(id, opacity);
 }
@@ -3076,11 +3131,24 @@ void MainWindow::updateMindGrainGuardrails() {
         toolConfigurationPanel_->setActiveLayer(*activeLayer);
     }
 
+    // v0.Y.62.1 Installment C - a real-world testing pass finding: a
+    // Filter/Equalizer layer can never hold paintable content at all
+    // (PaintController::beginStroke()'s own guard already refuses it
+    // silently), regardless of which tool is configured - checked here,
+    // independent of the Mind-Grain-specific logic below, so selecting
+    // one as the active layer visibly disables Paint rather than leaving
+    // the Tool Configuration panel showing controls that quietly do
+    // nothing.
+    const sound_mind::core::Layer* activeLayerPtr =
+        (project_.has_value() && activeLayer.has_value()) ? project_->layerById(*activeLayer) : nullptr;
+    const bool activeLayerIsFilterType =
+        activeLayerPtr != nullptr && sound_mind::core::isFilterLayerType(activeLayerPtr->type());
+
     const auto* mindGrain =
         dynamic_cast<const sound_mind::core::MindGrainConfiguration*>(&toolConfigurationPanel_->toolConfiguration());
 
     std::vector<sound_mind::core::LayerId> disallowed;
-    bool activeLayerDisallowed = false;
+    bool activeLayerDisallowed = activeLayerIsFilterType;
     if (mindGrain != nullptr && project_.has_value()) {
         const sound_mind::core::LayerId sourceLayer = mindGrain->sourceLayerId();
         for (const sound_mind::core::Layer& layer : project_->layers()) {
@@ -3088,8 +3156,8 @@ void MainWindow::updateMindGrainGuardrails() {
                 disallowed.push_back(layer.id());
             }
         }
-        activeLayerDisallowed =
-            !activeLayer.has_value() || !sound_mind::core::isLayerAbove(*project_, *activeLayer, sourceLayer);
+        activeLayerDisallowed = activeLayerDisallowed || !activeLayer.has_value() ||
+                                 !sound_mind::core::isLayerAbove(*project_, *activeLayer, sourceLayer);
     }
     layersPanel_->setDisallowedLayers(disallowed);
 
@@ -3098,9 +3166,15 @@ void MainWindow::updateMindGrainGuardrails() {
             setPaintModeEnabled(false);
         }
         paintAction_->setEnabled(false);
+        // The Filter/Equalizer-type reason takes priority in the tooltip's
+        // own wording - it's the more fundamental of the two, true
+        // regardless of which tool is configured.
         paintAction_->setToolTip(
-            tr("The configured Mind Grain can't paint onto the active layer - it must stay above its own source "
-               "layer. Select a layer higher in the stack, or reorder the layers, first."));
+            activeLayerIsFilterType
+                ? tr("Filter and Equalizer layers composite and transform the layers beneath them - they have no "
+                     "paintable content of their own. Select a Normal/Background layer to paint.")
+                : tr("The configured Mind Grain can't paint onto the active layer - it must stay above its own source "
+                     "layer. Select a layer higher in the stack, or reorder the layers, first."));
     } else {
         paintAction_->setEnabled(true);
         // Restores the plain default (Qt only auto-derives a tooltip from
@@ -3132,6 +3206,8 @@ void MainWindow::updateConfiguredDeviceLockState() {
     const bool outputBusy = loopEngine_ && loopEngine_->isRunning();
     configureDevicesPanel_->setInputDeviceSelectionEnabled(!inputBusy);
     configureDevicesPanel_->setOutputDeviceSelectionEnabled(!outputBusy);
+    landingPage_->deviceConfiguration()->setInputDeviceSelectionEnabled(!inputBusy);
+    landingPage_->deviceConfiguration()->setOutputDeviceSelectionEnabled(!outputBusy);
 }
 
 void MainWindow::undo() { undoStack_.undo(); }
@@ -3944,6 +4020,11 @@ void MainWindow::refreshConfiguredDevices() {
     const QStringList outputDevices = toQStringList(playbackController_->availableOutputDeviceNames());
     configureDevicesPanel_->setInputDevices(inputDevices);
     configureDevicesPanel_->setOutputDevices(outputDevices);
+    // v0.Y.62.1 Installment H - the Landing Page's own independent
+    // DeviceConfigurationWidget instance needs the same device list -
+    // see its own docs on why there are two instances to keep in sync.
+    landingPage_->deviceConfiguration()->setInputDevices(inputDevices);
+    landingPage_->deviceConfiguration()->setOutputDevices(outputDevices);
 }
 
 void MainWindow::setConfiguredInputDevice(const QString& deviceName) {
@@ -3952,6 +4033,13 @@ void MainWindow::setConfiguredInputDevice(const QString& deviceName) {
     if (loopEngine_) {
         loopEngine_->setPreferredInputDevice(deviceName.toStdString());
     }
+    // v0.Y.62.1 Installment H - keeps whichever DeviceConfigurationWidget
+    // instance *didn't* originate this change showing the same selection
+    // (see toggleTestInputDevice()'s own docs on this same "sync both,
+    // unconditionally" shape - setSelectedInputDevice() blocks its own
+    // signal, so this is a safe no-op on the originating instance too).
+    configureDevicesPanel_->setSelectedInputDevice(deviceName);
+    landingPage_->deviceConfiguration()->setSelectedInputDevice(deviceName);
 }
 
 void MainWindow::setConfiguredOutputDevice(const QString& deviceName) {
@@ -3960,6 +4048,9 @@ void MainWindow::setConfiguredOutputDevice(const QString& deviceName) {
     if (loopEngine_) {
         loopEngine_->setPreferredOutputDevice(deviceName.toStdString());
     }
+    // See setConfiguredInputDevice()'s own docs.
+    configureDevicesPanel_->setSelectedOutputDevice(deviceName);
+    landingPage_->deviceConfiguration()->setSelectedOutputDevice(deviceName);
 }
 
 void MainWindow::setConfiguredInputGain(int percent) {
@@ -3972,9 +4063,19 @@ void MainWindow::setConfiguredInputGain(int percent) {
     if (loopEngine_) {
         loopEngine_->setInputGain(gain);
     }
+    // See setConfiguredInputDevice()'s own docs on syncing both
+    // DeviceConfigurationWidget instances' own displayed state.
+    configureDevicesPanel_->setInputGainPercent(percent);
+    landingPage_->deviceConfiguration()->setInputGainPercent(percent);
 }
 
-void MainWindow::setConfiguredOutputGain(int percent) { setPlaybackVolume(percent); }
+void MainWindow::setConfiguredOutputGain(int percent) {
+    setPlaybackVolume(percent);
+    deviceTestTonePlayer_.setGain(static_cast<float>(percent) / 100.0f);
+    // See setConfiguredInputDevice()'s own docs.
+    configureDevicesPanel_->setOutputGainPercent(percent);
+    landingPage_->deviceConfiguration()->setOutputGainPercent(percent);
+}
 
 void MainWindow::toggleTestInputDevice(bool testing) {
     if (testing) {
@@ -3985,7 +4086,17 @@ void MainWindow::toggleTestInputDevice(bool testing) {
         testInputLevelTimer_->stop();
         deviceTestRecordEngine_.stop();
         configureDevicesPanel_->setInputLevel(0.0f);
+        landingPage_->deviceConfiguration()->setInputLevel(0.0f);
     }
+    // v0.Y.62.1 Installment H - this may have been triggered by either
+    // DeviceConfigurationWidget instance (the dock's own, or the Landing
+    // Page's own); both need their own "Test" button's checked state
+    // kept in sync regardless of which one the user actually clicked.
+    // setTestingInput() blocks its own signal, so calling it on the
+    // originating widget too is a safe, idempotent no-op rather than a
+    // feedback loop.
+    configureDevicesPanel_->setTestingInput(testing);
+    landingPage_->deviceConfiguration()->setTestingInput(testing);
 }
 
 void MainWindow::toggleTestOutputDevice(bool testing) {
@@ -3994,6 +4105,10 @@ void MainWindow::toggleTestOutputDevice(bool testing) {
     } else {
         deviceTestTonePlayer_.stop();
     }
+    // See toggleTestInputDevice()'s own docs on why both instances are
+    // synced unconditionally.
+    configureDevicesPanel_->setTestingOutput(testing);
+    landingPage_->deviceConfiguration()->setTestingOutput(testing);
 }
 
 void MainWindow::drainRecording() {
@@ -4006,7 +4121,9 @@ void MainWindow::pollTestInputLevel() {
     // only currentInputLevel() below, but letting the ring fill up would
     // start dropping samples mid-block, same reasoning as drainRecording().
     deviceTestRecordEngine_.drainAvailable();
-    configureDevicesPanel_->setInputLevel(deviceTestRecordEngine_.currentInputLevel());
+    const float level = deviceTestRecordEngine_.currentInputLevel();
+    configureDevicesPanel_->setInputLevel(level);
+    landingPage_->deviceConfiguration()->setInputLevel(level);
 }
 
 void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer) {

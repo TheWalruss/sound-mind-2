@@ -48,6 +48,11 @@ void LayerController::setProject(sound_mind::core::Project* project) {
     // whatever new/opened project this now is, not carried over from
     // whatever project (if any) was previously set.
     pendingFilterConfiguration_ = sound_mind::core::FilterConfiguration{};
+    // See canUnhideOtherLayers()'s own docs - a hide-others snapshot
+    // naming layer ids from the *old* project (if any) is meaningless
+    // once that project is gone.
+    hiddenOthersSnapshot_.reset();
+    layersPanel_->setUnhideOtherLayersAvailable(false);
     // Re-syncs filterConfigurationPanel_ against the *new* project_ -
     // MainWindow's own real caller already clears layersPanel_'s selection
     // before calling this, but whatever earlier handleLayerSelectionChanged()
@@ -222,6 +227,81 @@ void LayerController::cycleLayerVisibilityState(sound_mind::core::LayerId id) {
          /*redo=*/[this, id, newVisible, newMuted]() { applyVisibilityAndMute(id, newVisible, newMuted); },
          /*description=*/tr("Changed layer visibility")});
 }
+
+void LayerController::hideOtherLayers(sound_mind::core::LayerId keepVisible) {
+    if (project_ == nullptr) {
+        return;
+    }
+    std::vector<std::tuple<sound_mind::core::LayerId, bool, bool>> snapshot;
+    for (const sound_mind::core::Layer& layer : project_->layers()) {
+        if (layer.id() == keepVisible) {
+            continue;
+        }
+        snapshot.emplace_back(layer.id(), layer.visible(), layer.muted());
+    }
+    if (snapshot.empty()) {
+        return;
+    }
+
+    for (const auto& [id, oldVisible, oldMuted] : snapshot) {
+        applyVisibilityAndMute(id, false, oldMuted);
+    }
+    hiddenOthersSnapshot_ = snapshot;
+    layersPanel_->setUnhideOtherLayersAvailable(true);
+
+    undoStack_->push(
+        {/*undo=*/
+         [this, snapshot]() {
+             for (const auto& [id, oldVisible, oldMuted] : snapshot) {
+                 applyVisibilityAndMute(id, oldVisible, oldMuted);
+             }
+             hiddenOthersSnapshot_.reset();
+             layersPanel_->setUnhideOtherLayersAvailable(false);
+         },
+         /*redo=*/
+         [this, snapshot]() {
+             for (const auto& [id, oldVisible, oldMuted] : snapshot) {
+                 applyVisibilityAndMute(id, false, oldMuted);
+             }
+             hiddenOthersSnapshot_ = snapshot;
+             layersPanel_->setUnhideOtherLayersAvailable(true);
+         },
+         /*description=*/tr("Hide other layers")});
+}
+
+void LayerController::unhideOtherLayers() {
+    if (!hiddenOthersSnapshot_.has_value()) {
+        return;
+    }
+    const auto snapshot = *hiddenOthersSnapshot_;
+
+    for (const auto& [id, oldVisible, oldMuted] : snapshot) {
+        applyVisibilityAndMute(id, oldVisible, oldMuted);
+    }
+    hiddenOthersSnapshot_.reset();
+    layersPanel_->setUnhideOtherLayersAvailable(false);
+
+    undoStack_->push(
+        {/*undo=*/
+         [this, snapshot]() {
+             for (const auto& [id, oldVisible, oldMuted] : snapshot) {
+                 applyVisibilityAndMute(id, false, oldMuted);
+             }
+             hiddenOthersSnapshot_ = snapshot;
+             layersPanel_->setUnhideOtherLayersAvailable(true);
+         },
+         /*redo=*/
+         [this, snapshot]() {
+             for (const auto& [id, oldVisible, oldMuted] : snapshot) {
+                 applyVisibilityAndMute(id, oldVisible, oldMuted);
+             }
+             hiddenOthersSnapshot_.reset();
+             layersPanel_->setUnhideOtherLayersAvailable(false);
+         },
+         /*description=*/tr("Unhide other layers")});
+}
+
+bool LayerController::canUnhideOtherLayers() const noexcept { return hiddenOthersSnapshot_.has_value(); }
 
 void LayerController::applyOpacity(sound_mind::core::LayerId id, float opacity) {
     sound_mind::core::Layer* layer = layerById(id);

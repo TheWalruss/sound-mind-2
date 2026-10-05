@@ -33,6 +33,7 @@ private slots:
     void setEqualizerPreviewCheckedSyncsWithoutEmitting();
 
     void freshCombosOfferOnlyNoneUntilSetAvailableMindWavesIsCalled();
+    void selectingCreateNewMindWaveCallsTheCallbackAndRewritesTheItemInPlace();
     void setAvailableMindWavesPopulatesEveryCombo();
     void changingABindCombosEmitsFilterConfigurationChangedWithTheNewBinding();
     void selectingNoneUnbindsAndEmits();

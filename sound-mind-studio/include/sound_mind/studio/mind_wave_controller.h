@@ -111,12 +111,30 @@ public:
     /// MindWave-bound opacity now shows.
     void refreshMindWavesPanel();
 
-    /// @brief Adds a new, default MindWave to the current project (see
-    ///        `sound_mind::core::MindWave`'s own docs for what "default"
-    ///        means), named "MindWave N" (the smallest N not already
-    ///        used), and selects it immediately in `MindWavesPanel`. A
-    ///        no-op if no project is set.
-    void addMindWave();
+    /**
+     * @brief Adds a new, default MindWave to the current project (see
+     *        `sound_mind::core::MindWave`'s own docs for what "default"
+     *        means), named "MindWave N" (the smallest N not already
+     *        used), and selects it immediately in `MindWavesPanel`.
+     *
+     * **As of `v0.Y.62.1` Installment G**, also shows and raises
+     * `mindWavesPanel_` - a real-world testing pass finding: nothing
+     * previously surfaced the panel itself if it happened to be hidden
+     * or tabbed behind another dock, so a caller reaching this through
+     * the panel's own "+ Add MindWave" button (already visible, by
+     * definition) never noticed, but the new "Create New MindWave..."
+     * entry a MindWave-binding dropdown now offers (see
+     * `ToolConfigurationPanel`/`FilterConfigurationPanel`/`LayersPanel`'s
+     * own `setCreateMindWaveCallback()`) very much needs this - that's
+     * the whole point of offering it from somewhere the MindWaves panel
+     * might not be visible at all.
+     *
+     * @return The new MindWave's own id, or `MindWaveId{0}` (no real
+     *         MindWave ever has this id - see `sound_mind::core::Layer::
+     *         opacityMindWave()`'s own docs on `0`/`std::nullopt` being
+     *         interchangeable "unbound" signals) if no project is set.
+     */
+    sound_mind::core::MindWaveId addMindWave();
 
     /// @brief Removes the MindWave with the given id from the current
     ///        project. A no-op if no project is set or no MindWave with

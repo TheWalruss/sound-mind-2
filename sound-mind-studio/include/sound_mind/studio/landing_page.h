@@ -9,6 +9,8 @@ class QVBoxLayout;
 
 namespace sound_mind::studio {
 
+class DeviceConfigurationWidget;
+
 /**
  * @brief The Studio's persistent start screen, shown as the central widget
  *        until a project is created or opened - see
@@ -38,6 +40,19 @@ namespace sound_mind::studio {
  * class's own header docs, without carrying over its two-column Open/Read
  * layout - a single centered column matches this class's own existing
  * style instead).
+ *
+ * **As of `v0.Y.62.1` Installment H:** a "Device Configuration" section
+ * below Recent Projects, embedding one `DeviceConfigurationWidget`
+ * instance - the same input/output device selection, gain, and "test it"
+ * controls `ConfigureDevicesPanel`'s own dock already offers - so a user
+ * can pick and test audio devices immediately, before even creating or
+ * opening a project (`MainWindow` already constructs
+ * `recordEngine_`/`playbackController_`/`deviceTestTonePlayer_`
+ * regardless of whether a project exists, so there's nothing project-
+ * specific blocking this). deviceConfiguration()'s own docs cover how
+ * `MainWindow` keeps this instance and the dock's own instance in sync -
+ * this class itself just embeds and displays it, the same "purely
+ * presentational" treatment every other control here already gets.
  */
 class LandingPage : public QWidget {
     Q_OBJECT
@@ -60,6 +75,20 @@ public:
      *        `RecentProjects::list()`.
      */
     void setRecentProjects(const std::vector<std::filesystem::path>& paths);
+
+    /**
+     * @brief The "Device Configuration" section's own embedded controls -
+     *        `v0.Y.62.1` Installment H. `MainWindow` connects its own
+     *        signals and calls its own setters exactly as it already
+     *        does for `ConfigureDevicesPanel`'s own instance (both need
+     *        the same device lists, gain levels, and testing state kept
+     *        in sync, since they're two views onto the same underlying
+     *        preferences) - this class owns the instance (constructed in
+     *        the constructor, always non-null) but has no behavior of
+     *        its own to add on top of it.
+     * @return The embedded widget. Never `nullptr`.
+     */
+    [[nodiscard]] DeviceConfigurationWidget* deviceConfiguration() const noexcept { return deviceConfiguration_; }
 
 signals:
     /// @brief The user clicked "New Project".
@@ -89,6 +118,7 @@ signals:
 
 private:
     QVBoxLayout* recentProjectsLayout_ = nullptr;
+    DeviceConfigurationWidget* deviceConfiguration_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

@@ -76,6 +76,36 @@ public:
     /// @return `true` if a real output device is open.
     [[nodiscard]] bool isDeviceAvailable() const noexcept;
 
+    /**
+     * @brief Sets the test tone's own linear output gain - the Configure
+     *        Devices panel's own output gain slider applies to the test
+     *        tone too, not just real project playback (`v0.Y.62.1`
+     *        Installment A, a real-world-testing-pass finding: the slider
+     *        previously only ever reached `PlaybackController`/
+     *        `PlaybackEngine::setVolume()`, leaving the test tone always
+     *        at a fixed amplitude regardless of the slider's position).
+     *
+     * Thread-safe (an atomic store - may be called from the UI thread
+     * while `processBlock()` runs concurrently on the audio thread), real-
+     * time-safe (no allocation/locking), matching `PlaybackEngine::
+     * setVolume()`'s own exact contract and clamping convention.
+     *
+     * @param gain The new linear gain; clamped to `[0, kMaxGain]`. `1.0`
+     *        (the default) leaves `kToneAmplitude` as the tone's own
+     *        actual peak, exactly matching every pre-existing caller's
+     *        behavior before this method existed.
+     */
+    void setGain(float gain) noexcept;
+
+    /// @brief The test tone's own current linear gain.
+    /// @return The value set via setGain(); `1.0` by default.
+    [[nodiscard]] float gain() const noexcept;
+
+    /// @brief The upper bound setGain() clamps to - `2.0` (200%), the same
+    ///        real boost headroom `PlaybackEngine::kMaxVolume` allows for
+    ///        real project playback.
+    static constexpr float kMaxGain = 2.0f;
+
     /// @brief The test tone's own frequency, in Hz - a plain, recognizable
     ///        reference pitch (concert A), not user-configurable.
     static constexpr float kToneFrequencyHz = 440.0f;
@@ -117,6 +147,7 @@ private:
     AudioDeviceMode deviceMode_;
     bool deviceAvailable_ = false;
     std::atomic<bool> playing_{false};
+    std::atomic<float> gain_{1.0f};
 
     /// @brief Audio-thread-owned (only ever touched while a tone is
     /// playing, so never concurrently with start()'s own reset, which only

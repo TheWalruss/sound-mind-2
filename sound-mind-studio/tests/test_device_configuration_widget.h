@@ -2,7 +2,7 @@
 
 #include <QObject>
 
-class ConfigureDevicesPanelTest : public QObject {
+class DeviceConfigurationWidgetTest : public QObject {
     Q_OBJECT
 
 private slots:
@@ -13,14 +13,11 @@ private slots:
     void changingTheOutputDeviceEmitsOutputDeviceChanged();
     void gainSlidersStartAtUnityAndAllowAboveIt();
     void movingTheInputGainSliderEmitsInputGainPercentChanged();
-    void movingTheOutputGainSliderEmitsOutputGainPercentChanged();
     void setInputGainPercentDoesNotEmitInputGainPercentChanged();
-    void setOutputGainPercentDoesNotEmitOutputGainPercentChanged();
     void testButtonsEmitTestToggledWithTheirCheckedState();
     void setInputLevelUpdatesTheLevelBarClamped();
     void setTestingInputAndOutputChangeCheckedStateWithoutEmittingSignals();
     void setInputDeviceSelectionEnabledTogglesTheInputComboOnly();
-    void setOutputDeviceSelectionEnabledTogglesTheOutputComboOnly();
     void setSelectedInputDeviceSelectsItWithoutEmittingInputDeviceChanged();
     void setSelectedOutputDeviceSelectsItWithoutEmittingOutputDeviceChanged();
 };

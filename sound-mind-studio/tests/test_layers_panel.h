@@ -8,7 +8,7 @@ class LayersPanelTest : public QObject {
 private slots:
     void setLayersCreatesOneRowPerLayerTopFirst();
     void setLayersReplacesThePreviousRows();
-    void visibilityButtonEmitsVisibilityCycleRequestedAndShowsTheCorrectGlyphPerState();
+    void visibilityButtonEmitsVisibilityCycleRequestedAndShowsTheCorrectIconPerState();
     void backgroundVisibilityButtonIsDisabled();
     void backgroundLayerHasNoOpacityOrTransformControls();
     void opacitySliderEmitsOpacityChanged();
@@ -42,6 +42,7 @@ private slots:
     void clearSelectionEmitsSelectionChangedWithNullopt();
     void setLayersEmitsSelectionChangedWhenTheSelectedLayerIsGone();
     void freshRowsOfferOnlyNoneUntilSetAvailableMindWavesIsCalled();
+    void selectingCreateNewMindWaveCallsTheCallbackAndRewritesTheItemInPlace();
     void setAvailableMindWavesPopulatesEveryRowsComboImmediately();
     void aRowsComboPreselectsItsOwnCurrentBinding();
     void changingARowsMindWaveComboEmitsOpacityMindWaveChanged();

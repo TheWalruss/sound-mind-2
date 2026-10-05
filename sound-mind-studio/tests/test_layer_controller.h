@@ -15,6 +15,10 @@ private slots:
     void setLayerTranslationChangesTranslation();
     void setLayerRescaleChangesRescale();
     void cycleLayerVisibilityStateIsUndoableAndRedoable();
+    void hideOtherLayersHidesEveryLayerExceptTheGivenOneAndEnablesUnhide();
+    void unhideOtherLayersRestoresEachLayersOwnPriorVisibleMutedPairExactly();
+    void hideOtherLayersIsUndoableAndRedoable();
+    void setProjectClearsCanUnhideOtherLayers();
     void setLayerOpacityIsUndoableAndRedoable();
     void setLayerBalanceIsUndoableAndRedoable();
     void setLayerOpacityMindWaveIsUndoableAndRedoable();

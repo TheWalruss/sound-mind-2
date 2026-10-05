@@ -24,6 +24,7 @@
 #include "test_configure_devices_panel.h"
 #include "test_create_project_wizard.h"
 #include "test_device_combo_helpers.h"
+#include "test_device_configuration_widget.h"
 #include "test_equalizer_curve_widget.h"
 #include "test_filter_configuration_panel.h"
 #include "test_generator_dialog.h"
@@ -180,6 +181,9 @@ int main(int argc, char** argv) {
 
     DeviceComboHelpersTest deviceComboHelpersTest;
     status |= QTest::qExec(&deviceComboHelpersTest, argc, argv);
+
+    DeviceConfigurationWidgetTest deviceConfigurationWidgetTest;
+    status |= QTest::qExec(&deviceConfigurationWidgetTest, argc, argv);
 
     ImportExportTest importExportTest;
     status |= QTest::qExec(&importExportTest, argc, argv);

@@ -8,6 +8,8 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+#include "sound_mind/studio/device_configuration_widget.h"
+
 namespace sound_mind::studio {
 
 namespace {
@@ -80,6 +82,17 @@ LandingPage::LandingPage(QWidget* parent) : QWidget(parent) {
 
     recentProjectsLayout_ = new QVBoxLayout();
     root->addLayout(recentProjectsLayout_);
+
+    // v0.Y.62.1 Installment H - lets a user pick/test audio devices before
+    // even creating or opening a project. See the class's own docs on why
+    // this is a second, independent DeviceConfigurationWidget instance,
+    // not the dock's own.
+    root->addSpacing(24);
+    root->addWidget(makeHeading(tr("Device Configuration"), 2), 0, Qt::AlignHCenter);
+    root->addWidget(makeSeparator());
+
+    deviceConfiguration_ = new DeviceConfigurationWidget(this);
+    root->addWidget(deviceConfiguration_, 0, Qt::AlignHCenter);
 
     root->addSpacing(24);
     root->addWidget(makeHeading(tr("Documentation"), 2), 0, Qt::AlignHCenter);

@@ -205,6 +205,89 @@ void LayerControllerTest::cycleLayerVisibilityStateIsUndoableAndRedoable() {
     QVERIFY(project.layers().front().muted());
 }
 
+void LayerControllerTest::hideOtherLayersHidesEveryLayerExceptTheGivenOneAndEnablesUnhide() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    Layer normal(0, "Normal", LayerType::Normal);
+    const LayerId normalId = project.addLayer(std::move(normal));
+    fixture.controller.setProject(&project);
+    const LayerId backgroundId = project.layers().front().id();
+
+    // Mute (not just plain-visible) one of the "other" layers first - the
+    // point of the test below is that hideOtherLayers()/unhideOtherLayers()
+    // round-trip each layer's own *specific* prior state, not a generic
+    // "was visible" assumption.
+    fixture.controller.cycleLayerVisibilityState(backgroundId);  // Visible -> Muted.
+    QVERIFY(!fixture.controller.canUnhideOtherLayers());
+
+    fixture.controller.hideOtherLayers(normalId);
+
+    QVERIFY(project.layerById(normalId)->visible());
+    for (const auto& layer : project.layers()) {
+        if (layer.id() == normalId) {
+            continue;
+        }
+        QVERIFY(!layer.visible());  // Every other layer, including the Equalizer createNew() seeds.
+    }
+    QVERIFY(fixture.controller.canUnhideOtherLayers());
+}
+
+void LayerControllerTest::unhideOtherLayersRestoresEachLayersOwnPriorVisibleMutedPairExactly() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    Layer normal(0, "Normal", LayerType::Normal);
+    const LayerId normalId = project.addLayer(std::move(normal));
+    fixture.controller.setProject(&project);
+    const LayerId backgroundId = project.layers().front().id();
+    fixture.controller.cycleLayerVisibilityState(backgroundId);  // Visible -> Muted.
+
+    fixture.controller.hideOtherLayers(normalId);
+    QVERIFY(!project.layerById(backgroundId)->visible());
+
+    fixture.controller.unhideOtherLayers();
+
+    QVERIFY(project.layerById(backgroundId)->visible());
+    QVERIFY(project.layerById(backgroundId)->muted());  // Restored to Muted, not plain Visible.
+    QVERIFY(!fixture.controller.canUnhideOtherLayers());
+}
+
+void LayerControllerTest::hideOtherLayersIsUndoableAndRedoable() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    Layer normal(0, "Normal", LayerType::Normal);
+    const LayerId normalId = project.addLayer(std::move(normal));
+    fixture.controller.setProject(&project);
+    const LayerId backgroundId = project.layers().front().id();
+
+    fixture.controller.hideOtherLayers(normalId);
+    QVERIFY(!project.layerById(backgroundId)->visible());
+    QVERIFY(fixture.undoStack.canUndo());
+
+    fixture.undoStack.undo();
+    QVERIFY(project.layerById(backgroundId)->visible());
+    QVERIFY(!fixture.controller.canUnhideOtherLayers());
+    QVERIFY(fixture.undoStack.canRedo());
+
+    fixture.undoStack.redo();
+    QVERIFY(!project.layerById(backgroundId)->visible());
+    QVERIFY(fixture.controller.canUnhideOtherLayers());
+}
+
+void LayerControllerTest::setProjectClearsCanUnhideOtherLayers() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    Layer normal(0, "Normal", LayerType::Normal);
+    const LayerId normalId = project.addLayer(std::move(normal));
+    fixture.controller.setProject(&project);
+    fixture.controller.hideOtherLayers(normalId);
+    QVERIFY(fixture.controller.canUnhideOtherLayers());
+
+    Project secondProject = Project::createNew(testSettings());
+    fixture.controller.setProject(&secondProject);
+
+    QVERIFY(!fixture.controller.canUnhideOtherLayers());
+}
+
 void LayerControllerTest::setLayerOpacityIsUndoableAndRedoable() {
     Fixture fixture;
     Project project = Project::createNew(testSettings());
