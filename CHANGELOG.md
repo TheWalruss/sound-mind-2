@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.12.1] - 2026-10-09
+
+Portable Resources, Installment A - `docs/sound-mind-roadmap.md`'s `v0.Y.57.1`: the generic portable-resource file I/O this milestone's own later installments (Studio export/import actions, the Resource Browser panel, Toolkit collections) build on. `sound-mind-core` only - no Studio UI yet, nothing user-visible in the built app.
+
+### Added
+
+- Five new standalone, portable resource file kinds, all sharing one JSON envelope shape (`sound_mind::core::exportMindWave()`/`importMindWave()` and four siblings, `resource_file.h`): `.smwave` (a `NamedMindWave`), `.sminst` (a `NamedToolPreset`, any `ToolType` - a "Sound Mind Instrument" is a `ToolType::Instrument` preset in the actual implementation, not a separate class), `.smshot` (a `NamedMindShot`), `.smresonance` (a `NamedResonanceProfile`), `.smfilter` (a `NamedConvolutionKernel`). Every export drops the entry's own project-local `id`; every import returns one with `id == 0`, ready for a caller to pass to the owning `Project`'s own `addXxx()` to get a fresh, project-unique id.
+
+### Notes
+
+- Corrects a stale claim in `docs/sound-mind-architecture.md`'s "Portable Resource Files" table: a Mind Shot is not "just a Stream file" - `NamedMindShot::clip` has been a plain JSON `Clip` struct (the same one Copy/Paste use) since Mind Shots were actually built, so `.smshot` gets the same JSON envelope every other kind here does, not a bare file copy.
+- Resolves `docs/sound-mind-architecture.md`'s former *Decisions Needed* #3 (Mind Grain portability): Mind Grains stay project-scoped only, with no portable file of their own - a `NamedMindGrain` embeds no pixel content at all, only a reference to a layer that may not exist in another project.
+- Mind Grain and Layer deliberately have no portable file kind - see `resource_file.h`'s own docs and `docs/sound-mind-architecture.md`'s updated table for why. Layers import between projects directly (`v0.Y.57.1` Installment C, not yet built) rather than via a standalone format.
+- **Still ahead for this milestone**: Installment B (Studio-side Export/Import actions on each resource's own panel), Installment C (cross-project import plus the Resource Browser panel), Installment D (Toolkit collections), Installment E (closing pass) - see `docs/sound-mind-roadmap.md`'s own updated `v0.Y.57.1` entry.
+
 ## [0.1.11.1] - 2026-10-08
 
 Codec Design Gap Fixes - `docs/sound-mind-roadmap.md`'s `v0.Y.64.1`: the three gaps the previous release's design doc surfaced, fixed directly ahead of running `sound-mind-codec-eval` for real. Internal codec behavior change; no Studio UI changed.
