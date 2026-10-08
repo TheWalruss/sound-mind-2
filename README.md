@@ -56,4 +56,10 @@ A developer-only performance benchmarking tool also lives here
 (`sound-mind-benchmark` - not part of the shipped app) - see
 `docs/sound-mind-benchmarking.md`.
 
+A second developer-only tool, `sound-mind-codec-eval`, encodes/decodes real
+audio files through both the Stream and Pool codecs and reports fidelity,
+timing, and memory metrics to a CSV - see `docs/sound-mind-codec-design.md`
+for what the codec itself does, and that tool's own Doxygen docs for how to
+run it.
+
 See `CHANGELOG.md` for what's actually implemented so far.

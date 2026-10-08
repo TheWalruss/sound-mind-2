@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.10.1] - 2026-10-08
+
+Codec Fidelity Evaluation - `docs/sound-mind-roadmap.md`'s `v0.Y.63.1`: a new design/implementation description document plus a new developer-only tool, both requested ahead of further codec iteration. Purely internal; no user-visible behavior change, nothing shipped in the packaged app.
+
+### Added
+
+- `docs/sound-mind-codec-design.md` - a from-the-source description of what the codec actually does: the transforms (Stream's fixed-window STFT vs. Pool's from-scratch constant-Q filter-bank), window functions (Hann, both of them), axis scaling (linear time, logarithmic frequency - log only, no mel/octave/variable-Q yet), bit depth per representation (32-bit float in memory, 16-bit quantized only in the Pool file, 8-bit only in RGB display), and - most concretely - a clear statement of what the codec does *not* do yet: no A-weighting/equal-loudness curve, no input-level normalization, no reflection-padding at clip boundaries, and no GPU-accelerated encode/decode path (GPU acceleration today only reaches the compositor). See `docs/sound-mind-architecture.md`'s Decision #204.
+- `sound-mind-codec-eval` - a new CMake module/executable that encodes/decodes real audio files through both the Stream and Pool codecs across a sweep of hop lengths and bin counts, writes each decoded result to a lossless FLAC file for listening, and reports fidelity (time-domain correlation, overall and three-band SNR), timing, and approximate memory cost to a CSV report with a blank `ListeningNotes` column for manual subjective feedback alongside the automated numbers.
+
+### Notes
+
+Not part of the shipped app (no `install()` rule, not linked into any packaged artifact) - run manually via `./build/release/sound-mind-codec-eval/sound-mind-codec-eval.exe <audio files...>`. Running it against real, user-provided audio and acting on the resulting report is the deliberate next step, not part of this release.
+
 ## [0.1.9.1] - 2026-10-05
 
 Real-world testing pass #2: eight findings from a second tester's hands-on use, executed immediately (confirmed with the user) rather than only triaged. A mix of audio/compositor bugs, UI-plumbing gaps, and two small new features - see `docs/sound-mind-architecture.md`'s Decision #203 for the full writeup of each.
