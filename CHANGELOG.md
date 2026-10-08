@@ -6,6 +6,25 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.11.1] - 2026-10-08
+
+Codec Design Gap Fixes - `docs/sound-mind-roadmap.md`'s `v0.Y.64.1`: the three gaps the previous release's design doc surfaced, fixed directly ahead of running `sound-mind-codec-eval` for real. Internal codec behavior change; no Studio UI changed.
+
+### Added
+
+- Input-level normalization, for both the Stream and Pool codecs - the combined left/right peak is scaled toward `0.95` before encoding (quiet content reads brighter, loud content no longer sits at the very ceiling with no margin), and reversed exactly on decode via a new `inputNormalizationScale` field on `StreamImage`/`PoolImage`, so the decoded audio's absolute level always matches the original input - deliberately not the one-way "never restore" behavior the legacy codec used, since this codebase's own `encode()`/`poolEncode()` are called per paint stroke/layer/live buffer, not once per whole-file import.
+- A-weighting, for both codecs - the standard IEC 61672 equal-loudness curve, applied per frequency bin to the stored amplitude and removed again before reconstructing audio, so bass and treble content reads at a brightness that better matches how loud it actually sounds, instead of its raw, perceptually-uncorrected magnitude.
+- Reflection padding at a clip's start/end, for the Stream codec - softens the hard edge an analysis window used to see right at a clip's true boundary, mitigating a source of edge-adjacent ringing/artifacts.
+
+### Fixed
+
+Nothing user-facing; see Notes below for a real limitation found and deliberately not shipped.
+
+### Notes
+
+- **Reflection padding was attempted for the Pool codec too, and deliberately deferred rather than shipped.** Pool's single whole-signal transform means padding requires growing the global FFT and reconciling that against independent decode reconstruction - two different ways of doing this both produced a real, measured, signal-wide gain error (not just a softer edge-case approximation), so Pool's own `poolEncode()`/`poolDecode()` are unchanged in this respect. See `docs/sound-mind-architecture.md`'s Decision #205 for the full investigation, and `docs/sound-mind-codec-design.md` for the current, accurate state of both codecs.
+- `StreamImage`'s Stream-file binary format gained a trailing `inputNormalizationScale` field, additively (not a breaking format-version bump) - an older Stream file simply reads back with the correct default (`1.0`, unchanged). `PoolImage`'s Pool-file TIFF metadata gained the equivalent `InputNormalizationScale` key the same way.
+
 ## [0.1.10.1] - 2026-10-08
 
 Codec Fidelity Evaluation - `docs/sound-mind-roadmap.md`'s `v0.Y.63.1`: a new design/implementation description document plus a new developer-only tool, both requested ahead of further codec iteration. Purely internal; no user-visible behavior change, nothing shipped in the packaged app.

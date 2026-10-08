@@ -132,7 +132,8 @@ void writePoolFile(const std::filesystem::path& path, const PoolImage& image) {
              << "SoundMindPool:MinFrequencyHz=" << image.config.minFrequencyHz << '\n'
              << "SoundMindPool:MaxFrequencyHz=" << image.config.maxFrequencyHz << '\n'
              << "SoundMindPool:FrameCount=" << image.frameCount << '\n'
-             << "SoundMindPool:SampleCount=" << image.sampleCount << '\n';
+             << "SoundMindPool:SampleCount=" << image.sampleCount << '\n'
+             << "SoundMindPool:InputNormalizationScale=" << image.inputNormalizationScale << '\n';
     const std::string metadataString = metadata.str();
 
     const std::uint32_t width = image.frameCount;
@@ -196,6 +197,8 @@ PoolImage readPoolFile(const std::filesystem::path& path) {
             image.frameCount = static_cast<std::uint32_t>(std::stoul(value));
         } else if (key == "SoundMindPool:SampleCount") {
             image.sampleCount = std::stoull(value);
+        } else if (key == "SoundMindPool:InputNormalizationScale") {
+            image.inputNormalizationScale = std::stof(value);
         }
         // Unknown keys are silently ignored, for forward compatibility -
         // matching the legacy TIFF spec's own parsing rules.

@@ -54,6 +54,24 @@ void inverseRealFft(const std::vector<std::complex<float>>& bins, std::size_t n,
     return logIndex;
 }
 
+/// @brief For each linear FFT bin (0..fftSize/2), its own A-weighting dB
+/// offset - evaluated at the exact same (clamped) frequency
+/// logBinToLinearBinIndex()'s inverse, linearBinToLogBinIndex(), maps that
+/// bin to, so decode() removes precisely the offset encode() added for the
+/// log-bin position it reads back from (see aWeightingDb()'s own docs).
+[[nodiscard]] std::vector<float> linearBinWeightingDb(const StreamCodecConfig& config, std::uint32_t fftSize) {
+    const std::size_t linearBinCount = fftSize / 2 + 1;
+    std::vector<float> weights(linearBinCount);
+    const float maxFrequencyHz = clampedMaxFrequencyHz(config);
+    const float hzPerLinearBin = static_cast<float>(config.sampleRateHz) / static_cast<float>(fftSize);
+    for (std::size_t k = 0; k < linearBinCount; ++k) {
+        const float frequencyHz = static_cast<float>(k) * hzPerLinearBin;
+        const float clampedFrequencyHz = std::clamp(frequencyHz, config.minFrequencyHz, maxFrequencyHz);
+        weights[k] = aWeightingDb(clampedFrequencyHz);
+    }
+    return weights;
+}
+
 /// @brief Linearly interpolates a stored `[bin][frame]` plane's `frame`
 /// column at the fractional bin index `logBinIndex`, clamped to range.
 [[nodiscard]] float sampleStoredPlane(const std::vector<float>& plane, std::uint32_t binCount, std::uint32_t frameCount,
@@ -95,19 +113,34 @@ StreamImage encode(const AudioBuffer& audio, const StreamCodecConfig& configIn) 
     const auto frameCount =
         static_cast<std::uint32_t>(numSamples == 0 ? 1 : (numSamples + config.hopLength - 1) / config.hopLength);
     const std::vector<float> linearBinIndex = logBinToLinearBinIndex(config, fftSize);
+    const std::vector<float> weightDb = logBinWeightingDb(config);
+    const std::uint32_t padSamples = computePadSamples(config, numSamples);
+
+    // Input-level normalization - see encode()'s own docs. One combined
+    // peak across both channels (not one per channel), so stereo balance
+    // is preserved rather than each channel scaling independently.
+    float peak = 0.0f;
+    for (const float sample : audio.left) peak = std::max(peak, std::abs(sample));
+    for (const float sample : audio.right) peak = std::max(peak, std::abs(sample));
+    const float scale = (peak > 0.0f) ? (0.95f / peak) : 1.0f;
+
+    std::vector<float> scaledLeft(numSamples);
+    std::vector<float> scaledRight(numSamples);
+    std::vector<float> mid(numSamples);
+    for (std::size_t i = 0; i < numSamples; ++i) {
+        scaledLeft[i] = audio.left[i] * scale;
+        scaledRight[i] = audio.right[i] * scale;
+        mid[i] = 0.5f * (scaledLeft[i] + scaledRight[i]);
+    }
 
     StreamImage image;
     image.config = config;
     image.frameCount = frameCount;
     image.sampleCount = numSamples;
+    image.inputNormalizationScale = scale;
     image.leftMagnitudeDb.resize(std::size_t{config.binCount} * frameCount);
     image.rightMagnitudeDb.resize(std::size_t{config.binCount} * frameCount);
     image.sharedPhaseRadians.resize(std::size_t{config.binCount} * frameCount);
-
-    std::vector<float> mid(numSamples);
-    for (std::size_t i = 0; i < numSamples; ++i) {
-        mid[i] = 0.5f * (audio.left[i] + audio.right[i]);
-    }
 
     std::vector<float> frameLeft(fftSize);
     std::vector<float> frameRight(fftSize);
@@ -118,9 +151,9 @@ StreamImage encode(const AudioBuffer& audio, const StreamCodecConfig& configIn) 
 
     for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
         const auto start = static_cast<std::ptrdiff_t>(frame) * static_cast<std::ptrdiff_t>(config.hopLength);
-        extractFrame(audio.left, start, frameLeft);
-        extractFrame(audio.right, start, frameRight);
-        extractFrame(mid, start, frameMid);
+        extractFrame(scaledLeft, start, padSamples, frameLeft);
+        extractFrame(scaledRight, start, padSamples, frameRight);
+        extractFrame(mid, start, padSamples, frameMid);
 
         for (std::uint32_t i = 0; i < fftSize; ++i) {
             frameLeft[i] *= window[i];
@@ -139,8 +172,8 @@ StreamImage encode(const AudioBuffer& audio, const StreamCodecConfig& configIn) 
             const SpectrumSample mid_ = sampleSpectrum(spectrumMid, index);
 
             const std::size_t cell = static_cast<std::size_t>(bin) * frameCount + frame;
-            image.leftMagnitudeDb[cell] = amplitudeToDb(left.magnitude);
-            image.rightMagnitudeDb[cell] = amplitudeToDb(right.magnitude);
+            image.leftMagnitudeDb[cell] = amplitudeToDb(left.magnitude) + weightDb[bin];
+            image.rightMagnitudeDb[cell] = amplitudeToDb(right.magnitude) + weightDb[bin];
             image.sharedPhaseRadians[cell] = std::atan2(mid_.sinPhase, mid_.cosPhase);
         }
     }
@@ -161,6 +194,7 @@ AudioBuffer decode(const StreamImage& image) {
     const std::vector<float> window = hannWindow(fftSize);
     const std::size_t linearBinCount = fftSize / 2 + 1;
     const std::vector<float> logBinIndexForLinearBin = linearBinToLogBinIndex(config, fftSize);
+    const std::vector<float> weightDb = linearBinWeightingDb(config, fftSize);
 
     const std::uint32_t frameCount = image.frameCount;
     const std::size_t outputLength = static_cast<std::size_t>(frameCount - 1) * config.hopLength + fftSize;
@@ -180,8 +214,8 @@ AudioBuffer decode(const StreamImage& image) {
             const float phase = sampleStoredPhase(image.sharedPhaseRadians, config.binCount, frameCount, frame, logBinIndex);
             const float leftDb = sampleStoredPlane(image.leftMagnitudeDb, config.binCount, frameCount, frame, logBinIndex);
             const float rightDb = sampleStoredPlane(image.rightMagnitudeDb, config.binCount, frameCount, frame, logBinIndex);
-            spectrumLeft[k] = std::polar(dbToAmplitude(leftDb), phase);
-            spectrumRight[k] = std::polar(dbToAmplitude(rightDb), phase);
+            spectrumLeft[k] = std::polar(dbToAmplitude(leftDb - weightDb[k]), phase);
+            spectrumRight[k] = std::polar(dbToAmplitude(rightDb - weightDb[k]), phase);
         }
 
         inverseRealFft(spectrumLeft, fftSize, frameLeft);
@@ -196,10 +230,18 @@ AudioBuffer decode(const StreamImage& image) {
         }
     }
 
+    // Undo encode()'s input-level normalization, so the decoded audio's
+    // absolute level matches the original input exactly, regardless of
+    // that internal choice - see StreamImage::inputNormalizationScale's
+    // own docs. Floored defensively; encode() never actually produces 0
+    // (it falls back to 1.0 for a silent input), but a hand-constructed
+    // StreamImage could.
+    const float unnormalize = 1.0f / std::max(image.inputNormalizationScale, 1e-6f);
+
     for (std::size_t i = 0; i < outputLength; ++i) {
         const float normalizer = std::max(windowSumSquared[i], kMinWindowSumSquared);
-        leftAccumulator[i] /= normalizer;
-        rightAccumulator[i] /= normalizer;
+        leftAccumulator[i] = leftAccumulator[i] / normalizer * unnormalize;
+        rightAccumulator[i] = rightAccumulator[i] / normalizer * unnormalize;
     }
 
     const std::size_t trimmedLength = std::min(static_cast<std::size_t>(image.sampleCount), outputLength);

@@ -19,6 +19,24 @@ constexpr float kMinWindowSumSquared = 1e-6f;
 // letting it collapse to something degenerate (0 or 1).
 constexpr std::uint32_t kMinBinWindowLength = 4;
 
+/// @brief The standard IEC 61672 A-weighting curve, as a dB offset
+/// normalized to `0` dB at 1 kHz - see `stream_frame_codec.h`'s own
+/// identical copy (duplicated rather than shared, per this codebase's
+/// convention - Pool doesn't include Stream's own private header) for the
+/// full write-up of why this exists.
+[[nodiscard]] float aWeightingDb(float frequencyHz) noexcept {
+    const float f = std::max(frequencyHz, 1.0f);
+    const double f2 = static_cast<double>(f) * static_cast<double>(f);
+    constexpr double kF1 = 20.6;
+    constexpr double kF2 = 107.7;
+    constexpr double kF3 = 737.9;
+    constexpr double kF4 = 12194.0;
+    const double numerator = (kF4 * kF4) * (f2 * f2);
+    const double denominator = (f2 + kF1 * kF1) * std::sqrt((f2 + kF2 * kF2) * (f2 + kF3 * kF3)) * (f2 + kF4 * kF4);
+    const double ra = numerator / std::max(denominator, 1e-12);
+    return static_cast<float>(20.0 * std::log10(std::max(ra, 1e-12)) + 2.00);
+}
+
 [[nodiscard]] float amplitudeToDb(float amplitude) noexcept {
     return 20.0f * std::log10(std::max(amplitude, kMinLinearAmplitude));
 }
@@ -159,15 +177,17 @@ struct NativeSample {
 }
 
 /// @brief Interpolates a bin's native-rate coefficient sequence onto the
-/// image's `frameCount`-wide common grid, storing dB magnitude and phase.
+/// image's `frameCount`-wide common grid, storing dB magnitude (plus
+/// `weightDb`, the bin's own A-weighting offset - see `aWeightingDb()`)
+/// and phase.
 void storeInterpolated(const std::vector<std::complex<float>>& native, std::uint32_t bin, std::uint32_t frameCount,
-                        std::vector<float>& magnitudeDb, std::vector<float>& phaseRadians) {
+                        float weightDb, std::vector<float>& magnitudeDb, std::vector<float>& phaseRadians) {
     for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
         const float t = (frameCount > 1) ? static_cast<float>(frame) / static_cast<float>(frameCount - 1) : 0.0f;
         const float nativeIndex = t * static_cast<float>(native.size() - 1);
         const NativeSample sample = sampleNativeSequence(native, nativeIndex);
         const std::size_t cell = static_cast<std::size_t>(bin) * frameCount + frame;
-        magnitudeDb[cell] = amplitudeToDb(sample.magnitude);
+        magnitudeDb[cell] = amplitudeToDb(sample.magnitude) + weightDb;
         phaseRadians[cell] = std::atan2(sample.sinPhase, sample.cosPhase);
     }
 }
@@ -222,10 +242,23 @@ PoolImage poolEncode(const AudioBuffer& audio, const StreamCodecConfig& configIn
     image.leftPhaseRadians.resize(std::size_t{config.binCount} * frameCount);
     image.rightPhaseRadians.resize(std::size_t{config.binCount} * frameCount);
 
-    // NSGT operates on the whole signal at once - one global real FFT per
-    // channel, not framed like Stream's STFT.
-    std::vector<float> leftPadded(audio.left.begin(), audio.left.end());
-    std::vector<float> rightPadded(audio.right.begin(), audio.right.end());
+    // Input-level normalization - see poolEncode()'s own docs. One
+    // combined peak across both channels (not one per channel), so stereo
+    // balance is preserved rather than each channel scaling independently.
+    float peak = 0.0f;
+    for (const float sample : audio.left) peak = std::max(peak, std::abs(sample));
+    for (const float sample : audio.right) peak = std::max(peak, std::abs(sample));
+    const float scale = (peak > 0.0f) ? (0.95f / peak) : 1.0f;
+    image.inputNormalizationScale = scale;
+
+    // NSGT operates on the whole (normalized) signal at once - one global
+    // real FFT per channel, not framed like Stream's STFT.
+    std::vector<float> leftPadded(numSamples);
+    std::vector<float> rightPadded(numSamples);
+    for (std::size_t i = 0; i < numSamples; ++i) {
+        leftPadded[i] = audio.left[i] * scale;
+        rightPadded[i] = audio.right[i] * scale;
+    }
     leftPadded.resize(fftSize, 0.0f);
     rightPadded.resize(fftSize, 0.0f);
 
@@ -244,14 +277,15 @@ PoolImage poolEncode(const AudioBuffer& audio, const StreamCodecConfig& configIn
         const auto centerIndex = static_cast<std::ptrdiff_t>(std::lround(centerHz / hzPerFftBin));
         const std::uint32_t windowLength = binWindowLength(config, bin, fftSize);
         const std::vector<float> window = hannWindow(windowLength);
+        const float weightDb = aWeightingDb(centerHz);
 
         extractWindowedSlice(leftSpectrum, centerIndex, window, slice);
         inverseComplexFft(slice, nativeSequence);
-        storeInterpolated(nativeSequence, bin, frameCount, image.leftMagnitudeDb, image.leftPhaseRadians);
+        storeInterpolated(nativeSequence, bin, frameCount, weightDb, image.leftMagnitudeDb, image.leftPhaseRadians);
 
         extractWindowedSlice(rightSpectrum, centerIndex, window, slice);
         inverseComplexFft(slice, nativeSequence);
-        storeInterpolated(nativeSequence, bin, frameCount, image.rightMagnitudeDb, image.rightPhaseRadians);
+        storeInterpolated(nativeSequence, bin, frameCount, weightDb, image.rightMagnitudeDb, image.rightPhaseRadians);
     }
 
     return image;
@@ -284,6 +318,7 @@ AudioBuffer poolDecode(const PoolImage& image) {
         const std::uint32_t windowLength = binWindowLength(config, bin, fftSize);
         const std::vector<float> window = hannWindow(windowLength);
         const auto half = static_cast<std::ptrdiff_t>(windowLength / 2);
+        const float weightDb = aWeightingDb(centerHz);
 
         for (int channel = 0; channel < 2; ++channel) {
             const std::vector<float>& magnitudeDb = (channel == 0) ? image.leftMagnitudeDb : image.rightMagnitudeDb;
@@ -296,7 +331,7 @@ AudioBuffer poolDecode(const PoolImage& image) {
                 const float frameIndex = t * static_cast<float>(image.frameCount - 1);
                 const float db = sampleStoredMagnitude(magnitudeDb, image.frameCount, bin, frameIndex);
                 const float phase = sampleStoredPhase(phaseRadians, image.frameCount, bin, frameIndex);
-                nativeSequence[i] = std::polar(dbToAmplitude(db), phase);
+                nativeSequence[i] = std::polar(dbToAmplitude(db - weightDb), phase);
             }
 
             forwardComplexFft(nativeSequence, resynthesized);
@@ -324,6 +359,13 @@ AudioBuffer poolDecode(const PoolImage& image) {
     std::vector<float> rightTime;
     inverseRealFft(leftAccumulator, fftSize, leftTime);
     inverseRealFft(rightAccumulator, fftSize, rightTime);
+
+    // Undo poolEncode()'s input-level normalization - see
+    // PoolImage::inputNormalizationScale's own docs. Floored defensively,
+    // same reasoning as stream_codec.cpp's decode().
+    const float unnormalize = 1.0f / std::max(image.inputNormalizationScale, 1e-6f);
+    for (float& sample : leftTime) sample *= unnormalize;
+    for (float& sample : rightTime) sample *= unnormalize;
 
     const std::size_t trimmedLength = std::min(static_cast<std::size_t>(image.sampleCount), static_cast<std::size_t>(fftSize));
     result.left.assign(leftTime.begin(), leftTime.begin() + static_cast<std::ptrdiff_t>(trimmedLength));

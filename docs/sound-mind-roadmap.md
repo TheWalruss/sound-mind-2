@@ -1052,6 +1052,16 @@ Requested directly by the user, ahead of further codec iteration: understand wha
 
 **Still ahead**: the user running this tool against real, provided audio files, and iterating on the codec's design/implementation based on what that run and `docs/sound-mind-codec-design.md` together surface - explicitly the next step, not part of this installment.
 
+### `v0.Y.64.1` - Codec Design Gap Fixes (2026-10-08)
+
+The three concrete gaps `v0.Y.63.1`'s own design doc surfaced, fixed before running `sound-mind-codec-eval` for real - directly requested by the user.
+
+- ✅ **Input-level normalization**, for both codecs - reversible (`inputNormalizationScale`, undone exactly on decode), not the legacy codec's one-way behavior, since `encode()`/`poolEncode()` are called per-stroke/per-layer here, not once per whole-file import.
+- ✅ **A-weighting**, for both codecs - the standard IEC 61672 curve, cosmetic (removed again before reconstructing audio). Resolves `docs/sound-mind-architecture.md`'s former *Decisions Needed* #4.
+- ✅ **Reflection padding at clip start/end - Stream only.** Implemented cleanly for Stream (`extractFrame()` now reflects instead of zero-filling). Attempted twice for Pool and **deferred, not shipped**: Pool's single whole-signal transform means padding requires growing the global FFT, and reconciling that against independent decode reconstruction surfaced a real, structural correctness problem (a signal-wide gain error up to 3-4x, not just a softer approximation) neither attempt resolved. See `docs/sound-mind-architecture.md`'s Decision #205 for the full account, including a real testing lesson (Pearson correlation is scale-invariant and was blind to the gain bug for an entire debugging pass).
+
+**Backlog addition**: a correct Pool reflection-padding implementation - needs either a different mechanism for representing a safe "don't-care" padding-region contribution in a single-global-spectrum reconstruction, or validating against a reference NSGT implementation rather than re-deriving the DFT identities by hand.
+
 **Backlog - queued for before Beta opens, not part of this iteration:**
 
 - **Edit menu redesign** - flagged as needing a complete redesign; not yet scoped into a concrete plan.
@@ -1059,6 +1069,7 @@ Requested directly by the user, ahead of further codec iteration: understand wha
 - **A "filter preview" control** - loops a few seconds of audio through an in-progress filter configuration live, so a user can tune by ear without processing the whole canvas first.
 - **A resource browser panel** (an extension of `v0.Y.57.1`'s own "Portable Resources" milestone, above, not yet its own scoped installment) - pick a category (MindWave, Procedural Instrument, Resonance, Filter, Mind Grain, Mind Shot, Generator, ...), see every named entry in it, and inspect one in full: source paths/selections, parameters, spectral distribution, rendered pixel raster, and a playable decoded clip.
 - **SoundMind "Toolkit" collections** (also extending `v0.Y.57.1`) - bundling several named resources (e.g. a filter plus the MindWaves driving its parameters) into one packaged, exportable, shareable, importable, browsable unit.
+- **A correct Pool reflection-padding implementation** (see `v0.Y.64.1` above and `docs/sound-mind-architecture.md`'s Decision #205) - two attempts deferred after a real, measured gain-error problem; needs either a new mechanism or validation against a reference NSGT implementation.
 
 ---
 

@@ -60,6 +60,7 @@ void writeStreamFile(const std::filesystem::path& path, const StreamImage& image
     writeRawArray(stream, image.leftMagnitudeDb);
     writeRawArray(stream, image.rightMagnitudeDb);
     writeRawArray(stream, image.sharedPhaseRadians);
+    writeRaw(stream, image.inputNormalizationScale);
 }
 
 StreamImage readStreamFile(const std::filesystem::path& path) {
@@ -95,6 +96,18 @@ StreamImage readStreamFile(const std::filesystem::path& path) {
     readRawArray(stream, image.leftMagnitudeDb, planeSize);
     readRawArray(stream, image.rightMagnitudeDb, planeSize);
     readRawArray(stream, image.sharedPhaseRadians, planeSize);
+
+    // inputNormalizationScale is an additive, optional trailing field (see
+    // this header's own docs) - a file written before it existed simply
+    // ends here. Exceptions disabled for this one read so a short/absent
+    // trailing field reads as "leave the struct's own default (1.0)"
+    // rather than throwing.
+    stream.exceptions(std::ios::goodbit);
+    float inputNormalizationScale = 1.0f;
+    readRaw(stream, inputNormalizationScale);
+    if (stream) {
+        image.inputNormalizationScale = inputNormalizationScale;
+    }
 
     return image;
 }

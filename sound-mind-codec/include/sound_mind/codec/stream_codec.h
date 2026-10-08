@@ -74,6 +74,17 @@ struct StreamImage {
     ///        number of hops.
     std::uint64_t sampleCount = 0;
 
+    /// @brief The gain `encode()` applied to the input audio before
+    ///        transforming it, so the stored amplitude makes good use of
+    ///        the dB range regardless of how quiet or loud the source was -
+    ///        `decode()` divides the final reconstructed audio by this same
+    ///        value, so the decoded result's absolute level always matches
+    ///        the original input exactly, independent of this internal
+    ///        choice. `1.0` for a signal already at (or silent, so there's
+    ///        nothing to measure a peak from) the target peak - see
+    ///        `encode()`'s own docs for the exact formula.
+    float inputNormalizationScale = 1.0f;
+
     /// @brief Left channel amplitude, in dB, row-major `[bin][frame]`.
     std::vector<float> leftMagnitudeDb;
 
@@ -88,6 +99,44 @@ struct StreamImage {
 /**
  * @brief Encodes stereo audio into the Stream codec's time-frequency
  *        representation.
+ *
+ * Three pre/post-processing steps wrap the core STFT, all per
+ * `docs/sound-mind-codec-design.md` (and, before this, both tracked as open
+ * items on `docs/sound-mind-architecture.md`'s *Decisions Needed*):
+ *
+ * - **Input-level normalization.** The combined left/right peak (so stereo
+ *   balance is preserved - a per-channel peak would scale each channel
+ *   differently) is scaled toward a target of `0.95` before anything else
+ *   happens: `scale = (peak > 0) ? 0.95f / peak : 1.0f`. This can scale a
+ *   quiet signal *up* (so its stored amplitude makes good use of the dB
+ *   range, instead of reading as near-black) or a loud signal *down* (so it
+ *   doesn't sit right at the dB ceiling with no margin), and is always
+ *   exactly reversible - `scale` is carried on the returned `StreamImage`
+ *   (`inputNormalizationScale`) and `decode()` divides it back out, so the
+ *   decoded audio's absolute level always matches the original input,
+ *   regardless of this internal choice.
+ * - **Reflection padding.** The signal is extended by
+ *   `min(sampleRateHz / minFrequencyHz, numSamples - 1)` samples at each
+ *   end, mirroring the signal's own content (not repeating the boundary
+ *   sample) rather than the hard zero-silence `encode()` used to read past
+ *   either edge - softening the discontinuity an analysis window sees near
+ *   a clip's true start/end. Transparent to the stored representation:
+ *   `frameCount`/`sampleCount` are unaffected, and `decode()` needs no
+ *   knowledge that padding happened at all.
+ * - **A-weighting.** Each output bin's stored dB value has a per-frequency
+ *   offset added (the standard IEC 61672 A-weighting curve, normalized to
+ *   `0` dB at 1 kHz) - so the stored/displayed amplitude better matches how
+ *   loud a frequency actually *sounds*, rather than its raw linear-FFT
+ *   magnitude (bass and treble content no longer reads as fainter than an
+ *   equally-loud 1 kHz tone). Purely cosmetic: `decode()` subtracts the
+ *   same offset back out before reconstructing audio, so this never
+ *   affects the decoded result.
+ *
+ * `StreamIncrementalEncoder` deliberately does **not** apply normalization
+ * or padding (both need knowledge of the whole signal's peak/extent, which
+ * a live, causally-arriving stream doesn't have) - only A-weighting, which
+ * is a pure per-bin, per-frame function with no such dependency. See that
+ * class's own docs.
  *
  * @param audio The audio to encode.
  * @param config Encode parameters; the same values are needed again to
@@ -106,6 +155,12 @@ struct StreamImage {
 
 /**
  * @brief Decodes a Stream image back into stereo audio.
+ *
+ * Reverses both of encode()'s reversible steps: each bin's A-weighting
+ * offset is subtracted before reconstructing amplitude, and the final
+ * reconstructed audio is divided by `image.inputNormalizationScale` before
+ * trimming - see encode()'s own docs for why both are exact inverses
+ * regardless of what internal choice encode() made.
  *
  * @param image The encoded representation to decode.
  * @return The reconstructed audio, trimmed to `image.sampleCount` samples.

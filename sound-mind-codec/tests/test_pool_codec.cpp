@@ -1,5 +1,7 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <numbers>
@@ -128,4 +130,69 @@ TEST_CASE("Energy outside the encoded frequency range is silently dropped, not c
     }
     const double rms = std::sqrt(sumSquares / static_cast<double>(decoded.left.size()));
     CHECK(rms < 0.05);
+}
+
+TEST_CASE("A quiet signal is normalized up toward 0.95 peak internally, but decodes back at its own original peak",
+          "[pool_codec]") {
+    AudioBuffer quiet = makeSineTone(1000.0f, 0.5f, 44100);
+    for (float& sample : quiet.left) sample *= 0.1f;
+    for (float& sample : quiet.right) sample *= 0.1f;
+
+    const auto image = poolEncode(quiet, StreamCodecConfig{});
+
+    CHECK(image.inputNormalizationScale > 1.0f);  // boosted, since peak (0.1) is well below the 0.95 target.
+
+    const AudioBuffer decoded = poolDecode(image);
+    const float decodedPeak = *std::max_element(decoded.left.begin(), decoded.left.end());
+    CHECK(decodedPeak == Catch::Approx(0.1f).margin(0.01f));
+}
+
+TEST_CASE("A loud signal is normalized down toward 0.95 peak internally, but decodes back at its own original peak",
+          "[pool_codec]") {
+    const AudioBuffer loud = makeSineTone(1000.0f, 0.5f, 44100);  // unit amplitude - peak 1.0, above the 0.95 target.
+
+    const auto image = poolEncode(loud, StreamCodecConfig{});
+
+    CHECK(image.inputNormalizationScale < 1.0f);
+
+    const AudioBuffer decoded = poolDecode(image);
+    const float decodedPeak = *std::max_element(decoded.left.begin(), decoded.left.end());
+    CHECK(decodedPeak == Catch::Approx(1.0f).margin(0.05f));
+}
+
+TEST_CASE("Silence normalizes to a scale of exactly 1.0 (nothing to measure a peak from)", "[pool_codec]") {
+    AudioBuffer silence;
+    silence.sampleRateHz = 44100;
+    silence.left.assign(4410, 0.0f);
+    silence.right.assign(4410, 0.0f);
+
+    const auto image = poolEncode(silence, StreamCodecConfig{});
+    CHECK(image.inputNormalizationScale == 1.0f);
+}
+
+TEST_CASE("A-weighting makes a bass tone store measurably quieter than an equal-amplitude 1 kHz tone", "[pool_codec]") {
+    // Both at the same amplitude (so any raw-magnitude difference is purely
+    // the A-weighting curve's own doing, not a difference in input level).
+    const AudioBuffer bass = makeSineTone(250.0f, 0.5f, 44100);
+    const AudioBuffer reference = makeSineTone(1000.0f, 0.5f, 44100);
+
+    const auto bassImage = poolEncode(bass, StreamCodecConfig{});
+    const auto referenceImage = poolEncode(reference, StreamCodecConfig{});
+
+    const float bassPeakDb = *std::max_element(bassImage.leftMagnitudeDb.begin(), bassImage.leftMagnitudeDb.end());
+    const float referencePeakDb =
+        *std::max_element(referenceImage.leftMagnitudeDb.begin(), referenceImage.leftMagnitudeDb.end());
+
+    // A-weighting attenuates 250 Hz relative to 1 kHz (per the standard
+    // IEC 61672 curve) - confirms the weighting is actually being applied,
+    // not just present-but-zero.
+    CHECK(bassPeakDb < referencePeakDb);
+}
+
+TEST_CASE("A signal much shorter than a hop still encodes/decodes without crashing", "[pool_codec]") {
+    const AudioBuffer original = makeSineTone(1000.0f, 0.01f, 44100);  // ~441 samples.
+    const auto image = poolEncode(original, StreamCodecConfig{});
+    const AudioBuffer decoded = poolDecode(image);
+
+    CHECK(decoded.left.size() == original.frameCount());
 }

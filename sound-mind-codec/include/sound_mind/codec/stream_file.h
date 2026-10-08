@@ -16,6 +16,17 @@ namespace sound_mind::codec {
  * implementation for a format whose entire reason to exist is
  * encode/decode speed rather than generic-viewer compatibility.
  *
+ * `StreamImage::inputNormalizationScale` is written as one trailing float
+ * after the three planar arrays - additively, not via a format-version
+ * bump: a file written before this field existed is simply shorter by one
+ * float, and `readStreamFile()` detects that (there's nothing left to
+ * read) and leaves the loaded `StreamImage`'s own default (`1.0`,
+ * "unchanged") in that case, matching every such file's own actual,
+ * un-normalized encoding exactly. Chosen over bumping `kFormatVersion`
+ * specifically to avoid a breaking file-format change for a field whose
+ * absence has an exact, correct default - see
+ * `docs/sound-mind-architecture.md`'s own Decision on this for the reasoning.
+ *
  * @param path Destination path.
  * @param image The Stream image to write.
  * @throws std::ios_base::failure if the file can't be written.

@@ -108,6 +108,17 @@ private:
     std::vector<float> window_;
     std::vector<float> linearBinIndex_;
 
+    /// @brief Per-bin A-weighting dB offset (see `aWeightingDb()`'s own
+    ///        docs), precomputed once here rather than per frame. Applied
+    ///        identically to `encode()`'s own, so a `StreamImage` built
+    ///        incrementally decodes correctly through the exact same
+    ///        `decode()` path - deliberately *not* joined by input-level
+    ///        normalization or reflection padding, both of which need
+    ///        knowledge of the whole signal's peak/extent that a live,
+    ///        causally-arriving stream doesn't have (see `encode()`'s own
+    ///        docs for both).
+    std::vector<float> weightDb_;
+
     std::vector<float> left_;
     std::vector<float> right_;
     std::vector<float> mid_;

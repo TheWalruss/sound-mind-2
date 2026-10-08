@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -72,11 +73,21 @@ TEST_CASE("StreamIncrementalEncoder produces the same data as encode() for the f
     std::vector<float> right;
     makeSineTone(1000.0f, 44100, config.sampleRateHz, left, right);
 
+    // Rescale to land at exactly encode()'s own 0.95 input-normalization
+    // target (see its own docs), so its gain is a no-op (scale == 1.0) and
+    // this direct encode()-vs-incremental comparison isn't confounded by a
+    // gain StreamIncrementalEncoder deliberately never applies (it can't
+    // know the whole stream's own future peak).
+    const float actualPeak = *std::max_element(left.begin(), left.end());
+    for (float& sample : left) sample *= 0.95f / actualPeak;
+    for (float& sample : right) sample *= 0.95f / actualPeak;
+
     sound_mind::codec::AudioBuffer audio;
     audio.sampleRateHz = config.sampleRateHz;
     audio.left = left;
     audio.right = right;
     const StreamImage wholeBuffer = encode(audio, config);
+    REQUIRE(wholeBuffer.inputNormalizationScale == Catch::Approx(1.0f).margin(0.001));
 
     StreamIncrementalEncoder encoder{config};
     encoder.pushSamples(left.data(), right.data(), left.size());

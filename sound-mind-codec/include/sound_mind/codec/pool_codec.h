@@ -39,6 +39,12 @@ struct PoolImage {
     /// @brief The exact sample count of the audio this was encoded from.
     std::uint64_t sampleCount = 0;
 
+    /// @brief The gain `poolEncode()` applied to the input audio before
+    ///        transforming it - see `StreamImage::inputNormalizationScale`'s
+    ///        own docs (the two types share the same contract: `1.0` means
+    ///        unchanged, `poolDecode()` divides it back out exactly).
+    float inputNormalizationScale = 1.0f;
+
     /// @brief Left channel amplitude, in dB, row-major `[bin][frame]`.
     std::vector<float> leftMagnitudeDb;
 
@@ -76,6 +82,33 @@ struct PoolImage {
  * signal's real energy in that discarded range is a genuine, accepted
  * loss, not a bug.
  *
+ * Two pre/post-processing steps wrap the transform above, identical in
+ * intent (and, for normalization, in exact formula) to `encode()`'s own -
+ * see that function's own docs for the full rationale, and
+ * `docs/sound-mind-codec-design.md` for both codecs' write-up together:
+ *
+ * - **Input-level normalization** toward a combined-channel peak of
+ *   `0.95`, exactly reversed by `poolDecode()` via the returned
+ *   `inputNormalizationScale`.
+ * - **A-weighting**, the same per-frequency dB offset `encode()` applies,
+ *   added per bin and subtracted back out by `poolDecode()` - cosmetic,
+ *   never affecting the reconstructed audio.
+ *
+ * **Reflection padding - unlike `encode()`, deliberately *not* implemented
+ * here.** Pool's single whole-signal transform means every per-bin
+ * window/placement calculation (`centerIndex`, `windowLength`) is itself
+ * derived from whatever length is transformed - growing it to a padded
+ * length (so a reflection-padded signal could feed the transform the same
+ * way `encode()`'s per-frame padding does) requires `poolDecode()` to
+ * reconstruct at that same padded length and crop the padding back off
+ * afterward. Two different ways of doing that were tried and both
+ * produced a real, measurable, signal-wide gain error (not just an edge
+ * artifact) rather than the intended fidelity improvement - see Decision
+ * #205 in `docs/sound-mind-architecture.md` for the full account,
+ * including why the error wasn't just a narrower approximation-quality
+ * tradeoff. Deferred as a dedicated follow-up rather than shipped
+ * half-working; `docs/sound-mind-roadmap.md` tracks it.
+ *
  * @param audio The audio to encode.
  * @param config Encode parameters; the same values are needed again to
  *        decode, and are carried on the returned PoolImage for that
@@ -91,6 +124,12 @@ struct PoolImage {
 
 /**
  * @brief Decodes a Pool image back into stereo audio.
+ *
+ * Reverses both of poolEncode()'s reversible steps: each bin's A-weighting
+ * offset is subtracted before reconstructing amplitude, and the final
+ * reconstructed audio is divided by `image.inputNormalizationScale` before
+ * trimming.
+ *
  * @param image The encoded representation to decode.
  * @return The reconstructed audio, trimmed to `image.sampleCount` samples.
  */
