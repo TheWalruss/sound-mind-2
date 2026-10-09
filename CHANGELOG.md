@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.15.2] - 2026-10-09
+
+Tool Preset preview refinement - direct user feedback on `v0.1.15.1`'s own new Tool Preset preview stroke.
+
+### Changed
+
+- The Tool Preset inspector preview is now clipped vertically at 1 kHz - the low-frequency portion of the full axis (well below the preview stroke's own fixed 3 kHz-5 kHz span) is cropped out before rendering, rather than squeezing the whole configured frequency range into the small preview.
+
 ## [0.1.15.1] - 2026-10-09
 
 Resource Browser enhancements - direct user feedback on `v0.1.14.2`'s own Resource Browser work: a new Filter Preset library (whole `FilterConfiguration`s, saveable/loadable just like Tool Presets), rendered previews for MindWave/Tool Preset/Resonance Profile, and automatic dependency bundling for Toolkit collections.

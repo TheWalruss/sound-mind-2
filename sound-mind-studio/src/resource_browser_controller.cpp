@@ -94,6 +94,13 @@ QImage renderSpectrumImage(const std::vector<float>& spectrum) {
     return image;
 }
 
+/// @brief The preview stroke's own lower frequency bound for display -
+/// confirmed with the user: the rendered raster is clipped vertically at
+/// this frequency, so the (mostly empty, since the stroke itself never
+/// goes below 3 kHz) low-frequency portion of the full axis doesn't waste
+/// space in a preview this small.
+constexpr float kPreviewMinFrequencyHz = 1000.0f;
+
 /// @brief Renders a Tool Preset's own configuration as a straight,
 /// diagonal 3-second stroke from 3 kHz to 5 kHz - confirmed with the
 /// user as the Resource Browser's own Tool Preset preview. A
@@ -101,7 +108,8 @@ QImage renderSpectrumImage(const std::vector<float>& spectrum) {
 /// that struct's own docs on why - a tool configuration is reusable
 /// across strokes precisely because it isn't tied to one), so this
 /// preview picks a fixed, fully-opaque default gradient deliberately,
-/// rather than trying to guess one.
+/// rather than trying to guess one. Clipped vertically at
+/// `kPreviewMinFrequencyHz` - see that constant's own docs.
 QImage renderToolPresetPreview(const sound_mind::core::ToolConfiguration& config, const Project& project) {
     using namespace sound_mind::core;
 
@@ -145,7 +153,34 @@ QImage renderToolPresetPreview(const sound_mind::core::ToolConfiguration& config
     };
     applyPaintOperation(op, scale, content, /*resolveLayerContent=*/{}, resolveMindWave);
 
-    const auto rgb = sound_mind::codec::toRgbImage(content);
+    // Clip out every bin below kPreviewMinFrequencyHz before rendering -
+    // frequencyToBinIndex() maps low Hz to low bin indices, so this keeps
+    // bins [keepFromBin, binCount - 1] (the high end of the axis, where
+    // the stroke itself actually is) and drops the rest.
+    const float keepFromBinF = frequencyToBinIndex(kPreviewMinFrequencyHz, codecConfig);
+    const auto keepFromBin = static_cast<std::uint32_t>(
+        std::clamp(std::lround(keepFromBinF), 0L, static_cast<long>(codecConfig.binCount) - 1));
+    const std::uint32_t keptBinCount = codecConfig.binCount - keepFromBin;
+
+    sound_mind::codec::StreamImage cropped;
+    cropped.config = codecConfig;
+    cropped.config.binCount = keptBinCount;
+    cropped.frameCount = frameCount;
+    cropped.leftMagnitudeDb.resize(std::size_t{keptBinCount} * frameCount);
+    cropped.rightMagnitudeDb.resize(std::size_t{keptBinCount} * frameCount);
+    cropped.sharedPhaseRadians.resize(std::size_t{keptBinCount} * frameCount);
+    for (std::uint32_t bin = 0; bin < keptBinCount; ++bin) {
+        const std::uint32_t sourceBin = keepFromBin + bin;
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t sourceIndex = std::size_t{sourceBin} * frameCount + frame;
+            const std::size_t destIndex = std::size_t{bin} * frameCount + frame;
+            cropped.leftMagnitudeDb[destIndex] = content.leftMagnitudeDb[sourceIndex];
+            cropped.rightMagnitudeDb[destIndex] = content.rightMagnitudeDb[sourceIndex];
+            cropped.sharedPhaseRadians[destIndex] = content.sharedPhaseRadians[sourceIndex];
+        }
+    }
+
+    const auto rgb = sound_mind::codec::toRgbImage(cropped);
     const auto downsampled = sound_mind::codec::downsampleAveraged(rgb, kRasterWidth, kRasterHeight);
     return toQImageView(downsampled).copy();
 }

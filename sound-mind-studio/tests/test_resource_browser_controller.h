@@ -30,4 +30,5 @@ private slots:
     void addingAMindWaveBoundToolPresetToToolkitAlsoAddsTheMindWaveAndNotifies();
     void addingAnEntryWithNoDependenciesNeverNotifies();
     void addingTheSameDependencyTwiceDoesNotDuplicateIt();
+    void toolPresetPreviewStillRendersWhenTheProjectsOwnMaxFrequencyIsBelowOneKilohertz();
 };

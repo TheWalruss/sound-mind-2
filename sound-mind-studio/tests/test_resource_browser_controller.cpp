@@ -533,3 +533,23 @@ void ResourceBrowserControllerTest::addingTheSameDependencyTwiceDoesNotDuplicate
     auto* toolkitList = fixture.panel.findChild<QListWidget*>(QStringLiteral("toolkitEntriesList"));
     QCOMPARE(toolkitList->count(), 3);  // Brush One, Brush Two, Shared Wave (once).
 }
+
+void ResourceBrowserControllerTest::
+    toolPresetPreviewStillRendersWhenTheProjectsOwnMaxFrequencyIsBelowOneKilohertz() {
+    // The preview is clipped vertically at 1 kHz - a project whose own
+    // encoded range never reaches 1 kHz at all must still render a real
+    // (non-empty, non-crashing) raster rather than an empty crop.
+    ProjectSettings lowRangeSettings = testSettings();
+    lowRangeSettings.minFrequencyHz = 20.0f;
+    lowRangeSettings.maxFrequencyHz = 500.0f;
+
+    Fixture fixture;
+    fixture.project = Project::createNew(lowRangeSettings);
+    fixture.project.addToolPreset("Low-Range Brush", ProceduralConfiguration{});
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::ToolPreset);
+
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    QVERIFY(!fixture.panel.findChild<QLabel*>(QStringLiteral("inspectorRasterLabel"))->isHidden());
+}

@@ -1762,7 +1762,10 @@ sense:
 - **Tool Preset** - a preview stroke: a straight 3-second line from 3 kHz
   to 5 kHz, painted with the preset's own configuration, so you can see
   (and, for an Instrument bound to a MindWave, hear its vibrato/tremolo
-  reflected in) what it actually looks like before picking it.
+  reflected in) what it actually looks like before picking it. The
+  preview image is cropped to frequencies at or above 1 kHz, so the
+  stroke itself (always well above that) fills the small preview rather
+  than being squeezed down alongside the rest of the frequency range.
 - **Mind Shot** - its own rendered spectrogram, plus a **Play** button to
   hear it.
 - **Resonance Profile** - a plot of its spectrum, and, alongside it, the
