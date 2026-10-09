@@ -30,8 +30,9 @@ in-app behavior is correct and this guide is due an update.
 19. [Pooling a Layer](#pooling-a-layer)
 20. [Exporting](#exporting)
 21. [Saving and Project Files](#saving-and-project-files)
-22. [Performance](#performance)
-23. [What's Not Here Yet](#whats-not-here-yet)
+22. [Resource Browser](#resource-browser)
+23. [Performance](#performance)
+24. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -1732,6 +1733,44 @@ without the other breaks the project.
 
 Closing the window, opening a different project, or starting a new one
 while you have unsaved changes prompts you to save first.
+
+## Resource Browser
+
+**Configure → Resource Browser** opens a panel for browsing, exporting,
+and importing the "library" resources a project accumulates - MindWaves,
+Tool Presets (Procedural, Instrument, Resonance, and every other brush
+type with saved settings), Mind Shots, Resonance Profiles, Filters (saved
+convolution kernels), Mind Grains, and Layers. Pick a category from the
+drop-down at the top to see every one of that kind your current project
+has; selecting an entry shows its parameters in the inspector, plus - for
+a Mind Shot - its own rendered spectrogram and a **Play** button to hear
+it, and - for a Resonance Profile - a small plot of its spectrum.
+
+- **Export...** saves the selected entry to its own standalone file (a
+  MindWave as `.smwave`, a Tool Preset as `.sminst`, a Mind Shot as
+  `.smshot`, a Resonance Profile as `.smresonance`, a Filter as
+  `.smfilter`), which you can hand to someone else or import into a
+  different project later. Mind Grains and Layers have no standalone file
+  of their own - a Mind Grain only makes sense tied to its own layer, and
+  a Layer is portable by browsing its own project directly (see below).
+- **Import from File...** reads one of those same file types back in,
+  adding it to your current project's own library under its saved name.
+- **Browse Other Project...** opens a second `.smproj` file read-only,
+  without closing or changing the one you're working on, and shows its own
+  libraries in the same panel. Select anything in it - including a whole
+  Layer, with its painted content - and click **Import** to copy it into
+  your current project. **Return to This Project** switches the panel back
+  to your own project's own libraries.
+- **Toolkit draft**: build up a bundle of several resources to share as one
+  file. Select an entry (any category with its own file format) and click
+  **Add to Toolkit** - it appears in the draft list below, and you can keep
+  adding more from other categories, or even from a browsed other project,
+  before exporting. **Remove** takes a selected draft entry back out.
+  **Export Toolkit...** asks for a name, then a destination `.smtoolkit`
+  file, and clears the draft once written. **Import Toolkit...** reads one
+  back in and adds every bundled resource to your current project in one
+  step - either everything in the file is added, or (if something in it is
+  malformed) nothing is, never a partial import.
 
 ## Performance
 

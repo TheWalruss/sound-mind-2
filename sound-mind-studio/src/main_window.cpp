@@ -81,6 +81,8 @@
 #include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/qt_image_conversion.h"
 #include "sound_mind/studio/record_panel.h"
+#include "sound_mind/studio/resource_browser_controller.h"
+#include "sound_mind/studio/resource_browser_panel.h"
 #include "sound_mind/studio/theme.h"
 
 #ifndef SOUND_MIND_VERSION
@@ -261,6 +263,17 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(mindWavesPanel_, &MindWavesPanel::deleteRequested, this, &MainWindow::removeMindWave);
     connect(mindWavesPanel_, &MindWavesPanel::renameRequested, this, &MainWindow::renameMindWave);
     connect(mindWavesPanel_, &MindWavesPanel::mindWaveChanged, this, &MainWindow::updateMindWave);
+
+    // The Resource Browser panel (docs/sound-mind-roadmap.md's v0.Y.57.1
+    // Installment C, folding in the roadmap backlog's own "resource
+    // browser panel"/"SoundMind Toolkit collections" entries) - hidden by
+    // default, the same reasoning mindWavesPanel_ above already gives.
+    // ResourceBrowserController (constructed later, once every panel it
+    // might need to react through already exists) owns its actual
+    // behavior - this panel is purely presentational.
+    resourceBrowserPanel_ = new ResourceBrowserPanel(this);
+    resourceBrowserPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, resourceBrowserPanel_);
 
     // The History Panel (v0.Y.46.1 Installment D, "Layers Panel & Editing
     // Enhancements v2") - hidden by default, the same reasoning
@@ -713,6 +726,13 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         // history actually does.
         toolPaletteController_->invalidateContentCaches();
     });
+
+    // The Resource Browser panel's own Project reads/mutations
+    // (docs/sound-mind-roadmap.md's v0.Y.57.1 Installment C) - see its own
+    // class docs.
+    resourceBrowserController_ = new ResourceBrowserController(resourceBrowserPanel_, this);
+    connect(resourceBrowserController_, &ResourceBrowserController::resourcesChanged, this,
+            [this]() { hasUnsavedChanges_ = true; });
 
     // "Create New MindWave..." (v0.Y.62.1 Installment G) - one shared
     // callback, injected into every MindWave-binding dropdown's own
@@ -1426,6 +1446,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     configureMenu->addAction(gridPanel_->toggleViewAction());
     configureMenu->addAction(filterConfigurationPanel_->toggleViewAction());
     configureMenu->addAction(mindWavesPanel_->toggleViewAction());
+    configureMenu->addAction(resourceBrowserPanel_->toggleViewAction());
 
     auto* configureButton = new QToolButton(this);
     configureButton->setObjectName(QStringLiteral("configureButton"));
@@ -1846,6 +1867,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     toolPaletteController_->setProject(&*project_);
     layerController_->setProject(&*project_);
     mindWaveController_->setProject(&*project_);
+    resourceBrowserController_->setProject(&*project_);
     midiConfigurationPanel_->setProject(&*project_);
     // EqualizerCurveWidget's own frequency-axis guides need the new
     // project's own settings; the preview overlay (if currently enabled)
@@ -1881,6 +1903,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     }
     layerController_->refreshLayersPanel();
     mindWaveController_->refreshMindWavesPanel();
+    resourceBrowserController_->refreshPanel();
     refreshConvolutionKernelCombo();
     // The new project's own layer stack/active layer are both different
     // from whatever the guardrail last computed - see

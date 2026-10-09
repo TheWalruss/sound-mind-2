@@ -6,6 +6,36 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.14.1] - 2026-10-09
+
+Portable Resources, Installment D - `docs/sound-mind-roadmap.md`'s `v0.Y.57.1`: SoundMind "Toolkit" collections, folding in the roadmap backlog's own "Toolkit collections" entry. Closes out this milestone's own feature work (Installment E, the closing regression/documentation pass, follows).
+
+### Added
+
+- A new standalone **Toolkit** portable file (`.smtoolkit`) bundling several named resources - any mix of MindWave/Tool Preset/Mind Shot/Resonance Profile/Filter - into one packaged, exportable, shareable, importable unit.
+- The **Resource Browser** panel gained a **Toolkit draft** section: **Add to Toolkit** adds the currently selected entry (any category with a portable file format) to an in-progress bundle shown in its own list; **Remove** takes one back out; **Export Toolkit...** names the bundle and writes it to a `.smtoolkit` file, clearing the draft on success; **Import Toolkit...** reads one back in, adding every bundled entry to the current project in one step.
+- Importing a Toolkit is all-or-nothing - every entry is applied to a private trial copy of the project first, and only swapped in if every single one succeeds; a malformed or unrecognized entry leaves the project completely untouched rather than partially imported.
+
+### Notes
+
+- **Simpler first pass, confirmed scope**: building a Toolkit is one-entry-at-a-time (select, Add to Toolkit, repeat) rather than a multi-select in the entries list - the entries list stays single-selection, matching how the inspector already works. Importing a Toolkit also doesn't offer a "browse its contents first, without importing" preview the way browsing another project does - every bundled entry is added immediately.
+- **Still ahead for this milestone**: Installment E, the closing regression/documentation reconciliation pass - see `docs/sound-mind-roadmap.md`'s own updated `v0.Y.57.1` entry.
+
+## [0.1.13.1] - 2026-10-09
+
+Portable Resources, Installments B+C (merged) - `docs/sound-mind-roadmap.md`'s `v0.Y.57.1`: a new **Resource Browser** panel (**Configure → Resource Browser**), folding in the roadmap backlog's own "resource browser panel" entry. First user-visible piece of this milestone.
+
+### Added
+
+- A new dockable **Resource Browser** panel browsing one project's resource libraries at a time - pick a category (MindWave, Tool Preset, Mind Shot, Resonance Profile, Filter, Mind Grain, Layer) and see every named entry the current project holds for it. Selecting an entry shows its parameters in a text inspector; a Mind Shot additionally renders its own spectrogram raster and offers a **Play** button (a dedicated, isolated playback path - previewing a Mind Shot never interferes with actual project playback); a Resonance Profile shows its spectrum as a small plotted line chart.
+- **Export...**/**Import from File...**, wired to `v0.1.12.1`'s portable-file functions - saves/loads a MindWave (`.smwave`), Tool Preset (`.sminst`), Mind Shot (`.smshot`), Resonance Profile (`.smresonance`), or Filter (`.smfilter`) as its own standalone file. Mind Grain and Layer have neither button, consistent with neither having a portable file format.
+- **Browse Other Project...** opens a second `.smproj` file read-only, without touching the one you're working on, and shows its own libraries in the same panel; an **Import** button on each entry copies it into your current project (a Layer included, with its full painted content) - **Return to This Project** switches back. This is `v0.Y.57.1`'s own "cross-project import of layers, Mind Shots, MindWaves..." line, built as one mechanism rather than a separate dialog.
+
+### Notes
+
+- Originally scoped as two separate installments (B: per-panel Export/Import buttons; C: the browser itself) - merged once building B surfaced that Mind Shot and Resonance Profile have no existing per-panel UI to attach a button to (both are created via capture/compute workflows with no prior list/management view at all), making a unified browser the only sensible single surface for all six categories rather than three narrow buttons plus a separate browser later. See `docs/sound-mind-architecture.md` Decision #207.
+- **Still ahead for this milestone**: Installment D (SoundMind Toolkit collections - bundling several resources into one packaged file) and Installment E (closing pass) - see `docs/sound-mind-roadmap.md`'s own updated `v0.Y.57.1` entry.
+
 ## [0.1.12.1] - 2026-10-09
 
 Portable Resources, Installment A - `docs/sound-mind-roadmap.md`'s `v0.Y.57.1`: the generic portable-resource file I/O this milestone's own later installments (Studio export/import actions, the Resource Browser panel, Toolkit collections) build on. `sound-mind-core` only - no Studio UI yet, nothing user-visible in the built app.

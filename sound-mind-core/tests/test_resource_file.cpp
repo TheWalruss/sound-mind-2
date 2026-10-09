@@ -159,3 +159,61 @@ TEST_CASE("importConvolutionKernel surfaces a missing file as std::ios_base::fai
           "[core][resource_file]") {
     REQUIRE_THROWS_AS(importConvolutionKernel(scratchPath("does-not-exist.smfilter")), std::ios_base::failure);
 }
+
+TEST_CASE("exportToolkit/importToolkit round-trip a bundle of mixed resource types, dropping every id",
+          "[core][resource_file]") {
+    NamedMindWave wave;
+    wave.id = 5;
+    wave.name = "Bundled Wave";
+
+    NamedConvolutionKernel kernel;
+    kernel.id = 9;
+    kernel.name = "Bundled Kernel";
+    kernel.size = 3;
+    kernel.coefficients = {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+
+    std::vector<ToolkitEntry> entries;
+    entries.push_back({PortableResourceType::MindWave, nlohmann::json(wave)});
+    entries.push_back({PortableResourceType::ConvolutionKernel, nlohmann::json(kernel)});
+
+    const std::filesystem::path path = scratchPath("bundle.smtoolkit");
+    exportToolkit("My Toolkit", entries, path);
+    const ImportedToolkit restored = importToolkit(path);
+    std::filesystem::remove(path);
+
+    REQUIRE(restored.name == "My Toolkit");
+    REQUIRE(restored.entries.size() == 2);
+
+    REQUIRE(restored.entries[0].type == PortableResourceType::MindWave);
+    const auto restoredWave = restored.entries[0].resource.get<NamedMindWave>();
+    REQUIRE(restoredWave.id == 0);
+    REQUIRE(restoredWave.name == wave.name);
+
+    REQUIRE(restored.entries[1].type == PortableResourceType::ConvolutionKernel);
+    const auto restoredKernel = restored.entries[1].resource.get<NamedConvolutionKernel>();
+    REQUIRE(restoredKernel.id == 0);
+    REQUIRE(restoredKernel.name == kernel.name);
+    REQUIRE(restoredKernel.coefficients == kernel.coefficients);
+}
+
+TEST_CASE("importToolkit rejects a file with no soundMindToolkit envelope marker", "[core][resource_file]") {
+    const std::filesystem::path path = scratchPath("not-a-toolkit.smtoolkit");
+    {
+        std::ofstream file(path);
+        file << nlohmann::json{{"hello", "world"}}.dump();
+    }
+
+    REQUIRE_THROWS_AS(importToolkit(path), std::invalid_argument);
+
+    std::filesystem::remove(path);
+}
+
+TEST_CASE("exportToolkit writes an empty entries array for an empty bundle", "[core][resource_file]") {
+    const std::filesystem::path path = scratchPath("empty.smtoolkit");
+    exportToolkit("Empty Toolkit", {}, path);
+    const ImportedToolkit restored = importToolkit(path);
+    std::filesystem::remove(path);
+
+    REQUIRE(restored.name == "Empty Toolkit");
+    REQUIRE(restored.entries.empty());
+}

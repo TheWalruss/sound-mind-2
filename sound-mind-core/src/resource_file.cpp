@@ -124,4 +124,54 @@ NamedConvolutionKernel importConvolutionKernel(const std::filesystem::path& path
     return readResourceFile<NamedConvolutionKernel>(PortableResourceType::ConvolutionKernel, path);
 }
 
+void exportToolkit(const std::string& name, const std::vector<ToolkitEntry>& entries,
+                    const std::filesystem::path& path) {
+    nlohmann::json entriesJson = nlohmann::json::array();
+    for (const ToolkitEntry& entry : entries) {
+        nlohmann::json resource = entry.resource;
+        if (resource.contains("id")) {
+            resource["id"] = 0;
+        }
+        entriesJson.push_back(nlohmann::json{{"resourceType", entry.type}, {"resource", resource}});
+    }
+
+    nlohmann::json envelope;
+    envelope["soundMindToolkit"] = true;
+    envelope["formatVersion"] = kFormatVersion;
+    envelope["name"] = name;
+    envelope["entries"] = entriesJson;
+
+    std::ofstream file(path);
+    if (!file) {
+        throw std::ios_base::failure("Could not open toolkit file for writing: " + path.string());
+    }
+    file << envelope.dump(2);
+}
+
+ImportedToolkit importToolkit(const std::filesystem::path& path) {
+    std::ifstream file(path);
+    if (!file) {
+        throw std::ios_base::failure("Could not open toolkit file for reading: " + path.string());
+    }
+    nlohmann::json envelope;
+    file >> envelope;
+
+    if (!envelope.value("soundMindToolkit", false)) {
+        throw std::invalid_argument("Not a Sound Mind Toolkit file: " + path.string());
+    }
+
+    ImportedToolkit toolkit;
+    envelope.at("name").get_to(toolkit.name);
+    for (const nlohmann::json& entryJson : envelope.at("entries")) {
+        ToolkitEntry entry;
+        entry.type = entryJson.at("resourceType").get<PortableResourceType>();
+        entry.resource = entryJson.at("resource");
+        if (entry.resource.contains("id")) {
+            entry.resource["id"] = 0;
+        }
+        toolkit.entries.push_back(std::move(entry));
+    }
+    return toolkit;
+}
+
 }  // namespace sound_mind::core

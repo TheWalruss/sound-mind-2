@@ -67,6 +67,8 @@ class LoopPanel;
 class MindWavesPanel;
 class PlaybackPanel;
 class RecordPanel;
+class ResourceBrowserController;
+class ResourceBrowserPanel;
 
 /**
  * @brief The Sound Mind Studio main window.
@@ -3696,6 +3698,17 @@ private:
     /// Hidden by default, the same "off until shown" convention
     /// filterConfigurationPanel_ already follows.
     MindWavesPanel* mindWavesPanel_ = nullptr;
+
+    /// @brief The dockable panel browsing the current project's (or a
+    /// second, read-only `.smproj`'s) resource libraries - see its own
+    /// class docs (`docs/sound-mind-roadmap.md`'s `v0.Y.57.1` Installment
+    /// C). Hidden by default, the same reasoning mindWavesPanel_ above
+    /// already gives.
+    ResourceBrowserPanel* resourceBrowserPanel_ = nullptr;
+
+    /// @brief Owns resourceBrowserPanel_'s own actual Project reads/
+    /// mutations - see its own class docs.
+    ResourceBrowserController* resourceBrowserController_ = nullptr;
 
     /// @brief The dockable read-only history panel - see its own class
     /// docs (`v0.Y.46.1` Installment D). Hidden by default, the same

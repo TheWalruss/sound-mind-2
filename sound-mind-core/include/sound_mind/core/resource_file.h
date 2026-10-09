@@ -1,7 +1,9 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -212,5 +214,77 @@ void exportConvolutionKernel(const NamedConvolutionKernel& entry, const std::fil
  *         `PortableResourceType::ConvolutionKernel`.
  */
 [[nodiscard]] NamedConvolutionKernel importConvolutionKernel(const std::filesystem::path& path);
+
+/**
+ * @brief One resource bundled inside a Toolkit collection - `docs/sound-
+ *        mind-roadmap.md`'s `v0.Y.57.1` Installment D, the roadmap
+ *        backlog's own "SoundMind Toolkit collections" entry ("bundling
+ *        several named resources... into one packaged, exportable,
+ *        shareable, importable... unit").
+ *
+ * Deliberately just a type tag plus that resource's own already-
+ * serialized JSON (the same shape `exportMindWave()` and its four
+ * siblings each write as their file's own `"resource"` field) - a
+ * Toolkit is a flat bundle of entries any mix of the five portable types
+ * above, not a new resource type of its own, so it reuses each one's own
+ * existing `to_json()`/`from_json()` rather than inventing parallel
+ * fields per type.
+ */
+struct ToolkitEntry {
+    /// @brief Which of the five portable resource types `resource` is.
+    PortableResourceType type = PortableResourceType::MindWave;
+
+    /// @brief That resource's own serialized JSON - e.g. a `NamedMindWave`
+    ///        for `PortableResourceType::MindWave`. Its own `id` field, if
+    ///        present, is ignored on both export and import (zeroed the
+    ///        same way every standalone portable resource file's own `id`
+    ///        is) - see `exportMindWave()`'s own docs for why.
+    nlohmann::json resource;
+};
+
+/**
+ * @brief Writes a named collection of resources to a standalone
+ *        `.smtoolkit` file.
+ *
+ * One JSON envelope, the same spirit as every standalone resource file
+ * above: `{soundMindToolkit: true, formatVersion: 1, name: ..., entries:
+ * [{resourceType: ..., resource: ...}, ...]}`. Each entry's own `resource`
+ * has its `id` field zeroed before writing (if present) - the same
+ * "never meaningful outside the project that assigned it" reasoning
+ * every other export function here already follows.
+ *
+ * @param name The toolkit's own display name.
+ * @param entries The resources to bundle - any mix of the five portable
+ *        types, in any order; duplicates (by type/content) are written
+ *        as given, not deduplicated.
+ * @param path Destination path. Any existing file there is overwritten.
+ * @throws std::ios_base::failure if `path` can't be opened for writing.
+ */
+void exportToolkit(const std::string& name, const std::vector<ToolkitEntry>& entries,
+                    const std::filesystem::path& path);
+
+/// @brief A Toolkit collection read back from a standalone `.smtoolkit`
+/// file - the inverse of exportToolkit()'s own inputs.
+struct ImportedToolkit {
+    /// @brief The toolkit's own display name, as given to exportToolkit().
+    std::string name;
+
+    /// @brief The bundled resources - each entry's own `resource.id` is
+    ///        `0`, the same "never written, always zeroed back" contract
+    ///        every other `importXxx()` function here already follows.
+    std::vector<ToolkitEntry> entries;
+};
+
+/**
+ * @brief Reads a Toolkit collection back from a standalone `.smtoolkit`
+ *        file - the inverse of exportToolkit().
+ * @param path The file to read.
+ * @return The toolkit's own name and bundled entries.
+ * @throws std::ios_base::failure if `path` can't be opened for reading.
+ * @throws nlohmann::json::exception on malformed or missing required data.
+ * @throws std::invalid_argument if the file's own envelope isn't a Sound
+ *         Mind Toolkit file.
+ */
+[[nodiscard]] ImportedToolkit importToolkit(const std::filesystem::path& path);
 
 }  // namespace sound_mind::core

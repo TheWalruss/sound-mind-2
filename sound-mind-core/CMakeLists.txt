@@ -65,6 +65,7 @@ add_library(sound-mind-core
     src/resonant_instrument.cpp
     src/resonance_profile.cpp
     src/resource_file.cpp
+    src/mind_shot_preview.cpp
 )
 
 target_include_directories(sound-mind-core

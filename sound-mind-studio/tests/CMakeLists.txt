@@ -50,6 +50,8 @@ add_executable(sound-mind-studio-tests
     test_playback_panel.cpp
     test_record_panel.cpp
     test_recent_projects.cpp
+    test_resource_browser_controller.cpp
+    test_resource_browser_panel.cpp
     test_rotary_dial_widget.cpp
     test_theme.cpp
     test_tone_curve_editor.cpp

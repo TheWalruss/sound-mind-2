@@ -59,6 +59,8 @@
 #include "test_polar_origin_dialog.h"
 #include "test_record_panel.h"
 #include "test_recent_projects.h"
+#include "test_resource_browser_controller.h"
+#include "test_resource_browser_panel.h"
 #include "test_rotary_dial_widget.h"
 #include "test_selection_configuration_panel.h"
 #include "test_selection_controller.h"
@@ -244,6 +246,12 @@ int main(int argc, char** argv) {
 
     MindWaveControllerTest mindWaveControllerTest;
     status |= QTest::qExec(&mindWaveControllerTest, argc, argv);
+
+    ResourceBrowserPanelTest resourceBrowserPanelTest;
+    status |= QTest::qExec(&resourceBrowserPanelTest, argc, argv);
+
+    ResourceBrowserControllerTest resourceBrowserControllerTest;
+    status |= QTest::qExec(&resourceBrowserControllerTest, argc, argv);
 
     UndoStackTest undoStackTest;
     status |= QTest::qExec(&undoStackTest, argc, argv);
