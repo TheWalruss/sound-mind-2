@@ -19,4 +19,6 @@ private slots:
     void exportToolkitFailsWhenTheDraftIsEmpty();
     void removingADraftEntryTakesItOutOfTheNextExport();
     void importToolkitIsAllOrNothingOnAMalformedEntry();
+    void setProjectStopsBrowsingAnyOtherProject();
+    void toolkitDraftEntryIsASnapshotUnaffectedByLaterEditsToItsSource();
 };

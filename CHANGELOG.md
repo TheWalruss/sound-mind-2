@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.14.2] - 2026-10-09
+
+Portable Resources, Installment E (closing pass) - `docs/sound-mind-roadmap.md`'s `v0.Y.57.1`: cross-checking Doxygen output, `docs/sound-mind-architecture.md`, and the test suite against each other end to end for everything Installments A-D touched, per `CLAUDE.md`'s documentation policy. No user-visible behavior change - a point release, the same reasoning `v0.0.0.2`'s own entry gives.
+
+### Fixed
+
+Three real, if narrow, test-coverage gaps the cross-check surfaced (no production code changed - every one of these behaviors was already correctly implemented, just not yet exercised by a test):
+- `exportToolPreset()` rejecting a `NamedToolPreset` with a null `config` (documented, untested until now).
+- `ResourceBrowserController::setProject()` actually stopping any in-progress "Browse Other Project..." session, not just shadowing it.
+- A Toolkit draft entry being a true snapshot at "Add to Toolkit" time - confirmed that mutating the source resource afterward never changes what an already-added draft entry exports.
+
+### Notes
+
+This closes out `docs/sound-mind-roadmap.md`'s `v0.Y.57.1` (Portable Resources) in full, including both roadmap backlog items it folded in (the resource browser panel, SoundMind Toolkit collections).
+
 ## [0.1.14.1] - 2026-10-09
 
 Portable Resources, Installment D - `docs/sound-mind-roadmap.md`'s `v0.Y.57.1`: SoundMind "Toolkit" collections, folding in the roadmap backlog's own "Toolkit collections" entry. Closes out this milestone's own feature work (Installment E, the closing regression/documentation pass, follows).

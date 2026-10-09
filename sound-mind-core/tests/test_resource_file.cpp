@@ -80,6 +80,13 @@ TEST_CASE("exportToolPreset/importToolPreset round-trip a NamedToolPreset, dropp
     REQUIRE(restored.config->type() == original.config->type());
 }
 
+TEST_CASE("exportToolPreset rejects a NamedToolPreset with a null config", "[core][resource_file]") {
+    NamedToolPreset empty;
+    empty.name = "Never Saved";
+
+    REQUIRE_THROWS_AS(exportToolPreset(empty, scratchPath("null-config.sminst")), std::invalid_argument);
+}
+
 TEST_CASE("exportMindShot/importMindShot round-trip a NamedMindShot, dropping its id", "[core][resource_file]") {
     NamedMindShot original;
     original.id = 3;

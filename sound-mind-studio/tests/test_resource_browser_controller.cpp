@@ -348,3 +348,60 @@ void ResourceBrowserControllerTest::importToolkitIsAllOrNothingOnAMalformedEntry
 
     std::filesystem::remove(path);
 }
+
+void ResourceBrowserControllerTest::setProjectStopsBrowsingAnyOtherProject() {
+    Project other = Project::createNew(testSettings());
+    other.addMindWave("Other's Wave", MindWave{});
+    const std::filesystem::path path = scratchPath("other-setproject.smproj");
+    other.save(path);
+
+    Fixture fixture;
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::MindWave);
+    QVERIFY(fixture.controller.browseOtherProjectAt(path));
+    // Actively browsing: "Browse Other Project..." is hidden in favor of
+    // "Return to This Project".
+    QVERIFY(fixture.panel.findChild<QPushButton*>(QStringLiteral("browseOtherProjectButton"))->isHidden());
+
+    Project replacement = Project::createNew(testSettings());
+    replacement.addMindWave("Replacement's Wave", MindWave{});
+    fixture.controller.setProject(&replacement);
+    fixture.controller.refreshPanel();
+
+    // setProject() itself stops browsing the other project - the panel
+    // now reflects `replacement`, not the one browseOtherProjectAt()
+    // loaded, confirming browsedProject_/browsedProjectPath_ were both
+    // actually cleared, not just shadowed.
+    QVERIFY(!fixture.panel.findChild<QPushButton*>(QStringLiteral("browseOtherProjectButton"))->isHidden());
+    auto* list = fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"));
+    QCOMPARE(list->count(), 1);
+    QCOMPARE(list->item(0)->text(), QStringLiteral("Replacement's Wave"));
+
+    std::filesystem::remove(path);
+}
+
+void ResourceBrowserControllerTest::toolkitDraftEntryIsASnapshotUnaffectedByLaterEditsToItsSource() {
+    Fixture fixture;
+    MindWave wave;
+    wave.setPeriod(1.0);
+    const auto id = fixture.project.addMindWave("Mutable Wave", wave);
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::MindWave);
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+    QTest::mouseClick(fixture.panel.findChild<QPushButton*>(QStringLiteral("addToToolkitButton")), Qt::LeftButton);
+
+    // Mutate the source *after* it was added to the draft.
+    fixture.project.mindWaveById(id)->wave.setPeriod(999.0);
+
+    const std::filesystem::path path = scratchPath("snapshot.smtoolkit");
+    QVERIFY(fixture.controller.exportToolkitAt(QStringLiteral("Snapshot Test"), path));
+    const auto imported = sound_mind::core::importToolkit(path);
+
+    QCOMPARE(imported.entries.size(), std::size_t{1});
+    const auto exportedWave = imported.entries[0].resource.get<NamedMindWave>();
+    // The draft captured the wave's own period (1.0) at "Add to Toolkit"
+    // time - the later mutation to 999.0 never reaches the exported file.
+    QCOMPARE(exportedWave.wave.period(), 1.0);
+
+    std::filesystem::remove(path);
+}
