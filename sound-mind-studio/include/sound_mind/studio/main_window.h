@@ -1202,6 +1202,27 @@ public slots:
     void refreshConvolutionKernelCombo();
 
     /**
+     * @brief Prompts for a name and appends a new entry to the current
+     *        project's own Filter Preset library - the actual work behind
+     *        `FilterConfigurationPanel::savePresetRequested()`. A no-op if
+     *        no project is open, or the user cancels/leaves the name
+     *        empty.
+     * @param config The configuration to save - the panel's own current,
+     *        complete configuration at the moment "Save..." was clicked.
+     */
+    void saveFilterPreset(const sound_mind::core::FilterConfiguration& config);
+
+    /**
+     * @brief Feeds the current project's own Filter Preset library into
+     *        `filterConfigurationPanel_->setAvailableFilterPresets()` -
+     *        called whenever a project is opened/created and after
+     *        `saveFilterPreset()` appends a new entry, the same role
+     *        `refreshConvolutionKernelCombo()` plays for convolution
+     *        kernels.
+     */
+    void refreshFilterPresetCombo();
+
+    /**
      * @brief Reorders the current project's layer stack - the actual work
      *        behind `LayersPanel`'s drag-to-reorder.
      *

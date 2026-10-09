@@ -6,6 +6,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 #include <nlohmann/json.hpp>
 
@@ -129,6 +130,26 @@ public:
     ///         import itself throws.
     bool importToolkitFrom(const std::filesystem::path& path, QString* errorMessage = nullptr);
 
+    /**
+     * @brief The non-prompting core behind "Add to Toolkit" - see
+     *        `exportSelectedEntry()`'s own docs for why this split exists
+     *        (here, so the auto-added-dependency notification is
+     *        directly testable without a real, blocking `QMessageBox`).
+     *
+     * Adds the currently selected entry to the Toolkit draft, and
+     * recursively does the same for every other resource it references
+     * (`docs/sound-mind-roadmap.md`'s "check whether the resource requires
+     * something else... add the dependencies, and notify the user which
+     * additional resources were added" - confirmed with the user). A
+     * dependency already present in the draft is a no-op for that one
+     * entry, not re-added or re-reported.
+     * @return The display name of every dependency actually added
+     *         *besides* the primary entry itself, in order; empty if none
+     *         were needed, nothing was selected, or the selected category
+     *         has no portable form to add at all.
+     */
+    QStringList addSelectedEntryToToolkit();
+
 signals:
     /// @brief An import actually added something to `project_` - the
     ///        Studio's own cue to mark `hasUnsavedChanges()`, the same
@@ -175,6 +196,72 @@ private:
     static void applyToolkitEntry(sound_mind::core::PortableResourceType type, const nlohmann::json& resource,
                                    sound_mind::core::Project& target);
 
+    /// @brief One resource `findDependencies()` found referenced, by type
+    ///        and project-local id - `docs/sound-mind-roadmap.md`'s
+    ///        "check whether the resource requires something else...
+    ///        add the dependencies" (confirmed with the user).
+    struct ResourceDependency {
+        sound_mind::core::PortableResourceType type;
+        std::uint64_t id;
+    };
+
+    /// @brief Looks up `id` within `type`'s own library in `project` and
+    ///        builds its serialized JSON and display label - the shared
+    ///        lookup `handleAddToToolkitRequested()`'s own former per-
+    ///        category switch duplicated; factored out so
+    ///        `addToolkitEntryWithDependencies()` can resolve a
+    ///        dependency's own id the identical way.
+    /// @param type Which library to look in.
+    /// @param id The entry to find.
+    /// @param project The project to resolve against.
+    /// @param outResource Set to the entry's own serialized JSON on
+    ///        success.
+    /// @param outDisplayName Set to the entry's own display label (e.g.
+    ///        "My Brush (Procedural)") on success.
+    /// @return `true` if `id` resolved to a real entry; `false` otherwise
+    ///         (neither output is touched).
+    static bool resolveResourceForToolkit(sound_mind::core::PortableResourceType type, std::uint64_t id,
+                                           const sound_mind::core::Project& project, nlohmann::json& outResource,
+                                           QString& outDisplayName);
+
+    /// @brief Scans a resource's own serialized JSON for every reference
+    ///        to another library resource - any field ending in
+    ///        `"MindWaveId"` (every `opacityMindWave()`/`blurSigmaMindWave()`/
+    ///        etc.-style binding across `ToolConfiguration`/
+    ///        `FilterConfiguration` already shares this one naming
+    ///        convention), plus `"sourceMindShotId"`/
+    ///        `"sourceResonanceProfileId"` (a `MindShotConfiguration`'s/
+    ///        `ResonanceConfiguration`'s own UI-metadata source id).
+    ///        `"sourceMindGrainId"` is deliberately not matched - a Mind
+    ///        Grain has no portable form to bundle in the first place.
+    /// @param resourceJson The already-serialized resource to scan.
+    /// @return Every dependency found, in encounter order; duplicates are
+    ///         possible (the caller dedups against the draft already).
+    [[nodiscard]] static std::vector<ResourceDependency> findDependencies(const nlohmann::json& resourceJson);
+
+    /// @brief Adds `type`/`id` to `toolkitDraft_` (if not already present,
+    ///        by `type`+`sourceId`) and recursively does the same for
+    ///        every dependency `findDependencies()` finds in its own
+    ///        serialized JSON, appending each dependency's own display
+    ///        name to `autoAddedNames` (never the originally-requested
+    ///        entry's own name, even on a repeat call that's already a
+    ///        no-op).
+    /// @param type Which library `id` is in.
+    /// @param id The entry to add.
+    /// @param project The project to resolve `id` (and any dependency ids
+    ///        it references) against.
+    /// @param autoAddedNames Appended with each dependency's own display
+    ///        name, for `handleAddToToolkitRequested()`'s own "Also
+    ///        added..." notification.
+    /// @param isDependency `true` for a recursive dependency call (so its
+    ///        own name is reported); `false` for the originally-requested
+    ///        entry.
+    /// @return `true` if `id` resolved and was (or already is) in the
+    ///         draft; `false` if it didn't resolve at all.
+    bool addToolkitEntryWithDependencies(sound_mind::core::PortableResourceType type, std::uint64_t id,
+                                         const sound_mind::core::Project& project, QStringList& autoAddedNames,
+                                         bool isDependency = false);
+
     /// @brief `browsedProject_ ? &*browsedProject_ : project_` - see the
     ///        class's own docs.
     [[nodiscard]] const sound_mind::core::Project* activeProject() const;
@@ -208,6 +295,17 @@ private:
     struct ToolkitDraftEntry {
         /// @brief Which portable resource type this entry is.
         sound_mind::core::PortableResourceType type;
+
+        /// @brief The entry's own id within whichever project it was
+        ///        added from - kept only for this session's own in-memory
+        ///        dedup check (`addToolkitEntryWithDependencies()`'s own
+        ///        "already in the draft?" lookup), never written to the
+        ///        exported `.smtoolkit` file (`exportToolkitAt()` only
+        ///        ever reads `type`/`resource` back out) - the same
+        ///        "never meaningful outside the project that assigned it"
+        ///        reasoning every exported resource's own `id` field
+        ///        already follows.
+        std::uint64_t sourceId = 0;
 
         /// @brief That resource's own serialized JSON, captured from
         ///        `activeProject()` at the moment "Add to Toolkit" was

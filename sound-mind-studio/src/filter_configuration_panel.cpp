@@ -118,6 +118,40 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     auto* container = new QWidget(this);
     auto* root = new QVBoxLayout(container);
 
+    // The whole-FilterConfiguration counterpart to ToolConfigurationPanel's
+    // own Tool Preset row - confirmed with the user ("make filter
+    // configuration save-able to a filter preset, just like tool
+    // configurations are save-able to tool preset").
+    auto* presetRow = new QHBoxLayout();
+    filterPresetCombo_ = new QComboBox(container);
+    filterPresetCombo_->setObjectName(QStringLiteral("filterPresetCombo"));
+    filterPresetCombo_->setToolTip(tr("Load a saved Filter Preset"));
+    filterPresetCombo_->addItem(tr("Load Preset..."));
+    connect(filterPresetCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (index <= 0 || static_cast<std::size_t>(index - 1) >= availableFilterPresets_.size()) {
+            return;
+        }
+        setFilterConfiguration(availableFilterPresets_[static_cast<std::size_t>(index - 1)].config);
+        emitConfigChanged();
+        // One-shot trigger, not a sticky selection - the same
+        // "immediately apply, then reset to the placeholder" contract
+        // convolveLoadKernelCombo_ already establishes.
+        const QSignalBlocker blocker(filterPresetCombo_);
+        filterPresetCombo_->setCurrentIndex(0);
+    });
+    presetRow->addWidget(filterPresetCombo_, 1);
+
+    savePresetButton_ = new QPushButton(tr("Save..."), container);
+    savePresetButton_->setObjectName(QStringLiteral("savePresetButton"));
+    savePresetButton_->setToolTip(tr("Save the current configuration as a new Filter Preset"));
+    connect(savePresetButton_, &QPushButton::clicked, this,
+            [this]() { emit savePresetRequested(config_); });
+    presetRow->addWidget(savePresetButton_);
+
+    auto* presetForm = new QFormLayout();
+    presetForm->addRow(tr("Filter Preset:"), presetRow);
+    root->addLayout(presetForm);
+
     auto* typeForm = new QFormLayout();
     filterTypeCombo_ = new QComboBox(container);
     filterTypeCombo_->setObjectName(QStringLiteral("filterTypeCombo"));
@@ -1206,6 +1240,18 @@ void FilterConfigurationPanel::setAvailableConvolutionKernels(
                                            QVariant::fromValue(static_cast<qulonglong>(kernel.id)));
     }
     convolveLoadKernelCombo_->setCurrentIndex(0);
+}
+
+void FilterConfigurationPanel::setAvailableFilterPresets(
+    const std::vector<sound_mind::core::NamedFilterPreset>& presets) {
+    availableFilterPresets_ = presets;
+    const QSignalBlocker blocker(filterPresetCombo_);
+    filterPresetCombo_->clear();
+    filterPresetCombo_->addItem(tr("Load Preset..."));
+    for (const auto& preset : availableFilterPresets_) {
+        filterPresetCombo_->addItem(QString::fromStdString(preset.name));
+    }
+    filterPresetCombo_->setCurrentIndex(0);
 }
 
 void FilterConfigurationPanel::rebuildConvolveKernelGrid(int size) {

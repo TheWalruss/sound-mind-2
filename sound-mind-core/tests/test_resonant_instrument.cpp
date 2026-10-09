@@ -5,6 +5,7 @@
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <nlohmann/json.hpp>
 
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/resonant_instrument.h"
@@ -12,6 +13,7 @@
 using sound_mind::core::BranchGraft;
 using sound_mind::core::computeWaveKernelSignature;
 using sound_mind::core::CurveGraph;
+using sound_mind::core::CurvePoint;
 using sound_mind::core::curveGraphFromBranches;
 using sound_mind::core::curveGraphFromPath;
 using sound_mind::core::Path;
@@ -298,4 +300,32 @@ TEST_CASE("computeWaveKernelSignature distinguishes a jagged shape from a straig
         }
     }
     REQUIRE(foundDifference);
+}
+
+TEST_CASE("A CurveGraph round-trips through JSON, edges included", "[core][resonant_instrument]") {
+    CurveGraph original;
+    const std::size_t a = original.addNode(CurvePoint{0.0, 0.0});
+    const std::size_t b = original.addNode(CurvePoint{1.0, 2.0});
+    const std::size_t c = original.addNode(CurvePoint{2.0, 0.0});
+    original.addEdge(a, b);
+    original.addEdge(b, c);
+
+    const nlohmann::json json = original;
+    const CurveGraph restored = json.get<CurveGraph>();
+
+    REQUIRE(restored.nodes().size() == 3);
+    REQUIRE(restored.nodes()[0].position.x == 0.0);
+    REQUIRE(restored.nodes()[1].position.y == 2.0);
+    REQUIRE(restored.nodes()[0].neighbors == std::vector<std::size_t>{1});
+    REQUIRE(restored.nodes()[1].neighbors == std::vector<std::size_t>{0, 2});
+    REQUIRE(restored.nodes()[2].neighbors == std::vector<std::size_t>{1});
+}
+
+TEST_CASE("An empty CurveGraph round-trips through JSON as an empty graph", "[core][resonant_instrument]") {
+    const CurveGraph original;
+
+    const nlohmann::json json = original;
+    const CurveGraph restored = json.get<CurveGraph>();
+
+    REQUIRE(restored.nodes().empty());
 }

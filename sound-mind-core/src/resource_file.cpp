@@ -76,6 +76,8 @@ std::string_view portableResourceFileExtension(PortableResourceType type) noexce
         case PortableResourceType::ResonanceProfile:
             return ".smresonance";
         case PortableResourceType::ConvolutionKernel:
+            return ".smkernel";
+        case PortableResourceType::FilterPreset:
             return ".smfilter";
     }
     return "";
@@ -122,6 +124,14 @@ void exportConvolutionKernel(const NamedConvolutionKernel& entry, const std::fil
 
 NamedConvolutionKernel importConvolutionKernel(const std::filesystem::path& path) {
     return readResourceFile<NamedConvolutionKernel>(PortableResourceType::ConvolutionKernel, path);
+}
+
+void exportFilterPreset(const NamedFilterPreset& entry, const std::filesystem::path& path) {
+    writeResourceFile(entry, PortableResourceType::FilterPreset, path);
+}
+
+NamedFilterPreset importFilterPreset(const std::filesystem::path& path) {
+    return readResourceFile<NamedFilterPreset>(PortableResourceType::FilterPreset, path);
 }
 
 void exportToolkit(const std::string& name, const std::vector<ToolkitEntry>& entries,

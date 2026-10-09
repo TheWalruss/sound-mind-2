@@ -639,6 +639,16 @@ way rather than starting from scratch. Whatever you last set stays in
 place for the *next* Filter layer too, so adding several in a row can
 start each one from the same settings.
 
+A **Filter Preset** row sits above the Filter Type dropdown - **Save...**
+stores the panel's own current, complete configuration (whichever type is
+selected, with every one of its own settings) under a name you choose,
+and the drop-down beside it lists every Filter Preset you've saved;
+picking one loads it immediately (switching Filter Type if needed) and
+the drop-down resets to its own placeholder, ready to pick again. Saved
+presets also show up in the **Resource Browser**'s own Filter Preset
+category, where they can be exported to a `.smfilter` file and imported
+into another project.
+
 The Filter Configuration panel starts with a **Filter Type** dropdown -
 every new Filter layer starts as **Frequency-Axis Gradient**. Choosing a
 different type shows only that type's own controls below the dropdown;
@@ -1739,20 +1749,35 @@ while you have unsaved changes prompts you to save first.
 **Configure → Resource Browser** opens a panel for browsing, exporting,
 and importing the "library" resources a project accumulates - MindWaves,
 Tool Presets (Procedural, Instrument, Resonance, and every other brush
-type with saved settings), Mind Shots, Resonance Profiles, Filters (saved
-convolution kernels), Mind Grains, and Layers. Pick a category from the
-drop-down at the top to see every one of that kind your current project
-has; selecting an entry shows its parameters in the inspector, plus - for
-a Mind Shot - its own rendered spectrogram and a **Play** button to hear
-it, and - for a Resonance Profile - a small plot of its spectrum.
+type with saved settings), Mind Shots, Resonance Profiles, Filter Presets
+(a whole saved Filter layer configuration), Convolution Kernels (a saved
+kernel for the Convolve filter type specifically), Mind Grains, and
+Layers. Pick a category from the drop-down at the top to see every one of
+that kind your current project has; selecting an entry shows its
+parameters in the inspector, plus a rendered preview where one makes
+sense:
+
+- **MindWave** - a small grayscale preview of the field it actually
+  generates, the same preview the MindWaves panel's own rows show.
+- **Tool Preset** - a preview stroke: a straight 3-second line from 3 kHz
+  to 5 kHz, painted with the preset's own configuration, so you can see
+  (and, for an Instrument bound to a MindWave, hear its vibrato/tremolo
+  reflected in) what it actually looks like before picking it.
+- **Mind Shot** - its own rendered spectrogram, plus a **Play** button to
+  hear it.
+- **Resonance Profile** - a plot of its spectrum, and, alongside it, the
+  source path or branching curve it was computed from (if captured since
+  this rendering was added - an older entry just shows the spectrum
+  alone).
 
 - **Export...** saves the selected entry to its own standalone file (a
   MindWave as `.smwave`, a Tool Preset as `.sminst`, a Mind Shot as
-  `.smshot`, a Resonance Profile as `.smresonance`, a Filter as
-  `.smfilter`), which you can hand to someone else or import into a
-  different project later. Mind Grains and Layers have no standalone file
-  of their own - a Mind Grain only makes sense tied to its own layer, and
-  a Layer is portable by browsing its own project directly (see below).
+  `.smshot`, a Resonance Profile as `.smresonance`, a Filter Preset as
+  `.smfilter`, a Convolution Kernel as `.smkernel`), which you can hand to
+  someone else or import into a different project later. Mind Grains and
+  Layers have no standalone file of their own - a Mind Grain only makes
+  sense tied to its own layer, and a Layer is portable by browsing its own
+  project directly (see below).
 - **Import from File...** reads one of those same file types back in,
   adding it to your current project's own library under its saved name.
 - **Browse Other Project...** opens a second `.smproj` file read-only,
@@ -1765,12 +1790,16 @@ it, and - for a Resonance Profile - a small plot of its spectrum.
   file. Select an entry (any category with its own file format) and click
   **Add to Toolkit** - it appears in the draft list below, and you can keep
   adding more from other categories, or even from a browsed other project,
-  before exporting. **Remove** takes a selected draft entry back out.
-  **Export Toolkit...** asks for a name, then a destination `.smtoolkit`
-  file, and clears the draft once written. **Import Toolkit...** reads one
-  back in and adds every bundled resource to your current project in one
-  step - either everything in the file is added, or (if something in it is
-  malformed) nothing is, never a partial import.
+  before exporting. If the entry you add depends on something else - a
+  Tool Preset or Filter Preset with a parameter bound to a MindWave, say -
+  that MindWave is added automatically too, and a message tells you which
+  extra resources were pulled in, so the bundle still works correctly once
+  imported somewhere else. **Remove** takes a selected draft entry back
+  out. **Export Toolkit...** asks for a name, then a destination
+  `.smtoolkit` file, and clears the draft once written. **Import
+  Toolkit...** reads one back in and adds every bundled resource to your
+  current project in one step - either everything in the file is added,
+  or (if something in it is malformed) nothing is, never a partial import.
 
 ## Performance
 

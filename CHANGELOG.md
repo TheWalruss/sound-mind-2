@@ -6,6 +6,25 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.15.1] - 2026-10-09
+
+Resource Browser enhancements - direct user feedback on `v0.1.14.2`'s own Resource Browser work: a new Filter Preset library (whole `FilterConfiguration`s, saveable/loadable just like Tool Presets), rendered previews for MindWave/Tool Preset/Resonance Profile, and automatic dependency bundling for Toolkit collections.
+
+### Added
+
+- **Filter Presets**: a new project-level library of whole, named `FilterConfiguration`s (any `FilterType`, every one of its own settings) - the Filter Configuration panel gained a **Save...** button and a Load combo, mirroring the Tool Configuration panel's own Tool Preset row exactly. Exportable/importable as `.smfilter` files via the Resource Browser's new **Filter Preset** category.
+- **Rendered previews in the Resource Browser inspector**: selecting a **MindWave** shows the same grayscale field preview the MindWaves panel's own rows already show; selecting a **Tool Preset** shows a straight 3-second, 3 kHz→5 kHz preview stroke painted with that preset's own configuration (an Instrument bound to a MindWave reflects its vibrato/tremolo too); selecting a **Resonance Profile** shows its source path/branching curve rendered alongside its spectrum plot (for any entry captured since this was added - see Notes).
+- **Toolkit dependency bundling**: "Add to Toolkit" now scans the entry's own serialized configuration for anything else it references (any MindWave-binding parameter, a Mind Shot/Resonance Profile a brush tip was built from) and adds those automatically too, notifying which extra resources were pulled in - so an exported Toolkit stays self-sufficient instead of silently depending on something the bundle doesn't actually include.
+
+### Changed
+
+- The Resource Browser's former **Filter** category (saved convolution kernels) is now labeled **Convolution Kernel**, and its portable file extension changed from `.smfilter` to `.smkernel` - freed up so the new, more broadly useful Filter Preset category could take the name and extension a user actually expects "Filter" to mean. Neither has shipped to any real user yet, so this rename carries no migration concern.
+
+### Notes
+
+- `NamedResonanceProfile` gained a new `sourceCurve` field (the `CurveGraph` a profile's spectrum was computed from) - additive, not a Y bump; an entry saved before this field existed (or created via a path this codebase doesn't retain the curve for) simply shows its spectrum alone, with an empty curve render.
+- See `docs/sound-mind-architecture.md`'s Decision #210 for the full implementation writeup.
+
 ## [0.1.14.2] - 2026-10-09
 
 Portable Resources, Installment E (closing pass) - `docs/sound-mind-roadmap.md`'s `v0.Y.57.1`: cross-checking Doxygen output, `docs/sound-mind-architecture.md`, and the test suite against each other end to end for everything Installments A-D touched, per `CLAUDE.md`'s documentation policy. No user-visible behavior change - a point release, the same reasoning `v0.0.0.2`'s own entry gives.

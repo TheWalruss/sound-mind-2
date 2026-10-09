@@ -10,6 +10,7 @@
 
 #include "sound_mind/core/convolution_kernel.h"
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/filter_preset.h"
 #include "sound_mind/core/project_settings.h"
 
 class QCheckBox;
@@ -314,6 +315,17 @@ public:
      */
     void setAvailableConvolutionKernels(const std::vector<sound_mind::core::NamedConvolutionKernel>& kernels);
 
+    /**
+     * @brief Replaces the Filter Preset combo's own entries - the whole-
+     *        `FilterConfiguration` counterpart to
+     *        `setAvailableConvolutionKernels()`, fed by `MainWindow` from
+     *        `Project::filterPresets()` the same way.
+     * @param presets The project's current Filter Preset library - should
+     *        appear in the combo (after a leading placeholder entry,
+     *        always first).
+     */
+    void setAvailableFilterPresets(const std::vector<sound_mind::core::NamedFilterPreset>& presets);
+
 signals:
     /// @brief Emitted whenever any parameter control changes.
     /// @param config The panel's own new, complete configuration.
@@ -333,6 +345,19 @@ signals:
      * @param normalize The kernel's own current Normalize setting.
      */
     void saveConvolutionKernelRequested(int size, std::vector<float> coefficients, bool normalize);
+
+    /**
+     * @brief The Filter Preset "Save..." button was clicked -
+     *        `MainWindow`'s cue to prompt for a name and append a new
+     *        entry to the project's own Filter Preset library
+     *        (`Project::addFilterPreset()`), then refresh this panel's own
+     *        combo via `setAvailableFilterPresets()`. This panel has no
+     *        `Project` reference of its own, the same boundary
+     *        `saveConvolutionKernelRequested()` already keeps.
+     * @param config The panel's own current, complete configuration to
+     *        save.
+     */
+    void savePresetRequested(const sound_mind::core::FilterConfiguration& config);
 
     /**
      * @brief The Equalizer mode's own "Preview on Canvas" checkbox
@@ -513,6 +538,11 @@ private:
     QComboBox* convolveLoadKernelCombo_ = nullptr;
     /// @brief See setAvailableConvolutionKernels()'s own docs.
     std::vector<sound_mind::core::NamedConvolutionKernel> availableConvolutionKernels_;
+
+    QPushButton* savePresetButton_ = nullptr;
+    QComboBox* filterPresetCombo_ = nullptr;
+    /// @brief See setAvailableFilterPresets()'s own docs.
+    std::vector<sound_mind::core::NamedFilterPreset> availableFilterPresets_;
 
     // --- v0.Y.36.1 Installment D: Space - only Mix gained a MindWave-
     // binding combo in v0.Y.38.1; the other five remain deliberately

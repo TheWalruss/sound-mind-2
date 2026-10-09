@@ -6,6 +6,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/core/resonant_instrument.h"
+
 namespace sound_mind::core {
 
 /// @brief Opaque identifier for a `NamedResonanceProfile` within a Project -
@@ -62,6 +64,20 @@ struct NamedResonanceProfile {
     ///        stored - see this struct's own docs on why nothing in this
     ///        codebase ever mutates it in place.
     std::vector<float> spectrum;
+
+    /**
+     * @brief The `CurveGraph` this entry's own `spectrum` was computed
+     *        from, if any - added so the Resource Browser panel can show
+     *        the source curve rendered, next to the spectrum plot
+     *        (confirmed with the user). A permanent snapshot, the same
+     *        "copied in, never a live reference" reasoning this struct's
+     *        own class docs already give for `spectrum` itself - editing
+     *        or deleting the original `Path`/branching curve afterward
+     *        has no effect on this copy. Empty (no nodes) for any entry
+     *        created before this field existed, or via a path this
+     *        codebase doesn't retain the curve for.
+     */
+    CurveGraph sourceCurve;
 };
 
 /// @brief Serializes a named resonant profile to its JSON representation.

@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/core/convolution_kernel.h"
+#include "sound_mind/core/filter_preset.h"
 #include "sound_mind/core/mind_shot.h"
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/resonance_profile.h"
@@ -23,11 +24,21 @@ namespace sound_mind::core {
  * `docs/sound-mind-architecture.md`'s "Portable Resource Files" table lists
  * the on-disk extension each one conventionally uses
  * (`portableResourceFileExtension()` below) - `.smwave`, `.sminst`,
- * `.smshot`, `.smresonance`, `.smfilter`. Layer and Mind Grain deliberately
- * have no entry here - see that same table's own notes on why neither is a
- * standalone-file resource (a layer travels between projects directly, via
- * `Project::addLayer()`; a Mind Grain embeds no pixel content to export in
- * the first place).
+ * `.smshot`, `.smresonance`, `.smfilter`, `.smkernel`. Layer and Mind Grain
+ * deliberately have no entry here - see that same table's own notes on why
+ * neither is a standalone-file resource (a layer travels between projects
+ * directly, via `Project::addLayer()`; a Mind Grain embeds no pixel
+ * content to export in the first place).
+ *
+ * **`FilterPreset` added after `ConvolutionKernel`, confirmed with the
+ * user** ("make filter configuration save-able to a filter preset, just
+ * like tool configurations are save-able to tool preset") - a whole
+ * `FilterConfiguration` (any `FilterType`), not just a saved convolution
+ * kernel. Took over the `.smfilter` extension - the name a user actually
+ * expects "Filter" to mean, mirroring `ToolPreset`'s own `.sminst` - while
+ * `ConvolutionKernel` moved to `.smkernel`, a rename made freely since
+ * neither has shipped to any real user yet (see `docs/sound-mind-
+ * architecture.md`'s own Decision on this).
  */
 enum class PortableResourceType {
     MindWave,
@@ -35,6 +46,7 @@ enum class PortableResourceType {
     MindShot,
     ResonanceProfile,
     ConvolutionKernel,
+    FilterPreset,
 };
 
 // clang-format off
@@ -44,6 +56,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(PortableResourceType, {
     {PortableResourceType::MindShot, "mindShot"},
     {PortableResourceType::ResonanceProfile, "resonanceProfile"},
     {PortableResourceType::ConvolutionKernel, "convolutionKernel"},
+    {PortableResourceType::FilterPreset, "filterPreset"},
 })
 // clang-format on
 
@@ -191,7 +204,7 @@ void exportResonanceProfile(const NamedResonanceProfile& entry, const std::files
 [[nodiscard]] NamedResonanceProfile importResonanceProfile(const std::filesystem::path& path);
 
 /**
- * @brief Writes a `NamedConvolutionKernel` to a standalone `.smfilter`
+ * @brief Writes a `NamedConvolutionKernel` to a standalone `.smkernel`
  *        file - see `exportMindWave()`'s own docs for the shared envelope
  *        shape this follows.
  * @param entry The entry to export - its own `id` is not written, the same
@@ -203,7 +216,7 @@ void exportConvolutionKernel(const NamedConvolutionKernel& entry, const std::fil
 
 /**
  * @brief Reads a `NamedConvolutionKernel` back from a standalone
- *        `.smfilter` file - the inverse of `exportConvolutionKernel()`.
+ *        `.smkernel` file - the inverse of `exportConvolutionKernel()`.
  * @param path The file to read.
  * @return The entry this file holds, with `id == 0` - see `importMindWave()`'s
  *         own docs on why.
@@ -214,6 +227,31 @@ void exportConvolutionKernel(const NamedConvolutionKernel& entry, const std::fil
  *         `PortableResourceType::ConvolutionKernel`.
  */
 [[nodiscard]] NamedConvolutionKernel importConvolutionKernel(const std::filesystem::path& path);
+
+/**
+ * @brief Writes a `NamedFilterPreset` to a standalone `.smfilter` file -
+ *        see `exportMindWave()`'s own docs for the shared envelope shape
+ *        this follows.
+ * @param entry The entry to export - its own `id` is not written, the same
+ *        reasoning as `exportMindWave()`.
+ * @param path Destination path. Any existing file there is overwritten.
+ * @throws std::ios_base::failure if `path` can't be opened for writing.
+ */
+void exportFilterPreset(const NamedFilterPreset& entry, const std::filesystem::path& path);
+
+/**
+ * @brief Reads a `NamedFilterPreset` back from a standalone `.smfilter`
+ *        file - the inverse of `exportFilterPreset()`.
+ * @param path The file to read.
+ * @return The entry this file holds, with `id == 0` - see `importMindWave()`'s
+ *         own docs on why.
+ * @throws std::ios_base::failure if `path` can't be opened for reading.
+ * @throws nlohmann::json::exception on malformed or missing required data.
+ * @throws std::invalid_argument if the file's own envelope isn't a Sound
+ *         Mind portable resource file, or names a `resourceType` other than
+ *         `PortableResourceType::FilterPreset`.
+ */
+[[nodiscard]] NamedFilterPreset importFilterPreset(const std::filesystem::path& path);
 
 /**
  * @brief One resource bundled inside a Toolkit collection - `docs/sound-

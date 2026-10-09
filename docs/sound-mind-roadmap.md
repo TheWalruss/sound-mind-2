@@ -1069,6 +1069,16 @@ The three concrete gaps `v0.Y.63.1`'s own design doc surfaced, fixed before runn
 
 **Backlog addition**: a correct Pool reflection-padding implementation - needs either a different mechanism for representing a safe "don't-care" padding-region contribution in a single-global-spectrum reconstruction, or validating against a reference NSGT implementation rather than re-deriving the DFT identities by hand.
 
+### `v0.Y.65.1` - Resource Browser enhancements (2026-10-09)
+
+Direct user feedback on `v0.Y.57.1`'s own shipped Resource Browser (`v0.1.13.1`-`v0.1.14.2`), after actually trying it: a missing Filter Preset library, no rendered previews for three of the six categories, and Toolkit collections that could silently export something incomplete.
+
+- ✅ **Filter Presets** - a new project-level library of whole, named `FilterConfiguration`s, the missing Filter-layer counterpart to Tool Presets ("make filter configuration save-able to a filter preset, just like tool configurations are save-able to tool preset"). `FilterConfigurationPanel` gained its own Save/Load Preset row; the Resource Browser's former **Filter** category (saved convolution kernels) renamed to **Convolution Kernel**, freeing the `Filter`/`.smfilter` name for this new, more broadly useful category.
+- ✅ **Rendered previews** - MindWave now shows the same grayscale field preview the MindWaves panel's own rows already use; Tool Preset shows a straight 3-second, 3 kHz→5 kHz preview stroke painted with that preset's own configuration; Resonance Profile shows its source path/branching curve rendered alongside its existing spectrum plot (`NamedResonanceProfile` gained a new `sourceCurve` field to make this possible at all).
+- ✅ **Toolkit dependency bundling** - "Add to Toolkit" now scans an entry's own configuration for anything else it references (a MindWave-bound parameter, a Mind Shot/Resonance Profile a brush was built from) and adds those automatically too, notifying which extra resources were pulled in, so an exported Toolkit stays self-sufficient.
+
+See `docs/sound-mind-architecture.md`'s Decision #210 for the full implementation writeup. Settled in `v0.1.15.1`.
+
 **Backlog - queued for before Beta opens, not part of this iteration:**
 
 - **Edit menu redesign** - flagged as needing a complete redesign; not yet scoped into a concrete plan.

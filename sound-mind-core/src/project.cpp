@@ -74,6 +74,7 @@ Project::Project(const Project& other)
       resonanceProfiles_(other.resonanceProfiles_),
       convolutionKernels_(other.convolutionKernels_),
       toolPresets_(other.toolPresets_),
+      filterPresets_(other.filterPresets_),
       midiProgramMappings_(other.midiProgramMappings_) {
     // operationLog_ deliberately left default-constructed (empty) - see
     // this constructor's own docs.
@@ -89,6 +90,7 @@ Project& Project::operator=(const Project& other) {
         resonanceProfiles_ = other.resonanceProfiles_;
         convolutionKernels_ = other.convolutionKernels_;
         toolPresets_ = other.toolPresets_;
+        filterPresets_ = other.filterPresets_;
         midiProgramMappings_ = other.midiProgramMappings_;
         operationLog_ = OperationLog{};
     }
@@ -317,12 +319,14 @@ NamedMindGrain* Project::mindGrainById(MindGrainId id) noexcept {
     return nullptr;
 }
 
-ResonanceProfileId Project::addResonanceProfile(std::string name, std::vector<float> spectrum) {
+ResonanceProfileId Project::addResonanceProfile(std::string name, std::vector<float> spectrum,
+                                                 CurveGraph sourceCurve) {
     const auto maxId = std::max_element(
         resonanceProfiles_.begin(), resonanceProfiles_.end(),
         [](const NamedResonanceProfile& a, const NamedResonanceProfile& b) { return a.id < b.id; });
     const ResonanceProfileId newId = (maxId == resonanceProfiles_.end() ? ResonanceProfileId{0} : maxId->id) + 1;
-    resonanceProfiles_.push_back(NamedResonanceProfile{newId, std::move(name), std::move(spectrum)});
+    resonanceProfiles_.push_back(
+        NamedResonanceProfile{newId, std::move(name), std::move(spectrum), std::move(sourceCurve)});
     return newId;
 }
 
@@ -433,6 +437,46 @@ NamedToolPreset* Project::toolPresetById(ToolPresetId id) noexcept {
     return nullptr;
 }
 
+FilterPresetId Project::addFilterPreset(std::string name, const FilterConfiguration& config) {
+    const auto maxId = std::max_element(filterPresets_.begin(), filterPresets_.end(),
+                                          [](const NamedFilterPreset& a, const NamedFilterPreset& b) { return a.id < b.id; });
+    const FilterPresetId newId = (maxId == filterPresets_.end() ? FilterPresetId{0} : maxId->id) + 1;
+    NamedFilterPreset preset;
+    preset.id = newId;
+    preset.name = std::move(name);
+    preset.config = config;
+    filterPresets_.push_back(std::move(preset));
+    return newId;
+}
+
+bool Project::removeFilterPreset(FilterPresetId id) {
+    const auto it = std::find_if(filterPresets_.begin(), filterPresets_.end(),
+                                  [id](const NamedFilterPreset& named) { return named.id == id; });
+    if (it == filterPresets_.end()) {
+        return false;
+    }
+    filterPresets_.erase(it);
+    return true;
+}
+
+const NamedFilterPreset* Project::filterPresetById(FilterPresetId id) const noexcept {
+    for (const NamedFilterPreset& named : filterPresets_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
+NamedFilterPreset* Project::filterPresetById(FilterPresetId id) noexcept {
+    for (NamedFilterPreset& named : filterPresets_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
 void Project::setMidiProgramMapping(const MidiProgramMapping& mapping) {
     for (MidiProgramMapping& existing : midiProgramMappings_) {
         if (existing.programNumber == mapping.programNumber) {
@@ -513,6 +557,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"resonanceProfiles", project.resonanceProfiles_},
         {"convolutionKernels", project.convolutionKernels_},
         {"toolPresets", project.toolPresets_},
+        {"filterPresets", project.filterPresets_},
         {"midiProgramMappings", project.midiProgramMappings_},
     };
 }
@@ -580,6 +625,15 @@ void from_json(const nlohmann::json& json, Project& project) {
     if (json.contains("toolPresets")) {
         for (const auto& namedJson : json.at("toolPresets")) {
             project.toolPresets_.push_back(namedJson.get<NamedToolPreset>());
+        }
+    }
+
+    // Lenient, same reasoning - didn't exist before Filter Presets; a
+    // project saved before it had no saved Filter Presets to lose.
+    project.filterPresets_.clear();
+    if (json.contains("filterPresets")) {
+        for (const auto& namedJson : json.at("filterPresets")) {
+            project.filterPresets_.push_back(namedJson.get<NamedFilterPreset>());
         }
     }
 

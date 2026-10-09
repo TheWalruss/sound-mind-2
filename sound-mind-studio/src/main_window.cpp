@@ -680,6 +680,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             &MainWindow::applyFilterConfiguration);
     connect(filterConfigurationPanel_, &FilterConfigurationPanel::saveConvolutionKernelRequested, this,
             &MainWindow::saveConvolutionKernel);
+    connect(filterConfigurationPanel_, &FilterConfigurationPanel::savePresetRequested, this,
+            &MainWindow::saveFilterPreset);
     connect(filterConfigurationPanel_, &FilterConfigurationPanel::equalizerPreviewToggled, this,
             &MainWindow::setEqualizerPreviewEnabled);
 
@@ -1905,6 +1907,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     mindWaveController_->refreshMindWavesPanel();
     resourceBrowserController_->refreshPanel();
     refreshConvolutionKernelCombo();
+    refreshFilterPresetCombo();
     // The new project's own layer stack/active layer are both different
     // from whatever the guardrail last computed - see
     // updateMindGrainGuardrails()'s own docs.
@@ -3510,7 +3513,7 @@ void MainWindow::createResonanceFromPickedPathNamed(const std::string& name) {
     const auto graph = sound_mind::core::curveGraphFromPath(
         *curve, sound_mind::core::frequencyToTimeScaleFor(project_->settings()), kResonanceNodeCount);
     const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
-    project_->addResonanceProfile(name, spectrum);
+    project_->addResonanceProfile(name, spectrum, graph);
     // Unlike captureMindShot()/captureMindGrain() (wired through
     // SelectionController's own mindShotCaptured()/mindGrainCaptured()
     // signals, connected once in ToolPaletteController's own constructor),
@@ -3571,7 +3574,7 @@ void MainWindow::createResonanceFromPickedGraphNamed(const std::string& name) {
         branchCurveSession_.branches(), sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
         kResonanceNodeCount);
     const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
-    project_->addResonanceProfile(name, spectrum);
+    project_->addResonanceProfile(name, spectrum, graph);
     branchCurveSession_.end();
     // See createResonanceFromPickedPathNamed()'s own identical
     // comment - this capture writes directly to project_ too.
@@ -3677,6 +3680,28 @@ void MainWindow::saveConvolutionKernel(int size, std::vector<float> coefficients
 void MainWindow::refreshConvolutionKernelCombo() {
     filterConfigurationPanel_->setAvailableConvolutionKernels(
         project_.has_value() ? project_->convolutionKernels() : std::vector<sound_mind::core::NamedConvolutionKernel>{});
+}
+
+void MainWindow::saveFilterPreset(const sound_mind::core::FilterConfiguration& config) {
+    if (!project_.has_value()) {
+        return;
+    }
+    bool ok = false;
+    const QString defaultName = tr("Filter Preset %1").arg(project_->filterPresets().size() + 1);
+    const QString name =
+        QInputDialog::getText(this, tr("Save Filter Preset"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
+    if (!ok || name.trimmed().isEmpty()) {
+        return;
+    }
+    project_->addFilterPreset(name.trimmed().toStdString(), config);
+    refreshFilterPresetCombo();
+    hasUnsavedChanges_ = true;
+    statusBar()->showMessage(tr("Saved as \"%1\".").arg(name.trimmed()), 5000);
+}
+
+void MainWindow::refreshFilterPresetCombo() {
+    filterConfigurationPanel_->setAvailableFilterPresets(
+        project_.has_value() ? project_->filterPresets() : std::vector<sound_mind::core::NamedFilterPreset>{});
 }
 
 void MainWindow::startPlayback() {

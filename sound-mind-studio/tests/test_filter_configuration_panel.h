@@ -93,4 +93,11 @@ private slots:
     void changingANewBindComboEmitsFilterConfigurationChangedWithTheNewBinding();
     void selectingNoneOnANewComboUnbindsAndEmits();
     void setFilterConfigurationSyncsAllFifteenNewCombosWithoutEmitting();
+
+    // --- Filter Preset (confirmed with the user: "make filter
+    // configuration save-able to a filter preset, just like tool
+    // configurations are save-able to tool preset") ---
+    void clickingSavePresetEmitsSavePresetRequestedWithTheCurrentConfiguration();
+    void setAvailableFilterPresetsPopulatesTheCombo();
+    void selectingALoadedFilterPresetAppliesItEmitsChangedAndResetsTheComboToThePlaceholder();
 };

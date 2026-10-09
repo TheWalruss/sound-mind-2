@@ -142,7 +142,7 @@ TEST_CASE(
     original.coefficients = {0.0f, -1.0f, 0.0f, -1.0f, 5.0f, -1.0f, 0.0f, -1.0f, 0.0f};
     original.normalize = true;
 
-    const std::filesystem::path path = scratchPath("kernel.smfilter");
+    const std::filesystem::path path = scratchPath("kernel.smkernel");
     exportConvolutionKernel(original, path);
     const NamedConvolutionKernel restored = importConvolutionKernel(path);
     std::filesystem::remove(path);
@@ -154,17 +154,37 @@ TEST_CASE(
     REQUIRE(restored.normalize == original.normalize);
 }
 
+TEST_CASE("exportFilterPreset/importFilterPreset round-trip a NamedFilterPreset, dropping its id",
+          "[core][resource_file]") {
+    NamedFilterPreset original;
+    original.id = 13;
+    original.name = "My Blur";
+    original.config.setType(FilterType::UniformBlur);
+    original.config.setBlurSigma(3.0f);
+
+    const std::filesystem::path path = scratchPath("preset.smfilter");
+    exportFilterPreset(original, path);
+    const NamedFilterPreset restored = importFilterPreset(path);
+    std::filesystem::remove(path);
+
+    REQUIRE(restored.id == 0);
+    REQUIRE(restored.name == original.name);
+    REQUIRE(restored.config.type() == FilterType::UniformBlur);
+    REQUIRE(restored.config.blurSigma() == 3.0f);
+}
+
 TEST_CASE("portableResourceFileExtension returns each type's conventional extension", "[core][resource_file]") {
     REQUIRE(portableResourceFileExtension(PortableResourceType::MindWave) == ".smwave");
     REQUIRE(portableResourceFileExtension(PortableResourceType::ToolPreset) == ".sminst");
     REQUIRE(portableResourceFileExtension(PortableResourceType::MindShot) == ".smshot");
     REQUIRE(portableResourceFileExtension(PortableResourceType::ResonanceProfile) == ".smresonance");
-    REQUIRE(portableResourceFileExtension(PortableResourceType::ConvolutionKernel) == ".smfilter");
+    REQUIRE(portableResourceFileExtension(PortableResourceType::ConvolutionKernel) == ".smkernel");
+    REQUIRE(portableResourceFileExtension(PortableResourceType::FilterPreset) == ".smfilter");
 }
 
 TEST_CASE("importConvolutionKernel surfaces a missing file as std::ios_base::failure",
           "[core][resource_file]") {
-    REQUIRE_THROWS_AS(importConvolutionKernel(scratchPath("does-not-exist.smfilter")), std::ios_base::failure);
+    REQUIRE_THROWS_AS(importConvolutionKernel(scratchPath("does-not-exist.smkernel")), std::ios_base::failure);
 }
 
 TEST_CASE("exportToolkit/importToolkit round-trip a bundle of mixed resource types, dropping every id",

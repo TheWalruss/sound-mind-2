@@ -26,6 +26,7 @@ using sound_mind::core::DownsampleMode;
 using sound_mind::core::FilterType;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::NamedConvolutionKernel;
+using sound_mind::core::NamedFilterPreset;
 using sound_mind::studio::EqualizerCurveWidget;
 using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::GradientBarWidget;
@@ -1335,4 +1336,66 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsAllFifteenNewCombo
         auto* combo = panel.findChild<QComboBox*>(comboName);
         QCOMPARE(combo->currentText(), QStringLiteral("Slow Pulse"));
     }
+}
+
+void FilterConfigurationPanelTest::clickingSavePresetEmitsSavePresetRequestedWithTheCurrentConfiguration() {
+    FilterConfigurationPanel panel;
+    // Sharpen, not UniformBlur - UniformBlur happens to be the combo's own
+    // first/default item, so selecting it wouldn't actually change its
+    // index (and so wouldn't fire currentIndexChanged at all).
+    auto* typeCombo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
+    typeCombo->setCurrentIndex(typeCombo->findData(QVariant::fromValue(static_cast<int>(FilterType::Sharpen))));
+    panel.findChild<QDoubleSpinBox*>(QStringLiteral("sharpenAmountSpinBox"))->setValue(0.5);
+    auto* button = panel.findChild<QPushButton*>(QStringLiteral("savePresetButton"));
+    QVERIFY(button != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::savePresetRequested);
+
+    button->click();
+
+    QCOMPARE(spy.count(), 1);
+    // The panel's own current configuration (not extracted from the
+    // spied signal argument, which would need FilterConfiguration
+    // registered as a Qt metatype) - already set via the UI above.
+    QCOMPARE(panel.filterConfiguration().type(), FilterType::Sharpen);
+    QCOMPARE(panel.filterConfiguration().sharpenAmount(), 0.5f);
+}
+
+void FilterConfigurationPanelTest::setAvailableFilterPresetsPopulatesTheCombo() {
+    FilterConfigurationPanel panel;
+    NamedFilterPreset first;
+    first.id = 1;
+    first.name = "My Blur";
+    NamedFilterPreset second;
+    second.id = 2;
+    second.name = "My Sharpen";
+
+    panel.setAvailableFilterPresets({first, second});
+
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterPresetCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(combo->count(), 3);  // placeholder + two presets.
+    QCOMPARE(combo->itemText(1), QStringLiteral("My Blur"));
+    QCOMPARE(combo->itemText(2), QStringLiteral("My Sharpen"));
+}
+
+void FilterConfigurationPanelTest::selectingALoadedFilterPresetAppliesItEmitsChangedAndResetsTheComboToThePlaceholder() {
+    FilterConfigurationPanel panel;
+    NamedFilterPreset saved;
+    saved.id = 42;
+    saved.name = "My Sharpen Preset";
+    saved.config.setType(FilterType::Sharpen);
+    saved.config.setSharpenAmount(0.75f);
+    panel.setAvailableFilterPresets({saved});
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterPresetCombo"));
+    QVERIFY(combo != nullptr);
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
+
+    combo->setCurrentIndex(1);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().type(), FilterType::Sharpen);
+    QCOMPARE(panel.filterConfiguration().sharpenAmount(), 0.75f);
+    // A one-shot trigger - reset back to its own placeholder afterward,
+    // the same contract convolveLoadKernelCombo_ already establishes.
+    QCOMPARE(combo->currentIndex(), 0);
 }

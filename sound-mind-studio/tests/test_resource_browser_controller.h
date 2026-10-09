@@ -21,4 +21,13 @@ private slots:
     void importToolkitIsAllOrNothingOnAMalformedEntry();
     void setProjectStopsBrowsingAnyOtherProject();
     void toolkitDraftEntryIsASnapshotUnaffectedByLaterEditsToItsSource();
+
+    // --- Resource Browser enhancements (direct user feedback) ---
+    void filterPresetCategoryListsExportsAndImports();
+    void selectingAMindWaveRendersAPreviewRaster();
+    void selectingAToolPresetRendersAStrokePreviewRaster();
+    void selectingAResonanceProfileRendersItsSourceCurveAlongsideTheSpectrum();
+    void addingAMindWaveBoundToolPresetToToolkitAlsoAddsTheMindWaveAndNotifies();
+    void addingAnEntryWithNoDependenciesNeverNotifies();
+    void addingTheSameDependencyTwiceDoesNotDuplicateIt();
 };

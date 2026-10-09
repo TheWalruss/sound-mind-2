@@ -4,6 +4,8 @@
 #include <optional>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "sound_mind/core/path.h"
 
 namespace sound_mind::core {
@@ -110,6 +112,34 @@ public:
 private:
     std::vector<CurveNode> nodes_;
 };
+
+/// @brief Serializes a curve point to its JSON representation.
+void to_json(nlohmann::json& json, const CurvePoint& point);
+
+/// @brief Parses a curve point from its JSON representation.
+/// @throws nlohmann::json::exception on malformed or missing required data.
+void from_json(const nlohmann::json& json, CurvePoint& point);
+
+/// @brief Serializes a curve node to its JSON representation.
+void to_json(nlohmann::json& json, const CurveNode& node);
+
+/// @brief Parses a curve node from its JSON representation.
+/// @throws nlohmann::json::exception on malformed or missing required data.
+void from_json(const nlohmann::json& json, CurveNode& node);
+
+/**
+ * @brief Serializes a `CurveGraph` to its JSON representation - added so
+ *        `NamedResonanceProfile` can store the source curve a Resonance
+ *        Profile was computed from (`v0.Y.57.1`'s Resource Browser work:
+ *        "for resonance, also show the path/branching curve rendered,
+ *        next to the spectrum profile" - confirmed with the user), not
+ *        just the already-computed `spectrum`.
+ */
+void to_json(nlohmann::json& json, const CurveGraph& graph);
+
+/// @brief Parses a `CurveGraph` from its JSON representation.
+/// @throws nlohmann::json::exception on malformed or missing required data.
+void from_json(const nlohmann::json& json, CurveGraph& graph);
 
 /**
  * @brief Resamples `path` into a linear (non-branching) `CurveGraph` of

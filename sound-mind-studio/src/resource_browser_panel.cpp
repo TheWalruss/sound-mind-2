@@ -27,7 +27,9 @@ QString categoryLabel(ResourceCategory category) {
         case ResourceCategory::ResonanceProfile:
             return QObject::tr("Resonance Profile");
         case ResourceCategory::ConvolutionKernel:
-            return QObject::tr("Filter");
+            return QObject::tr("Convolution Kernel");
+        case ResourceCategory::FilterPreset:
+            return QObject::tr("Filter Preset");
         case ResourceCategory::MindGrain:
             return QObject::tr("Mind Grain");
         case ResourceCategory::Layer:
@@ -164,9 +166,10 @@ ResourceBrowserPanel::ResourceBrowserPanel(QWidget* parent) : QDockWidget(tr("Re
 
 void ResourceBrowserPanel::populateCategoryCombo() {
     static constexpr ResourceCategory kCategories[] = {
-        ResourceCategory::MindWave,       ResourceCategory::ToolPreset, ResourceCategory::MindShot,
-        ResourceCategory::ResonanceProfile, ResourceCategory::ConvolutionKernel, ResourceCategory::MindGrain,
-        ResourceCategory::Layer,
+        ResourceCategory::MindWave,          ResourceCategory::ToolPreset,
+        ResourceCategory::MindShot,          ResourceCategory::ResonanceProfile,
+        ResourceCategory::FilterPreset,      ResourceCategory::ConvolutionKernel,
+        ResourceCategory::MindGrain,         ResourceCategory::Layer,
     };
     for (const ResourceCategory category : kCategories) {
         categoryCombo_->addItem(categoryLabel(category), static_cast<int>(category));

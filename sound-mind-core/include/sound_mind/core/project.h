@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/core/convolution_kernel.h"
+#include "sound_mind/core/filter_preset.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -538,10 +539,16 @@ public:
      *        not enforced here.
      * @param spectrum The already-computed spectrum itself (see
      *        `computeWaveKernelSignature()`, `resonant_instrument.h`).
+     * @param sourceCurve The `CurveGraph` `spectrum` was computed from, if
+     *        the caller has one - see `NamedResonanceProfile::sourceCurve`'s
+     *        own docs. Defaults to an empty graph (the only behavior that
+     *        existed before this parameter), for every caller with no
+     *        curve to offer.
      * @return The id assigned to the new entry - see `addLayer()`'s own
      *         docs for the identical "fresh, project-unique id" pattern.
      */
-    ResonanceProfileId addResonanceProfile(std::string name, std::vector<float> spectrum);
+    ResonanceProfileId addResonanceProfile(std::string name, std::vector<float> spectrum,
+                                            CurveGraph sourceCurve = CurveGraph{});
 
     /**
      * @brief Removes the Resonance profile with the given id, if
@@ -708,6 +715,66 @@ public:
     [[nodiscard]] NamedToolPreset* toolPresetById(ToolPresetId id) noexcept;
 
     /**
+     * @brief This project's Filter Preset library - the Filter-layer
+     *        counterpart to `toolPresets()` (see `NamedFilterPreset`'s own
+     *        docs), the same "peer resource library" shape every other
+     *        library here already establishes.
+     * @return This project's current Filter Preset library.
+     */
+    [[nodiscard]] const std::vector<NamedFilterPreset>& filterPresets() const noexcept { return filterPresets_; }
+
+    /// @brief This project's Filter Preset library - mutable access, for
+    ///        in-place edits (renaming) that don't change the library's
+    ///        own membership (addFilterPreset() is still how a new entry
+    ///        gets appended).
+    /// @return This project's current Filter Preset library.
+    [[nodiscard]] std::vector<NamedFilterPreset>& filterPresets() noexcept { return filterPresets_; }
+
+    /**
+     * @brief Adds a new, named Filter Preset to this project's library - a
+     *        real copy of `config`, not a reference (see
+     *        `NamedFilterPreset`'s own docs).
+     * @param name Display name - see `NamedFilterPreset::name`'s own docs
+     *        on uniqueness being this project's own responsibility, not
+     *        enforced here.
+     * @param config The configuration to save.
+     * @return The id assigned to the new entry - see `addLayer()`'s own
+     *         docs for the identical "fresh, project-unique id" pattern.
+     */
+    FilterPresetId addFilterPreset(std::string name, const FilterConfiguration& config);
+
+    /**
+     * @brief Removes the Filter Preset with the given id, if one exists.
+     *
+     * Does **not** affect any `FilterConfigurationPanel`/`Layer` that
+     * already loaded this preset's own configuration - see
+     * `removeToolPreset()`'s own docs for the identical "a loaded copy is
+     * independent, not a live reference" reasoning.
+     *
+     * @param id The Filter Preset to remove.
+     * @return `true` if a Filter Preset with this id was found and
+     *         removed; `false` (no change) if none was.
+     */
+    bool removeFilterPreset(FilterPresetId id);
+
+    /**
+     * @brief Finds the Filter Preset library entry with the given id, if
+     *        one exists - the same "small, project-level lookup"
+     *        `layerById()`/`toolPresetById()` already provide.
+     * @param id The entry to find.
+     * @return A pointer to that entry, or `nullptr` if no Filter Preset
+     *         with this id exists in this project's library.
+     */
+    [[nodiscard]] const NamedFilterPreset* filterPresetById(FilterPresetId id) const noexcept;
+
+    /// @brief Mutable overload of filterPresetById() - for in-place edits
+    ///        (renaming).
+    /// @param id The entry to find.
+    /// @return A mutable pointer to that entry, or `nullptr` if no Filter
+    ///         Preset with this id exists in this project's library.
+    [[nodiscard]] NamedFilterPreset* filterPresetById(FilterPresetId id) noexcept;
+
+    /**
      * @brief This project's own MIDI Configuration - which saved Tool
      *        Preset, duration scale, and pitch offset a given General MIDI
      *        program paints through on import - `v0.Y.55.1`'s own MIDI
@@ -763,6 +830,7 @@ private:
     std::vector<NamedResonanceProfile> resonanceProfiles_;
     std::vector<NamedConvolutionKernel> convolutionKernels_;
     std::vector<NamedToolPreset> toolPresets_;
+    std::vector<NamedFilterPreset> filterPresets_;
     std::vector<MidiProgramMapping> midiProgramMappings_;
 };
 

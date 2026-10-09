@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <functional>
+#include <string_view>
 
 #include <QFileDialog>
 #include <QImage>
@@ -15,7 +17,10 @@
 #include <nlohmann/json.hpp>
 
 #include "sound_mind/codec/color_mapping.h"
+#include "sound_mind/codec/rgb_image_resample.h"
 #include "sound_mind/core/mind_shot_preview.h"
+#include "sound_mind/core/paint_application.h"
+#include "sound_mind/core/path.h"
 #include "sound_mind/core/resource_file.h"
 #include "sound_mind/studio/qt_image_conversion.h"
 #include "sound_mind/studio/resource_browser_panel.h"
@@ -25,12 +30,18 @@ namespace sound_mind::studio {
 namespace {
 
 using sound_mind::core::ConvolutionKernelId;
+using sound_mind::core::FilterPresetId;
 using sound_mind::core::MindGrainId;
 using sound_mind::core::MindShotId;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::Project;
 using sound_mind::core::ResonanceProfileId;
 using sound_mind::core::ToolPresetId;
+
+/// @brief The inspector raster area's own fixed size, shared by every
+/// category that renders one (MindWave, Mind Shot, Resonance Profile).
+constexpr int kRasterWidth = 240;
+constexpr int kRasterHeight = 80;
 
 QString toolTypeLabel(sound_mind::core::ToolType type) {
     switch (type) {
@@ -65,9 +76,7 @@ QString toolTypeLabel(sound_mind::core::ToolType type) {
 /// a 1-D spectrum has, distinct from a Mind Shot's own 2-D spectrogram
 /// raster.
 QImage renderSpectrumImage(const std::vector<float>& spectrum) {
-    constexpr int kWidth = 240;
-    constexpr int kHeight = 80;
-    QImage image(kWidth, kHeight, QImage::Format_RGB888);
+    QImage image(kRasterWidth, kRasterHeight, QImage::Format_RGB888);
     image.fill(Qt::black);
     if (spectrum.empty()) {
         return image;
@@ -75,14 +84,132 @@ QImage renderSpectrumImage(const std::vector<float>& spectrum) {
 
     QPainter painter(&image);
     painter.setPen(Qt::green);
-    const double stepX = static_cast<double>(kWidth) / static_cast<double>(spectrum.size());
+    const double stepX = static_cast<double>(kRasterWidth) / static_cast<double>(spectrum.size());
     for (std::size_t i = 0; i < spectrum.size(); ++i) {
         const double x = static_cast<double>(i) * stepX;
         const double value = std::clamp(spectrum[i], 0.0f, 1.0f);
-        const double barHeight = value * kHeight;
-        painter.drawLine(QPointF(x, kHeight), QPointF(x, kHeight - barHeight));
+        const double barHeight = value * kRasterHeight;
+        painter.drawLine(QPointF(x, kRasterHeight), QPointF(x, kRasterHeight - barHeight));
     }
     return image;
+}
+
+/// @brief Renders a Tool Preset's own configuration as a straight,
+/// diagonal 3-second stroke from 3 kHz to 5 kHz - confirmed with the
+/// user as the Resource Browser's own Tool Preset preview. A
+/// `NamedToolPreset` carries no `Path`/gradient of its own to reuse (see
+/// that struct's own docs on why - a tool configuration is reusable
+/// across strokes precisely because it isn't tied to one), so this
+/// preview picks a fixed, fully-opaque default gradient deliberately,
+/// rather than trying to guess one.
+QImage renderToolPresetPreview(const sound_mind::core::ToolConfiguration& config, const Project& project) {
+    using namespace sound_mind::core;
+
+    const auto codecConfig = streamCodecConfigFor(project.settings());
+    const double scale = frequencyToTimeScaleFor(project.settings());
+
+    Path path;
+    PathNode start;
+    start.anchor = TimeFrequencyPoint{0.0, 3000.0};
+    start.type = PathNodeType::Corner;
+    path.addNode(start);
+    PathNode end;
+    end.anchor = TimeFrequencyPoint{3.0, 5000.0};
+    end.type = PathNodeType::Corner;
+    path.addNode(end);
+    GradientStop stop = path.gradient().stops().front();
+    stop.leftIntensity = 0.0f;
+    stop.rightIntensity = 0.0f;
+    stop.leftOpacity = 1.0f;
+    stop.rightOpacity = 1.0f;
+    path.gradient().setStopValues(0, stop);
+    path.gradient().setStopValues(1, stop);
+
+    const auto frameCount =
+        static_cast<std::uint32_t>(std::lround(3.0 * codecConfig.sampleRateHz / codecConfig.hopLength));
+    sound_mind::codec::StreamImage content;
+    content.config = codecConfig;
+    content.frameCount = frameCount;
+    content.sampleCount = static_cast<std::uint64_t>(frameCount) * codecConfig.hopLength;
+    // -96 dB, this codebase's established silence floor (see Project::
+    // createNew()'s own Equalizer default) - a quiet, not literally
+    // empty, backdrop the stroke itself stands out starkly against.
+    content.leftMagnitudeDb.assign(std::size_t{codecConfig.binCount} * frameCount, -96.0f);
+    content.rightMagnitudeDb.assign(std::size_t{codecConfig.binCount} * frameCount, -96.0f);
+    content.sharedPhaseRadians.assign(std::size_t{codecConfig.binCount} * frameCount, 0.0f);
+
+    const PaintOperation op(OperationId{0}, LayerId{0}, path, config.clone());
+    const MindWaveResolver resolveMindWave = [&project](MindWaveId mindWaveId) -> const MindWave* {
+        const auto* entry = project.mindWaveById(mindWaveId);
+        return entry != nullptr ? &entry->wave : nullptr;
+    };
+    applyPaintOperation(op, scale, content, /*resolveLayerContent=*/{}, resolveMindWave);
+
+    const auto rgb = sound_mind::codec::toRgbImage(content);
+    const auto downsampled = sound_mind::codec::downsampleAveraged(rgb, kRasterWidth, kRasterHeight);
+    return toQImageView(downsampled).copy();
+}
+
+/// @brief Renders a `CurveGraph`'s own shape (every edge, as a straight
+/// line between its two endpoints - exactly what a `CurveGraph` actually
+/// represents, see that class's own docs) into a fixed-size image -
+/// confirmed with the user as the Resonance Profile inspector's own
+/// "also show the path/branching curve rendered, next to the spectrum
+/// profile." A uniform scale (not a stretch-to-fit) keeps the curve's
+/// own real proportions, since `CurvePoint::x`/`y` are already
+/// comparable units (see that struct's own docs).
+QImage renderCurveGraphImage(const sound_mind::core::CurveGraph& graph) {
+    QImage image(kRasterWidth, kRasterHeight, QImage::Format_RGB888);
+    image.fill(Qt::black);
+    const auto& nodes = graph.nodes();
+    if (nodes.empty()) {
+        return image;
+    }
+
+    double minX = nodes.front().position.x;
+    double maxX = minX;
+    double minY = nodes.front().position.y;
+    double maxY = minY;
+    for (const auto& node : nodes) {
+        minX = std::min(minX, node.position.x);
+        maxX = std::max(maxX, node.position.x);
+        minY = std::min(minY, node.position.y);
+        maxY = std::max(maxY, node.position.y);
+    }
+    const double spanX = std::max(maxX - minX, 1e-6);
+    const double spanY = std::max(maxY - minY, 1e-6);
+    constexpr double kMargin = 8.0;
+    const double scale =
+        std::min((kRasterWidth - 2 * kMargin) / spanX, (kRasterHeight - 2 * kMargin) / spanY);
+    const double offsetX = kMargin + (kRasterWidth - 2 * kMargin - spanX * scale) / 2.0;
+    const double offsetY = kMargin + (kRasterHeight - 2 * kMargin - spanY * scale) / 2.0;
+    const auto toPoint = [&](const sound_mind::core::CurvePoint& p) {
+        return QPointF(offsetX + (p.x - minX) * scale, offsetY + (p.y - minY) * scale);
+    };
+
+    QPainter painter(&image);
+    painter.setPen(Qt::cyan);
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
+        for (const std::size_t neighbor : nodes[i].neighbors) {
+            if (neighbor > i) {
+                painter.drawLine(toPoint(nodes[i].position), toPoint(nodes[neighbor].position));
+            }
+        }
+    }
+    return image;
+}
+
+/// @brief Composes a Resonance Profile's own spectrum plot and source
+/// curve render side by side into one image - see
+/// `renderSpectrumImage()`'s/`renderCurveGraphImage()`'s own docs for
+/// each half. A blank (all-black) right half if `graph` has no nodes
+/// (an entry saved before `sourceCurve` existed).
+QImage renderResonanceInspectorImage(const std::vector<float>& spectrum, const sound_mind::core::CurveGraph& graph) {
+    QImage combined(kRasterWidth * 2, kRasterHeight, QImage::Format_RGB888);
+    QPainter painter(&combined);
+    painter.drawImage(0, 0, renderSpectrumImage(spectrum));
+    painter.drawImage(kRasterWidth, 0, renderCurveGraphImage(graph));
+    return combined;
 }
 
 /// @brief The portable-file extension filter string for a `QFileDialog`,
@@ -104,6 +231,8 @@ std::optional<sound_mind::core::PortableResourceType> portableTypeFor(ResourceCa
             return sound_mind::core::PortableResourceType::ResonanceProfile;
         case ResourceCategory::ConvolutionKernel:
             return sound_mind::core::PortableResourceType::ConvolutionKernel;
+        case ResourceCategory::FilterPreset:
+            return sound_mind::core::PortableResourceType::FilterPreset;
         case ResourceCategory::MindGrain:
         case ResourceCategory::Layer:
             return std::nullopt;
@@ -187,6 +316,11 @@ void ResourceBrowserController::refreshEntries() {
                     rows.push_back({entry.id, QString::fromStdString(entry.name)});
                 }
                 break;
+            case ResourceCategory::FilterPreset:
+                for (const auto& entry : project->filterPresets()) {
+                    rows.push_back({entry.id, QString::fromStdString(entry.name)});
+                }
+                break;
             case ResourceCategory::MindGrain:
                 for (const auto& entry : project->mindGrains()) {
                     rows.push_back({entry.id, QString::fromStdString(entry.name)});
@@ -228,6 +362,17 @@ void ResourceBrowserController::refreshInspector() {
             }
             name = QString::fromStdString(entry->name);
             parameterText = QString::fromStdString(nlohmann::json(entry->wave).dump(2));
+
+            // The same evaluate-then-grayscale pipeline MindWavesPanel's
+            // own per-row mini-preview already uses
+            // (MindWaveController::refreshMindWavesPanel()).
+            const auto config = sound_mind::core::streamCodecConfigFor(project->settings());
+            const auto field =
+                sound_mind::core::evaluateMindWaveField(entry->wave, config, project->settings().canvasWidth);
+            const auto grayscale =
+                sound_mind::codec::toGrayscaleImage(field, project->settings().canvasWidth, config.binCount);
+            const auto downsampled = sound_mind::codec::downsampleAveraged(grayscale, kRasterWidth, kRasterHeight);
+            raster = toQImageView(downsampled).copy();
             break;
         }
         case ResourceCategory::ToolPreset: {
@@ -240,6 +385,7 @@ void ResourceBrowserController::refreshInspector() {
             nlohmann::json json;
             sound_mind::core::to_json(json, *entry->config);
             parameterText = QString::fromStdString(json.dump(2));
+            raster = renderToolPresetPreview(*entry->config, *project);
             break;
         }
         case ResourceCategory::MindShot: {
@@ -270,8 +416,10 @@ void ResourceBrowserController::refreshInspector() {
                 return;
             }
             name = QString::fromStdString(entry->name);
-            parameterText = QObject::tr("spectrum: %1 values").arg(entry->spectrum.size());
-            raster = renderSpectrumImage(entry->spectrum);
+            parameterText = QObject::tr("spectrum: %1 values\nsourceCurve: %2 nodes")
+                                .arg(entry->spectrum.size())
+                                .arg(entry->sourceCurve.nodes().size());
+            raster = renderResonanceInspectorImage(entry->spectrum, entry->sourceCurve);
             break;
         }
         case ResourceCategory::ConvolutionKernel: {
@@ -283,6 +431,18 @@ void ResourceBrowserController::refreshInspector() {
             name = QString::fromStdString(entry->name);
             nlohmann::json json;
             sound_mind::core::to_json(json, *entry);
+            parameterText = QString::fromStdString(json.dump(2));
+            break;
+        }
+        case ResourceCategory::FilterPreset: {
+            const auto* entry = project->filterPresetById(static_cast<FilterPresetId>(*id));
+            if (entry == nullptr) {
+                panel_->clearInspector();
+                return;
+            }
+            name = QString::fromStdString(entry->name);
+            nlohmann::json json;
+            sound_mind::core::to_json(json, entry->config);
             parameterText = QString::fromStdString(json.dump(2));
             break;
         }
@@ -356,6 +516,10 @@ bool ResourceBrowserController::exportSelectedEntry(const std::filesystem::path&
                 sound_mind::core::exportConvolutionKernel(
                     *project->convolutionKernelById(static_cast<ConvolutionKernelId>(*id)), path);
                 break;
+            case ResourceCategory::FilterPreset:
+                sound_mind::core::exportFilterPreset(*project->filterPresetById(static_cast<FilterPresetId>(*id)),
+                                                      path);
+                break;
             case ResourceCategory::MindGrain:
             case ResourceCategory::Layer:
                 return false;
@@ -415,6 +579,11 @@ bool ResourceBrowserController::importFromFile(const std::filesystem::path& path
                 project_->addConvolutionKernel(entry.name, entry.size, entry.coefficients, entry.normalize);
                 break;
             }
+            case ResourceCategory::FilterPreset: {
+                const auto entry = sound_mind::core::importFilterPreset(path);
+                project_->addFilterPreset(entry.name, entry.config);
+                break;
+            }
             case ResourceCategory::MindGrain:
             case ResourceCategory::Layer:
                 return false;
@@ -470,6 +639,11 @@ void ResourceBrowserController::handleImportEntryRequested() {
         case ResourceCategory::ConvolutionKernel:
             if (const auto* entry = browsedProject_->convolutionKernelById(static_cast<ConvolutionKernelId>(*id))) {
                 project_->addConvolutionKernel(entry->name, entry->size, entry->coefficients, entry->normalize);
+            }
+            break;
+        case ResourceCategory::FilterPreset:
+            if (const auto* entry = browsedProject_->filterPresetById(static_cast<FilterPresetId>(*id))) {
+                project_->addFilterPreset(entry->name, entry->config);
             }
             break;
         case ResourceCategory::Layer:
@@ -575,69 +749,156 @@ void ResourceBrowserController::refreshToolkitEntries() {
 }
 
 void ResourceBrowserController::handleAddToToolkitRequested() {
+    const QStringList autoAddedNames = addSelectedEntryToToolkit();
+    if (!autoAddedNames.isEmpty()) {
+        QMessageBox::information(
+            panel_, QObject::tr("Dependencies Added"),
+            QObject::tr("Also added to the Toolkit draft, since the selected entry depends on it:\n\n%1")
+                .arg(autoAddedNames.join(QStringLiteral("\n"))));
+    }
+}
+
+QStringList ResourceBrowserController::addSelectedEntryToToolkit() {
     const Project* project = activeProject();
     const std::optional<std::uint64_t> id = panel_->selectedEntryId();
     const auto portableType = portableTypeFor(panel_->selectedCategory());
+    QStringList autoAddedNames;
     if (project == nullptr || !id.has_value() || !portableType.has_value()) {
-        return;
+        return autoAddedNames;
+    }
+
+    if (addToolkitEntryWithDependencies(*portableType, *id, *project, autoAddedNames)) {
+        refreshToolkitEntries();
+    }
+    return autoAddedNames;
+}
+
+bool ResourceBrowserController::resolveResourceForToolkit(sound_mind::core::PortableResourceType type,
+                                                           std::uint64_t id, const Project& project,
+                                                           nlohmann::json& outResource, QString& outDisplayName) {
+    switch (type) {
+        case sound_mind::core::PortableResourceType::MindWave: {
+            const auto* entry = project.mindWaveById(static_cast<MindWaveId>(id));
+            if (entry == nullptr) {
+                return false;
+            }
+            outResource = *entry;
+            outDisplayName = QObject::tr("%1 (MindWave)").arg(QString::fromStdString(entry->name));
+            return true;
+        }
+        case sound_mind::core::PortableResourceType::ToolPreset: {
+            const auto* entry = project.toolPresetById(static_cast<ToolPresetId>(id));
+            if (entry == nullptr || !entry->config) {
+                return false;
+            }
+            outResource = *entry;
+            outDisplayName =
+                QObject::tr("%1 (%2)").arg(QString::fromStdString(entry->name), toolTypeLabel(entry->config->type()));
+            return true;
+        }
+        case sound_mind::core::PortableResourceType::MindShot: {
+            const auto* entry = project.mindShotById(static_cast<MindShotId>(id));
+            if (entry == nullptr) {
+                return false;
+            }
+            outResource = *entry;
+            outDisplayName = QObject::tr("%1 (Mind Shot)").arg(QString::fromStdString(entry->name));
+            return true;
+        }
+        case sound_mind::core::PortableResourceType::ResonanceProfile: {
+            const auto* entry = project.resonanceProfileById(static_cast<ResonanceProfileId>(id));
+            if (entry == nullptr) {
+                return false;
+            }
+            outResource = *entry;
+            outDisplayName = QObject::tr("%1 (Resonance Profile)").arg(QString::fromStdString(entry->name));
+            return true;
+        }
+        case sound_mind::core::PortableResourceType::ConvolutionKernel: {
+            const auto* entry = project.convolutionKernelById(static_cast<ConvolutionKernelId>(id));
+            if (entry == nullptr) {
+                return false;
+            }
+            outResource = *entry;
+            outDisplayName = QObject::tr("%1 (Convolution Kernel)").arg(QString::fromStdString(entry->name));
+            return true;
+        }
+        case sound_mind::core::PortableResourceType::FilterPreset: {
+            const auto* entry = project.filterPresetById(static_cast<FilterPresetId>(id));
+            if (entry == nullptr) {
+                return false;
+            }
+            outResource = *entry;
+            outDisplayName = QObject::tr("%1 (Filter Preset)").arg(QString::fromStdString(entry->name));
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<ResourceBrowserController::ResourceDependency> ResourceBrowserController::findDependencies(
+    const nlohmann::json& resourceJson) {
+    std::vector<ResourceDependency> dependencies;
+    std::function<void(const nlohmann::json&)> scan = [&](const nlohmann::json& node) {
+        if (node.is_object()) {
+            for (auto it = node.begin(); it != node.end(); ++it) {
+                const std::string& key = it.key();
+                if (it->is_number_integer()) {
+                    constexpr std::string_view kMindWaveIdSuffix = "MindWaveId";
+                    if (key.size() > kMindWaveIdSuffix.size() &&
+                        key.compare(key.size() - kMindWaveIdSuffix.size(), kMindWaveIdSuffix.size(),
+                                    kMindWaveIdSuffix) == 0) {
+                        dependencies.push_back(
+                            {sound_mind::core::PortableResourceType::MindWave, it->get<std::uint64_t>()});
+                    } else if (key == "sourceMindShotId") {
+                        dependencies.push_back(
+                            {sound_mind::core::PortableResourceType::MindShot, it->get<std::uint64_t>()});
+                    } else if (key == "sourceResonanceProfileId") {
+                        dependencies.push_back(
+                            {sound_mind::core::PortableResourceType::ResonanceProfile, it->get<std::uint64_t>()});
+                    }
+                    // "sourceMindGrainId" deliberately not tracked - Mind
+                    // Grain has no portable form to bundle (see
+                    // docs/sound-mind-architecture.md's "Portable Resource
+                    // Files" table), so there's nothing to add for it.
+                }
+                scan(*it);
+            }
+        } else if (node.is_array()) {
+            for (const auto& item : node) {
+                scan(item);
+            }
+        }
+    };
+    scan(resourceJson);
+    return dependencies;
+}
+
+bool ResourceBrowserController::addToolkitEntryWithDependencies(sound_mind::core::PortableResourceType type,
+                                                                 std::uint64_t id, const Project& project,
+                                                                 QStringList& autoAddedNames, bool isDependency) {
+    for (const ToolkitDraftEntry& existing : toolkitDraft_) {
+        if (existing.type == type && existing.sourceId == id) {
+            return true;  // Already in the draft - nothing more to do.
+        }
     }
 
     nlohmann::json resource;
     QString displayName;
-    switch (panel_->selectedCategory()) {
-        case ResourceCategory::MindWave: {
-            const auto* entry = project->mindWaveById(static_cast<MindWaveId>(*id));
-            if (entry == nullptr) {
-                return;
-            }
-            resource = *entry;
-            displayName = QObject::tr("%1 (MindWave)").arg(QString::fromStdString(entry->name));
-            break;
-        }
-        case ResourceCategory::ToolPreset: {
-            const auto* entry = project->toolPresetById(static_cast<ToolPresetId>(*id));
-            if (entry == nullptr || !entry->config) {
-                return;
-            }
-            resource = *entry;
-            displayName =
-                QObject::tr("%1 (%2)").arg(QString::fromStdString(entry->name), toolTypeLabel(entry->config->type()));
-            break;
-        }
-        case ResourceCategory::MindShot: {
-            const auto* entry = project->mindShotById(static_cast<MindShotId>(*id));
-            if (entry == nullptr) {
-                return;
-            }
-            resource = *entry;
-            displayName = QObject::tr("%1 (Mind Shot)").arg(QString::fromStdString(entry->name));
-            break;
-        }
-        case ResourceCategory::ResonanceProfile: {
-            const auto* entry = project->resonanceProfileById(static_cast<ResonanceProfileId>(*id));
-            if (entry == nullptr) {
-                return;
-            }
-            resource = *entry;
-            displayName = QObject::tr("%1 (Resonance Profile)").arg(QString::fromStdString(entry->name));
-            break;
-        }
-        case ResourceCategory::ConvolutionKernel: {
-            const auto* entry = project->convolutionKernelById(static_cast<ConvolutionKernelId>(*id));
-            if (entry == nullptr) {
-                return;
-            }
-            resource = *entry;
-            displayName = QObject::tr("%1 (Filter)").arg(QString::fromStdString(entry->name));
-            break;
-        }
-        case ResourceCategory::MindGrain:
-        case ResourceCategory::Layer:
-            return;
+    if (!resolveResourceForToolkit(type, id, project, resource, displayName)) {
+        return false;
     }
 
-    toolkitDraft_.push_back({*portableType, std::move(resource), displayName});
-    refreshToolkitEntries();
+    toolkitDraft_.push_back({type, id, resource, displayName});
+    if (isDependency) {
+        autoAddedNames.push_back(displayName);
+    }
+
+    for (const ResourceDependency& dependency : findDependencies(resource)) {
+        addToolkitEntryWithDependencies(dependency.type, dependency.id, project, autoAddedNames,
+                                         /*isDependency=*/true);
+    }
+    return true;
 }
 
 void ResourceBrowserController::handleRemoveFromToolkitRequested(int index) {
@@ -709,6 +970,11 @@ void ResourceBrowserController::applyToolkitEntry(sound_mind::core::PortableReso
         case sound_mind::core::PortableResourceType::ConvolutionKernel: {
             const auto entry = resource.get<sound_mind::core::NamedConvolutionKernel>();
             target.addConvolutionKernel(entry.name, entry.size, entry.coefficients, entry.normalize);
+            return;
+        }
+        case sound_mind::core::PortableResourceType::FilterPreset: {
+            const auto entry = resource.get<sound_mind::core::NamedFilterPreset>();
+            target.addFilterPreset(entry.name, entry.config);
             return;
         }
     }

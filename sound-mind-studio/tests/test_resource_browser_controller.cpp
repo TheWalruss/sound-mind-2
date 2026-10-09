@@ -13,13 +13,20 @@
 
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/core/resonant_instrument.h"
 #include "sound_mind/core/resource_file.h"
 #include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/resource_browser_controller.h"
 #include "sound_mind/studio/resource_browser_panel.h"
 
+using sound_mind::core::CurveGraph;
+using sound_mind::core::CurvePoint;
+using sound_mind::core::FilterConfiguration;
+using sound_mind::core::FilterType;
 using sound_mind::core::MindWave;
+using sound_mind::core::MindWaveId;
 using sound_mind::core::NamedConvolutionKernel;
+using sound_mind::core::NamedFilterPreset;
 using sound_mind::core::NamedMindWave;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
@@ -404,4 +411,125 @@ void ResourceBrowserControllerTest::toolkitDraftEntryIsASnapshotUnaffectedByLate
     QCOMPARE(exportedWave.wave.period(), 1.0);
 
     std::filesystem::remove(path);
+}
+
+void ResourceBrowserControllerTest::filterPresetCategoryListsExportsAndImports() {
+    Fixture fixture;
+    FilterConfiguration config;
+    config.setType(FilterType::Sharpen);
+    config.setSharpenAmount(0.6f);
+    fixture.project.addFilterPreset("My Sharpen Preset", config);
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::FilterPreset);
+
+    auto* list = fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"));
+    QCOMPARE(list->count(), 1);
+    QCOMPARE(list->item(0)->text(), QStringLiteral("My Sharpen Preset"));
+    list->setCurrentRow(0);
+
+    const std::filesystem::path path = scratchPath("preset.smfilter");
+    QString errorMessage;
+    QVERIFY(fixture.controller.exportSelectedEntry(path, &errorMessage));
+    QVERIFY(fixture.controller.importFromFile(path, &errorMessage));
+    QCOMPARE(fixture.project.filterPresets().size(), std::size_t{2});
+    QCOMPARE(fixture.project.filterPresets()[1].config.type(), FilterType::Sharpen);
+
+    std::filesystem::remove(path);
+}
+
+void ResourceBrowserControllerTest::selectingAMindWaveRendersAPreviewRaster() {
+    Fixture fixture;
+    fixture.project.addMindWave("My Wave", MindWave{});
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::MindWave);
+
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    QVERIFY(!fixture.panel.findChild<QLabel*>(QStringLiteral("inspectorRasterLabel"))->isHidden());
+}
+
+void ResourceBrowserControllerTest::selectingAToolPresetRendersAStrokePreviewRaster() {
+    Fixture fixture;
+    fixture.project.addToolPreset("My Brush", ProceduralConfiguration{});
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::ToolPreset);
+
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    QVERIFY(!fixture.panel.findChild<QLabel*>(QStringLiteral("inspectorRasterLabel"))->isHidden());
+}
+
+void ResourceBrowserControllerTest::selectingAResonanceProfileRendersItsSourceCurveAlongsideTheSpectrum() {
+    Fixture fixture;
+    CurveGraph graph;
+    const std::size_t a = graph.addNode(CurvePoint{0.0, 0.0});
+    const std::size_t b = graph.addNode(CurvePoint{1.0, 1.0});
+    graph.addEdge(a, b);
+    fixture.project.addResonanceProfile("My Resonance", {0.1f, 0.5f, 1.0f}, graph);
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::ResonanceProfile);
+
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    QVERIFY(!fixture.panel.findChild<QLabel*>(QStringLiteral("inspectorRasterLabel"))->isHidden());
+    QVERIFY(fixture.panel.findChild<QPlainTextEdit*>(QStringLiteral("inspectorParametersEdit"))
+                ->toPlainText()
+                .contains(QStringLiteral("sourceCurve: 2 nodes")));
+}
+
+void ResourceBrowserControllerTest::addingAMindWaveBoundToolPresetToToolkitAlsoAddsTheMindWaveAndNotifies() {
+    Fixture fixture;
+    const MindWaveId waveId = fixture.project.addMindWave("Driving Wave", MindWave{});
+    ProceduralConfiguration config;
+    config.setOpacityMindWave(waveId);
+    fixture.project.addToolPreset("Bound Brush", config);
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::ToolPreset);
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    const QStringList autoAdded = fixture.controller.addSelectedEntryToToolkit();
+
+    QCOMPARE(autoAdded.size(), 1);
+    QVERIFY(autoAdded.front().contains(QStringLiteral("Driving Wave")));
+    auto* toolkitList = fixture.panel.findChild<QListWidget*>(QStringLiteral("toolkitEntriesList"));
+    QCOMPARE(toolkitList->count(), 2);
+}
+
+void ResourceBrowserControllerTest::addingAnEntryWithNoDependenciesNeverNotifies() {
+    Fixture fixture;
+    fixture.project.addMindWave("Lone Wave", MindWave{});
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::MindWave);
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    const QStringList autoAdded = fixture.controller.addSelectedEntryToToolkit();
+
+    QVERIFY(autoAdded.isEmpty());
+    QCOMPARE(fixture.panel.findChild<QListWidget*>(QStringLiteral("toolkitEntriesList"))->count(), 1);
+}
+
+void ResourceBrowserControllerTest::addingTheSameDependencyTwiceDoesNotDuplicateIt() {
+    Fixture fixture;
+    const MindWaveId waveId = fixture.project.addMindWave("Shared Wave", MindWave{});
+    ProceduralConfiguration first;
+    first.setOpacityMindWave(waveId);
+    ProceduralConfiguration second;
+    second.setSizeMindWave(waveId);
+    fixture.project.addToolPreset("Brush One", first);
+    fixture.project.addToolPreset("Brush Two", second);
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::ToolPreset);
+    auto* list = fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"));
+
+    list->setCurrentRow(0);
+    const QStringList firstAutoAdded = fixture.controller.addSelectedEntryToToolkit();
+    list->setCurrentRow(1);
+    const QStringList secondAutoAdded = fixture.controller.addSelectedEntryToToolkit();
+
+    QCOMPARE(firstAutoAdded.size(), 1);
+    // The shared MindWave was already in the draft from the first add - no
+    // second copy, and nothing to report this time.
+    QVERIFY(secondAutoAdded.isEmpty());
+    auto* toolkitList = fixture.panel.findChild<QListWidget*>(QStringLiteral("toolkitEntriesList"));
+    QCOMPARE(toolkitList->count(), 3);  // Brush One, Brush Two, Shared Wave (once).
 }

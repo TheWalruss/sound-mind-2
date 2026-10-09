@@ -19,6 +19,10 @@ using sound_mind::codec::StreamImage;
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::Clip;
 using sound_mind::core::ConvolutionKernelId;
+using sound_mind::core::CurveGraph;
+using sound_mind::core::CurvePoint;
+using sound_mind::core::FilterConfiguration;
+using sound_mind::core::FilterPresetId;
 using sound_mind::core::FilterType;
 using sound_mind::core::Layer;
 using sound_mind::core::LayerId;
@@ -621,6 +625,102 @@ TEST_CASE("A Project saved before the Tool Preset library existed loads with an 
     REQUIRE(restored.toolPresets().empty());
 }
 
+TEST_CASE("A new Project has no saved Filter Presets", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.filterPresets().empty());
+}
+
+TEST_CASE("addFilterPreset appends a named copy with a fresh, unique id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    FilterConfiguration config;
+    config.setType(FilterType::UniformBlur);
+    config.setBlurSigma(2.5);
+
+    const FilterPresetId firstId = project.addFilterPreset("My Blur", config);
+    const FilterPresetId secondId = project.addFilterPreset("Another Blur", config);
+
+    REQUIRE(firstId != secondId);
+    REQUIRE(project.filterPresets().size() == 2);
+    REQUIRE(project.filterPresets()[0].id == firstId);
+    REQUIRE(project.filterPresets()[0].name == "My Blur");
+    REQUIRE(project.filterPresets()[0].config.type() == FilterType::UniformBlur);
+    REQUIRE(project.filterPresets()[0].config.blurSigma() == 2.5);
+}
+
+TEST_CASE("filterPresetById finds the entry with a matching id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    FilterConfiguration config;
+    config.setType(FilterType::Sharpen);
+    const FilterPresetId id = project.addFilterPreset("My Sharpen", config);
+
+    const auto* found = project.filterPresetById(id);
+
+    REQUIRE(found != nullptr);
+    REQUIRE(found->name == "My Sharpen");
+    REQUIRE(found->config.type() == FilterType::Sharpen);
+}
+
+TEST_CASE("filterPresetById returns nullptr for an unknown id", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.filterPresetById(FilterPresetId{999}) == nullptr);
+}
+
+TEST_CASE("filterPresetById's mutable overload allows in-place edits", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const FilterPresetId id = project.addFilterPreset("My Filter", FilterConfiguration{});
+
+    auto* found = project.filterPresetById(id);
+    REQUIRE(found != nullptr);
+    found->name = "Renamed";
+
+    REQUIRE(project.filterPresetById(id)->name == "Renamed");
+}
+
+TEST_CASE("removeFilterPreset removes the entry with the given id and returns true", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const FilterPresetId id = project.addFilterPreset("My Filter", FilterConfiguration{});
+
+    const bool removed = project.removeFilterPreset(id);
+
+    REQUIRE(removed);
+    REQUIRE(project.filterPresets().empty());
+}
+
+TEST_CASE("removeFilterPreset returns false and changes nothing for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    project.addFilterPreset("My Filter", FilterConfiguration{});
+
+    const bool removed = project.removeFilterPreset(FilterPresetId{999999});
+
+    REQUIRE_FALSE(removed);
+    REQUIRE(project.filterPresets().size() == 1);
+}
+
+TEST_CASE("A Project's Filter Preset library round-trips through JSON", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    FilterConfiguration config;
+    config.setType(FilterType::Sharpen);
+    const FilterPresetId id = original.addFilterPreset("My Sharpen", config);
+
+    const nlohmann::json json = original;
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.filterPresets().size() == 1);
+    REQUIRE(restored.filterPresets()[0].id == id);
+    REQUIRE(restored.filterPresets()[0].name == "My Sharpen");
+    REQUIRE(restored.filterPresets()[0].config.type() == FilterType::Sharpen);
+}
+
+TEST_CASE("A Project saved before the Filter Preset library existed loads with an empty one", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    nlohmann::json json = original;
+    json.erase("filterPresets");
+
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.filterPresets().empty());
+}
+
 TEST_CASE("Copying a Project deep-clones its own Tool Preset library, independent of the original",
           "[core][project]") {
     Project original = Project::createNew(ProjectSettings{});
@@ -922,6 +1022,43 @@ TEST_CASE("A Project's Resonance profile library round-trips through JSON", "[co
     REQUIRE(restored.resonanceProfiles()[0].id == id);
     REQUIRE(restored.resonanceProfiles()[0].name == "Wire Loop");
     REQUIRE(restored.resonanceProfiles()[0].spectrum == std::vector<float>{0.1f, 0.5f, 1.0f});
+}
+
+TEST_CASE("addResonanceProfile stores the source curve alongside the spectrum, round-tripping through JSON",
+          "[core][project]") {
+    CurveGraph graph;
+    const std::size_t a = graph.addNode(CurvePoint{0.0, 0.0});
+    const std::size_t b = graph.addNode(CurvePoint{1.0, 1.0});
+    graph.addEdge(a, b);
+
+    Project original = Project::createNew(ProjectSettings{});
+    const ResonanceProfileId id = original.addResonanceProfile("Wire Loop", {0.1f, 0.5f, 1.0f}, graph);
+
+    REQUIRE(original.resonanceProfileById(id)->sourceCurve.nodes().size() == 2);
+
+    const nlohmann::json json = original;
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.resonanceProfiles()[0].sourceCurve.nodes().size() == 2);
+    REQUIRE(restored.resonanceProfiles()[0].sourceCurve.nodes()[0].neighbors == std::vector<std::size_t>{1});
+}
+
+TEST_CASE("addResonanceProfile defaults to an empty source curve when none is given", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const ResonanceProfileId id = project.addResonanceProfile("Wire Loop", {0.1f, 0.5f, 1.0f});
+
+    REQUIRE(project.resonanceProfileById(id)->sourceCurve.nodes().empty());
+}
+
+TEST_CASE("A Resonance profile saved before sourceCurve existed loads with an empty curve", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    original.addResonanceProfile("Wire Loop", {0.1f, 0.5f, 1.0f});
+    nlohmann::json json = original;
+    json["resonanceProfiles"][0].erase("sourceCurve");
+
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.resonanceProfiles()[0].sourceCurve.nodes().empty());
 }
 
 TEST_CASE("A Project saved before Resonance profiles existed loads with an empty library",

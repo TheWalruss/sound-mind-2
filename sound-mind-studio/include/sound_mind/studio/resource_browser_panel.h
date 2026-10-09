@@ -38,6 +38,7 @@ enum class ResourceCategory {
     MindShot,
     ResonanceProfile,
     ConvolutionKernel,
+    FilterPreset,
     MindGrain,
     Layer,
 };

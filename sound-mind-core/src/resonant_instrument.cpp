@@ -155,6 +155,37 @@ bool CurveGraph::addEdge(std::size_t a, std::size_t b) {
     return true;
 }
 
+void to_json(nlohmann::json& json, const CurvePoint& point) { json = nlohmann::json{{"x", point.x}, {"y", point.y}}; }
+
+void from_json(const nlohmann::json& json, CurvePoint& point) {
+    json.at("x").get_to(point.x);
+    json.at("y").get_to(point.y);
+}
+
+void to_json(nlohmann::json& json, const CurveNode& node) {
+    json = nlohmann::json{{"position", node.position}, {"neighbors", node.neighbors}};
+}
+
+void from_json(const nlohmann::json& json, CurveNode& node) {
+    json.at("position").get_to(node.position);
+    json.at("neighbors").get_to(node.neighbors);
+}
+
+void to_json(nlohmann::json& json, const CurveGraph& graph) { json = nlohmann::json{{"nodes", graph.nodes()}}; }
+
+void from_json(const nlohmann::json& json, CurveGraph& graph) {
+    graph = CurveGraph{};
+    const auto nodesJson = json.at("nodes").get<std::vector<CurveNode>>();
+    for (const CurveNode& node : nodesJson) {
+        graph.addNode(node.position);
+    }
+    for (std::size_t i = 0; i < nodesJson.size(); ++i) {
+        for (const std::size_t neighbor : nodesJson[i].neighbors) {
+            graph.addEdge(i, neighbor);
+        }
+    }
+}
+
 CurveGraph curveGraphFromPath(const Path& path, double frequencyToTimeScale, std::size_t targetNodeCount) {
     CurveGraph graph;
     appendResampledChain(graph, path, frequencyToTimeScale, std::max<std::size_t>(2, targetNodeCount));
