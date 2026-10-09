@@ -1282,6 +1282,13 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     };
     auto openAbout = [this]() { AboutDialog(this).exec(); };
 
+    // Resource Browser's own toggle, promoted from the Configure dropdown
+    // to a top-level menu-bar entry (between View and Help) - confirmed
+    // with the user; unlike the Configure dropdown's other panels, the
+    // Resource Browser is used often enough on its own (not just as one
+    // of many "configure a tool" panels) to warrant one less click.
+    menuBar()->addAction(resourceBrowserPanel_->toggleViewAction());
+
     QMenu* helpMenu = menuBar()->addMenu(tr("&Help"));
     QAction* quickStartAction = helpMenu->addAction(tr("&Quick Start"));
     connect(quickStartAction, &QAction::triggered, this, openQuickStart);
@@ -1448,7 +1455,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     configureMenu->addAction(gridPanel_->toggleViewAction());
     configureMenu->addAction(filterConfigurationPanel_->toggleViewAction());
     configureMenu->addAction(mindWavesPanel_->toggleViewAction());
-    configureMenu->addAction(resourceBrowserPanel_->toggleViewAction());
 
     auto* configureButton = new QToolButton(this);
     configureButton->setObjectName(QStringLiteral("configureButton"));
@@ -1499,6 +1505,32 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // Page (stack_ defaults to index 0) until New/Open Project actually
     // creates or loads one - see setProject()'s and isShowingLandingPage()'s
     // docs.
+
+    // Default dock layout: every panel above was added to
+    // Qt::RightDockWidgetArea on its own, which (once more than one is
+    // visible at a time) would otherwise stack them vertically, each
+    // getting only a thin slice of the available height. Confirmed with
+    // the user: opening a panel should instead default to a maximized,
+    // tabbed arrangement in that same space - dragging a tab back out
+    // into its own stack still works exactly as before, this only
+    // changes where a *newly opened* panel starts out. tabifyDockWidget()
+    // requires its first argument to already occupy the target dock area
+    // (true for layersPanel_, the first one added above), and chaining
+    // every other Right-dock-area panel onto it here groups all of them
+    // into one shared tab group.
+    tabifyDockWidget(layersPanel_, mindWavesPanel_);
+    tabifyDockWidget(layersPanel_, resourceBrowserPanel_);
+    tabifyDockWidget(layersPanel_, historyPanel_);
+    tabifyDockWidget(layersPanel_, playbackPanel_);
+    tabifyDockWidget(layersPanel_, toolConfigurationPanel_);
+    tabifyDockWidget(layersPanel_, midiConfigurationPanel_);
+    tabifyDockWidget(layersPanel_, chordGeneratorPanel_);
+    tabifyDockWidget(layersPanel_, configureDevicesPanel_);
+    tabifyDockWidget(layersPanel_, selectionConfigurationPanel_);
+    tabifyDockWidget(layersPanel_, gridPanel_);
+    tabifyDockWidget(layersPanel_, filterConfigurationPanel_);
+    tabifyDockWidget(layersPanel_, recordPanel_);
+    tabifyDockWidget(layersPanel_, loopPanel_);
 }
 
 const sound_mind::core::Project* MainWindow::project() const noexcept {
@@ -3670,11 +3702,17 @@ void MainWindow::saveConvolutionKernel(int size, std::vector<float> coefficients
     if (!project_.has_value()) {
         return;
     }
-    const std::string name = "Kernel " + std::to_string(project_->convolutionKernels().size() + 1);
-    project_->addConvolutionKernel(name, size, std::move(coefficients), normalize);
+    bool ok = false;
+    const QString defaultName = tr("Kernel %1").arg(project_->convolutionKernels().size() + 1);
+    const QString name =
+        QInputDialog::getText(this, tr("Save Kernel"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
+    if (!ok || name.trimmed().isEmpty()) {
+        return;
+    }
+    project_->addConvolutionKernel(name.trimmed().toStdString(), size, std::move(coefficients), normalize);
     refreshConvolutionKernelCombo();
     hasUnsavedChanges_ = true;
-    statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(name)), 5000);
+    statusBar()->showMessage(tr("Saved as \"%1\".").arg(name.trimmed()), 5000);
 }
 
 void MainWindow::refreshConvolutionKernelCombo() {

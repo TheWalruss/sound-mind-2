@@ -440,7 +440,12 @@ void ResourceBrowserController::refreshInspector() {
             const auto config = sound_mind::core::streamCodecConfigFor(project->settings());
             const auto image = sound_mind::core::streamImageFromClip(entry->clip, config);
             raster = toQImageView(sound_mind::codec::toRgbImage(image)).copy();
-            currentPreviewAudio_ = sound_mind::codec::decode(image);
+            // decode() (a full inverse STFT) is the expensive part of a
+            // Mind Shot preview, not the raster render above - deferred to
+            // handlePlayRequested()'s first actual Play click instead of
+            // running on every mere selection.
+            currentPreviewImage_ = image;
+            currentPreviewAudio_ = sound_mind::codec::AudioBuffer{};
             canPlay = true;
             break;
         }
@@ -763,7 +768,15 @@ void ResourceBrowserController::handleReturnToCurrentProjectRequested() {
 
 void ResourceBrowserController::handlePlayRequested() {
     if (currentPreviewAudio_.frameCount() == 0) {
-        return;
+        if (!currentPreviewImage_.has_value()) {
+            return;
+        }
+        // First Play on this selection: decode now and cache, so a second
+        // Play on the same Mind Shot doesn't pay for decode() again.
+        currentPreviewAudio_ = sound_mind::codec::decode(*currentPreviewImage_);
+        if (currentPreviewAudio_.frameCount() == 0) {
+            return;
+        }
     }
     previewEngine_.loadAudio(currentPreviewAudio_);
     previewEngine_.play();

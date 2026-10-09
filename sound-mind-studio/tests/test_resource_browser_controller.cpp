@@ -138,6 +138,45 @@ void ResourceBrowserControllerTest::selectingAMindShotRendersARasterAndEnablesPl
     QVERIFY(!fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"))->isHidden());
 }
 
+void ResourceBrowserControllerTest::playingAMindShotDecodesLazilyOnFirstPlayAndStaysPlayableOnASecondPlay() {
+    // The actual decode (sound_mind::codec::decode(), a full inverse STFT)
+    // used to run eagerly in refreshInspector(), on mere selection - direct
+    // user feedback ("very very slow") - rather than being deferred to the
+    // first Play click. This exercises the real decode path end to end
+    // (not just canPlay's own visibility, which
+    // selectingAMindShotRendersARasterAndEnablesPlay() already covers):
+    // Play must still actually work on first click despite the deferral,
+    // and a second Play on the same selection must still work too (the
+    // cached-decode path).
+    Fixture fixture;
+    sound_mind::core::Clip clip;
+    clip.frameCount = 4;
+    clip.binCount = fixture.project.settings().binCount;
+    clip.leftMagnitudeDb.assign(clip.frameCount * clip.binCount, -20.0f);
+    clip.rightMagnitudeDb.assign(clip.frameCount * clip.binCount, -20.0f);
+    clip.sharedPhaseRadians.assign(clip.frameCount * clip.binCount, 0.0f);
+    fixture.project.addMindShot("My Shot", clip);
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::MindShot);
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    auto* playButton = fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"));
+    auto* stopButton = fixture.panel.findChild<QPushButton*>(QStringLiteral("stopButton"));
+    QVERIFY(playButton != nullptr);
+    QVERIFY(stopButton != nullptr);
+
+    QTest::mouseClick(playButton, Qt::LeftButton);
+    QVERIFY(!stopButton->isHidden());
+
+    QTest::mouseClick(stopButton, Qt::LeftButton);
+    QVERIFY(!playButton->isHidden());
+
+    // Second Play on the same selection - exercises the cached decode
+    // (currentPreviewAudio_ already populated from the first Play above).
+    QTest::mouseClick(playButton, Qt::LeftButton);
+    QVERIFY(!stopButton->isHidden());
+}
+
 void ResourceBrowserControllerTest::exportThenImportFromFileRoundTripsAMindWaveIntoTheProject() {
     Fixture fixture;
     fixture.project.addMindWave("Exported Wave", MindWave{});

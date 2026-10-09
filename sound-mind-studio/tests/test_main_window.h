@@ -287,4 +287,17 @@ private slots:
 
     // Workflow & Device Polish, Installment E: Hardware Acceleration toggle (v0.0.42.5)
     void setHardwareAccelerationEnabledForwardsToCore();
+
+    // saveConvolutionKernel() - confirmed with the user: saving a
+    // convolution kernel now prompts for a name instead of silently
+    // auto-naming it.
+    void saveConvolutionKernelIsANoOpWithNoProjectOpen();
+
+    // Resource Browser toggle promoted to a top-level menu-bar entry,
+    // between View and Help (previously inside the Configure dropdown).
+    void resourceBrowserToggleIsATopLevelMenuBarEntryBetweenViewAndHelp();
+
+    // Default dock layout: every Right-dock-area panel tabs together
+    // instead of stacking vertically.
+    void rightDockAreaPanelsAreTabifiedTogetherByDefault();
 };

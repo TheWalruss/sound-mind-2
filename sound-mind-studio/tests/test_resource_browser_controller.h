@@ -31,4 +31,9 @@ private slots:
     void addingAnEntryWithNoDependenciesNeverNotifies();
     void addingTheSameDependencyTwiceDoesNotDuplicateIt();
     void toolPresetPreviewStillRendersWhenTheProjectsOwnMaxFrequencyIsBelowOneKilohertz();
+
+    // Mind Shot preview decode deferred to the first Play click (direct
+    // user feedback: "the Mind Shot preview in the Resource Browser is
+    // very very slow").
+    void playingAMindShotDecodesLazilyOnFirstPlayAndStaysPlayableOnASecondPlay();
 };

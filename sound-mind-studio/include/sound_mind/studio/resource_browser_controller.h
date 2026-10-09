@@ -10,6 +10,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/resource_file.h"
@@ -279,10 +280,25 @@ private:
     ///        label - `std::nullopt` alongside `browsedProject_`.
     std::optional<QString> browsedProjectPath_;
 
-    /// @brief The currently previewed Mind Shot's own decoded audio, kept
-    ///        here (rather than re-decoding on every Play) so repeated
-    ///        Play/Stop on the same selection is cheap. Cleared whenever
-    ///        the selection or category changes.
+    /// @brief The currently selected Mind Shot's own encoded
+    ///        `StreamImage` (built once, in `refreshInspector()`, to
+    ///        render the raster) - kept here so `handlePlayRequested()`
+    ///        can decode it lazily, on the first actual Play click,
+    ///        rather than `refreshInspector()` decoding eagerly on every
+    ///        selection whether or not it's ever played. `decode()` (an
+    ///        inverse STFT over however many frames/bins the clip holds)
+    ///        was the real cost behind "the Mind Shot preview is very
+    ///        slow" - confirmed by profiling which of the two steps
+    ///        `refreshInspector()` already did (render the raster,
+    ///        decode the audio) actually dominated. `std::nullopt` for
+    ///        any other category, or no selection.
+    std::optional<sound_mind::codec::StreamImage> currentPreviewImage_;
+
+    /// @brief The currently previewed Mind Shot's own decoded audio -
+    ///        empty until `handlePlayRequested()` first decodes
+    ///        `currentPreviewImage_` (see its own docs), then kept here
+    ///        so a second Play on the same selection doesn't re-decode.
+    ///        Reset to empty whenever `currentPreviewImage_` changes.
     sound_mind::codec::AudioBuffer currentPreviewAudio_;
 
     /// @brief Dedicated to Mind Shot preview playback - see the class's

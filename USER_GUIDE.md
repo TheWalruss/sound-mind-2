@@ -155,6 +155,13 @@ to make one taller/shorter or wider/narrower; if a panel's own content no
 longer fits at the size you've given it, a scrollbar appears inside it
 rather than the panel refusing to shrink.
 
+By default, opening a panel on the right-hand side adds it as a full-size
+tab alongside whatever else is already open there, rather than a smaller
+panel stacked below the others - click a tab to switch between them.
+Dragging a panel's tab out (to a different edge, or to float it) breaks
+it out of that shared tab group into its own stack, if you'd rather see
+two of them at once.
+
 ## Canvas Navigation
 
 By default the canvas always shrinks or grows to exactly fill the space
@@ -753,9 +760,10 @@ group's own controls while it was hidden.
     brighten or darken the image overall.
   - **Amount** is a dry/wet mix - `0` is no effect regardless of the
     kernel, `1` is the fully convolved result.
-  - **Save As New Kernel** stores the current grid permanently, named
-    "Kernel 1", "Kernel 2", and so on, for reuse later - on this Filter
-    layer, a different one, or a different project entirely. **Load
+  - **Save As New Kernel** asks for a name (defaulting to "Kernel 1",
+    "Kernel 2", and so on, still editable) and stores the current grid
+    permanently under it, for reuse later - on this Filter layer, a
+    different one, or a different project entirely. **Load
     Saved Kernel** drops a previously saved kernel's own values into the
     grid (again, a one-time copy you can keep editing, not a live link -
     editing it afterward doesn't change the saved copy, and deleting the
@@ -1746,7 +1754,8 @@ while you have unsaved changes prompts you to save first.
 
 ## Resource Browser
 
-**Configure → Resource Browser** opens a panel for browsing, exporting,
+**Resource Browser** (its own entry in the menu bar, between **View** and
+**Help**) opens a panel for browsing, exporting,
 and importing the "library" resources a project accumulates - MindWaves,
 Tool Presets (Procedural, Instrument, Resonance, and every other brush
 type with saved settings), Mind Shots, Resonance Profiles, Filter Presets

@@ -47,6 +47,7 @@
 #include "sound_mind/studio/configure_devices_panel.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/grid_panel.h"
+#include "sound_mind/studio/history_panel.h"
 #include "sound_mind/studio/image_scale_picker_dialog.h"
 #include "sound_mind/studio/landing_page.h"
 #include "sound_mind/studio/layers_panel.h"
@@ -56,6 +57,7 @@
 #include "sound_mind/studio/mind_waves_panel.h"
 #include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/record_panel.h"
+#include "sound_mind/studio/resource_browser_panel.h"
 #include "sound_mind/studio/selection_configuration_panel.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
@@ -72,6 +74,7 @@ using sound_mind::studio::ComposerPanel;
 using sound_mind::studio::ConfigureDevicesPanel;
 using sound_mind::studio::ImageScalePickerDialog;
 using sound_mind::studio::GridPanel;
+using sound_mind::studio::HistoryPanel;
 using sound_mind::studio::LandingPage;
 using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::LayersPanel;
@@ -83,6 +86,7 @@ using sound_mind::studio::MindWavesPanel;
 using sound_mind::studio::PlaybackPanel;
 using sound_mind::studio::PlaybackScope;
 using sound_mind::studio::RecordPanel;
+using sound_mind::studio::ResourceBrowserPanel;
 using sound_mind::studio::SelectionConfigurationPanel;
 using sound_mind::studio::ToolConfigurationPanel;
 
@@ -6075,4 +6079,108 @@ void MainWindowTest::setHardwareAccelerationEnabledForwardsToCore() {
     // that runs before the next TestMainWindow is constructed.
     window.setHardwareAccelerationEnabled(true);
     QVERIFY(sound_mind::core::hardwareAccelerationEnabled());
+}
+
+void MainWindowTest::saveConvolutionKernelIsANoOpWithNoProjectOpen() {
+    TestMainWindow window;
+
+    // The real, modal-dialog-showing slot - safe to call directly here
+    // since the "no project open" guard returns before the naming
+    // QInputDialog would ever show, the same reasoning
+    // createResonanceFromPickedPathIsANoOpWithNothingPicked() already
+    // relies on.
+    window.saveConvolutionKernel(3, {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f}, false);
+
+    QVERIFY(window.project() == nullptr);
+}
+
+void MainWindowTest::resourceBrowserToggleIsATopLevelMenuBarEntryBetweenViewAndHelp() {
+    // "Move the Resource Browser button from the Configure menu to right
+    // in-between View and Help" - promoted out of the Configure dropdown
+    // (unlike composerPanelsToggleIsInTheViewMenuNotOnTheToolbar's move
+    // into the View menu, this one is its own top-level entry, not nested
+    // in either menu).
+    const TestMainWindow window;
+    auto* resourceBrowserPanel = window.findChild<ResourceBrowserPanel*>();
+    QVERIFY(resourceBrowserPanel != nullptr);
+    QAction* toggleAction = resourceBrowserPanel->toggleViewAction();
+    QVERIFY(toggleAction != nullptr);
+
+    auto* configureButton = window.findChild<QToolButton*>(QStringLiteral("configureButton"));
+    QVERIFY(configureButton != nullptr);
+    auto* configureMenu = configureButton->menu();
+    QVERIFY(configureMenu != nullptr);
+    QVERIFY(!configureMenu->actions().contains(toggleAction));
+
+    const QList<QAction*> topLevelActions = window.menuBar()->actions();
+    const int toggleIndex = topLevelActions.indexOf(toggleAction);
+    QVERIFY(toggleIndex >= 0);
+
+    int viewIndex = -1;
+    int helpIndex = -1;
+    for (int i = 0; i < topLevelActions.size(); ++i) {
+        if (topLevelActions[i]->text() == QStringLiteral("&View")) {
+            viewIndex = i;
+        } else if (topLevelActions[i]->text() == QStringLiteral("&Help")) {
+            helpIndex = i;
+        }
+    }
+    QVERIFY(viewIndex >= 0);
+    QVERIFY(helpIndex >= 0);
+    QCOMPARE(toggleIndex, viewIndex + 1);
+    QCOMPARE(toggleIndex, helpIndex - 1);
+}
+
+void MainWindowTest::rightDockAreaPanelsAreTabifiedTogetherByDefault() {
+    // "Opening a panel should by default place them maximized (with
+    // tabs) in the right panel space, rather than as a smaller panel
+    // arranged in a vertical column" - confirmed with the user.
+    // tabifiedDockWidgets() reports every *other* dock sharing a tab
+    // group with the one passed in - checking from layersPanel_'s own
+    // point of view confirms every other Right-dock-area panel joined
+    // its group.
+    //
+    // A real Qt quirk, confirmed by a minimal QMainWindow/QDockWidget
+    // repro before trusting this test at all: tabifyDockWidget() does
+    // register the grouping even for two docks that are still hidden at
+    // the time (it survives a later hide()/show() cycle), but
+    // tabifiedDockWidgets() itself only *reports* that grouping for a
+    // dock that is currently visible - querying it while every panel
+    // sits in its normal, hidden-by-default state always returns an
+    // empty list, regardless of whether tabifyDockWidget() was ever
+    // called. So every panel below needs an explicit show() first, the
+    // same "needs real, laid-out geometry" reasoning
+    // qtest-visibility-and-click-pitfalls already established for
+    // QTest::mouseClick() - this is that same category of pitfall, just
+    // for a dock-layout query instead of a click.
+    TestMainWindow window;
+    window.show();
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    layersPanel->show();
+
+    const QList<QDockWidget*> otherPanels = {
+        window.findChild<MindWavesPanel*>(),
+        window.findChild<ResourceBrowserPanel*>(),
+        window.findChild<HistoryPanel*>(),
+        window.findChild<PlaybackPanel*>(),
+        window.findChild<ToolConfigurationPanel*>(),
+        window.findChild<MidiConfigurationPanel*>(),
+        window.findChild<ChordGeneratorPanel*>(),
+        window.findChild<ConfigureDevicesPanel*>(),
+        window.findChild<SelectionConfigurationPanel*>(),
+        window.findChild<GridPanel*>(),
+        window.findChild<FilterConfigurationPanel*>(),
+        window.findChild<RecordPanel*>(),
+        window.findChild<LoopPanel*>(),
+    };
+    for (QDockWidget* panel : otherPanels) {
+        QVERIFY(panel != nullptr);
+        panel->show();
+    }
+
+    const QList<QDockWidget*> tabifiedWithLayers = window.tabifiedDockWidgets(layersPanel);
+    for (QDockWidget* panel : otherPanels) {
+        QVERIFY(tabifiedWithLayers.contains(panel));
+    }
 }

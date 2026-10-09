@@ -6,6 +6,38 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.19.1] - 2026-10-09
+
+Direct user feedback: a newly opened panel started as a small vertical slice alongside whatever else was already open in the right-hand dock area, instead of a full-size tab.
+
+### Changed
+
+- Every panel that docks to the right-hand side (Layers, MindWaves, Resource Browser, History, Playback, Tool/MIDI/Chord/Selection/Grid/Filter Configuration, Configure Devices, Record, Loop) now starts tabbed together by default - opening one gives it the full height of that space as a tab, rather than stacking it in a smaller vertical slice alongside whatever else is already open. Dragging a panel's tab out into its own stack still works exactly as before; this only changes where a newly opened panel starts out.
+
+## [0.1.18.1] - 2026-10-09
+
+Direct user feedback: "Move the Resource Browser button from the Configure menu to right in-between View and Help."
+
+### Changed
+
+- The Resource Browser's toggle is now a top-level menu-bar entry, between **View** and **Help**, instead of living inside the **Configure** dropdown with the other configuration panels.
+
+## [0.1.17.1] - 2026-10-09
+
+Direct user feedback: the Resource Browser's Mind Shot preview was "very very slow".
+
+### Fixed
+
+- Selecting a Mind Shot in the Resource Browser no longer decodes its audio (a full inverse STFT reconstruction) just to show the inspector - that decode is now deferred to the first actual **Play** click on that selection, and cached from then on so a second Play on the same selection stays cheap. The raster preview (which doesn't need the decode) still renders immediately on selection, same as before.
+
+## [0.1.16.1] - 2026-10-09
+
+Direct user feedback: saving a convolution kernel didn't let the user name it.
+
+### Fixed
+
+- The Filter Configuration panel's **Save As New Kernel** button now prompts for a name (defaulting to "Kernel 1", "Kernel 2", and so on, still editable), matching the naming prompt every other "save as a named resource" action in the Studio already uses (Tool Preset, Filter Preset, Resonance). Previously saved silently under an auto-generated name with no way to choose one.
+
 ## [0.1.15.2] - 2026-10-09
 
 Tool Preset preview refinement - direct user feedback on `v0.1.15.1`'s own new Tool Preset preview stroke.

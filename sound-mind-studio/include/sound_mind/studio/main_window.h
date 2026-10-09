@@ -1174,14 +1174,19 @@ public slots:
     void setEqualizerPreviewEnabled(bool enabled);
 
     /**
-     * @brief Appends a new, auto-named entry to the current project's own
-     *        convolution kernel library and refreshes `filterConfigurationPanel_`'s
-     *        own Load Kernel combo - the actual work behind
-     *        `FilterConfigurationPanel::saveConvolutionKernelRequested()`.
+     * @brief Prompts for a name and appends a new entry to the current
+     *        project's own convolution kernel library, refreshing
+     *        `filterConfigurationPanel_`'s own Load Kernel combo - the
+     *        actual work behind `FilterConfigurationPanel::
+     *        saveConvolutionKernelRequested()`.
      *
-     * Named "Kernel 1", "Kernel 2", and so on, the same auto-naming
-     * `captureMindShot()`/`captureMindGrain()` already establish (no
-     * naming prompt). A no-op if no project is open.
+     * Defaults the prompt to "Kernel 1", "Kernel 2", and so on (still
+     * editable), the same `QInputDialog` naming prompt `saveFilterPreset()`/
+     * `createResonanceFromPickedPathNamed()` already use - confirmed with
+     * the user ("saving convolution kernels doesn't give the user the
+     * option to name them"), replacing this method's own former silent
+     * auto-naming. A no-op if no project is open, or the user cancels/
+     * leaves the name empty.
      *
      * @param size The kernel's own current side length.
      * @param coefficients The kernel's own current coefficients, row-major.
