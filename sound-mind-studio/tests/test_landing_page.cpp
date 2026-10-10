@@ -2,7 +2,9 @@
 
 #include <QComboBox>
 #include <QLabel>
+#include <QLayout>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
@@ -149,4 +151,56 @@ void LandingPageTest::aboutButtonEmitsAboutRequested() {
     button->click();
 
     QCOMPARE(spy.count(), 1);
+}
+
+void LandingPageTest::headerIsNotHorizontallyCentered() {
+    LandingPage page;
+    page.resize(1200, 800);
+    page.layout()->activate();
+
+    auto* logoLabel = page.findChild<QLabel*>(QStringLiteral("logoLabel"));
+    QVERIFY(logoLabel != nullptr);
+    // Left-aligned: the logo sits near the page's own left margin, not
+    // centered in a 1200px-wide page (which would put it past x=500).
+    QVERIFY(logoLabel->x() < 100);
+}
+
+void LandingPageTest::newOpenProjectAndRecentProjectsLiveInTheLeftColumn() {
+    LandingPage page;
+    auto* leftColumn = page.findChild<QScrollArea*>(QStringLiteral("leftColumnScrollArea"));
+    QVERIFY(leftColumn != nullptr);
+
+    auto* newButton = page.findChild<QPushButton*>(QStringLiteral("newProjectButton"));
+    auto* openButton = page.findChild<QPushButton*>(QStringLiteral("openProjectButton"));
+    QVERIFY(newButton != nullptr);
+    QVERIFY(openButton != nullptr);
+    QVERIFY(leftColumn->isAncestorOf(newButton));
+    QVERIFY(leftColumn->isAncestorOf(openButton));
+
+    page.setRecentProjects({std::filesystem::path("C:/projects/a.smproj")});
+    auto* recentEntry = page.findChild<QPushButton*>(QStringLiteral("recentProjectButton"));
+    QVERIFY(recentEntry != nullptr);
+    QVERIFY(leftColumn->isAncestorOf(recentEntry));
+}
+
+void LandingPageTest::documentationAndDeviceConfigurationLiveInTheRightColumn() {
+    LandingPage page;
+    auto* rightColumn = page.findChild<QScrollArea*>(QStringLiteral("rightColumnScrollArea"));
+    QVERIFY(rightColumn != nullptr);
+
+    auto* quickStartButton = page.findChild<QPushButton*>(QStringLiteral("quickStartButton"));
+    QVERIFY(quickStartButton != nullptr);
+    QVERIFY(rightColumn->isAncestorOf(quickStartButton));
+    QVERIFY(rightColumn->isAncestorOf(page.deviceConfiguration()));
+}
+
+void LandingPageTest::leftAndRightColumnsAreEachTheirOwnResizableScrollArea() {
+    LandingPage page;
+    auto* leftColumn = page.findChild<QScrollArea*>(QStringLiteral("leftColumnScrollArea"));
+    auto* rightColumn = page.findChild<QScrollArea*>(QStringLiteral("rightColumnScrollArea"));
+    QVERIFY(leftColumn != nullptr);
+    QVERIFY(rightColumn != nullptr);
+    QVERIFY(leftColumn != rightColumn);
+    QVERIFY(leftColumn->widgetResizable());
+    QVERIFY(rightColumn->widgetResizable());
 }

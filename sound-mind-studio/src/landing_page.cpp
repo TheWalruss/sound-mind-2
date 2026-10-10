@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QPixmap>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QVBoxLayout>
 
 #include "sound_mind/studio/device_configuration_widget.h"
@@ -51,55 +52,80 @@ QHBoxLayout* makeHeader(const QString& titleText) {
     }
 
     header->addWidget(makeHeading(titleText, 10), 0, Qt::AlignVCenter);
+    // Packs the logo+title to the left rather than letting them stretch
+    // to fill the row - see this class's own docs on the header being
+    // left-aligned, not centered, as of the Header/Two-Column
+    // Reorganization milestone.
+    header->addStretch(1);
     return header;
+}
+
+/// @brief Wraps `content` in a borderless, resizable `QScrollArea` - the
+/// Header/Two-Column Reorganization milestone's own "both columns get
+/// scroll bars if the content doesn't fit" requirement, applied
+/// identically to both the left and right columns.
+/// @param objectName This scroll area's own object name, for tests to
+///        find it by (`"leftColumnScrollArea"`/`"rightColumnScrollArea"`).
+/// @param content The column's own content widget - already laid out,
+///        just needs to become scrollable.
+QScrollArea* makeColumnScrollArea(const QString& objectName, QWidget* content) {
+    auto* scrollArea = new QScrollArea();
+    scrollArea->setObjectName(objectName);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setWidget(content);
+    return scrollArea;
 }
 
 }  // namespace
 
 LandingPage::LandingPage(QWidget* parent) : QWidget(parent) {
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(48, 40, 48, 40);
-    root->addStretch(1);
+    root->setContentsMargins(24, 24, 24, 24);
 
-    auto* header = makeHeader(tr("Sound Mind Studio"));
-    root->addLayout(header);
-    root->setAlignment(header, Qt::AlignHCenter);
-    root->addSpacing(24);
+    // Left-aligned header (see makeHeader()'s own docs on the trailing
+    // stretch) - direct user feedback: "The header, left-aligned, has
+    // the image glyph and 'SoundMind Studio'."
+    root->addLayout(makeHeader(tr("Sound Mind Studio")));
+    root->addSpacing(16);
+
+    auto* columns = new QHBoxLayout();
+    columns->setSpacing(24);
+    root->addLayout(columns, 1);
+
+    // --- Left column: New/Open Project + Recent Projects --------------
+    auto* leftContent = new QWidget();
+    auto* leftLayout = new QVBoxLayout(leftContent);
 
     auto* newButton = new QPushButton(tr("New Project..."));
     newButton->setObjectName(QStringLiteral("newProjectButton"));
     connect(newButton, &QPushButton::clicked, this, &LandingPage::newProjectRequested);
-    root->addWidget(newButton, 0, Qt::AlignHCenter);
+    leftLayout->addWidget(newButton, 0, Qt::AlignHCenter);
 
     auto* openButton = new QPushButton(tr("Open Project..."));
     openButton->setObjectName(QStringLiteral("openProjectButton"));
     connect(openButton, &QPushButton::clicked, this, &LandingPage::openProjectRequested);
-    root->addWidget(openButton, 0, Qt::AlignHCenter);
+    leftLayout->addWidget(openButton, 0, Qt::AlignHCenter);
 
-    root->addSpacing(24);
-    root->addWidget(makeHeading(tr("Recent Projects"), 2), 0, Qt::AlignHCenter);
-    root->addWidget(makeSeparator());
+    leftLayout->addSpacing(24);
+    leftLayout->addWidget(makeHeading(tr("Recent Projects"), 2), 0, Qt::AlignHCenter);
+    leftLayout->addWidget(makeSeparator());
 
     recentProjectsLayout_ = new QVBoxLayout();
-    root->addLayout(recentProjectsLayout_);
+    leftLayout->addLayout(recentProjectsLayout_);
+    leftLayout->addStretch(1);
 
-    // v0.Y.62.1 Installment H - lets a user pick/test audio devices before
-    // even creating or opening a project. See the class's own docs on why
-    // this is a second, independent DeviceConfigurationWidget instance,
-    // not the dock's own.
-    root->addSpacing(24);
-    root->addWidget(makeHeading(tr("Device Configuration"), 2), 0, Qt::AlignHCenter);
-    root->addWidget(makeSeparator());
+    columns->addWidget(makeColumnScrollArea(QStringLiteral("leftColumnScrollArea"), leftContent), 1);
 
-    deviceConfiguration_ = new DeviceConfigurationWidget(this);
-    root->addWidget(deviceConfiguration_, 0, Qt::AlignHCenter);
+    // --- Right column: Documentation + Device Configuration -----------
+    auto* rightContent = new QWidget();
+    auto* rightLayout = new QVBoxLayout(rightContent);
 
-    root->addSpacing(24);
-    root->addWidget(makeHeading(tr("Documentation"), 2), 0, Qt::AlignHCenter);
-    root->addWidget(makeSeparator());
+    rightLayout->addWidget(makeHeading(tr("Documentation"), 2), 0, Qt::AlignHCenter);
+    rightLayout->addWidget(makeSeparator());
 
     auto* docsLayout = new QVBoxLayout();
-    root->addLayout(docsLayout);
+    rightLayout->addLayout(docsLayout);
 
     auto addDocButton = [&](const QString& objectName, const QString& text, void (LandingPage::*signal)()) {
         auto* button = new QPushButton(text, this);
@@ -114,7 +140,19 @@ LandingPage::LandingPage(QWidget* parent) : QWidget(parent) {
     addDocButton(QStringLiteral("changelogButton"), tr("Changelog"), &LandingPage::changelogRequested);
     addDocButton(QStringLiteral("aboutButton"), tr("About"), &LandingPage::aboutRequested);
 
-    root->addStretch(2);
+    // v0.Y.62.1 Installment H - lets a user pick/test audio devices before
+    // even creating or opening a project. See the class's own docs on why
+    // this is a second, independent DeviceConfigurationWidget instance,
+    // not the dock's own.
+    rightLayout->addSpacing(24);
+    rightLayout->addWidget(makeHeading(tr("Device Configuration"), 2), 0, Qt::AlignHCenter);
+    rightLayout->addWidget(makeSeparator());
+
+    deviceConfiguration_ = new DeviceConfigurationWidget(rightContent);
+    rightLayout->addWidget(deviceConfiguration_, 0, Qt::AlignHCenter);
+    rightLayout->addStretch(1);
+
+    columns->addWidget(makeColumnScrollArea(QStringLiteral("rightColumnScrollArea"), rightContent), 1);
 }
 
 void LandingPage::setRecentProjects(const std::vector<std::filesystem::path>& paths) {

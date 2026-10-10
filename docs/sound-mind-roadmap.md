@@ -1110,6 +1110,15 @@ Direct user feedback: "Are named grid presets a thing yet? If not, the next feat
 
 See `docs/sound-mind-architecture.md`'s Decision #223 for the full implementation writeup, including a real pre-existing bug fixed in passing (Resonance Profile import was silently dropping the imported `sourceCurve`) and three pre-existing tests that needed fixing rather than just extending. Settled in `v0.1.27.1`.
 
+### `v0.Y.69.1` - Landing Page: header + two-column reorganization (2026-10-10)
+
+Direct user feedback: "Reorganize the landing page into a header and two columns. The header, left-aligned, has the image glyph and 'SoundMind Studio'. The left column shall have the New Project and Open Project buttons, as well as the list of recent projects. The right column shall have the documentation and the device configuration. Make sure both columns get scroll bars if the content doesn't fit."
+
+- ✅ **Left-aligned header** - the logo and title no longer sit centered; they pack to the left of the header row.
+- ✅ **Two independently-scrolling columns** - New Project/Open Project/Recent Projects on the left, Documentation/Device Configuration on the right, each its own `QScrollArea` so either can grow past the window's height without clipping or affecting the other.
+
+See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementation writeup - a purely internal layout restructuring, no public API or object-name changes. Settled in `v0.1.29.1`.
+
 **Backlog - queued for before Beta opens, not part of this iteration:**
 
 - ~~**Edit menu redesign - grouped into named, fold-out submenus**~~ - **settled in `v0.1.22.1`, 2026-10-10** (`docs/sound-mind-architecture.md`'s Decision #218). Still open, as its own explicit next step: graying out a group/action when its own precondition isn't met (e.g. **Edit → Path Editing → Edit Path** with nothing Picked).

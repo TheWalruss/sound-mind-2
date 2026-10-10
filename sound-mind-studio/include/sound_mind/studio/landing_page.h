@@ -53,6 +53,21 @@ class DeviceConfigurationWidget;
  * `MainWindow` keeps this instance and the dock's own instance in sync -
  * this class itself just embeds and displays it, the same "purely
  * presentational" treatment every other control here already gets.
+ *
+ * **As of the Header/Two-Column Reorganization:** direct user feedback
+ * ("reorganize the landing page into a header and two columns") replaced
+ * the former single centered column with a left-aligned header (logo +
+ * title, packed left by a trailing layout stretch rather than
+ * `Qt::AlignHCenter`) above two side-by-side columns - New/Open Project
+ * and Recent Projects on the left, Documentation and Device
+ * Configuration on the right. Each column is its own borderless,
+ * `setWidgetResizable(true)` `QScrollArea` (`"leftColumnScrollArea"`/
+ * `"rightColumnScrollArea"`), so a column whose content outgrows the
+ * available height scrolls independently of the other - direct user
+ * feedback's own "make sure both columns get scroll bars if the content
+ * doesn't fit." Every control's own object name is unchanged, so
+ * `MainWindow`'s existing signal connections and this class's own public
+ * API needed no changes - purely an internal layout restructuring.
  */
 class LandingPage : public QWidget {
     Q_OBJECT

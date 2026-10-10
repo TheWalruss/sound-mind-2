@@ -18,4 +18,10 @@ private slots:
     void userGuideButtonEmitsUserGuideRequested();
     void changelogButtonEmitsChangelogRequested();
     void aboutButtonEmitsAboutRequested();
+
+    // Header + two-column reorganization.
+    void headerIsNotHorizontallyCentered();
+    void newOpenProjectAndRecentProjectsLiveInTheLeftColumn();
+    void documentationAndDeviceConfigurationLiveInTheRightColumn();
+    void leftAndRightColumnsAreEachTheirOwnResizableScrollArea();
 };
