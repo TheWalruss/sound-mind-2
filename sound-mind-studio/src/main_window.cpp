@@ -945,6 +945,27 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // far - the same scope PaintController's own undo()/redo() already
     // has (see its docs) - not a project-wide undo covering every kind of
     // change yet.
+    // Edit menu redesign (docs/sound-mind-roadmap.md's own long-flagged
+    // "Edit menu redesign" backlog item, v0.Y.65.1's own backlog list) -
+    // direct user feedback: the previous flat, 29-action/6-separator
+    // menu was "a kludge" and "intimidating". Each of the groups that
+    // flat list's own separators (and doc comments) already implied
+    // becomes one named submenu here instead, so the top-level Edit menu
+    // now shows a short, scannable list of named categories rather than
+    // every individual action at once. Undo/Redo/Delete and Image Mode
+    // are the deliberate exceptions, kept directly on the top level
+    // rather than each getting their own single/triple-item submenu -
+    // confirmed-by-judgment, not literally instructed: Undo/Redo/Delete
+    // are the most universally expected, most frequently reached-for
+    // items in *any* application's Edit menu (burying them a click
+    // deeper would make the menu worse, not less intimidating), and
+    // Image Mode is a checkable mode toggle (its checked state is worth
+    // seeing at a glance, not worth hiding behind a submenu for just one
+    // item). Every action's own shortcut, connection, and no-op-when-
+    // inapplicable behavior is unchanged - this only reorganizes the
+    // menu structure around them. Graying out a group/action when its
+    // own precondition isn't met (e.g. "Edit Path" with nothing Picked)
+    // is deliberately a separate, later step - confirmed with the user.
     QMenu* editMenu = menuBar()->addMenu(tr("&Edit"));
     QAction* undoAction = editMenu->addAction(tr("&Undo"));
     undoAction->setShortcut(QKeySequence::Undo);
@@ -976,52 +997,51 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // (docs/sound-mind-architecture.md's Decision on it): the bracket keys
     // are now Zoom's own, and Ctrl+[/Ctrl+] specifically is Zoom's coarse
     // step, confirmed with the user as the side that wins this conflict.
-    QAction* bringToFrontAction = editMenu->addAction(tr("Bring to &Front"));
+    QMenu* stackOrderMenu = editMenu->addMenu(tr("&Stack Order"));
+    QAction* bringToFrontAction = stackOrderMenu->addAction(tr("Bring to &Front"));
     bringToFrontAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Up));
     connect(bringToFrontAction, &QAction::triggered, this, &MainWindow::bringPickedObjectToFront);
 
-    QAction* sendToBackAction = editMenu->addAction(tr("Send to &Back"));
+    QAction* sendToBackAction = stackOrderMenu->addAction(tr("Send to &Back"));
     sendToBackAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Down));
     connect(sendToBackAction, &QAction::triggered, this, &MainWindow::sendPickedObjectToBack);
 
-    QAction* bringForwardAction = editMenu->addAction(tr("Bring &Forward"));
+    QAction* bringForwardAction = stackOrderMenu->addAction(tr("Bring &Forward"));
     bringForwardAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Up));
     connect(bringForwardAction, &QAction::triggered, this, &MainWindow::bringPickedObjectForward);
 
-    QAction* sendBackwardAction = editMenu->addAction(tr("Send Back&ward"));
+    QAction* sendBackwardAction = stackOrderMenu->addAction(tr("Send Back&ward"));
     sendBackwardAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Down));
     connect(sendBackwardAction, &QAction::triggered, this, &MainWindow::sendPickedObjectBackward);
 
-    editMenu->addSeparator();
-
     // Path node/handle editing (v0.0.26.4) - see PickController::
     // beginPathEdit()'s own docs. No standard shortcuts (matching Fill
-    // Selection's own no-shortcut choice above); each is a no-op when
+    // Selection's own no-shortcut choice below); each is a no-op when
     // inapplicable, the same "always present" choice deleteAction makes.
-    QAction* editPathAction = editMenu->addAction(tr("&Edit Path"));
+    QMenu* pathEditingMenu = editMenu->addMenu(tr("Path &Editing"));
+    QAction* editPathAction = pathEditingMenu->addAction(tr("&Edit Path"));
     connect(editPathAction, &QAction::triggered, this, &MainWindow::editPickedPath);
 
-    QAction* toggleNodeTypeAction = editMenu->addAction(tr("Toggle &Node Type"));
+    QAction* toggleNodeTypeAction = pathEditingMenu->addAction(tr("Toggle &Node Type"));
     connect(toggleNodeTypeAction, &QAction::triggered, this, &MainWindow::togglePickedPathNodeType);
 
-    QAction* applyPathEditAction = editMenu->addAction(tr("&Apply Path Edit"));
+    QAction* applyPathEditAction = pathEditingMenu->addAction(tr("&Apply Path Edit"));
     connect(applyPathEditAction, &QAction::triggered, this, &MainWindow::applyPickedPathEdit);
 
-    QAction* cancelPathEditAction = editMenu->addAction(tr("Cancel Pat&h Edit"));
+    QAction* cancelPathEditAction = pathEditingMenu->addAction(tr("Cancel Pat&h Edit"));
     connect(cancelPathEditAction, &QAction::triggered, this, &MainWindow::cancelPickedPathEdit);
-
-    editMenu->addSeparator();
 
     // Selection & Fill (v0.Y.25.1): the standard "clear the current
     // selection" shortcut/name every other image/vector editor already
     // uses - a no-op, per deselect()'s own docs, when there isn't one.
-    QAction* deselectAction = editMenu->addAction(tr("D&eselect"));
+    QMenu* selectionMenu = editMenu->addMenu(tr("&Selection"));
+    QAction* deselectAction = selectionMenu->addAction(tr("D&eselect"));
     deselectAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
     connect(deselectAction, &QAction::triggered, this, &MainWindow::deselect);
 
     // No standard shortcut for this one (unlike Delete/Deselect above) -
     // matching Pool Layer's own no-shortcut toolbar action below.
-    QAction* fillAction = editMenu->addAction(tr("&Fill Selection..."));
+    QAction* fillAction = selectionMenu->addAction(tr("&Fill Selection..."));
     connect(fillAction, &QAction::triggered, this, &MainWindow::fillSelection);
 
     // Apply Filter to Selection (v0.Y.46.1 Installment E, "Layers Panel &
@@ -1029,8 +1049,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // Selection's own no-shortcut choice above); a no-op with no
     // committed selection, the same "always present" choice deleteAction
     // makes.
-    QAction* applyFilterToSelectionAction = editMenu->addAction(tr("Apply &Filter to Selection"));
+    QAction* applyFilterToSelectionAction = selectionMenu->addAction(tr("Apply &Filter to Selection"));
     connect(applyFilterToSelectionAction, &QAction::triggered, this, &MainWindow::applyFilterToSelection);
+
+    editMenu->addSeparator();
 
     // Principal Modes (v0.Y.47.1) - docs/sound-mind-design.md's own
     // "Principal modes". An editing-behavior toggle, not a view/display
@@ -1039,7 +1061,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // setPrincipalMode()'s own docs. Initial state applied directly
     // (matching Hardware Acceleration's own QSignalBlocker pattern above)
     // once a project is actually set, in setProject() below - a
-    // freshly-constructed MainWindow has no project yet to reflect.
+    // freshly-constructed MainWindow has no project yet to reflect. Kept
+    // directly on the Edit menu (not nested in a submenu) - see this
+    // whole block's own opening comment for why.
     principalModeAction_ = editMenu->addAction(tr("&Image Mode"));
     principalModeAction_->setCheckable(true);
     principalModeAction_->setToolTip(
@@ -1056,15 +1080,16 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // no-op with nothing on the clipboard - none of the three are enabled/
     // disabled in sync with that state, the same "always present, no-op
     // when inapplicable" choice deleteAction above already makes.
-    QAction* cutAction = editMenu->addAction(tr("Cu&t"));
+    QMenu* clipboardMenu = editMenu->addMenu(tr("&Clipboard"));
+    QAction* cutAction = clipboardMenu->addAction(tr("Cu&t"));
     cutAction->setShortcut(QKeySequence::Cut);
     connect(cutAction, &QAction::triggered, this, &MainWindow::cutSelection);
 
-    QAction* copyAction = editMenu->addAction(tr("&Copy"));
+    QAction* copyAction = clipboardMenu->addAction(tr("&Copy"));
     copyAction->setShortcut(QKeySequence::Copy);
     connect(copyAction, &QAction::triggered, this, &MainWindow::copySelection);
 
-    QAction* pasteAction = editMenu->addAction(tr("&Paste"));
+    QAction* pasteAction = clipboardMenu->addAction(tr("&Paste"));
     pasteAction->setShortcut(QKeySequence::Paste);
     connect(pasteAction, &QAction::triggered, this, &MainWindow::paste);
 
@@ -1072,20 +1097,27 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // Fill Selection's own no-shortcut choice above); a no-op with no
     // committed selection, the same "always present" choice deleteAction/
     // Cut/Copy/Paste all make.
-    QAction* captureMindShotAction = editMenu->addAction(tr("Capture as &Mind Shot"));
+    QMenu* captureMenu = editMenu->addMenu(tr("Ca&pture"));
+    QAction* captureMindShotAction = captureMenu->addAction(tr("Capture as &Mind Shot"));
     connect(captureMindShotAction, &QAction::triggered, this, &MainWindow::captureMindShot);
 
     // Mind Grains (v0.Y.33.1 Installment B) - the same "no shortcut, no-op
     // with no committed selection" treatment as Mind Shot's own action
     // right above.
-    QAction* captureMindGrainAction = editMenu->addAction(tr("Capture as Mind &Grain"));
+    QAction* captureMindGrainAction = captureMenu->addAction(tr("Capture as Mind &Grain"));
     connect(captureMindGrainAction, &QAction::triggered, this, &MainWindow::captureMindGrain);
 
     // MindWaves v2, Installment B (v0.Y.39.1) - no standard shortcut
     // (matching Fill Selection's own no-shortcut choice above); a no-op
     // with nothing suitable Picked, the same "always present" choice
-    // deleteAction/Cut/Copy/Paste all make.
-    QAction* usePickedPathAsMindWaveShapeAction = editMenu->addAction(tr("Use Picked Path as MindWave &Shape"));
+    // deleteAction/Cut/Copy/Paste all make. Grouped with the Resonant
+    // Instrument actions right below rather than with Capture above -
+    // both take the same "a Picked path/curve" input and produce a new
+    // library entry from it, unlike Capture's own "turn a Selection into
+    // a Mind Shot/Grain" shape.
+    QMenu* pickedPathToolsMenu = editMenu->addMenu(tr("Picked Path &Tools"));
+    QAction* usePickedPathAsMindWaveShapeAction =
+        pickedPathToolsMenu->addAction(tr("Use Picked Path as MindWave &Shape"));
     connect(usePickedPathAsMindWaveShapeAction, &QAction::triggered, this, &MainWindow::usePickedPathAsMindWaveShape);
 
     // Resonant Instruments (v0.Y.59.1 Installment C) - same "always
@@ -1093,7 +1125,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // MindWave-shape action right above, since both share the same input
     // (a Picked path/curve), just producing a new named library entry
     // instead of overwriting part of an existing MindWave.
-    QAction* createResonanceAction = editMenu->addAction(tr("Create &Resonance from Picked Path..."));
+    QAction* createResonanceAction = pickedPathToolsMenu->addAction(tr("Create &Resonance from Picked Path..."));
     connect(createResonanceAction, &QAction::triggered, this, &MainWindow::createResonanceFromPickedPath);
 
     // Resonant Instruments - Branching Curve editor (v0.Y.59.1, the
@@ -1101,17 +1133,18 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // suitable Picked/no session active" treatment as every action above.
     // See startBranchingCurveFromPickedPath()'s own docs for the full
     // workflow these three fit into.
-    QAction* startBranchingCurveAction = editMenu->addAction(tr("Start Branching Curve from Picked Path"));
+    QAction* startBranchingCurveAction =
+        pickedPathToolsMenu->addAction(tr("Start Branching Curve from Picked Path"));
     connect(startBranchingCurveAction, &QAction::triggered, this, &MainWindow::startBranchingCurveFromPickedPath);
 
-    QAction* addBranchAction = editMenu->addAction(tr("Add Picked Path as &Branch"));
+    QAction* addBranchAction = pickedPathToolsMenu->addAction(tr("Add Picked Path as &Branch"));
     connect(addBranchAction, &QAction::triggered, this, &MainWindow::addPickedPathAsBranch);
 
-    QAction* cancelBranchingCurveAction = editMenu->addAction(tr("Cancel Branching Curve"));
+    QAction* cancelBranchingCurveAction = pickedPathToolsMenu->addAction(tr("Cancel Branching Curve"));
     connect(cancelBranchingCurveAction, &QAction::triggered, this, &MainWindow::cancelBranchingCurve);
 
     QAction* createResonanceFromGraphAction =
-        editMenu->addAction(tr("Create Resonance from Picked &Graph..."));
+        pickedPathToolsMenu->addAction(tr("Create Resonance from Picked &Graph..."));
     connect(createResonanceFromGraphAction, &QAction::triggered, this,
             &MainWindow::createResonanceFromPickedGraph);
 
@@ -1128,41 +1161,41 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // selected, already at the relevant end of the stack, or blocked by a
     // locked Background/Equalizer neighbor - see LayerController::
     // selectLayerAbove()'s and its siblings' own docs.
-    QAction* selectLayerAboveAction = editMenu->addAction(tr("Select Layer &Above"));
+    QMenu* layersMenu = editMenu->addMenu(tr("&Layers"));
+    QAction* selectLayerAboveAction = layersMenu->addAction(tr("Select Layer &Above"));
     selectLayerAboveAction->setShortcut(QKeySequence(Qt::Key_PageUp));
     connect(selectLayerAboveAction, &QAction::triggered, this, &MainWindow::selectLayerAbove);
 
-    QAction* selectLayerBelowAction = editMenu->addAction(tr("Select Layer &Below"));
+    QAction* selectLayerBelowAction = layersMenu->addAction(tr("Select Layer &Below"));
     selectLayerBelowAction->setShortcut(QKeySequence(Qt::Key_PageDown));
     connect(selectLayerBelowAction, &QAction::triggered, this, &MainWindow::selectLayerBelow);
 
-    QAction* moveLayerUpAction = editMenu->addAction(tr("&Move Layer Up"));
+    QAction* moveLayerUpAction = layersMenu->addAction(tr("&Move Layer Up"));
     moveLayerUpAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_PageUp));
     connect(moveLayerUpAction, &QAction::triggered, this, &MainWindow::moveSelectedLayerUp);
 
-    QAction* moveLayerDownAction = editMenu->addAction(tr("M&ove Layer Down"));
+    QAction* moveLayerDownAction = layersMenu->addAction(tr("M&ove Layer Down"));
     moveLayerDownAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_PageDown));
     connect(moveLayerDownAction, &QAction::triggered, this, &MainWindow::moveSelectedLayerDown);
 
-    QAction* increaseLayerOpacityAction = editMenu->addAction(tr("&Increase Layer Opacity"));
+    QAction* increaseLayerOpacityAction = layersMenu->addAction(tr("&Increase Layer Opacity"));
     increaseLayerOpacityAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_PageUp));
     connect(increaseLayerOpacityAction, &QAction::triggered, this, &MainWindow::increaseSelectedLayerOpacity);
 
-    QAction* decreaseLayerOpacityAction = editMenu->addAction(tr("&Decrease Layer Opacity"));
+    QAction* decreaseLayerOpacityAction = layersMenu->addAction(tr("&Decrease Layer Opacity"));
     decreaseLayerOpacityAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_PageDown));
     connect(decreaseLayerOpacityAction, &QAction::triggered, this, &MainWindow::decreaseSelectedLayerOpacity);
-
-    editMenu->addSeparator();
 
     // Paths & Grids (v0.Y.26.1): ends/discards the Path tool's own in-
     // progress node placement - see finishPath()'s/cancelPath()'s own
     // docs. No standard shortcut for either (matching Fill Selection's
     // own no-shortcut choice above); both are no-ops when nothing's being
     // placed, the same "always present" choice deleteAction makes.
-    QAction* finishPathAction = editMenu->addAction(tr("&Finish Path"));
+    QMenu* pathToolMenu = editMenu->addMenu(tr("Path &Tool"));
+    QAction* finishPathAction = pathToolMenu->addAction(tr("&Finish Path"));
     connect(finishPathAction, &QAction::triggered, this, &MainWindow::finishPath);
 
-    QAction* cancelPathAction = editMenu->addAction(tr("Cance&l Path"));
+    QAction* cancelPathAction = pathToolMenu->addAction(tr("Cance&l Path"));
     connect(cancelPathAction, &QAction::triggered, this, &MainWindow::cancelPath);
 
     // Canvas Navigation's own Zoom feature (docs/sound-mind-design.md) -

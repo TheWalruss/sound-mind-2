@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.22.1] - 2026-10-10
+
+Direct user feedback: "The Edit menu is a kludge." Scopes `docs/sound-mind-roadmap.md`'s long-flagged "Edit menu redesign" backlog item.
+
+### Changed
+
+- The Edit menu's former flat list of 29 actions is now grouped into named, fold-out submenus: **Stack Order**, **Path Editing**, **Selection**, **Clipboard**, **Capture**, **Picked Path Tools**, **Layers**, and **Path Tool**. **Undo**, **Redo**, **Delete**, and the **Image Mode** toggle stay directly on the menu - the most universally expected items, and a checkable toggle whose state is worth seeing at a glance. No action's own shortcut, behavior, or no-op-when-inapplicable handling changed - this only reorganizes where each one lives in the menu.
+
+### Notes
+
+- Graying out a group or action when its own precondition isn't met (e.g. **Edit Path** with nothing Picked) is a deliberate, separate next step - confirmed with the user, not done in this round.
+
 ## [0.1.21.1] - 2026-10-09
 
 Direct user feedback: "I want 'repeat' mode during playback to loop without the audible skip."

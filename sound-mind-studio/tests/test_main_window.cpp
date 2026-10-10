@@ -6237,3 +6237,86 @@ void MainWindowTest::showingATabifiedPanelSwitchesToItImmediately() {
     QTest::qWait(50);
     QCOMPARE(currentTabifiedPanelTitle(window), mindWavesPanel->windowTitle());
 }
+
+void MainWindowTest::editMenuActionsAreGroupedIntoNamedSubmenus() {
+    // "The Edit menu is a kludge. The options in there are grouped -
+    // create an option for each group, and move the groups into
+    // submenu's that fold out" - direct user feedback. Confirms the new
+    // structure (named submenus for every group except Undo/Redo/Delete
+    // and Image Mode, kept direct - see the constructor's own comment on
+    // why) without re-asserting every single action's own shortcut/
+    // connection, which no test here ever did even for the old flat menu.
+    const TestMainWindow window;
+
+    QMenu* editMenu = nullptr;
+    for (QAction* topLevelAction : window.menuBar()->actions()) {
+        if (topLevelAction->text() == QStringLiteral("&Edit")) {
+            editMenu = topLevelAction->menu();
+            break;
+        }
+    }
+    QVERIFY(editMenu != nullptr);
+
+    auto findDirectAction = [editMenu](const QString& text) -> QAction* {
+        for (QAction* action : editMenu->actions()) {
+            if (action->text() == text) {
+                return action;
+            }
+        }
+        return nullptr;
+    };
+    auto findSubmenu = [editMenu](const QString& text) -> QMenu* {
+        for (QAction* action : editMenu->actions()) {
+            if (action->text() == text && action->menu() != nullptr) {
+                return action->menu();
+            }
+        }
+        return nullptr;
+    };
+
+    // Undo/Redo/Delete and Image Mode stay directly on the top level.
+    QVERIFY(findDirectAction(QStringLiteral("&Undo")) != nullptr);
+    QVERIFY(findDirectAction(QStringLiteral("&Redo")) != nullptr);
+    QVERIFY(findDirectAction(QStringLiteral("&Delete")) != nullptr);
+    QVERIFY(findDirectAction(QStringLiteral("&Image Mode")) != nullptr);
+
+    // Every other group is now a named submenu, not a direct action.
+    QVERIFY(findDirectAction(QStringLiteral("Bring to &Front")) == nullptr);
+    QVERIFY(findDirectAction(QStringLiteral("&Edit Path")) == nullptr);
+    QVERIFY(findDirectAction(QStringLiteral("Cu&t")) == nullptr);
+
+    QMenu* stackOrderMenu = findSubmenu(QStringLiteral("&Stack Order"));
+    QMenu* pathEditingMenu = findSubmenu(QStringLiteral("Path &Editing"));
+    QMenu* selectionMenu = findSubmenu(QStringLiteral("&Selection"));
+    QMenu* clipboardMenu = findSubmenu(QStringLiteral("&Clipboard"));
+    QMenu* captureMenu = findSubmenu(QStringLiteral("Ca&pture"));
+    QMenu* pickedPathToolsMenu = findSubmenu(QStringLiteral("Picked Path &Tools"));
+    QMenu* layersMenu = findSubmenu(QStringLiteral("&Layers"));
+    QMenu* pathToolMenu = findSubmenu(QStringLiteral("Path &Tool"));
+    QVERIFY(stackOrderMenu != nullptr);
+    QVERIFY(pathEditingMenu != nullptr);
+    QVERIFY(selectionMenu != nullptr);
+    QVERIFY(clipboardMenu != nullptr);
+    QVERIFY(captureMenu != nullptr);
+    QVERIFY(pickedPathToolsMenu != nullptr);
+    QVERIFY(layersMenu != nullptr);
+    QVERIFY(pathToolMenu != nullptr);
+
+    // Spot-check one representative action landed in the right submenu.
+    auto containsText = [](QMenu* menu, const QString& text) {
+        for (QAction* action : menu->actions()) {
+            if (action->text() == text) {
+                return true;
+            }
+        }
+        return false;
+    };
+    QVERIFY(containsText(stackOrderMenu, QStringLiteral("Bring to &Front")));
+    QVERIFY(containsText(pathEditingMenu, QStringLiteral("&Edit Path")));
+    QVERIFY(containsText(selectionMenu, QStringLiteral("D&eselect")));
+    QVERIFY(containsText(clipboardMenu, QStringLiteral("Cu&t")));
+    QVERIFY(containsText(captureMenu, QStringLiteral("Capture as &Mind Shot")));
+    QVERIFY(containsText(pickedPathToolsMenu, QStringLiteral("Use Picked Path as MindWave &Shape")));
+    QVERIFY(containsText(layersMenu, QStringLiteral("Select Layer &Above")));
+    QVERIFY(containsText(pathToolMenu, QStringLiteral("&Finish Path")));
+}

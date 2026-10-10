@@ -304,4 +304,8 @@ private slots:
     // Showing a tabified panel switches to its tab immediately, rather
     // than adding it in the background behind whichever tab was active.
     void showingATabifiedPanelSwitchesToItImmediately();
+
+    // Edit menu redesign: the former flat, 29-action list is now grouped
+    // into named submenus (Undo/Redo/Delete and Image Mode stay direct).
+    void editMenuActionsAreGroupedIntoNamedSubmenus();
 };

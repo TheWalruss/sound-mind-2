@@ -465,7 +465,7 @@ other layer in the project, remembering each one's own exact prior state
 Once used, the same menu also offers **Unhide other layers**, restoring
 them all in one step; both are undoable as a single step too.
 
-**Keyboard shortcuts** (Edit menu) work without touching the mouse:
+**Keyboard shortcuts** (Edit → Layers menu) work without touching the mouse:
 **Page Up**/**Page Down** select the layer above/below the currently
 selected one; **Shift+Page Up**/**Shift+Page Down** move the selected
 layer up/down one position in the stack; **Ctrl+Page Up**/**Ctrl+Page
@@ -577,7 +577,8 @@ shape instead of staying fixed.
   to type numbers into.
 - **Drawn** shapes come from a curve you draw yourself, rather than a
   formula: draw an ordinary stroke anywhere on the canvas, switch to Pick
-  and select it, then choose **Edit → Use Picked Path as MindWave Shape**
+  and select it, then choose **Edit → Picked Path Tools → Use Picked Path as
+MindWave Shape**
   - this applies the picked curve to whichever MindWave is currently
   selected in this panel, switching its own Generator Type to Drawn along
   the way. The shape then loops using the same **Period** control every
@@ -1219,12 +1220,12 @@ regardless of the "Show bounding boxes" setting - ready to:
   way - a filled selection or a pasted region can still be moved and
   deleted, just not "modified" through this panel.
 - **Delete** it - **Edit → Delete** (or the Delete key).
-- **Restack** it within its own layer - **Edit → Bring to Front**
-  (Ctrl+Shift+Up), **Send to Back** (Ctrl+Shift+Down), **Bring Forward**
-  (Ctrl+Up), or **Send Backward** (Ctrl+Down). This only changes which
-  object renders on top where they overlap - it doesn't move, modify, or
-  select anything else.
-- **Edit its own path** - **Edit → Edit Path** (a brush stroke only;
+- **Restack** it within its own layer - **Edit → Stack Order → Bring to
+  Front** (Ctrl+Shift+Up), **Send to Back** (Ctrl+Shift+Down), **Bring
+  Forward** (Ctrl+Up), or **Send Backward** (Ctrl+Down). This only changes
+  which object renders on top where they overlap - it doesn't move,
+  modify, or select anything else.
+- **Edit its own path** - **Edit → Path Editing → Edit Path** (a brush stroke only;
   a filled selection or a pasted region has no path to edit). Brings its
   nodes and handles back onto the canvas as small dots:
   - **Click a node** to select it (shown larger, in white).
@@ -1234,15 +1235,15 @@ regardless of the "Show bounding boxes" setting - ready to:
     node's own handles are ever shown) to reshape the curve on that
     side. The opposite handle always mirrors it, to keep the curve
     smooth through the node.
-  - **Edit → Toggle Node Type** switches the selected node between a
+  - **Edit → Path Editing → Toggle Node Type** switches the selected node between a
     smooth curve point and a sharp corner. Converting to smooth extends
     its own two handles out a comfortable distance, rounding out the
     corner right away - drag either handle further from there to reshape
     it more.
   - **Delete key** removes the selected node (refused if it's the only
     node left).
-  - **Edit → Apply Path Edit** commits everything changed so far as a
-    new, undoable edit to the stroke. **Edit → Cancel Path Edit**
+  - **Edit → Path Editing → Apply Path Edit** commits everything changed so far as a
+    new, undoable edit to the stroke. **Edit → Path Editing → Cancel Path Edit**
     discards it instead, leaving the stroke exactly as it was.
 
 Clicking empty canvas space deselects. If an object is entirely covered
@@ -1296,7 +1297,7 @@ dockable panel (off by default):
     point's own overtone rows (2x, 3x, ... its frequency), the same way a
     note's harmonics naturally stack above its fundamental - useful for
     selecting a whole note at once rather than just its loudest partial.
-- **Paste Blend Mode** - how **Edit → Paste** (below) combines its clip
+- **Paste Blend Mode** - how **Edit → Clipboard → Paste** (below) combines its clip
   with the destination: **Overwrite** (the default) replaces it entirely,
   same as before this control existed; **Normal**, **Multiply**,
   **Screen**, **Overlay**, **Difference**, and **Add** blend it in
@@ -1326,25 +1327,25 @@ themselves to the rotated shape exactly like they do for a Lasso
 selection. Rotating back to (approximately) no rotation returns the
 selection to a plain, axis-aligned rectangle.
 
-- **Fill** it - **Edit → Fill Selection...** opens the same draggable
+- **Fill** it - **Edit → Selection → Fill Selection...** opens the same draggable
   gradient editor Painting's brush and Filter Configuration's
   Frequency-Axis Gradient use (see [Painting](#painting)/[Filter
   Layers](#filter-layers) above), seeded with a fully-opaque default;
   accepting fills the selection, confined exactly to its own boundary. A
   gradient with more than two stops varies continuously left-to-right
   across the selection, not just a single flat color.
-- **Apply a filter to** it - **Edit → Apply Filter to Selection** bakes
+- **Apply a filter to** it - **Edit → Selection → Apply Filter to Selection** bakes
   whatever filter is currently configured in the [Filter
   Layers](#filter-layers) panel over the selection only, confined exactly
   to its own boundary the same way Fill is - the rest of the layer is left
   untouched. This is a one-time bake of the panel's current settings, not
   a live filter that keeps reacting to further changes; undo it like any
   other edit if the result isn't what you wanted.
-- **Copy** it - **Edit → Copy** (Ctrl+C) captures the selection's own
+- **Copy** it - **Edit → Clipboard → Copy** (Ctrl+C) captures the selection's own
   pixels onto the clipboard, leaving them in place.
-- **Cut** it - **Edit → Cut** (Ctrl+X) does the same as Copy, then
+- **Cut** it - **Edit → Clipboard → Cut** (Ctrl+X) does the same as Copy, then
   silences the selection's own region in place.
-- **Paste** the clipboard - **Edit → Paste** (Ctrl+V) writes it back at
+- **Paste** the clipboard - **Edit → Clipboard → Paste** (Ctrl+V) writes it back at
   the same position it was captured from, onto whichever layer is
   currently active in the Layers panel - which doesn't have to be the
   layer it was copied or cut from. Select a different layer's row first
@@ -1353,7 +1354,7 @@ selection to a plain, axis-aligned rectangle.
   Switches straight to [Pick](#pick) and selects the newly pasted result
   there - move, modify, delete, or restack it right away, with no
   separate click needed to find it again.
-- **Capture as Mind Shot** it - **Edit → Capture as Mind Shot** opens a small
+- **Capture as Mind Shot** it - **Edit → Capture → Capture as Mind Shot** opens a small
   dialog before storing the selection's own pixels permanently: a **Name**
   (defaulting to "Mind Shot 1", "Mind Shot 2", and so on, still editable), a
   **Fundamental Frequency**, and a **Start-Time Offset**. Unlike Copy, this
@@ -1370,7 +1371,7 @@ selection to a plain, axis-aligned rectangle.
   you paint, instead of the capture's own geometric middle landing there.
   Always captures the selection's own full bounding box, even for a
   Lasso/Wand/combined selection - not yet confined to its actual shape.
-- **Capture as Mind Grain** it - **Edit → Capture as Mind Grain** opens the
+- **Capture as Mind Grain** it - **Edit → Capture → Capture as Mind Grain** opens the
   same dialog Capture as Mind Shot does (defaulting to "Mind Grain 1", "Mind
   Grain 2", and so on) and stores a *reference* to the selection's own layer
   and region - unlike Capture as Mind Shot, no pixels are captured at all,
@@ -1382,8 +1383,8 @@ selection to a plain, axis-aligned rectangle.
   above for what Fundamental Frequency/Start-Time Offset do (identical
   either way). Also always references the selection's own full bounding
   box, same as Mind Shot above.
-- **Create Resonance from Picked Path...** - **Edit → Create
-  Resonance from Picked Path...** prompts for a name (defaulting
+- **Create Resonance from Picked Path...** - **Edit → Picked Path Tools →
+  Create Resonance from Picked Path...** prompts for a name (defaulting
   to "Resonance 1", "Resonance 2", and so on), then
   analyzes whichever path/stroke is currently Picked and stores the result
   permanently under that name - a confirmation appears in the status bar.
@@ -1394,20 +1395,20 @@ selection to a plain, axis-aligned rectangle.
 - **Branching Curve editor** - build a real tree/graph for a Resonance
   brush, instead of just one straight stroke. Draw a trunk stroke
   as an ordinary paint stroke, switch to Pick and click it, then **Edit
-  → Start Branching Curve from Picked Path**. To grow a branch: click a
+  → Picked Path Tools → Start Branching Curve from Picked Path**. To grow a branch: click a
   precise point on the trunk (or on any already-added branch) - this
   arms that point as the next branch's own attachment point. Switch to
   Paint and draw a new stroke, switch back to Pick and click it, then
-  **Edit → Add Picked Path as Branch**. Repeat as many times as you
+  **Edit → Picked Path Tools → Add Picked Path as Branch**. Repeat as many times as you
   like, grafting new branches onto the trunk or onto earlier branches.
-  When the tree is complete, **Edit → Create Resonance from
+  When the tree is complete, **Edit → Picked Path Tools → Create Resonance from
   Picked Graph...** prompts for a name and stores the whole tree's own
   spectrum, the same way Create Resonance from Picked Path
-  does for a single curve. **Edit → Cancel Branching Curve** abandons an
+  does for a single curve. **Edit → Picked Path Tools → Cancel Branching Curve** abandons an
   in-progress tree without saving anything, if you want to start over.
   Every branch past the trunk needs its own attachment point clicked
   first - adding a branch with no point armed does nothing.
-- **Deselect** it - **Edit → Deselect** (Ctrl+D), or drag-clicking without
+- **Deselect** it - **Edit → Selection → Deselect** (Ctrl+D), or drag-clicking without
   actually dragging (a plain click) on the canvas while in Select mode.
 
 Filling and pasting are both undoable (Ctrl+Z), the same as painting a
@@ -1424,10 +1425,10 @@ click on the canvas places one more node, building a path
 one node at a time - a live line always shows the path built so far, plus
 a segment out to wherever the cursor currently is.
 
-- **Finish** it - **Edit → Finish Path** commits the path as a new,
+- **Finish** it - **Edit → Path Tool → Finish Path** commits the path as a new,
   undoable paint object (using the current Painting brush's own color/
   opacity settings), exactly like a freehand stroke.
-- **Cancel** it - **Edit → Cancel Path** discards everything placed so
+- **Cancel** it - **Edit → Path Tool → Cancel Path** discards everything placed so
   far instead.
 - **Smooth Nodes** - a toolbar checkbox next to the Tool dropdown
   controls which node type the *next* click places: unchecked (the
@@ -1946,7 +1947,7 @@ remains future work, since each is built from straight lines that don't
 translate onto a disk without their own dedicated redesign.
 
 **Resonance** (formerly "Resonant Instrument") is now complete end to
-end: **Edit → Create Resonance from Picked Path...** (see [Pick](#pick)
+end: **Edit → Picked Path Tools → Create Resonance from Picked Path...** (see [Pick](#pick)
 above) analyzes a picked path's own shape and stores the result
 permanently, under a name you choose; **Resonance** (see
 [Painting](#painting) below) paints with it; a **Resonance** MindWave
@@ -1990,7 +1991,7 @@ what's designed for it:
 - Pick can't **copy** a picked object yet - only move, modify a stroke's
   own brush settings, delete it, restack it within its own layer, or (for
   a brush stroke) edit its own path.
-- Path editing (Edit → Edit Path) can move a node, drag a handle, or
+- Path editing (Edit → Path Editing → Edit Path) can move a node, drag a handle, or
   toggle a node's type, but can't yet insert or delete a node by
   double-clicking a segment or an existing node, or detach a handle from
   its own mirrored pair with Alt+drag - only whole-node delete (Delete
