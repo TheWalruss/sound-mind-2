@@ -18,6 +18,7 @@ DeviceTestTonePlayer::~DeviceTestTonePlayer() { stop(); }
 void DeviceTestTonePlayer::start(const std::string& outputDeviceName) {
     stop();
     phase_ = 0.0;
+    deviceProblem_.clear();
 
     if (deviceMode_ == AudioDeviceMode::Real) {
         juce::AudioDeviceManager::AudioDeviceSetup setup;
@@ -27,6 +28,8 @@ void DeviceTestTonePlayer::start(const std::string& outputDeviceName) {
         deviceAvailable_ = error.isEmpty();
         if (deviceAvailable_) {
             deviceManager_.addAudioCallback(this);
+        } else {
+            deviceProblem_ = "Could not open the output device: " + error.toStdString();
         }
     }
 
@@ -42,9 +45,12 @@ void DeviceTestTonePlayer::stop() {
         deviceManager_.removeAudioCallback(this);
         deviceAvailable_ = false;
     }
+    deviceProblem_.clear();
 
     playing_.store(false, std::memory_order_relaxed);
 }
+
+const std::string& DeviceTestTonePlayer::deviceProblem() const noexcept { return deviceProblem_; }
 
 bool DeviceTestTonePlayer::isPlaying() const noexcept { return playing_.load(std::memory_order_relaxed); }
 
@@ -69,7 +75,8 @@ void DeviceTestTonePlayer::processBlock(float* const* outputChannelData, int num
         return;
     }
 
-    const double increment = kTwoPi * static_cast<double>(kToneFrequencyHz) / kSampleRateHz;
+    const double increment =
+        kTwoPi * static_cast<double>(kToneFrequencyHz) / sampleRateHz_.load(std::memory_order_relaxed);
     const float gain = gain_.load(std::memory_order_relaxed);
     for (int i = 0; i < numSamples; ++i) {
         const float sample = kToneAmplitude * gain * static_cast<float>(std::sin(phase_));
@@ -90,7 +97,10 @@ void DeviceTestTonePlayer::audioDeviceIOCallbackWithContext(const float* const* 
     processBlock(outputChannelData, numOutputChannels, numSamples);
 }
 
-void DeviceTestTonePlayer::audioDeviceAboutToStart(juce::AudioIODevice* /*device*/) {}
+void DeviceTestTonePlayer::audioDeviceAboutToStart(juce::AudioIODevice* device) {
+    const double rate = device != nullptr ? device->getCurrentSampleRate() : 0.0;
+    sampleRateHz_.store(rate > 0.0 ? rate : kSampleRateHz, std::memory_order_relaxed);
+}
 
 void DeviceTestTonePlayer::audioDeviceStopped() {}
 

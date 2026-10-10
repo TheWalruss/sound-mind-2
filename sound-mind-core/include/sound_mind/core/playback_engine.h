@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -122,7 +123,9 @@ public:
      * environments with no audio hardware (CI runners, in particular),
      * rather than throwing or crashing when none is found.
      *
-     * @return `true` if a real output device is open.
+     * @return `true` if a real output device is open *and still running*
+     *         (it turns `false` again if the device is later unplugged or
+     *         stopped - see deviceProblem() for the reason to show).
      */
     [[nodiscard]] bool isDeviceAvailable() const noexcept;
 
@@ -185,6 +188,31 @@ public:
     /// @brief The currently open output device's name.
     /// @return Empty if no device is open (isDeviceAvailable() is `false`).
     [[nodiscard]] std::string currentOutputDeviceName() const;
+
+    /**
+     * @brief A human-readable reason sound is not currently reaching an
+     *        output device, for surfacing to the user.
+     *
+     * Non-empty exactly when a real device was wanted
+     * (`AudioDeviceMode::Real`) but isn't working: it couldn't be opened
+     * at construction, a setPreferredOutputDevice() switch failed, or the
+     * device later stopped/reported an error (unplugged, taken over by
+     * another application, ...). Always empty for `AudioDeviceMode::None`
+     * (where having no device is the point), and cleared again by a
+     * successful setPreferredOutputDevice().
+     *
+     * @return The reason text, or an empty string when nothing is wrong.
+     * @note Safe to call from any non-real-time thread (guarded by a
+     *       mutex that the audio callback never touches).
+     */
+    [[nodiscard]] std::string deviceProblem() const;
+
+    /// @brief The sample rate the open output device is actually running at.
+    /// @return Hz, or `0.0` if no device is open. When this differs from the
+    ///         loaded audio's own sampleRateHz(), renderBlock() (which does
+    ///         not resample) plays it proportionally faster or slower -
+    ///         callers should surface that rather than let it pass silently.
+    [[nodiscard]] double deviceSampleRateHz() const noexcept;
 
     /**
      * @brief Sets the output gain applied in renderBlock().
@@ -296,9 +324,18 @@ private:
                                            const juce::AudioIODeviceCallbackContext& context) override;
     void audioDeviceAboutToStart(juce::AudioIODevice* device) override;
     void audioDeviceStopped() override;
+    void audioDeviceError(const juce::String& errorMessage) override;
+
+    void setDeviceProblem(std::string problem);
 
     juce::AudioDeviceManager deviceManager_;
+    AudioDeviceMode deviceMode_ = AudioDeviceMode::Real;
     bool deviceAvailable_ = false;
+    bool callbackRegistered_ = false;
+    std::atomic<bool> deviceActive_{false};
+    std::atomic<double> deviceSampleRateHz_{0.0};
+    mutable std::mutex problemMutex_;
+    std::string problem_;
     sound_mind::codec::AudioBuffer audio_;
     std::atomic<std::size_t> position_{0};
     std::atomic<bool> playing_{false};

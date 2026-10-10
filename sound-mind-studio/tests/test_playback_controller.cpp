@@ -154,6 +154,31 @@ void PlaybackControllerTest::setVolumeChangesVolume() {
     QVERIFY(qFuzzyCompare(controller.volume(), 1.5f));
 }
 
+void PlaybackControllerTest::ensureOutputReadyIsSilentWhenNothingIsWrong() {
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
+    QVERIFY(controller.outputDeviceProblem().isEmpty());
+    QVERIFY(controller.ensureOutputReady(QString()).isEmpty());
+}
+
+void PlaybackControllerTest::ensureOutputReadyWarnsWhenOutputGainIsZero() {
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
+    controller.setVolume(0);
+    QVERIFY(controller.ensureOutputReady(QString()).contains(QStringLiteral("0%")));
+    controller.setVolume(100);
+    QVERIFY(controller.ensureOutputReady(QString()).isEmpty());
+}
+
+void PlaybackControllerTest::ensureOutputReadyExplainsAFailedDeviceSwitch() {
+    PlaybackController controller;  // real device mode - a device problem needs a device wanted.
+    (void)controller.availableOutputDeviceNames();
+    QVERIFY(!controller.setOutputDevice(QStringLiteral("definitely not a real device name")));
+    QVERIFY(!controller.outputDeviceProblem().isEmpty());
+    // Retrying against the same bogus name can't recover, so the warning
+    // must still say why - never an empty string while the device is broken.
+    QVERIFY(controller.ensureOutputReady(QStringLiteral("definitely not a real device name"))
+                .contains(QStringLiteral("No sound will be heard")));
+}
+
 void PlaybackControllerTest::outputDeviceMethodsAreCallableWithoutCrashing() {
     PlaybackController controller;  // real device mode (the default) - this test needs it.
     // Populate the device manager's device types first - see

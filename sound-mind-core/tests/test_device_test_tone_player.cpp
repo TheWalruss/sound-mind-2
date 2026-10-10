@@ -19,6 +19,7 @@ TEST_CASE("start with AudioDeviceMode::None never opens a real device but report
     player.start("");
     CHECK(player.isPlaying());
     CHECK_FALSE(player.isDeviceAvailable());
+    CHECK(player.deviceProblem().empty());  // None mode wants no device, so there's no failure to report.
     player.stop();
     CHECK_FALSE(player.isPlaying());
 }

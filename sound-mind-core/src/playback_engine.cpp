@@ -6,7 +6,7 @@
 
 namespace sound_mind::core {
 
-PlaybackEngine::PlaybackEngine(AudioDeviceMode deviceMode) {
+PlaybackEngine::PlaybackEngine(AudioDeviceMode deviceMode) : deviceMode_(deviceMode) {
     if (deviceMode == AudioDeviceMode::None) {
         return;
     }
@@ -14,13 +14,38 @@ PlaybackEngine::PlaybackEngine(AudioDeviceMode deviceMode) {
     deviceAvailable_ = error.isEmpty();
     if (deviceAvailable_) {
         deviceManager_.addAudioCallback(this);
+        callbackRegistered_ = true;
+    } else {
+        setDeviceProblem("Could not open the default output device: " + error.toStdString());
     }
 }
 
 PlaybackEngine::~PlaybackEngine() {
-    if (deviceAvailable_) {
+    if (callbackRegistered_) {
         deviceManager_.removeAudioCallback(this);
     }
+}
+
+void PlaybackEngine::setDeviceProblem(std::string problem) {
+    const std::lock_guard<std::mutex> lock(problemMutex_);
+    problem_ = std::move(problem);
+}
+
+std::string PlaybackEngine::deviceProblem() const {
+    if (deviceMode_ == AudioDeviceMode::None) {
+        return {};
+    }
+    {
+        const std::lock_guard<std::mutex> lock(problemMutex_);
+        if (!problem_.empty()) {
+            return problem_;
+        }
+    }
+    return isDeviceAvailable() ? std::string{} : std::string("The output device is not running.");
+}
+
+double PlaybackEngine::deviceSampleRateHz() const noexcept {
+    return deviceSampleRateHz_.load(std::memory_order_relaxed);
 }
 
 void PlaybackEngine::loadAudio(sound_mind::codec::AudioBuffer audio) {
@@ -49,7 +74,7 @@ bool PlaybackEngine::isPlaying() const noexcept {
 }
 
 bool PlaybackEngine::isDeviceAvailable() const noexcept {
-    return deviceAvailable_;
+    return deviceAvailable_ && deviceActive_.load(std::memory_order_relaxed);
 }
 
 std::vector<std::string> PlaybackEngine::availableOutputDeviceNames() {
@@ -62,10 +87,22 @@ bool PlaybackEngine::setPreferredOutputDevice(const std::string& deviceName) {
     setup.outputDeviceName = juce::String(deviceName);
     setup.useDefaultOutputChannels = true;
     const juce::String error = deviceManager_.setAudioDeviceSetup(setup, true);
+    // JUCE closes the old device before trying the new one, so a failure
+    // can leave nothing open at all - reflect what is actually open rather
+    // than assuming the previous device survived.
+    deviceAvailable_ = deviceManager_.getCurrentAudioDevice() != nullptr;
+    if (deviceAvailable_ && !callbackRegistered_) {
+        // The constructor's initial open failed (no callback was attached
+        // then), so a later successful open has to attach it now - else
+        // the device would be open but permanently silent.
+        deviceManager_.addAudioCallback(this);
+        callbackRegistered_ = true;
+    }
     if (!error.isEmpty()) {
+        setDeviceProblem("Could not switch the output device: " + error.toStdString());
         return false;
     }
-    deviceAvailable_ = true;
+    setDeviceProblem({});
     return true;
 }
 
@@ -194,8 +231,19 @@ void PlaybackEngine::audioDeviceIOCallbackWithContext(const float* const* /*inpu
     renderBlock(outputChannelData, numOutputChannels, numSamples);
 }
 
-void PlaybackEngine::audioDeviceAboutToStart(juce::AudioIODevice* /*device*/) {}
+void PlaybackEngine::audioDeviceAboutToStart(juce::AudioIODevice* device) {
+    deviceSampleRateHz_.store(device != nullptr ? device->getCurrentSampleRate() : 0.0, std::memory_order_relaxed);
+    deviceActive_.store(true, std::memory_order_relaxed);
+    setDeviceProblem({});
+}
 
-void PlaybackEngine::audioDeviceStopped() {}
+void PlaybackEngine::audioDeviceStopped() {
+    deviceActive_.store(false, std::memory_order_relaxed);
+    deviceSampleRateHz_.store(0.0, std::memory_order_relaxed);
+}
+
+void PlaybackEngine::audioDeviceError(const juce::String& errorMessage) {
+    setDeviceProblem("The output device reported an error: " + errorMessage.toStdString());
+}
 
 }  // namespace sound_mind::core

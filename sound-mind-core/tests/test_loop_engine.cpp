@@ -125,6 +125,7 @@ TEST_CASE("LoopEngine::start with AudioDeviceMode::None never opens a real devic
     engine.start();
     CHECK(engine.isRunning());
     CHECK_FALSE(engine.isDeviceAvailable());
+    CHECK(engine.deviceProblem().empty());  // None mode wants no device - nothing to report.
     engine.stop();
     CHECK_FALSE(engine.isRunning());
 }

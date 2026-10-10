@@ -176,6 +176,12 @@ public:
      */
     [[nodiscard]] bool isDeviceAvailable() const noexcept;
 
+    /// @brief Why the most recent start() could not open the input/output
+    ///        devices, for showing to the user instead of looping silence.
+    /// @return Non-empty only for `AudioDeviceMode::Real` when that start()
+    ///         failed to open a device; empty otherwise.
+    [[nodiscard]] const std::string& deviceProblem() const noexcept;
+
     /**
      * @brief The input device names currently available, for the device
      *        manager's current device type - see
@@ -399,6 +405,7 @@ private:
 
     juce::AudioDeviceManager deviceManager_;
     bool deviceAvailable_ = false;
+    std::string deviceProblem_;
     AudioDeviceMode deviceMode_;
     sound_mind::codec::StreamCodecConfig config_;
     std::size_t loopLengthSamples_;

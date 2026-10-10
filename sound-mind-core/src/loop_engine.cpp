@@ -59,6 +59,7 @@ void LoopEngine::start() {
     }
     previewEncoder_.reset();
     previewPushedSamples_ = 0;
+    deviceProblem_.clear();
 
     if (deviceMode_ == AudioDeviceMode::Real) {
         juce::AudioDeviceManager::AudioDeviceSetup setup;
@@ -70,6 +71,8 @@ void LoopEngine::start() {
         deviceAvailable_ = error.isEmpty();
         if (deviceAvailable_) {
             deviceManager_.addAudioCallback(this);
+        } else {
+            deviceProblem_ = "Could not open the input/output devices: " + error.toStdString();
         }
     }
 
@@ -98,6 +101,10 @@ bool LoopEngine::isRunning() const noexcept {
 
 bool LoopEngine::isDeviceAvailable() const noexcept {
     return deviceAvailable_;
+}
+
+const std::string& LoopEngine::deviceProblem() const noexcept {
+    return deviceProblem_;
 }
 
 std::vector<std::string> LoopEngine::availableInputDeviceNames() {

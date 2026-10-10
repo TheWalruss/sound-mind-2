@@ -105,6 +105,13 @@ public:
      */
     [[nodiscard]] bool isDeviceAvailable() const noexcept;
 
+    /// @brief Why the most recent start() could not open the input device,
+    ///        for showing to the user instead of recording silence.
+    /// @return Non-empty only for `AudioDeviceMode::Real` when that start()
+    ///         failed to open a device; empty otherwise. Cleared by the next
+    ///         start().
+    [[nodiscard]] const std::string& deviceProblem() const noexcept;
+
     /**
      * @brief The input device names currently available, for the device
      *        manager's current device type - see
@@ -230,6 +237,7 @@ private:
 
     juce::AudioDeviceManager deviceManager_;
     bool deviceAvailable_ = false;
+    std::string deviceProblem_;
     AudioDeviceMode deviceMode_;
     std::uint32_t sampleRateHz_;
     std::string preferredInputDevice_;

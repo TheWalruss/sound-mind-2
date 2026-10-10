@@ -4177,7 +4177,15 @@ void MainWindow::startPlayback() {
         return;
     }
 
+    // Recovers a lost/never-opened output device if it can, and otherwise
+    // says plainly why nothing (or the wrong thing) will be heard - playback
+    // starting "successfully" with no sound and no explanation is the
+    // failure mode this guards against.
+    const QString outputWarning = playbackController_->ensureOutputReady(configuredOutputDeviceName_);
     playbackController_->play();
+    if (!outputWarning.isEmpty()) {
+        statusBar()->showMessage(outputWarning, 20000);
+    }
     macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStarted,
                                 tr("Started playback"), undoStack_.currentIndex());
 }
@@ -4226,7 +4234,9 @@ void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
     // this switches immediately - see PlaybackEngine::setPreferredOutputDevice()'s
     // own docs.
     if (!playbackController_->setOutputDevice(deviceName)) {
-        statusBar()->showMessage(tr("Could not switch to the selected output device."), 5000);
+        statusBar()->showMessage(
+            tr("Could not switch to the selected output device: %1").arg(playbackController_->outputDeviceProblem()),
+            15000);
     }
 }
 
@@ -4339,7 +4349,9 @@ void MainWindow::toggleLoopMode() {
     updateConfiguredDeviceLockState();
     if (!loopEngine_->isDeviceAvailable()) {
         statusBar()->showMessage(
-            tr("Loop capture started, but no input device is available - nothing will be captured."), 5000);
+            tr("Loop capture started, but no audio device could be opened - nothing will be captured or heard. %1")
+                .arg(QString::fromStdString(loopEngine_->deviceProblem())),
+            15000);
     } else {
         statusBar()->showMessage(tr("Looping..."));
     }
@@ -4475,8 +4487,10 @@ void MainWindow::toggleRecording() {
     recordPanel_->setRecording(true);
     updateConfiguredDeviceLockState();
     if (!recordEngine_.isDeviceAvailable()) {
-        statusBar()->showMessage(tr("Recording started, but no input device is available - nothing will be captured."),
-                                  5000);
+        statusBar()->showMessage(
+            tr("Recording started, but no input device could be opened - nothing will be captured. %1")
+                .arg(QString::fromStdString(recordEngine_.deviceProblem())),
+            15000);
     } else {
         statusBar()->showMessage(tr("Recording..."));
     }
@@ -4549,7 +4563,20 @@ void MainWindow::toggleTestInputDevice(bool testing) {
     if (testing) {
         deviceTestRecordEngine_.setPreferredInputDevice(configuredInputDeviceName_.toStdString());
         deviceTestRecordEngine_.start();
-        testInputLevelTimer_->start();
+        if (!deviceTestRecordEngine_.deviceProblem().empty()) {
+            // A "Test" whose meter just sits at zero is indistinguishable
+            // from a quiet room - say outright that the device didn't open.
+            const QString problem = QString::fromStdString(deviceTestRecordEngine_.deviceProblem());
+            deviceTestRecordEngine_.stop();
+            testing = false;
+            QMessageBox::warning(this, tr("Input device test"),
+                                 tr("The input device could not be opened, so nothing can be tested.\n\n%1\n\n"
+                                    "Pick a different input device, or check that no other program is using it "
+                                    "and that microphone access is allowed in your system privacy settings.")
+                                     .arg(problem));
+        } else {
+            testInputLevelTimer_->start();
+        }
     } else {
         testInputLevelTimer_->stop();
         deviceTestRecordEngine_.stop();
@@ -4570,6 +4597,16 @@ void MainWindow::toggleTestInputDevice(bool testing) {
 void MainWindow::toggleTestOutputDevice(bool testing) {
     if (testing) {
         deviceTestTonePlayer_.start(configuredOutputDeviceName_.toStdString());
+        if (!deviceTestTonePlayer_.deviceProblem().empty()) {
+            const QString problem = QString::fromStdString(deviceTestTonePlayer_.deviceProblem());
+            deviceTestTonePlayer_.stop();
+            testing = false;
+            QMessageBox::warning(this, tr("Output device test"),
+                                 tr("The output device could not be opened, so no test tone can play.\n\n%1\n\n"
+                                    "Pick a different output device, or check that no other program is using "
+                                    "it exclusively.")
+                                     .arg(problem));
+        }
     } else {
         deviceTestTonePlayer_.stop();
     }

@@ -1,6 +1,7 @@
 #include "sound_mind/studio/playback_controller.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include <QTimer>
 
@@ -85,6 +86,34 @@ double PlaybackController::totalSeconds() const noexcept {
 
 bool PlaybackController::setOutputDevice(const QString& deviceName) {
     return engine_.setPreferredOutputDevice(deviceName.toStdString());
+}
+
+QString PlaybackController::outputDeviceProblem() const {
+    return QString::fromStdString(engine_.deviceProblem());
+}
+
+QString PlaybackController::ensureOutputReady(const QString& preferredDeviceName) {
+    if (!engine_.deviceProblem().empty()) {
+        engine_.setPreferredOutputDevice(preferredDeviceName.toStdString());
+    }
+    if (const QString problem = outputDeviceProblem(); !problem.isEmpty()) {
+        return tr("No sound will be heard: %1 Pick a working output device in Configure Devices and click Test.")
+            .arg(problem);
+    }
+    const double deviceRate = engine_.deviceSampleRateHz();
+    const double contentRate = static_cast<double>(engine_.sampleRateHz());
+    if (deviceRate > 0.0 && contentRate > 0.0 && std::abs(deviceRate - contentRate) > 1.0) {
+        return tr("The output device runs at %1 Hz but this project is %2 Hz, so playback will sound "
+                  "%3 and %4. Set the device to %2 Hz in your system sound settings.")
+            .arg(deviceRate, 0, 'f', 0)
+            .arg(contentRate, 0, 'f', 0)
+            .arg(deviceRate > contentRate ? tr("faster") : tr("slower"))
+            .arg(deviceRate > contentRate ? tr("higher in pitch") : tr("lower in pitch"));
+    }
+    if (engine_.volume() <= 0.0f) {
+        return tr("The output gain is 0%, so playback is silent. Raise it in Configure Devices.");
+    }
+    return {};
 }
 
 QString PlaybackController::currentOutputDeviceName() const {

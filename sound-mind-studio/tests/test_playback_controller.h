@@ -20,4 +20,7 @@ private slots:
     void setPlaybackRangeDoesNothingWhenNotLoaded();
     void setVolumeChangesVolume();
     void outputDeviceMethodsAreCallableWithoutCrashing();
+    void ensureOutputReadyIsSilentWhenNothingIsWrong();
+    void ensureOutputReadyWarnsWhenOutputGainIsZero();
+    void ensureOutputReadyExplainsAFailedDeviceSwitch();
 };

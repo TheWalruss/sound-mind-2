@@ -28,6 +28,7 @@ void RecordEngine::start() {
     capturedAudio_.left.clear();
     capturedAudio_.right.clear();
     captureFifo_.reset();
+    deviceProblem_.clear();
 
     if (deviceMode_ == AudioDeviceMode::Real) {
         // Input-only - Record doesn't monitor/pass audio through to an
@@ -39,6 +40,8 @@ void RecordEngine::start() {
         deviceAvailable_ = error.isEmpty();
         if (deviceAvailable_) {
             deviceManager_.addAudioCallback(this);
+        } else {
+            deviceProblem_ = "Could not open the input device: " + error.toStdString();
         }
     }
 
@@ -68,6 +71,10 @@ bool RecordEngine::isRecording() const noexcept {
 
 bool RecordEngine::isDeviceAvailable() const noexcept {
     return deviceAvailable_;
+}
+
+const std::string& RecordEngine::deviceProblem() const noexcept {
+    return deviceProblem_;
 }
 
 std::vector<std::string> RecordEngine::availableInputDeviceNames() {

@@ -193,6 +193,19 @@ TEST_CASE("setPreferredOutputDevice fails gracefully for an unknown device name"
     CHECK_FALSE(engine.setPreferredOutputDevice("definitely not a real device name"));
 }
 
+TEST_CASE("AudioDeviceMode::None reports no device problem and no device sample rate", "[core][playback_engine]") {
+    const PlaybackEngine engine(AudioDeviceMode::None);
+    CHECK(engine.deviceProblem().empty());
+    CHECK(engine.deviceSampleRateHz() == 0.0);
+}
+
+TEST_CASE("A failed setPreferredOutputDevice explains itself via deviceProblem", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::Real);
+    (void)engine.availableOutputDeviceNames();  // see the unknown-device test above for why.
+    REQUIRE_FALSE(engine.setPreferredOutputDevice("definitely not a real device name"));
+    CHECK(engine.deviceProblem().find("Could not switch the output device") != std::string::npos);
+}
+
 TEST_CASE("availableOutputDeviceNames is callable without crashing", "[core][playback_engine]") {
     PlaybackEngine engine(AudioDeviceMode::None);
     const auto names = engine.availableOutputDeviceNames();

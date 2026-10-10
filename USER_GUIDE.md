@@ -55,21 +55,24 @@ project's own design principle for this, not a side effect.
 
 ## Starting Out
 
-Launching the Studio shows the **start screen** with two buttons and a
-list:
+Launching the Studio shows the **start screen**: a left-aligned header
+(the Studio's own logo and name) above two side-by-side columns, each
+scrolling independently if its own content doesn't fit the window:
 
-- **New Project...** - opens the [Create Project wizard](#creating-a-project).
-- **Open Project...** - browse to an existing `.smproj` file.
-- **Recent Projects** - your most recently opened projects, click one to
-  reopen it directly.
-- **Device Configuration** - the same input/output device, gain, and
-  "Test" controls [Configure Devices](#configure-devices) offers once a
-  project is open, available here too - so you can pick and test your
-  audio devices before creating or opening anything. Either copy of
-  these controls stays in sync with the other automatically.
-- **Documentation** - Quick Start, Readme, User Guide, Changelog, and
-  About - the same five links the Help menu offers once a project is
-  open, available here too.
+- **Left column**:
+  - **New Project...** - opens the [Create Project wizard](#creating-a-project).
+  - **Open Project...** - browse to an existing `.smproj` file.
+  - **Recent Projects** - your most recently opened projects, click one
+    to reopen it directly.
+- **Right column**:
+  - **Documentation** - Quick Start, Readme, User Guide, Changelog, and
+    About - the same five links the Help menu offers once a project is
+    open, available here too.
+  - **Device Configuration** - the same input/output device, gain, and
+    "Test" controls [Configure Devices](#configure-devices) offers once
+    a project is open, available here too - so you can pick and test
+    your audio devices before creating or opening anything. Either copy
+    of these controls stays in sync with the other automatically.
 
 ## Creating a Project
 
@@ -1742,6 +1745,14 @@ actually use.
   and Loop Mode at once. A **Gain** slider works the same way. Click
   **Test** to play a brief tone through the device, confirming you hear
   it from the right place.
+
+If a device can't be opened, **Test** un-checks itself and a warning says
+why - a Test that quietly does nothing never happens. Pressing **Play** also
+re-tries your chosen output device automatically, and the status bar tells
+you if nothing will be heard (device missing or in use by another program,
+output gain at 0%) or if the device runs at a different sample rate than the
+project (which makes playback sound faster/slower and shifted in pitch - set
+the device to the project's rate in your system sound settings).
 
 The Input combo (and its Gain) locks while Recording or Loop Mode is
 running; the Output combo (and its Gain) locks only while Loop Mode is

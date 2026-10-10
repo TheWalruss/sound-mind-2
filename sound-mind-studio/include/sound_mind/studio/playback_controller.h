@@ -134,6 +134,33 @@ public:
      */
     bool setOutputDevice(const QString& deviceName);
 
+    /// @brief Why sound is not currently reaching an output device - see
+    ///        `PlaybackEngine::deviceProblem()`.
+    /// @return Empty if the device is working (or none is wanted, as with
+    ///         `AudioDeviceMode::None`).
+    [[nodiscard]] QString outputDeviceProblem() const;
+
+    /**
+     * @brief Checks, just before playing, that playback will actually be
+     *        heard and at the right speed - and tries to recover first.
+     *
+     * If the output device isn't working (never opened, unplugged, taken
+     * over by another application, ...), re-opens `preferredDeviceName`
+     * once (an empty string means the system default) - so merely plugging
+     * a device back in, or closing the program that grabbed it, is enough;
+     * no extra step is needed. Then reports, in priority order: the device
+     * still being unusable; the device running at a different sample rate
+     * than the loaded audio (which would play it proportionally faster/
+     * slower and higher/lower in pitch, since the engine does not
+     * resample); the output gain being 0%.
+     *
+     * @param preferredDeviceName The device the user configured.
+     * @return A short, user-presentable explanation, or empty if nothing is
+     *         wrong. Never empty for a real, unusable device; always empty
+     *         for `AudioDeviceMode::None` apart from the 0%-gain case.
+     */
+    [[nodiscard]] QString ensureOutputReady(const QString& preferredDeviceName);
+
     /// @brief The currently open output device's name.
     /// @return Empty if no device is open.
     [[nodiscard]] QString currentOutputDeviceName() const;

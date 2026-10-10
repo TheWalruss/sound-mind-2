@@ -36,6 +36,7 @@ TEST_CASE("RecordEngine::start with AudioDeviceMode::None never opens a real dev
     engine.start();
     CHECK(engine.isRecording());
     CHECK_FALSE(engine.isDeviceAvailable());
+    CHECK(engine.deviceProblem().empty());  // None mode wants no device - nothing to report.
     engine.stop();
     CHECK_FALSE(engine.isRecording());
 }

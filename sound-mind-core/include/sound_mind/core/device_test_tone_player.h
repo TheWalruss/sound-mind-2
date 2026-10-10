@@ -76,6 +76,15 @@ public:
     /// @return `true` if a real output device is open.
     [[nodiscard]] bool isDeviceAvailable() const noexcept;
 
+    /// @brief Why start() could not open the requested output device, for
+    ///        showing to the user (a "Test" that silently plays nothing is
+    ///        exactly what this exists to prevent).
+    /// @return Non-empty only for `AudioDeviceMode::Real` when the most
+    ///         recent start() failed to open a device; empty otherwise
+    ///         (always empty for `AudioDeviceMode::None`). Cleared by the
+    ///         next start() or by stop().
+    [[nodiscard]] const std::string& deviceProblem() const noexcept;
+
     /**
      * @brief Sets the test tone's own linear output gain - the Configure
      *        Devices panel's own output gain slider applies to the test
@@ -115,11 +124,11 @@ public:
     ///        clipping a downstream device.
     static constexpr float kToneAmplitude = 0.25f;
 
-    /// @brief The sample rate the tone's own phase increment is computed
-    ///        against - trusted to match whatever real device actually
-    ///        opens, the same simplification every other engine in this
-    ///        codebase already makes (none validates a real device's own
-    ///        negotiated rate against what it expects).
+    /// @brief The sample rate the tone's phase increment is computed
+    ///        against until (and unless) a real device reports its own
+    ///        actual rate via audioDeviceAboutToStart() - after which the
+    ///        device's rate is used, so the tone is a true 440 Hz on a
+    ///        48 kHz device too.
     static constexpr double kSampleRateHz = 44100.0;
 
     /**
@@ -146,6 +155,8 @@ private:
     juce::AudioDeviceManager deviceManager_;
     AudioDeviceMode deviceMode_;
     bool deviceAvailable_ = false;
+    std::string deviceProblem_;
+    std::atomic<double> sampleRateHz_{kSampleRateHz};
     std::atomic<bool> playing_{false};
     std::atomic<float> gain_{1.0f};
 

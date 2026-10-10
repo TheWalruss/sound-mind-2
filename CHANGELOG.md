@@ -6,6 +6,32 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.29.1] - 2026-10-10
+
+Direct user feedback: "Reorganize the landing page into a header and two columns. The header, left-aligned, has the image glyph and 'SoundMind Studio'. The left column shall have the New Project and Open Project buttons, as well as the list of recent projects. The right column shall have the documentation and the device configuration. Make sure both columns get scroll bars if the content doesn't fit."
+
+### Changed
+
+- **Start screen layout**: the logo and "Sound Mind Studio" title now sit in a left-aligned header instead of a centered one. Below it, New Project/Open Project/Recent Projects moved into a left column, and Documentation/Device Configuration into a right column - each its own independently scrolling area, so either column can grow past the window's height without clipping or pushing the other column around.
+
+## [0.1.28.1] - 2026-10-10
+
+Direct user feedback: "review the sound output, device selection, and related code and documentation. It is important that none of it fails silently, so it is easy to configure and verify that sound is working properly."
+
+### Fixed
+
+- **Playback with no working output device no longer looks like it works.** Pressing Play now re-tries the configured output device once (so replugging a device, or closing the program that grabbed it, is enough) and, if it still can't be used, says so in the status bar with the reason instead of silently advancing the playhead.
+- **Output device stuck silent after a failed first open.** If the output device couldn't be opened at startup, a later successful device pick opened the device but never attached the audio callback, so it stayed silent forever. It now attaches correctly.
+- A failed output-device switch no longer leaves the app believing the old device is still open.
+- A device that is unplugged or stopped mid-session is now noticed (previously ignored).
+- The Configure Devices **Output Test** tone is now a true 440 Hz on devices that run at a rate other than 44.1 kHz.
+
+### Added
+
+- **Device Test buttons report failure**: if the chosen input or output device can't be opened, the Test button un-checks itself and a warning explains why and what to try - instead of a silent tone or a level meter that just sits at zero.
+- **Playback warnings**: before playing, the app now also warns if the output device runs at a different sample rate than the project (which plays it faster/slower and shifted in pitch) or if output gain is 0%.
+- Recording, Loop Mode and device-switch status messages now include the underlying reason a device couldn't be opened, and stay visible longer.
+
 ## [0.1.27.1] - 2026-10-10
 
 Direct user feedback: "Are named grid presets a thing yet? If not, the next feature I want to do is to give the user the option to save/load named grid presets, just like tool configuration presets. Also part of the Resource Manager. Additionally, for all the named resources, I want the following behavior: when a user specifies an existing name, the user gets the option to replace the existing resource, to give a new name (to resolve the conflict), or to cancel saving. Check for new name collisions when the user specifies a new name, of course. When importing resources, if there's a name collision, give the user the option to use the import version (overwrite), keep the existing version (ignore), or keep both (rename import version)."
