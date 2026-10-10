@@ -308,4 +308,13 @@ private slots:
     // Edit menu redesign: the former flat, 29-action list is now grouped
     // into named submenus (Undo/Redo/Delete and Image Mode stay direct).
     void editMenuActionsAreGroupedIntoNamedSubmenus();
+
+    // Canvas right-click context menu (direct user feedback).
+    void rightClickingAPickedStrokeShowsTheObjectContextMenu();
+    void rightClickingEmptyCanvasShowsTheCanvasContextMenu();
+
+    // Real, user-reported hang (CPU pegged, UI locked) - a re-entrancy
+    // regression in Decision #216's own raise()-on-show wiring, fixed by
+    // Decision #221.
+    void showingSeveralTabifiedPanelsInSequenceWithAProjectOpenDoesNotHang();
 };

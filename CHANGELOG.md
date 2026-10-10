@@ -6,6 +6,38 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.25.1] - 2026-10-10
+
+Direct user feedback: "Right-clicking on an object on the canvas, or an empty part of the canvas, shall cause a small menu to appear with likely actions to take."
+
+### Added
+
+- The canvas now shows a right-click context menu. Right-clicking something paintable/pickable shows **Edit Path**, **Bring to Front**, **Send to Back**, and **Delete**; right-clicking an empty part of the canvas shows **Paste**, **Fill Selection...**, **Apply Filter to Selection**, and **Deselect**.
+
+### Notes
+
+- Graying out whichever entries don't actually apply at the exact click point is a deliberate, separate next step, not part of this change.
+
+## [0.1.24.1] - 2026-10-10
+
+Direct user feedback: "when I open the app and have opened a project or created one, when I open a panel for any reason, the program locks and consumes a whole CPU core."
+
+### Fixed
+
+- Opening a right-hand-dock panel no longer sometimes locks the app and pegs a CPU core. Root cause: showing one tabified panel could, under real window-system compositing, trigger a runaway back-and-forth between it and whichever tab was previously active, each one endlessly re-activating itself in response to the other - introduced by `v0.1.20.1`'s own "switch to the new tab immediately" fix. A new guard stops a panel's own tab-activation from ever triggering another one's in turn.
+
+## [0.1.23.1] - 2026-10-10
+
+Found while investigating a different report (today's Edit menu redesign): the full regression suite had two failing pre-existing tests, flagged to the user and fixed on request.
+
+### Fixed
+
+- Showing Playback, Record, or Loop no longer sometimes leaves one of the other two open too, instead of hiding them. Root cause: `QDockWidget::visibilityChanged(bool visible)`'s own `visible` argument can read `false` for a dock joining an already-active tab group, even though it genuinely just became visible (a side effect of `v0.1.19.1`'s default tabbing) - the mutual-exclusivity check trusted that argument instead of the dock's own real `isVisible()`.
+
+### Notes
+
+- A related, test-only bug (no production behavior affected) found and fixed in the same pass: the Playback panel's own Play/Stop buttons and the Resource Browser's Mind Shot preview Play/Stop buttons share the same object names (by design - each is correctly scoped to its own panel everywhere else), so one `MainWindowTest` case that searched the whole window for `"playButton"` instead of the specific panel could silently grab the wrong one.
+
 ## [0.1.22.1] - 2026-10-10
 
 Direct user feedback: "The Edit menu is a kludge." Scopes `docs/sound-mind-roadmap.md`'s long-flagged "Edit menu redesign" backlog item.

@@ -1252,6 +1252,13 @@ object again to select the one underneath - each further click on the
 same spot cycles to the next one down, wrapping back to the topmost once
 you reach the bottom.
 
+**Right-clicking** an object (in any tool mode, not just Pick) selects
+it and opens a small menu with **Edit Path**, **Bring to Front**,
+**Send to Back**, and **Delete** - the same actions as above, without
+reaching for the Edit menu. Right-clicking empty canvas space instead
+opens **Paste**, **Fill Selection...**, **Apply Filter to Selection**,
+and **Deselect** (see [Selection and Fill](#selection-and-fill) below).
+
 Move/Modify/Delete/a completed path edit are all undoable (Ctrl+Z), the
 same as painting a new stroke. Restacking currently isn't - if you bring
 something to front and change your mind, restack it back rather than

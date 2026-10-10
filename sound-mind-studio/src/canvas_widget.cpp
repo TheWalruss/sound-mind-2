@@ -5,6 +5,7 @@
 #include <optional>
 
 #include <QColor>
+#include <QContextMenuEvent>
 #include <QFontMetrics>
 #include <QImage>
 #include <QMouseEvent>
@@ -906,6 +907,15 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void CanvasWidget::leaveEvent(QEvent* /*event*/) { emit cursorLeft(); }
+
+void CanvasWidget::contextMenuEvent(QContextMenuEvent* event) {
+    if (const auto point = widgetPointToTimeFrequency(event->pos()); point.has_value()) {
+        emit contextMenuRequested(*point, mapToGlobal(event->pos()));
+        event->accept();
+        return;
+    }
+    event->ignore();
+}
 
 void CanvasWidget::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton) {

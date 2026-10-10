@@ -97,4 +97,8 @@ private slots:
     void polarModePaintPressInsideTheDiskEmitsPaintStrokeStarted();
     void polarModePaintPressOutsideTheDiskEmitsNothing();
     void polarModeStillDrawsTheMindWavePreview();
+
+    // Canvas right-click context menu (direct user feedback).
+    void contextMenuEventWithNoProjectEmitsNothing();
+    void contextMenuEventEmitsContextMenuRequestedWithAConvertedPointAndGlobalPos();
 };

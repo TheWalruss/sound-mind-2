@@ -1534,6 +1534,31 @@ public slots:
     ///        no-op if a path edit isn't active.
     void cancelPickedPathEdit();
 
+    /**
+     * @brief Builds and shows the canvas's own right-click context menu
+     *        - "right-clicking on an object on the canvas, or an empty
+     *        part of the canvas... a small menu... with likely actions
+     *        to take" (direct user feedback). Connected to
+     *        `CanvasWidget::contextMenuRequested()`.
+     *
+     * Attempts a Pick at `point` first (the same `ToolPaletteController::
+     * beginPick()` a real left-click-to-Pick already calls), then shows
+     * one of two small, fixed menus depending on whether that found
+     * something: **Edit Path**, **Bring to Front**, **Send to Back**,
+     * **Delete** for a Picked object; or **Paste**, **Fill Selection...**,
+     * **Apply Filter to Selection**, **Deselect** otherwise (acting on the
+     * separate rectangle/lasso Selection or the clipboard - these stay
+     * "always present, no-op when inapplicable", the same as their own
+     * Edit menu entries; this doesn't check whether a Selection actually
+     * covers `point` first). Graying out whichever entries don't
+     * actually apply is a deliberate, separate next step.
+     *
+     * @param point The right-click position, converted to time/frequency
+     *        space.
+     * @param globalPos Screen-global position to pop the menu up at.
+     */
+    void showCanvasContextMenu(sound_mind::core::TimeFrequencyPoint point, QPoint globalPos);
+
     /// @brief Clears the current rectangular selection - the actual work
     ///        behind the Edit menu's Deselect action. Delegates to
     ///        `SelectionController::clearSelection()`; a no-op if there
@@ -3648,6 +3673,19 @@ private:
     /// `setChecked()`, the same pattern its own initial-state application
     /// already uses) every time `setProject()` loads a different project.
     QAction* principalModeAction_ = nullptr;
+
+    /// @brief Re-entrancy guard shared by every Right-dock-area panel's
+    /// own `visibilityChanged()`-to-`raise()` connection (Decision #216) -
+    /// `true` for the duration of an actual `raise()` call, so a
+    /// `visibilityChanged()` it synchronously fires for a *different*
+    /// panel (the previously active tab in the same group, losing focus)
+    /// can't schedule that other panel's own raise() in turn. Without
+    /// this, two tabs could ping-pong "raise me back"/"raise me back"
+    /// indefinitely, one zero-delay `QTimer::singleShot()` at a time - a
+    /// real, user-reported hang (one CPU core pegged, UI locked),
+    /// reproducible only with a real display, never under this project's
+    /// own offscreen test platform.
+    bool raisingDockPanel_ = false;
 
     /// @brief The transport toolbar's "Record Macro" checkable toggle -
     /// `v0.Y.49.1` (Macro Mode) Installment A. Checked while

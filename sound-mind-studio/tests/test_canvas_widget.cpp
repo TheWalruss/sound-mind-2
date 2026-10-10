@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include <QContextMenuEvent>
 #include <QCoreApplication>
 #include <QEvent>
 #include <QMouseEvent>
@@ -1813,4 +1814,50 @@ void CanvasWidgetTest::polarModeStillDrawsTheMindWavePreview() {
         }
     }
     QVERIFY(foundDifference);
+}
+
+void CanvasWidgetTest::contextMenuEventWithNoProjectEmitsNothing() {
+    // widgetPointToTimeFrequency()'s own contract: std::nullopt with no
+    // project set - contextMenuEvent() emits nothing in that case, the
+    // same "nothing to do, so do nothing" choice mousePressDoesNothing
+    // InNoneMode() already established for a different no-op condition.
+    CanvasWidget widget;
+    widget.resize(100, 50);
+    QSignalSpy spy(&widget, &CanvasWidget::contextMenuRequested);
+
+    const QPoint localPos(30, 10);
+    QContextMenuEvent event(QContextMenuEvent::Mouse, localPos, widget.mapToGlobal(localPos));
+    QCoreApplication::sendEvent(&widget, &event);
+
+    QCOMPARE(spy.count(), 0);
+}
+
+void CanvasWidgetTest::contextMenuEventEmitsContextMenuRequestedWithAConvertedPointAndGlobalPos() {
+    // Independent of toolMode() - unlike every Started/Continued/Ended
+    // gesture, this fires regardless of which tool is active (confirmed
+    // by deliberately leaving toolMode() at its None default here).
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+
+    std::optional<TimeFrequencyPoint> receivedPoint;
+    std::optional<QPoint> receivedGlobalPos;
+    QObject::connect(&widget, &CanvasWidget::contextMenuRequested,
+                      [&](TimeFrequencyPoint point, QPoint globalPos) {
+                          receivedPoint = point;
+                          receivedGlobalPos = globalPos;
+                      });
+
+    const QPoint localPos(30, 10);
+    QContextMenuEvent event(QContextMenuEvent::Mouse, localPos, widget.mapToGlobal(localPos));
+    QCoreApplication::sendEvent(&widget, &event);
+
+    QVERIFY(receivedPoint.has_value());
+    const double expectedTime = sound_mind::core::frameIndexToTime(30.0, config);
+    QCOMPARE(receivedPoint->timeSeconds, expectedTime);
+    QCOMPARE(receivedGlobalPos, std::make_optional(widget.mapToGlobal(localPos)));
 }

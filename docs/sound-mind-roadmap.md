@@ -1079,6 +1079,16 @@ Direct user feedback on `v0.Y.57.1`'s own shipped Resource Browser (`v0.1.13.1`-
 
 See `docs/sound-mind-architecture.md`'s Decision #210 for the full implementation writeup. Settled in `v0.1.15.1`.
 
+### `v0.Y.66.1` - Canvas right-click context menu (2026-10-10)
+
+Direct user feedback: "Right-clicking on an object on the canvas, or an empty part of the canvas, shall cause a small menu to appear with likely actions to take."
+
+- ✅ **Two small, fixed menus** - **Edit Path**/**Bring to Front**/**Send to Back**/**Delete** when the click lands on something Pickable; **Paste**/**Fill Selection...**/**Apply Filter to Selection**/**Deselect** otherwise. `CanvasWidget` gained a new `contextMenuRequested()` signal (right mouse button, or the keyboard Menu key/Shift+F10), independent of the current tool mode.
+
+See `docs/sound-mind-architecture.md`'s Decision #221 for the full implementation writeup, including which of the Edit menu's newly-grouped submenus each half of this draws from. Settled in `v0.1.25.1`.
+
+**Backlog addition**: graying out whichever menu entries don't actually apply at the exact click point (same deferred next step the Edit menu redesign above already named) would apply here too, once that work actually happens.
+
 **Backlog - queued for before Beta opens, not part of this iteration:**
 
 - ~~**Edit menu redesign - grouped into named, fold-out submenus**~~ - **settled in `v0.1.22.1`, 2026-10-10** (`docs/sound-mind-architecture.md`'s Decision #218). Still open, as its own explicit next step: graying out a group/action when its own precondition isn't met (e.g. **Edit → Path Editing → Edit Path** with nothing Picked).

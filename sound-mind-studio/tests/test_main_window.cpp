@@ -8,8 +8,10 @@
 #include <vector>
 
 #include <QAction>
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QContextMenuEvent>
 #include <QCoreApplication>
 #include <QDir>
 #include <QDoubleSpinBox>
@@ -26,6 +28,7 @@
 #include <QSignalSpy>
 #include <QSlider>
 #include <QStatusBar>
+#include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
 #include <QUrl>
@@ -2506,8 +2509,18 @@ void MainWindowTest::playbackPanelButtonsDriveRealPlayback() {
     QVERIFY(window.importAudioFile(path));
     std::filesystem::remove(path);
 
-    auto* playButton = window.findChild<QPushButton*>(QStringLiteral("playButton"));
-    auto* stopButton = window.findChild<QPushButton*>(QStringLiteral("stopButton"));
+    // Scoped to the PlaybackPanel instance specifically, not a bare
+    // window.findChild<QPushButton*>("playButton") - a real, found-while-
+    // investigating-an-unrelated-report bug: ResourceBrowserPanel's own
+    // Play/Stop buttons (Mind Shot preview playback) use the exact same
+    // object names, so an unscoped lookup across the whole MainWindow is
+    // ambiguous and can silently return the wrong panel's button -
+    // exactly what started happening here once something shifted which
+    // panel's subtree findChild() happens to walk first.
+    auto* playbackPanel = window.findChild<PlaybackPanel*>();
+    QVERIFY(playbackPanel != nullptr);
+    auto* playButton = playbackPanel->findChild<QPushButton*>(QStringLiteral("playButton"));
+    auto* stopButton = playbackPanel->findChild<QPushButton*>(QStringLiteral("stopButton"));
     QVERIFY(playButton != nullptr);
     QVERIFY(stopButton != nullptr);
 
@@ -6175,14 +6188,19 @@ void MainWindowTest::rightDockAreaPanelsAreTabifiedTogetherByDefault() {
         window.findChild<RecordPanel*>(),
         window.findChild<LoopPanel*>(),
     };
+    // Checked right after each show() (not accumulated and checked once
+    // at the end) - Playback/Record/Loop are separately, deliberately
+    // mutually exclusive (Decision #179, re-fixed by Decision #219), so
+    // showing all three in sequence leaves only the last one actually
+    // visible by the end. That's correct, unrelated behavior, not a
+    // tabify failure - checking immediately after each show() confirms
+    // every panel *does* join the shared tab group the moment it's
+    // shown, without being tripped up by a different panel's own later
+    // side effect hiding an earlier one again.
     for (QDockWidget* panel : otherPanels) {
         QVERIFY(panel != nullptr);
         panel->show();
-    }
-
-    const QList<QDockWidget*> tabifiedWithLayers = window.tabifiedDockWidgets(layersPanel);
-    for (QDockWidget* panel : otherPanels) {
-        QVERIFY(tabifiedWithLayers.contains(panel));
+        QVERIFY(window.tabifiedDockWidgets(layersPanel).contains(panel));
     }
 }
 
@@ -6319,4 +6337,124 @@ void MainWindowTest::editMenuActionsAreGroupedIntoNamedSubmenus() {
     QVERIFY(containsText(pickedPathToolsMenu, QStringLiteral("Use Picked Path as MindWave &Shape")));
     QVERIFY(containsText(layersMenu, QStringLiteral("Select Layer &Above")));
     QVERIFY(containsText(pathToolMenu, QStringLiteral("&Finish Path")));
+}
+
+namespace {
+
+/// @brief Sends a right-click context-menu request to `canvas` at
+///        `localPos`, capturing which (non-separator) action texts the
+///        resulting popup menu actually shows - without blocking the
+///        test on `QMenu::exec()`'s own nested event loop. A
+///        `QTimer::singleShot(0, ...)` is a well-established technique
+///        for this: `exec()` runs its own nested loop, which still
+///        dispatches a zero-delay timer queued *before* it started, so
+///        the deferred lambda below runs once the menu is actually open
+///        and reachable via `QApplication::activePopupWidget()`, then
+///        closes it - letting `exec()` (and this whole call) return.
+QStringList shownContextMenuActionTexts(CanvasWidget* canvas, QPoint localPos) {
+    QStringList shownActionTexts;
+    QTimer::singleShot(0, [&shownActionTexts]() {
+        auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+        if (menu == nullptr) {
+            return;
+        }
+        for (QAction* action : menu->actions()) {
+            if (!action->isSeparator()) {
+                shownActionTexts << action->text();
+            }
+        }
+        menu->close();
+    });
+
+    QContextMenuEvent event(QContextMenuEvent::Mouse, localPos, canvas->mapToGlobal(localPos));
+    QCoreApplication::sendEvent(canvas, &event);
+    return shownActionTexts;
+}
+
+}  // namespace
+
+void MainWindowTest::rightClickingAPickedStrokeShowsTheObjectContextMenu() {
+    // "Right-clicking on an object on the canvas... shall cause a small
+    // menu to appear with likely actions to take" - direct user
+    // feedback. Paints a real, single-point stroke first (the same
+    // mousePress+mouseRelease pattern paintingACompleteStrokeAppendsOne
+    // OperationToTheLog() and siblings already establish), so the
+    // right-click lands on something genuinely Pickable.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-context-menu-object.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->resize(100, 50);
+    window.setPaintModeEnabled(true);
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+
+    const QStringList shownActionTexts = shownContextMenuActionTexts(canvas, QPoint(30, 10));
+
+    QCOMPARE(shownActionTexts, QStringList({QStringLiteral("Edit Path"), QStringLiteral("Bring to Front"),
+                                             QStringLiteral("Send to Back"), QStringLiteral("Delete")}));
+}
+
+void MainWindowTest::rightClickingEmptyCanvasShowsTheCanvasContextMenu() {
+    // "...or an empty part of the canvas" - the other half of the same
+    // feedback. Nothing painted this time, so the right-click finds
+    // nothing Pickable - the Selection/Clipboard-flavored menu instead.
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-context-menu-canvas.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    canvas->resize(100, 50);
+
+    const QStringList shownActionTexts = shownContextMenuActionTexts(canvas, QPoint(30, 10));
+
+    QCOMPARE(shownActionTexts,
+             QStringList({QStringLiteral("Paste"), QStringLiteral("Fill Selection..."),
+                          QStringLiteral("Apply Filter to Selection"), QStringLiteral("Deselect")}));
+}
+
+void MainWindowTest::showingSeveralTabifiedPanelsInSequenceWithAProjectOpenDoesNotHang() {
+    // Direct user feedback: "when I open a project... and then open a
+    // panel for any reason, the program locks and consumes a whole CPU
+    // core" - a real regression in Decision #216's own raise()-on-show
+    // wiring, reproducible only with a real display (this suite's own
+    // offscreen test platform never shows the exact mechanism directly -
+    // confirmed empirically: raise()ing one tabified panel here doesn't
+    // synchronously re-fire a sibling's own visibilityChanged() the way
+    // it apparently does with real window-system compositing involved).
+    // Root cause: raise()'s own tab-activation can fire
+    // visibilityChanged() for the *previously* active sibling tab too,
+    // which - without MainWindow's own raisingDockPanel_ guard - would
+    // schedule that sibling's own deferred raise(), re-activating it and
+    // deactivating the one just shown, ad infinitum. This test can't
+    // directly exercise the cross-panel cascade itself (see above), but
+    // does exercise the exact real-world sequence the report described
+    // (a project open, then several panels shown one after another) and
+    // asserts it completes promptly - if the guard above ever regresses
+    // and the cascade becomes reproducible here too, this hangs instead
+    // of passing, which CTest's own test timeout surfaces as a failure
+    // rather than a silent, shipped hang.
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "sound-mind-test-tabify-raise-no-hang.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+    window.show();
+
+    for (QDockWidget* panel : {
+             static_cast<QDockWidget*>(window.findChild<LayersPanel*>()),
+             static_cast<QDockWidget*>(window.findChild<MindWavesPanel*>()),
+             static_cast<QDockWidget*>(window.findChild<ToolConfigurationPanel*>()),
+             static_cast<QDockWidget*>(window.findChild<FilterConfigurationPanel*>()),
+         }) {
+        QVERIFY(panel != nullptr);
+        panel->show();
+        QTest::qWait(20);
+    }
 }

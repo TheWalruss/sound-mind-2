@@ -612,6 +612,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             toolPaletteController_->stampChord(*layerId, point.timeSeconds);
         }
     });
+    connect(canvas_, &CanvasWidget::contextMenuRequested, this, &MainWindow::showCanvasContextMenu);
     // Merges all four tool controllers' own contentChanged() into one
     // connection - see ToolPaletteController::contentChanged()'s own
     // docs; it has already called canvas_->update() itself by this point.
@@ -788,20 +789,34 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // visibility, so hiding the other two here is the only bookkeeping
     // this needs; hide() on an already-hidden dock is a no-op (doesn't
     // re-emit visibilityChanged()), so this can't recurse.
-    connect(playbackPanel_, &QDockWidget::visibilityChanged, this, [this](bool visible) {
-        if (visible) {
+    //
+    // Re-checks isVisible() directly rather than trusting this signal's
+    // own `visible` argument (deliberately ignored, not just unused) -
+    // a real regression, found 2026-10-10: since these three panels
+    // joined the shared Right-dock-area tab group below (Decision
+    // #215), showing one of them while another is already the active
+    // tab makes Qt emit this signal with `visible == false` even though
+    // the panel's own isVisible() reads `true` moments later - the same
+    // "joining an existing tab group" quirk the raise()-wiring below
+    // already has to work around (see its own comment), now also
+    // breaking this *older* code that predates tabify and still
+    // (wrongly) trusted the argument. Confirmed via a temporary qDebug
+    // in each lambda before fixing: `visibilityChanged false isVisible()
+    // true`, for both playbackPanel_ and recordPanel_, every time.
+    connect(playbackPanel_, &QDockWidget::visibilityChanged, this, [this](bool) {
+        if (playbackPanel_->isVisible()) {
             recordPanel_->hide();
             loopPanel_->hide();
         }
     });
-    connect(recordPanel_, &QDockWidget::visibilityChanged, this, [this](bool visible) {
-        if (visible) {
+    connect(recordPanel_, &QDockWidget::visibilityChanged, this, [this](bool) {
+        if (recordPanel_->isVisible()) {
             playbackPanel_->hide();
             loopPanel_->hide();
         }
     });
-    connect(loopPanel_, &QDockWidget::visibilityChanged, this, [this](bool visible) {
-        if (visible) {
+    connect(loopPanel_, &QDockWidget::visibilityChanged, this, [this](bool) {
+        if (loopPanel_->isVisible()) {
             playbackPanel_->hide();
             recordPanel_->hide();
         }
@@ -1588,7 +1603,24 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
              static_cast<QDockWidget*>(recordPanel_),
              static_cast<QDockWidget*>(loopPanel_),
          }) {
-        connect(panel, &QDockWidget::visibilityChanged, panel, [panel](bool) {
+        connect(panel, &QDockWidget::visibilityChanged, panel, [this, panel](bool) {
+            // Re-entrancy guard against a real, user-reported hang (CPU
+            // pegged, UI locked, reproducible only with a real display -
+            // this environment's own offscreen test platform never
+            // triggers it): raise()'s own tab-activation can synchronously
+            // fire visibilityChanged() for the *previously* active sibling
+            // tab in the same group too (not just the panel being raised),
+            // which - without this guard - would schedule *that* sibling's
+            // own deferred raise(), re-activating it and deactivating the
+            // one just shown, firing this panel's own visibilityChanged()
+            // again, and so on - an unbounded ping-pong between two tabs,
+            // one zero-delay timer at a time, never idling. Every one of
+            // these 14 lambdas shares the single `raisingDockPanel_` flag
+            // (not a per-panel one), since the cascade hops *between*
+            // different panels, not just within one.
+            if (raisingDockPanel_) {
+                return;
+            }
             // Deferred to the next event-loop turn, and re-checking
             // isVisible() there rather than trusting this signal's own
             // `visible` argument - confirmed empirically that for a
@@ -1600,9 +1632,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             // Calling raise() synchronously here is also too early -
             // Qt's own internal tab-group bookkeeping isn't settled yet
             // at the point this signal fires.
-            QTimer::singleShot(0, panel, [panel]() {
+            QTimer::singleShot(0, panel, [this, panel]() {
                 if (panel->isVisible()) {
+                    raisingDockPanel_ = true;
                     panel->raise();
+                    raisingDockPanel_ = false;
                 }
             });
         });
@@ -3446,6 +3480,60 @@ void MainWindow::togglePickedPathNodeType() { toolPaletteController_->toggleSele
 void MainWindow::applyPickedPathEdit() { toolPaletteController_->commitPathEdit(); }
 
 void MainWindow::cancelPickedPathEdit() { toolPaletteController_->cancelPathEdit(); }
+
+void MainWindow::showCanvasContextMenu(sound_mind::core::TimeFrequencyPoint point, QPoint globalPos) {
+    // "Right-clicking on an object on the canvas, or an empty part of
+    // the canvas, shall cause a small menu to appear with likely
+    // actions to take" - direct user feedback. Hit-tests via the exact
+    // same beginPick() a real left-click-to-Pick already uses (arming a
+    // potential drag too, same as that click - harmless here since
+    // nothing ever follows up with continueMove()/endMove(), the same
+    // "a plain click, not a drag" no-op path a real click-without-
+    // dragging already relies on), then builds one of two small, fixed
+    // menus depending on whether that found something.
+    //
+    // Deliberately two fixed menus, not a single one trying to cover
+    // both Pick and Selection (two genuinely separate mechanisms in this
+    // app, confirmed by reading each action's own doc comment before
+    // assuming): Edit Path/Bring to Front/Send to Back/Delete all act on
+    // whatever's Picked; Paste/Fill Selection/Apply Filter to
+    // Selection/Deselect all act on the separate rectangle/lasso
+    // Selection (or the clipboard) and stay exactly as "always present,
+    // no-op when inapplicable" as their own Edit menu entries already
+    // are - this doesn't try to detect whether a Selection genuinely
+    // covers `point` before offering them, the same way the Edit menu
+    // itself never has. Graying out whichever ones don't actually apply
+    // is next, separate work, confirmed with the user.
+    if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
+        toolPaletteController_->beginPick(*layerId, point);
+    }
+
+    QMenu menu(this);
+    if (toolPaletteController_->selectedOperationId().has_value()) {
+        QAction* editPath = menu.addAction(tr("Edit Path"));
+        connect(editPath, &QAction::triggered, this, &MainWindow::editPickedPath);
+        menu.addSeparator();
+        QAction* bringToFront = menu.addAction(tr("Bring to Front"));
+        connect(bringToFront, &QAction::triggered, this, &MainWindow::bringPickedObjectToFront);
+        QAction* sendToBack = menu.addAction(tr("Send to Back"));
+        connect(sendToBack, &QAction::triggered, this, &MainWindow::sendPickedObjectToBack);
+        menu.addSeparator();
+        QAction* deleteObject = menu.addAction(tr("Delete"));
+        connect(deleteObject, &QAction::triggered, this, &MainWindow::deletePickedObject);
+    } else {
+        QAction* pasteAction = menu.addAction(tr("Paste"));
+        connect(pasteAction, &QAction::triggered, this, &MainWindow::paste);
+        menu.addSeparator();
+        QAction* fill = menu.addAction(tr("Fill Selection..."));
+        connect(fill, &QAction::triggered, this, &MainWindow::fillSelection);
+        QAction* applyFilter = menu.addAction(tr("Apply Filter to Selection"));
+        connect(applyFilter, &QAction::triggered, this, &MainWindow::applyFilterToSelection);
+        menu.addSeparator();
+        QAction* deselectAction = menu.addAction(tr("Deselect"));
+        connect(deselectAction, &QAction::triggered, this, &MainWindow::deselect);
+    }
+    menu.exec(globalPos);
+}
 
 void MainWindow::deselect() { toolPaletteController_->clearSelection(); }
 

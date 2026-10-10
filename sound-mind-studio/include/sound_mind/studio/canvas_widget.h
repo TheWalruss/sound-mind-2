@@ -16,6 +16,7 @@
 #include "sound_mind/studio/axis_labels.h"
 #include "sound_mind/studio/grid_config.h"
 
+class QContextMenuEvent;
 class QEvent;
 class QMouseEvent;
 class QPainter;
@@ -705,6 +706,32 @@ signals:
     void selectionRotateEnded();
 
     /**
+     * @brief A context-menu request landed on the canvas (right mouse
+     *        button, or the keyboard Menu key/Shift+F10) - "right-clicking
+     *        on an object on the canvas, or an empty part of the canvas"
+     *        (direct user feedback), independent of the current
+     *        toolMode() - unlike every Started/Continued/Ended gesture
+     *        above, which only fires in its own one matching mode.
+     *
+     * Not emitted at all if `point` can't be resolved (outside the
+     * canvas entirely, or no project set) - the same "nothing to do, so
+     * do nothing" contract mousePressEvent() already follows rather than
+     * emitting with an empty `std::optional`, since there's no
+     * in-progress gesture state here that would need a matching "ended"
+     * signal either way. Deciding what the menu actually contains (based
+     * on whatever is - or isn't - Picked at `point`) is the caller's own
+     * job (`MainWindow`), the same "this class only converts raw input,
+     * never acts on it" split every other gesture signal already follows.
+     *
+     * @param point The press position, converted to time/frequency space.
+     * @param globalPos Screen-global position to pop the menu up at
+     *        (`QMenu::exec()`'s own expected coordinate space) - a plain
+     *        widget-local point wouldn't survive the trip through
+     *        `MainWindow`'s own slot unchanged the way a global one does.
+     */
+    void contextMenuRequested(sound_mind::core::TimeFrequencyPoint point, QPoint globalPos);
+
+    /**
      * @brief A new Path node was placed (`Path` tool mode, left button
      *        pressed).
      *
@@ -791,6 +818,17 @@ protected:
     /// @brief Emits cursorLeft() - see its own docs.
     /// @param event Unused; required by QWidget's override signature.
     void leaveEvent(QEvent* event) override;
+
+    /// @brief Emits contextMenuRequested() - see its own docs. Accepted
+    ///        (`event->accept()`) whenever it's actually emitted, so Qt
+    ///        never also tries its own default handling (a no-op for a
+    ///        plain `QWidget` today, but accepting makes that explicit
+    ///        rather than relying on it).
+    /// @param event The context-menu event - mouse-triggered (right
+    ///        button) or keyboard-triggered (Menu key/Shift+F10); either
+    ///        way, `event->globalPos()` is already the right position to
+    ///        pop a menu up at.
+    void contextMenuEvent(QContextMenuEvent* event) override;
 
     /**
      * @brief Zooms via the scroll wheel - `Ctrl`/`Alt`/`Shift`+wheel,
