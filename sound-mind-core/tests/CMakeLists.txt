@@ -51,6 +51,8 @@ add_executable(sound-mind-core-tests
     test_resonant_instrument.cpp
     test_resource_file.cpp
     test_mind_shot_preview.cpp
+    test_tool_configuration_preview.cpp
+    test_grid_preset.cpp
 )
 
 target_link_libraries(sound-mind-core-tests

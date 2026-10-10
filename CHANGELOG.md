@@ -6,6 +6,34 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.27.1] - 2026-10-10
+
+Direct user feedback: "Are named grid presets a thing yet? If not, the next feature I want to do is to give the user the option to save/load named grid presets, just like tool configuration presets. Also part of the Resource Manager. Additionally, for all the named resources, I want the following behavior: when a user specifies an existing name, the user gets the option to replace the existing resource, to give a new name (to resolve the conflict), or to cancel saving. Check for new name collisions when the user specifies a new name, of course. When importing resources, if there's a name collision, give the user the option to use the import version (overwrite), keep the existing version (ignore), or keep both (rename import version)."
+
+### Added
+
+- **Named Grid Presets**: the Grid panel's Frequency Grid, Timing Grid, and Snap to Grid settings can now be saved, loaded, and deleted as a named unit, exactly like Tool Presets - a new **Grid Preset** row (Load combo + Save... + Delete) sits below the Timing Grid group. Grid Presets also show up as their own browsable category in the Resource Browser (no standalone file export yet - saving/loading is the Grid panel's own job).
+- **Universal save-name-collision handling**: every named resource in the app (MindWave, Tool Preset, Mind Shot, Mind Grain, Resonance Profile, Convolution Kernel, Filter Preset, and the new Grid Preset) now checks for a name collision when you save/capture/rename under a name. On a collision, you're asked to **Replace** the existing one, **Rename** (re-checked for a fresh collision), or **Cancel** - closing a gap every one of these resource types' own documentation had long claimed ("Project is responsible for keeping names unique") but never actually enforced.
+- **Universal import-name-collision handling**: importing a resource (from a standalone file, from another browsed project, or as part of a Toolkit bundle) whose name already exists now asks **Overwrite** (use the imported version), **Keep Existing** (ignore the import), or **Keep Both** (auto-renames the import to "Name (2)", "Name (3)", ...) - previously, a colliding import silently created a second, identically-named, indistinguishable entry.
+
+### Fixed
+
+- `ResourceBrowserController::importFromFile()`'s own Resonance Profile case dropped the imported entry's `sourceCurve`, keeping only its `spectrum` - a real, pre-existing gap (the portable `.smresonance` file format itself already carried `sourceCurve`, added by an earlier decision, but the import code was never updated to actually use it). Fixed while rewriting this code path for collision handling.
+
+## [0.1.26.1] - 2026-10-10
+
+Direct user feedback: "In the resource browser, tool configuration, and other appropriate places - practically wherever there is a visual preview of something, give the user the ability to play an audio preview of whatever it is."
+
+### Added
+
+- **Resource Browser**: MindWave, Tool Preset, and Resonance Profile entries now have Play/Stop buttons alongside their existing visual preview, like Mind Shot already did. MindWave previews a default Instrument bound to it as vibrato; Resonance Profile previews a default Resonance brush carrying its spectrum - both painted as the same representative stroke and decoded.
+- **Tool Configuration panel**: a new Preview button plays the current (not-yet-saved) tool settings the same way, so you can audition a brush before painting with it.
+
+### Notes
+
+- Filter Configuration, Convolution Kernel, and Filter Preset are deliberately not included - previewing a filter needs live filtering of real audio, which is a separate, already-queued backlog item ("a 'filter preview' control").
+- **Correction**: the previous entry below (`v0.1.25.1`, the canvas context menu) was fully documented but the build's own version number was left one step behind (`0.1.24.1`) by mistake - this entry's own version now reflects the real, built sequence.
+
 ## [0.1.25.1] - 2026-10-10
 
 Direct user feedback: "Right-clicking on an object on the canvas, or an empty part of the canvas, shall cause a small menu to appear with likely actions to take."

@@ -15,6 +15,10 @@ using sound_mind::studio::snapToGrid;
 using sound_mind::studio::TimingGridConfig;
 using sound_mind::studio::TimingGridMode;
 using sound_mind::studio::timingGridLinesSeconds;
+using sound_mind::studio::fromFrequencyGridPresetConfig;
+using sound_mind::studio::fromTimingGridPresetConfig;
+using sound_mind::studio::toFrequencyGridPresetConfig;
+using sound_mind::studio::toTimingGridPresetConfig;
 
 namespace {
 
@@ -390,4 +394,69 @@ void GridConfigTest::snapToGridSnapsBothAxesWhenBothGridsAreActive() {
 
     QVERIFY(qAbs(snapped.timeSeconds - 1.0) < 1e-9);
     QCOMPARE(snapped.frequencyHz, 300.0);
+}
+
+void GridConfigTest::toFrequencyGridPresetConfigRoundTripsEveryField() {
+    FrequencyGridConfig config;
+    config.noteGridEnabled = true;
+    config.noteGridTemperament = sound_mind::core::Temperament::Equal24;
+    config.noteGridKey = sound_mind::core::PitchClass::GSharp;
+    config.noteGridScale = sound_mind::core::ScaleType::MinorPentatonic;
+    config.noteGridExcludedSteps = {2, 4};
+    config.noteGridExcludedOctaves = {0};
+    config.harmonicSeriesEnabled = true;
+    config.harmonicFundamentalHz = 55.0;
+    config.customFrequenciesEnabled = true;
+    config.customFrequenciesHz = {123.0, 456.0};
+    config.lineColor = QColor(10, 20, 30);
+    config.lineWidthPixels = 3.5;
+    config.lineStyle = Qt::DashLine;
+
+    const auto preset = toFrequencyGridPresetConfig(config);
+    const auto restored = fromFrequencyGridPresetConfig(preset);
+
+    QCOMPARE(restored.noteGridEnabled, config.noteGridEnabled);
+    QCOMPARE(static_cast<int>(restored.noteGridTemperament), static_cast<int>(config.noteGridTemperament));
+    QCOMPARE(static_cast<int>(restored.noteGridKey), static_cast<int>(config.noteGridKey));
+    QCOMPARE(static_cast<int>(restored.noteGridScale), static_cast<int>(config.noteGridScale));
+    QCOMPARE(restored.noteGridExcludedSteps, config.noteGridExcludedSteps);
+    QCOMPARE(restored.noteGridExcludedOctaves, config.noteGridExcludedOctaves);
+    QCOMPARE(restored.harmonicSeriesEnabled, config.harmonicSeriesEnabled);
+    QCOMPARE(restored.harmonicFundamentalHz, config.harmonicFundamentalHz);
+    QCOMPARE(restored.customFrequenciesEnabled, config.customFrequenciesEnabled);
+    QCOMPARE(restored.customFrequenciesHz, config.customFrequenciesHz);
+    QCOMPARE(restored.lineColor, config.lineColor);
+    QCOMPARE(restored.lineWidthPixels, config.lineWidthPixels);
+    QCOMPARE(restored.lineStyle, config.lineStyle);
+}
+
+void GridConfigTest::toTimingGridPresetConfigRoundTripsEveryField() {
+    TimingGridConfig config;
+    config.mode = TimingGridMode::Tempo;
+    config.intervalSeconds = 2.0;
+    config.tempoBeatFraction = 0.25;
+    config.lineColor = QColor(40, 50, 60);
+    config.lineWidthPixels = 2.0;
+    config.lineStyle = Qt::DotLine;
+
+    const auto preset = toTimingGridPresetConfig(config);
+    const auto restored = fromTimingGridPresetConfig(preset);
+
+    QCOMPARE(restored.mode, config.mode);
+    QCOMPARE(restored.intervalSeconds, config.intervalSeconds);
+    QCOMPARE(restored.tempoBeatFraction, config.tempoBeatFraction);
+    QCOMPARE(restored.lineColor, config.lineColor);
+    QCOMPARE(restored.lineWidthPixels, config.lineWidthPixels);
+    QCOMPARE(restored.lineStyle, config.lineStyle);
+}
+
+void GridConfigTest::frequencyGridPresetConfigDashStylesRoundTripThroughAllThreeOptions() {
+    for (const Qt::PenStyle style : {Qt::SolidLine, Qt::DashLine, Qt::DotLine}) {
+        FrequencyGridConfig config;
+        config.lineStyle = style;
+
+        const auto restored = fromFrequencyGridPresetConfig(toFrequencyGridPresetConfig(config));
+
+        QCOMPARE(restored.lineStyle, style);
+    }
 }

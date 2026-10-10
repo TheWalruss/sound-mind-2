@@ -7,6 +7,7 @@
 #include <QColor>
 #include <Qt>
 
+#include "sound_mind/core/grid_preset.h"
 #include "sound_mind/core/music_theory.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project_settings.h"
@@ -268,5 +269,39 @@ struct TimingGridConfig {
                                                                   const FrequencyGridConfig& frequencyGridConfig,
                                                                   const TimingGridConfig& timingGridConfig,
                                                                   const sound_mind::core::ProjectSettings& settings);
+
+/**
+ * @brief Converts a Qt-flavored `FrequencyGridConfig` to its Qt-
+ *        independent, savable counterpart - `GridPanel`'s own Grid
+ *        Preset Save button uses this before calling
+ *        `Project::addGridPreset()` (see `sound_mind::core::
+ *        FrequencyGridPresetConfig`'s own docs on why the two
+ *        representations differ at all - a Qt-free `sound-mind-core`
+ *        can't depend on `QColor`/`Qt::PenStyle`).
+ * @param config The panel's own current configuration.
+ * @return The equivalent, Qt-independent configuration.
+ */
+[[nodiscard]] sound_mind::core::FrequencyGridPresetConfig toFrequencyGridPresetConfig(
+    const FrequencyGridConfig& config);
+
+/// @brief The inverse of toFrequencyGridPresetConfig() - `GridPanel`'s
+///        own Grid Preset Load combo uses this to apply a saved preset's
+///        Frequency Grid back into the panel's own Qt-flavored fields.
+/// @param config The saved, Qt-independent configuration.
+/// @return The equivalent Qt-flavored configuration.
+[[nodiscard]] FrequencyGridConfig fromFrequencyGridPresetConfig(
+    const sound_mind::core::FrequencyGridPresetConfig& config);
+
+/// @brief Converts a Qt-flavored `TimingGridConfig` to its Qt-independent,
+///        savable counterpart - see toFrequencyGridPresetConfig()'s own
+///        docs for the identical reasoning, applied here.
+/// @param config The panel's own current configuration.
+/// @return The equivalent, Qt-independent configuration.
+[[nodiscard]] sound_mind::core::TimingGridPresetConfig toTimingGridPresetConfig(const TimingGridConfig& config);
+
+/// @brief The inverse of toTimingGridPresetConfig().
+/// @param config The saved, Qt-independent configuration.
+/// @return The equivalent Qt-flavored configuration.
+[[nodiscard]] TimingGridConfig fromTimingGridPresetConfig(const sound_mind::core::TimingGridPresetConfig& config);
 
 }  // namespace sound_mind::studio

@@ -50,6 +50,7 @@
 #include "test_mind_wave_controller.h"
 #include "test_mind_wave_editor.h"
 #include "test_mind_waves_panel.h"
+#include "test_name_collision_dialog.h"
 #include "test_paint_controller.h"
 #include "test_path_controller.h"
 #include "test_path_edit_session.h"
@@ -231,6 +232,9 @@ int main(int argc, char** argv) {
 
     MindWavesPanelTest mindWavesPanelTest;
     status |= QTest::qExec(&mindWavesPanelTest, argc, argv);
+
+    NameCollisionDialogTest nameCollisionDialogTest;
+    status |= QTest::qExec(&nameCollisionDialogTest, argc, argv);
 
     MindCaptureDialogTest mindCaptureDialogTest;
     status |= QTest::qExec(&mindCaptureDialogTest, argc, argv);

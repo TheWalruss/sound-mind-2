@@ -1754,3 +1754,54 @@ void ToolConfigurationPanelTest::loadingAnInstrumentConfigurationSyncsTheHarmoni
     QVERIFY(harmonicSeriesWidget != nullptr);
     QCOMPARE(harmonicSeriesWidget->harmonicStrengths(), std::vector<double>({1.0, 0.7, 0.4}));
 }
+
+void ToolConfigurationPanelTest::freshPanelShowsPlayPreviewNotStop() {
+    // Direct user feedback: "practically wherever there is a visual
+    // preview of something, give the user the ability to play an audio
+    // preview of whatever it is" - the live counterpart to the Resource
+    // Browser's own Tool Preset preview.
+    ToolConfigurationPanel panel;
+    auto* playButton = panel.findChild<QPushButton*>(QStringLiteral("playPreviewButton"));
+    auto* stopButton = panel.findChild<QPushButton*>(QStringLiteral("stopPreviewButton"));
+    QVERIFY(playButton != nullptr);
+    QVERIFY(stopButton != nullptr);
+    QVERIFY(!playButton->isHidden());
+    QVERIFY(stopButton->isHidden());
+}
+
+void ToolConfigurationPanelTest::clickingPlayPreviewEmitsPreviewRequested() {
+    ToolConfigurationPanel panel;
+    auto* playButton = panel.findChild<QPushButton*>(QStringLiteral("playPreviewButton"));
+    QVERIFY(playButton != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::previewRequested);
+
+    playButton->click();
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void ToolConfigurationPanelTest::clickingStopPreviewEmitsStopPreviewRequested() {
+    ToolConfigurationPanel panel;
+    panel.setPreviewPlaying(true);
+    auto* stopButton = panel.findChild<QPushButton*>(QStringLiteral("stopPreviewButton"));
+    QVERIFY(stopButton != nullptr);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::stopPreviewRequested);
+
+    stopButton->click();
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void ToolConfigurationPanelTest::setPreviewPlayingTogglesWhichButtonIsShown() {
+    ToolConfigurationPanel panel;
+    auto* playButton = panel.findChild<QPushButton*>(QStringLiteral("playPreviewButton"));
+    auto* stopButton = panel.findChild<QPushButton*>(QStringLiteral("stopPreviewButton"));
+
+    panel.setPreviewPlaying(true);
+    QVERIFY(playButton->isHidden());
+    QVERIFY(!stopButton->isHidden());
+
+    panel.setPreviewPlaying(false);
+    QVERIFY(!playButton->isHidden());
+    QVERIFY(stopButton->isHidden());
+}

@@ -67,6 +67,8 @@ add_library(sound-mind-core
     src/resource_file.cpp
     src/mind_shot_preview.cpp
     src/filter_preset.cpp
+    src/tool_configuration_preview.cpp
+    src/grid_preset.cpp
 )
 
 target_include_directories(sound-mind-core

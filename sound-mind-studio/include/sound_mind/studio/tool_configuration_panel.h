@@ -341,6 +341,19 @@ public:
      */
     void setCreateMindWaveCallback(std::function<std::pair<sound_mind::core::MindWaveId, QString>()> callback);
 
+    /// @brief Sets the Preview Play/Stop buttons' own state - `playing`
+    ///        toggles which of the two is shown, the same shape
+    ///        `ResourceBrowserPanel::setPlaying()` already establishes
+    ///        for its own, analogous Play/Stop pair. Direct user
+    ///        feedback: "practically wherever there is a visual preview
+    ///        of something, give the user the ability to play an audio
+    ///        preview of whatever it is" - `toolConfiguration()`'s own
+    ///        current value, played as a representative stroke, is
+    ///        exactly that for this panel; `MainWindow` owns the actual
+    ///        playback, this panel only reflects its state.
+    /// @param playing `true` to show Stop in place of Play.
+    void setPreviewPlaying(bool playing);
+
 signals:
     /// @brief Emitted whenever any parameter control changes.
     /// @param config The panel's own new, complete configuration.
@@ -353,6 +366,13 @@ signals:
     /// @brief The "Show path geometry" checkbox changed.
     /// @param shown The new checked state.
     void showPathGeometryChanged(bool shown);
+
+    /// @brief The Preview Play button was clicked - see
+    ///        setPreviewPlaying()'s own docs.
+    void previewRequested();
+
+    /// @brief The Preview Stop button was clicked.
+    void stopPreviewRequested();
 
 private:
     /// @brief Emits toolConfigurationChanged() with the current config_.
@@ -641,6 +661,13 @@ private:
     QComboBox* toolPresetCombo_ = nullptr;
     QPushButton* savePresetButton_ = nullptr;
     QPushButton* deletePresetButton_ = nullptr;
+
+    /// @brief Preview Play/Stop - see setPreviewPlaying()'s own docs.
+    ///        `playPreviewButton_`'s own visibility is `setPreviewPlaying()`'s
+    ///        `!playing`; `stopPreviewButton_`'s is `playing` - exactly
+    ///        `ResourceBrowserPanel`'s own Play/Stop pair's shape.
+    QPushButton* playPreviewButton_ = nullptr;
+    QPushButton* stopPreviewButton_ = nullptr;
 
     QComboBox* toolTypeCombo_ = nullptr;
 

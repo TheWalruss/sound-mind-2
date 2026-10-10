@@ -23,8 +23,8 @@ class ResourceBrowserPanel;
  * @brief Owns the Resource Browser panel's actual `Project` reads/
  *        mutations - browsing a second project read-only, exporting an
  *        entry to a standalone portable resource file, importing one from
- *        a file or from the browsed project, and previewing a Mind Shot's
- *        own rendered raster/decoded audio. `docs/sound-mind-roadmap.md`'s
+ *        a file or from the browsed project, and previewing an entry's own
+ *        rendered raster and/or decoded audio. `docs/sound-mind-roadmap.md`'s
  *        `v0.Y.57.1` Installment C, the same "own presentation" split
  *        `MindWaveController` already establishes for `MindWavesPanel`.
  *
@@ -36,12 +36,18 @@ class ResourceBrowserPanel;
  * entirely separate from, and never written back over, whatever file it
  * came from).
  *
- * **Mind Shot preview playback** owns a dedicated `PlaybackEngine`
- * instance, independent of the Studio's own main playback path - the same
- * "its own isolated engine, not the shared transport" precedent
+ * **Audio preview playback** owns a dedicated `PlaybackEngine` instance,
+ * independent of the Studio's own main playback path - the same "its own
+ * isolated engine, not the shared transport" precedent
  * `DeviceTestTonePlayer` already establishes for test-tone playback, so
- * previewing a Mind Shot here never interferes with (or is interfered
- * with by) actual project playback/Loop Mode.
+ * previewing an entry here never interferes with (or is interfered with
+ * by) actual project playback/Loop Mode. Mind Shot previews its own real
+ * captured audio; Mind Wave, Tool Preset, and Resonance Profile each
+ * instead preview a *synthesized* representative stroke (direct user
+ * feedback: "practically wherever there is a visual preview of
+ * something, give the user the ability to play an audio preview of
+ * whatever it is") - see `renderToolConfigurationStreamImage()`'s own
+ * docs in the `.cpp` for how.
  */
 class ResourceBrowserController : public QObject {
     Q_OBJECT
@@ -187,14 +193,18 @@ private:
     /// @brief Applies one imported Toolkit entry onto `target` - shared by
     ///        `importToolkitFrom()`'s own all-or-nothing trial-copy
     ///        mechanism (see that method's own docs on why it operates on
-    ///        a copy, not `project_` directly).
+    ///        a copy, not `project_` directly). Not `static` (despite
+    ///        operating on `target`, not `project_`) - it still needs
+    ///        `panel_` as the parent widget for the collision-resolution
+    ///        dialog (`sound_mind::studio::resolveImportName()`) a
+    ///        colliding entry's own name now shows.
     /// @param type Which portable resource type `resource` holds.
     /// @param resource That resource's own serialized JSON (`id` already
     ///        `0`, per `sound_mind::core::ImportedToolkit`'s own docs).
     /// @param target The project to add it to.
     /// @throws nlohmann::json::exception if `resource` doesn't actually
     ///         match `type`'s own expected shape.
-    static void applyToolkitEntry(sound_mind::core::PortableResourceType type, const nlohmann::json& resource,
+    void applyToolkitEntry(sound_mind::core::PortableResourceType type, const nlohmann::json& resource,
                                    sound_mind::core::Project& target);
 
     /// @brief One resource `findDependencies()` found referenced, by type
@@ -280,29 +290,35 @@ private:
     ///        label - `std::nullopt` alongside `browsedProject_`.
     std::optional<QString> browsedProjectPath_;
 
-    /// @brief The currently selected Mind Shot's own encoded
-    ///        `StreamImage` (built once, in `refreshInspector()`, to
-    ///        render the raster) - kept here so `handlePlayRequested()`
-    ///        can decode it lazily, on the first actual Play click,
-    ///        rather than `refreshInspector()` decoding eagerly on every
-    ///        selection whether or not it's ever played. `decode()` (an
-    ///        inverse STFT over however many frames/bins the clip holds)
-    ///        was the real cost behind "the Mind Shot preview is very
-    ///        slow" - confirmed by profiling which of the two steps
-    ///        `refreshInspector()` already did (render the raster,
-    ///        decode the audio) actually dominated. `std::nullopt` for
-    ///        any other category, or no selection.
+    /// @brief The currently selected entry's own encoded `StreamImage`
+    ///        (built once, in `refreshInspector()`, to render the raster
+    ///        and/or ready an audio preview) - kept here so
+    ///        `handlePlayRequested()` can decode it lazily, on the first
+    ///        actual Play click, rather than `refreshInspector()`
+    ///        decoding eagerly on every selection whether or not it's
+    ///        ever played. `decode()` (an inverse STFT over however many
+    ///        frames/bins the image holds) was the real cost behind "the
+    ///        Mind Shot preview is very slow" - confirmed by profiling
+    ///        which of the two steps `refreshInspector()` already did
+    ///        (render the raster, decode the audio) actually dominated;
+    ///        every other previewable category reuses the same lazy-
+    ///        decode shape for the same reason. A Mind Shot's own real
+    ///        captured image for that category; a freshly synthesized
+    ///        one (`renderToolConfigurationStreamImage()`) for Tool
+    ///        Preset/MindWave/Resonance Profile. `std::nullopt` for any
+    ///        other category, or no selection.
     std::optional<sound_mind::codec::StreamImage> currentPreviewImage_;
 
-    /// @brief The currently previewed Mind Shot's own decoded audio -
-    ///        empty until `handlePlayRequested()` first decodes
+    /// @brief The currently previewed entry's own decoded audio - empty
+    ///        until `handlePlayRequested()` first decodes
     ///        `currentPreviewImage_` (see its own docs), then kept here
     ///        so a second Play on the same selection doesn't re-decode.
     ///        Reset to empty whenever `currentPreviewImage_` changes.
     sound_mind::codec::AudioBuffer currentPreviewAudio_;
 
-    /// @brief Dedicated to Mind Shot preview playback - see the class's
-    ///        own docs on why this is a separate engine instance.
+    /// @brief Dedicated to this panel's own audio preview playback - see
+    ///        the class's own docs on why this is a separate engine
+    ///        instance.
     sound_mind::core::PlaybackEngine previewEngine_{sound_mind::core::AudioDeviceMode::Real};
 
     /// @brief One entry added to the in-progress Toolkit draft via "Add to

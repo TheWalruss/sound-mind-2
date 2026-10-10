@@ -144,4 +144,12 @@ private slots:
     void changingAHarmonicStrengthSpinBoxSyncsTheHarmonicSeriesWidget();
     void changingHarmonicCountResyncsTheHarmonicSeriesWidget();
     void loadingAnInstrumentConfigurationSyncsTheHarmonicSeriesWidget();
+
+    // Audio preview (direct user feedback: "practically wherever there
+    // is a visual preview of something, give the user the ability to
+    // play an audio preview of whatever it is").
+    void freshPanelShowsPlayPreviewNotStop();
+    void clickingPlayPreviewEmitsPreviewRequested();
+    void clickingStopPreviewEmitsStopPreviewRequested();
+    void setPreviewPlayingTogglesWhichButtonIsShown();
 };

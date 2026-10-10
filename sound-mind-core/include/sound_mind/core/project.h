@@ -9,6 +9,7 @@
 
 #include "sound_mind/core/convolution_kernel.h"
 #include "sound_mind/core/filter_preset.h"
+#include "sound_mind/core/grid_preset.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -388,6 +389,13 @@ public:
     ///         MindWave with this id exists in this project's library.
     [[nodiscard]] NamedMindWave* mindWaveById(MindWaveId id) noexcept;
 
+    /// @brief Whether a MindWave with this exact name already exists -
+    ///        see `Project::filterPresetNameExists()`'s own docs for the
+    ///        identical pattern, applied here.
+    /// @param name The name to check.
+    /// @return `true` if some entry's `name` matches exactly.
+    [[nodiscard]] bool mindWaveNameExists(const std::string& name) const noexcept;
+
     /**
      * @brief This project's Mind Shot library - `v0.Y.33.1` Installment
      *        A's own permanent, named store of captured selections (see
@@ -447,6 +455,13 @@ public:
     /// @return A mutable pointer to that entry, or `nullptr` if no Mind
     ///         Shot with this id exists in this project's library.
     [[nodiscard]] NamedMindShot* mindShotById(MindShotId id) noexcept;
+
+    /// @brief Whether a Mind Shot with this exact name already exists -
+    ///        see `Project::filterPresetNameExists()`'s own docs for the
+    ///        identical pattern, applied here.
+    /// @param name The name to check.
+    /// @return `true` if some entry's `name` matches exactly.
+    [[nodiscard]] bool mindShotNameExists(const std::string& name) const noexcept;
 
     /**
      * @brief This project's Mind Grain library - `v0.Y.33.1` Installment
@@ -510,6 +525,13 @@ public:
     /// @return A mutable pointer to that entry, or `nullptr` if no Mind
     ///         Grain with this id exists in this project's library.
     [[nodiscard]] NamedMindGrain* mindGrainById(MindGrainId id) noexcept;
+
+    /// @brief Whether a Mind Grain with this exact name already exists -
+    ///        see `Project::filterPresetNameExists()`'s own docs for the
+    ///        identical pattern, applied here.
+    /// @param name The name to check.
+    /// @return `true` if some entry's `name` matches exactly.
+    [[nodiscard]] bool mindGrainNameExists(const std::string& name) const noexcept;
 
     /**
      * @brief This project's Resonance profile library -
@@ -582,6 +604,13 @@ public:
     ///         with this id exists in this project's library.
     [[nodiscard]] NamedResonanceProfile* resonanceProfileById(ResonanceProfileId id) noexcept;
 
+    /// @brief Whether a Resonance Profile with this exact name already
+    ///        exists - see `Project::filterPresetNameExists()`'s own docs
+    ///        for the identical pattern, applied here.
+    /// @param name The name to check.
+    /// @return `true` if some entry's `name` matches exactly.
+    [[nodiscard]] bool resonanceProfileNameExists(const std::string& name) const noexcept;
+
     /**
      * @brief This project's convolution kernel library - `v0.Y.36.1`
      *        (Deferred Filters) Installment B's own permanent, named store
@@ -650,6 +679,13 @@ public:
     ///         with this id exists in this project's library.
     [[nodiscard]] NamedConvolutionKernel* convolutionKernelById(ConvolutionKernelId id) noexcept;
 
+    /// @brief Whether a Convolution Kernel with this exact name already
+    ///        exists - see `Project::filterPresetNameExists()`'s own docs
+    ///        for the identical pattern, applied here.
+    /// @param name The name to check.
+    /// @return `true` if some entry's `name` matches exactly.
+    [[nodiscard]] bool convolutionKernelNameExists(const std::string& name) const noexcept;
+
     /**
      * @brief This project's Tool Preset library - `v0.Y.55.1`'s own second
      *        prerequisite, per `docs/sound-mind-design.md`'s "Tool
@@ -714,6 +750,13 @@ public:
     ///         Preset with this id exists in this project's library.
     [[nodiscard]] NamedToolPreset* toolPresetById(ToolPresetId id) noexcept;
 
+    /// @brief Whether a Tool Preset with this exact name already exists -
+    ///        see `Project::filterPresetNameExists()`'s own docs for the
+    ///        identical pattern, applied here.
+    /// @param name The name to check.
+    /// @return `true` if some entry's `name` matches exactly.
+    [[nodiscard]] bool toolPresetNameExists(const std::string& name) const noexcept;
+
     /**
      * @brief This project's Filter Preset library - the Filter-layer
      *        counterpart to `toolPresets()` (see `NamedFilterPreset`'s own
@@ -774,6 +817,84 @@ public:
     ///         Preset with this id exists in this project's library.
     [[nodiscard]] NamedFilterPreset* filterPresetById(FilterPresetId id) noexcept;
 
+    /// @brief Whether a Filter Preset with this exact name already exists
+    ///        in this project's library - case-sensitive exact match, the
+    ///        primitive behind the universal Replace/Rename/Cancel
+    ///        save-name-collision flow (`docs/sound-mind-architecture.md`'s
+    ///        Grid Preset/collision-handling decision) - `Project` itself
+    ///        now actually enforces the "uniqueness is this project's own
+    ///        responsibility" every `Named*` struct's own docs have long
+    ///        claimed, where every Studio-layer caller checks first.
+    /// @param name The name to check.
+    /// @return `true` if some entry's `name` matches exactly.
+    [[nodiscard]] bool filterPresetNameExists(const std::string& name) const noexcept;
+
+    /**
+     * @brief This project's Grid Preset library - `GridPanel`'s own
+     *        saved Overlay Grid configurations (see `NamedGridPreset`'s
+     *        own docs), the same "peer resource library" shape every
+     *        other library here already establishes. Direct user
+     *        feedback: "give the user the option to save/load named grid
+     *        presets, just like tool configuration presets."
+     * @return This project's current Grid Preset library.
+     */
+    [[nodiscard]] const std::vector<NamedGridPreset>& gridPresets() const noexcept { return gridPresets_; }
+
+    /// @brief This project's Grid Preset library - mutable access, for
+    ///        in-place edits (renaming, or overwriting an existing entry's
+    ///        own payload when the user chooses Replace on a name
+    ///        collision) that don't change the library's own membership
+    ///        (addGridPreset() is still how a new entry gets appended).
+    /// @return This project's current Grid Preset library.
+    [[nodiscard]] std::vector<NamedGridPreset>& gridPresets() noexcept { return gridPresets_; }
+
+    /**
+     * @brief Adds a new, named Grid Preset to this project's library - a
+     *        real copy of its three fields, independent of whichever
+     *        `GridPanel` it was saved from.
+     * @param name Display name - see `NamedGridPreset::name`'s own docs
+     *        on uniqueness being this project's own responsibility, not
+     *        enforced here (see `gridPresetNameExists()`).
+     * @param frequencyGrid The Frequency Grid configuration to save.
+     * @param timingGrid The Timing Grid configuration to save.
+     * @param snapToGridEnabled The Snap to Grid checkbox state to save.
+     * @return The id assigned to the new entry - see `addLayer()`'s own
+     *         docs for the identical "fresh, project-unique id" pattern.
+     */
+    GridPresetId addGridPreset(std::string name, FrequencyGridPresetConfig frequencyGrid,
+                               TimingGridPresetConfig timingGrid, bool snapToGridEnabled);
+
+    /**
+     * @brief Removes the Grid Preset with the given id, if one exists.
+     * @param id The Grid Preset to remove.
+     * @return `true` if a Grid Preset with this id was found and removed;
+     *         `false` (no change) if none was.
+     */
+    bool removeGridPreset(GridPresetId id);
+
+    /**
+     * @brief Finds the Grid Preset library entry with the given id, if
+     *        one exists - the same "small, project-level lookup"
+     *        `layerById()`/`filterPresetById()` already provide.
+     * @param id The entry to find.
+     * @return A pointer to that entry, or `nullptr` if no Grid Preset
+     *         with this id exists in this project's library.
+     */
+    [[nodiscard]] const NamedGridPreset* gridPresetById(GridPresetId id) const noexcept;
+
+    /// @brief Mutable overload of gridPresetById() - for in-place edits.
+    /// @param id The entry to find.
+    /// @return A mutable pointer to that entry, or `nullptr` if no Grid
+    ///         Preset with this id exists in this project's library.
+    [[nodiscard]] NamedGridPreset* gridPresetById(GridPresetId id) noexcept;
+
+    /// @brief Whether a Grid Preset with this exact name already exists -
+    ///        see `filterPresetNameExists()`'s own docs for the identical
+    ///        pattern, applied here.
+    /// @param name The name to check.
+    /// @return `true` if some entry's `name` matches exactly.
+    [[nodiscard]] bool gridPresetNameExists(const std::string& name) const noexcept;
+
     /**
      * @brief This project's own MIDI Configuration - which saved Tool
      *        Preset, duration scale, and pitch offset a given General MIDI
@@ -831,6 +952,7 @@ private:
     std::vector<NamedConvolutionKernel> convolutionKernels_;
     std::vector<NamedToolPreset> toolPresets_;
     std::vector<NamedFilterPreset> filterPresets_;
+    std::vector<NamedGridPreset> gridPresets_;
     std::vector<MidiProgramMapping> midiProgramMappings_;
 };
 

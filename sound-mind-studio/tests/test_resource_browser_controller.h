@@ -36,4 +36,13 @@ private slots:
     // user feedback: "the Mind Shot preview in the Resource Browser is
     // very very slow").
     void playingAMindShotDecodesLazilyOnFirstPlayAndStaysPlayableOnASecondPlay();
+
+    // Audio preview for every category that already has a visual one
+    // (direct user feedback: "practically wherever there is a visual
+    // preview of something, give the user the ability to play an audio
+    // preview of whatever it is").
+    void playingAMindWavePreviewSynthesizesAndDecodesAudio();
+    void playingAToolPresetPreviewSynthesizesAndDecodesAudio();
+    void playingAResonanceProfilePreviewSynthesizesAndDecodesAudio();
+    void resonanceProfileWithAnEmptySpectrumOffersNoPlayButton();
 };

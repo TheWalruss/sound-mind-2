@@ -1,5 +1,6 @@
 #include "sound_mind/studio/grid_panel.h"
 
+#include <algorithm>
 #include <array>
 #include <utility>
 
@@ -14,6 +15,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QStringList>
 #include <QVariant>
 #include <QVBoxLayout>
@@ -416,6 +418,36 @@ GridPanel::GridPanel(QWidget* parent) : QDockWidget(tr("Grid"), parent) {
 
     root->addWidget(timingGroup);
 
+    // --- Grid Preset -------------------------------------------------
+    // Saves/loads the Frequency Grid, Timing Grid, and Snap to Grid
+    // state above together as one named unit - direct user feedback:
+    // "give the user the option to save/load named grid presets, just
+    // like tool configuration presets." Placed after both groups (not
+    // inside either), the same "whole-grid" scope Snap to Grid below
+    // already has.
+    auto* presetRow = new QHBoxLayout();
+    gridPresetCombo_ = new QComboBox(container);
+    gridPresetCombo_->setObjectName(QStringLiteral("gridPresetCombo"));
+    gridPresetCombo_->addItem(tr("(none saved yet)"));
+    connect(gridPresetCombo_, &QComboBox::currentIndexChanged, this, &GridPanel::handleGridPresetComboChanged);
+    presetRow->addWidget(gridPresetCombo_, 1);
+
+    savePresetButton_ = new QPushButton(tr("Save..."), container);
+    savePresetButton_->setObjectName(QStringLiteral("savePresetButton"));
+    savePresetButton_->setToolTip(tr("Save the current grid configuration as a new Grid Preset"));
+    connect(savePresetButton_, &QPushButton::clicked, this, &GridPanel::handleSavePresetButtonClicked);
+    presetRow->addWidget(savePresetButton_);
+
+    deletePresetButton_ = new QPushButton(tr("Delete"), container);
+    deletePresetButton_->setObjectName(QStringLiteral("deletePresetButton"));
+    deletePresetButton_->setToolTip(tr("Delete the selected Grid Preset"));
+    connect(deletePresetButton_, &QPushButton::clicked, this, &GridPanel::handleDeletePresetButtonClicked);
+    presetRow->addWidget(deletePresetButton_);
+
+    auto* presetForm = new QFormLayout();
+    presetForm->addRow(tr("Grid Preset:"), presetRow);
+    root->addLayout(presetForm);
+
     // --- Snap to Grid ----------------------------------------------------
     snapToGridCheckBox_ = new QCheckBox(tr("Snap to Grid"), container);
     snapToGridCheckBox_->setObjectName(QStringLiteral("snapToGridCheckBox"));
@@ -544,5 +576,119 @@ void GridPanel::updateTimingGridControlsEnabled() {
 void GridPanel::emitFrequencyGridConfigChanged() { emit frequencyGridConfigChanged(frequencyGridConfig_); }
 
 void GridPanel::emitTimingGridConfigChanged() { emit timingGridConfigChanged(timingGridConfig_); }
+
+void GridPanel::setAvailableGridPresets(const std::vector<sound_mind::core::NamedGridPreset>& presets) {
+    const QVariant previousData = gridPresetCombo_->currentData();
+
+    availableGridPresets_ = presets;
+    const QSignalBlocker blocker(gridPresetCombo_);
+    gridPresetCombo_->clear();
+    if (availableGridPresets_.empty()) {
+        gridPresetCombo_->addItem(tr("(none saved yet)"));
+        return;
+    }
+    for (const auto& preset : availableGridPresets_) {
+        gridPresetCombo_->addItem(QString::fromStdString(preset.name),
+                                   QVariant::fromValue(static_cast<qulonglong>(preset.id)));
+    }
+    const int index = gridPresetCombo_->findData(previousData);
+    gridPresetCombo_->setCurrentIndex(index >= 0 ? index : 0);
+}
+
+void GridPanel::applyFrequencyGridConfig(const FrequencyGridConfig& config) {
+    frequencyGridConfig_ = config;
+
+    const QSignalBlocker noteBlocker(noteGridCheckBox_);
+    const QSignalBlocker temperamentBlocker(temperamentCombo_);
+    const QSignalBlocker keyBlocker(keyCombo_);
+    const QSignalBlocker scaleBlocker(scaleCombo_);
+    const QSignalBlocker harmonicBlocker(harmonicSeriesCheckBox_);
+    const QSignalBlocker fundamentalBlocker(harmonicFundamentalSpinBox_);
+    const QSignalBlocker customBlocker(customFrequenciesCheckBox_);
+    const QSignalBlocker lineEditBlocker(customFrequenciesLineEdit_);
+    const QSignalBlocker colorBlocker(frequencyGridColorButton_);
+    const QSignalBlocker widthBlocker(frequencyGridWidthSpinBox_);
+    const QSignalBlocker dashBlocker(frequencyGridDashStyleCombo_);
+
+    noteGridCheckBox_->setChecked(config.noteGridEnabled);
+    temperamentCombo_->setCurrentIndex(
+        temperamentCombo_->findData(QVariant::fromValue(static_cast<int>(config.noteGridTemperament))));
+    keyCombo_->setCurrentIndex(keyCombo_->findData(QVariant::fromValue(static_cast<int>(config.noteGridKey))));
+    scaleCombo_->setCurrentIndex(scaleCombo_->findData(QVariant::fromValue(static_cast<int>(config.noteGridScale))));
+    harmonicSeriesCheckBox_->setChecked(config.harmonicSeriesEnabled);
+    harmonicFundamentalSpinBox_->setValue(config.harmonicFundamentalHz);
+    customFrequenciesCheckBox_->setChecked(config.customFrequenciesEnabled);
+    QStringList frequencyTexts;
+    for (const double hz : config.customFrequenciesHz) {
+        frequencyTexts << QString::number(hz);
+    }
+    customFrequenciesLineEdit_->setText(frequencyTexts.join(QStringLiteral(", ")));
+    frequencyGridColorButton_->setText(config.lineColor.name());
+    frequencyGridColorButton_->setStyleSheet(QStringLiteral("background-color: %1;").arg(config.lineColor.name()));
+    frequencyGridWidthSpinBox_->setValue(config.lineWidthPixels);
+    frequencyGridDashStyleCombo_->setCurrentIndex(
+        frequencyGridDashStyleCombo_->findData(QVariant::fromValue(static_cast<int>(config.lineStyle))));
+
+    updateFrequencyGridControlsEnabled();
+    updateKeyAndScaleControlsEnabled();
+    emitFrequencyGridConfigChanged();
+}
+
+void GridPanel::applyTimingGridConfig(const TimingGridConfig& config) {
+    timingGridConfig_ = config;
+
+    const QSignalBlocker modeBlocker(timingGridModeCombo_);
+    const QSignalBlocker intervalBlocker(timingGridIntervalSpinBox_);
+    const QSignalBlocker subdivisionBlocker(timingGridSubdivisionCombo_);
+    const QSignalBlocker colorBlocker(timingGridColorButton_);
+    const QSignalBlocker widthBlocker(timingGridWidthSpinBox_);
+    const QSignalBlocker dashBlocker(timingGridDashStyleCombo_);
+
+    timingGridModeCombo_->setCurrentIndex(
+        timingGridModeCombo_->findData(QVariant::fromValue(static_cast<int>(config.mode))));
+    timingGridIntervalSpinBox_->setValue(config.intervalSeconds);
+    const int subdivisionIndex = timingGridSubdivisionCombo_->findData(config.tempoBeatFraction);
+    timingGridSubdivisionCombo_->setCurrentIndex(subdivisionIndex >= 0 ? subdivisionIndex : 2);
+    timingGridColorButton_->setText(config.lineColor.name());
+    timingGridColorButton_->setStyleSheet(QStringLiteral("background-color: %1;").arg(config.lineColor.name()));
+    timingGridWidthSpinBox_->setValue(config.lineWidthPixels);
+    timingGridDashStyleCombo_->setCurrentIndex(
+        timingGridDashStyleCombo_->findData(QVariant::fromValue(static_cast<int>(config.lineStyle))));
+
+    updateTimingGridControlsEnabled();
+    emitTimingGridConfigChanged();
+}
+
+void GridPanel::handleGridPresetComboChanged(int index) {
+    const QVariant data = gridPresetCombo_->itemData(index);
+    if (!data.isValid()) {
+        return;  // The "(none saved yet)" placeholder.
+    }
+    const auto id = static_cast<sound_mind::core::GridPresetId>(data.toULongLong());
+    const auto it = std::find_if(availableGridPresets_.begin(), availableGridPresets_.end(),
+                                  [id](const sound_mind::core::NamedGridPreset& preset) { return preset.id == id; });
+    if (it == availableGridPresets_.end()) {
+        return;
+    }
+
+    applyFrequencyGridConfig(fromFrequencyGridPresetConfig(it->frequencyGrid));
+    applyTimingGridConfig(fromTimingGridPresetConfig(it->timingGrid));
+    snapToGridEnabled_ = it->snapToGridEnabled;
+    {
+        const QSignalBlocker snapBlocker(snapToGridCheckBox_);
+        snapToGridCheckBox_->setChecked(snapToGridEnabled_);
+    }
+    emit snapToGridChanged(snapToGridEnabled_);
+}
+
+void GridPanel::handleSavePresetButtonClicked() { emit savePresetRequested(); }
+
+void GridPanel::handleDeletePresetButtonClicked() {
+    const QVariant data = gridPresetCombo_->currentData();
+    if (!data.isValid()) {
+        return;  // The "(none saved yet)" placeholder.
+    }
+    emit deletePresetRequested(static_cast<sound_mind::core::GridPresetId>(data.toULongLong()));
+}
 
 }  // namespace sound_mind::studio

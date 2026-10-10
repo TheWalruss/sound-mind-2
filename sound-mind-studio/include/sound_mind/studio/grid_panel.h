@@ -114,6 +114,20 @@ public:
      */
     void applyOctaveSelection(const std::vector<bool>& checkedStates);
 
+    /**
+     * @brief Replaces the Grid Preset combo's own contents - `MainWindow`
+     *        calls this after every `Project::addGridPreset()`/
+     *        `removeGridPreset()`, the same "push the refreshed list
+     *        back in" shape `FilterConfigurationPanel::
+     *        setAvailableFilterPresets()` already establishes (see that
+     *        method's own docs for why loading itself needs no signal
+     *        back out to `MainWindow` at all: the combo applies a
+     *        selected entry directly, the same one-shot-trigger contract
+     *        `convolveLoadKernelCombo_`/`filterPresetCombo_` already use).
+     * @param presets The project's current Grid Preset library.
+     */
+    void setAvailableGridPresets(const std::vector<sound_mind::core::NamedGridPreset>& presets);
+
 signals:
     /// @brief The "Vertical axis" combo box changed.
     /// @param mode The newly selected mode.
@@ -140,7 +154,58 @@ signals:
     /// @param enabled The new checked state.
     void snapToGridChanged(bool enabled);
 
+    /**
+     * @brief The Grid Preset row's own "Save..." button was clicked -
+     *        direct user feedback: "give the user the option to
+     *        save/load named grid presets, just like tool configuration
+     *        presets." `GridPanel` holds no `Project*` of its own (see
+     *        this class's own docs), so `MainWindow` is what actually
+     *        prompts for a name (resolving any collision - see
+     *        `sound_mind::studio::promptSaveName()`) and calls
+     *        `Project::addGridPreset()`, reading this panel's own
+     *        current `frequencyGridConfig()`/`timingGridConfig()`/
+     *        `snapToGridEnabled()` first.
+     */
+    void savePresetRequested();
+
+    /**
+     * @brief The Grid Preset row's own "Delete" button was clicked, with
+     *        a real preset selected - `MainWindow` calls
+     *        `Project::removeGridPreset(id)` and refreshes the combo via
+     *        setAvailableGridPresets().
+     * @param id The selected Grid Preset's own id.
+     */
+    void deletePresetRequested(sound_mind::core::GridPresetId id);
+
 private:
+    /// @brief Applies a full `FrequencyGridConfig` to every widget in the
+    ///        Frequency Grid group at once, then emits
+    ///        `frequencyGridConfigChanged()` - the Grid Preset combo's
+    ///        own Load half; the inverse of every individual widget's
+    ///        own one-field-at-a-time slot above.
+    void applyFrequencyGridConfig(const FrequencyGridConfig& config);
+
+    /// @brief Applies a full `TimingGridConfig` to every widget in the
+    ///        Timing Grid group at once, then emits
+    ///        `timingGridConfigChanged()` - see
+    ///        applyFrequencyGridConfig()'s own docs for the identical
+    ///        pattern, applied here.
+    void applyTimingGridConfig(const TimingGridConfig& config);
+
+    /// @brief The Grid Preset combo's own selection changed - a real
+    ///        entry applies it immediately via applyFrequencyGridConfig()/
+    ///        applyTimingGridConfig()/the Snap to Grid checkbox, then
+    ///        resets the combo back to its own leading placeholder item -
+    ///        the same one-shot-trigger contract `filterPresetCombo_`
+    ///        already establishes, not a sticky selection.
+    void handleGridPresetComboChanged(int index);
+
+    /// @brief The Grid Preset row's own "Save..." button was clicked.
+    void handleSavePresetButtonClicked();
+
+    /// @brief The Grid Preset row's own "Delete" button was clicked.
+    void handleDeletePresetButtonClicked();
+
     /// @brief Parses customFrequenciesLineEdit_'s own current text into
     ///        frequencyGridConfig_.customFrequenciesHz - a
     ///        comma/whitespace-separated list of positive Hz values;
@@ -241,6 +306,15 @@ private:
 
     bool snapToGridEnabled_ = false;
     QCheckBox* snapToGridCheckBox_ = nullptr;
+
+    /// @brief The project's own current Grid Preset library, as last
+    ///        pushed in by setAvailableGridPresets() - gridPresetCombo_'s
+    ///        own backing data (matching `availableFilterPresets_`'s
+    ///        identical role in `FilterConfigurationPanel`).
+    std::vector<sound_mind::core::NamedGridPreset> availableGridPresets_;
+    QComboBox* gridPresetCombo_ = nullptr;
+    QPushButton* savePresetButton_ = nullptr;
+    QPushButton* deletePresetButton_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

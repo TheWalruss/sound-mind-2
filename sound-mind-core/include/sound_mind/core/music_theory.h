@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 namespace sound_mind::core {
 
 /**
@@ -280,5 +282,64 @@ enum class Temperament {
  * @return The step-within-octave index.
  */
 [[nodiscard]] int stepWithinOctaveForPitchClass(Temperament temperament, PitchClass pitchClass) noexcept;
+
+/// @brief JSON (de)serialization for `PitchClass` - by name (`"C"`,
+/// `"CSharp"`, ...), not ordinal, so a saved value stays meaningful (and
+/// tolerant of enum reordering) across versions. First needed by
+/// `docs/sound-mind-architecture.md`'s Grid Preset decision - the Note
+/// Grid's own Key selector had never been serialized before (the Frequency
+/// Grid itself was session-only Studio state, never persisted).
+NLOHMANN_JSON_SERIALIZE_ENUM(PitchClass, {
+                                              {PitchClass::C, "C"},
+                                              {PitchClass::CSharp, "CSharp"},
+                                              {PitchClass::D, "D"},
+                                              {PitchClass::DSharp, "DSharp"},
+                                              {PitchClass::E, "E"},
+                                              {PitchClass::F, "F"},
+                                              {PitchClass::FSharp, "FSharp"},
+                                              {PitchClass::G, "G"},
+                                              {PitchClass::GSharp, "GSharp"},
+                                              {PitchClass::A, "A"},
+                                              {PitchClass::ASharp, "ASharp"},
+                                              {PitchClass::B, "B"},
+                                          })
+
+/// @brief JSON (de)serialization for `ScaleType` - by name, same reasoning
+/// as `PitchClass`'s own.
+NLOHMANN_JSON_SERIALIZE_ENUM(ScaleType, {
+                                             {ScaleType::Chromatic, "Chromatic"},
+                                             {ScaleType::Major, "Major"},
+                                             {ScaleType::Dorian, "Dorian"},
+                                             {ScaleType::Phrygian, "Phrygian"},
+                                             {ScaleType::Lydian, "Lydian"},
+                                             {ScaleType::Mixolydian, "Mixolydian"},
+                                             {ScaleType::Minor, "Minor"},
+                                             {ScaleType::Locrian, "Locrian"},
+                                             {ScaleType::HarmonicMinor, "HarmonicMinor"},
+                                             {ScaleType::MelodicMinor, "MelodicMinor"},
+                                             {ScaleType::MajorPentatonic, "MajorPentatonic"},
+                                             {ScaleType::MinorPentatonic, "MinorPentatonic"},
+                                             {ScaleType::Blues, "Blues"},
+                                             {ScaleType::WholeTone, "WholeTone"},
+                                             {ScaleType::Octatonic, "Octatonic"},
+                                         })
+
+/// @brief JSON (de)serialization for `Temperament` - by name, same
+/// reasoning as `PitchClass`'s own.
+NLOHMANN_JSON_SERIALIZE_ENUM(Temperament, {
+                                               {Temperament::Equal12, "Equal12"},
+                                               {Temperament::Equal15, "Equal15"},
+                                               {Temperament::Equal17, "Equal17"},
+                                               {Temperament::Equal19, "Equal19"},
+                                               {Temperament::Equal22, "Equal22"},
+                                               {Temperament::Equal24, "Equal24"},
+                                               {Temperament::Equal31, "Equal31"},
+                                               {Temperament::Equal34, "Equal34"},
+                                               {Temperament::Equal41, "Equal41"},
+                                               {Temperament::Equal53, "Equal53"},
+                                               {Temperament::Equal72, "Equal72"},
+                                               {Temperament::QuarterCommaMeantone, "QuarterCommaMeantone"},
+                                               {Temperament::Pythagorean, "Pythagorean"},
+                                           })
 
 }  // namespace sound_mind::core

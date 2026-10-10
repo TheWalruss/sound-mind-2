@@ -36,4 +36,12 @@ private slots:
     void changingTheTimingGridSubdivisionEmitsTimingGridConfigChanged();
 
     void togglingSnapToGridEmitsSnapToGridChanged();
+
+    // Grid Preset row.
+    void freshPanelShowsNoneSavedYetInThePresetCombo();
+    void clickingSaveButtonEmitsSavePresetRequested();
+    void setAvailableGridPresetsPopulatesTheComboByName();
+    void selectingAPresetAppliesItsConfigurationAndEmitsChangeSignals();
+    void clickingDeleteButtonEmitsDeletePresetRequestedForTheSelectedPreset();
+    void deleteButtonWithThePlaceholderSelectedEmitsNothing();
 };

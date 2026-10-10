@@ -45,4 +45,9 @@ private slots:
     void snapToGridSnapsOnlyFrequencyWhenOnlyTheFrequencyGridIsActive();
     void snapToGridSnapsOnlyTimeWhenOnlyTheTimingGridIsActive();
     void snapToGridSnapsBothAxesWhenBothGridsAreActive();
+
+    // Grid Preset conversion (Qt <-> Qt-independent sound_mind::core types).
+    void toFrequencyGridPresetConfigRoundTripsEveryField();
+    void toTimingGridPresetConfigRoundTripsEveryField();
+    void frequencyGridPresetConfigDashStylesRoundTripThroughAllThreeOptions();
 };

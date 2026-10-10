@@ -8,6 +8,7 @@
 #include "sound_mind/codec/pool_codec.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/convolution_kernel.h"
+#include "sound_mind/core/grid_preset.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -32,11 +33,15 @@ using sound_mind::core::MindShotId;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::MidiProgramMapping;
+using sound_mind::core::FrequencyGridPresetConfig;
+using sound_mind::core::GridPresetId;
+using sound_mind::core::GridTimingPresetMode;
 using sound_mind::core::ProceduralConfiguration;
 using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::ResonanceProfileId;
 using sound_mind::core::TimeFrequencyRect;
+using sound_mind::core::TimingGridPresetConfig;
 using sound_mind::core::ToolPresetId;
 
 TEST_CASE("A new Project has a Background layer at the bottom and an Equalizer layer at the top",
@@ -1276,4 +1281,143 @@ TEST_CASE("addLayer automatically de-duplicates a colliding name", "[core][proje
 
     REQUIRE(project.layerById(firstId)->name() == "New Layer");
     REQUIRE(project.layerById(secondId)->name() == "New Layer (2)");
+}
+
+TEST_CASE("A new Project has no Grid Presets", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.gridPresets().empty());
+}
+
+TEST_CASE("addGridPreset appends a named copy with a fresh, unique id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    FrequencyGridPresetConfig frequencyGrid;
+    frequencyGrid.harmonicSeriesEnabled = true;
+    frequencyGrid.harmonicFundamentalHz = 220.0;
+    TimingGridPresetConfig timingGrid;
+    timingGrid.mode = GridTimingPresetMode::Tempo;
+
+    const GridPresetId firstId = project.addGridPreset("My Grid", frequencyGrid, timingGrid, true);
+    const GridPresetId secondId = project.addGridPreset("Another Grid", frequencyGrid, timingGrid, false);
+
+    REQUIRE(firstId != secondId);
+    REQUIRE(project.gridPresets().size() == 2);
+    REQUIRE(project.gridPresets()[0].id == firstId);
+    REQUIRE(project.gridPresets()[0].name == "My Grid");
+    REQUIRE(project.gridPresets()[0].frequencyGrid.harmonicFundamentalHz == 220.0);
+    REQUIRE(project.gridPresets()[0].timingGrid.mode == GridTimingPresetMode::Tempo);
+    REQUIRE(project.gridPresets()[0].snapToGridEnabled == true);
+}
+
+TEST_CASE("gridPresetById finds the entry with a matching id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const GridPresetId id =
+        project.addGridPreset("My Grid", FrequencyGridPresetConfig{}, TimingGridPresetConfig{}, false);
+
+    const auto* found = project.gridPresetById(id);
+
+    REQUIRE(found != nullptr);
+    REQUIRE(found->name == "My Grid");
+}
+
+TEST_CASE("gridPresetById returns nullptr for an unknown id", "[core][project]") {
+    const Project project = Project::createNew(ProjectSettings{});
+    REQUIRE(project.gridPresetById(GridPresetId{999}) == nullptr);
+}
+
+TEST_CASE("gridPresetById's mutable overload allows in-place edits", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const GridPresetId id =
+        project.addGridPreset("My Grid", FrequencyGridPresetConfig{}, TimingGridPresetConfig{}, false);
+
+    auto* found = project.gridPresetById(id);
+    found->name = "Renamed";
+
+    REQUIRE(project.gridPresetById(id)->name == "Renamed");
+}
+
+TEST_CASE("removeGridPreset removes the entry with the given id and returns true", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const GridPresetId id =
+        project.addGridPreset("My Grid", FrequencyGridPresetConfig{}, TimingGridPresetConfig{}, false);
+
+    const bool removed = project.removeGridPreset(id);
+
+    REQUIRE(removed);
+    REQUIRE(project.gridPresets().empty());
+}
+
+TEST_CASE("removeGridPreset returns false and changes nothing for an unknown id", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    project.addGridPreset("My Grid", FrequencyGridPresetConfig{}, TimingGridPresetConfig{}, false);
+
+    const bool removed = project.removeGridPreset(GridPresetId{999999});
+
+    REQUIRE_FALSE(removed);
+    REQUIRE(project.gridPresets().size() == 1);
+}
+
+TEST_CASE("A saved and reloaded Project round-trips its Grid Presets", "[core][project]") {
+    Project original = Project::createNew(ProjectSettings{});
+    FrequencyGridPresetConfig frequencyGrid;
+    frequencyGrid.noteGridEnabled = true;
+    const GridPresetId id = original.addGridPreset("My Grid", frequencyGrid, TimingGridPresetConfig{}, true);
+
+    const nlohmann::json json = original;
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.gridPresets().size() == 1);
+    REQUIRE(restored.gridPresets()[0].id == id);
+    REQUIRE(restored.gridPresets()[0].name == "My Grid");
+    REQUIRE(restored.gridPresets()[0].frequencyGrid.noteGridEnabled == true);
+    REQUIRE(restored.gridPresets()[0].snapToGridEnabled == true);
+}
+
+TEST_CASE("Loading a Project missing the gridPresets field leaves it empty, not an error", "[core][project]") {
+    const Project original = Project::createNew(ProjectSettings{});
+    nlohmann::json json = original;
+    json.erase("gridPresets");
+
+    const Project restored = json.get<Project>();
+
+    REQUIRE(restored.gridPresets().empty());
+}
+
+TEST_CASE("Every named-resource library's nameExists() check is case-sensitive, exact-match only",
+          "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+
+    REQUIRE_FALSE(project.mindWaveNameExists("Taken"));
+    project.addMindWave("Taken", sound_mind::core::MindWave{});
+    REQUIRE(project.mindWaveNameExists("Taken"));
+    REQUIRE_FALSE(project.mindWaveNameExists("taken"));
+    REQUIRE_FALSE(project.mindWaveNameExists("Not Taken"));
+
+    REQUIRE_FALSE(project.mindShotNameExists("Taken"));
+    project.addMindShot("Taken", Clip{});
+    REQUIRE(project.mindShotNameExists("Taken"));
+
+    REQUIRE_FALSE(project.mindGrainNameExists("Taken"));
+    const LayerId sourceLayer = project.addLayer(Layer(0, "Source", LayerType::Normal));
+    project.addMindGrain("Taken", sourceLayer, TimeFrequencyRect{});
+    REQUIRE(project.mindGrainNameExists("Taken"));
+
+    REQUIRE_FALSE(project.resonanceProfileNameExists("Taken"));
+    project.addResonanceProfile("Taken", std::vector<float>{1.0f}, CurveGraph{});
+    REQUIRE(project.resonanceProfileNameExists("Taken"));
+
+    REQUIRE_FALSE(project.convolutionKernelNameExists("Taken"));
+    project.addConvolutionKernel("Taken", 3, std::vector<float>(9, 0.0f), false);
+    REQUIRE(project.convolutionKernelNameExists("Taken"));
+
+    REQUIRE_FALSE(project.toolPresetNameExists("Taken"));
+    project.addToolPreset("Taken", ProceduralConfiguration{});
+    REQUIRE(project.toolPresetNameExists("Taken"));
+
+    REQUIRE_FALSE(project.filterPresetNameExists("Taken"));
+    project.addFilterPreset("Taken", FilterConfiguration{});
+    REQUIRE(project.filterPresetNameExists("Taken"));
+
+    REQUIRE_FALSE(project.gridPresetNameExists("Taken"));
+    project.addGridPreset("Taken", FrequencyGridPresetConfig{}, TimingGridPresetConfig{}, false);
+    REQUIRE(project.gridPresetNameExists("Taken"));
 }

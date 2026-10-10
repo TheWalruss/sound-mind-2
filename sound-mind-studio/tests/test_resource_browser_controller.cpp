@@ -2,13 +2,18 @@
 
 #include <filesystem>
 #include <fstream>
+#include <functional>
 
+#include <QAbstractButton>
+#include <QApplication>
 #include <QComboBox>
 #include <QLabel>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QTimer>
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/project.h"
@@ -117,7 +122,12 @@ void ResourceBrowserControllerTest::selectingAnEntryPopulatesTheInspector() {
              QStringLiteral("My Wave"));
     QVERIFY(!fixture.panel.findChild<QPlainTextEdit*>(QStringLiteral("inspectorParametersEdit"))->toPlainText().isEmpty());
     QVERIFY(!fixture.panel.findChild<QPushButton*>(QStringLiteral("exportButton"))->isHidden());
-    QVERIFY(fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"))->isHidden());
+    // A MindWave now also offers an audio preview - see
+    // selectingAMindWaveRendersAPreviewRaster()/
+    // playingAMindWavePreviewSynthesizesAndDecodesAudio() for the
+    // dedicated coverage; this test's own concern is the inspector's
+    // other fields, so just confirms Play is shown, not hidden.
+    QVERIFY(!fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"))->isHidden());
 }
 
 void ResourceBrowserControllerTest::selectingAMindShotRendersARasterAndEnablesPlay() {
@@ -177,6 +187,80 @@ void ResourceBrowserControllerTest::playingAMindShotDecodesLazilyOnFirstPlayAndS
     QVERIFY(!stopButton->isHidden());
 }
 
+void ResourceBrowserControllerTest::playingAMindWavePreviewSynthesizesAndDecodesAudio() {
+    // Direct user feedback: "practically wherever there is a visual
+    // preview of something, give the user the ability to play an audio
+    // preview" - a MindWave's own preview is a default Instrument bound
+    // to it as vibrato, painted as a representative stroke and decoded,
+    // exercising that synthesis end to end (not just canPlay's own
+    // visibility, which selectingAMindWaveRendersAPreviewRaster() already
+    // covers).
+    Fixture fixture;
+    fixture.project.addMindWave("My Wave", MindWave{});
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::MindWave);
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    auto* playButton = fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"));
+    auto* stopButton = fixture.panel.findChild<QPushButton*>(QStringLiteral("stopButton"));
+    QVERIFY(playButton != nullptr);
+    QVERIFY(stopButton != nullptr);
+
+    QTest::mouseClick(playButton, Qt::LeftButton);
+    QVERIFY(!stopButton->isHidden());
+}
+
+void ResourceBrowserControllerTest::playingAToolPresetPreviewSynthesizesAndDecodesAudio() {
+    // A Tool Preset's own real configuration, painted as the same
+    // representative stroke and decoded.
+    Fixture fixture;
+    fixture.project.addToolPreset("My Brush", ProceduralConfiguration{});
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::ToolPreset);
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    auto* playButton = fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"));
+    auto* stopButton = fixture.panel.findChild<QPushButton*>(QStringLiteral("stopButton"));
+    QVERIFY(playButton != nullptr);
+    QVERIFY(stopButton != nullptr);
+
+    QTest::mouseClick(playButton, Qt::LeftButton);
+    QVERIFY(!stopButton->isHidden());
+}
+
+void ResourceBrowserControllerTest::playingAResonanceProfilePreviewSynthesizesAndDecodesAudio() {
+    // A default Resonance brush carrying this profile's own spectrum,
+    // painted as the same representative stroke and decoded.
+    Fixture fixture;
+    fixture.project.addResonanceProfile("My Resonance", {0.1f, 0.5f, 1.0f}, CurveGraph{});
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::ResonanceProfile);
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    auto* playButton = fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"));
+    auto* stopButton = fixture.panel.findChild<QPushButton*>(QStringLiteral("stopButton"));
+    QVERIFY(playButton != nullptr);
+    QVERIFY(stopButton != nullptr);
+
+    QTest::mouseClick(playButton, Qt::LeftButton);
+    QVERIFY(!stopButton->isHidden());
+}
+
+void ResourceBrowserControllerTest::resonanceProfileWithAnEmptySpectrumOffersNoPlayButton() {
+    // A degenerate entry (shouldn't exist via any real UI path, but
+    // defended against anyway - see syntheticResonancePreviewConfig()'s
+    // own call site's `if (!entry->spectrum.empty())` guard): nothing
+    // sensible to paint or decode, so no Play button at all, rather than
+    // a Play button that produces silence or a wasted paint operation.
+    Fixture fixture;
+    fixture.project.addResonanceProfile("Empty", {}, CurveGraph{});
+    fixture.controller.refreshPanel();
+    fixture.selectCategory(ResourceCategory::ResonanceProfile);
+    fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
+
+    QVERIFY(fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"))->isHidden());
+}
+
 void ResourceBrowserControllerTest::exportThenImportFromFileRoundTripsAMindWaveIntoTheProject() {
     Fixture fixture;
     fixture.project.addMindWave("Exported Wave", MindWave{});
@@ -189,10 +273,30 @@ void ResourceBrowserControllerTest::exportThenImportFromFileRoundTripsAMindWaveI
     QVERIFY(fixture.controller.exportSelectedEntry(path, &errorMessage));
     QVERIFY(errorMessage.isEmpty());
 
+    // Re-importing lands on the same, still-populated project, so the
+    // re-imported "Exported Wave" collides with the one still there -
+    // Keep Both (the closest match to this test's own pre-collision-
+    // handling intent: both entries end up coexisting) via the same
+    // QTimer::singleShot()-before-exec() technique
+    // shownContextMenuActionTexts() (test_main_window.cpp) already
+    // establishes for any modal shown from inside a blocking call.
+    QTimer::singleShot(0, [&]() {
+        auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        QVERIFY(box != nullptr);
+        for (QAbstractButton* button : box->buttons()) {
+            if (box->buttonRole(button) == QMessageBox::ActionRole) {
+                button->click();
+                return;
+            }
+        }
+        QFAIL("No Keep Both button found.");
+    });
+
     QSignalSpy spy(&fixture.controller, &ResourceBrowserController::resourcesChanged);
     QVERIFY(fixture.controller.importFromFile(path, &errorMessage));
     QCOMPARE(spy.count(), 1);
     QCOMPARE(fixture.project.mindWaves().size(), std::size_t{2});
+    QCOMPARE(QString::fromStdString(fixture.project.mindWaves()[1].name), QStringLiteral("Exported Wave (2)"));
 
     std::filesystem::remove(path);
 }
@@ -315,6 +419,33 @@ void ResourceBrowserControllerTest::addToToolkitThenExportThenImportRoundTripsMi
     QVERIFY(errorMessage.isEmpty());
     // A successful export clears the draft.
     QCOMPARE(toolkitList->count(), 0);
+
+    // The target project still has both names - re-importing the toolkit
+    // collides twice (MindWave, then ConvolutionKernel), each its own
+    // blocking QMessageBox (Overwrite/Keep Existing/Keep Both) applied
+    // one entry at a time - Keep Both both times is the closest match to
+    // this test's own pre-collision-handling intent (both end up
+    // duplicated), via the same QTimer::singleShot()-before-exec()
+    // technique shownContextMenuActionTexts() (test_main_window.cpp)
+    // already establishes.
+    auto clickKeepBoth = [](std::function<void()> next) {
+        auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        if (box == nullptr) {
+            QFAIL("Expected a collision QMessageBox, found none.");
+            return;
+        }
+        for (QAbstractButton* button : box->buttons()) {
+            if (box->buttonRole(button) == QMessageBox::ActionRole) {
+                button->click();
+                if (next) {
+                    QTimer::singleShot(0, std::move(next));
+                }
+                return;
+            }
+        }
+        QFAIL("No Keep Both button found.");
+    };
+    QTimer::singleShot(0, [&]() { clickKeepBoth([&]() { clickKeepBoth(nullptr); }); });
 
     QSignalSpy spy(&fixture.controller, &ResourceBrowserController::resourcesChanged);
     QVERIFY(fixture.controller.importToolkitFrom(path, &errorMessage));
@@ -469,6 +600,22 @@ void ResourceBrowserControllerTest::filterPresetCategoryListsExportsAndImports()
     const std::filesystem::path path = scratchPath("preset.smfilter");
     QString errorMessage;
     QVERIFY(fixture.controller.exportSelectedEntry(path, &errorMessage));
+
+    // Re-importing lands on the same, still-populated project - see
+    // exportThenImportFromFileRoundTripsAMindWaveIntoTheProject()'s own
+    // identical comment for why Keep Both is armed here.
+    QTimer::singleShot(0, [&]() {
+        auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        QVERIFY(box != nullptr);
+        for (QAbstractButton* button : box->buttons()) {
+            if (box->buttonRole(button) == QMessageBox::ActionRole) {
+                button->click();
+                return;
+            }
+        }
+        QFAIL("No Keep Both button found.");
+    });
+
     QVERIFY(fixture.controller.importFromFile(path, &errorMessage));
     QCOMPARE(fixture.project.filterPresets().size(), std::size_t{2});
     QCOMPARE(fixture.project.filterPresets()[1].config.type(), FilterType::Sharpen);
@@ -485,6 +632,11 @@ void ResourceBrowserControllerTest::selectingAMindWaveRendersAPreviewRaster() {
     fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
 
     QVERIFY(!fixture.panel.findChild<QLabel*>(QStringLiteral("inspectorRasterLabel"))->isHidden());
+    // Direct user feedback: "wherever there is a visual preview of
+    // something, give the user the ability to play an audio preview" -
+    // a MindWave's own preview is synthesized (a default Instrument
+    // bound to it as vibrato, painted as a representative stroke).
+    QVERIFY(!fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"))->isHidden());
 }
 
 void ResourceBrowserControllerTest::selectingAToolPresetRendersAStrokePreviewRaster() {
@@ -496,6 +648,7 @@ void ResourceBrowserControllerTest::selectingAToolPresetRendersAStrokePreviewRas
     fixture.panel.findChild<QListWidget*>(QStringLiteral("entriesList"))->setCurrentRow(0);
 
     QVERIFY(!fixture.panel.findChild<QLabel*>(QStringLiteral("inspectorRasterLabel"))->isHidden());
+    QVERIFY(!fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"))->isHidden());
 }
 
 void ResourceBrowserControllerTest::selectingAResonanceProfileRendersItsSourceCurveAlongsideTheSpectrum() {
@@ -514,6 +667,7 @@ void ResourceBrowserControllerTest::selectingAResonanceProfileRendersItsSourceCu
     QVERIFY(fixture.panel.findChild<QPlainTextEdit*>(QStringLiteral("inspectorParametersEdit"))
                 ->toPlainText()
                 .contains(QStringLiteral("sourceCurve: 2 nodes")));
+    QVERIFY(!fixture.panel.findChild<QPushButton*>(QStringLiteral("playButton"))->isHidden());
 }
 
 void ResourceBrowserControllerTest::addingAMindWaveBoundToolPresetToToolkitAlsoAddsTheMindWaveAndNotifies() {

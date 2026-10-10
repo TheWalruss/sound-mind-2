@@ -14,8 +14,6 @@
 
 namespace sound_mind::studio {
 
-namespace {
-
 QString categoryLabel(ResourceCategory category) {
     switch (category) {
         case ResourceCategory::MindWave:
@@ -30,6 +28,8 @@ QString categoryLabel(ResourceCategory category) {
             return QObject::tr("Convolution Kernel");
         case ResourceCategory::FilterPreset:
             return QObject::tr("Filter Preset");
+        case ResourceCategory::GridPreset:
+            return QObject::tr("Grid Preset");
         case ResourceCategory::MindGrain:
             return QObject::tr("Mind Grain");
         case ResourceCategory::Layer:
@@ -37,8 +37,6 @@ QString categoryLabel(ResourceCategory category) {
     }
     return QString();
 }
-
-}  // namespace
 
 ResourceBrowserPanel::ResourceBrowserPanel(QWidget* parent) : QDockWidget(tr("Resource Browser"), parent) {
     auto* content = new QWidget(this);
@@ -169,7 +167,8 @@ void ResourceBrowserPanel::populateCategoryCombo() {
         ResourceCategory::MindWave,          ResourceCategory::ToolPreset,
         ResourceCategory::MindShot,          ResourceCategory::ResonanceProfile,
         ResourceCategory::FilterPreset,      ResourceCategory::ConvolutionKernel,
-        ResourceCategory::MindGrain,         ResourceCategory::Layer,
+        ResourceCategory::GridPreset,        ResourceCategory::MindGrain,
+        ResourceCategory::Layer,
     };
     for (const ResourceCategory category : kCategories) {
         categoryCombo_->addItem(categoryLabel(category), static_cast<int>(category));

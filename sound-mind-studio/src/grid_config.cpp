@@ -213,4 +213,123 @@ sound_mind::core::TimeFrequencyPoint snapToGrid(sound_mind::core::TimeFrequencyP
     return point;
 }
 
+namespace {
+
+sound_mind::core::GridLinePresetStyle toLinePresetStyle(const QColor& color, double widthPixels, Qt::PenStyle style) {
+    sound_mind::core::GridLinePresetStyle result;
+    result.colorR = static_cast<std::uint8_t>(color.red());
+    result.colorG = static_cast<std::uint8_t>(color.green());
+    result.colorB = static_cast<std::uint8_t>(color.blue());
+    result.widthPixels = widthPixels;
+    // Only the three styles GridPanel's own kDashStyles offers ever reach
+    // here - anything else (not reachable through this panel's own UI)
+    // falls back to Solid rather than asserting over a cosmetic mismatch.
+    switch (style) {
+        case Qt::DashLine:
+            result.dashStyle = sound_mind::core::GridLinePresetStyle::DashStyle::Dash;
+            break;
+        case Qt::DotLine:
+            result.dashStyle = sound_mind::core::GridLinePresetStyle::DashStyle::Dot;
+            break;
+        default:
+            result.dashStyle = sound_mind::core::GridLinePresetStyle::DashStyle::Solid;
+            break;
+    }
+    return result;
+}
+
+QColor fromLinePresetStyleColor(const sound_mind::core::GridLinePresetStyle& style) {
+    return QColor(style.colorR, style.colorG, style.colorB);
+}
+
+Qt::PenStyle fromLinePresetStyleDash(const sound_mind::core::GridLinePresetStyle& style) {
+    switch (style.dashStyle) {
+        case sound_mind::core::GridLinePresetStyle::DashStyle::Dash:
+            return Qt::DashLine;
+        case sound_mind::core::GridLinePresetStyle::DashStyle::Dot:
+            return Qt::DotLine;
+        case sound_mind::core::GridLinePresetStyle::DashStyle::Solid:
+        default:
+            return Qt::SolidLine;
+    }
+}
+
+}  // namespace
+
+sound_mind::core::FrequencyGridPresetConfig toFrequencyGridPresetConfig(const FrequencyGridConfig& config) {
+    sound_mind::core::FrequencyGridPresetConfig result;
+    result.noteGridEnabled = config.noteGridEnabled;
+    result.noteGridTemperament = config.noteGridTemperament;
+    result.noteGridKey = config.noteGridKey;
+    result.noteGridScale = config.noteGridScale;
+    result.noteGridExcludedSteps = config.noteGridExcludedSteps;
+    result.noteGridExcludedOctaves = config.noteGridExcludedOctaves;
+    result.harmonicSeriesEnabled = config.harmonicSeriesEnabled;
+    result.harmonicFundamentalHz = config.harmonicFundamentalHz;
+    result.customFrequenciesEnabled = config.customFrequenciesEnabled;
+    result.customFrequenciesHz = config.customFrequenciesHz;
+    result.lineStyle = toLinePresetStyle(config.lineColor, config.lineWidthPixels, config.lineStyle);
+    return result;
+}
+
+FrequencyGridConfig fromFrequencyGridPresetConfig(const sound_mind::core::FrequencyGridPresetConfig& config) {
+    FrequencyGridConfig result;
+    result.noteGridEnabled = config.noteGridEnabled;
+    result.noteGridTemperament = config.noteGridTemperament;
+    result.noteGridKey = config.noteGridKey;
+    result.noteGridScale = config.noteGridScale;
+    result.noteGridExcludedSteps = config.noteGridExcludedSteps;
+    result.noteGridExcludedOctaves = config.noteGridExcludedOctaves;
+    result.harmonicSeriesEnabled = config.harmonicSeriesEnabled;
+    result.harmonicFundamentalHz = config.harmonicFundamentalHz;
+    result.customFrequenciesEnabled = config.customFrequenciesEnabled;
+    result.customFrequenciesHz = config.customFrequenciesHz;
+    result.lineColor = fromLinePresetStyleColor(config.lineStyle);
+    result.lineWidthPixels = config.lineStyle.widthPixels;
+    result.lineStyle = fromLinePresetStyleDash(config.lineStyle);
+    return result;
+}
+
+sound_mind::core::TimingGridPresetConfig toTimingGridPresetConfig(const TimingGridConfig& config) {
+    sound_mind::core::TimingGridPresetConfig result;
+    switch (config.mode) {
+        case TimingGridMode::Interval:
+            result.mode = sound_mind::core::GridTimingPresetMode::Interval;
+            break;
+        case TimingGridMode::Tempo:
+            result.mode = sound_mind::core::GridTimingPresetMode::Tempo;
+            break;
+        case TimingGridMode::Off:
+        default:
+            result.mode = sound_mind::core::GridTimingPresetMode::Off;
+            break;
+    }
+    result.intervalSeconds = config.intervalSeconds;
+    result.tempoBeatFraction = config.tempoBeatFraction;
+    result.lineStyle = toLinePresetStyle(config.lineColor, config.lineWidthPixels, config.lineStyle);
+    return result;
+}
+
+TimingGridConfig fromTimingGridPresetConfig(const sound_mind::core::TimingGridPresetConfig& config) {
+    TimingGridConfig result;
+    switch (config.mode) {
+        case sound_mind::core::GridTimingPresetMode::Interval:
+            result.mode = TimingGridMode::Interval;
+            break;
+        case sound_mind::core::GridTimingPresetMode::Tempo:
+            result.mode = TimingGridMode::Tempo;
+            break;
+        case sound_mind::core::GridTimingPresetMode::Off:
+        default:
+            result.mode = TimingGridMode::Off;
+            break;
+    }
+    result.intervalSeconds = config.intervalSeconds;
+    result.tempoBeatFraction = config.tempoBeatFraction;
+    result.lineColor = fromLinePresetStyleColor(config.lineStyle);
+    result.lineWidthPixels = config.lineStyle.widthPixels;
+    result.lineStyle = fromLinePresetStyleDash(config.lineStyle);
+    return result;
+}
+
 }  // namespace sound_mind::studio

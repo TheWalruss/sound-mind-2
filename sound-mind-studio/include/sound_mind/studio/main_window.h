@@ -19,6 +19,7 @@
 #include "sound_mind/core/device_test_tone_player.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/loop_engine.h"
+#include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/record_engine.h"
@@ -1231,6 +1232,34 @@ public slots:
     void refreshFilterPresetCombo();
 
     /**
+     * @brief Prompts for a name (resolving any collision via
+     *        `sound_mind::studio::promptSaveName()`) and appends - or, on
+     *        Replace, overwrites in place - an entry in the current
+     *        project's own Grid Preset library, reading `gridPanel_`'s
+     *        own current configuration - the actual work behind
+     *        `GridPanel::savePresetRequested()`. A no-op if no project is
+     *        open, or the user cancels the name prompt.
+     */
+    void saveGridPreset();
+
+    /**
+     * @brief Removes the given entry from the current project's own Grid
+     *        Preset library and refreshes `gridPanel_`'s own combo - the
+     *        actual work behind `GridPanel::deletePresetRequested()`.
+     * @param id The Grid Preset to remove.
+     */
+    void deleteGridPreset(sound_mind::core::GridPresetId id);
+
+    /**
+     * @brief Feeds the current project's own Grid Preset library into
+     *        `gridPanel_->setAvailableGridPresets()` - called whenever a
+     *        project is opened/created and after `saveGridPreset()`/
+     *        `deleteGridPreset()` change the library, the same role
+     *        `refreshFilterPresetCombo()` plays for Filter Presets.
+     */
+    void refreshGridPresetCombo();
+
+    /**
      * @brief Reorders the current project's layer stack - the actual work
      *        behind `LayersPanel`'s drag-to-reorder.
      *
@@ -1558,6 +1587,30 @@ public slots:
      * @param globalPos Screen-global position to pop the menu up at.
      */
     void showCanvasContextMenu(sound_mind::core::TimeFrequencyPoint point, QPoint globalPos);
+
+    /**
+     * @brief Plays a preview of `toolConfigurationPanel_`'s own current
+     *        configuration - direct user feedback: "practically
+     *        wherever there is a visual preview of something, give the
+     *        user the ability to play an audio preview of whatever it
+     *        is." Connected to `ToolConfigurationPanel::previewRequested()`.
+     *
+     * Synthesizes the same representative 3-second stroke the Resource
+     * Browser's own Tool Preset preview uses
+     * (`sound_mind::core::toolConfigurationPreviewStreamImage()`),
+     * decodes it, and plays it through `toolConfigurationPreviewEngine_`
+     * - a dedicated engine, independent of the Studio's own main
+     * playback path, the same "its own isolated engine" precedent
+     * `ResourceBrowserController`'s own preview engine already
+     * establishes. A no-op with no project open.
+     */
+    void previewToolConfiguration();
+
+    /// @brief Stops `toolConfigurationPreviewEngine_` and resets
+    ///        `toolConfigurationPanel_`'s own Play/Stop buttons - see
+    ///        previewToolConfiguration()'s own docs. Connected to
+    ///        `ToolConfigurationPanel::stopPreviewRequested()`.
+    void stopToolConfigurationPreview();
 
     /// @brief Clears the current rectangular selection - the actual work
     ///        behind the Edit menu's Deselect action. Delegates to
@@ -3686,6 +3739,11 @@ private:
     /// reproducible only with a real display, never under this project's
     /// own offscreen test platform.
     bool raisingDockPanel_ = false;
+
+    /// @brief Dedicated to `toolConfigurationPanel_`'s own audio preview
+    ///        playback - see `previewToolConfiguration()`'s own docs on
+    ///        why this is a separate engine instance.
+    sound_mind::core::PlaybackEngine toolConfigurationPreviewEngine_{sound_mind::core::AudioDeviceMode::Real};
 
     /// @brief The transport toolbar's "Record Macro" checkable toggle -
     /// `v0.Y.49.1` (Macro Mode) Installment A. Checked while

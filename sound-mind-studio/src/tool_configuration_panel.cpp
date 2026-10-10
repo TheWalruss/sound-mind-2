@@ -1,5 +1,6 @@
 #include "sound_mind/studio/tool_configuration_panel.h"
 
+#include <algorithm>
 #include <array>
 #include <limits>
 #include <optional>
@@ -32,6 +33,7 @@
 #include "sound_mind/core/stamp_interval_pattern.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
 #include "sound_mind/studio/harmonic_series_widget.h"
+#include "sound_mind/studio/name_collision_dialog.h"
 
 namespace sound_mind::studio {
 
@@ -210,6 +212,25 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     deletePresetButton_->setToolTip(tr("Delete the selected Tool Preset"));
     connect(deletePresetButton_, &QPushButton::clicked, this, &ToolConfigurationPanel::deleteCurrentToolPreset);
     presetRow->addWidget(deletePresetButton_);
+
+    // Audio preview (direct user feedback: "practically wherever there
+    // is a visual preview of something, give the user the ability to
+    // play an audio preview of whatever it is") - plays the current
+    // configuration as a representative stroke; MainWindow owns the
+    // actual synthesis/playback, this panel only shows Play xor Stop,
+    // the same split ResourceBrowserPanel's own Play/Stop pair already
+    // establishes.
+    playPreviewButton_ = new QPushButton(tr("Preview"), container);
+    playPreviewButton_->setObjectName(QStringLiteral("playPreviewButton"));
+    playPreviewButton_->setToolTip(tr("Play a preview of the current tool configuration"));
+    connect(playPreviewButton_, &QPushButton::clicked, this, &ToolConfigurationPanel::previewRequested);
+    presetRow->addWidget(playPreviewButton_);
+
+    stopPreviewButton_ = new QPushButton(tr("Stop"), container);
+    stopPreviewButton_->setObjectName(QStringLiteral("stopPreviewButton"));
+    stopPreviewButton_->setVisible(false);
+    connect(stopPreviewButton_, &QPushButton::clicked, this, &ToolConfigurationPanel::stopPreviewRequested);
+    presetRow->addWidget(stopPreviewButton_);
 
     auto* presetForm = new QFormLayout();
     presetForm->addRow(tr("Tool Preset:"), presetRow);
@@ -1316,6 +1337,11 @@ void ToolConfigurationPanel::setCreateMindWaveCallback(
     createMindWaveCallback_ = std::move(callback);
 }
 
+void ToolConfigurationPanel::setPreviewPlaying(bool playing) {
+    playPreviewButton_->setVisible(!playing);
+    stopPreviewButton_->setVisible(playing);
+}
+
 void ToolConfigurationPanel::rebuildMindWaveCombos() {
     const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(config_.get());
     populateMindWaveCombo(vibratoMindWaveCombo_, instrument != nullptr ? instrument->vibratoMindWave() : std::nullopt);
@@ -1376,14 +1402,29 @@ void ToolConfigurationPanel::handleToolPresetComboChanged(int index) {
 }
 
 void ToolConfigurationPanel::saveCurrentAsToolPreset() {
-    bool ok = false;
-    const QString name =
-        QInputDialog::getText(this, tr("Save Tool Preset"), tr("Name:"), QLineEdit::Normal,
-                                QString::fromStdString(config_->name()), &ok);
-    if (!ok) {
+    if (project_ == nullptr) {
         return;
     }
-    saveCurrentAsToolPresetNamed(name);
+    const auto result = sound_mind::studio::promptSaveName(
+        this, tr("Save Tool Preset"), tr("Name:"), QString::fromStdString(config_->name()),
+        [this](const std::string& candidate) { return project_->toolPresetNameExists(candidate); });
+    if (result.outcome == sound_mind::studio::SaveNameOutcome::Cancelled) {
+        return;
+    }
+    if (!result.replacingExisting) {
+        saveCurrentAsToolPresetNamed(QString::fromStdString(result.name));
+        return;
+    }
+    auto& presets = project_->toolPresets();
+    const auto it = std::find_if(presets.begin(), presets.end(),
+                                  [&result](const auto& named) { return named.name == result.name; });
+    if (it == presets.end()) {
+        return;
+    }
+    it->config = config_->clone();
+    refreshToolPresets();
+    const int index = toolPresetCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(it->id)));
+    toolPresetCombo_->setCurrentIndex(index >= 0 ? index : 0);
 }
 
 std::optional<ToolPresetId> ToolConfigurationPanel::saveCurrentAsToolPresetNamed(const QString& name) {

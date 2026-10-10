@@ -66,6 +66,7 @@ add_library(sound-mind-studio-lib
     src/mind_wave_controller.cpp
     src/mind_wave_editor.cpp
     src/mind_waves_panel.cpp
+    src/name_collision_dialog.cpp
     src/paint_controller.cpp
     src/path_controller.cpp
     src/path_edit_session.cpp

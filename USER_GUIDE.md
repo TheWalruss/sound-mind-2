@@ -550,7 +550,10 @@ shape instead of staying fixed.
 
 - **+ Add MindWave** creates a new one with a sensible default (a plain,
   audible sine wave) and selects it. Double-click a MindWave's name to
-  rename it; the **×** button deletes it.
+  rename it (renaming to a name another MindWave already has offers
+  Replace/Rename/Cancel, like every other saved resource in this app -
+  Replace here means the *other* MindWave with that name goes away,
+  replaced by this one); the **×** button deletes it.
 - Every MindWave-binding drop-down (a layer's own Opacity MindWave, any
   Instrument/Filter parameter binding) also offers **Create New
   MindWave...** at the bottom of its list - picking it creates a new
@@ -650,8 +653,10 @@ start each one from the same settings.
 
 A **Filter Preset** row sits above the Filter Type dropdown - **Save...**
 stores the panel's own current, complete configuration (whichever type is
-selected, with every one of its own settings) under a name you choose,
-and the drop-down beside it lists every Filter Preset you've saved;
+selected, with every one of its own settings) under a name you choose
+(if that name is already taken, you're asked to Replace the existing
+preset, pick a different name, or cancel), and the drop-down beside it
+lists every Filter Preset you've saved;
 picking one loads it immediately (switching Filter Type if needed) and
 the drop-down resets to its own placeholder, ready to pick again. Saved
 presets also show up in the **Resource Browser**'s own Filter Preset
@@ -763,9 +768,11 @@ group's own controls while it was hidden.
   - **Amount** is a dry/wet mix - `0` is no effect regardless of the
     kernel, `1` is the fully convolved result.
   - **Save As New Kernel** asks for a name (defaulting to "Kernel 1",
-    "Kernel 2", and so on, still editable) and stores the current grid
-    permanently under it, for reuse later - on this Filter layer, a
-    different one, or a different project entirely. **Load
+    "Kernel 2", and so on, still editable; a name that's already taken
+    offers Replace/Rename/Cancel the same way Filter Preset's own Save...
+    does) and stores the current grid permanently under it, for reuse
+    later - on this Filter layer, a different one, or a different project
+    entirely. **Load
     Saved Kernel** drops a previously saved kernel's own values into the
     grid (again, a one-time copy you can keep editing, not a live link -
     editing it afterward doesn't change the saved copy, and deleting the
@@ -893,7 +900,9 @@ panel (off by default) with the brush's own settings:
   preset saved in the current project, empty ("(none saved yet)") until
   you save your first one. Picking one loads every setting below - Tool
   Type and everything under it - at once. **Save...** prompts for a name
-  and stores the panel's *current* settings as a new preset; **Delete**
+  (a name that's already taken offers Replace/Rename/Cancel, the same
+  as every other saved resource in this app) and stores the panel's
+  *current* settings as a new preset; **Delete**
   removes whichever preset is currently selected (no confirmation - like
   removing a saved MindWave, this never affects anything already painted
   with it). There's no Wizard yet (see "What's Not Here Yet" below) - this
@@ -901,6 +910,10 @@ panel (off by default) with the brush's own settings:
   or **Resonance** preset shows a small icon of its own
   harmonic/spectral content next to its name, so you can recognize one at
   a glance without loading it first; other preset types show no icon.
+  Next to Save/Delete, **Preview** plays the panel's own *current*
+  settings - whether or not you've saved them yet - as a representative
+  3-second stroke, so you can audition a brush before painting with it;
+  it becomes **Stop** while playing.
 - **Tool Type** - **Procedural** (the default), **Instrument**,
   **Resonance**, **Mind Shot**, **Mind Grain**, **Heal**,
   **Soften**, **Smudge**, or **Order/Chaos**; picks which set of controls
@@ -1363,7 +1376,9 @@ selection to a plain, axis-aligned rectangle.
   separate click needed to find it again.
 - **Capture as Mind Shot** it - **Edit → Capture → Capture as Mind Shot** opens a small
   dialog before storing the selection's own pixels permanently: a **Name**
-  (defaulting to "Mind Shot 1", "Mind Shot 2", and so on, still editable), a
+  (defaulting to "Mind Shot 1", "Mind Shot 2", and so on, still editable; a
+  name that's already taken offers Replace/Rename/Cancel after you
+  confirm the dialog), a
   **Fundamental Frequency**, and a **Start-Time Offset**. Unlike Copy, this
   doesn't touch the clipboard, and the source pixels are left exactly as
   they were (no silencing, unlike Cut). Once captured, pick **Mind Shot** as
@@ -1380,7 +1395,8 @@ selection to a plain, axis-aligned rectangle.
   Lasso/Wand/combined selection - not yet confined to its actual shape.
 - **Capture as Mind Grain** it - **Edit → Capture → Capture as Mind Grain** opens the
   same dialog Capture as Mind Shot does (defaulting to "Mind Grain 1", "Mind
-  Grain 2", and so on) and stores a *reference* to the selection's own layer
+  Grain 2", and so on, with the same Replace/Rename/Cancel on a name
+  collision) and stores a *reference* to the selection's own layer
   and region - unlike Capture as Mind Shot, no pixels are captured at all,
   and neither the clipboard nor the source layer's content is touched. Once
   captured, pick **Mind Grain** as the Tool Type and select it from the
@@ -1392,7 +1408,8 @@ selection to a plain, axis-aligned rectangle.
   box, same as Mind Shot above.
 - **Create Resonance from Picked Path...** - **Edit → Picked Path Tools →
   Create Resonance from Picked Path...** prompts for a name (defaulting
-  to "Resonance 1", "Resonance 2", and so on), then
+  to "Resonance 1", "Resonance 2", and so on; a name that's already taken
+  offers Replace/Rename/Cancel), then
   analyzes whichever path/stroke is currently Picked and stores the result
   permanently under that name - a confirmation appears in the status bar.
   Pick **Resonance** as the Tool Type in
@@ -1606,6 +1623,18 @@ independently so the two grids stay visually distinct when both are on
 at once. Purely a display aid, like Axis Labels: neither grid affects
 encoding, decoding, or any stored pixel data.
 
+**Grid Preset** saves the Frequency Grid, Timing Grid, and Snap to Grid
+state above together as one named, reloadable unit - **Save...** names
+and saves the panel's current settings (if the name you type is already
+taken, you're asked to Replace the existing preset, pick a different
+name, or cancel); picking a saved preset from the drop-down loads it
+back immediately; **Delete** removes whichever preset is currently
+selected. Axis Labels aren't included - just the grid/snap settings.
+Grid Presets also show up in the [Resource Browser](#resource-browser)
+for browsing alongside your other saved resources, though saving,
+loading, and deleting one is this panel's own job, not the Resource
+Browser's.
+
 **Snap to Grid**, once checked, makes a Path node drag, a whole-object
 Pick move, or a Selection drag land on the nearest active grid line
 instead of exactly where you release the mouse - frequency snaps to the
@@ -1773,44 +1802,59 @@ and importing the "library" resources a project accumulates - MindWaves,
 Tool Presets (Procedural, Instrument, Resonance, and every other brush
 type with saved settings), Mind Shots, Resonance Profiles, Filter Presets
 (a whole saved Filter layer configuration), Convolution Kernels (a saved
-kernel for the Convolve filter type specifically), Mind Grains, and
-Layers. Pick a category from the drop-down at the top to see every one of
-that kind your current project has; selecting an entry shows its
-parameters in the inspector, plus a rendered preview where one makes
-sense:
+kernel for the Convolve filter type specifically), Grid Presets (see
+[Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid) - saved/
+loaded/deleted from the Grid panel itself, browsable here like everything
+else), Mind Grains, and Layers. Pick a category from the drop-down at the
+top to see every one of that kind your current project has; selecting an
+entry shows its parameters in the inspector, plus a rendered preview
+where one makes sense:
 
 - **MindWave** - a small grayscale preview of the field it actually
-  generates, the same preview the MindWaves panel's own rows show.
+  generates, the same preview the MindWaves panel's own rows show, plus a
+  **Play** button: hear a default instrument modulated by this MindWave
+  (its vibrato), painted as the same representative stroke Tool Preset
+  uses below.
 - **Tool Preset** - a preview stroke: a straight 3-second line from 3 kHz
   to 5 kHz, painted with the preset's own configuration, so you can see
-  (and, for an Instrument bound to a MindWave, hear its vibrato/tremolo
-  reflected in) what it actually looks like before picking it. The
-  preview image is cropped to frequencies at or above 1 kHz, so the
-  stroke itself (always well above that) fills the small preview rather
-  than being squeezed down alongside the rest of the frequency range.
+  what it actually looks like before picking it, plus a **Play** button
+  to hear it (an Instrument bound to a MindWave plays its vibrato/tremolo
+  too). The preview image is cropped to frequencies at or above 1 kHz, so
+  the stroke itself (always well above that) fills the small preview
+  rather than being squeezed down alongside the rest of the frequency
+  range.
 - **Mind Shot** - its own rendered spectrogram, plus a **Play** button to
   hear it.
 - **Resonance Profile** - a plot of its spectrum, and, alongside it, the
   source path or branching curve it was computed from (if captured since
   this rendering was added - an older entry just shows the spectrum
-  alone).
+  alone), plus a **Play** button: hear a default Resonance brush using
+  this profile's own spectrum, the same representative stroke as above
+  (no Play button for an entry with an empty spectrum - nothing to
+  preview).
 
 - **Export...** saves the selected entry to its own standalone file (a
   MindWave as `.smwave`, a Tool Preset as `.sminst`, a Mind Shot as
   `.smshot`, a Resonance Profile as `.smresonance`, a Filter Preset as
   `.smfilter`, a Convolution Kernel as `.smkernel`), which you can hand to
-  someone else or import into a different project later. Mind Grains and
-  Layers have no standalone file of their own - a Mind Grain only makes
-  sense tied to its own layer, and a Layer is portable by browsing its own
-  project directly (see below).
+  someone else or import into a different project later. Grid Presets,
+  Mind Grains, and Layers have no standalone file of their own yet - a
+  Mind Grain only makes sense tied to its own layer, and a Layer is
+  portable by browsing its own project directly (see below).
 - **Import from File...** reads one of those same file types back in,
-  adding it to your current project's own library under its saved name.
+  adding it to your current project's own library under its saved name -
+  unless that name is already taken, in which case you're asked whether
+  to use the imported version (**Overwrite**), keep what you already
+  have (**Keep Existing**), or keep both (**Keep Both**, which
+  auto-numbers the import as "Name (2)", "Name (3)", and so on).
 - **Browse Other Project...** opens a second `.smproj` file read-only,
   without closing or changing the one you're working on, and shows its own
   libraries in the same panel. Select anything in it - including a whole
   Layer, with its painted content - and click **Import** to copy it into
-  your current project. **Return to This Project** switches the panel back
-  to your own project's own libraries.
+  your current project (the same Overwrite/Keep Existing/Keep Both prompt
+  as **Import from File...** above, if the name collides). **Return to
+  This Project** switches the panel back to your own project's own
+  libraries.
 - **Toolkit draft**: build up a bundle of several resources to share as one
   file. Select an entry (any category with its own file format) and click
   **Add to Toolkit** - it appears in the draft list below, and you can keep
@@ -1824,7 +1868,9 @@ sense:
   `.smtoolkit` file, and clears the draft once written. **Import
   Toolkit...** reads one back in and adds every bundled resource to your
   current project in one step - either everything in the file is added,
-  or (if something in it is malformed) nothing is, never a partial import.
+  or (if something in it is malformed) nothing is, never a partial
+  import; the same Overwrite/Keep Existing/Keep Both prompt appears for
+  any bundled entry whose name collides with one you already have.
 
 ## Performance
 

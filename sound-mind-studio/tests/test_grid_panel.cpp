@@ -8,13 +8,20 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
+#include "sound_mind/core/grid_preset.h"
 #include "sound_mind/core/music_theory.h"
 #include "sound_mind/studio/grid_config.h"
 #include "sound_mind/studio/grid_panel.h"
 
+using sound_mind::core::FrequencyGridPresetConfig;
+using sound_mind::core::GridPresetId;
+using sound_mind::core::GridTimingPresetMode;
+using sound_mind::core::NamedGridPreset;
+using sound_mind::core::TimingGridPresetConfig;
 using sound_mind::studio::FrequencyGridConfig;
 using sound_mind::studio::GridPanel;
 using sound_mind::studio::HorizontalAxisLabelMode;
@@ -378,4 +385,100 @@ void GridPanelTest::togglingSnapToGridEmitsSnapToGridChanged() {
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.at(0).at(0).toBool(), true);
     QVERIFY(panel.snapToGridEnabled());
+}
+
+namespace {
+
+NamedGridPreset makeGridPreset(GridPresetId id, const QString& name) {
+    NamedGridPreset preset;
+    preset.id = id;
+    preset.name = name.toStdString();
+    preset.frequencyGrid.harmonicSeriesEnabled = true;
+    preset.frequencyGrid.harmonicFundamentalHz = 55.0;
+    preset.timingGrid.mode = GridTimingPresetMode::Tempo;
+    preset.timingGrid.tempoBeatFraction = 0.25;
+    preset.snapToGridEnabled = true;
+    return preset;
+}
+
+}  // namespace
+
+void GridPanelTest::freshPanelShowsNoneSavedYetInThePresetCombo() {
+    const GridPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("gridPresetCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(combo->count(), 1);
+    QCOMPARE(combo->currentText(), QStringLiteral("(none saved yet)"));
+}
+
+void GridPanelTest::clickingSaveButtonEmitsSavePresetRequested() {
+    GridPanel panel;
+    auto* saveButton = panel.findChild<QPushButton*>(QStringLiteral("savePresetButton"));
+    QVERIFY(saveButton != nullptr);
+    QSignalSpy spy(&panel, &GridPanel::savePresetRequested);
+
+    saveButton->click();
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void GridPanelTest::setAvailableGridPresetsPopulatesTheComboByName() {
+    GridPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("gridPresetCombo"));
+
+    panel.setAvailableGridPresets({makeGridPreset(1, QStringLiteral("Grid A")), makeGridPreset(2, QStringLiteral("Grid B"))});
+
+    QCOMPARE(combo->count(), 2);
+    QCOMPARE(combo->itemText(0), QStringLiteral("Grid A"));
+    QCOMPARE(combo->itemText(1), QStringLiteral("Grid B"));
+}
+
+void GridPanelTest::selectingAPresetAppliesItsConfigurationAndEmitsChangeSignals() {
+    GridPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("gridPresetCombo"));
+    // Two presets, not one - setAvailableGridPresets() itself already
+    // (silently, signal-blocked) lands the combo on index 0 when nothing
+    // was selected before, so re-selecting index 0 wouldn't be a real
+    // change for QComboBox::currentIndexChanged to fire on; moving to
+    // index 1 is.
+    panel.setAvailableGridPresets(
+        {makeGridPreset(1, QStringLiteral("Grid A")), makeGridPreset(7, QStringLiteral("Grid B"))});
+    QSignalSpy frequencySpy(&panel, &GridPanel::frequencyGridConfigChanged);
+    QSignalSpy timingSpy(&panel, &GridPanel::timingGridConfigChanged);
+    QSignalSpy snapSpy(&panel, &GridPanel::snapToGridChanged);
+
+    combo->setCurrentIndex(1);
+
+    QCOMPARE(frequencySpy.count(), 1);
+    QCOMPARE(timingSpy.count(), 1);
+    QCOMPARE(snapSpy.count(), 1);
+    QVERIFY(panel.frequencyGridConfig().harmonicSeriesEnabled);
+    QCOMPARE(panel.frequencyGridConfig().harmonicFundamentalHz, 55.0);
+    QCOMPARE(panel.timingGridConfig().mode, TimingGridMode::Tempo);
+    QCOMPARE(panel.timingGridConfig().tempoBeatFraction, 0.25);
+    QVERIFY(panel.snapToGridEnabled());
+}
+
+void GridPanelTest::clickingDeleteButtonEmitsDeletePresetRequestedForTheSelectedPreset() {
+    GridPanel panel;
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("gridPresetCombo"));
+    auto* deleteButton = panel.findChild<QPushButton*>(QStringLiteral("deletePresetButton"));
+    panel.setAvailableGridPresets({makeGridPreset(42, QStringLiteral("Grid A"))});
+    combo->setCurrentIndex(0);
+    QSignalSpy spy(&panel, &GridPanel::deletePresetRequested);
+
+    deleteButton->click();
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toULongLong(), 42ULL);
+}
+
+void GridPanelTest::deleteButtonWithThePlaceholderSelectedEmitsNothing() {
+    GridPanel panel;
+    auto* deleteButton = panel.findChild<QPushButton*>(QStringLiteral("deletePresetButton"));
+    QSignalSpy spy(&panel, &GridPanel::deletePresetRequested);
+
+    deleteButton->click();
+
+    QCOMPARE(spy.count(), 0);
 }

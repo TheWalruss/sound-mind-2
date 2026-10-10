@@ -57,6 +57,7 @@
 #include "sound_mind/core/pooling.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/resonant_instrument.h"
+#include "sound_mind/core/tool_configuration_preview.h"
 #include "sound_mind/studio/about_dialog.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/canvas_widget.h"
@@ -77,6 +78,7 @@
 #include "sound_mind/studio/loop_panel.h"
 #include "sound_mind/studio/mind_capture_dialog.h"
 #include "sound_mind/studio/mind_waves_panel.h"
+#include "sound_mind/studio/name_collision_dialog.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/qt_image_conversion.h"
@@ -517,6 +519,18 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // toolPaletteController_'s own lambdas just above rely on.
     connect(toolConfigurationPanel_, &ToolConfigurationPanel::toolConfigurationChanged, this,
             [this](const sound_mind::core::ToolConfiguration&) { updateMindGrainGuardrails(); });
+    // Audio preview (direct user feedback: "practically wherever there
+    // is a visual preview of something, give the user the ability to
+    // play an audio preview of whatever it is") - the live counterpart
+    // to the Resource Browser's own Tool Preset preview: the same
+    // representative-stroke synthesis (sound_mind::core::
+    // toolConfigurationPreviewStreamImage()), just fed this panel's own
+    // current, possibly-unsaved configuration instead of a saved
+    // preset's.
+    connect(toolConfigurationPanel_, &ToolConfigurationPanel::previewRequested, this,
+            &MainWindow::previewToolConfiguration);
+    connect(toolConfigurationPanel_, &ToolConfigurationPanel::stopPreviewRequested, this,
+            &MainWindow::stopToolConfigurationPreview);
 
     // Basic Painting/Pick/Selection & Fill/Paths & Grids (Phase 3,
     // v0.Y.24.1-v0.Y.26.1) - extracted as its own class (Refactor & Clean
@@ -669,6 +683,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(gridPanel_, &GridPanel::snapToGridChanged, this, &MainWindow::applyGridSnapping);
     connect(gridPanel_, &GridPanel::frequencyGridConfigChanged, this, &MainWindow::applyGridSnapping);
     connect(gridPanel_, &GridPanel::timingGridConfigChanged, this, &MainWindow::applyGridSnapping);
+    // Grid Preset save/delete (direct user feedback: "give the user the
+    // option to save/load named grid presets, just like tool
+    // configuration presets") - GridPanel holds no Project* of its own
+    // (see that class's own docs), so MainWindow owns both.
+    connect(gridPanel_, &GridPanel::savePresetRequested, this, &MainWindow::saveGridPreset);
+    connect(gridPanel_, &GridPanel::deletePresetRequested, this, &MainWindow::deleteGridPreset);
 
     filterConfigurationPanel_ = new FilterConfigurationPanel(this);
     filterConfigurationPanel_->hide();
@@ -2050,6 +2070,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     resourceBrowserController_->refreshPanel();
     refreshConvolutionKernelCombo();
     refreshFilterPresetCombo();
+    refreshGridPresetCombo();
     // The new project's own layer stack/active layer are both different
     // from whatever the guardrail last computed - see
     // updateMindGrainGuardrails()'s own docs.
@@ -3189,13 +3210,29 @@ void MainWindow::renameMindWave(sound_mind::core::MindWaveId id) {
     if (entry == nullptr) {
         return;
     }
-    bool ok = false;
-    const QString newName = QInputDialog::getText(this, tr("Rename MindWave"), tr("Name:"), QLineEdit::Normal,
-                                                    QString::fromStdString(entry->name), &ok);
-    if (!ok) {
+    const std::string currentName = entry->name;
+    const auto result = sound_mind::studio::promptSaveName(
+        this, tr("Rename MindWave"), tr("Name:"), QString::fromStdString(currentName),
+        [this, currentName](const std::string& candidate) {
+            // Keeping the current name unchanged is never a "collision" -
+            // it's a no-op rename, even if some other, pre-existing
+            // duplicate already happens to share it.
+            return candidate != currentName && project_->mindWaveNameExists(candidate);
+        });
+    if (result.outcome == sound_mind::studio::SaveNameOutcome::Cancelled) {
         return;
     }
-    mindWaveController_->renameMindWaveTo(id, newName);
+    if (result.replacingExisting) {
+        // Replace: the *other* entry currently holding this name goes
+        // away, replaced by this rename.
+        auto& waves = project_->mindWaves();
+        const auto otherIt = std::find_if(waves.begin(), waves.end(),
+                                           [&](const auto& w) { return w.name == result.name && w.id != id; });
+        if (otherIt != waves.end()) {
+            project_->removeMindWave(otherIt->id);
+        }
+    }
+    mindWaveController_->renameMindWaveTo(id, QString::fromStdString(result.name));
 }
 
 void MainWindow::updateMindWave(sound_mind::core::MindWaveId id, const sound_mind::core::MindWave& wave) {
@@ -3535,6 +3572,26 @@ void MainWindow::showCanvasContextMenu(sound_mind::core::TimeFrequencyPoint poin
     menu.exec(globalPos);
 }
 
+void MainWindow::previewToolConfiguration() {
+    if (!project_) {
+        return;
+    }
+    const auto image =
+        sound_mind::core::toolConfigurationPreviewStreamImage(toolConfigurationPanel_->toolConfiguration(), *project_);
+    const auto audio = sound_mind::codec::decode(image);
+    if (audio.frameCount() == 0) {
+        return;
+    }
+    toolConfigurationPreviewEngine_.loadAudio(audio);
+    toolConfigurationPreviewEngine_.play();
+    toolConfigurationPanel_->setPreviewPlaying(true);
+}
+
+void MainWindow::stopToolConfigurationPreview() {
+    toolConfigurationPreviewEngine_.stop();
+    toolConfigurationPanel_->setPreviewPlaying(false);
+}
+
 void MainWindow::deselect() { toolPaletteController_->clearSelection(); }
 
 void MainWindow::finishPath() {
@@ -3687,14 +3744,30 @@ void MainWindow::createResonanceFromPickedPath() {
     if (!project_.has_value() || !toolPaletteController_->selectedPath().has_value()) {
         return;
     }
-    bool ok = false;
     const QString defaultName = tr("Resonance %1").arg(project_->resonanceProfiles().size() + 1);
-    const QString name =
-        QInputDialog::getText(this, tr("Create Resonance"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
-    if (!ok || name.trimmed().isEmpty()) {
+    const auto result = sound_mind::studio::promptSaveName(
+        this, tr("Create Resonance"), tr("Name:"), defaultName,
+        [this](const std::string& candidate) { return project_->resonanceProfileNameExists(candidate); });
+    if (result.outcome == sound_mind::studio::SaveNameOutcome::Cancelled) {
         return;
     }
-    createResonanceFromPickedPathNamed(name.trimmed().toStdString());
+    if (!result.replacingExisting) {
+        createResonanceFromPickedPathNamed(result.name);
+        return;
+    }
+    const auto curve = toolPaletteController_->selectedPath();
+    const auto graph = sound_mind::core::curveGraphFromPath(
+        *curve, sound_mind::core::frequencyToTimeScaleFor(project_->settings()), kResonanceNodeCount);
+    const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
+    auto& profiles = project_->resonanceProfiles();
+    const auto it = std::find_if(profiles.begin(), profiles.end(),
+                                  [&result](const auto& named) { return named.name == result.name; });
+    if (it != profiles.end()) {
+        it->spectrum = spectrum;
+        it->sourceCurve = graph;
+    }
+    toolConfigurationPanel_->refreshResonanceProfiles();
+    statusBar()->showMessage(tr("Created Resonance \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }
 
 void MainWindow::createResonanceFromPickedPathNamed(const std::string& name) {
@@ -3751,14 +3824,32 @@ void MainWindow::createResonanceFromPickedGraph() {
     if (!project_.has_value() || !branchCurveSession_.isActive()) {
         return;
     }
-    bool ok = false;
     const QString defaultName = tr("Resonance %1").arg(project_->resonanceProfiles().size() + 1);
-    const QString name =
-        QInputDialog::getText(this, tr("Create Resonance"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
-    if (!ok || name.trimmed().isEmpty()) {
+    const auto result = sound_mind::studio::promptSaveName(
+        this, tr("Create Resonance"), tr("Name:"), defaultName,
+        [this](const std::string& candidate) { return project_->resonanceProfileNameExists(candidate); });
+    if (result.outcome == sound_mind::studio::SaveNameOutcome::Cancelled) {
         return;
     }
-    createResonanceFromPickedGraphNamed(name.trimmed().toStdString());
+    if (!result.replacingExisting) {
+        createResonanceFromPickedGraphNamed(result.name);
+        return;
+    }
+    const auto graph = sound_mind::core::curveGraphFromBranches(
+        branchCurveSession_.branches(), sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
+        kResonanceNodeCount);
+    const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
+    auto& profiles = project_->resonanceProfiles();
+    const auto it = std::find_if(profiles.begin(), profiles.end(),
+                                  [&result](const auto& named) { return named.name == result.name; });
+    if (it != profiles.end()) {
+        it->spectrum = spectrum;
+        it->sourceCurve = graph;
+    }
+    branchCurveSession_.end();
+    toolConfigurationPanel_->refreshResonanceProfiles();
+    statusBar()->showMessage(
+        tr("Created Resonance \"%1\" from the branching curve.").arg(QString::fromStdString(result.name)), 5000);
 }
 
 void MainWindow::createResonanceFromPickedGraphNamed(const std::string& name) {
@@ -3821,8 +3912,38 @@ void MainWindow::captureMindShot() {
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
-    captureMindShotWithDetails(dialog.name().toStdString(), dialog.fundamentalFrequencyHz(),
-                                 dialog.startTimeOffsetSeconds());
+    const auto result = sound_mind::studio::resolveNameCollision(
+        this, tr("Capture Mind Shot"), tr("Name:"), dialog.name(),
+        [this](const std::string& candidate) { return project_->mindShotNameExists(candidate); });
+    if (result.outcome == sound_mind::studio::SaveNameOutcome::Cancelled) {
+        return;
+    }
+    if (!result.replacingExisting) {
+        captureMindShotWithDetails(result.name, dialog.fundamentalFrequencyHz(), dialog.startTimeOffsetSeconds());
+        return;
+    }
+    // Replace: ToolPaletteController::captureMindShot() always appends a
+    // fresh entry (never an in-place update), so the simplest way to
+    // reuse that same capture pipeline for Replace is to let it capture
+    // under a new id, then fold the result into the pre-existing entry
+    // of the same name (preserving that entry's own id) and discard the
+    // now-duplicate new one.
+    const auto newId = toolPaletteController_->captureMindShot(result.name, dialog.fundamentalFrequencyHz(),
+                                                                  dialog.startTimeOffsetSeconds());
+    if (!newId.has_value()) {
+        return;
+    }
+    auto& shots = project_->mindShots();
+    const auto newIt = std::find_if(shots.begin(), shots.end(), [&](const auto& s) { return s.id == *newId; });
+    const auto oldIt = std::find_if(shots.begin(), shots.end(),
+                                     [&](const auto& s) { return s.name == result.name && s.id != *newId; });
+    if (newIt != shots.end() && oldIt != shots.end()) {
+        const auto oldId = oldIt->id;
+        *oldIt = *newIt;
+        oldIt->id = oldId;
+        project_->removeMindShot(*newId);
+    }
+    statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }
 
 void MainWindow::captureMindShotWithDetails(const std::string& name, double fundamentalFrequencyHz,
@@ -3846,8 +3967,33 @@ void MainWindow::captureMindGrain() {
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
-    captureMindGrainWithDetails(dialog.name().toStdString(), dialog.fundamentalFrequencyHz(),
-                                  dialog.startTimeOffsetSeconds());
+    const auto result = sound_mind::studio::resolveNameCollision(
+        this, tr("Capture Mind Grain"), tr("Name:"), dialog.name(),
+        [this](const std::string& candidate) { return project_->mindGrainNameExists(candidate); });
+    if (result.outcome == sound_mind::studio::SaveNameOutcome::Cancelled) {
+        return;
+    }
+    if (!result.replacingExisting) {
+        captureMindGrainWithDetails(result.name, dialog.fundamentalFrequencyHz(), dialog.startTimeOffsetSeconds());
+        return;
+    }
+    // Replace - see captureMindShot()'s own identical reasoning.
+    const auto newId = toolPaletteController_->captureMindGrain(result.name, dialog.fundamentalFrequencyHz(),
+                                                                   dialog.startTimeOffsetSeconds());
+    if (!newId.has_value()) {
+        return;
+    }
+    auto& grains = project_->mindGrains();
+    const auto newIt = std::find_if(grains.begin(), grains.end(), [&](const auto& g) { return g.id == *newId; });
+    const auto oldIt = std::find_if(grains.begin(), grains.end(),
+                                     [&](const auto& g) { return g.name == result.name && g.id != *newId; });
+    if (newIt != grains.end() && oldIt != grains.end()) {
+        const auto oldId = oldIt->id;
+        *oldIt = *newIt;
+        oldIt->id = oldId;
+        project_->removeMindGrain(*newId);
+    }
+    statusBar()->showMessage(tr("Captured as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }
 
 void MainWindow::captureMindGrainWithDetails(const std::string& name, double fundamentalFrequencyHz,
@@ -3866,17 +4012,28 @@ void MainWindow::saveConvolutionKernel(int size, std::vector<float> coefficients
     if (!project_.has_value()) {
         return;
     }
-    bool ok = false;
     const QString defaultName = tr("Kernel %1").arg(project_->convolutionKernels().size() + 1);
-    const QString name =
-        QInputDialog::getText(this, tr("Save Kernel"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
-    if (!ok || name.trimmed().isEmpty()) {
+    const auto result = sound_mind::studio::promptSaveName(
+        this, tr("Save Kernel"), tr("Name:"), defaultName,
+        [this](const std::string& candidate) { return project_->convolutionKernelNameExists(candidate); });
+    if (result.outcome == sound_mind::studio::SaveNameOutcome::Cancelled) {
         return;
     }
-    project_->addConvolutionKernel(name.trimmed().toStdString(), size, std::move(coefficients), normalize);
+    if (result.replacingExisting) {
+        auto& kernels = project_->convolutionKernels();
+        const auto it = std::find_if(kernels.begin(), kernels.end(),
+                                      [&result](const auto& named) { return named.name == result.name; });
+        if (it != kernels.end()) {
+            it->size = size;
+            it->coefficients = std::move(coefficients);
+            it->normalize = normalize;
+        }
+    } else {
+        project_->addConvolutionKernel(result.name, size, std::move(coefficients), normalize);
+    }
     refreshConvolutionKernelCombo();
     hasUnsavedChanges_ = true;
-    statusBar()->showMessage(tr("Saved as \"%1\".").arg(name.trimmed()), 5000);
+    statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }
 
 void MainWindow::refreshConvolutionKernelCombo() {
@@ -3888,17 +4045,71 @@ void MainWindow::saveFilterPreset(const sound_mind::core::FilterConfiguration& c
     if (!project_.has_value()) {
         return;
     }
-    bool ok = false;
     const QString defaultName = tr("Filter Preset %1").arg(project_->filterPresets().size() + 1);
-    const QString name =
-        QInputDialog::getText(this, tr("Save Filter Preset"), tr("Name:"), QLineEdit::Normal, defaultName, &ok);
-    if (!ok || name.trimmed().isEmpty()) {
+    const auto result = sound_mind::studio::promptSaveName(
+        this, tr("Save Filter Preset"), tr("Name:"), defaultName,
+        [this](const std::string& candidate) { return project_->filterPresetNameExists(candidate); });
+    if (result.outcome == sound_mind::studio::SaveNameOutcome::Cancelled) {
         return;
     }
-    project_->addFilterPreset(name.trimmed().toStdString(), config);
+    if (result.replacingExisting) {
+        auto& presets = project_->filterPresets();
+        const auto it = std::find_if(presets.begin(), presets.end(),
+                                      [&result](const auto& named) { return named.name == result.name; });
+        if (it != presets.end()) {
+            it->config = config;
+        }
+    } else {
+        project_->addFilterPreset(result.name, config);
+    }
     refreshFilterPresetCombo();
     hasUnsavedChanges_ = true;
-    statusBar()->showMessage(tr("Saved as \"%1\".").arg(name.trimmed()), 5000);
+    statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
+}
+
+void MainWindow::saveGridPreset() {
+    if (!project_.has_value()) {
+        return;
+    }
+    const QString defaultName = tr("Grid Preset %1").arg(project_->gridPresets().size() + 1);
+    const auto result = sound_mind::studio::promptSaveName(
+        this, tr("Save Grid Preset"), tr("Name:"), defaultName,
+        [this](const std::string& candidate) { return project_->gridPresetNameExists(candidate); });
+    if (result.outcome == sound_mind::studio::SaveNameOutcome::Cancelled) {
+        return;
+    }
+    auto frequencyGrid = sound_mind::studio::toFrequencyGridPresetConfig(gridPanel_->frequencyGridConfig());
+    auto timingGrid = sound_mind::studio::toTimingGridPresetConfig(gridPanel_->timingGridConfig());
+    const bool snapToGridEnabled = gridPanel_->snapToGridEnabled();
+    if (result.replacingExisting) {
+        auto& presets = project_->gridPresets();
+        const auto it = std::find_if(presets.begin(), presets.end(),
+                                      [&result](const auto& named) { return named.name == result.name; });
+        if (it != presets.end()) {
+            it->frequencyGrid = std::move(frequencyGrid);
+            it->timingGrid = std::move(timingGrid);
+            it->snapToGridEnabled = snapToGridEnabled;
+        }
+    } else {
+        project_->addGridPreset(result.name, std::move(frequencyGrid), std::move(timingGrid), snapToGridEnabled);
+    }
+    refreshGridPresetCombo();
+    hasUnsavedChanges_ = true;
+    statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
+}
+
+void MainWindow::deleteGridPreset(sound_mind::core::GridPresetId id) {
+    if (!project_.has_value()) {
+        return;
+    }
+    project_->removeGridPreset(id);
+    refreshGridPresetCombo();
+    hasUnsavedChanges_ = true;
+}
+
+void MainWindow::refreshGridPresetCombo() {
+    gridPanel_->setAvailableGridPresets(project_.has_value() ? project_->gridPresets()
+                                                               : std::vector<sound_mind::core::NamedGridPreset>{});
 }
 
 void MainWindow::refreshFilterPresetCombo() {

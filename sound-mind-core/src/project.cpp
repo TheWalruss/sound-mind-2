@@ -246,6 +246,11 @@ NamedMindWave* Project::mindWaveById(MindWaveId id) noexcept {
     return nullptr;
 }
 
+bool Project::mindWaveNameExists(const std::string& name) const noexcept {
+    return std::any_of(mindWaves_.begin(), mindWaves_.end(),
+                        [&name](const NamedMindWave& named) { return named.name == name; });
+}
+
 MindShotId Project::addMindShot(std::string name, Clip clip) {
     const auto maxId = std::max_element(mindShots_.begin(), mindShots_.end(),
                                           [](const NamedMindShot& a, const NamedMindShot& b) { return a.id < b.id; });
@@ -280,6 +285,11 @@ NamedMindShot* Project::mindShotById(MindShotId id) noexcept {
         }
     }
     return nullptr;
+}
+
+bool Project::mindShotNameExists(const std::string& name) const noexcept {
+    return std::any_of(mindShots_.begin(), mindShots_.end(),
+                        [&name](const NamedMindShot& named) { return named.name == name; });
 }
 
 MindGrainId Project::addMindGrain(std::string name, LayerId sourceLayerId, TimeFrequencyRect bounds) {
@@ -317,6 +327,11 @@ NamedMindGrain* Project::mindGrainById(MindGrainId id) noexcept {
         }
     }
     return nullptr;
+}
+
+bool Project::mindGrainNameExists(const std::string& name) const noexcept {
+    return std::any_of(mindGrains_.begin(), mindGrains_.end(),
+                        [&name](const NamedMindGrain& named) { return named.name == name; });
 }
 
 ResonanceProfileId Project::addResonanceProfile(std::string name, std::vector<float> spectrum,
@@ -358,6 +373,11 @@ NamedResonanceProfile* Project::resonanceProfileById(ResonanceProfileId id) noex
     return nullptr;
 }
 
+bool Project::resonanceProfileNameExists(const std::string& name) const noexcept {
+    return std::any_of(resonanceProfiles_.begin(), resonanceProfiles_.end(),
+                        [&name](const NamedResonanceProfile& named) { return named.name == name; });
+}
+
 ConvolutionKernelId Project::addConvolutionKernel(std::string name, int size, std::vector<float> coefficients,
                                                    bool normalize) {
     const auto maxId = std::max_element(
@@ -395,6 +415,11 @@ NamedConvolutionKernel* Project::convolutionKernelById(ConvolutionKernelId id) n
         }
     }
     return nullptr;
+}
+
+bool Project::convolutionKernelNameExists(const std::string& name) const noexcept {
+    return std::any_of(convolutionKernels_.begin(), convolutionKernels_.end(),
+                        [&name](const NamedConvolutionKernel& named) { return named.name == name; });
 }
 
 ToolPresetId Project::addToolPreset(std::string name, const ToolConfiguration& config) {
@@ -437,6 +462,11 @@ NamedToolPreset* Project::toolPresetById(ToolPresetId id) noexcept {
     return nullptr;
 }
 
+bool Project::toolPresetNameExists(const std::string& name) const noexcept {
+    return std::any_of(toolPresets_.begin(), toolPresets_.end(),
+                        [&name](const NamedToolPreset& named) { return named.name == name; });
+}
+
 FilterPresetId Project::addFilterPreset(std::string name, const FilterConfiguration& config) {
     const auto maxId = std::max_element(filterPresets_.begin(), filterPresets_.end(),
                                           [](const NamedFilterPreset& a, const NamedFilterPreset& b) { return a.id < b.id; });
@@ -475,6 +505,60 @@ NamedFilterPreset* Project::filterPresetById(FilterPresetId id) noexcept {
         }
     }
     return nullptr;
+}
+
+bool Project::filterPresetNameExists(const std::string& name) const noexcept {
+    return std::any_of(filterPresets_.begin(), filterPresets_.end(),
+                        [&name](const NamedFilterPreset& named) { return named.name == name; });
+}
+
+GridPresetId Project::addGridPreset(std::string name, FrequencyGridPresetConfig frequencyGrid,
+                                     TimingGridPresetConfig timingGrid, bool snapToGridEnabled) {
+    const auto maxId = std::max_element(
+        gridPresets_.begin(), gridPresets_.end(),
+        [](const NamedGridPreset& a, const NamedGridPreset& b) { return a.id < b.id; });
+    const GridPresetId newId = (maxId == gridPresets_.end() ? GridPresetId{0} : maxId->id) + 1;
+    NamedGridPreset preset;
+    preset.id = newId;
+    preset.name = std::move(name);
+    preset.frequencyGrid = std::move(frequencyGrid);
+    preset.timingGrid = std::move(timingGrid);
+    preset.snapToGridEnabled = snapToGridEnabled;
+    gridPresets_.push_back(std::move(preset));
+    return newId;
+}
+
+bool Project::removeGridPreset(GridPresetId id) {
+    const auto it = std::find_if(gridPresets_.begin(), gridPresets_.end(),
+                                  [id](const NamedGridPreset& named) { return named.id == id; });
+    if (it == gridPresets_.end()) {
+        return false;
+    }
+    gridPresets_.erase(it);
+    return true;
+}
+
+const NamedGridPreset* Project::gridPresetById(GridPresetId id) const noexcept {
+    for (const NamedGridPreset& named : gridPresets_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
+NamedGridPreset* Project::gridPresetById(GridPresetId id) noexcept {
+    for (NamedGridPreset& named : gridPresets_) {
+        if (named.id == id) {
+            return &named;
+        }
+    }
+    return nullptr;
+}
+
+bool Project::gridPresetNameExists(const std::string& name) const noexcept {
+    return std::any_of(gridPresets_.begin(), gridPresets_.end(),
+                        [&name](const NamedGridPreset& named) { return named.name == name; });
 }
 
 void Project::setMidiProgramMapping(const MidiProgramMapping& mapping) {
@@ -558,6 +642,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"convolutionKernels", project.convolutionKernels_},
         {"toolPresets", project.toolPresets_},
         {"filterPresets", project.filterPresets_},
+        {"gridPresets", project.gridPresets_},
         {"midiProgramMappings", project.midiProgramMappings_},
     };
 }
@@ -634,6 +719,15 @@ void from_json(const nlohmann::json& json, Project& project) {
     if (json.contains("filterPresets")) {
         for (const auto& namedJson : json.at("filterPresets")) {
             project.filterPresets_.push_back(namedJson.get<NamedFilterPreset>());
+        }
+    }
+
+    // Lenient, same reasoning - didn't exist before Grid Presets; a
+    // project saved before it had no saved Grid Presets to lose.
+    project.gridPresets_.clear();
+    if (json.contains("gridPresets")) {
+        for (const auto& namedJson : json.at("gridPresets")) {
+            project.gridPresets_.push_back(namedJson.get<NamedGridPreset>());
         }
     }
 

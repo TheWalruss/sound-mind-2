@@ -20,8 +20,10 @@
 #include "sound_mind/codec/rgb_image_resample.h"
 #include "sound_mind/core/mind_shot_preview.h"
 #include "sound_mind/core/paint_application.h"
-#include "sound_mind/core/path.h"
 #include "sound_mind/core/resource_file.h"
+#include "sound_mind/core/tool_configuration.h"
+#include "sound_mind/core/tool_configuration_preview.h"
+#include "sound_mind/studio/name_collision_dialog.h"
 #include "sound_mind/studio/qt_image_conversion.h"
 #include "sound_mind/studio/resource_browser_panel.h"
 
@@ -101,57 +103,15 @@ QImage renderSpectrumImage(const std::vector<float>& spectrum) {
 /// space in a preview this small.
 constexpr float kPreviewMinFrequencyHz = 1000.0f;
 
-/// @brief Renders a Tool Preset's own configuration as a straight,
-/// diagonal 3-second stroke from 3 kHz to 5 kHz - confirmed with the
-/// user as the Resource Browser's own Tool Preset preview. A
-/// `NamedToolPreset` carries no `Path`/gradient of its own to reuse (see
-/// that struct's own docs on why - a tool configuration is reusable
-/// across strokes precisely because it isn't tied to one), so this
-/// preview picks a fixed, fully-opaque default gradient deliberately,
-/// rather than trying to guess one. Clipped vertically at
-/// `kPreviewMinFrequencyHz` - see that constant's own docs.
-QImage renderToolPresetPreview(const sound_mind::core::ToolConfiguration& config, const Project& project) {
+/// @brief Crops `content` (as `sound_mind::core::
+/// toolConfigurationPreviewStreamImage()` returns it) vertically at
+/// `kPreviewMinFrequencyHz` and rasterizes it
+/// to the inspector's own fixed raster size - confirmed with the user
+/// as the Resource Browser's own Tool Preset preview, now shared by
+/// every category that previews a synthesized stroke the same way.
+QImage cropAndRasterizePreviewImage(const sound_mind::codec::StreamImage& content) {
     using namespace sound_mind::core;
-
-    const auto codecConfig = streamCodecConfigFor(project.settings());
-    const double scale = frequencyToTimeScaleFor(project.settings());
-
-    Path path;
-    PathNode start;
-    start.anchor = TimeFrequencyPoint{0.0, 3000.0};
-    start.type = PathNodeType::Corner;
-    path.addNode(start);
-    PathNode end;
-    end.anchor = TimeFrequencyPoint{3.0, 5000.0};
-    end.type = PathNodeType::Corner;
-    path.addNode(end);
-    GradientStop stop = path.gradient().stops().front();
-    stop.leftIntensity = 0.0f;
-    stop.rightIntensity = 0.0f;
-    stop.leftOpacity = 1.0f;
-    stop.rightOpacity = 1.0f;
-    path.gradient().setStopValues(0, stop);
-    path.gradient().setStopValues(1, stop);
-
-    const auto frameCount =
-        static_cast<std::uint32_t>(std::lround(3.0 * codecConfig.sampleRateHz / codecConfig.hopLength));
-    sound_mind::codec::StreamImage content;
-    content.config = codecConfig;
-    content.frameCount = frameCount;
-    content.sampleCount = static_cast<std::uint64_t>(frameCount) * codecConfig.hopLength;
-    // -96 dB, this codebase's established silence floor (see Project::
-    // createNew()'s own Equalizer default) - a quiet, not literally
-    // empty, backdrop the stroke itself stands out starkly against.
-    content.leftMagnitudeDb.assign(std::size_t{codecConfig.binCount} * frameCount, -96.0f);
-    content.rightMagnitudeDb.assign(std::size_t{codecConfig.binCount} * frameCount, -96.0f);
-    content.sharedPhaseRadians.assign(std::size_t{codecConfig.binCount} * frameCount, 0.0f);
-
-    const PaintOperation op(OperationId{0}, LayerId{0}, path, config.clone());
-    const MindWaveResolver resolveMindWave = [&project](MindWaveId mindWaveId) -> const MindWave* {
-        const auto* entry = project.mindWaveById(mindWaveId);
-        return entry != nullptr ? &entry->wave : nullptr;
-    };
-    applyPaintOperation(op, scale, content, /*resolveLayerContent=*/{}, resolveMindWave);
+    const auto& codecConfig = content.config;
 
     // Clip out every bin below kPreviewMinFrequencyHz before rendering -
     // frequencyToBinIndex() maps low Hz to low bin indices, so this keeps
@@ -161,6 +121,7 @@ QImage renderToolPresetPreview(const sound_mind::core::ToolConfiguration& config
     const auto keepFromBin = static_cast<std::uint32_t>(
         std::clamp(std::lround(keepFromBinF), 0L, static_cast<long>(codecConfig.binCount) - 1));
     const std::uint32_t keptBinCount = codecConfig.binCount - keepFromBin;
+    const std::uint32_t frameCount = content.frameCount;
 
     sound_mind::codec::StreamImage cropped;
     cropped.config = codecConfig;
@@ -183,6 +144,31 @@ QImage renderToolPresetPreview(const sound_mind::core::ToolConfiguration& config
     const auto rgb = sound_mind::codec::toRgbImage(cropped);
     const auto downsampled = sound_mind::codec::downsampleAveraged(rgb, kRasterWidth, kRasterHeight);
     return toQImageView(downsampled).copy();
+}
+
+/// @brief A default `InstrumentConfiguration` with `mindWaveId` bound as
+/// its own vibrato source - exists only so a standalone MindWave library
+/// entry (not yet attached to any real Tool Preset) can still be
+/// previewed the same way a Tool Preset is: painted as a representative
+/// stroke and decoded. Plain default harmonics/inharmonicity - nothing
+/// about *this* preview is about the Instrument, only about making the
+/// MindWave's own modulation audible.
+std::unique_ptr<sound_mind::core::ToolConfiguration> syntheticInstrumentPreviewConfig(
+    sound_mind::core::MindWaveId mindWaveId) {
+    auto config = std::make_unique<sound_mind::core::InstrumentConfiguration>();
+    config->setVibratoMindWave(mindWaveId);
+    return config;
+}
+
+/// @brief A default `ResonanceConfiguration` carrying `spectrum` - exists
+/// only so a standalone Resonance Profile library entry can be previewed
+/// the same way a Tool Preset is, before it's ever been used to paint a
+/// real stroke.
+std::unique_ptr<sound_mind::core::ToolConfiguration> syntheticResonancePreviewConfig(
+    sound_mind::core::ResonanceProfileId sourceId, std::vector<float> spectrum) {
+    auto config = std::make_unique<sound_mind::core::ResonanceConfiguration>();
+    config->setSpectrum(sourceId, std::move(spectrum));
+    return config;
 }
 
 /// @brief Renders a `CurveGraph`'s own shape (every edge, as a straight
@@ -268,6 +254,7 @@ std::optional<sound_mind::core::PortableResourceType> portableTypeFor(ResourceCa
             return sound_mind::core::PortableResourceType::ConvolutionKernel;
         case ResourceCategory::FilterPreset:
             return sound_mind::core::PortableResourceType::FilterPreset;
+        case ResourceCategory::GridPreset:
         case ResourceCategory::MindGrain:
         case ResourceCategory::Layer:
             return std::nullopt;
@@ -356,6 +343,11 @@ void ResourceBrowserController::refreshEntries() {
                     rows.push_back({entry.id, QString::fromStdString(entry.name)});
                 }
                 break;
+            case ResourceCategory::GridPreset:
+                for (const auto& entry : project->gridPresets()) {
+                    rows.push_back({entry.id, QString::fromStdString(entry.name)});
+                }
+                break;
             case ResourceCategory::MindGrain:
                 for (const auto& entry : project->mindGrains()) {
                     rows.push_back({entry.id, QString::fromStdString(entry.name)});
@@ -386,7 +378,8 @@ void ResourceBrowserController::refreshInspector() {
     QImage raster;
     bool canPlay = false;
     const bool canExport = portableTypeFor(panel_->selectedCategory()).has_value();
-    const bool canImportEntry = browsingOther && panel_->selectedCategory() != ResourceCategory::MindGrain;
+    const bool canImportEntry = browsingOther && panel_->selectedCategory() != ResourceCategory::MindGrain &&
+                                 panel_->selectedCategory() != ResourceCategory::GridPreset;
 
     switch (panel_->selectedCategory()) {
         case ResourceCategory::MindWave: {
@@ -408,6 +401,19 @@ void ResourceBrowserController::refreshInspector() {
                 sound_mind::codec::toGrayscaleImage(field, project->settings().canvasWidth, config.binCount);
             const auto downsampled = sound_mind::codec::downsampleAveraged(grayscale, kRasterWidth, kRasterHeight);
             raster = toQImageView(downsampled).copy();
+
+            // Audible preview: a default Instrument bound to this
+            // MindWave as its own vibrato source, painted as the same
+            // representative 3-second stroke a Tool Preset preview
+            // uses, then decoded - see syntheticInstrumentPreviewConfig()'s
+            // own docs. Doesn't change the raster above at all; this
+            // only adds a Play button alongside the existing visual.
+            {
+                const auto previewConfig = syntheticInstrumentPreviewConfig(static_cast<MindWaveId>(*id));
+                currentPreviewImage_ = sound_mind::core::toolConfigurationPreviewStreamImage(*previewConfig, *project);
+                currentPreviewAudio_ = sound_mind::codec::AudioBuffer{};
+                canPlay = true;
+            }
             break;
         }
         case ResourceCategory::ToolPreset: {
@@ -420,7 +426,10 @@ void ResourceBrowserController::refreshInspector() {
             nlohmann::json json;
             sound_mind::core::to_json(json, *entry->config);
             parameterText = QString::fromStdString(json.dump(2));
-            raster = renderToolPresetPreview(*entry->config, *project);
+            currentPreviewImage_ = sound_mind::core::toolConfigurationPreviewStreamImage(*entry->config, *project);
+            raster = cropAndRasterizePreviewImage(*currentPreviewImage_);
+            currentPreviewAudio_ = sound_mind::codec::AudioBuffer{};
+            canPlay = true;
             break;
         }
         case ResourceCategory::MindShot: {
@@ -460,6 +469,19 @@ void ResourceBrowserController::refreshInspector() {
                                 .arg(entry->spectrum.size())
                                 .arg(entry->sourceCurve.nodes().size());
             raster = renderResonanceInspectorImage(entry->spectrum, entry->sourceCurve);
+
+            // Audible preview: a default Resonance brush carrying this
+            // profile's own spectrum, painted as the same representative
+            // stroke a Tool Preset preview uses, then decoded - see
+            // syntheticResonancePreviewConfig()'s own docs. Doesn't
+            // change the raster above (spectrum + source curve) at all.
+            if (!entry->spectrum.empty()) {
+                const auto previewConfig =
+                    syntheticResonancePreviewConfig(static_cast<ResonanceProfileId>(*id), entry->spectrum);
+                currentPreviewImage_ = sound_mind::core::toolConfigurationPreviewStreamImage(*previewConfig, *project);
+                currentPreviewAudio_ = sound_mind::codec::AudioBuffer{};
+                canPlay = true;
+            }
             break;
         }
         case ResourceCategory::ConvolutionKernel: {
@@ -483,6 +505,18 @@ void ResourceBrowserController::refreshInspector() {
             name = QString::fromStdString(entry->name);
             nlohmann::json json;
             sound_mind::core::to_json(json, entry->config);
+            parameterText = QString::fromStdString(json.dump(2));
+            break;
+        }
+        case ResourceCategory::GridPreset: {
+            const auto* entry = project->gridPresetById(static_cast<sound_mind::core::GridPresetId>(*id));
+            if (entry == nullptr) {
+                panel_->clearInspector();
+                return;
+            }
+            name = QString::fromStdString(entry->name);
+            nlohmann::json json;
+            sound_mind::core::to_json(json, *entry);
             parameterText = QString::fromStdString(json.dump(2));
             break;
         }
@@ -560,6 +594,7 @@ bool ResourceBrowserController::exportSelectedEntry(const std::filesystem::path&
                 sound_mind::core::exportFilterPreset(*project->filterPresetById(static_cast<FilterPresetId>(*id)),
                                                       path);
                 break;
+            case ResourceCategory::GridPreset:
             case ResourceCategory::MindGrain:
             case ResourceCategory::Layer:
                 return false;
@@ -592,38 +627,138 @@ bool ResourceBrowserController::importFromFile(const std::filesystem::path& path
         switch (panel_->selectedCategory()) {
             case ResourceCategory::MindWave: {
                 const auto entry = sound_mind::core::importMindWave(path);
-                project_->addMindWave(entry.name, entry.wave);
+                const auto resolution = sound_mind::studio::resolveImportName(
+                    panel_, categoryLabel(ResourceCategory::MindWave), entry.name,
+                    [this](const std::string& candidate) { return project_->mindWaveNameExists(candidate); });
+                if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                    return true;
+                }
+                if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                    auto& waves = project_->mindWaves();
+                    const auto it = std::find_if(waves.begin(), waves.end(),
+                                                  [&resolution](const auto& w) { return w.name == resolution.name; });
+                    if (it != waves.end()) {
+                        it->wave = entry.wave;
+                    }
+                } else {
+                    project_->addMindWave(resolution.name, entry.wave);
+                }
                 break;
             }
             case ResourceCategory::ToolPreset: {
                 const auto entry = sound_mind::core::importToolPreset(path);
-                project_->addToolPreset(entry.name, *entry.config);
+                const auto resolution = sound_mind::studio::resolveImportName(
+                    panel_, categoryLabel(ResourceCategory::ToolPreset), entry.name,
+                    [this](const std::string& candidate) { return project_->toolPresetNameExists(candidate); });
+                if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                    return true;
+                }
+                if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                    auto& presets = project_->toolPresets();
+                    const auto it = std::find_if(
+                        presets.begin(), presets.end(),
+                        [&resolution](const auto& named) { return named.name == resolution.name; });
+                    if (it != presets.end() && entry.config) {
+                        it->config = entry.config->clone();
+                    }
+                } else if (entry.config) {
+                    project_->addToolPreset(resolution.name, *entry.config);
+                }
                 break;
             }
             case ResourceCategory::MindShot: {
                 const auto entry = sound_mind::core::importMindShot(path);
-                const MindShotId newId = project_->addMindShot(entry.name, entry.clip);
-                if (auto* added = project_->mindShotById(newId)) {
-                    added->fundamentalFrequencyHz = entry.fundamentalFrequencyHz;
-                    added->startTimeOffsetSeconds = entry.startTimeOffsetSeconds;
+                const auto resolution = sound_mind::studio::resolveImportName(
+                    panel_, categoryLabel(ResourceCategory::MindShot), entry.name,
+                    [this](const std::string& candidate) { return project_->mindShotNameExists(candidate); });
+                if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                    return true;
+                }
+                if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                    auto& shots = project_->mindShots();
+                    const auto it = std::find_if(shots.begin(), shots.end(),
+                                                  [&resolution](const auto& s) { return s.name == resolution.name; });
+                    if (it != shots.end()) {
+                        it->clip = entry.clip;
+                        it->fundamentalFrequencyHz = entry.fundamentalFrequencyHz;
+                        it->startTimeOffsetSeconds = entry.startTimeOffsetSeconds;
+                    }
+                } else {
+                    const MindShotId newId = project_->addMindShot(resolution.name, entry.clip);
+                    if (auto* added = project_->mindShotById(newId)) {
+                        added->fundamentalFrequencyHz = entry.fundamentalFrequencyHz;
+                        added->startTimeOffsetSeconds = entry.startTimeOffsetSeconds;
+                    }
                 }
                 break;
             }
             case ResourceCategory::ResonanceProfile: {
                 const auto entry = sound_mind::core::importResonanceProfile(path);
-                project_->addResonanceProfile(entry.name, entry.spectrum);
+                const auto resolution = sound_mind::studio::resolveImportName(
+                    panel_, categoryLabel(ResourceCategory::ResonanceProfile), entry.name,
+                    [this](const std::string& candidate) { return project_->resonanceProfileNameExists(candidate); });
+                if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                    return true;
+                }
+                if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                    auto& profiles = project_->resonanceProfiles();
+                    const auto it = std::find_if(
+                        profiles.begin(), profiles.end(),
+                        [&resolution](const auto& p) { return p.name == resolution.name; });
+                    if (it != profiles.end()) {
+                        it->spectrum = entry.spectrum;
+                        it->sourceCurve = entry.sourceCurve;
+                    }
+                } else {
+                    project_->addResonanceProfile(resolution.name, entry.spectrum, entry.sourceCurve);
+                }
                 break;
             }
             case ResourceCategory::ConvolutionKernel: {
                 const auto entry = sound_mind::core::importConvolutionKernel(path);
-                project_->addConvolutionKernel(entry.name, entry.size, entry.coefficients, entry.normalize);
+                const auto resolution = sound_mind::studio::resolveImportName(
+                    panel_, categoryLabel(ResourceCategory::ConvolutionKernel), entry.name,
+                    [this](const std::string& candidate) { return project_->convolutionKernelNameExists(candidate); });
+                if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                    return true;
+                }
+                if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                    auto& kernels = project_->convolutionKernels();
+                    const auto it = std::find_if(
+                        kernels.begin(), kernels.end(),
+                        [&resolution](const auto& k) { return k.name == resolution.name; });
+                    if (it != kernels.end()) {
+                        it->size = entry.size;
+                        it->coefficients = entry.coefficients;
+                        it->normalize = entry.normalize;
+                    }
+                } else {
+                    project_->addConvolutionKernel(resolution.name, entry.size, entry.coefficients, entry.normalize);
+                }
                 break;
             }
             case ResourceCategory::FilterPreset: {
                 const auto entry = sound_mind::core::importFilterPreset(path);
-                project_->addFilterPreset(entry.name, entry.config);
+                const auto resolution = sound_mind::studio::resolveImportName(
+                    panel_, categoryLabel(ResourceCategory::FilterPreset), entry.name,
+                    [this](const std::string& candidate) { return project_->filterPresetNameExists(candidate); });
+                if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                    return true;
+                }
+                if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                    auto& presets = project_->filterPresets();
+                    const auto it = std::find_if(
+                        presets.begin(), presets.end(),
+                        [&resolution](const auto& named) { return named.name == resolution.name; });
+                    if (it != presets.end()) {
+                        it->config = entry.config;
+                    }
+                } else {
+                    project_->addFilterPreset(resolution.name, entry.config);
+                }
                 break;
             }
+            case ResourceCategory::GridPreset:
             case ResourceCategory::MindGrain:
             case ResourceCategory::Layer:
                 return false;
@@ -650,47 +785,163 @@ void ResourceBrowserController::handleImportEntryRequested() {
     }
 
     switch (panel_->selectedCategory()) {
-        case ResourceCategory::MindWave:
-            if (const auto* entry = browsedProject_->mindWaveById(static_cast<MindWaveId>(*id))) {
-                project_->addMindWave(entry->name, entry->wave);
+        case ResourceCategory::MindWave: {
+            const auto* entry = browsedProject_->mindWaveById(static_cast<MindWaveId>(*id));
+            if (entry == nullptr) {
+                break;
             }
-            break;
-        case ResourceCategory::ToolPreset:
-            if (const auto* entry = browsedProject_->toolPresetById(static_cast<ToolPresetId>(*id))) {
-                if (entry->config) {
-                    project_->addToolPreset(entry->name, *entry->config);
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::MindWave), entry->name,
+                [this](const std::string& candidate) { return project_->mindWaveNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& waves = project_->mindWaves();
+                const auto it = std::find_if(waves.begin(), waves.end(),
+                                              [&resolution](const auto& w) { return w.name == resolution.name; });
+                if (it != waves.end()) {
+                    it->wave = entry->wave;
                 }
+            } else {
+                project_->addMindWave(resolution.name, entry->wave);
             }
             break;
-        case ResourceCategory::MindShot:
-            if (const auto* entry = browsedProject_->mindShotById(static_cast<MindShotId>(*id))) {
-                const MindShotId newId = project_->addMindShot(entry->name, entry->clip);
+        }
+        case ResourceCategory::ToolPreset: {
+            const auto* entry = browsedProject_->toolPresetById(static_cast<ToolPresetId>(*id));
+            if (entry == nullptr || !entry->config) {
+                break;
+            }
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::ToolPreset), entry->name,
+                [this](const std::string& candidate) { return project_->toolPresetNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& presets = project_->toolPresets();
+                const auto it = std::find_if(
+                    presets.begin(), presets.end(),
+                    [&resolution](const auto& named) { return named.name == resolution.name; });
+                if (it != presets.end()) {
+                    it->config = entry->config->clone();
+                }
+            } else {
+                project_->addToolPreset(resolution.name, *entry->config);
+            }
+            break;
+        }
+        case ResourceCategory::MindShot: {
+            const auto* entry = browsedProject_->mindShotById(static_cast<MindShotId>(*id));
+            if (entry == nullptr) {
+                break;
+            }
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::MindShot), entry->name,
+                [this](const std::string& candidate) { return project_->mindShotNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& shots = project_->mindShots();
+                const auto it = std::find_if(shots.begin(), shots.end(),
+                                              [&resolution](const auto& s) { return s.name == resolution.name; });
+                if (it != shots.end()) {
+                    it->clip = entry->clip;
+                    it->fundamentalFrequencyHz = entry->fundamentalFrequencyHz;
+                    it->startTimeOffsetSeconds = entry->startTimeOffsetSeconds;
+                }
+            } else {
+                const MindShotId newId = project_->addMindShot(resolution.name, entry->clip);
                 if (auto* added = project_->mindShotById(newId)) {
                     added->fundamentalFrequencyHz = entry->fundamentalFrequencyHz;
                     added->startTimeOffsetSeconds = entry->startTimeOffsetSeconds;
                 }
             }
             break;
-        case ResourceCategory::ResonanceProfile:
-            if (const auto* entry = browsedProject_->resonanceProfileById(static_cast<ResonanceProfileId>(*id))) {
-                project_->addResonanceProfile(entry->name, entry->spectrum);
+        }
+        case ResourceCategory::ResonanceProfile: {
+            const auto* entry = browsedProject_->resonanceProfileById(static_cast<ResonanceProfileId>(*id));
+            if (entry == nullptr) {
+                break;
+            }
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::ResonanceProfile), entry->name,
+                [this](const std::string& candidate) { return project_->resonanceProfileNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& profiles = project_->resonanceProfiles();
+                const auto it = std::find_if(
+                    profiles.begin(), profiles.end(),
+                    [&resolution](const auto& p) { return p.name == resolution.name; });
+                if (it != profiles.end()) {
+                    it->spectrum = entry->spectrum;
+                    it->sourceCurve = entry->sourceCurve;
+                }
+            } else {
+                project_->addResonanceProfile(resolution.name, entry->spectrum, entry->sourceCurve);
             }
             break;
-        case ResourceCategory::ConvolutionKernel:
-            if (const auto* entry = browsedProject_->convolutionKernelById(static_cast<ConvolutionKernelId>(*id))) {
-                project_->addConvolutionKernel(entry->name, entry->size, entry->coefficients, entry->normalize);
+        }
+        case ResourceCategory::ConvolutionKernel: {
+            const auto* entry = browsedProject_->convolutionKernelById(static_cast<ConvolutionKernelId>(*id));
+            if (entry == nullptr) {
+                break;
+            }
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::ConvolutionKernel), entry->name,
+                [this](const std::string& candidate) { return project_->convolutionKernelNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& kernels = project_->convolutionKernels();
+                const auto it = std::find_if(
+                    kernels.begin(), kernels.end(),
+                    [&resolution](const auto& k) { return k.name == resolution.name; });
+                if (it != kernels.end()) {
+                    it->size = entry->size;
+                    it->coefficients = entry->coefficients;
+                    it->normalize = entry->normalize;
+                }
+            } else {
+                project_->addConvolutionKernel(resolution.name, entry->size, entry->coefficients, entry->normalize);
             }
             break;
-        case ResourceCategory::FilterPreset:
-            if (const auto* entry = browsedProject_->filterPresetById(static_cast<FilterPresetId>(*id))) {
-                project_->addFilterPreset(entry->name, entry->config);
+        }
+        case ResourceCategory::FilterPreset: {
+            const auto* entry = browsedProject_->filterPresetById(static_cast<FilterPresetId>(*id));
+            if (entry == nullptr) {
+                break;
+            }
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::FilterPreset), entry->name,
+                [this](const std::string& candidate) { return project_->filterPresetNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& presets = project_->filterPresets();
+                const auto it = std::find_if(
+                    presets.begin(), presets.end(),
+                    [&resolution](const auto& named) { return named.name == resolution.name; });
+                if (it != presets.end()) {
+                    it->config = entry->config;
+                }
+            } else {
+                project_->addFilterPreset(resolution.name, entry->config);
             }
             break;
+        }
         case ResourceCategory::Layer:
             if (const auto* layer = browsedProject_->layerById(static_cast<sound_mind::core::LayerId>(*id))) {
                 project_->addLayer(*layer);
             }
             break;
+        case ResourceCategory::GridPreset:
         case ResourceCategory::MindGrain:
             return;
     }
@@ -772,7 +1023,7 @@ void ResourceBrowserController::handlePlayRequested() {
             return;
         }
         // First Play on this selection: decode now and cache, so a second
-        // Play on the same Mind Shot doesn't pay for decode() again.
+        // Play on the same entry doesn't pay for decode() again.
         currentPreviewAudio_ = sound_mind::codec::decode(*currentPreviewImage_);
         if (currentPreviewAudio_.frameCount() == 0) {
             return;
@@ -991,38 +1242,138 @@ void ResourceBrowserController::applyToolkitEntry(sound_mind::core::PortableReso
     switch (type) {
         case sound_mind::core::PortableResourceType::MindWave: {
             const auto entry = resource.get<sound_mind::core::NamedMindWave>();
-            target.addMindWave(entry.name, entry.wave);
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::MindWave), entry.name,
+                [&target](const std::string& candidate) { return target.mindWaveNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& waves = target.mindWaves();
+                const auto it = std::find_if(waves.begin(), waves.end(),
+                                              [&resolution](const auto& w) { return w.name == resolution.name; });
+                if (it != waves.end()) {
+                    it->wave = entry.wave;
+                }
+            } else {
+                target.addMindWave(resolution.name, entry.wave);
+            }
             return;
         }
         case sound_mind::core::PortableResourceType::ToolPreset: {
             const auto entry = resource.get<sound_mind::core::NamedToolPreset>();
-            if (entry.config) {
-                target.addToolPreset(entry.name, *entry.config);
+            if (!entry.config) {
+                return;
+            }
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::ToolPreset), entry.name,
+                [&target](const std::string& candidate) { return target.toolPresetNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& presets = target.toolPresets();
+                const auto it = std::find_if(
+                    presets.begin(), presets.end(),
+                    [&resolution](const auto& named) { return named.name == resolution.name; });
+                if (it != presets.end()) {
+                    it->config = entry.config->clone();
+                }
+            } else {
+                target.addToolPreset(resolution.name, *entry.config);
             }
             return;
         }
         case sound_mind::core::PortableResourceType::MindShot: {
             const auto entry = resource.get<sound_mind::core::NamedMindShot>();
-            const MindShotId newId = target.addMindShot(entry.name, entry.clip);
-            if (auto* added = target.mindShotById(newId)) {
-                added->fundamentalFrequencyHz = entry.fundamentalFrequencyHz;
-                added->startTimeOffsetSeconds = entry.startTimeOffsetSeconds;
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::MindShot), entry.name,
+                [&target](const std::string& candidate) { return target.mindShotNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& shots = target.mindShots();
+                const auto it = std::find_if(shots.begin(), shots.end(),
+                                              [&resolution](const auto& s) { return s.name == resolution.name; });
+                if (it != shots.end()) {
+                    it->clip = entry.clip;
+                    it->fundamentalFrequencyHz = entry.fundamentalFrequencyHz;
+                    it->startTimeOffsetSeconds = entry.startTimeOffsetSeconds;
+                }
+            } else {
+                const MindShotId newId = target.addMindShot(resolution.name, entry.clip);
+                if (auto* added = target.mindShotById(newId)) {
+                    added->fundamentalFrequencyHz = entry.fundamentalFrequencyHz;
+                    added->startTimeOffsetSeconds = entry.startTimeOffsetSeconds;
+                }
             }
             return;
         }
         case sound_mind::core::PortableResourceType::ResonanceProfile: {
             const auto entry = resource.get<sound_mind::core::NamedResonanceProfile>();
-            target.addResonanceProfile(entry.name, entry.spectrum);
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::ResonanceProfile), entry.name,
+                [&target](const std::string& candidate) { return target.resonanceProfileNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& profiles = target.resonanceProfiles();
+                const auto it = std::find_if(
+                    profiles.begin(), profiles.end(),
+                    [&resolution](const auto& p) { return p.name == resolution.name; });
+                if (it != profiles.end()) {
+                    it->spectrum = entry.spectrum;
+                    it->sourceCurve = entry.sourceCurve;
+                }
+            } else {
+                target.addResonanceProfile(resolution.name, entry.spectrum, entry.sourceCurve);
+            }
             return;
         }
         case sound_mind::core::PortableResourceType::ConvolutionKernel: {
             const auto entry = resource.get<sound_mind::core::NamedConvolutionKernel>();
-            target.addConvolutionKernel(entry.name, entry.size, entry.coefficients, entry.normalize);
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::ConvolutionKernel), entry.name,
+                [&target](const std::string& candidate) { return target.convolutionKernelNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& kernels = target.convolutionKernels();
+                const auto it = std::find_if(
+                    kernels.begin(), kernels.end(),
+                    [&resolution](const auto& k) { return k.name == resolution.name; });
+                if (it != kernels.end()) {
+                    it->size = entry.size;
+                    it->coefficients = entry.coefficients;
+                    it->normalize = entry.normalize;
+                }
+            } else {
+                target.addConvolutionKernel(resolution.name, entry.size, entry.coefficients, entry.normalize);
+            }
             return;
         }
         case sound_mind::core::PortableResourceType::FilterPreset: {
             const auto entry = resource.get<sound_mind::core::NamedFilterPreset>();
-            target.addFilterPreset(entry.name, entry.config);
+            const auto resolution = sound_mind::studio::resolveImportName(
+                panel_, categoryLabel(ResourceCategory::FilterPreset), entry.name,
+                [&target](const std::string& candidate) { return target.filterPresetNameExists(candidate); });
+            if (resolution.action == sound_mind::studio::ImportNameAction::Skip) {
+                return;
+            }
+            if (resolution.action == sound_mind::studio::ImportNameAction::OverwriteExisting) {
+                auto& presets = target.filterPresets();
+                const auto it = std::find_if(
+                    presets.begin(), presets.end(),
+                    [&resolution](const auto& named) { return named.name == resolution.name; });
+                if (it != presets.end()) {
+                    it->config = entry.config;
+                }
+            } else {
+                target.addFilterPreset(resolution.name, entry.config);
+            }
             return;
         }
     }

@@ -1089,6 +1089,27 @@ See `docs/sound-mind-architecture.md`'s Decision #221 for the full implementatio
 
 **Backlog addition**: graying out whichever menu entries don't actually apply at the exact click point (same deferred next step the Edit menu redesign above already named) would apply here too, once that work actually happens.
 
+### `v0.Y.67.1` - Audio preview wherever a visual one already exists (2026-10-10)
+
+Direct user feedback: "In the resource browser, tool configuration, and other appropriate places - practically wherever there is a visual preview of something, give the user the ability to play an audio preview of whatever it is."
+
+- ✅ **Resource Browser** - MindWave, Tool Preset, and Resonance Profile entries all gained Play/Stop buttons alongside their existing visual preview (Mind Shot already had one). MindWave/Resonance Profile synthesize a representative stroke (a default Instrument bound as vibrato; a default Resonance brush carrying the spectrum) through the same painting pipeline Tool Preset's own preview already used.
+- ✅ **Tool Configuration panel** - a new Preview button plays the panel's own current, not-yet-saved settings the same way.
+
+See `docs/sound-mind-architecture.md`'s Decision #222 for the full implementation writeup, including why Filter Configuration/Convolution Kernel/Filter Preset are deliberately excluded. Settled in `v0.1.26.1` (note: `v0.1.25.1` itself was fully documented for the context menu above, but its own `CMakeLists.txt` was mistakenly left un-bumped - corrected here, see Decision #222's own first bullet).
+
+**Backlog addition**: `MindWavesPanel`'s own separate canvas-overlay "Preview" toggle could get the same audio treatment later - noted, not pulled into this round.
+
+### `v0.Y.68.1` - Named Grid Presets, plus universal save/import name-collision handling (2026-10-10)
+
+Direct user feedback: "Are named grid presets a thing yet? If not, the next feature I want to do is to give the user the option to save/load named grid presets, just like tool configuration presets. Also part of the Resource Manager. Additionally, for all the named resources, I want the following behavior: when a user specifies an existing name, the user gets the option to replace the existing resource, to give a new name (to resolve the conflict), or to cancel saving. Check for new name collisions when the user specifies a new name, of course. When importing resources, if there's a name collision, give the user the option to use the import version (overwrite), keep the existing version (ignore), or keep both (rename import version)."
+
+- ✅ **Named Grid Presets** - the Grid panel's Frequency Grid/Timing Grid/Snap to Grid settings can now be saved/loaded/deleted as a named unit (a new Save.../Load/Delete row), and browsed as their own Resource Manager category (no standalone file export yet, matching Mind Grain's own existing limitation).
+- ✅ **Universal save-name-collision handling** - every named resource (MindWave, Tool Preset, Mind Shot, Mind Grain, Resonance Profile, Convolution Kernel, Filter Preset, Grid Preset) now offers Replace/Rename/Cancel on a save-time name collision, closing a gap every one of these types' own documentation had already claimed but no code had ever enforced.
+- ✅ **Universal import-name-collision handling** - importing from a file, from another browsed project, or via a Toolkit bundle now offers Overwrite/Keep Existing/Keep Both on a colliding name, for every resource type that supports import at all.
+
+See `docs/sound-mind-architecture.md`'s Decision #223 for the full implementation writeup, including a real pre-existing bug fixed in passing (Resonance Profile import was silently dropping the imported `sourceCurve`) and three pre-existing tests that needed fixing rather than just extending. Settled in `v0.1.27.1`.
+
 **Backlog - queued for before Beta opens, not part of this iteration:**
 
 - ~~**Edit menu redesign - grouped into named, fold-out submenus**~~ - **settled in `v0.1.22.1`, 2026-10-10** (`docs/sound-mind-architecture.md`'s Decision #218). Still open, as its own explicit next step: graying out a group/action when its own precondition isn't met (e.g. **Edit → Path Editing → Edit Path** with nothing Picked).

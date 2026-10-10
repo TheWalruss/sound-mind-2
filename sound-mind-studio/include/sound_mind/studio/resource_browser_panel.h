@@ -39,9 +39,28 @@ enum class ResourceCategory {
     ResonanceProfile,
     ConvolutionKernel,
     FilterPreset,
+    /// @brief `GridPanel`'s own saved Overlay Grid configurations - see
+    ///        `sound_mind::core::NamedGridPreset`'s own docs. Browsable/
+    ///        inspectable here like every other library, but (like
+    ///        `MindGrain` below) has no portable single-file export/
+    ///        import format yet, and no cross-project "Browse Other
+    ///        Project" import either - saving/loading/deleting a Grid
+    ///        Preset is `GridPanel`'s own dedicated row's job, not this
+    ///        panel's.
+    GridPreset,
     MindGrain,
     Layer,
 };
+
+/// @brief `category`'s own human-readable display name (`"MindWave"`,
+///        `"Tool Preset"`, ...) - this panel's own category combo uses
+///        it to build its items, and `ResourceBrowserController`'s
+///        import-collision prompts (`sound_mind::studio::
+///        resolveImportName()`) reuse it so a dialog's own message text
+///        names the resource type the same way the combo does.
+/// @param category The category to label.
+/// @return The display label.
+[[nodiscard]] QString categoryLabel(ResourceCategory category);
 
 /**
  * @brief A dockable panel browsing one project's resource libraries at a
@@ -116,11 +135,13 @@ public:
      * @param parameterText A human-readable dump of its own parameters -
      *        typically its JSON representation, pretty-printed.
      * @param raster A rendered pixel raster (a Mind Shot's own spectrogram,
-     *        or a Resonance Profile's own spectrum plotted as a small
-     *        line chart) - a null `QImage` hides the raster area entirely
+     *        a MindWave/Tool Preset's own painted-stroke preview, or a
+     *        Resonance Profile's own spectrum plotted as a small line
+     *        chart) - a null `QImage` hides the raster area entirely
      *        (every other category has no pixel content to show).
-     * @param canPlay Whether a playable decoded preview exists for this
-     *        entry (Mind Shot only) - shows/hides the Play/Stop buttons.
+     * @param canPlay Whether a playable decoded audio preview exists for
+     *        this entry (Mind Shot, MindWave, Tool Preset, Resonance
+     *        Profile) - shows/hides the Play/Stop buttons.
      * @param canExport Whether this category has a portable file format at
      *        all (`false` for Mind Grain and Layer) - hides the Export
      *        button when `false`.

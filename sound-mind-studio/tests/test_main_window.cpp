@@ -7,6 +7,7 @@
 #include <optional>
 #include <vector>
 
+#include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
@@ -19,9 +20,11 @@
 #include <QFile>
 #include <QGroupBox>
 #include <QImage>
+#include <QInputDialog>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QTabBar>
@@ -6108,6 +6111,136 @@ void MainWindowTest::saveConvolutionKernelIsANoOpWithNoProjectOpen() {
     QVERIFY(window.project() == nullptr);
 }
 
+void MainWindowTest::saveGridPresetIsANoOpWithNoProjectOpen() {
+    TestMainWindow window;
+
+    // Safe to call the real, modal-dialog-showing slot directly - the
+    // "no project open" guard returns before the naming QInputDialog
+    // would ever show, the same reasoning
+    // saveConvolutionKernelIsANoOpWithNoProjectOpen() already relies on.
+    window.saveGridPreset();
+
+    QVERIFY(window.project() == nullptr);
+}
+
+void MainWindowTest::deleteGridPresetIsANoOpWithNoProjectOpen() {
+    TestMainWindow window;
+    window.deleteGridPreset(1);
+    QVERIFY(window.project() == nullptr);
+}
+
+void MainWindowTest::deleteGridPresetRemovesTheEntryAndRefreshesTheCombo() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* project = const_cast<sound_mind::core::Project*>(window.project());
+    const auto id = project->addGridPreset("Grid A", sound_mind::core::FrequencyGridPresetConfig{},
+                                             sound_mind::core::TimingGridPresetConfig{}, false);
+    auto* gridPanel = window.findChild<GridPanel*>();
+    gridPanel->setAvailableGridPresets(project->gridPresets());
+
+    window.deleteGridPreset(id);
+
+    QVERIFY(project->gridPresets().empty());
+    auto* combo = gridPanel->findChild<QComboBox*>(QStringLiteral("gridPresetCombo"));
+    QCOMPARE(combo->count(), 1);
+    QCOMPARE(combo->currentText(), QStringLiteral("(none saved yet)"));
+}
+
+void MainWindowTest::savingANewGridPresetNameAddsItToTheProjectAndRefreshesThePanel() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* gridPanel = window.findChild<GridPanel*>();
+    auto* noteGridCheckBox = gridPanel->findChild<QCheckBox*>(QStringLiteral("noteGridCheckBox"));
+    noteGridCheckBox->setChecked(true);  // A real, non-default configuration to save.
+
+    // The naming QInputDialog's own nested event loop still dispatches a
+    // zero-delay timer queued before it opened - the same technique
+    // test_main_window.cpp's own shownContextMenuActionTexts() already
+    // establishes for QMenu::exec(), applied here to QInputDialog.
+    QTimer::singleShot(0, [&]() {
+        auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog != nullptr);
+        dialog->setTextValue(QStringLiteral("My Grid"));
+        dialog->accept();
+    });
+
+    window.saveGridPreset();
+
+    QCOMPARE(window.project()->gridPresets().size(), std::size_t{1});
+    QCOMPARE(window.project()->gridPresets()[0].name, std::string("My Grid"));
+    QVERIFY(window.project()->gridPresets()[0].frequencyGrid.noteGridEnabled);
+    auto* combo = gridPanel->findChild<QComboBox*>(QStringLiteral("gridPresetCombo"));
+    QCOMPARE(combo->count(), 1);
+    QCOMPARE(combo->itemText(0), QStringLiteral("My Grid"));
+}
+
+void MainWindowTest::savingAGridPresetUnderAnExistingNameAndChoosingReplaceOverwritesInPlace() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* project = const_cast<sound_mind::core::Project*>(window.project());
+    const auto existingId = project->addGridPreset("My Grid", sound_mind::core::FrequencyGridPresetConfig{},
+                                                      sound_mind::core::TimingGridPresetConfig{}, false);
+    auto* gridPanel = window.findChild<GridPanel*>();
+    auto* noteGridCheckBox = gridPanel->findChild<QCheckBox*>(QStringLiteral("noteGridCheckBox"));
+    noteGridCheckBox->setChecked(true);
+
+    QTimer::singleShot(0, [&]() {
+        auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog != nullptr);
+        dialog->setTextValue(QStringLiteral("My Grid"));
+        dialog->accept();
+
+        QTimer::singleShot(0, []() {
+            auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            QVERIFY(box != nullptr);
+            for (QAbstractButton* button : box->buttons()) {
+                if (box->buttonRole(button) == QMessageBox::AcceptRole) {
+                    button->click();
+                    return;
+                }
+            }
+            QFAIL("No Replace button found.");
+        });
+    });
+
+    window.saveGridPreset();
+
+    QCOMPARE(window.project()->gridPresets().size(), std::size_t{1});
+    QCOMPARE(window.project()->gridPresets()[0].id, existingId);
+    QVERIFY(window.project()->gridPresets()[0].frequencyGrid.noteGridEnabled);
+}
+
+void MainWindowTest::savingAGridPresetUnderAnExistingNameAndChoosingCancelLeavesTheProjectUnchanged() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* project = const_cast<sound_mind::core::Project*>(window.project());
+    project->addGridPreset("My Grid", sound_mind::core::FrequencyGridPresetConfig{},
+                             sound_mind::core::TimingGridPresetConfig{}, false);
+
+    QTimer::singleShot(0, [&]() {
+        auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget());
+        QVERIFY(dialog != nullptr);
+        dialog->setTextValue(QStringLiteral("My Grid"));
+        dialog->accept();
+
+        QTimer::singleShot(0, []() {
+            auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            QVERIFY(box != nullptr);
+            for (QAbstractButton* button : box->buttons()) {
+                if (box->buttonRole(button) == QMessageBox::RejectRole) {
+                    button->click();
+                    return;
+                }
+            }
+            QFAIL("No Cancel button found.");
+        });
+    });
+
+    window.saveGridPreset();
+
+    QCOMPARE(window.project()->gridPresets().size(), std::size_t{1});
+}
+
 void MainWindowTest::resourceBrowserToggleIsATopLevelMenuBarEntryBetweenViewAndHelp() {
     // "Move the Resource Browser button from the Configure menu to right
     // in-between View and Help" - promoted out of the Configure dropdown
@@ -6457,4 +6590,42 @@ void MainWindowTest::showingSeveralTabifiedPanelsInSequenceWithAProjectOpenDoesN
         panel->show();
         QTest::qWait(20);
     }
+}
+
+void MainWindowTest::previewingTheCurrentToolConfigurationPlaysAudio() {
+    // Direct user feedback: "practically wherever there is a visual
+    // preview of something, give the user the ability to play an audio
+    // preview of whatever it is" - the live counterpart to the Resource
+    // Browser's own Tool Preset preview, previewing whatever
+    // ToolConfigurationPanel's own controls currently describe, saved
+    // or not.
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* panel = window.findChild<ToolConfigurationPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* playButton = panel->findChild<QPushButton*>(QStringLiteral("playPreviewButton"));
+    auto* stopButton = panel->findChild<QPushButton*>(QStringLiteral("stopPreviewButton"));
+    QVERIFY(playButton != nullptr);
+    QVERIFY(stopButton != nullptr);
+
+    playButton->click();
+    QVERIFY(!stopButton->isHidden());
+
+    stopButton->click();
+    QVERIFY(!playButton->isHidden());
+}
+
+void MainWindowTest::previewToolConfigurationIsANoOpWithNoProjectOpen() {
+    const TestMainWindow window;
+    auto* panel = window.findChild<ToolConfigurationPanel*>();
+    QVERIFY(panel != nullptr);
+    auto* playButton = panel->findChild<QPushButton*>(QStringLiteral("playPreviewButton"));
+    auto* stopButton = panel->findChild<QPushButton*>(QStringLiteral("stopPreviewButton"));
+    QVERIFY(playButton != nullptr);
+    QVERIFY(stopButton != nullptr);
+
+    playButton->click();
+
+    QVERIFY(!playButton->isHidden());
+    QVERIFY(stopButton->isHidden());
 }

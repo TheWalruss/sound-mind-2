@@ -293,6 +293,13 @@ private slots:
     // auto-naming it.
     void saveConvolutionKernelIsANoOpWithNoProjectOpen();
 
+    void saveGridPresetIsANoOpWithNoProjectOpen();
+    void deleteGridPresetIsANoOpWithNoProjectOpen();
+    void deleteGridPresetRemovesTheEntryAndRefreshesTheCombo();
+    void savingANewGridPresetNameAddsItToTheProjectAndRefreshesThePanel();
+    void savingAGridPresetUnderAnExistingNameAndChoosingReplaceOverwritesInPlace();
+    void savingAGridPresetUnderAnExistingNameAndChoosingCancelLeavesTheProjectUnchanged();
+
     // Resource Browser toggle promoted to a top-level menu-bar entry,
     // between View and Help (previously inside the Configure dropdown).
     void resourceBrowserToggleIsATopLevelMenuBarEntryBetweenViewAndHelp();
@@ -317,4 +324,11 @@ private slots:
     // regression in Decision #216's own raise()-on-show wiring, fixed by
     // Decision #221.
     void showingSeveralTabifiedPanelsInSequenceWithAProjectOpenDoesNotHang();
+
+    // Tool Configuration's own live audio preview (direct user
+    // feedback: "practically wherever there is a visual preview of
+    // something, give the user the ability to play an audio preview of
+    // whatever it is").
+    void previewingTheCurrentToolConfigurationPlaysAudio();
+    void previewToolConfigurationIsANoOpWithNoProjectOpen();
 };
