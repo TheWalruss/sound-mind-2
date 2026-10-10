@@ -101,6 +101,22 @@ public:
      */
     void seek(double positionSeconds);
 
+    /**
+     * @brief Restricts playback to end at `rangeEndSeconds`, looping back
+     *        to `loopBackSeconds` or halting there - a thin seconds<->
+     *        samples conversion over `PlaybackEngine::setPlaybackRange()`
+     *        (see its own docs, including Decision #217's "no separate
+     *        polling or later reaction" point), the same pattern seek()
+     *        itself already uses. Does nothing if nothing is loaded.
+     *
+     * @param loopEnabled Whether reaching `rangeEndSeconds` loops back
+     *        (`true`) or halts there (`false`).
+     * @param rangeEndSeconds Where the restricted range ends, in seconds.
+     * @param loopBackSeconds Where a loop-back seeks to, in seconds -
+     *        ignored when `!loopEnabled`.
+     */
+    void setPlaybackRange(bool loopEnabled, double rangeEndSeconds, double loopBackSeconds);
+
     /// @brief Whether playback is currently active.
     /// @return `true` if currently playing.
     [[nodiscard]] bool isPlaying() const noexcept;

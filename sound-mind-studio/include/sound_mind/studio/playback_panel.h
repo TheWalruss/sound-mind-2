@@ -28,7 +28,7 @@ namespace sound_mind::studio {
  * `docs/sound-mind-architecture.md`'s Decision #131). Repeat still decides
  * one thing for every scope: whether the active range loops back
  * (checked) or halts (unchecked) once its own end is reached - see
- * `MainWindow::checkRepeatPlaybackRange()`'s own docs.
+ * `MainWindow::syncPlaybackRangeToEngine()`'s own docs.
  */
 enum class PlaybackScope {
     /// @brief Plays the whole track, start to end (today's only

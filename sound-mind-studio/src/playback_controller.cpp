@@ -60,6 +60,20 @@ void PlaybackController::seek(double positionSeconds) {
     emitPosition();
 }
 
+void PlaybackController::setPlaybackRange(bool loopEnabled, double rangeEndSeconds, double loopBackSeconds) {
+    if (!loaded_) {
+        return;
+    }
+    const auto sampleRate = engine_.sampleRateHz();
+    if (sampleRate == 0) {
+        return;
+    }
+    const auto toSamples = [sampleRate](double seconds) {
+        return static_cast<std::size_t>(std::max(0.0, seconds) * sampleRate);
+    };
+    engine_.setPlaybackRange(loopEnabled, toSamples(rangeEndSeconds), toSamples(loopBackSeconds));
+}
+
 bool PlaybackController::isPlaying() const noexcept {
     return engine_.isPlaying();
 }

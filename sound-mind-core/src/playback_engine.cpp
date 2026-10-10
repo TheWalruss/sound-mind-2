@@ -26,6 +26,9 @@ PlaybackEngine::~PlaybackEngine() {
 void PlaybackEngine::loadAudio(sound_mind::codec::AudioBuffer audio) {
     audio_ = std::move(audio);
     position_.store(0, std::memory_order_relaxed);
+    loopEnabled_.store(false, std::memory_order_relaxed);
+    rangeEndSamples_.store(audio_.frameCount(), std::memory_order_relaxed);
+    loopBackSamples_.store(0, std::memory_order_relaxed);
 }
 
 void PlaybackEngine::play() {
@@ -94,7 +97,32 @@ std::uint32_t PlaybackEngine::sampleRateHz() const noexcept {
 }
 
 void PlaybackEngine::seek(std::size_t sampleIndex) noexcept {
-    position_.store(std::min(sampleIndex, audio_.frameCount()), std::memory_order_relaxed);
+    std::size_t position = std::min(sampleIndex, audio_.frameCount());
+    const std::size_t rangeEnd = std::min(rangeEndSamples_.load(std::memory_order_relaxed), audio_.frameCount());
+    if (position >= rangeEnd) {
+        const RangeCrossing crossing = resolveRangeCrossing(rangeEnd);
+        position = crossing.position;
+        if (crossing.halted) {
+            playing_.store(false, std::memory_order_relaxed);
+        }
+    }
+    position_.store(position, std::memory_order_relaxed);
+}
+
+void PlaybackEngine::setPlaybackRange(bool loopEnabled, std::size_t rangeEndSamples,
+                                       std::size_t loopBackSamples) noexcept {
+    loopEnabled_.store(loopEnabled, std::memory_order_relaxed);
+    rangeEndSamples_.store(rangeEndSamples, std::memory_order_relaxed);
+    loopBackSamples_.store(loopBackSamples, std::memory_order_relaxed);
+}
+
+PlaybackEngine::RangeCrossing PlaybackEngine::resolveRangeCrossing(std::size_t rangeEnd) const noexcept {
+    const bool loopEnabled = loopEnabled_.load(std::memory_order_relaxed);
+    const std::size_t loopBack = loopBackSamples_.load(std::memory_order_relaxed);
+    if (loopEnabled && loopBack < rangeEnd) {
+        return {loopBack, false};
+    }
+    return {rangeEnd, true};
 }
 
 void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputChannels, int numSamples) noexcept {
@@ -111,10 +139,23 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
 
     std::size_t position = position_.load(std::memory_order_relaxed);
     const std::size_t frameCount = audio_.frameCount();
+    const std::size_t rangeEnd = std::min(rangeEndSamples_.load(std::memory_order_relaxed), frameCount);
     const float volume = volume_.load(std::memory_order_relaxed);
 
+    // Resolved once up front too (not just on the in-loop crossing below) -
+    // covers a position that's already at or past rangeEnd as this block
+    // starts (a degenerate rangeEnd == 0, or a race against a very recent
+    // setPlaybackRange() call), so this can never get stuck rendering
+    // silence forever without ever actually halting.
+    bool halted = false;
+    if (position >= rangeEnd) {
+        const RangeCrossing crossing = resolveRangeCrossing(rangeEnd);
+        position = crossing.position;
+        halted = crossing.halted;
+    }
+
     for (int sample = 0; sample < numSamples; ++sample) {
-        if (position < frameCount) {
+        if (!halted && position < rangeEnd) {
             outputChannelData[0][sample] = audio_.left[position] * volume;
             if (numOutputChannels > 1) {
                 outputChannelData[1][sample] = audio_.right[position] * volume;
@@ -123,6 +164,16 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
                 outputChannelData[channel][sample] = 0.0f;
             }
             ++position;
+            // A loop-back landing mid-block keeps filling the rest of this
+            // same block with real audio from the new position - the whole
+            // point of resolving this here rather than in MainWindow's own
+            // position-polling timer (see the class docs' Decision #217
+            // note): no silence at the seam at all, not just a shorter gap.
+            if (position >= rangeEnd) {
+                const RangeCrossing crossing = resolveRangeCrossing(rangeEnd);
+                position = crossing.position;
+                halted = crossing.halted;
+            }
         } else {
             for (int channel = 0; channel < numOutputChannels; ++channel) {
                 outputChannelData[channel][sample] = 0.0f;
@@ -131,7 +182,7 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
     }
 
     position_.store(position, std::memory_order_relaxed);
-    if (position >= frameCount) {
+    if (halted) {
         playing_.store(false, std::memory_order_relaxed);
     }
 }

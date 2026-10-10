@@ -6,6 +6,22 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.21.1] - 2026-10-09
+
+Direct user feedback: "I want 'repeat' mode during playback to loop without the audible skip."
+
+### Fixed
+
+- Repeat Playback's loop-back (and Delta/Review's end-of-range halt) now happens sample-accurately, inside the audio engine itself, instead of being noticed up to ~33ms late by the position bar's own update timer and reacted to afterward - the audible gap at every loop-back is gone.
+
+## [0.1.20.1] - 2026-10-09
+
+Direct user feedback on `v0.1.19.1`'s new default tabbing: "the currently active tab is left activated, so the new panel is opened in the background."
+
+### Fixed
+
+- Showing a right-hand-dock panel (via its menu toggle, or any other way it becomes visible) now immediately switches to its tab, instead of leaving whichever tab was already active in front and adding the new one behind it.
+
 ## [0.1.19.1] - 2026-10-09
 
 Direct user feedback: a newly opened panel started as a small vertical slice alongside whatever else was already open in the right-hand dock area, instead of a full-size tab.

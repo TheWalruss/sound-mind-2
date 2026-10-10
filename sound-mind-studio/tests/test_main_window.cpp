@@ -22,6 +22,7 @@
 #include <QMenuBar>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QTabBar>
 #include <QSignalSpy>
 #include <QSlider>
 #include <QStatusBar>
@@ -3983,7 +3984,7 @@ void MainWindowTest::oneShotDeltaPlaybackHaltsAtTheEditsEndWithoutLooping() {
     window.setPaintModeEnabled(true);
     // A single-column click (not a dragged stroke) so the edited region's
     // own end is a known, narrow point well before the track's own end -
-    // see checkRepeatPlaybackRange()'s own docs on why a genuinely
+    // see syncPlaybackRangeToEngine()'s own docs on why a genuinely
     // zero-width Delta/Review range is instead treated as "nothing to loop
     // over" (no halt/loop at all, straight through) - a couple of columns
     // wide avoids that edge case while keeping a known, narrow range.
@@ -6183,4 +6184,56 @@ void MainWindowTest::rightDockAreaPanelsAreTabifiedTogetherByDefault() {
     for (QDockWidget* panel : otherPanels) {
         QVERIFY(tabifiedWithLayers.contains(panel));
     }
+}
+
+namespace {
+
+/// @brief The text of whichever tab is currently active in `window`'s
+///        own (single) tabified dock group - QMainWindow exposes no
+///        direct "current tab for this dock" query, so this reaches
+///        into the real `QTabBar` Qt creates for a tabified group
+///        instead of relying on `QDockWidget::isVisible()`, which
+///        (confirmed empirically) stays `true` for every dock in a tab
+///        group once each has been shown at least once, regardless of
+///        which one is actually on top.
+QString currentTabifiedPanelTitle(const QMainWindow& window) {
+    const QList<QTabBar*> tabBars = window.findChildren<QTabBar*>();
+    if (tabBars.isEmpty() || tabBars.first()->currentIndex() < 0) {
+        return QString();
+    }
+    return tabBars.first()->tabText(tabBars.first()->currentIndex());
+}
+
+}  // namespace
+
+void MainWindowTest::showingATabifiedPanelSwitchesToItImmediately() {
+    // Direct user feedback on rightDockAreaPanelsAreTabifiedTogetherByDefault()'s
+    // own new default tabbing: "the currently active tab is left
+    // activated, so the new panel is opened in the background" -
+    // instead, showing a panel should immediately switch to its tab.
+    // MainWindow's own fix defers the actual raise() by one event-loop
+    // turn (QTimer::singleShot(0, ...) - see its own comment), since
+    // calling it synchronously from inside show()'s visibilityChanged()
+    // emission was confirmed, empirically, to be a silent no-op (Qt's
+    // internal tab-group bookkeeping isn't settled yet at that point) -
+    // QTest::qWait() spins the event loop long enough for that deferred
+    // call to actually run.
+    TestMainWindow window;
+    window.show();
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    auto* mindWavesPanel = window.findChild<MindWavesPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    QVERIFY(mindWavesPanel != nullptr);
+
+    layersPanel->show();
+    QTest::qWait(50);
+    QCOMPARE(currentTabifiedPanelTitle(window), layersPanel->windowTitle());
+
+    // mindWavesPanel joining the group (its own first-ever show()) is
+    // exactly the "a new panel tab is added" scenario this was reported
+    // against - it should become the active tab immediately, not sit
+    // open in the background behind layersPanel.
+    mindWavesPanel->show();
+    QTest::qWait(50);
+    QCOMPARE(currentTabifiedPanelTitle(window), mindWavesPanel->windowTitle());
 }

@@ -116,6 +116,38 @@ void PlaybackControllerTest::seekDoesNothingWhenNotLoaded() {
     QVERIFY(!controller.isPlaying());
 }
 
+void PlaybackControllerTest::setPlaybackRangeWrapsSeekToTheLoopBackPosition() {
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
+    controller.load(makeTestAudio());  // 1 second @ 44100 Hz.
+    controller.setPlaybackRange(/*loopEnabled=*/true, /*rangeEndSeconds=*/0.5, /*loopBackSeconds=*/0.1);
+
+    QSignalSpy spy(&controller, &PlaybackController::positionChanged);
+    controller.seek(0.5);  // exactly at the restricted range's own end.
+
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(qAbs(spy.at(0).at(0).toDouble() - 0.1) < 0.01);  // wrapped to loopBackSeconds, not 0.5.
+}
+
+void PlaybackControllerTest::setPlaybackRangeHaltsPlaybackAtRangeEndWhenNotLooping() {
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
+    controller.load(makeTestAudio());
+    controller.play();
+    controller.setPlaybackRange(/*loopEnabled=*/false, /*rangeEndSeconds=*/0.5, /*loopBackSeconds=*/0.0);
+
+    controller.seek(0.5);
+
+    QVERIFY(!controller.isPlaying());
+
+    controller.stop();  // cleanup.
+}
+
+void PlaybackControllerTest::setPlaybackRangeDoesNothingWhenNotLoaded() {
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
+    controller.setPlaybackRange(true, 0.5, 0.0);  // nothing loaded - should be a harmless no-op.
+    QVERIFY(!controller.isLoaded());
+    QVERIFY(!controller.isPlaying());
+}
+
 void PlaybackControllerTest::setVolumeChangesVolume() {
     PlaybackController controller(nullptr, AudioDeviceMode::None);
     controller.setVolume(150);

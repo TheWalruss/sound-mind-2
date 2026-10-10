@@ -156,11 +156,12 @@ longer fits at the size you've given it, a scrollbar appears inside it
 rather than the panel refusing to shrink.
 
 By default, opening a panel on the right-hand side adds it as a full-size
-tab alongside whatever else is already open there, rather than a smaller
-panel stacked below the others - click a tab to switch between them.
-Dragging a panel's tab out (to a different edge, or to float it) breaks
-it out of that shared tab group into its own stack, if you'd rather see
-two of them at once.
+tab alongside whatever else is already open there and switches to it
+immediately, rather than a smaller panel stacked below the others left
+hidden behind whichever tab was already showing - click a tab to switch
+between them yourself afterward. Dragging a panel's tab out (to a
+different edge, or to float it) breaks it out of that shared tab group
+into its own stack, if you'd rather see two of them at once.
 
 ## Canvas Navigation
 
@@ -1651,6 +1652,10 @@ The **Scope** drop-down decides how an edit affects playback, and
 
 Unchecking Repeat, or dragging the position bar yourself, always goes
 back to playing (or looping) the whole track.
+
+A loop-back (Repeat checked, reaching the active region's own end) is
+seamless - no audible gap or skip at the seam, regardless of region
+length.
 
 ## Recording
 

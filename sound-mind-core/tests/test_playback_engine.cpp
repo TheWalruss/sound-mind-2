@@ -253,3 +253,132 @@ TEST_CASE("seek clamps to totalSamples", "[core][playback_engine]") {
 
     CHECK(engine.positionSamples() == 4);
 }
+
+// setPlaybackRange() - Decision #217 (Gapless Repeat Playback): both
+// renderBlock() and seek() must resolve a loop-back or an end-of-range
+// halt entirely within this class, with no silence inserted at the seam
+// of a loop-back that lands mid-block.
+
+TEST_CASE("renderBlock loops back mid-block with no silence at the seam", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());  // left = {0.1, 0.2, 0.3, 0.4}
+    engine.setPlaybackRange(/*loopEnabled=*/true, /*rangeEndSamples=*/4, /*loopBackSamples=*/1);
+    engine.play();
+
+    std::vector<float> left(6, -1.0f);
+    std::vector<float> right(6, -1.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 6);
+
+    // Plays through to the range's own end (samples 0-3), then - still
+    // within this same block - wraps back to sample 1 and keeps playing
+    // real audio (samples 1-2), never falling back to silence.
+    CHECK(left[0] == 0.1f);
+    CHECK(left[1] == 0.2f);
+    CHECK(left[2] == 0.3f);
+    CHECK(left[3] == 0.4f);
+    CHECK(left[4] == 0.2f);
+    CHECK(left[5] == 0.3f);
+    CHECK(engine.isPlaying());
+    CHECK(engine.positionSamples() == 3);
+}
+
+TEST_CASE("renderBlock loops repeatedly across separate renderBlock calls", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    engine.setPlaybackRange(/*loopEnabled=*/true, /*rangeEndSamples=*/3, /*loopBackSamples=*/0);
+    engine.play();
+
+    std::vector<float> left(3, -1.0f);
+    std::vector<float> right(3, -1.0f);
+    float* channels[] = {left.data(), right.data()};
+
+    engine.renderBlock(channels, 2, 3);
+    CHECK(left[0] == 0.1f);
+    CHECK(left[1] == 0.2f);
+    CHECK(left[2] == 0.3f);
+    CHECK(engine.isPlaying());
+
+    engine.renderBlock(channels, 2, 3);
+    CHECK(left[0] == 0.1f);  // looped back to the start, not sample 0.4/silence.
+    CHECK(left[1] == 0.2f);
+    CHECK(left[2] == 0.3f);
+    CHECK(engine.isPlaying());
+}
+
+TEST_CASE("renderBlock halts exactly at rangeEndSamples when not looping", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    engine.setPlaybackRange(/*loopEnabled=*/false, /*rangeEndSamples=*/2, /*loopBackSamples=*/0);
+    engine.play();
+
+    std::vector<float> left(4, -1.0f);
+    std::vector<float> right(4, -1.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 4);
+
+    CHECK(left[0] == 0.1f);
+    CHECK(left[1] == 0.2f);
+    CHECK(left[2] == 0.0f);  // silenced - never reaches sample 0.3.
+    CHECK(left[3] == 0.0f);
+    CHECK_FALSE(engine.isPlaying());
+    CHECK(engine.positionSamples() == 2);
+}
+
+TEST_CASE("a degenerate loop-back target falls back to halting instead of looping", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    // loopBackSamples == rangeEndSamples: nothing to actually loop over.
+    engine.setPlaybackRange(/*loopEnabled=*/true, /*rangeEndSamples=*/3, /*loopBackSamples=*/3);
+    engine.play();
+
+    std::vector<float> left(4, -1.0f);
+    std::vector<float> right(4, -1.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 4);
+
+    CHECK(left[2] == 0.3f);
+    CHECK(left[3] == 0.0f);
+    CHECK_FALSE(engine.isPlaying());
+}
+
+TEST_CASE("seek wraps immediately when landing at or past a looping range's end", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    engine.setPlaybackRange(/*loopEnabled=*/true, /*rangeEndSamples=*/3, /*loopBackSamples=*/1);
+
+    engine.seek(3);  // exactly at rangeEnd.
+    CHECK(engine.positionSamples() == 1);
+
+    engine.seek(999);  // well past both rangeEnd and totalSamples().
+    CHECK(engine.positionSamples() == 1);
+}
+
+TEST_CASE("seek halts immediately when landing at or past a non-looping range's end", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    engine.setPlaybackRange(/*loopEnabled=*/false, /*rangeEndSamples=*/2, /*loopBackSamples=*/0);
+    engine.play();
+
+    engine.seek(2);
+
+    CHECK_FALSE(engine.isPlaying());
+    CHECK(engine.positionSamples() == 2);
+}
+
+TEST_CASE("loadAudio resets any previously set playback range", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    engine.setPlaybackRange(/*loopEnabled=*/false, /*rangeEndSamples=*/2, /*loopBackSamples=*/0);
+
+    engine.loadAudio(makeTestAudio());  // a fresh load - should widen back out.
+    engine.play();
+
+    std::vector<float> left(4, -1.0f);
+    std::vector<float> right(4, -1.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 4);
+
+    CHECK(left[3] == 0.4f);  // played all the way through, not halted at 2.
+    CHECK_FALSE(engine.isPlaying());  // halted naturally at the real end instead.
+}

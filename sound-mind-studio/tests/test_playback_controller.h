@@ -15,6 +15,9 @@ private slots:
     void stopClearsLoadedAndPlaying();
     void seekEmitsPositionChangedImmediately();
     void seekDoesNothingWhenNotLoaded();
+    void setPlaybackRangeWrapsSeekToTheLoopBackPosition();
+    void setPlaybackRangeHaltsPlaybackAtRangeEndWhenNotLooping();
+    void setPlaybackRangeDoesNothingWhenNotLoaded();
     void setVolumeChangesVolume();
     void outputDeviceMethodsAreCallableWithoutCrashing();
 };

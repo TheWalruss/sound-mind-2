@@ -300,4 +300,8 @@ private slots:
     // Default dock layout: every Right-dock-area panel tabs together
     // instead of stacking vertically.
     void rightDockAreaPanelsAreTabifiedTogetherByDefault();
+
+    // Showing a tabified panel switches to its tab immediately, rather
+    // than adding it in the background behind whichever tab was active.
+    void showingATabifiedPanelSwitchesToItImmediately();
 };

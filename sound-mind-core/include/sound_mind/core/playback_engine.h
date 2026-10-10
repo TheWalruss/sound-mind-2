@@ -49,6 +49,20 @@ enum class AudioDeviceMode {
  * (setVolume()/volume(), allowed above unity - see kMaxVolume) - both
  * previously-deferred scope, per the Playback panel this milestone adds.
  *
+ * **As of Decision #217 (Gapless Repeat Playback):** `setPlaybackRange()`
+ * lets a caller restrict playback to `[0, rangeEndSamples)` and choose
+ * what happens on reaching that end - loop back to `loopBackSamples`, or
+ * halt right there. Both `renderBlock()` and `seek()` apply this
+ * sample-accurately and entirely within this class: a loop-back that
+ * falls mid-block keeps filling the rest of that same block with real
+ * audio from the new position, with no silence at the seam. This
+ * replaces `sound_mind::studio::MainWindow`'s former approach of
+ * noticing a range had been crossed from its own ~33ms position-polling
+ * timer and reacting with a separate `seek()`/`play()` call afterward -
+ * which always left an audible gap between the natural end and that
+ * later reaction. See `docs/sound-mind-architecture.md`'s own Decision
+ * #217 for the full reasoning.
+ *
  * @note Thread-safety: `loadAudio()`/`play()`/`pause()`/`stop()`/
  *       `setPreferredOutputDevice()` are meant to be called from the UI
  *       thread only. `loadAudio()` must not be called while playing
@@ -57,9 +71,9 @@ enum class AudioDeviceMode {
  *       the lock-free double-buffering that would allow it. `renderBlock()`
  *       is the one method actually called from the audio callback thread
  *       (indirectly, via JUCE) - it is real-time-safe (no allocation, no
- *       locking, only atomics and array indexing); `setVolume()`/`volume()`
- *       are real-time-safe too (a plain atomic), safely callable from
- *       either thread.
+ *       locking, only atomics and array indexing); `setVolume()`/`volume()`/
+ *       `setPlaybackRange()` are real-time-safe too (plain atomics),
+ *       safely callable from either thread.
  */
 class PlaybackEngine : private juce::AudioIODeviceCallback {
 public:
@@ -76,6 +90,12 @@ public:
 
     /**
      * @brief Loads the audio to play, replacing anything previously loaded.
+     *
+     * Also clears any previously set setPlaybackRange() restriction back to
+     * its default (the whole of the newly loaded audio, not looping) - a
+     * caller that wants a restriction on the new audio too must call
+     * setPlaybackRange() again after this.
+     *
      * @param audio The audio to play. Playback starts from its beginning.
      */
     void loadAudio(sound_mind::codec::AudioBuffer audio);
@@ -216,7 +236,13 @@ public:
      * just resumes from the new position on the next play().
      *
      * @param sampleIndex The new position, in samples; clamped to
-     *        `[0, totalSamples()]`.
+     *        `[0, totalSamples()]`, then - if that clamped position is at
+     *        or past the active setPlaybackRange() restriction's own end -
+     *        resolved exactly the way reaching that end during playback
+     *        would be: wrapped to the loop-back position, or (not looping)
+     *        clamped to the range's own end instead, which also halts
+     *        playback (isPlaying() becomes `false`) right there - the same
+     *        outcome a seek dragged past a halting range's end should have.
      * @note Real-time-safe (a plain atomic store), safely callable from
      *       either thread - same as setVolume(). A concurrent renderBlock()
      *       call may still read the pre-seek position for that one block -
@@ -224,7 +250,47 @@ public:
      */
     void seek(std::size_t sampleIndex) noexcept;
 
+    /**
+     * @brief Restricts playback to `[0, rangeEndSamples)`, and chooses what
+     *        happens once that end is reached - see the class docs'
+     *        Decision #217 note.
+     *
+     * Both renderBlock() and seek() consult this immediately and entirely
+     * within this class - no separate polling or later reaction is needed
+     * (or should be built) to make a loop-back or an end-of-range halt
+     * actually happen.
+     *
+     * @param loopEnabled `true` wraps back to `loopBackSamples` once
+     *        `rangeEndSamples` is reached; `false` halts playback there
+     *        instead (same as reaching the natural end of the loaded
+     *        audio always has).
+     * @param rangeEndSamples Where the restricted range ends. Clamped to
+     *        `totalSamples()` at the point it's actually used - pass
+     *        `totalSamples()` itself for "no narrower restriction than the
+     *        whole loaded audio" (loadAudio()'s own default).
+     * @param loopBackSamples Where a loop-back (`loopEnabled`) seeks to.
+     *        Ignored when `!loopEnabled`. If this isn't strictly less than
+     *        the (clamped) `rangeEndSamples`, looping is skipped in favor
+     *        of halting instead - a defensive fallback against a
+     *        degenerate/misconfigured range, not a case callers should
+     *        rely on.
+     * @note Real-time-safe (plain atomic stores), safely callable from
+     *       either thread - same as setVolume()/seek().
+     */
+    void setPlaybackRange(bool loopEnabled, std::size_t rangeEndSamples, std::size_t loopBackSamples) noexcept;
+
 private:
+    /// @brief What position()/seek() should resolve to on reaching
+    /// `rangeEnd` - either the loop-back position (`halted == false`) or
+    /// `rangeEnd` itself (`halted == true`) - see setPlaybackRange()'s own
+    /// docs on the degenerate-loop-back fallback. Shared by renderBlock()
+    /// and seek() so the two can't disagree on the outcome.
+    struct RangeCrossing {
+        std::size_t position;
+        bool halted;
+    };
+    [[nodiscard]] RangeCrossing resolveRangeCrossing(std::size_t rangeEnd) const noexcept;
+
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData, int numInputChannels,
                                            float* const* outputChannelData, int numOutputChannels, int numSamples,
                                            const juce::AudioIODeviceCallbackContext& context) override;
@@ -237,6 +303,9 @@ private:
     std::atomic<std::size_t> position_{0};
     std::atomic<bool> playing_{false};
     std::atomic<float> volume_{1.0f};
+    std::atomic<bool> loopEnabled_{false};
+    std::atomic<std::size_t> rangeEndSamples_{0};
+    std::atomic<std::size_t> loopBackSamples_{0};
 };
 
 }  // namespace sound_mind::core

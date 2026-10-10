@@ -322,7 +322,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         // updateLoudnessDisplays()'s own docs on why pausing needs nothing
         // further here).
         layerController_->updateLoudnessDisplays(total > 0.0 ? positionSeconds / total : 0.0);
-        checkRepeatPlaybackRange(positionSeconds);
         advanceMacroPlayback(positionSeconds);
     });
     connect(playbackPanel_, &PlaybackPanel::repeatChanged, this, &MainWindow::setPlaybackRepeat);
@@ -1531,6 +1530,50 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     tabifyDockWidget(layersPanel_, filterConfigurationPanel_);
     tabifyDockWidget(layersPanel_, recordPanel_);
     tabifyDockWidget(layersPanel_, loopPanel_);
+
+    // Showing a tabified panel (via its own toggleViewAction(), or any
+    // other show() call) adds its tab without switching to it - Qt
+    // leaves whichever tab was already active in front. Confirmed with
+    // the user: a newly shown panel should immediately become the
+    // visible tab instead. QDockWidget::raise() is exactly "bring this
+    // dock to the front of its own tab group", and visibilityChanged()
+    // fires for every way a panel can become visible, so one connection
+    // per panel covers it regardless of what triggered the show.
+    for (QDockWidget* panel : {
+             static_cast<QDockWidget*>(layersPanel_),
+             static_cast<QDockWidget*>(mindWavesPanel_),
+             static_cast<QDockWidget*>(resourceBrowserPanel_),
+             static_cast<QDockWidget*>(historyPanel_),
+             static_cast<QDockWidget*>(playbackPanel_),
+             static_cast<QDockWidget*>(toolConfigurationPanel_),
+             static_cast<QDockWidget*>(midiConfigurationPanel_),
+             static_cast<QDockWidget*>(chordGeneratorPanel_),
+             static_cast<QDockWidget*>(configureDevicesPanel_),
+             static_cast<QDockWidget*>(selectionConfigurationPanel_),
+             static_cast<QDockWidget*>(gridPanel_),
+             static_cast<QDockWidget*>(filterConfigurationPanel_),
+             static_cast<QDockWidget*>(recordPanel_),
+             static_cast<QDockWidget*>(loopPanel_),
+         }) {
+        connect(panel, &QDockWidget::visibilityChanged, panel, [panel](bool) {
+            // Deferred to the next event-loop turn, and re-checking
+            // isVisible() there rather than trusting this signal's own
+            // `visible` argument - confirmed empirically that for a
+            // dock *joining* an existing tab group (another tab already
+            // active), Qt emits this signal with `visible == false` even
+            // though the dock's own isVisible() is `true` moments later
+            // once show() finishes (it correctly reflects "not the
+            // active tab right now", not the final widget-level state).
+            // Calling raise() synchronously here is also too early -
+            // Qt's own internal tab-group bookkeeping isn't settled yet
+            // at the point this signal fires.
+            QTimer::singleShot(0, panel, [panel]() {
+                if (panel->isVisible()) {
+                    panel->raise();
+                }
+            });
+        });
+    }
 }
 
 const sound_mind::core::Project* MainWindow::project() const noexcept {
@@ -3842,6 +3885,7 @@ void MainWindow::seekPlayback(double positionSeconds) {
     repeatRangeStartSeconds_ = 0.0;
     repeatRangeEndSeconds_ = playbackController_->totalSeconds();
     repeatLoopBackSeconds_ = 0.0;
+    syncPlaybackRangeToEngine();
 }
 
 void MainWindow::setPlaybackOutputDevice(const QString& deviceName) {
@@ -3888,6 +3932,12 @@ void MainWindow::setPlaybackRepeat(bool enabled) {
         repeatRangeEndSeconds_ = playbackController_->totalSeconds();
         repeatLoopBackSeconds_ = 0.0;
     }
+    // Unconditional (not just inside the widen branch above) - a toggle
+    // needs to reach the engine immediately even when the range itself
+    // doesn't change, since syncPlaybackRangeToEngine() is also what
+    // carries repeatEnabled_ itself down to PlaybackEngine's own
+    // loopEnabled flag.
+    syncPlaybackRangeToEngine();
 }
 
 void MainWindow::setPlaybackScope(sound_mind::studio::PlaybackScope scope) {
@@ -4265,12 +4315,19 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
             repeatRangeStartSeconds_ = 0.0;
             repeatRangeEndSeconds_ = totalSeconds;
             repeatLoopBackSeconds_ = repeatRangeStartSeconds_;
+            // Pushed to the engine before this seek() - a fresh load()
+            // just reset it to "no restriction" (see PlaybackEngine::
+            // loadAudio()'s own docs), so the seek below needs this scope's
+            // own range in place first to resolve correctly if it happens
+            // to land exactly at/past that range's own end.
+            syncPlaybackRangeToEngine();
             playbackController_->seek(currentPlaybackPositionSeconds_);
             break;
         case sound_mind::studio::PlaybackScope::Delta:
             repeatRangeStartSeconds_ = editedBounds ? editedBounds->startTimeSeconds : 0.0;
             repeatRangeEndSeconds_ = editedBounds ? editedBounds->endTimeSeconds : totalSeconds;
             repeatLoopBackSeconds_ = repeatRangeStartSeconds_;
+            syncPlaybackRangeToEngine();
             playbackController_->seek(repeatRangeStartSeconds_);
             break;
         case sound_mind::studio::PlaybackScope::Review:
@@ -4279,6 +4336,7 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
             // Unlike Delta, Review loops the whole track once it reaches
             // the end - back to the track's own start, not the edit's.
             repeatLoopBackSeconds_ = 0.0;
+            syncPlaybackRangeToEngine();
             playbackController_->seek(repeatRangeStartSeconds_);
             break;
     }
@@ -4286,41 +4344,24 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
     playbackController_->play();
 }
 
-void MainWindow::checkRepeatPlaybackRange(double positionSeconds) {
+void MainWindow::syncPlaybackRangeToEngine() {
     // `<= repeatRangeStartSeconds_`, not `<= 0.0`: a single-click (as
     // opposed to dragged) paint stroke's own bounds() is a genuine
     // zero-width point - Delta/Review scope then sets
     // repeatRangeEndSeconds_ == repeatRangeStartSeconds_ exactly (see
-    // handleContentChangedForPlayback() above). The seek() below emits
-    // positionChanged() synchronously (see PlaybackController::seek()'s
-    // own docs), re-entering this same function - with the old `<= 0.0`
-    // guard, a zero-width range still looked "active" (end > 0), so the
-    // very seek() that establishes it already satisfies "past the end"
-    // (positionSeconds == repeatRangeEndSeconds_), triggering another
-    // seek(), another positionChanged(), and so on - unbounded recursion
-    // until the stack overflows. A range with nothing to actually loop
-    // over (end <= start) is treated the same as "no range yet": play
-    // straight through with no halt/loop-back at all for that one edit.
+    // handleContentChangedForPlayback() above). A range with nothing to
+    // actually loop over (end <= start) is treated the same as "no range
+    // yet": push "no restriction" down instead, so playback continues
+    // straight through with no halt/loop-back at all for that one edit -
+    // see this method's own docs on why, unlike the former
+    // checkRepeatPlaybackRange() this replaces, there's no recursion risk
+    // here to guard against.
     if (repeatRangeEndSeconds_ <= repeatRangeStartSeconds_) {
+        playbackController_->setPlaybackRange(/*loopEnabled=*/false, playbackController_->totalSeconds(),
+                                               /*loopBackSeconds=*/0.0);
         return;
     }
-    if (positionSeconds < repeatRangeEndSeconds_) {
-        return;
-    }
-    // Repeat ON loops back (see repeatLoopBackSeconds_'s own docs for the
-    // per-scope target); Repeat OFF halts right here instead - per
-    // docs/sound-mind-design.md's "Repeat Playback" section, Delta "halts
-    // or repeats depending on the repeat checkbox" once it reaches its own
-    // range's end, regardless of which one happens. `pause()`, not
-    // `stop()`: the playhead stays exactly where it halted rather than
-    // resetting to the start - see stopPlayback()'s own docs on why that
-    // one's different (an explicit Stop is a deliberate reset).
-    if (repeatEnabled_) {
-        playbackController_->seek(repeatLoopBackSeconds_);
-        playbackController_->play();
-    } else {
-        playbackController_->pause();
-    }
+    playbackController_->setPlaybackRange(repeatEnabled_, repeatRangeEndSeconds_, repeatLoopBackSeconds_);
 }
 
 void MainWindow::advanceMacroPlayback(double positionSeconds) {
@@ -4355,6 +4396,11 @@ void MainWindow::advanceMacroPlayback(double positionSeconds) {
         return;
     }
     playbackController_->load(sound_mind::codec::decode(*composite));
+    // load() just reset the engine's own range to "no restriction" (see
+    // PlaybackEngine::loadAudio()'s own docs) - re-push whatever range is
+    // still active in this class's own fields before the seek() below, the
+    // same reasoning as handleContentChangedForPlayback()'s own calls.
+    syncPlaybackRangeToEngine();
     playbackController_->seek(positionSeconds);
     playbackController_->play();
 }
@@ -4573,6 +4619,7 @@ void MainWindow::pollCompositeProgress() {
                 repeatRangeStartSeconds_ = 0.0;
                 repeatRangeEndSeconds_ = playbackController_->totalSeconds();
                 repeatLoopBackSeconds_ = 0.0;
+                syncPlaybackRangeToEngine();
                 playbackController_->play();
                 macroRecorder_.recordEvent(currentPlaybackPositionSeconds_, MacroEventType::PlaybackStarted,
                                             tr("Started playback"), undoStack_.currentIndex());
