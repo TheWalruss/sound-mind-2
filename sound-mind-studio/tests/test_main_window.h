@@ -24,6 +24,7 @@ private slots:
     void startPlaybackDoesNothingWithNoContent();
     void startPlaybackPlaysAnImportedLayer();
     void pauseAndResumePlayback();
+    void contentChangeDiscardsAlreadyPreparedPlaybackAudio();
     void stopPlaybackStopsIt();
     void startPlaybackRunsCompositeInTheBackgroundAndShowsTheCancelButton();
     void cancelPlaybackCompositeDiscardsTheResultWithoutStartingPlayback();

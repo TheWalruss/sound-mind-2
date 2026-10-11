@@ -650,6 +650,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
                 // refreshLayersPanel()'s own docs on why this matters:
                 // this fires after nearly every canvas edit).
                 layerController_->refreshLayersPanel(layer);
+                // Any audio already prepared for playback predates this edit -
+                // without discarding it the next Play would replay the old
+                // (e.g. silent, pre-paint) buffer. Must precede
+                // handleContentChangedForPlayback(), which may load fresh audio.
+                playbackController_->invalidate();
                 handleContentChangedForPlayback(layer);
                 refreshHistoryPanel();
                 refreshComposerPanel();

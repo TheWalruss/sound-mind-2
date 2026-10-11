@@ -60,6 +60,7 @@
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/loop_panel.h"
 #include "sound_mind/studio/main_window.h"
+#include "sound_mind/studio/tool_palette_controller.h"
 #include "sound_mind/studio/midi_configuration_panel.h"
 #include "sound_mind/studio/mind_waves_panel.h"
 #include "sound_mind/studio/playback_panel.h"
@@ -655,6 +656,39 @@ void MainWindowTest::pauseAndResumePlayback() {
     QVERIFY(!window.isPlaying());
 
     window.startPlayback();
+    QVERIFY(window.isPlaying());
+}
+
+void MainWindowTest::contentChangeDiscardsAlreadyPreparedPlaybackAudio() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-stale.wav";
+    writeTestWavFile(path);
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-playback-stale.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+    window.pausePlayback();  // audio stays prepared (loaded) - only stopPlayback() discards it.
+
+    // A paint/fill/paste commit changes what the composite would sound like;
+    // pressing Play afterwards must prepare fresh audio, not replay the
+    // buffer prepared before the edit (which made painted content inaudible).
+    auto* tools = window.findChild<sound_mind::studio::ToolPaletteController*>();
+    QVERIFY(tools != nullptr);
+    emit tools->contentChanged(topmostNonEqualizerLayer(*window.project()).id());
+
+    window.startPlayback();
+    QVERIFY(!compositeCancelButton->isHidden());  // re-compositing, not resuming stale audio.
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
     QVERIFY(window.isPlaying());
 }
 

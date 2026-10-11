@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.29.3] - 2026-10-11
+
+Direct user feedback: "When I make an empty layer and paint on it, the result is not audible at all. However, when I import an MP3 into a layer, I can hear that perfectly fine in playback."
+
+### Fixed
+
+- **Painting (and fills, pastes, filters on a selection, chord stamps, path strokes) are audible on the next Play even if you already played or paused earlier.** Playback audio prepared before an edit was kept and replayed as-is, so a layer that was silent when you last pressed Play stayed silent after you painted on it; only importing explicitly discarded it. Any committed canvas edit now discards the prepared audio, so the next Play prepares fresh audio from the current canvas.
+
 ## [0.1.29.2] - 2026-10-10
 
 Direct user feedback: "Somehow it doesn't work anymore to click a tab to switch panels. For example, if the Layers panel is activated, but I open the History panel, it adds the History panel to the tabs in the right sidebar and switches to it, but I can't switch back to the Layers panel by clicking the tab."
