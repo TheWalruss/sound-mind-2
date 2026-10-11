@@ -49,7 +49,14 @@ double PlaybackEngine::deviceSampleRateHz() const noexcept {
 }
 
 void PlaybackEngine::loadAudio(sound_mind::codec::AudioBuffer audio) {
+    {
+        const std::lock_guard<std::mutex> lock(stagedMutex_);
+        staged_ = {};
+        hasStaged_.store(false, std::memory_order_relaxed);
+    }
     audio_ = std::move(audio);
+    frameCount_.store(audio_.frameCount(), std::memory_order_relaxed);
+    sampleRateHzCached_.store(audio_.sampleRateHz, std::memory_order_relaxed);
     position_.store(0, std::memory_order_relaxed);
     loopEnabled_.store(false, std::memory_order_relaxed);
     rangeEndSamples_.store(audio_.frameCount(), std::memory_order_relaxed);
@@ -126,16 +133,17 @@ std::size_t PlaybackEngine::positionSamples() const noexcept {
 }
 
 std::size_t PlaybackEngine::totalSamples() const noexcept {
-    return audio_.frameCount();
+    return frameCount_.load(std::memory_order_relaxed);
 }
 
 std::uint32_t PlaybackEngine::sampleRateHz() const noexcept {
-    return audio_.sampleRateHz;
+    return sampleRateHzCached_.load(std::memory_order_relaxed);
 }
 
 void PlaybackEngine::seek(std::size_t sampleIndex) noexcept {
-    std::size_t position = std::min(sampleIndex, audio_.frameCount());
-    const std::size_t rangeEnd = std::min(rangeEndSamples_.load(std::memory_order_relaxed), audio_.frameCount());
+    const std::size_t frameCount = frameCount_.load(std::memory_order_relaxed);
+    std::size_t position = std::min(sampleIndex, frameCount);
+    const std::size_t rangeEnd = std::min(rangeEndSamples_.load(std::memory_order_relaxed), frameCount);
     if (position >= rangeEnd) {
         const RangeCrossing crossing = resolveRangeCrossing(rangeEnd);
         position = crossing.position;
@@ -153,6 +161,22 @@ void PlaybackEngine::setPlaybackRange(bool loopEnabled, std::size_t rangeEndSamp
     loopBackSamples_.store(loopBackSamples, std::memory_order_relaxed);
 }
 
+bool PlaybackEngine::stageAudio(sound_mind::codec::AudioBuffer&& audio) {
+    const std::size_t frameCount = frameCount_.load(std::memory_order_relaxed);
+    if (frameCount == 0 || audio.frameCount() != frameCount ||
+        audio.sampleRateHz != sampleRateHzCached_.load(std::memory_order_relaxed)) {
+        return false;
+    }
+    const std::lock_guard<std::mutex> lock(stagedMutex_);
+    staged_ = std::move(audio);
+    hasStaged_.store(true, std::memory_order_release);
+    return true;
+}
+
+bool PlaybackEngine::hasStagedAudio() const noexcept {
+    return hasStaged_.load(std::memory_order_acquire);
+}
+
 PlaybackEngine::RangeCrossing PlaybackEngine::resolveRangeCrossing(std::size_t rangeEnd) const noexcept {
     const bool loopEnabled = loopEnabled_.load(std::memory_order_relaxed);
     const std::size_t loopBack = loopBackSamples_.load(std::memory_order_relaxed);
@@ -160,6 +184,20 @@ PlaybackEngine::RangeCrossing PlaybackEngine::resolveRangeCrossing(std::size_t r
         return {loopBack, false};
     }
     return {rangeEnd, true};
+}
+
+void PlaybackEngine::swapInStagedAudio() noexcept {
+    if (!hasStaged_.load(std::memory_order_acquire)) {
+        return;
+    }
+    // try_lock: if the UI thread is mid-stageAudio() right now, skip - the
+    // audio thread must never wait. The next loop-back picks it up.
+    std::unique_lock<std::mutex> lock(stagedMutex_, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        return;
+    }
+    std::swap(audio_, staged_);  // vector pointer swaps only: no allocation.
+    hasStaged_.store(false, std::memory_order_release);
 }
 
 void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputChannels, int numSamples) noexcept {
@@ -175,7 +213,7 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
     }
 
     std::size_t position = position_.load(std::memory_order_relaxed);
-    const std::size_t frameCount = audio_.frameCount();
+    const std::size_t frameCount = frameCount_.load(std::memory_order_relaxed);
     const std::size_t rangeEnd = std::min(rangeEndSamples_.load(std::memory_order_relaxed), frameCount);
     const float volume = volume_.load(std::memory_order_relaxed);
 
@@ -189,6 +227,9 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
         const RangeCrossing crossing = resolveRangeCrossing(rangeEnd);
         position = crossing.position;
         halted = crossing.halted;
+        if (!halted) {
+            swapInStagedAudio();
+        }
     }
 
     for (int sample = 0; sample < numSamples; ++sample) {
@@ -210,6 +251,9 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
                 const RangeCrossing crossing = resolveRangeCrossing(rangeEnd);
                 position = crossing.position;
                 halted = crossing.halted;
+                if (!halted) {
+                    swapInStagedAudio();
+                }
             }
         } else {
             for (int channel = 0; channel < numOutputChannels; ++channel) {

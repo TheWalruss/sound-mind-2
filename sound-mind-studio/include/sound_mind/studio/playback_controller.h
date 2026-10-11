@@ -78,6 +78,24 @@ public:
      */
     void invalidate() noexcept;
 
+    /**
+     * @brief Stages freshly prepared audio to replace the loaded audio at
+     *        the engine's next loop-back - see PlaybackEngine::stageAudio().
+     *
+     * Playback is not interrupted and isLoaded() is unchanged. Used to keep
+     * Repeat playback fresh after an edit: the new audio takes effect the
+     * moment the loop restarts, with no gap.
+     *
+     * @param audio The replacement; must match the loaded audio's frame
+     *        count and sample rate.
+     * @return `false` if nothing was staged (nothing loaded, or length/rate
+     *         differs) - the caller should fall back to load().
+     */
+    [[nodiscard]] bool stageAudio(sound_mind::codec::AudioBuffer&& audio);
+
+    /// @brief `true` while staged audio is waiting for the next loop-back.
+    [[nodiscard]] bool hasStagedAudio() const noexcept;
+
     /// @brief Starts (or resumes) playback from the current position -
     /// does nothing if nothing has been loaded yet.
     void play();
@@ -182,6 +200,11 @@ public:
     [[nodiscard]] float volume() const noexcept;
 
 signals:
+    /// @brief Emitted from invalidate(): whatever was prepared no longer
+    /// matches the project. Lets a Repeat session re-prepare in the
+    /// background so the next loop restart is fresh.
+    void invalidated();
+
     /// @brief Emitted once from load(), with the newly loaded audio's own
     /// duration.
     /// @param totalSeconds The new duration - see totalSeconds().

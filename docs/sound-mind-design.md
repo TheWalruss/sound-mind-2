@@ -596,7 +596,7 @@ There shall be a central "configure devices" panel that allows the user to refre
 
 ## Repeat Playback
 
-There shall be a "repeat" checkbox in the playback mode panel. This loops the output sound (starting over from the start when it reaches the end), and updates the output sound when the canvas is modified. This works in principle just like Loop Mode, but without a recording/input option. 
+There shall be a "repeat" checkbox in the playback mode panel. This loops the output sound (starting over from the start when it reaches the end), and updates the output sound when the canvas is modified: after every edit the output is re-prepared in the background so it is fresh the moment the loop restarts. This works in principle just like Loop Mode, but without a recording/input option. 
 
 In the Playback panel, there shall also be a "Scope" drop-down. Default is "Track", which plays the whole track.
 

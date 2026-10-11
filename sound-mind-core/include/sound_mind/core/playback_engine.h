@@ -72,7 +72,8 @@ enum class AudioDeviceMode {
  *       the lock-free double-buffering that would allow it. `renderBlock()`
  *       is the one method actually called from the audio callback thread
  *       (indirectly, via JUCE) - it is real-time-safe (no allocation, no
- *       locking, only atomics and array indexing); `setVolume()`/`volume()`/
+ *       blocking - only atomics, array indexing and, at a loop-back with
+ *       staged audio waiting, one non-blocking try-lock plus a buffer swap); `setVolume()`/`volume()`/
  *       `setPlaybackRange()` are real-time-safe too (plain atomics),
  *       safely callable from either thread.
  */
@@ -307,6 +308,32 @@ public:
      */
     void setPlaybackRange(bool loopEnabled, std::size_t rangeEndSamples, std::size_t loopBackSamples) noexcept;
 
+    /**
+     * @brief Stages freshly prepared audio to replace the loaded audio at the
+     *        next loop-back, with no gap and no interruption.
+     *
+     * The audio thread swaps it in at the exact sample a looping range wraps
+     * (see setPlaybackRange()), so a looping caller can re-prepare audio
+     * after every edit and have it take effect the moment the loop restarts.
+     * A later call replaces an earlier staged buffer that was never
+     * consumed. The staged buffer is never consumed by a range that halts
+     * rather than loops, and loadAudio() discards it.
+     *
+     * @param audio The replacement; moved from only when staging succeeds,
+     *        so a caller can fall back to loadAudio() with it. Must have exactly the loaded audio's
+     *        frame count and sample rate, since the active range and position
+     *        are expressed in samples of the loaded audio.
+     * @return `false` (nothing staged) if nothing is loaded or the frame
+     *         count / sample rate differs - the caller should then fall back
+     *         to loadAudio() on a stopped engine.
+     * @note UI thread only. May block briefly on a mutex the audio thread
+     *       only ever try-locks, so the audio thread never waits on it.
+     */
+    [[nodiscard]] bool stageAudio(sound_mind::codec::AudioBuffer&& audio);
+
+    /// @brief `true` while staged audio is waiting for the next loop-back.
+    [[nodiscard]] bool hasStagedAudio() const noexcept;
+
 private:
     /// @brief What position()/seek() should resolve to on reaching
     /// `rangeEnd` - either the loop-back position (`halted == false`) or
@@ -318,6 +345,10 @@ private:
         bool halted;
     };
     [[nodiscard]] RangeCrossing resolveRangeCrossing(std::size_t rangeEnd) const noexcept;
+
+    /// @brief Audio thread only: at a loop-back, swaps staged audio in (if
+    /// any, and if the UI thread isn't mid-stageAudio()). Never blocks.
+    void swapInStagedAudio() noexcept;
 
     void audioDeviceIOCallbackWithContext(const float* const* inputChannelData, int numInputChannels,
                                            float* const* outputChannelData, int numOutputChannels, int numSamples,
@@ -337,6 +368,13 @@ private:
     mutable std::mutex problemMutex_;
     std::string problem_;
     sound_mind::codec::AudioBuffer audio_;
+    // Cached so the UI thread can read them while the audio thread swaps
+    // audio_'s buffers; stageAudio() only accepts audio matching both.
+    std::atomic<std::size_t> frameCount_{0};
+    std::atomic<std::uint32_t> sampleRateHzCached_{44100};
+    std::mutex stagedMutex_;
+    sound_mind::codec::AudioBuffer staged_;
+    std::atomic<bool> hasStaged_{false};
     std::atomic<std::size_t> position_{0};
     std::atomic<bool> playing_{false};
     std::atomic<float> volume_{1.0f};

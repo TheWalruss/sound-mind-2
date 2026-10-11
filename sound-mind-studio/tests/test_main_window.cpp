@@ -692,6 +692,45 @@ void MainWindowTest::contentChangeDiscardsAlreadyPreparedPlaybackAudio() {
     QVERIFY(window.isPlaying());
 }
 
+void MainWindowTest::editWhileRepeatingStagesFreshAudioWithoutInterruptingPlayback() {
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-repeat-stage.wav";
+    writeTestWavFile(path);
+
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-repeat-stage.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(smallCanvasProjectSettings(), projectPath));
+    QVERIFY(window.importAudioFile(path));
+    std::filesystem::remove(path);
+
+    window.setPlaybackRepeat(true);
+    window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QVERIFY(compositeCancelButton != nullptr);
+    while (!compositeCancelButton->isHidden()) {
+        QTest::qWait(5);
+    }
+    QVERIFY(window.isPlaying());
+
+    auto* controller = window.findChild<sound_mind::studio::PlaybackController*>();
+    QVERIFY(controller != nullptr);
+    QVERIFY(!controller->hasStagedAudio());
+
+    // An edit while Repeat is playing re-prepares in the background and
+    // stages the result for the next loop restart; playback never stops.
+    auto* tools = window.findChild<sound_mind::studio::ToolPaletteController*>();
+    QVERIFY(tools != nullptr);
+    emit tools->contentChanged(topmostNonEqualizerLayer(*window.project()).id());
+    QVERIFY(window.isPlaying());
+
+    for (int i = 0; i < 1000 && !controller->hasStagedAudio(); ++i) {
+        QTest::qWait(5);
+    }
+    QVERIFY(controller->hasStagedAudio());
+    QVERIFY(window.isPlaying());
+
+    window.stopPlayback();
+}
+
 void MainWindowTest::stopPlaybackStopsIt() {
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-playback-stop.wav";
     writeTestWavFile(path);

@@ -31,6 +31,15 @@ bool PlaybackController::isLoaded() const noexcept {
 
 void PlaybackController::invalidate() noexcept {
     loaded_ = false;
+    emit invalidated();
+}
+
+bool PlaybackController::stageAudio(sound_mind::codec::AudioBuffer&& audio) {
+    return engine_.stageAudio(std::move(audio));
+}
+
+bool PlaybackController::hasStagedAudio() const noexcept {
+    return engine_.hasStagedAudio();
 }
 
 void PlaybackController::play() {

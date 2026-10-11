@@ -1676,8 +1676,11 @@ The **Scope** drop-down decides how an edit affects playback, and
 **Repeat** decides what happens once that reaches its own end:
 
 - **Track** (the default) - only reacts to an edit while **Repeat** is
-  checked *and* something is already playing: it keeps playing from
-  wherever it already was, re-rendered "in place", without jumping.
+  checked *and* something is already playing: it keeps playing without
+  interruption while the edit is prepared in the background, and the
+  fresh sound takes over at the exact moment the loop restarts. (If the
+  edit changes the track's length it reloads in place at the same
+  position instead.)
 - **Delta** - painting (or any other edit) jumps playback to whatever you
   just edited and plays through just that region - automatically, even if
   nothing was playing yet and even with **Repeat** unchecked, so you hear

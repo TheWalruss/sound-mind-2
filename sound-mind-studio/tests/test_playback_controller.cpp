@@ -51,6 +51,38 @@ void PlaybackControllerTest::invalidateClearsLoadedWithoutStoppingPlayback() {
     controller.stop();  // cleanup.
 }
 
+void PlaybackControllerTest::invalidateEmitsInvalidated() {
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
+    controller.load(makeTestAudio());
+    QSignalSpy spy(&controller, &PlaybackController::invalidated);
+
+    controller.invalidate();
+
+    QCOMPARE(spy.count(), 1);
+}
+
+void PlaybackControllerTest::stageAudioKeepsPlaybackUninterruptedAndRejectsAMismatchedLength() {
+    PlaybackController controller(nullptr, AudioDeviceMode::None);
+    AudioBuffer early = makeTestAudio();
+    QVERIFY(!controller.stageAudio(std::move(early)));  // nothing loaded.
+
+    controller.load(makeTestAudio());
+    controller.play();
+
+    AudioBuffer shorter = makeTestAudio();
+    shorter.left.resize(100);
+    shorter.right.resize(100);
+    QVERIFY(!controller.stageAudio(std::move(shorter)));
+    QVERIFY(!controller.hasStagedAudio());
+
+    QVERIFY(controller.stageAudio(makeTestAudio()));
+    QVERIFY(controller.hasStagedAudio());
+    QVERIFY(controller.isPlaying());  // staging never interrupts playback.
+    QVERIFY(controller.isLoaded());
+
+    controller.stop();  // cleanup.
+}
+
 void PlaybackControllerTest::loadEmitsDurationChanged() {
     PlaybackController controller(nullptr, AudioDeviceMode::None);
     QSignalSpy spy(&controller, &PlaybackController::durationChanged);

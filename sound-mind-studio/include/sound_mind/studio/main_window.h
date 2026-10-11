@@ -3376,6 +3376,27 @@ private:
     void pollCompositeProgress();
 
     /**
+     * @brief While Repeat is on and playback is running, re-prepares the
+     *        audio on a background thread so the next loop restart is
+     *        fresh.
+     *
+     * Connected to PlaybackController::invalidated(), so it fires after
+     * every edit (and every other change that makes prepared audio stale).
+     * Playback is never interrupted: the result is handed to
+     * PlaybackController::stageAudio() and the engine swaps it in at the
+     * loop-back sample. A change arriving mid-composite coalesces into one
+     * follow-up run, and the stale result is discarded. A no-op unless
+     * Repeat is on and playback is running. UI thread only.
+     */
+    void scheduleRepeatRefresh();
+
+    /// @brief refreshTimer_'s slot: once the background re-prepare finishes,
+    /// stages its result (or, if the audio length changed so it can't be
+    /// staged, falls back to an in-place reload at the same position), or
+    /// re-runs if another change arrived meanwhile.
+    void pollRepeatRefresh();
+
+    /**
      * @brief Repeat Playback's/one-shot preview's shared edit hook -
      *        connected to `toolPaletteController_::contentChanged()`
      *        (which already merges every content-changing action:
@@ -4059,6 +4080,15 @@ private:
     std::unique_ptr<sound_mind::core::BackgroundTask> compositeTask_;
     QTimer* compositeProgressTimer_ = nullptr;
     QPushButton* compositeCancelButton_ = nullptr;
+
+    /// @brief Result of refreshTask_ (see scheduleRepeatRefresh()); same
+    /// release/acquire reasoning as compositedResult_. Declared before
+    /// refreshTask_ so the task is destroyed first.
+    std::optional<sound_mind::codec::AudioBuffer> refreshResult_;
+    std::unique_ptr<sound_mind::core::BackgroundTask> refreshTask_;
+    QTimer* refreshTimer_ = nullptr;
+    /// @brief A change arrived while refreshTask_ was running.
+    bool refreshDirty_ = false;
 
     /// @brief compositeTask_'s own work function's result on success -
     /// written just before it returns and read only after observing

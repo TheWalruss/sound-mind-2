@@ -489,6 +489,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     compositeProgressTimer_->setInterval(33);  // same ~30fps cadence as loopUpdateTimer_.
     connect(compositeProgressTimer_, &QTimer::timeout, this, &MainWindow::pollCompositeProgress);
 
+    refreshTimer_ = new QTimer(this);
+    refreshTimer_->setInterval(33);
+    connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::pollRepeatRefresh);
+    connect(playbackController_, &PlaybackController::invalidated, this, &MainWindow::scheduleRepeatRefresh);
+
     // Selection & Fill (v0.Y.25.1), Selection Type (v0.Y.35.1 Installment
     // A) - toolPaletteController_ isn't constructed until just below, but
     // this lambda only ever runs later, on a real dropdown change - safe
@@ -4679,6 +4684,13 @@ void MainWindow::handleContentChangedForPlayback(sound_mind::core::LayerId layer
         if (!playbackController_->isPlaying()) {
             return;
         }
+        if (playbackScope_ == sound_mind::studio::PlaybackScope::Track) {
+            // Playback keeps going uninterrupted; the fresh audio is
+            // prepared in the background and swapped in at the next
+            // loop-back - see scheduleRepeatRefresh().
+            scheduleRepeatRefresh();
+            return;
+        }
     } else if (!deltaOrReview) {
         return;
     }
@@ -4987,6 +4999,65 @@ void MainWindow::pollPoolProgress() {
 
 bool MainWindow::isCompositingForPlayback() const noexcept {
     return compositeTask_ != nullptr && compositeTask_->isRunning();
+}
+
+void MainWindow::scheduleRepeatRefresh() {
+    if (!project_ || !repeatEnabled_ || !playbackController_->isPlaying()) {
+        return;
+    }
+    if (refreshTask_ && refreshTask_->isRunning()) {
+        refreshDirty_ = true;
+        return;
+    }
+    refreshDirty_ = false;
+    refreshResult_.reset();
+    refreshTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
+            try {
+                const auto composite = sound_mind::core::compositeProject(
+                    projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
+                if (composite.has_value()) {
+                    refreshResult_ = sound_mind::codec::decode(*composite);
+                }
+            } catch (const std::exception&) {
+                refreshResult_.reset();  // cancelled or failed: playback just keeps the older audio.
+            }
+        });
+    refreshTask_->start();
+    refreshTimer_->start();
+}
+
+void MainWindow::pollRepeatRefresh() {
+    if (!refreshTask_ || refreshTask_->isRunning()) {
+        return;
+    }
+    refreshTimer_->stop();
+    refreshTask_.reset();
+    auto result = std::move(refreshResult_);
+    refreshResult_.reset();
+
+    if (refreshDirty_) {
+        refreshDirty_ = false;
+        scheduleRepeatRefresh();
+        return;
+    }
+    if (!result.has_value() || !repeatEnabled_ || !playbackController_->isPlaying()) {
+        return;
+    }
+    if (playbackController_->stageAudio(std::move(*result))) {
+        return;
+    }
+    // Length or sample rate changed, so it can't be swapped in seamlessly:
+    // reload in place at the same position (stageAudio left `result` intact).
+    playbackController_->load(std::move(*result));
+    if (playbackScope_ == sound_mind::studio::PlaybackScope::Track) {
+        repeatRangeStartSeconds_ = 0.0;
+        repeatRangeEndSeconds_ = playbackController_->totalSeconds();
+        repeatLoopBackSeconds_ = 0.0;
+    }
+    syncPlaybackRangeToEngine();
+    playbackController_->seek(currentPlaybackPositionSeconds_);
+    playbackController_->play();
 }
 
 void MainWindow::cancelPlaybackComposite() {

@@ -395,3 +395,120 @@ TEST_CASE("loadAudio resets any previously set playback range", "[core][playback
     CHECK(left[3] == 0.4f);  // played all the way through, not halted at 2.
     CHECK_FALSE(engine.isPlaying());  // halted naturally at the real end instead.
 }
+
+namespace {
+
+AudioBuffer makeFreshTestAudio() {
+    AudioBuffer audio;
+    audio.sampleRateHz = 44100;
+    audio.left = {0.5f, 0.6f, 0.7f, 0.8f};
+    audio.right = {-0.5f, -0.6f, -0.7f, -0.8f};
+    return audio;
+}
+
+}  // namespace
+
+TEST_CASE("stageAudio takes effect exactly at the next loop-back, with no silence at the seam",
+          "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());  // left = {0.1, 0.2, 0.3, 0.4}
+    engine.setPlaybackRange(/*loopEnabled=*/true, /*rangeEndSamples=*/4, /*loopBackSamples=*/0);
+    engine.play();
+    REQUIRE(engine.stageAudio(makeFreshTestAudio()));
+    CHECK(engine.hasStagedAudio());
+
+    std::vector<float> left(6, -1.0f);
+    std::vector<float> right(6, -1.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 6);
+
+    // The first pass still plays the old audio; the mid-block wrap switches
+    // to the staged audio with no gap.
+    CHECK(left[0] == 0.1f);
+    CHECK(left[3] == 0.4f);
+    CHECK(left[4] == 0.5f);
+    CHECK(left[5] == 0.6f);
+    CHECK(right[4] == -0.5f);
+    CHECK_FALSE(engine.hasStagedAudio());
+    CHECK(engine.isPlaying());
+}
+
+TEST_CASE("stageAudio does not disturb playback before the loop-back", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    engine.setPlaybackRange(true, 4, 0);
+    engine.play();
+    REQUIRE(engine.stageAudio(makeFreshTestAudio()));
+
+    std::vector<float> left(3, -1.0f);
+    float* channels[] = {left.data()};
+    engine.renderBlock(channels, 1, 3);
+
+    CHECK(left[0] == 0.1f);
+    CHECK(left[2] == 0.3f);
+    CHECK(engine.hasStagedAudio());
+}
+
+TEST_CASE("a later stageAudio replaces an earlier one that was never consumed", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    engine.setPlaybackRange(true, 4, 0);
+    engine.play();
+    AudioBuffer first = makeFreshTestAudio();
+    first.left = {0.9f, 0.9f, 0.9f, 0.9f};
+    REQUIRE(engine.stageAudio(std::move(first)));
+    REQUIRE(engine.stageAudio(makeFreshTestAudio()));
+
+    std::vector<float> left(5, -1.0f);
+    float* channels[] = {left.data()};
+    engine.renderBlock(channels, 1, 5);
+
+    CHECK(left[4] == 0.5f);
+}
+
+TEST_CASE("stageAudio refuses audio of a different length or sample rate", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+
+    AudioBuffer longer = makeFreshTestAudio();
+    longer.left.push_back(0.1f);
+    longer.right.push_back(0.1f);
+    CHECK_FALSE(engine.stageAudio(std::move(longer)));
+
+    AudioBuffer otherRate = makeFreshTestAudio();
+    otherRate.sampleRateHz = 48000;
+    CHECK_FALSE(engine.stageAudio(std::move(otherRate)));
+
+    CHECK_FALSE(engine.hasStagedAudio());
+    CHECK(engine.totalSamples() == 4);
+}
+
+TEST_CASE("a staged buffer is not consumed when the range halts instead of looping", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    engine.setPlaybackRange(/*loopEnabled=*/false, 4, 0);
+    engine.play();
+    REQUIRE(engine.stageAudio(makeFreshTestAudio()));
+
+    std::vector<float> left(6, -1.0f);
+    float* channels[] = {left.data()};
+    engine.renderBlock(channels, 1, 6);
+
+    CHECK_FALSE(engine.isPlaying());
+    CHECK(engine.hasStagedAudio());
+}
+
+TEST_CASE("loadAudio discards any staged audio", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.loadAudio(makeTestAudio());
+    REQUIRE(engine.stageAudio(makeFreshTestAudio()));
+
+    engine.loadAudio(makeTestAudio());
+
+    CHECK_FALSE(engine.hasStagedAudio());
+}
+
+TEST_CASE("stageAudio with nothing loaded is refused", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    CHECK_FALSE(engine.stageAudio(makeFreshTestAudio()));
+}

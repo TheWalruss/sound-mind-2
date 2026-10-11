@@ -8,6 +8,8 @@ class PlaybackControllerTest : public QObject {
 private slots:
     void freshControllerIsNotLoadedOrPlaying();
     void loadMarksItLoaded();
+    void invalidateEmitsInvalidated();
+    void stageAudioKeepsPlaybackUninterruptedAndRejectsAMismatchedLength();
     void invalidateClearsLoadedWithoutStoppingPlayback();
     void loadEmitsDurationChanged();
     void playStartsPlayback();

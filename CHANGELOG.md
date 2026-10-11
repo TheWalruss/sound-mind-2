@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.29.4] - 2026-10-11
+
+Direct user feedback: with Repeat on during playback, "it keeps playing the same stale output until I stop and click Play again. ... I want to prepare playback after every edit, so that the sound output is fresh the moment Repeat restarts playback."
+
+### Fixed
+
+- **Repeat playback now picks up every edit at the next loop.** While Repeat is on and playing, each edit (painting, mute, volume, imports, undo/redo - anything that changes what you would hear) re-prepares the audio in the background, without interrupting what is playing. The fresh audio is swapped in at the exact sample the loop restarts, so there is no gap or click at the seam. Several quick edits coalesce into one follow-up preparation. If an edit changes the track's length, playback instead reloads in place at the same position.
+
 ## [0.1.29.3] - 2026-10-11
 
 Direct user feedback: "When I make an empty layer and paint on it, the result is not audible at all. However, when I import an MP3 into a layer, I can hear that perfectly fine in playback."
