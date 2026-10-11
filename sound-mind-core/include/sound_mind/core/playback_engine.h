@@ -331,7 +331,8 @@ public:
      */
     [[nodiscard]] bool stageAudio(sound_mind::codec::AudioBuffer&& audio);
 
-    /// @brief `true` while staged audio is waiting for the next loop-back.
+    /// @brief Whether staged audio is waiting for the next loop-back.
+    /// @return `true` while it is.
     [[nodiscard]] bool hasStagedAudio() const noexcept;
 
 private:

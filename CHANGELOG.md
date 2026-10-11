@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.29.5] - 2026-10-11
+
+### Changed
+
+- **The default brush is now audible.** Its intensity defaulted to 0 dB, about 50 dB quieter than a normal imported sound, so painted layers seemed silent. The default is now +45 dB, and the intensity boxes in the gradient editor accept up to +60 dB.
+
 ## [0.1.29.4] - 2026-10-11
 
 Direct user feedback: with Repeat on during playback, "it keeps playing the same stale output until I stop and click Play again. ... I want to prepare playback after every edit, so that the sound output is fresh the moment Repeat restarts playback."

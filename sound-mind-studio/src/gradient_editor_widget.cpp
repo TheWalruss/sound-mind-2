@@ -20,14 +20,15 @@ namespace {
 /// constant.
 constexpr float kSilenceFloorDb = -96.0f;
 
-/// @brief A `[-96, 0]` dB spin box, matching `makeIntensitySpinBox()`'s
+/// @brief A `[-96, +60]` dB spin box (stored magnitudes are raw A-weighted
+/// STFT dB, so a full-scale imported tone peaks near +52 dB), matching `makeIntensitySpinBox()`'s
 /// own precedent in `filter_configuration_panel.cpp` (the same range
 /// `silenceGradient()`'s own floor and `color_mapping.cpp`'s own display
 /// range already use).
 QDoubleSpinBox* makeIntensitySpinBox(QWidget* parent, const QString& objectName) {
     auto* spinBox = new QDoubleSpinBox(parent);
     spinBox->setObjectName(objectName);
-    spinBox->setRange(-96.0, 0.0);
+    spinBox->setRange(-96.0, 60.0);
     spinBox->setSingleStep(1.0);
     spinBox->setSuffix(QStringLiteral(" dB"));
     return spinBox;

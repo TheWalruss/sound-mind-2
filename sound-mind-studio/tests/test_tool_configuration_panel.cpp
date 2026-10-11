@@ -100,9 +100,9 @@ void ToolConfigurationPanelTest::freshPanelIsAnOpaqueCircularBrush() {
     QCOMPARE(dynamic_cast<const ProceduralConfiguration&>(config).tipShape(), BrushTipShape::Circle);
     QCOMPARE(config.defaultGradient().stops().front().leftOpacity, 1.0f);
     QCOMPARE(config.defaultGradient().stops().front().rightOpacity, 1.0f);
-    // 0 dB on both channels - the loudest a stop can be.
-    QCOMPARE(config.defaultGradient().stops().front().leftIntensity, 0.0f);
-    QCOMPARE(config.defaultGradient().stops().front().rightIntensity, 0.0f);
+    // +45 dB on both channels - audible next to a normal imported tone.
+    QCOMPARE(config.defaultGradient().stops().front().leftIntensity, 45.0f);
+    QCOMPARE(config.defaultGradient().stops().front().rightIntensity, 45.0f);
 }
 
 void ToolConfigurationPanelTest::freshPanelHasBothOverlayCheckboxesOff() {
