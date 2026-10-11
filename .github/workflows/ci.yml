@@ -103,12 +103,21 @@ jobs:
       # ffmpeg-from-scratch build - see timeout-minutes above - but every
       # run after that first one is fast regardless of what else changes,
       # as long as vcpkg.json itself doesn't.
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v4
+      # Restore-only. The key carries run_id so it never exact-matches a
+      # previous run: an exact hit is never re-saved, which previously froze
+      # the cache at its first (Sept 8) contents. After a runner-image
+      # compiler update vcpkg's ABI hashes changed, every package missed
+      # ("Restored 0 package(s)"), and the stale entry kept being restored
+      # without ever being refreshed - so Configure rebuilt everything
+      # (20-30 min) on every run. restore-keys still finds the newest entry.
+      - name: Restore vcpkg binary cache
+        id: vcpkg-restore
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}\vcpkg-binary-cache
-          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}-${{ github.run_id }}
           restore-keys: |
+            vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}-
             vcpkg-${{ matrix.name }}-
 
       - name: Install aqtinstall
@@ -149,6 +158,16 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force "${{ runner.temp }}\vcpkg-binary-cache" | Out-Null
           cmake --preset debug
+
+      # Saved straight after Configure, even if a later step fails or times
+      # out - a post-job save is skipped on failure, which kept the cache
+      # permanently cold whenever a run was cancelled at the timeout.
+      - name: Save vcpkg binary cache
+        if: always() && steps.vcpkg-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}\vcpkg-binary-cache
+          key: vcpkg-${{ matrix.name }}-${{ hashFiles('vcpkg.json') }}-${{ github.run_id }}
 
       - name: Build
         shell: pwsh
