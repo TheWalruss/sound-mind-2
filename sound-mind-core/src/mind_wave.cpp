@@ -330,7 +330,11 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
         effectiveBinIndex += delta;
     }
 
-    const double axisPosition = (axis_ == MindWaveAxis::Time) ? effectiveTimeSeconds : effectiveBinIndex;
+    const double unmirroredAxisPosition = (axis_ == MindWaveAxis::Time) ? effectiveTimeSeconds : effectiveBinIndex;
+    // Reversed mirrors the axis coordinate; Envelope mirrors around its own
+    // center below instead of around 0.
+    const double axisPosition = (reversed_ && type_ != GeneratorType::Envelope) ? -unmirroredAxisPosition
+                                                                               : unmirroredAxisPosition;
 
     double result = 0.5;  // Overwritten by every real branch below.
 
@@ -380,11 +384,14 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
                     result = (p < dutyCycle_) ? 1.0 : 0.0;
                     break;
                 }
+                case PeriodicWaveform::RectifiedSine:
+                    result = std::abs(std::sin(phase));
+                    break;
             }
             break;
         }
         case GeneratorType::Envelope: {
-            const double relativePosition = axisPosition - envelopeCenter_;
+            const double relativePosition = reversed_ ? -(axisPosition - envelopeCenter_) : axisPosition - envelopeCenter_;
             switch (envelopeShape_) {
                 case EnvelopeShape::ExponentialDecay:
                     // Plateaus at 1.0 before envelopeCenter_, decays after it.
@@ -400,6 +407,16 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
                 case EnvelopeShape::SCurve:
                     // A logistic sigmoid centered on envelopeCenter_.
                     result = 1.0 / (1.0 + std::exp(-envelopeSteepness_ * relativePosition));
+                    break;
+                case EnvelopeShape::Peak: {
+                    // A Gaussian bell: 1.0 at envelopeCenter_, narrower at higher steepness.
+                    const double scaled = envelopeSteepness_ * relativePosition;
+                    result = std::exp(-scaled * scaled);
+                    break;
+                }
+                case EnvelopeShape::Ramp:
+                    // 0 at envelopeCenter_, linearly up to 1 one 1/steepness later, flat beyond.
+                    result = std::clamp(envelopeSteepness_ * relativePosition, 0.0, 1.0);
                     break;
             }
             break;
@@ -522,6 +539,10 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
         }
     }
 
+    if (inverted_) {
+        result = 1.0 - std::clamp(result, 0.0, 1.0);
+    }
+
     for (const MindWave& member : superpositionStack_) {
         result = foldSuperposition(superpositionBlendMode_, result, static_cast<double>(member.evaluate(point, config)));
     }
@@ -538,7 +559,7 @@ float mindWaveValueAt(const MindWave& wave, std::uint32_t bin, std::uint32_t fra
 
 std::optional<std::vector<float>> MindWave::tryEvaluateFractalFieldOnGpu(
     const sound_mind::codec::StreamCodecConfig& config, std::uint32_t canvasWidth) const {
-    if (type_ != GeneratorType::Fractal || hasWarpSource() || !superpositionStack_.empty()) {
+    if (type_ != GeneratorType::Fractal || hasWarpSource() || !superpositionStack_.empty() || reversed_ || inverted_) {
         return std::nullopt;
     }
     sound_mind::gpu::ComputeDevice* device = sound_mind::core::detail::gpuComputeDeviceOrNull();
@@ -657,6 +678,8 @@ void to_json(nlohmann::json& json, const MindWave& mindWave) {
     json["continuousSkew"] = mindWave.continuousSkew();
     json["continuousCharacter"] = mindWave.continuousCharacter();
     json["resonanceSpectrum"] = mindWave.resonanceSpectrum();
+    json["reversed"] = mindWave.reversed();
+    json["inverted"] = mindWave.inverted();
     // "sourceResonanceProfileId" is UI-only metadata (see its own docs) -
     // only written if present, the same "only if present" convention
     // ResonanceConfiguration's own identical field already uses.
@@ -697,6 +720,9 @@ void from_json(const nlohmann::json& json, MindWave& mindWave) {
     // json.at(...) so older saved projects with neither field still load
     // cleanly, falling back to "unwarped".
     mindWave.setWarpStrength(json.value("warpStrength", 1.0));
+    // reversed/inverted were added after MindWave files already existed - lenient, default off.
+    mindWave.setReversed(json.value("reversed", false));
+    mindWave.setInverted(json.value("inverted", false));
     const auto warpSourceStack =
         json.value("warpSourceStack", nlohmann::json::array()).get<std::vector<MindWave>>();
     if (!warpSourceStack.empty()) {

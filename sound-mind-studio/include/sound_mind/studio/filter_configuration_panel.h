@@ -26,6 +26,7 @@ class QWidget;
 namespace sound_mind::studio {
 
 class EqualizerCurveWidget;
+class PresetIndicatorLabel;
 class GradientEditorWidget;
 class ToneCurveEditor;
 
@@ -326,6 +327,16 @@ public:
      */
     void setAvailableFilterPresets(const std::vector<sound_mind::core::NamedFilterPreset>& presets);
 
+    /**
+     * @brief Marks @p name as the active Filter Preset in the indicator
+     *        label (used after a successful save, which doesn't go through
+     *        the Load combo). Cleared automatically once the configuration
+     *        is replaced from outside.
+     * @param name The saved preset's name.
+     * @note GUI thread only.
+     */
+    void setActivePresetName(const QString& name);
+
 signals:
     /// @brief Emitted whenever any parameter control changes.
     /// @param config The panel's own new, complete configuration.
@@ -540,6 +551,8 @@ private:
     std::vector<sound_mind::core::NamedConvolutionKernel> availableConvolutionKernels_;
 
     QPushButton* savePresetButton_ = nullptr;
+    /// @brief Shows which Filter Preset is active and whether it has since been edited.
+    PresetIndicatorLabel* presetIndicator_ = nullptr;
     QComboBox* filterPresetCombo_ = nullptr;
     /// @brief See setAvailableFilterPresets()'s own docs.
     std::vector<sound_mind::core::NamedFilterPreset> availableFilterPresets_;

@@ -49,6 +49,7 @@
 #include "test_mind_capture_dialog.h"
 #include "test_mind_wave_controller.h"
 #include "test_mind_wave_editor.h"
+#include "test_preset_indicator_label.h"
 #include "test_mind_waves_panel.h"
 #include "test_name_collision_dialog.h"
 #include "test_paint_controller.h"
@@ -229,6 +230,9 @@ int main(int argc, char** argv) {
 
     MindWaveEditorTest mindWaveEditorTest;
     status |= QTest::qExec(&mindWaveEditorTest, argc, argv);
+
+    PresetIndicatorLabelTest presetIndicatorLabelTest;
+    status |= QTest::qExec(&presetIndicatorLabelTest, argc, argv);
 
     MindWavesPanelTest mindWavesPanelTest;
     status |= QTest::qExec(&mindWavesPanelTest, argc, argv);

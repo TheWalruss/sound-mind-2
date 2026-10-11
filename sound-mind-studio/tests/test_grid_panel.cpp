@@ -16,6 +16,7 @@
 #include "sound_mind/core/music_theory.h"
 #include "sound_mind/studio/grid_config.h"
 #include "sound_mind/studio/grid_panel.h"
+#include "sound_mind/studio/preset_indicator_label.h"
 
 using sound_mind::core::FrequencyGridPresetConfig;
 using sound_mind::core::GridPresetId;
@@ -481,4 +482,36 @@ void GridPanelTest::deleteButtonWithThePlaceholderSelectedEmitsNothing() {
     deleteButton->click();
 
     QCOMPARE(spy.count(), 0);
+}
+
+void GridPanelTest::presetIndicatorShowsLoadedPresetThenModifiedAfterAnEdit() {
+    GridPanel panel;
+    auto* indicator = panel.findChild<sound_mind::studio::PresetIndicatorLabel*>();
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("gridPresetCombo"));
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("noteGridCheckBox"));
+    QVERIFY(indicator != nullptr && combo != nullptr && checkBox != nullptr);
+    panel.setAvailableGridPresets(
+        {makeGridPreset(1, QStringLiteral("Grid A")), makeGridPreset(2, QStringLiteral("Grid B"))});
+    QVERIFY(!indicator->hasActivePreset());
+
+    combo->setCurrentIndex(1);
+    QCOMPARE(indicator->text(), QStringLiteral("Preset: Grid B"));
+    QVERIFY(!indicator->isModified());
+
+    checkBox->setChecked(!checkBox->isChecked());
+    QVERIFY(indicator->isModified());
+    QVERIFY(indicator->text().contains(QLatin1Char('*')));
+}
+
+void GridPanelTest::presetIndicatorFollowsSaveAndIsClearedWhenThePresetDisappears() {
+    GridPanel panel;
+    auto* indicator = panel.findChild<sound_mind::studio::PresetIndicatorLabel*>();
+    QVERIFY(indicator != nullptr);
+
+    panel.setAvailableGridPresets({makeGridPreset(1, QStringLiteral("Grid A"))});
+    panel.setActivePresetName(QStringLiteral("Grid A"));
+    QVERIFY(indicator->hasActivePreset());
+
+    panel.setAvailableGridPresets({});
+    QVERIFY(!indicator->hasActivePreset());
 }

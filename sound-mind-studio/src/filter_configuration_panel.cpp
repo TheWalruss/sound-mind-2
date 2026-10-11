@@ -25,6 +25,7 @@
 
 #include "sound_mind/studio/equalizer_curve_widget.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
+#include "sound_mind/studio/preset_indicator_label.h"
 #include "sound_mind/studio/tone_curve_editor.h"
 
 namespace sound_mind::studio {
@@ -131,8 +132,10 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         if (index <= 0 || static_cast<std::size_t>(index - 1) >= availableFilterPresets_.size()) {
             return;
         }
-        setFilterConfiguration(availableFilterPresets_[static_cast<std::size_t>(index - 1)].config);
+        const auto& chosen = availableFilterPresets_[static_cast<std::size_t>(index - 1)];
+        setFilterConfiguration(chosen.config);
         emitConfigChanged();
+        presetIndicator_->setActivePreset(QString::fromStdString(chosen.name));
         // One-shot trigger, not a sticky selection - the same
         // "immediately apply, then reset to the placeholder" contract
         // convolveLoadKernelCombo_ already establishes.
@@ -151,6 +154,9 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     auto* presetForm = new QFormLayout();
     presetForm->addRow(tr("Filter Preset:"), presetRow);
     root->addLayout(presetForm);
+
+    presetIndicator_ = new PresetIndicatorLabel(container);
+    root->addWidget(presetIndicator_);
 
     auto* typeForm = new QFormLayout();
     filterTypeCombo_ = new QComboBox(container);
@@ -985,7 +991,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     updateVisibleGroup();
 }
 
-void FilterConfigurationPanel::emitConfigChanged() { emit filterConfigurationChanged(config_); }
+void FilterConfigurationPanel::emitConfigChanged() {
+    presetIndicator_->markModified();
+    emit filterConfigurationChanged(config_);
+}
+
+void FilterConfigurationPanel::setActivePresetName(const QString& name) { presetIndicator_->setActivePreset(name); }
 
 void FilterConfigurationPanel::updateVisibleGroup() {
     filterTypeCombo_->setVisible(!isEqualizerMode_);
@@ -1041,6 +1052,7 @@ void FilterConfigurationPanel::setEqualizerPreviewChecked(bool checked) {
 
 void FilterConfigurationPanel::setFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
     config_ = config;
+    presetIndicator_->clearActivePreset();
 
     // QSignalBlocker on every control - see ToolConfigurationPanel::
     // setToolConfiguration()'s own docs for why: only the *display*
@@ -1180,9 +1192,19 @@ void FilterConfigurationPanel::resolveCreateMindWaveSentinel(QComboBox* combo, i
     if (newId == MindWaveId{0}) {
         return;  // No project set - see MindWaveController::addMindWave()'s own docs.
     }
+    // The callback normally triggers setAvailableMindWaves(), which has
+    // already rebuilt this combo around the new entry (and reset it to the
+    // config's still-unbound "None") - so look the new entry up and select
+    // it rather than assuming the sentinel item is still current. Only when
+    // no rebuild happened is the sentinel itself rewritten in place.
     const QSignalBlocker blocker(combo);
-    combo->setItemData(index, QVariant::fromValue(static_cast<qulonglong>(newId)));
-    combo->setItemText(index, newName);
+    int target = combo->findData(QVariant::fromValue(static_cast<qulonglong>(newId)));
+    if (target < 0) {
+        combo->setItemData(index, QVariant::fromValue(static_cast<qulonglong>(newId)));
+        combo->setItemText(index, newName);
+        target = index;
+    }
+    combo->setCurrentIndex(target);
 }
 
 void FilterConfigurationPanel::rebuildMindWaveCombos() {
@@ -1245,6 +1267,12 @@ void FilterConfigurationPanel::setAvailableConvolutionKernels(
 void FilterConfigurationPanel::setAvailableFilterPresets(
     const std::vector<sound_mind::core::NamedFilterPreset>& presets) {
     availableFilterPresets_ = presets;
+    if (presetIndicator_->hasActivePreset() &&
+        std::none_of(presets.begin(), presets.end(), [this](const auto& preset) {
+            return QString::fromStdString(preset.name) == presetIndicator_->activePresetName();
+        })) {
+        presetIndicator_->clearActivePreset();
+    }
     const QSignalBlocker blocker(filterPresetCombo_);
     filterPresetCombo_->clear();
     filterPresetCombo_->addItem(tr("Load Preset..."));

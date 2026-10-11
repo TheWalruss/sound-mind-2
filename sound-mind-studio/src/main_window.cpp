@@ -4097,6 +4097,7 @@ void MainWindow::saveFilterPreset(const sound_mind::core::FilterConfiguration& c
         project_->addFilterPreset(result.name, config);
     }
     refreshFilterPresetCombo();
+    filterConfigurationPanel_->setActivePresetName(QString::fromStdString(result.name));
     hasUnsavedChanges_ = true;
     statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }
@@ -4128,6 +4129,7 @@ void MainWindow::saveGridPreset() {
         project_->addGridPreset(result.name, std::move(frequencyGrid), std::move(timingGrid), snapToGridEnabled);
     }
     refreshGridPresetCombo();
+    gridPanel_->setActivePresetName(QString::fromStdString(result.name));
     hasUnsavedChanges_ = true;
     statusBar()->showMessage(tr("Saved as \"%1\".").arg(QString::fromStdString(result.name)), 5000);
 }

@@ -5,6 +5,7 @@
 #include <limits>
 #include <utility>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
@@ -47,18 +48,21 @@ constexpr std::array<std::pair<MindWaveAxis, const char*>, 2> kAxes{{
     {MindWaveAxis::Frequency, "Frequency"},
 }};
 
-constexpr std::array<std::pair<PeriodicWaveform, const char*>, 5> kPeriodicWaveforms{{
+constexpr std::array<std::pair<PeriodicWaveform, const char*>, 6> kPeriodicWaveforms{{
     {PeriodicWaveform::Sine, "Sine"},
     {PeriodicWaveform::Triangle, "Triangle"},
     {PeriodicWaveform::Square, "Square"},
     {PeriodicWaveform::Sawtooth, "Sawtooth"},
     {PeriodicWaveform::Pulse, "Pulse"},
+    {PeriodicWaveform::RectifiedSine, "Rectified Sine"},
 }};
 
-constexpr std::array<std::pair<EnvelopeShape, const char*>, 3> kEnvelopeShapes{{
+constexpr std::array<std::pair<EnvelopeShape, const char*>, 5> kEnvelopeShapes{{
     {EnvelopeShape::ExponentialDecay, "Exponential Decay"},
     {EnvelopeShape::DecayingOscillation, "Decaying Oscillation"},
     {EnvelopeShape::SCurve, "S-Curve"},
+    {EnvelopeShape::Peak, "Peak (Bell)"},
+    {EnvelopeShape::Ramp, "Ramp"},
 }};
 
 constexpr std::array<std::pair<SteppedNoiseShape, const char*>, 3> kSteppedNoiseShapes{{
@@ -165,6 +169,25 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
         emitChanged();
     });
     topForm->addRow(tr("Phase (radians):"), phaseSpinBox_);
+
+    reversedCheckBox_ = new QCheckBox(tr("Reversed"), this);
+    reversedCheckBox_->setObjectName(QStringLiteral("reversedCheckBox"));
+    reversedCheckBox_->setToolTip(
+        tr("Run backwards along the axis. An Exponential Decay becomes a rise toward its center."));
+    connect(reversedCheckBox_, &QCheckBox::toggled, this, [this](bool checked) {
+        wave_.setReversed(checked);
+        emitChanged();
+    });
+    topForm->addRow(QString(), reversedCheckBox_);
+
+    invertedCheckBox_ = new QCheckBox(tr("Inverted"), this);
+    invertedCheckBox_->setObjectName(QStringLiteral("invertedCheckBox"));
+    invertedCheckBox_->setToolTip(tr("Flip the polarity: every value v becomes 1 - v."));
+    connect(invertedCheckBox_, &QCheckBox::toggled, this, [this](bool checked) {
+        wave_.setInverted(checked);
+        emitChanged();
+    });
+    topForm->addRow(QString(), invertedCheckBox_);
 
     seedSpinBox_ = new QSpinBox(this);
     seedSpinBox_->setObjectName(QStringLiteral("seedSpinBox"));
@@ -571,6 +594,8 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     const QSignalBlocker axisBlocker(axisCombo_);
     const QSignalBlocker periodBlocker(periodSpinBox_);
     const QSignalBlocker phaseBlocker(phaseSpinBox_);
+    const QSignalBlocker reversedBlocker(reversedCheckBox_);
+    const QSignalBlocker invertedBlocker(invertedCheckBox_);
     const QSignalBlocker seedBlocker(seedSpinBox_);
     const QSignalBlocker noiseScaleBlocker(noiseScaleSpinBox_);
     const QSignalBlocker noiseOctavesBlocker(noiseOctavesSpinBox_);
@@ -598,6 +623,8 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     selectComboValue(axisCombo_, wave_.axis());
     periodSpinBox_->setValue(wave_.period());
     phaseSpinBox_->setValue(wave_.phaseRadians());
+    reversedCheckBox_->setChecked(wave_.reversed());
+    invertedCheckBox_->setChecked(wave_.inverted());
     seedSpinBox_->setValue(static_cast<int>(std::min<std::uint32_t>(
         wave_.seed(), static_cast<std::uint32_t>(std::numeric_limits<int>::max()))));
     noiseScaleSpinBox_->setValue(wave_.noiseScale());

@@ -39,6 +39,7 @@ add_executable(sound-mind-studio-tests
     test_mind_capture_dialog.cpp
     test_mind_wave_controller.cpp
     test_mind_wave_editor.cpp
+    test_preset_indicator_label.cpp
     test_mind_waves_panel.cpp
     test_name_collision_dialog.cpp
     test_paint_controller.cpp

@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QGroupBox>
@@ -109,6 +110,47 @@ void MindWaveEditorTest::changingPeriodicWaveformAndDutyCycleUpdateAndEmit() {
 
     QCOMPARE(editor.mindWave().periodicWaveform(), PeriodicWaveform::Pulse);
     QCOMPARE(editor.mindWave().dutyCycle(), 0.25);
+}
+
+void MindWaveEditorTest::reversedAndInvertedCheckBoxesUpdateTheWaveEmitAndRoundTripThroughSetMindWave() {
+    MindWaveEditor editor;
+    auto* reversedBox = editor.findChild<QCheckBox*>(QStringLiteral("reversedCheckBox"));
+    auto* invertedBox = editor.findChild<QCheckBox*>(QStringLiteral("invertedCheckBox"));
+    QVERIFY(reversedBox != nullptr);
+    QVERIFY(invertedBox != nullptr);
+    QVERIFY(!reversedBox->isChecked());
+    QVERIFY(!invertedBox->isChecked());
+    QSignalSpy spy(&editor, &MindWaveEditor::mindWaveChanged);
+
+    reversedBox->setChecked(true);
+    invertedBox->setChecked(true);
+
+    QVERIFY(editor.mindWave().reversed());
+    QVERIFY(editor.mindWave().inverted());
+    QCOMPARE(spy.count(), 2);
+
+    MindWaveEditor other;
+    other.setMindWave(editor.mindWave());
+    QVERIFY(other.findChild<QCheckBox*>(QStringLiteral("reversedCheckBox"))->isChecked());
+    QVERIFY(other.findChild<QCheckBox*>(QStringLiteral("invertedCheckBox"))->isChecked());
+    other.setMindWave(sound_mind::core::MindWave{});
+    QVERIFY(!other.findChild<QCheckBox*>(QStringLiteral("reversedCheckBox"))->isChecked());
+}
+
+void MindWaveEditorTest::theNewEnvelopeAndPeriodicShapesAreSelectable() {
+    MindWaveEditor editor;
+    auto* waveformCombo = editor.findChild<QComboBox*>(QStringLiteral("periodicWaveformCombo"));
+    waveformCombo->setCurrentIndex(
+        waveformCombo->findData(QVariant::fromValue(static_cast<int>(PeriodicWaveform::RectifiedSine))));
+    QCOMPARE(editor.mindWave().periodicWaveform(), PeriodicWaveform::RectifiedSine);
+
+    auto* shapeCombo = editor.findChild<QComboBox*>(QStringLiteral("envelopeShapeCombo"));
+    for (const EnvelopeShape shape : {EnvelopeShape::Peak, EnvelopeShape::Ramp}) {
+        const int index = shapeCombo->findData(QVariant::fromValue(static_cast<int>(shape)));
+        QVERIFY(index >= 0);
+        shapeCombo->setCurrentIndex(index);
+        QCOMPARE(editor.mindWave().envelopeShape(), shape);
+    }
 }
 
 void MindWaveEditorTest::changingEnvelopeFieldsUpdateAndEmit() {

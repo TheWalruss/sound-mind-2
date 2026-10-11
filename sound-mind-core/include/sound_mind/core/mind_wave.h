@@ -93,6 +93,7 @@ enum class PeriodicWaveform {
     Square,
     Sawtooth,
     Pulse,
+    RectifiedSine,
 };
 
 // clang-format off
@@ -102,6 +103,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(PeriodicWaveform, {
     {PeriodicWaveform::Square, "square"},
     {PeriodicWaveform::Sawtooth, "sawtooth"},
     {PeriodicWaveform::Pulse, "pulse"},
+    {PeriodicWaveform::RectifiedSine, "rectifiedSine"},
 })
 // clang-format on
 
@@ -136,6 +138,8 @@ enum class EnvelopeShape {
     ExponentialDecay,
     DecayingOscillation,
     SCurve,
+    Peak,
+    Ramp,
 };
 
 // clang-format off
@@ -143,6 +147,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(EnvelopeShape, {
     {EnvelopeShape::ExponentialDecay, "exponentialDecay"},
     {EnvelopeShape::DecayingOscillation, "decayingOscillation"},
     {EnvelopeShape::SCurve, "sCurve"},
+    {EnvelopeShape::Peak, "peak"},
+    {EnvelopeShape::Ramp, "ramp"},
 })
 // clang-format on
 
@@ -296,6 +302,36 @@ public:
     /// @brief Sets which generator family this MindWave uses.
     /// @param type The new generator type.
     void setType(GeneratorType type) noexcept { type_ = type; }
+
+    /**
+     * @brief Whether this MindWave runs backwards along its axis - the
+     *        axis coordinate is mirrored (negated) before the generator
+     *        reads it, so a Sawtooth ramps down instead of up, and an
+     *        `Envelope` mirrors around `envelopeCenter()` (an
+     *        `ExponentialDecay` therefore *grows* toward its center and
+     *        plateaus after it). Has no effect on `Spatial` (no single
+     *        axis) or on the noise/`Fractal`-family shapes' statistics, only
+     *        on which position maps to which value.
+     * @return `true` if reversed; `false` by default.
+     */
+    [[nodiscard]] bool reversed() const noexcept { return reversed_; }
+
+    /// @brief Sets whether this MindWave runs backwards - see `reversed()`.
+    /// @param reversed The new value.
+    void setReversed(bool reversed) noexcept { reversed_ = reversed; }
+
+    /**
+     * @brief Whether this MindWave's own generator output is flipped to
+     *        `1 - value` (a polarity/sign inversion within `[0, 1]`).
+     *        Applied to this MindWave's own generator result *before* its
+     *        `superpositionStack()` folds in, so members are unaffected.
+     * @return `true` if inverted; `false` by default.
+     */
+    [[nodiscard]] bool inverted() const noexcept { return inverted_; }
+
+    /// @brief Sets whether this MindWave's output is inverted - see `inverted()`.
+    /// @param inverted The new value.
+    void setInverted(bool inverted) noexcept { inverted_ = inverted; }
 
     /// @brief Which periodic shape this MindWave cycles through - only
     ///        meaningful while `type()` is `GeneratorType::Periodic`.
@@ -939,6 +975,8 @@ private:
     SuperpositionBlendMode superpositionBlendMode_ = SuperpositionBlendMode::Multiply;
     std::vector<MindWave> warpSourceStack_;
     double warpStrength_ = 1.0;
+    bool reversed_ = false;
+    bool inverted_ = false;
     Path drawnPath_;
     /// @brief `drawnPath_`'s own tessellated polyline, lazily built by
     ///        `evaluate()`'s own `GeneratorType::Drawn` case and reused

@@ -8,6 +8,7 @@
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/resonance_profile.h"
 
+class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QGroupBox;
@@ -200,6 +201,8 @@ private:
     QComboBox* axisCombo_ = nullptr;
     QDoubleSpinBox* periodSpinBox_ = nullptr;
     QDoubleSpinBox* phaseSpinBox_ = nullptr;
+    QCheckBox* reversedCheckBox_ = nullptr;
+    QCheckBox* invertedCheckBox_ = nullptr;
     QSpinBox* seedSpinBox_ = nullptr;
     QDoubleSpinBox* noiseScaleSpinBox_ = nullptr;
     QSpinBox* noiseOctavesSpinBox_ = nullptr;

@@ -44,4 +44,6 @@ private slots:
     void selectingAPresetAppliesItsConfigurationAndEmitsChangeSignals();
     void clickingDeleteButtonEmitsDeletePresetRequestedForTheSelectedPreset();
     void deleteButtonWithThePlaceholderSelectedEmitsNothing();
+    void presetIndicatorShowsLoadedPresetThenModifiedAfterAnEdit();
+    void presetIndicatorFollowsSaveAndIsClearedWhenThePresetDisappears();
 };

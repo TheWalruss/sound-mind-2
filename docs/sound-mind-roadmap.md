@@ -1129,10 +1129,10 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 
 **Backlog - from manual testing, 2026-10-11** (items 1-4 are being built immediately; 5-6 are backlog only):
 
-- **MindWave parameter option: auto-select the newly created MindWave** after "Create New MindWave..." so the option points at it straight away.
-- **Preset selection indicator** - when a preset (filter configuration, tool, grid...) is selected, show its name as the active preset; once any setting is changed afterwards, mark it modified with an asterisk and a color change.
-- **MindWave polarity/direction/sign option** (e.g. exponential decay in reverse).
-- **Additional MindWave functions** (peak, etc.).
+- **[Done in v0.1.29.6]** **MindWave parameter option: auto-select the newly created MindWave** after "Create New MindWave..." so the option points at it straight away.
+- **[Done in v0.1.29.6]** **Preset selection indicator** - when a preset (filter configuration, tool, grid...) is selected, show its name as the active preset; once any setting is changed afterwards, mark it modified with an asterisk and a color change.
+- **[Done in v0.1.29.6]** **MindWave polarity/direction/sign option** (e.g. exponential decay in reverse).
+- **[Done in v0.1.29.6]** **Additional MindWave functions** (peak, etc.).
 - **MindWave Superpositions aren't working well** - needs investigation with concrete reproductions; not yet scoped.
 - **Visual brightness of painted content isn't clearly correlated with its audible intensity** - the canvas color mapping spans [-96, 0] dB while stored magnitudes are raw A-weighted STFT dB (full-scale tones near +52 dB); needs a design decision on the display mapping.
 

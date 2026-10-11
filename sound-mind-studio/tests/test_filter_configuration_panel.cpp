@@ -16,6 +16,7 @@
 #include <QVariant>
 #include <QtTest/QtTest>
 
+#include "sound_mind/studio/preset_indicator_label.h"
 #include "sound_mind/studio/equalizer_curve_widget.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
 #include "sound_mind/studio/gradient_bar_widget.h"
@@ -523,6 +524,25 @@ void FilterConfigurationPanelTest::selectingCreateNewMindWaveCallsTheCallbackAnd
     QCOMPARE(callCount, 1);
     QCOMPARE(combo->currentText(), QStringLiteral("Fresh Wave"));
     QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.filterConfiguration().blurSigmaMindWave(), std::optional<MindWaveId>(MindWaveId{42}));
+}
+
+void FilterConfigurationPanelTest::createNewMindWaveSelectsTheNewEntryEvenWhenTheCallbackRebuildsTheCombos() {
+    // The real callback adds the MindWave and refreshes every panel's
+    // available list, which rebuilds the combo (resetting it to "None").
+    FilterConfigurationPanel panel;
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    panel.setCreateMindWaveCallback([&panel]() -> std::pair<MindWaveId, QString> {
+        panel.setAvailableMindWaves(
+            {{MindWaveId{5}, QStringLiteral("Slow Pulse")}, {MindWaveId{42}, QStringLiteral("Fresh Wave")}});
+        return {MindWaveId{42}, QStringLiteral("Fresh Wave")};
+    });
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("blurSigmaMindWaveCombo"));
+
+    combo->setCurrentIndex(combo->count() - 1);  // "Create New MindWave...".
+
+    QCOMPARE(combo->currentText(), QStringLiteral("Fresh Wave"));
+    QCOMPARE(combo->itemText(combo->count() - 1), QStringLiteral("Create New MindWave..."));
     QCOMPARE(panel.filterConfiguration().blurSigmaMindWave(), std::optional<MindWaveId>(MindWaveId{42}));
 }
 
@@ -1398,4 +1418,45 @@ void FilterConfigurationPanelTest::selectingALoadedFilterPresetAppliesItEmitsCha
     // A one-shot trigger - reset back to its own placeholder afterward,
     // the same contract convolveLoadKernelCombo_ already establishes.
     QCOMPARE(combo->currentIndex(), 0);
+}
+
+void FilterConfigurationPanelTest::presetIndicatorShowsLoadedPresetThenModifiedThenClearsOnExternalSet() {
+    FilterConfigurationPanel panel;
+    NamedFilterPreset saved;
+    saved.id = 7;
+    saved.name = "Crisp";
+    saved.config.setType(FilterType::Sharpen);
+    panel.setAvailableFilterPresets({saved});
+    auto* indicator = panel.findChild<sound_mind::studio::PresetIndicatorLabel*>();
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterPresetCombo"));
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"));
+    QVERIFY(indicator != nullptr && combo != nullptr && spinBox != nullptr);
+    QVERIFY(!indicator->hasActivePreset());
+
+    combo->setCurrentIndex(1);
+    QCOMPARE(indicator->text(), QStringLiteral("Preset: Crisp"));
+    QVERIFY(!indicator->isModified());
+
+    spinBox->setValue(-15.0);
+    QVERIFY(indicator->isModified());
+    QVERIFY(indicator->text().contains(QLatin1Char('*')));
+
+    panel.setFilterConfiguration(sound_mind::core::FilterConfiguration{});
+    QVERIFY(!indicator->hasActivePreset());
+}
+
+void FilterConfigurationPanelTest::presetIndicatorFollowsSaveAndIsClearedWhenThePresetDisappears() {
+    FilterConfigurationPanel panel;
+    auto* indicator = panel.findChild<sound_mind::studio::PresetIndicatorLabel*>();
+    QVERIFY(indicator != nullptr);
+    NamedFilterPreset saved;
+    saved.id = 3;
+    saved.name = "Keeper";
+
+    panel.setAvailableFilterPresets({saved});
+    panel.setActivePresetName(QStringLiteral("Keeper"));
+    QVERIFY(indicator->hasActivePreset());
+
+    panel.setAvailableFilterPresets({});
+    QVERIFY(!indicator->hasActivePreset());
 }

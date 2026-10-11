@@ -34,6 +34,7 @@
 #include "sound_mind/studio/gradient_editor_widget.h"
 #include "sound_mind/studio/harmonic_series_widget.h"
 #include "sound_mind/studio/name_collision_dialog.h"
+#include "sound_mind/studio/preset_indicator_label.h"
 
 namespace sound_mind::studio {
 
@@ -235,6 +236,9 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     auto* presetForm = new QFormLayout();
     presetForm->addRow(tr("Tool Preset:"), presetRow);
     root->addLayout(presetForm);
+
+    presetIndicator_ = new PresetIndicatorLabel(container);
+    root->addWidget(presetIndicator_);
 
     auto* topForm = new QFormLayout();
     toolTypeCombo_ = new QComboBox(container);
@@ -709,7 +713,10 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     setWidget(scrollArea);
 }
 
-void ToolConfigurationPanel::emitConfigChanged() { emit toolConfigurationChanged(*config_); }
+void ToolConfigurationPanel::emitConfigChanged() {
+    presetIndicator_->markModified();
+    emit toolConfigurationChanged(*config_);
+}
 
 void ToolConfigurationPanel::changeToolType(ToolType type) {
     if (config_->type() == type) {
@@ -975,6 +982,7 @@ std::vector<double> ToolConfigurationPanel::currentHarmonicStrengths() const {
 
 void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolConfiguration& config) {
     config_ = config.clone();
+    presetIndicator_->clearActivePreset();
 
     // Each control's own valueChanged/currentIndexChanged handler both
     // mutates config_ (redundant here, already set above) and calls
@@ -1328,9 +1336,19 @@ void ToolConfigurationPanel::resolveCreateMindWaveSentinel(QComboBox* combo, int
     if (newId == MindWaveId{0}) {
         return;  // No project set - see MindWaveController::addMindWave()'s own docs.
     }
+    // The callback normally triggers setAvailableMindWaves(), which has
+    // already rebuilt this combo around the new entry (and reset it to the
+    // config's still-unbound "None") - so look the new entry up and select
+    // it rather than assuming the sentinel item is still current. Only when
+    // no rebuild happened is the sentinel itself rewritten in place.
     const QSignalBlocker blocker(combo);
-    combo->setItemData(index, QVariant::fromValue(static_cast<qulonglong>(newId)));
-    combo->setItemText(index, newName);
+    int target = combo->findData(QVariant::fromValue(static_cast<qulonglong>(newId)));
+    if (target < 0) {
+        combo->setItemData(index, QVariant::fromValue(static_cast<qulonglong>(newId)));
+        combo->setItemText(index, newName);
+        target = index;
+    }
+    combo->setCurrentIndex(target);
 }
 
 void ToolConfigurationPanel::setCreateMindWaveCallback(
@@ -1400,6 +1418,7 @@ void ToolConfigurationPanel::handleToolPresetComboChanged(int index) {
     }
     setToolConfiguration(*named->config);
     emitConfigChanged();
+    presetIndicator_->setActivePreset(QString::fromStdString(named->name));
 }
 
 void ToolConfigurationPanel::saveCurrentAsToolPreset() {
@@ -1426,6 +1445,7 @@ void ToolConfigurationPanel::saveCurrentAsToolPreset() {
     refreshToolPresets();
     const int index = toolPresetCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(it->id)));
     toolPresetCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    presetIndicator_->setActivePreset(QString::fromStdString(it->name));
 }
 
 std::optional<ToolPresetId> ToolConfigurationPanel::saveCurrentAsToolPresetNamed(const QString& name) {
@@ -1436,6 +1456,7 @@ std::optional<ToolPresetId> ToolConfigurationPanel::saveCurrentAsToolPresetNamed
     refreshToolPresets();
     const int index = toolPresetCombo_->findData(QVariant::fromValue(static_cast<qulonglong>(id)));
     toolPresetCombo_->setCurrentIndex(index >= 0 ? index : 0);
+    presetIndicator_->setActivePreset(name.trimmed());
     return id;
 }
 
@@ -1449,6 +1470,7 @@ void ToolConfigurationPanel::deleteCurrentToolPreset() {
     }
     project_->removeToolPreset(static_cast<ToolPresetId>(data.toULongLong()));
     refreshToolPresets();
+    presetIndicator_->clearActivePreset();
 }
 
 void ToolConfigurationPanel::setActiveLayer(sound_mind::core::LayerId layer) {

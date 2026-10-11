@@ -279,6 +279,136 @@ TEST_CASE("Envelope SCurve transitions from 0 to 1 through its own center", "[co
     REQUIRE(wave.evaluate(TimeFrequencyPoint{20.0, 1000.0}, config) == Catch::Approx(1.0f).margin(0.001));
 }
 
+TEST_CASE("Envelope ExponentialDecay reversed mirrors around its center, growing toward it",
+          "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Envelope);
+    wave.setEnvelopeShape(EnvelopeShape::ExponentialDecay);
+    wave.setEnvelopeCenter(1.0);
+    wave.setDecayRate(2.0);
+    wave.setReversed(true);
+    const auto config = testConfig();
+
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{1.0, 1000.0}, config) == Catch::Approx(1.0f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{3.0, 1000.0}, config) == Catch::Approx(1.0f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, config) == Catch::Approx(std::exp(-2.0f)));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{-3.0, 1000.0}, config) <
+            wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, config));
+}
+
+TEST_CASE("Periodic reversed runs the cycle backwards", "[core][mind_wave]") {
+    MindWave forward;
+    forward.setPeriodicWaveform(PeriodicWaveform::Sawtooth);
+    MindWave backward = forward;
+    backward.setReversed(true);
+    const auto config = testConfig();
+
+    for (double t : {0.1, 0.25, 0.4, 0.8}) {
+        REQUIRE(backward.evaluate(TimeFrequencyPoint{t, 1000.0}, config) ==
+                Catch::Approx(forward.evaluate(TimeFrequencyPoint{-t, 1000.0}, config)).margin(1e-5));
+    }
+    REQUIRE(backward.evaluate(TimeFrequencyPoint{0.25, 1000.0}, config) == Catch::Approx(0.75f));
+}
+
+TEST_CASE("inverted flips every value to 1 - value, and is off by default", "[core][mind_wave]") {
+    MindWave wave;
+    REQUIRE_FALSE(wave.inverted());
+    REQUIRE_FALSE(wave.reversed());
+    const auto config = testConfig();
+    MindWave inverted = wave;
+    inverted.setInverted(true);
+
+    for (double t : {0.0, 0.1, 0.25, 0.6, 0.9}) {
+        const float plain = wave.evaluate(TimeFrequencyPoint{t, 1000.0}, config);
+        REQUIRE(inverted.evaluate(TimeFrequencyPoint{t, 1000.0}, config) == Catch::Approx(1.0f - plain).margin(1e-5));
+    }
+}
+
+TEST_CASE("inverted applies to a MindWave's own generator before its superposition stack", "[core][mind_wave]") {
+    MindWave member;
+    member.setType(GeneratorType::StepGrid);
+    member.setStepGridValues({1.0});
+    MindWave base;
+    base.setPeriodicWaveform(PeriodicWaveform::Square);
+    base.setInverted(true);
+    base.setSuperpositionStack({member});
+    base.setSuperpositionBlendMode(SuperpositionBlendMode::Multiply);
+    const auto config = testConfig();
+
+    // Square is 1.0 for p < 0.5; inverted -> 0.0, times member 1.0 -> 0.0.
+    // Second half: square 0.0 -> inverted 1.0, times 1.0 -> 1.0.
+    REQUIRE(base.evaluate(TimeFrequencyPoint{0.25, 1000.0}, config) == Catch::Approx(0.0f));
+    REQUIRE(base.evaluate(TimeFrequencyPoint{0.75, 1000.0}, config) == Catch::Approx(1.0f));
+}
+
+TEST_CASE("Envelope Peak is a bell centered on envelopeCenter, narrower at higher steepness", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Envelope);
+    wave.setEnvelopeShape(EnvelopeShape::Peak);
+    wave.setEnvelopeCenter(2.0);
+    wave.setEnvelopeSteepness(1.0);
+    const auto config = testConfig();
+
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{2.0, 1000.0}, config) == Catch::Approx(1.0f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{1.0, 1000.0}, config) ==
+            Catch::Approx(wave.evaluate(TimeFrequencyPoint{3.0, 1000.0}, config)));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, config) <
+            wave.evaluate(TimeFrequencyPoint{1.0, 1000.0}, config));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{20.0, 1000.0}, config) == Catch::Approx(0.0f).margin(0.001));
+
+    const float wideAtOffset = wave.evaluate(TimeFrequencyPoint{3.0, 1000.0}, config);
+    wave.setEnvelopeSteepness(4.0);
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{3.0, 1000.0}, config) < wideAtOffset);
+}
+
+TEST_CASE("Envelope Ramp rises linearly from 0 at its center to 1 one 1/steepness later", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setType(GeneratorType::Envelope);
+    wave.setEnvelopeShape(EnvelopeShape::Ramp);
+    wave.setEnvelopeCenter(2.0);
+    wave.setEnvelopeSteepness(4.0);
+    const auto config = testConfig();
+
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, config) == Catch::Approx(0.0f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{2.0, 1000.0}, config) == Catch::Approx(0.0f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{2.125, 1000.0}, config) == Catch::Approx(0.5f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{2.25, 1000.0}, config) == Catch::Approx(1.0f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{10.0, 1000.0}, config) == Catch::Approx(1.0f));
+}
+
+TEST_CASE("Periodic RectifiedSine is |sin|, twice as many humps per period as Sine", "[core][mind_wave]") {
+    MindWave wave;
+    wave.setPeriodicWaveform(PeriodicWaveform::RectifiedSine);
+    const auto config = testConfig();
+
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.0, 1000.0}, config) == Catch::Approx(0.0f).margin(1e-5));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.25, 1000.0}, config) == Catch::Approx(1.0f));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.5, 1000.0}, config) == Catch::Approx(0.0f).margin(1e-5));
+    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.75, 1000.0}, config) == Catch::Approx(1.0f));
+}
+
+TEST_CASE("reversed, inverted and the new shapes round-trip through JSON; older files default to off",
+          "[core][mind_wave]") {
+    MindWave original;
+    original.setReversed(true);
+    original.setInverted(true);
+    original.setPeriodicWaveform(PeriodicWaveform::RectifiedSine);
+    original.setEnvelopeShape(EnvelopeShape::Peak);
+
+    nlohmann::json json = original;
+    const MindWave restored = json.get<MindWave>();
+    REQUIRE(restored.reversed());
+    REQUIRE(restored.inverted());
+    REQUIRE(restored.periodicWaveform() == PeriodicWaveform::RectifiedSine);
+    REQUIRE(restored.envelopeShape() == EnvelopeShape::Peak);
+
+    json.erase("reversed");
+    json.erase("inverted");
+    const MindWave legacy = json.get<MindWave>();
+    REQUIRE_FALSE(legacy.reversed());
+    REQUIRE_FALSE(legacy.inverted());
+}
+
 TEST_CASE("SteppedNoise Stepped only ever takes stepCount discrete levels", "[core][mind_wave]") {
     MindWave wave;
     wave.setType(GeneratorType::SteppedNoise);

@@ -12,6 +12,8 @@ private slots:
     void spatialHidesTheAxisCombo();
     void changingPeriodPhaseSeedNoiseFieldsUpdateAndEmit();
     void changingPeriodicWaveformAndDutyCycleUpdateAndEmit();
+    void reversedAndInvertedCheckBoxesUpdateTheWaveEmitAndRoundTripThroughSetMindWave();
+    void theNewEnvelopeAndPeriodicShapesAreSelectable();
     void changingEnvelopeFieldsUpdateAndEmit();
     void changingSteppedNoiseFieldsUpdateAndEmit();
     void changingSpatialFieldsUpdateAndEmit();

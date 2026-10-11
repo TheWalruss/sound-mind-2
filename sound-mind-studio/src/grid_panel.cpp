@@ -23,6 +23,7 @@
 
 #include "sound_mind/core/music_theory.h"
 #include "sound_mind/studio/checklist_dialog.h"
+#include "sound_mind/studio/preset_indicator_label.h"
 
 namespace sound_mind::studio {
 
@@ -448,11 +449,15 @@ GridPanel::GridPanel(QWidget* parent) : QDockWidget(tr("Grid"), parent) {
     presetForm->addRow(tr("Grid Preset:"), presetRow);
     root->addLayout(presetForm);
 
+    presetIndicator_ = new PresetIndicatorLabel(container);
+    root->addWidget(presetIndicator_);
+
     // --- Snap to Grid ----------------------------------------------------
     snapToGridCheckBox_ = new QCheckBox(tr("Snap to Grid"), container);
     snapToGridCheckBox_->setObjectName(QStringLiteral("snapToGridCheckBox"));
     connect(snapToGridCheckBox_, &QCheckBox::toggled, this, [this](bool checked) {
         snapToGridEnabled_ = checked;
+        presetIndicator_->markModified();
         emit snapToGridChanged(checked);
     });
     root->addWidget(snapToGridCheckBox_);
@@ -573,14 +578,28 @@ void GridPanel::updateTimingGridControlsEnabled() {
     timingGridSubdivisionCombo_->setEnabled(timingGridConfig_.mode == TimingGridMode::Tempo);
 }
 
-void GridPanel::emitFrequencyGridConfigChanged() { emit frequencyGridConfigChanged(frequencyGridConfig_); }
+void GridPanel::emitFrequencyGridConfigChanged() {
+    presetIndicator_->markModified();
+    emit frequencyGridConfigChanged(frequencyGridConfig_);
+}
 
-void GridPanel::emitTimingGridConfigChanged() { emit timingGridConfigChanged(timingGridConfig_); }
+void GridPanel::emitTimingGridConfigChanged() {
+    presetIndicator_->markModified();
+    emit timingGridConfigChanged(timingGridConfig_);
+}
+
+void GridPanel::setActivePresetName(const QString& name) { presetIndicator_->setActivePreset(name); }
 
 void GridPanel::setAvailableGridPresets(const std::vector<sound_mind::core::NamedGridPreset>& presets) {
     const QVariant previousData = gridPresetCombo_->currentData();
 
     availableGridPresets_ = presets;
+    if (presetIndicator_->hasActivePreset() &&
+        std::none_of(presets.begin(), presets.end(), [this](const auto& preset) {
+            return QString::fromStdString(preset.name) == presetIndicator_->activePresetName();
+        })) {
+        presetIndicator_->clearActivePreset();
+    }
     const QSignalBlocker blocker(gridPresetCombo_);
     gridPresetCombo_->clear();
     if (availableGridPresets_.empty()) {
@@ -679,6 +698,7 @@ void GridPanel::handleGridPresetComboChanged(int index) {
         snapToGridCheckBox_->setChecked(snapToGridEnabled_);
     }
     emit snapToGridChanged(snapToGridEnabled_);
+    presetIndicator_->setActivePreset(QString::fromStdString(it->name));
 }
 
 void GridPanel::handleSavePresetButtonClicked() { emit savePresetRequested(); }

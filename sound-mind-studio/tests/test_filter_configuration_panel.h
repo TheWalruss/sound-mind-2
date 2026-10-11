@@ -34,6 +34,7 @@ private slots:
 
     void freshCombosOfferOnlyNoneUntilSetAvailableMindWavesIsCalled();
     void selectingCreateNewMindWaveCallsTheCallbackAndRewritesTheItemInPlace();
+    void createNewMindWaveSelectsTheNewEntryEvenWhenTheCallbackRebuildsTheCombos();
     void setAvailableMindWavesPopulatesEveryCombo();
     void changingABindCombosEmitsFilterConfigurationChangedWithTheNewBinding();
     void selectingNoneUnbindsAndEmits();
@@ -100,4 +101,6 @@ private slots:
     void clickingSavePresetEmitsSavePresetRequestedWithTheCurrentConfiguration();
     void setAvailableFilterPresetsPopulatesTheCombo();
     void selectingALoadedFilterPresetAppliesItEmitsChangedAndResetsTheComboToThePlaceholder();
+    void presetIndicatorShowsLoadedPresetThenModifiedThenClearsOnExternalSet();
+    void presetIndicatorFollowsSaveAndIsClearedWhenThePresetDisappears();
 };

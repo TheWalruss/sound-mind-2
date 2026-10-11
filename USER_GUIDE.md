@@ -562,7 +562,8 @@ shape instead of staying fixed.
   MindWave...** at the bottom of its list - picking it creates a new
   MindWave the same way **+ Add MindWave** does, binds it immediately,
   and brings this panel into view so you can shape it right away, without
-  switching over to this panel first.
+  switching over to this panel first. The option's drop-down then shows
+  the new MindWave as selected.
 - Every row shows a small grayscale mini-preview of its own field,
   always on - regardless of selection, and independent of the Preview
   toggle below (which does something different - see its own entry). The
@@ -580,7 +581,11 @@ shape instead of staying fixed.
   or Resonant) and that type's own plain numeric parameters - a period, a
   phase, a seed, and so on. This is a bare-bones, functional editor, not a
   polished one yet - there are no dials or drawing tools here, just fields
-  to type numbers into.
+  to type numbers into. Every MindWave also has **Reversed** (run the
+  wave backwards, e.g. a decay becomes a build-up) and **Inverted** (flip
+  the result, so loud becomes quiet) checkboxes. Periodic offers a
+  **Rectified Sine** shape, and Envelope offers **Peak (Bell)** and
+  **Ramp**.
 - **Drawn** shapes come from a curve you draw yourself, rather than a
   formula: draw an ordinary stroke anywhere on the canvas, switch to Pick
   and select it, then choose **Edit → Picked Path Tools → Use Picked Path as
@@ -653,6 +658,8 @@ Filter layer at all - dial in the settings you want first, then click
 way rather than starting from scratch. Whatever you last set stays in
 place for the *next* Filter layer too, so adding several in a row can
 start each one from the same settings.
+
+The Tool, Filter and Grid panels all show the **active preset** just under their preset row: "Preset: <name>" after you load or save one, and "Preset: <name> * (modified)" in orange as soon as you change any setting afterwards.
 
 A **Filter Preset** row sits above the Filter Type dropdown - **Save...**
 stores the panel's own current, complete configuration (whichever type is

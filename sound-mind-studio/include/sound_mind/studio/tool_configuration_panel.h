@@ -30,6 +30,8 @@ class Project;
 
 namespace sound_mind::studio {
 
+class PresetIndicatorLabel;
+
 class GradientEditorWidget;
 class HarmonicSeriesWidget;
 
@@ -660,6 +662,8 @@ private:
     ///        draw their own entries from.
     QComboBox* toolPresetCombo_ = nullptr;
     QPushButton* savePresetButton_ = nullptr;
+    /// @brief Shows which Tool Preset is active and whether it has since been edited.
+    PresetIndicatorLabel* presetIndicator_ = nullptr;
     QPushButton* deletePresetButton_ = nullptr;
 
     /// @brief Preview Play/Stop - see setPreviewPlaying()'s own docs.

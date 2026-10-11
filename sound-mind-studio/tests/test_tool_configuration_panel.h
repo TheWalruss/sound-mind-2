@@ -38,6 +38,7 @@ private slots:
     // MindWaves v2 Installment A: Instrument vibrato/tremolo (v0.Y.39.1).
     void setAvailableMindWavesPopulatesBothVibratoAndTremoloCombos();
     void selectingCreateNewMindWaveCallsTheCallbackAndRewritesTheItemInPlace();
+    void createNewMindWaveSelectsTheNewEntryEvenWhenTheCallbackRebuildsTheCombos();
     void selectingCreateNewMindWaveWithNoCallbackSetIsASilentNoOp();
     void changingVibratoDepthEmitsToolConfigurationChanged();
     void changingTheVibratoComboEmitsToolConfigurationChangedWithTheNewBinding();
@@ -152,4 +153,6 @@ private slots:
     void clickingPlayPreviewEmitsPreviewRequested();
     void clickingStopPreviewEmitsStopPreviewRequested();
     void setPreviewPlayingTogglesWhichButtonIsShown();
+    void presetIndicatorShowsLoadedPresetThenModifiedThenClearsOnExternalSet();
+    void presetIndicatorFollowsSaveAndDelete();
 };

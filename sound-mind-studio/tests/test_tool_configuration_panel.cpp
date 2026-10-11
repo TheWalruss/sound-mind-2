@@ -25,6 +25,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
 #include "sound_mind/studio/harmonic_series_widget.h"
+#include "sound_mind/studio/preset_indicator_label.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
 using sound_mind::core::BlendMode;
@@ -496,6 +497,26 @@ void ToolConfigurationPanelTest::selectingCreateNewMindWaveCallsTheCallbackAndRe
     QCOMPARE(combo->currentText(), QStringLiteral("Fresh Wave"));
     QCOMPARE(combo->itemData(combo->currentIndex()).toULongLong(), static_cast<qulonglong>(42));
     QCOMPARE(spy.count(), 1);
+    QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).vibratoMindWave(),
+              std::optional<MindWaveId>(MindWaveId{42}));
+}
+
+void ToolConfigurationPanelTest::createNewMindWaveSelectsTheNewEntryEvenWhenTheCallbackRebuildsTheCombos() {
+    ToolConfigurationPanel panel;
+    auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
+    toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
+    panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
+    panel.setCreateMindWaveCallback([&panel]() -> std::pair<MindWaveId, QString> {
+        panel.setAvailableMindWaves(
+            {{MindWaveId{5}, QStringLiteral("Slow Pulse")}, {MindWaveId{42}, QStringLiteral("Fresh Wave")}});
+        return {MindWaveId{42}, QStringLiteral("Fresh Wave")};
+    });
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("vibratoMindWaveCombo"));
+
+    combo->setCurrentIndex(combo->count() - 1);  // "Create New MindWave...".
+
+    QCOMPARE(combo->currentText(), QStringLiteral("Fresh Wave"));
+    QCOMPARE(combo->itemText(combo->count() - 1), QStringLiteral("Create New MindWave..."));
     QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).vibratoMindWave(),
               std::optional<MindWaveId>(MindWaveId{42}));
 }
@@ -1804,4 +1825,47 @@ void ToolConfigurationPanelTest::setPreviewPlayingTogglesWhichButtonIsShown() {
     panel.setPreviewPlaying(false);
     QVERIFY(!playButton->isHidden());
     QVERIFY(stopButton->isHidden());
+}
+
+void ToolConfigurationPanelTest::presetIndicatorShowsLoadedPresetThenModifiedThenClearsOnExternalSet() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    ProceduralConfiguration config;
+    project.addToolPreset("Alpha", config);
+    project.addToolPreset("Beta", config);
+    panel.setProject(&project);
+    auto* indicator = panel.findChild<sound_mind::studio::PresetIndicatorLabel*>();
+    auto* combo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
+    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"));
+    QVERIFY(indicator != nullptr && combo != nullptr && spinBox != nullptr);
+    QVERIFY(!indicator->hasActivePreset());
+
+    combo->setCurrentIndex(1);
+    QVERIFY(indicator->hasActivePreset());
+    QVERIFY(!indicator->isModified());
+    QCOMPARE(indicator->text(), QStringLiteral("Preset: Beta"));
+
+    spinBox->setValue(0.123);
+    QVERIFY(indicator->isModified());
+    QVERIFY(indicator->text().contains(QLatin1Char('*')));
+
+    panel.setToolConfiguration(config);
+    QVERIFY(!indicator->hasActivePreset());
+}
+
+void ToolConfigurationPanelTest::presetIndicatorFollowsSaveAndDelete() {
+    ToolConfigurationPanel panel;
+    Project project = Project::createNew(ProjectSettings{});
+    panel.setProject(&project);
+    auto* indicator = panel.findChild<sound_mind::studio::PresetIndicatorLabel*>();
+    auto* deleteButton = panel.findChild<QPushButton*>(QStringLiteral("deletePresetButton"));
+    QVERIFY(indicator != nullptr && deleteButton != nullptr);
+
+    QVERIFY(panel.saveCurrentAsToolPresetNamed(QStringLiteral("Saved One")).has_value());
+    QVERIFY(indicator->hasActivePreset());
+    QCOMPARE(indicator->activePresetName(), QStringLiteral("Saved One"));
+    QVERIFY(!indicator->isModified());
+
+    deleteButton->click();
+    QVERIFY(!indicator->hasActivePreset());
 }

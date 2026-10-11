@@ -3,6 +3,7 @@
 #include <vector>
 
 #include <QDockWidget>
+#include <QString>
 
 #include "sound_mind/studio/axis_labels.h"
 #include "sound_mind/studio/grid_config.h"
@@ -14,6 +15,8 @@ class QLineEdit;
 class QPushButton;
 
 namespace sound_mind::studio {
+
+class PresetIndicatorLabel;
 
 /**
  * @brief A dockable panel for configuring canvas overlays - Axis Labels,
@@ -127,6 +130,15 @@ public:
      * @param presets The project's current Grid Preset library.
      */
     void setAvailableGridPresets(const std::vector<sound_mind::core::NamedGridPreset>& presets);
+
+    /**
+     * @brief Marks @p name as the active Grid Preset in the indicator label
+     *        (used after a successful save, which doesn't go through the
+     *        preset combo).
+     * @param name The saved preset's name.
+     * @note GUI thread only.
+     */
+    void setActivePresetName(const QString& name);
 
 signals:
     /// @brief The "Vertical axis" combo box changed.
@@ -315,6 +327,8 @@ private:
     QComboBox* gridPresetCombo_ = nullptr;
     QPushButton* savePresetButton_ = nullptr;
     QPushButton* deletePresetButton_ = nullptr;
+    /// @brief Shows which Grid Preset is active and whether it has since been edited.
+    PresetIndicatorLabel* presetIndicator_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

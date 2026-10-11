@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.29.6] - 2026-10-11
+
+Direct user feedback from manual testing (items 1-4 of the backlog list).
+
+### Added
+
+- **The active preset is now shown.** The Tool, Filter and Grid panels each show a line under their preset row: "Preset: <name>" once you load or save a preset, "No preset active" otherwise. As soon as you change any setting afterwards, it reads "Preset: <name> * (modified)" in orange, so you can tell the controls no longer match the saved preset.
+- **MindWave Reversed and Inverted options.** Reversed runs the wave backwards (an Envelope decay becomes a build-up; a Periodic wave mirrors across the canvas). Inverted flips the result (1 - value) before any Superposition is folded in.
+- **New MindWave shapes.** Periodic gains **Rectified Sine**; Envelope gains **Peak (Bell)** and **Ramp**.
+
+### Fixed
+
+- **"Create New MindWave..." now selects the new MindWave.** Previously the option's drop-down showed None after the new MindWave was created, even though it was bound.
+
 ## [0.1.29.5] - 2026-10-11
 
 ### Changed
