@@ -324,6 +324,7 @@ private slots:
     // regression in Decision #216's own raise()-on-show wiring, fixed by
     // Decision #221.
     void showingSeveralTabifiedPanelsInSequenceWithAProjectOpenDoesNotHang();
+    void clickingATabifiedPanelsOwnTabSwitchesBackToIt();
 
     // Tool Configuration's own live audio preview (direct user
     // feedback: "practically wherever there is a visual preview of

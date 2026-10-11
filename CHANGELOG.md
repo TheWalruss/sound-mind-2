@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.29.2] - 2026-10-10
+
+Direct user feedback: "Somehow it doesn't work anymore to click a tab to switch panels. For example, if the Layers panel is activated, but I open the History panel, it adds the History panel to the tabs in the right sidebar and switches to it, but I can't switch back to the Layers panel by clicking the tab."
+
+### Fixed
+
+- **Clicking a dock panel's own tab to switch back to it works again.** A panel that merely lost the front tab to a sibling - by a manual tab click, or by another panel opening and taking over - was mistaken by the app's own "newly opened panels should switch to the front" logic for one being freshly shown, so it quietly raised itself back a moment later, undoing the click. Opening a new panel still switches to it immediately, same as before.
+
 ## [0.1.29.1] - 2026-10-10
 
 Direct user feedback: "Reorganize the landing page into a header and two columns. The header, left-aligned, has the image glyph and 'SoundMind Studio'. The left column shall have the New Project and Open Project buttons, as well as the list of recent projects. The right column shall have the documentation and the device configuration. Make sure both columns get scroll bars if the content doesn't fit."

@@ -1623,35 +1623,59 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
              static_cast<QDockWidget*>(recordPanel_),
              static_cast<QDockWidget*>(loopPanel_),
          }) {
-        connect(panel, &QDockWidget::visibilityChanged, panel, [this, panel](bool) {
+        connect(panel, &QDockWidget::visibilityChanged, panel, [this, panel](bool visibleArg) {
+            // A real, user-reported bug, fixed here: a tabified
+            // `QDockWidget` that merely lost *front-tab* status to a
+            // sibling - via a manual tab-bar click, or via raise()'s own
+            // cascade below - fires this signal with `visibleArg ==
+            // false`, but its own `isVisible()` is *already* `true` at
+            // this exact synchronous moment (confirmed empirically via a
+            // diagnostic build: unlike a genuine hide, Qt never actually
+            // hides a backgrounded-but-still-docked tab's widget). A
+            // *genuine* hide->show transition (this panel actually being
+            // opened, the real case this whole mechanism exists for)
+            // instead starts with `isVisible()` truly `false` at this
+            // same synchronous point, only flipping `true` moments later.
+            // Filtering on exactly that - `!visibleArg && isVisible()` -
+            // ignores every "lost front-tab status, but was never really
+            // hidden" notification before it can schedule anything, which
+            // is what previously made clicking a different tab to switch
+            // *back* to this one silently fail: this panel's own stale
+            // deferred raise() (see below), scheduled by that spurious
+            // notification, fired a tick later and undid the click.
+            if (!visibleArg && panel->isVisible()) {
+                return;
+            }
             // Re-entrancy guard against a real, user-reported hang (CPU
             // pegged, UI locked, reproducible only with a real display -
             // this environment's own offscreen test platform never
             // triggers it): raise()'s own tab-activation can synchronously
             // fire visibilityChanged() for the *previously* active sibling
-            // tab in the same group too (not just the panel being raised),
-            // which - without this guard - would schedule *that* sibling's
-            // own deferred raise(), re-activating it and deactivating the
-            // one just shown, firing this panel's own visibilityChanged()
-            // again, and so on - an unbounded ping-pong between two tabs,
-            // one zero-delay timer at a time, never idling. Every one of
-            // these 14 lambdas shares the single `raisingDockPanel_` flag
-            // (not a per-panel one), since the cascade hops *between*
-            // different panels, not just within one.
+            // tab in the same group too (not just the panel being raised).
+            // The filter above already catches this exact notification on
+            // its own (the sibling's `isVisible()` is also already `true`
+            // synchronously), but this flag stays as a second, independent
+            // safety net for the same cascade - confirmed-working defense
+            // kept rather than removed on the strength of one new fix.
+            // Every one of these 14 lambdas shares the single
+            // `raisingDockPanel_` flag (not a per-panel one), since the
+            // cascade hops *between* different panels, not just within one.
             if (raisingDockPanel_) {
                 return;
             }
             // Deferred to the next event-loop turn, and re-checking
             // isVisible() there rather than trusting this signal's own
-            // `visible` argument - confirmed empirically that for a
-            // dock *joining* an existing tab group (another tab already
+            // `visible` argument - confirmed empirically that for a dock
+            // *joining* an existing tab group (another tab already
             // active), Qt emits this signal with `visible == false` even
             // though the dock's own isVisible() is `true` moments later
-            // once show() finishes (it correctly reflects "not the
-            // active tab right now", not the final widget-level state).
-            // Calling raise() synchronously here is also too early -
-            // Qt's own internal tab-group bookkeeping isn't settled yet
-            // at the point this signal fires.
+            // once show() finishes (it correctly reflects "not hidden",
+            // the final widget-level state - see this connection's own
+            // filter above for the *different*, front-tab-specific sense
+            // of "visible" that isn't safe to read synchronously either).
+            // Calling raise() synchronously here is also too early - Qt's
+            // own internal tab-group bookkeeping isn't settled yet at the
+            // point this signal fires.
             QTimer::singleShot(0, panel, [this, panel]() {
                 if (panel->isVisible()) {
                     raisingDockPanel_ = true;

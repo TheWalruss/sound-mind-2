@@ -6389,6 +6389,47 @@ void MainWindowTest::showingATabifiedPanelSwitchesToItImmediately() {
     QCOMPARE(currentTabifiedPanelTitle(window), mindWavesPanel->windowTitle());
 }
 
+void MainWindowTest::clickingATabifiedPanelsOwnTabSwitchesBackToIt() {
+    // Direct user feedback: "if the Layers panel is activated, but I
+    // open the History panel... I can't switch back to the Layers
+    // panel by clicking the tab." This test drives an actual
+    // QTest::mouseClick() on the real QTabBar's own Layers tab, the one
+    // interaction no existing test exercised (every other tabify test
+    // only ever drives panels via show()).
+    TestMainWindow window;
+    window.show();
+    auto* layersPanel = window.findChild<LayersPanel*>();
+    auto* historyPanel = window.findChild<HistoryPanel*>();
+    QVERIFY(layersPanel != nullptr);
+    QVERIFY(historyPanel != nullptr);
+
+    layersPanel->show();
+    QTest::qWait(50);
+    QCOMPARE(currentTabifiedPanelTitle(window), layersPanel->windowTitle());
+
+    historyPanel->show();
+    QTest::qWait(50);
+    QCOMPARE(currentTabifiedPanelTitle(window), historyPanel->windowTitle());
+
+    const QList<QTabBar*> tabBars = window.findChildren<QTabBar*>();
+    QVERIFY(!tabBars.isEmpty());
+    QTabBar* tabBar = tabBars.first();
+    int layersIndex = -1;
+    for (int i = 0; i < tabBar->count(); ++i) {
+        if (tabBar->tabText(i) == layersPanel->windowTitle()) {
+            layersIndex = i;
+            break;
+        }
+    }
+    QVERIFY(layersIndex >= 0);
+
+    QTest::mouseClick(tabBar, Qt::LeftButton, Qt::NoModifier, tabBar->tabRect(layersIndex).center());
+    QTest::qWait(50);
+
+    QCOMPARE(tabBar->currentIndex(), layersIndex);
+    QCOMPARE(currentTabifiedPanelTitle(window), layersPanel->windowTitle());
+}
+
 void MainWindowTest::editMenuActionsAreGroupedIntoNamedSubmenus() {
     // "The Edit menu is a kludge. The options in there are grouped -
     // create an option for each group, and move the groups into
