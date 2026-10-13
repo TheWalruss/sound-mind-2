@@ -1153,6 +1153,7 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 - **Loop mode doesn't behave as intended.** Clicking "Start loop" should start playback of the whole project and, simultaneously, recording of a new Loop layer. When playback reaches the end, the newly recorded Loop layer replaces the previous Loop layer (which is discarded) and playback continues from the beginning, as in Playback mode with Repeat on. Checking "Freeze loop" stops recording and keeps the current Loop layer intact, while playback continues uninterrupted.
 - **Export Audio and Export Video seem to export only the current active layer**, not the whole composited stack. Both should export the full composite.
 - **Macro recording and exporting a macro to video need attention.** Not yet scoped; needs investigation with concrete reproductions.
+- **The canvas sometimes doesn't render or refresh when it should**, e.g. after importing an image or audio, and when first opening a project. Needs investigation with concrete reproductions.
 
 ---
 
