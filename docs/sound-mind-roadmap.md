@@ -1148,6 +1148,9 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 - **Canvas binding mode: regular stamp intervals across the whole canvas.** Stamp mode "along curve" counts in pixels, not Hz-ms; stamp mode "frequency axis" counts in pixels, not Hz.
 - **Reuse the Gradient editor for the Paint Tool gradient.**
 - **Intensity input as dB or value, everywhere intensity is set/configured/controlled.** The user chooses between "dB" and "value", where value is a float in [0, 1] (0 = noise floor, 1 = maximum), mapped exactly as the codec computes it.
+- **Choose which layer "Record" records to.** A drop-down lists all existing recorded layers plus "New recording layer", which lets the user type a new name (default "Recording"). Picking an existing layer overwrites that layer's content.
+- **Layers panel: decorate the Gain and Balance sliders, and make them responsive.** Add some UI decoration (scale/labels). The sliders are sluggish because the canvas starts updating immediately while dragging; apply the change on slider release instead of on move.
+- **Loop mode doesn't behave as intended.** Clicking "Start loop" should start playback of the whole project and, simultaneously, recording of a new Loop layer. When playback reaches the end, the newly recorded Loop layer replaces the previous Loop layer (which is discarded) and playback continues from the beginning, as in Playback mode with Repeat on. Checking "Freeze loop" stops recording and keeps the current Loop layer intact, while playback continues uninterrupted.
 
 ---
 
