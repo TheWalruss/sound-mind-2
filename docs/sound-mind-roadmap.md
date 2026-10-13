@@ -1136,6 +1136,19 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 - **MindWave Superpositions aren't working well** - needs investigation with concrete reproductions; not yet scoped.
 - **Visual brightness of painted content isn't clearly correlated with its audible intensity** - the canvas color mapping spans [-96, 0] dB while stored magnitudes are raw A-weighted STFT dB (full-scale tones near +52 dB); needs a design decision on the display mapping.
 
+**Backlog - from manual testing, 2026-10-13 (all to be fixed before Beta):**
+
+- **Deleting a layer must delete its content.** Currently, deleting a layer and then creating a new layer with the same name makes paint objects from the deleted layer appear on the new one. Deleting a layer should remove all of its content. Where that content is referenced by resources also used by other layers, offer the user a choice: cascade the delete to those other resources, or cancel. (The user can simply Hide the layer instead.)
+- **Spinboxes apply on commit, not on every keystroke.** The value is applied only when the user presses Enter or moves focus to another field.
+- **Decimal separator as a project-level setting.** The user chooses whether numeric fields represent decimals with "." or ",".
+- **Replace spinbox up/down buttons with sliders plus a numeric text field.** Remove the up/down arrows; give each value a slider (pick anywhere in the allowed range immediately, nudge slightly left/right) alongside a text field for exact entry.
+- **Numeric text fields: stop constraining input so hard.** Limiting the number of digits is annoying with leading/trailing zeroes. On applying the entered value, trim leading/trailing characters, validate the format (e.g. the number of "," and "."), write the cleaned result back into the field, and only then start the update.
+- **Most procedural brush tips render as plain circles.** Square and Diamond work; Triangle and all the others come out as circles. Fix each tip shape.
+- **Canvas binding mode: circles must be circular on the canvas**, not squashed into ovals depending on the vertical coordinate.
+- **Canvas binding mode: regular stamp intervals across the whole canvas.** Stamp mode "along curve" counts in pixels, not Hz-ms; stamp mode "frequency axis" counts in pixels, not Hz.
+- **Reuse the Gradient editor for the Paint Tool gradient.**
+- **Intensity input as dB or value, everywhere intensity is set/configured/controlled.** The user chooses between "dB" and "value", where value is a float in [0, 1] (0 = noise floor, 1 = maximum), mapped exactly as the codec computes it.
+
 ---
 
 ## Beta
