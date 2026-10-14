@@ -1162,6 +1162,10 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 - **Show the playhead bar while Recording or Looping.** Display the same vertical bar shown during Playback, marking where on the canvas (when in the track) the recording head is. The display must be smooth.
 - **"Live-encoding view" checkbox in the Recording and Looping panels.** When on, the layer being recorded to is live-encoded and displayed as the recording progresses. For performance, this live-encoded layer is rendered on top with "normal" compositing rather than at its real position in the compositing stack (which may sit deep under filters etc.). When off, the Loop Input / Recording layer is rendered in the compositing stack in the usual way.
 - **Noise generators** (new generator/filter, before Beta): white, pink, red/brownian, purple and gray noise, plus one with a customizable spectrum. Add MindWave bindings for vertical and horizontal resolution, and for the custom spectrum.
+- **Analysis tools with visualizations/graphs/overlays** (before Beta):
+  - **Goniometer / stereo width.**
+  - **Loudness meter:** loudness over time, loudness per frequency band, peak loudness, average loudness, and per-layer contributions (average, peak, per frequency band, over time).
+  - **Pitch detection.**
 
 ---
 
