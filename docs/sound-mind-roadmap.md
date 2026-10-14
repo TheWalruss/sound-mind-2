@@ -1154,6 +1154,11 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 - **Export Audio and Export Video seem to export only the current active layer**, not the whole composited stack. Both should export the full composite.
 - **Macro recording and exporting a macro to video need attention.** Not yet scoped; needs investigation with concrete reproductions.
 - **The canvas sometimes doesn't render or refresh when it should**, e.g. after importing an image or audio, and when first opening a project. Needs investigation with concrete reproductions.
+- **Rework the Path editing tool to behave exactly like a regular Paint activity**, except that it stamps nothing. Once a Path is painted, its nodes can be adjusted individually, as in the current Path tool.
+- **Right-click menu options for Paths and branching Paths** (the branching paths used for Resonance instruments) when a Path object is Picked and/or the Path editing tool is active.
+- **Render regular paths and branching paths distinctly** on the canvas, in different colors.
+- **Multi-select with the Pick tool** by click-dragging a selection rectangle over the canvas. The user can then delete, copy or move multiple objects at once.
+- **Merge multiple selected Paths and/or branching Paths into a single branching Path.** On merge, add the minimum number of shortest-possible edges needed to connect everything into one tree.
 
 ---
 
