@@ -1159,6 +1159,8 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 - **Render regular paths and branching paths distinctly** on the canvas, in different colors.
 - **Multi-select with the Pick tool** by click-dragging a selection rectangle over the canvas. The user can then delete, copy or move multiple objects at once.
 - **Merge multiple selected Paths and/or branching Paths into a single branching Path.** On merge, add the minimum number of shortest-possible edges needed to connect everything into one tree.
+- **Show the playhead bar while Recording or Looping.** Display the same vertical bar shown during Playback, marking where on the canvas (when in the track) the recording head is. The display must be smooth.
+- **"Live-encoding view" checkbox in the Recording and Looping panels.** When on, the layer being recorded to is live-encoded and displayed as the recording progresses. For performance, this live-encoded layer is rendered on top with "normal" compositing rather than at its real position in the compositing stack (which may sit deep under filters etc.). When off, the Loop Input / Recording layer is rendered in the compositing stack in the usual way.
 
 ---
 
