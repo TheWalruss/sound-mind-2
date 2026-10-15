@@ -497,6 +497,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     refreshTimer_->setInterval(33);
     connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::pollRepeatRefresh);
     connect(playbackController_, &PlaybackController::invalidated, this, &MainWindow::scheduleRepeatRefresh);
+    connect(playbackController_, &PlaybackController::invalidated, this, [this]() {
+        if (isLoopModeRunning()) {
+            scheduleLoopBacking();
+        }
+    });
 
     // Selection & Fill (v0.Y.25.1), Selection Type (v0.Y.35.1 Installment
     // A) - toolPaletteController_ isn't constructed until just below, but
@@ -1602,6 +1607,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     loopUpdateTimer_ = new QTimer(this);
     loopUpdateTimer_->setInterval(33);
     connect(loopUpdateTimer_, &QTimer::timeout, this, &MainWindow::updateLoopLayer);
+    loopBackingTimer_ = new QTimer(this);
+    loopBackingTimer_->setInterval(33);
+    connect(loopBackingTimer_, &QTimer::timeout, this, &MainWindow::pollLoopBacking);
 
     // Just needs to keep RecordEngine's ring buffer (~370ms of headroom at
     // its default capacity/sample rate) from ever filling up - unlike
@@ -1740,7 +1748,7 @@ bool MainWindow::isShowingLandingPage() const noexcept { return stack_->currentW
 bool MainWindow::hasUnsavedChanges() const noexcept { return hasUnsavedChanges_; }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
-    if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
+    if (isLoopModeRunning() || recordEngine_.isRecording()) {
         statusBar()->showMessage(tr("Stop Loop Mode or Recording before closing."), 5000);
         event->ignore();
         return;
@@ -2158,7 +2166,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
 }
 
 void MainWindow::newProject() {
-    if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
+    if (isLoopModeRunning() || recordEngine_.isRecording()) {
         statusBar()->showMessage(tr("Stop Loop Mode or Recording before starting a new project."), 5000);
         return;
     }
@@ -2213,7 +2221,7 @@ bool MainWindow::createProjectAt(sound_mind::core::ProjectSettings settings, con
 }
 
 void MainWindow::openProject() {
-    if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
+    if (isLoopModeRunning() || recordEngine_.isRecording()) {
         statusBar()->showMessage(tr("Stop Loop Mode or Recording before opening a project."), 5000);
         return;
     }
@@ -2247,7 +2255,7 @@ void MainWindow::openProject() {
 }
 
 bool MainWindow::openProjectAt(const std::filesystem::path& path, QString* errorMessage) {
-    if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
+    if (isLoopModeRunning() || recordEngine_.isRecording()) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("Stop Loop Mode or Recording before opening a project.");
         }
@@ -3484,8 +3492,8 @@ void MainWindow::updateSmoothNodesGuardrail() {
 }
 
 void MainWindow::updateConfiguredDeviceLockState() {
-    const bool inputBusy = (loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording();
-    const bool outputBusy = loopEngine_ && loopEngine_->isRunning();
+    const bool inputBusy = isLoopModeRunning() || recordEngine_.isRecording();
+    const bool outputBusy = isLoopModeRunning();
     configureDevicesPanel_->setInputDeviceSelectionEnabled(!inputBusy);
     configureDevicesPanel_->setOutputDeviceSelectionEnabled(!outputBusy);
     landingPage_->deviceConfiguration()->setInputDeviceSelectionEnabled(!inputBusy);
@@ -4236,7 +4244,7 @@ void MainWindow::startPlayback() {
     if (!project_) {
         return;
     }
-    if ((loopEngine_ && loopEngine_->isRunning()) || recordEngine_.isRecording()) {
+    if (isLoopModeRunning() || recordEngine_.isRecording()) {
         // Mutually exclusive with Loop Mode and Recording - see
         // toggleLoopMode()'s/toggleRecording()'s docs.
         return;
@@ -4403,37 +4411,37 @@ void MainWindow::setPlaybackScope(sound_mind::studio::PlaybackScope scope) {
 
 void MainWindow::toggleLoopMode() {
     if (!loopEngine_) {
-        // No project has ever been opened yet - loopEngine_ doesn't exist
-        // until setProject() has run once, since the loop length itself is
-        // derived from a project's own duration - nothing to start or stop
-        // - see the class docs' v0.Y.12.1 note.
+        // No project has been opened yet - loopEngine_ is created per
+        // project, since a loop is the project's own duration.
         return;
     }
 
-    if (loopEngine_->isRunning()) {
+    if (loopEngine_->isRunning() || loopStartPending_) {
+        loopStartPending_ = false;
+        loopBackingTimer_->stop();
+        if (loopBackingTask_) {
+            loopBackingTask_->requestCancel();
+        }
         loopUpdateTimer_->stop();
         loopEngine_->stop();
         loopLayerId_.reset();
+        canvas_->setPlayheadFraction(std::nullopt);
         loopPanel_->setRunning(false);
         updateConfiguredDeviceLockState();
-        statusBar()->showMessage(tr("Loop capture stopped."), 5000);
+        statusBar()->showMessage(tr("Loop stopped."), 5000);
         return;
     }
 
     if (recordEngine_.isRecording()) {
         // Refuse rather than surprise-stop an in-progress recording - both
-        // would otherwise want the same input device at once.
+        // would want the same input device at once.
         return;
     }
 
     stopPlayback();
 
-    // Reuse an existing "Loop Input" layer if the project already has one
-    // (from an earlier Loop Mode session this run, or reloaded from disk)
-    // rather than creating a new one every time - starting Loop Mode again
-    // keeps building on the same layer, so its previous content stays
-    // visible immediately instead of the canvas going blank again while
-    // the first loop of the new session is still being captured.
+    // Reuse an existing "Loop Input" layer (from an earlier session, or
+    // reloaded from disk), so its last take stays visible and audible.
     const std::string loopInputName = tr("Loop Input").toStdString();
     sound_mind::core::Layer* existing = nullptr;
     for (sound_mind::core::Layer& candidate : project_->layers()) {
@@ -4446,12 +4454,6 @@ void MainWindow::toggleLoopMode() {
         loopLayerId_ = existing->id();
     } else {
         sound_mind::core::Layer layer(0, loopInputName, sound_mind::core::LayerType::Normal);
-        // A silent, correctly-dimensioned placeholder - see LoopEngine::
-        // emptyImage()'s own docs - so a brand-new layer has something to
-        // render immediately, rather than nothing at all until the first
-        // real loop finishes. A *reused* layer (the branch above) already
-        // has real content from a previous session, so it deliberately
-        // keeps that instead of being overwritten with a blank image here.
         layer.setContent(loopEngine_->emptyImage());
         loopLayerId_ = project_->addLayer(std::move(layer));
     }
@@ -4459,17 +4461,86 @@ void MainWindow::toggleLoopMode() {
     layerController_->refreshLayersPanel();
     canvas_->invalidateCompositeAll();
 
-    loopEngine_->start();
+    loopStartPending_ = true;
     loopPanel_->setRunning(true);
     updateConfiguredDeviceLockState();
+    statusBar()->showMessage(tr("Preparing loop..."));
+    scheduleLoopBacking();
+}
+
+void MainWindow::scheduleLoopBacking() {
+    if (!project_ || !loopEngine_ || !loopLayerId_) {
+        return;
+    }
+    if (loopBackingTask_ && loopBackingTask_->isRunning()) {
+        loopBackingDirty_ = true;
+        return;
+    }
+    loopBackingDirty_ = false;
+    loopBackingResult_.reset();
+
+    sound_mind::core::Project projectCopy = *project_;
+    if (sound_mind::core::Layer* loopLayer = projectCopy.layerById(*loopLayerId_)) {
+        loopLayer->setMuted(true);  // the engine mixes the live take in itself.
+    }
+    const std::size_t loopLength = loopEngine_->loopLengthSamples();
+    const std::uint32_t sampleRateHz = sound_mind::core::streamCodecConfigFor(project_->settings()).sampleRateHz;
+    loopBackingTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, projectCopy = std::move(projectCopy), loopLength,
+         sampleRateHz](sound_mind::core::CancellationToken& token) {
+            sound_mind::codec::AudioBuffer audio;
+            audio.sampleRateHz = sampleRateHz;
+            try {
+                const auto composite = sound_mind::core::compositeProject(
+                    projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
+                if (composite.has_value()) {
+                    audio = sound_mind::codec::decode(*composite);
+                }
+            } catch (const std::exception&) {
+                return;  // cancelled or failed: keep whatever the engine already plays.
+            }
+            audio.sampleRateHz = sampleRateHz;
+            audio.left.resize(loopLength, 0.0f);
+            audio.right.resize(loopLength, 0.0f);
+            loopBackingResult_ = std::move(audio);
+        });
+    loopBackingTask_->start();
+    loopBackingTimer_->start();
+}
+
+void MainWindow::pollLoopBacking() {
+    if (!loopBackingTask_ || loopBackingTask_->isRunning()) {
+        return;
+    }
+    loopBackingTimer_->stop();
+    loopBackingTask_.reset();
+    auto result = std::move(loopBackingResult_);
+    loopBackingResult_.reset();
+
+    if (loopBackingDirty_) {
+        scheduleLoopBacking();
+        return;
+    }
+    if (!result.has_value() || !loopEngine_) {
+        return;
+    }
+    loopEngine_->setBackingAudio(std::move(*result));
+
+    if (!loopStartPending_) {
+        return;
+    }
+    loopStartPending_ = false;
+    loopTakesShown_ = 0;
+    loopEngine_->start();
     if (!loopEngine_->isDeviceAvailable()) {
         statusBar()->showMessage(
-            tr("Loop capture started, but no audio device could be opened - nothing will be captured or heard. %1")
+            tr("Loop started, but no audio device could be opened - nothing will be heard or recorded. %1")
                 .arg(QString::fromStdString(loopEngine_->deviceProblem())),
             15000);
     } else {
         statusBar()->showMessage(tr("Looping..."));
     }
+    updateLoopLayer();
     loopUpdateTimer_->start();
 }
 
@@ -4478,7 +4549,7 @@ void MainWindow::setKeepLooping(bool keepLooping) {
     if (!loopEngine_) {
         return;
     }
-    loopEngine_->setKeepLooping(keepLooping);
+    loopEngine_->setFrozen(keepLooping);
 }
 
 void MainWindow::updateLoopLayer() {
@@ -4490,33 +4561,32 @@ void MainWindow::updateLoopLayer() {
         return;
     }
 
-    // Loop Mode Live Preview (v0.0.41.1) - prefer the current loop's own
-    // still-growing preview whenever it has anything to show, falling back
-    // to the last *completed* loop's image otherwise (right after a loop
-    // boundary, before the new loop has captured enough for even one
-    // preview frame) - see LoopEngine::currentPreviewImage()'s own docs for
-    // why this combination is what actually produces continuous growth
-    // rather than a once-per-loop jump.
-    sound_mind::codec::StreamImage image = loopEngine_->currentPreviewImage();
-    if (image.frameCount == 0) {
-        image = loopEngine_->currentImage();
-    }
-    if (image.frameCount > 0) {
-        layer->setContent(std::move(image));
-        if (const auto index = project_->layerIndexById(*loopLayerId_)) {
-            canvas_->invalidateCompositeFrom(*index);
+    // The take plays at the Loop layer's own gain and balance - the same
+    // pan law the compositor uses (Layer::balance()) - and not at all while
+    // the layer is hidden or muted.
+    const float gain = (layer->visible() && !layer->muted()) ? layer->opacity() : 0.0f;
+    const float balance = layer->balance();
+    loopEngine_->setTakeGains(gain * std::min(1.0f, 2.0f * (1.0f - balance)), gain * std::min(1.0f, 2.0f * balance));
+
+    // Each finished take becomes the Loop layer's content once the engine's
+    // worker has encoded it.
+    const std::uint64_t takes = loopEngine_->takesCompleted();
+    if (takes != loopTakesShown_) {
+        sound_mind::codec::StreamImage image = loopEngine_->currentImage();
+        if (image.frameCount > 0) {
+            layer->setContent(std::move(image));
+            loopTakesShown_ = takes;
+            if (const auto index = project_->layerIndexById(*loopLayerId_)) {
+                canvas_->invalidateCompositeFrom(*index);
+            }
+            layerController_->refreshLayersPanel(*loopLayerId_);
         }
     }
 
-    // The confirmed scope's "visible loop-delay indicator" - see
-    // LoopEngine::loopsBehind()'s own docs for exactly what this counts.
-    const std::uint64_t loopsBehind = loopEngine_->loopsBehind();
-    if (loopsBehind > 0) {
-        statusBar()->showMessage(
-            tr("Looping... (%1 loop%2 behind)").arg(loopsBehind).arg(loopsBehind == 1 ? QString() : tr("s")));
-    } else {
-        statusBar()->showMessage(tr("Looping..."));
-    }
+    const std::size_t length = loopEngine_->loopLengthSamples();
+    canvas_->setPlayheadFraction(static_cast<double>(loopEngine_->playbackPositionSamples()) /
+                                 static_cast<double>(std::max<std::size_t>(length, 1)));
+    statusBar()->showMessage(loopEngine_->frozen() ? tr("Looping (frozen)...") : tr("Looping..."));
 }
 
 bool MainWindow::isPlaying() const noexcept {
@@ -4524,11 +4594,11 @@ bool MainWindow::isPlaying() const noexcept {
 }
 
 bool MainWindow::isLoopModeRunning() const noexcept {
-    return loopEngine_ && loopEngine_->isRunning();
+    return loopStartPending_ || (loopEngine_ && loopEngine_->isRunning());
 }
 
 bool MainWindow::keepLooping() const noexcept {
-    return loopEngine_ && loopEngine_->keepLooping();
+    return loopEngine_ && loopEngine_->frozen();
 }
 
 bool MainWindow::isRecording() const noexcept {
@@ -4592,7 +4662,7 @@ void MainWindow::toggleRecording() {
     if (!project_) {
         return;
     }
-    if (loopEngine_ && loopEngine_->isRunning()) {
+    if (isLoopModeRunning()) {
         // Refuse rather than surprise-stop a running Loop Mode session -
         // both would otherwise want the same input device at once.
         return;

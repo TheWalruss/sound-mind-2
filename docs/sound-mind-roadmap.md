@@ -1249,6 +1249,8 @@ This is the foundation milestone; later milestones build their new controls on i
 
 #### `v0.Y.75.1` - Record and Loop (L)
 
+*Progress: installment A (Loop Mode rebuilt to spec, Freeze, playhead while looping) settled in `v0.1.35.1` - Decision #236.*
+
 Real-time path; the allocation-free and lock-free rules apply throughout.
 
 - **Record target picker:** existing recorded layers plus "New recording layer" (name field, default "Recording"). Choosing an existing layer overwrites its content, and that must be undoable.

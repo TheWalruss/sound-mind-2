@@ -595,6 +595,10 @@ Image-mode could be called "pixel-space invariant mode".
 
 There shall be a central "configure devices" panel that allows the user to refresh input and output devices, choose the active input and output devices, test them, and adjust the master volume/gain for each.
 
+## Loop Mode
+
+*(Specified by the user, 2026-10-13; built in `v0.1.35.1`.)* When "Start loop" is clicked, playback of the whole project starts and, simultaneously, recording of a new Loop layer starts. When playback reaches the end, the newly recorded Loop layer is swapped in for the previous Loop layer (which is discarded), and playback continues from the beginning (like Playback mode with Repeat on). When "Freeze loop" is checked, recording is stopped and the previous Loop layer is kept intact, but playback continues uninterruptedly.
+
 ## Repeat Playback
 
 There shall be a "repeat" checkbox in the playback mode panel. This loops the output sound (starting over from the start when it reaches the end), and updates the output sound when the canvas is modified: after every edit the output is re-prepared in the background so it is fresh the moment the loop restarts. This works in principle just like Loop Mode, but without a recording/input option. 

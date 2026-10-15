@@ -9,7 +9,9 @@
 #include <vector>
 
 #include <juce_audio_devices/juce_audio_devices.h>
+#include <juce_core/juce_core.h>
 
+#include "sound_mind/codec/audio_buffer.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/codec/stream_incremental_encoder.h"
 #include "sound_mind/core/playback_engine.h"
@@ -17,130 +19,57 @@
 namespace sound_mind::core {
 
 /**
- * @brief A fixed-length loop pedal: continuously captures live audio input,
- *        one loop-length at a time, encoding/decoding each completed loop
- *        into the Stream codec and playing the previous loop's result back
- *        during the next one - per `docs/sound-mind-roadmap.md`'s Loop Mode
- *        milestone (`v0.Y.12.1`, renamed from Live Mode).
+ * @brief Loop Mode: plays the whole project over and over while recording
+ *        a new take into the Loop layer each pass - `docs/sound-mind-
+ *        design.md`'s "Loop Mode" (rewritten in `v0.1.35.1` per the user's
+ *        own spec, `docs/sound-mind-roadmap.md`'s Pre-Beta Plan `v0.Y.75.1`).
  *
- * Renamed and reimplemented from the original `LiveEngine`'s continuous,
- * always-decoding-the-whole-history model: per the milestone's confirmed
- * scope, this is the fixed-length loop pedal the legacy Studio's own "Live
- * Mode" actually was, not genuinely continuous streaming. `loopLengthSamples`
- * (derived from the project's own duration - see `docs/sound-mind-roadmap.md`
- * - not user-adjustable) is fixed for the engine's whole lifetime; each
- * completed loop of raw input is handed to the background worker thread as
- * one bounded buffer, encoded and decoded via the same whole-buffer
- * `sound_mind::codec::encode()`/`decode()` any import or Recording already
- * uses - `currentImage()`'s own result, what's actually played back, is
- * exclusively a whole-buffer-per-loop result, never a partial one.
+ * **What's heard each pass:** the project's own audio (`setBackingAudio()`
+ * - the caller composites every layer *except* the Loop layer) plus the
+ * previous pass's take, scaled by setTakeGains() (the Loop layer's own
+ * gain and balance). Mixing the take in here, in the audio callback,
+ * rather than re-compositing the whole project at every pass boundary, is
+ * what lets a fresh take be heard the instant the loop restarts - a full
+ * composite takes far longer than zero samples. Consequence: while
+ * looping live, filters and blend modes stacked *above* the Loop layer
+ * don't apply to the take; once Loop Mode stops, ordinary playback
+ * composites the Loop layer like any other.
  *
- * **As of `v0.0.41.1` (Loop Mode Live Preview):** a second, purely visual
- * result - `currentPreviewImage()` - *does* use `sound_mind::codec::
- * StreamIncrementalEncoder` after all, reviving it for the one case it was
- * always suited to (see that class's own docs): a bounded, repeating
- * capture that wants a growing preview *within* each cycle without it
- * growing forever *across* cycles. `previewEncoder_` is fed the same raw
- * audio `pendingLoopLeft_`/`pendingLoopRight_` accumulate, then reset (via
- * `StreamIncrementalEncoder::reset()`) at every loop boundary the worker
- * itself crosses - never growing across more than one loop's worth, unlike
- * the original `LiveEngine`'s unboundedly-growing use of the same class.
- * This changes nothing about what's actually heard - `processPendingAudio()`'s
- * own whole-buffer `encode()`/`decode()` per completed loop stays exactly
- * as it was; `previewEncoder_` is purely an additional, parallel pipeline
- * feeding `currentPreviewImage()`, never consulted for playback.
+ * **What's recorded:** input (scaled by setInputGain()) is written into a
+ * second take buffer at the same position the output is playing, so a take
+ * lines up with the project sample for sample. At the end of each pass the
+ * two take buffers swap: the take just recorded is what plays next, and
+ * the previous one is overwritten by the next pass's recording.
  *
- * **No compositing with the rest of the project** - the confirmed reduced
- * scope for this milestone: real multi-layer audio mixing still doesn't
- * exist anywhere in the codebase (see the roadmap's own note on why this
- * removed a dependency `v0.0.7.1`'s notes originally expected).
+ * **Freeze** (setFrozen()): recording stops immediately - the partial take
+ * in progress is discarded, never swapped in - and the current take keeps
+ * playing every pass. Unfreezing starts recording again at the beginning
+ * of the next pass, never mid-pass, so a take is always one whole pass.
  *
- * Architecture: the audio callback thread only ever copies fixed-size
- * blocks into a lock-free ring buffer (`juce::AbstractFifo`, same primitive
- * `LiveEngine`/`RecordEngine` already use) on the capture side, and reads
- * sequentially from one of two pre-allocated, fixed-size (`loopLengthSamples`
- * each) playback buffers on the output side - no allocation, no locking on
- * that thread, satisfying `CLAUDE.md`'s real-time constraint. All the real
- * (allocating) work - draining the capture ring, slicing off one loop's
- * worth of raw samples, `sound_mind::codec::encode()`/`decode()` - runs on a
- * background worker thread.
+ * **Project audio changes** (setBackingAudio() while running) take effect
+ * at the next pass start, never mid-pass - the same staged, try-lock
+ * hand-off `PlaybackEngine::stageAudio()` uses.
  *
- * **The "next loop" hand-off, and loop delay:** the background worker
- * publishes a newly-decoded loop's audio by flipping which of the two
- * playback buffers is "active" (`activeSlot_`); the audio thread only reads
- * that flag *once per loop boundary it crosses itself* (never mid-loop, so a
- * newly-published loop never splices in with an audible jump) - see
- * processBlock()'s own comments.
+ * **The background worker** (run(), or processPendingAudio() called
+ * directly in tests) encodes each finished take into currentImage() - the
+ * Loop layer's new content - and feeds currentPreviewImage() from the take
+ * in progress, for the live-encoding view.
  *
- * @note **Real, structural minimum latency, confirmed acceptable rather
- *       than engineered away:** a loop's audio can't even begin encoding
- *       until its capture finishes, and the playback cursor only checks for
- *       a newly-published result once per loop it itself plays through - so
- *       the earliest a captured loop's result can become the *active* slot
- *       is partway through the very next playback cycle, and the earliest
- *       the audio thread actually *starts reading* that slot is the cycle
- *       after that. In practice (encode/decode of one loop takes a small
- *       fraction of the wall-clock time it took to capture it - the normal
- *       case, and the only one this first pass targets), that means: what
- *       you captured as "loop N" is first heard during playback loop
- *       `N + 2`, not `N + 1` - two loop-lengths of latency, not one, even
- *       when the worker is keeping up perfectly (loopsBehind() == 0). This
- *       is a direct, unavoidable consequence of never splicing a result in
- *       mid-loop (see above) combined with a full encode/decode round trip
- *       needing to happen somewhere in between - a true "hear it the very
- *       next loop" design would need to deliberately run capture and
- *       playback out of phase with each other (playback's cycle boundary
- *       arriving some fixed margin after capture's), which is future work
- *       if this baseline latency turns out to matter in practice, not part
- *       of this milestone's confirmed scope. loopsBehind() tracks a
- *       different, additive thing on top of this fixed baseline: whether
- *       the worker has *also* fallen further behind than that (a slower-
- *       than-real-time pipeline falls behind by whole loop iterations, not
- *       a fixed latency, per the roadmap's own framing) - `0` means only
- *       the fixed two-loop baseline applies, not that there is no latency
- *       at all.
- *
- * **"Keep looping":** while setKeepLooping(true), newly-captured input is
- * discarded rather than handed to the worker at all (see processBlock()) -
- * the currently-active playback buffer just keeps replaying unchanged, loop
- * after loop, instead of being recorded over. The default, `false`, matches
- * the legacy behavior: record over the previous take every loop.
- *
- * **As of `v0.Y.16.1` (Transport Panels):** input/output device selection
- * (availableInputDeviceNames()/availableOutputDeviceNames()/
- * setPreferredInputDevice()/setPreferredOutputDevice()) for the new Loop
- * panel - like `RecordEngine`, a preference set while already running only
- * takes effect on the *next* start(), since (unlike `PlaybackEngine`) the
- * device is only ever opened inside start().
- *
- * @note Thread-safety: `start()`/`stop()`/`setKeepLooping()`/`keepLooping()`
- *       are meant to be called from the UI thread only. `processBlock()` is
- *       real-time-safe and is the one method actually called from the audio
- *       callback thread (indirectly, via JUCE). `processPendingAudio()` is
- *       the worker thread's own loop body, exposed separately (like
- *       `LiveEngine`'s equivalent was) so it's directly, deterministically
- *       testable without depending on real thread timing. `currentImage()`,
- *       `loopsCaptured()`, and `loopsBehind()` are safe to call from any
- *       thread.
+ * @note Thread-safety: start()/stop()/setters are for the UI thread.
+ *       processBlock() is the audio callback - real-time-safe: no
+ *       allocation, no blocking locks (only a try-lock), no exceptions.
+ *       processPendingAudio() is the worker's body and must not run
+ *       concurrently with itself. The getters are safe from any thread.
  */
 class LoopEngine : private juce::AudioIODeviceCallback, private juce::Thread {
 public:
-    /// @brief Constructs a LoopEngine. Capture doesn't start until start()
-    ///        is called.
-    /// @param config Stream codec parameters for each encoded loop -
-    ///        `config.sampleRateHz` should match whatever the audio device
-    ///        will actually be opened at (see audioDeviceAboutToStart()).
-    /// @param loopLengthSamples The fixed length of one loop, in samples per
-    ///        channel at `config.sampleRateHz` - derived from the project's
-    ///        own duration, per the class docs. Treated as at least 1 (a
-    ///        value of 0 would make loop-boundary arithmetic undefined) -
-    ///        callers should never actually pass 0 in practice.
-    /// @param deviceMode `Real` (the default) attaches to the system's
-    ///        real input+output device on start(), falling back gracefully
-    ///        (isDeviceAvailable() == false) if none exists; `None` never
-    ///        attaches to one at all - for hermetic tests that drive
-    ///        processBlock()/processPendingAudio() directly instead (same
-    ///        reasoning as PlaybackEngine's AudioDeviceMode).
+    /// @brief Constructs an idle engine; nothing runs until start().
+    /// @param config Stream codec parameters for encoding takes.
+    /// @param loopLengthSamples One pass - the project's own duration - in
+    ///        samples per channel; treated as at least 1.
+    /// @param deviceMode `Real` opens the system's input+output device on
+    ///        start(); `None` never does (for tests that call
+    ///        processBlock()/processPendingAudio() directly).
     explicit LoopEngine(sound_mind::codec::StreamCodecConfig config, std::size_t loopLengthSamples,
                          AudioDeviceMode deviceMode = AudioDeviceMode::Real);
     ~LoopEngine() override;
@@ -148,243 +77,133 @@ public:
     LoopEngine(const LoopEngine&) = delete;
     LoopEngine& operator=(const LoopEngine&) = delete;
 
-    /// @brief Opens the real input+output device (if constructed with
-    ///        `AudioDeviceMode::Real`) and starts the background encode/
-    ///        decode worker thread. Resets all loop-cycle state (capture
-    ///        position, playback position, loopsCaptured()/loopsBehind(),
-    ///        currentImage()) as if newly constructed. Does nothing if
-    ///        already running.
+    /// @brief Resets to the start of a fresh session (position 0, both
+    ///        takes silent, no takes completed, no images) - keeping the
+    ///        current project audio - opens the device (in `Real` mode)
+    ///        and starts the worker. Does nothing if already running.
     void start();
 
-    /// @brief Stops the worker thread and closes the device (if one was
-    ///        open). Does nothing if not running.
+    /// @brief Stops the worker and closes the device. Does nothing if not
+    ///        running.
     void stop();
 
-    /// @brief Whether capture is currently active.
-    /// @return `true` between a start() and the next stop().
+    /// @return `true` between start() and stop().
     [[nodiscard]] bool isRunning() const noexcept;
 
-    /**
-     * @brief Whether a real input+output device was actually opened.
-     *
-     * `false` means start() still flips isRunning() to `true`, but nothing
-     * will actually be captured or heard - a defensive fallback for
-     * environments with no audio hardware (CI runners, in particular),
-     * matching LiveEngine's/PlaybackEngine's identical accessor.
-     *
-     * @return `true` if a real input+output device is open.
-     */
+    /// @return `true` if start() opened a real input+output device.
     [[nodiscard]] bool isDeviceAvailable() const noexcept;
 
-    /// @brief Why the most recent start() could not open the input/output
-    ///        devices, for showing to the user instead of looping silence.
-    /// @return Non-empty only for `AudioDeviceMode::Real` when that start()
-    ///         failed to open a device; empty otherwise.
+    /// @return Why the last start() couldn't open a device; empty otherwise.
     [[nodiscard]] const std::string& deviceProblem() const noexcept;
 
-    /**
-     * @brief The input device names currently available, for the device
-     *        manager's current device type - see
-     *        `sound_mind::core::availableAudioDeviceNames()`'s own docs.
-     * @return Device names; empty if none are available (or
-     *         `AudioDeviceMode::None` was used and no device type exists).
-     */
+    /// @return The available input device names.
     [[nodiscard]] std::vector<std::string> availableInputDeviceNames();
 
-    /// @brief The output device names currently available - see
-    /// availableInputDeviceNames()'s docs for the shared caveats.
-    /// @return Device names; empty if none are available.
+    /// @return The available output device names.
     [[nodiscard]] std::vector<std::string> availableOutputDeviceNames();
 
-    /**
-     * @brief Sets which input device the *next* start() should open.
-     *
-     * Like `RecordEngine` (and unlike `PlaybackEngine`): this engine only
-     * opens a device inside start(), so a preference set while already
-     * running doesn't take effect until the *next* start().
-     *
-     * @param deviceName The device to prefer, from
-     *        availableInputDeviceNames() - an empty string (the default)
-     *        requests the system default device.
-     */
+    /// @brief Sets the input device the next start() opens (empty = the
+    ///        system default).
+    /// @param deviceName The device name.
     void setPreferredInputDevice(std::string deviceName);
 
-    /// @brief The input device start() will prefer - see
-    /// setPreferredInputDevice(). Empty means "system default".
-    /// @return The preferred input device name.
+    /// @return The input device the next start() prefers.
     [[nodiscard]] const std::string& preferredInputDevice() const noexcept;
 
-    /// @brief Sets which output device the *next* start() should open -
-    /// see setPreferredInputDevice()'s docs for the same "next start()"
-    /// timing.
-    /// @param deviceName From availableOutputDeviceNames(); empty for the
-    ///        system default.
+    /// @brief Sets the output device the next start() opens (empty = the
+    ///        system default).
+    /// @param deviceName The device name.
     void setPreferredOutputDevice(std::string deviceName);
 
-    /// @brief The output device start() will prefer - see
-    /// setPreferredOutputDevice(). Empty means "system default".
-    /// @return The preferred output device name.
+    /// @return The output device the next start() prefers.
     [[nodiscard]] const std::string& preferredOutputDevice() const noexcept;
 
-    /// @brief Sets the input gain applied to newly captured audio in
-    ///        processBlock() - `v0.0.42.1` (Configure Devices panel), the
-    ///        same addition and `[0, kMaxGain]` clamping as
-    ///        `RecordEngine::setInputGain()`. Never affects playback - only
-    ///        what's captured toward the *next* loop.
-    /// @param gain The new gain - `1.0` is unchanged/unity.
+    /// @brief Sets the gain applied to captured input, clamped to
+    ///        [0, kMaxGain].
+    /// @param gain `1` is unity.
     void setInputGain(float gain) noexcept;
 
-    /// @brief The current input gain - see setInputGain().
-    /// @return The current gain, `1.0` meaning unity (the default).
+    /// @return The current input gain.
     [[nodiscard]] float inputGain() const noexcept;
 
-    /// @brief The upper bound setInputGain() clamps to - see
-    /// `RecordEngine::kMaxGain`'s own identical reasoning.
+    /// @brief setInputGain()'s upper bound.
     static constexpr float kMaxGain = 2.0f;
 
-    /// @brief The most recently processed block's own peak input sample
-    ///        magnitude, post-gain - see `RecordEngine::currentInputLevel()`'s
-    ///        own docs for the exact "no smoothing" semantics this mirrors.
-    /// @return The current peak level, post-gain; never negative.
-    /// @note Real-time-safe (a plain atomic load), safely callable from
-    ///       either thread - same as inputGain().
+    /// @return The last processed block's peak input level, post-gain.
     [[nodiscard]] float currentInputLevel() const noexcept;
 
     /**
-     * @brief Whether subsequent loops should replay the last successfully
-     *        captured take unchanged instead of recording over it.
-     * @param keepLooping The new state - see the class docs' "Keep looping"
-     *        note.
+     * @brief Sets the project's own audio - everything but the Loop layer -
+     *        played each pass. Takes effect immediately while idle, or at
+     *        the next pass start while running.
+     * @param audio Exactly loopLengthSamples() long, at the engine's own
+     *        sample rate.
+     * @return `false` (nothing changes) if the length or rate doesn't match.
+     * @note UI thread only; allocation happens here, never on the audio
+     *       thread.
      */
-    void setKeepLooping(bool keepLooping) noexcept;
+    bool setBackingAudio(sound_mind::codec::AudioBuffer&& audio);
 
-    /// @brief The current "Keep looping" state - see setKeepLooping().
-    /// @return `true` if newly captured input is currently being discarded.
-    [[nodiscard]] bool keepLooping() const noexcept;
+    /// @brief Sets the take's own playback gains - the Loop layer's gain
+    ///        and balance, already combined per channel by the caller.
+    ///        Applies from the next audio block.
+    /// @param left Left-channel gain.
+    /// @param right Right-channel gain.
+    void setTakeGains(float left, float right) noexcept;
 
-    /// @brief The most recently completed loop's encoded Stream image.
-    /// @return A default-constructed (`frameCount == 0`) StreamImage until
-    ///         at least one whole loop has been captured and processed.
+    /// @brief Freezes or unfreezes the loop - see the class docs.
+    /// @param frozen `true` to stop recording and keep the current take.
+    void setFrozen(bool frozen) noexcept;
+
+    /// @return Whether the loop is frozen.
+    [[nodiscard]] bool frozen() const noexcept;
+
+    /// @return One pass, in samples per channel.
+    [[nodiscard]] std::size_t loopLengthSamples() const noexcept { return loopLengthSamples_; }
+
+    /// @return Where the output is within the current pass, in samples -
+    ///         for the playhead.
+    [[nodiscard]] std::size_t playbackPositionSamples() const noexcept;
+
+    /// @return How many whole takes have been recorded (and swapped in)
+    ///         since start() - frozen passes don't count.
+    [[nodiscard]] std::uint64_t takesCompleted() const noexcept;
+
+    /// @return The latest finished take, encoded by the worker - the Loop
+    ///         layer's new content. Empty (`frameCount == 0`) until the
+    ///         worker has encoded one.
     [[nodiscard]] sound_mind::codec::StreamImage currentImage() const;
 
-    /**
-     * @brief The *currently in-progress* loop's own partial Stream image,
-     *        growing continuously as more of it is captured -
-     *        `docs/sound-mind-roadmap.md`'s Loop Mode Live Preview
-     *        milestone (`v0.0.41.1`).
-     *
-     * A snapshot of `previewEncoder_` (see the class's own docs), which the
-     * worker thread feeds the same raw audio `processPendingAudio()`
-     * accumulates toward the next whole-loop `encode()`/`decode()` - purely
-     * a visual preview, never consulted for what's actually played back.
-     * Resets to a default-constructed (`frameCount == 0`) image at every
-     * loop boundary the worker crosses (immediately after that boundary's
-     * own `currentImage()` update - see `processPendingAudio()`'s own
-     * comments for the exact ordering and its one accepted, self-correcting
-     * race), so a caller polling both this and `currentImage()` should
-     * prefer this one whenever it has frames, falling back to
-     * `currentImage()` (the last *completed* loop) otherwise - that
-     * combination is what actually produces a continuously-growing canvas
-     * that jumps cleanly to the completed result at each loop boundary,
-     * rather than freezing for a whole loop's duration at a time.
-     *
-     * @return The in-progress loop's own partial image; `frameCount == 0`
-     *         right after a reset (a fresh loop just started, or too little
-     *         of it has arrived yet for even one analysis frame).
-     */
+    /// @return The take in progress, encoded as far as it has arrived -
+    ///         for the live-encoding view. Starts over at each pass; empty
+    ///         while frozen.
     [[nodiscard]] sound_mind::codec::StreamImage currentPreviewImage() const;
 
-    /**
-     * @brief A correctly-dimensioned, silent placeholder Stream image -
-     *        exactly what encoding a whole loop's worth of pure silence,
-     *        at this engine's own config/loop length, would produce.
-     *
-     * Exists so a caller (`sound-mind-studio`'s `MainWindow`, for a
-     * freshly created "Loop Input" layer that has never captured anything
-     * yet - see `toggleLoopMode()`'s own docs) can give a layer *something*
-     * to render immediately when Loop Mode starts, instead of leaving it
-     * with no content at all until the first real loop finishes - which
-     * can take as long as the whole project's duration, with nothing
-     * visible in the meantime. A pure function of this engine's config and
-     * loop length: doesn't touch or depend on currentImage()/isRunning(),
-     * and is safe to call whether or not the engine has ever been started.
-     *
-     * @return A silent StreamImage, the same dimensions any real completed
-     *         loop's image would have.
-     *
-     * @note Not real-time-safe (allocates, runs a real `encode()` pass) -
-     *       call from the UI thread only, same as currentImage().
-     */
+    /// @return A silent image one loop long, for a brand-new Loop layer.
+    /// @note Allocates; UI thread.
     [[nodiscard]] sound_mind::codec::StreamImage emptyImage() const;
 
-    /// @brief How many whole loops of input have been captured since
-    ///        start() - advances continuously while running (unless
-    ///        keepLooping() is `true`, which freezes it - see
-    ///        setKeepLooping()'s docs), independent of whether the
-    ///        background worker has actually finished processing each one.
-    /// @return The count of whole loops captured so far.
-    [[nodiscard]] std::uint64_t loopsCaptured() const noexcept;
-
     /**
-     * @brief How many whole loops the background worker's published result
-     *        currently lags loopsCaptured() by.
-     *
-     * `0` means the worker has kept up - the just-completed loop's decoded
-     * result is (or, if still in flight, is about to become) what's
-     * playing. A nonzero value means the worker hasn't finished encoding/
-     * decoding that many loops yet, so playback is still repeating an
-     * older result - see the class docs' "loop delay" note.
-     *
-     * @return `loopsCaptured() - <loops the worker has finished>`, never
-     *         negative.
-     */
-    [[nodiscard]] std::uint64_t loopsBehind() const noexcept;
-
-    /**
-     * @brief The engine's real-time-safe per-block audio processing: copies
-     *        captured input into the capture ring buffer (unless
-     *        keepLooping() is `true` - see setKeepLooping()'s docs), and
-     *        fills `outputChannelData` by reading sequentially through
-     *        whichever playback buffer is active for the loop currently
-     *        playing, wrapping - and re-checking which buffer is active -
-     *        only at that loop's own boundary (see the class docs' "next
-     *        loop" hand-off note).
-     *
-     * Exposed separately from the `AudioIODeviceCallback` interface it's
-     * normally invoked through, specifically so it's testable without a
-     * real device - same reasoning as `LiveEngine::processBlock()`.
-     *
-     * @param inputChannelData Pointers to each input channel's captured
-     *        samples, each `numSamples` long. Channel 0 is treated as
-     *        left; channel 1 (if present) as right; a mono (single-
-     *        channel) device's one channel is used for both.
-     * @param numInputChannels Number of channels in `inputChannelData`.
-     * @param outputChannelData Pointers to each output channel's sample
-     *        array to fill, each `numSamples` long.
-     * @param numOutputChannels Number of channels in `outputChannelData`;
-     *        any beyond the first two are silenced.
-     * @param numSamples Number of samples to process in each channel.
-     *
-     * @note Real-time-safe: no allocation, no locking, no exceptions.
+     * @brief The audio callback's work: mixes the project audio and the
+     *        playing take into the output, records input into the other
+     *        take, and at each pass end swaps the takes (unless frozen) and
+     *        adopts any staged project audio.
+     * @param inputChannelData Input channels (0 = left, 1 = right; mono is
+     *        used for both), each `numSamples` long.
+     * @param numInputChannels Number of input channels.
+     * @param outputChannelData Output channels to fill.
+     * @param numOutputChannels Number of output channels; any beyond two
+     *        are silenced.
+     * @param numSamples Samples per channel.
+     * @note Real-time-safe.
      */
     void processBlock(const float* const* inputChannelData, int numInputChannels, float* const* outputChannelData,
                        int numOutputChannels, int numSamples) noexcept;
 
-    /**
-     * @brief Drains whatever's currently in the capture ring buffer,
-     *        appending it to a growing pending-loop scratch buffer, and -
-     *        for every whole loopLengthSamples() now accumulated - slices
-     *        one off, encodes/decodes it, and publishes the result (see
-     *        the class docs' "next loop" hand-off note).
-     *
-     * This is the background worker thread's own per-iteration work (see
-     * run()), exposed separately so a test can drive it directly and
-     * synchronously, without depending on real thread timing.
-     *
-     * @note Not real-time-safe (allocates - drives the codec's encode()/
-     *       decode() machinery). Must not be called concurrently with
-     *       itself from more than one thread.
-     */
+    /// @brief The worker's own step: encodes a newly finished take into
+    ///        currentImage(), and feeds currentPreviewImage() with whatever
+    ///        of the current take has arrived since the last call.
+    /// @note Allocates; never concurrently with itself.
     void processPendingAudio();
 
 private:
@@ -395,13 +214,8 @@ private:
     void audioDeviceStopped() override;
     void run() override;
 
-    /// @brief Capture ring buffer capacity, in samples per channel -
-    /// generous relative to typical device buffer sizes and the worker
-    /// thread's poll interval (see run()), so normal operation never
-    /// approaches it. Independent of loopLengthSamples_ (which is usually
-    /// much larger) - this only needs to bridge one worker poll interval,
-    /// same reasoning as LiveEngine's identical constant.
-    static constexpr int kRingCapacity = 1 << 16;
+    /// @brief Adopts staged project audio, if any, without ever waiting.
+    void swapInStagedBacking() noexcept;
 
     juce::AudioDeviceManager deviceManager_;
     bool deviceAvailable_ = false;
@@ -412,52 +226,41 @@ private:
     std::string preferredInputDevice_;
     std::string preferredOutputDevice_;
 
-    juce::AbstractFifo captureFifo_{kRingCapacity};
-    std::vector<float> captureRingLeft_;
-    std::vector<float> captureRingRight_;
+    /// @brief The project audio played each pass (audio thread reads it).
+    sound_mind::codec::AudioBuffer backing_;
+    /// @brief Replacement project audio waiting for the next pass start.
+    sound_mind::codec::AudioBuffer stagedBacking_;
+    std::mutex stagedMutex_;
+    std::atomic<bool> hasStagedBacking_{false};
 
-    /// @brief Worker-thread-only accumulation of drained-but-not-yet-a-
-    /// whole-loop capture - never touched by the audio thread.
-    std::vector<float> pendingLoopLeft_;
-    std::vector<float> pendingLoopRight_;
+    /// @brief The two take buffers - one playing, one recording - each one
+    ///        pass long, allocated once.
+    std::array<std::vector<float>, 2> takeLeft_;
+    std::array<std::vector<float>, 2> takeRight_;
+    /// @brief Which take buffer is playing (the other records).
+    std::atomic<int> playingTake_{0};
 
-    /// @brief Feeds currentPreviewImage() - see the class's own docs on
-    /// `v0.0.41.1`. Worker-thread-only, like pendingLoopLeft_/Right_ (its
-    /// own pushSamples()/reset() calls are never concurrent with each
-    /// other, satisfying StreamIncrementalEncoder's own single-producer
-    /// contract); currentPreviewImage()'s snapshot() call is the one
-    /// cross-thread access, already safe via that class's own internal
-    /// mutex.
-    sound_mind::codec::StreamIncrementalEncoder previewEncoder_;
+    /// @brief Audio-thread position and recording state.
+    std::size_t position_ = 0;
+    bool recording_ = true;
+    std::atomic<std::size_t> publishedPosition_{0};
+    /// @brief Whether the audio thread is recording right now - for the
+    ///        worker's live preview.
+    std::atomic<bool> recordingNow_{true};
+    std::atomic<std::uint64_t> takesCompleted_{0};
 
-    /// @brief How many of pendingLoopLeft_'s/pendingLoopRight_'s own
-    /// leading samples have already been pushed into previewEncoder_ -
-    /// tracks position across processPendingAudio() calls so each call only
-    /// pushes genuinely new audio, and so a loop-boundary erase() (which
-    /// shifts pendingLoopLeft_'s own indexing down) can shift this down by
-    /// the same amount to stay correctly aligned. Worker-thread-only.
-    std::size_t previewPushedSamples_ = 0;
-
-    /// @brief Two fixed-size (loopLengthSamples_ each), pre-allocated
-    /// playback buffers - the worker always writes a newly-decoded loop
-    /// into whichever one activeSlot_ does *not* currently name, then
-    /// publishes it by flipping activeSlot_ - see the class docs.
-    std::array<std::vector<float>, 2> playbackLeft_;
-    std::array<std::vector<float>, 2> playbackRight_;
-    std::atomic<int> activeSlot_{0};
-
-    /// @brief Audio-thread-only playback cursor state - never touched by
-    /// the worker thread. readingSlot_ is only re-read from activeSlot_ at
-    /// a loop boundary the audio thread itself crosses (see processBlock()).
-    int readingSlot_ = 0;
-    std::size_t playPos_ = 0;
-
-    std::atomic<std::uint64_t> capturedSamplesTotal_{0};
-    std::atomic<std::uint64_t> loopsDecoded_{0};
-    std::atomic<bool> keepLooping_{false};
+    std::atomic<bool> frozen_{false};
     std::atomic<bool> running_{false};
     std::atomic<float> inputGain_{1.0f};
     std::atomic<float> currentInputLevel_{0.0f};
+    std::atomic<float> takeGainLeft_{1.0f};
+    std::atomic<float> takeGainRight_{1.0f};
+
+    /// @brief Worker-thread state.
+    std::uint64_t encodedTakes_ = 0;
+    std::uint64_t previewTake_ = 0;
+    std::size_t previewFed_ = 0;
+    sound_mind::codec::StreamIncrementalEncoder previewEncoder_;
 
     mutable std::mutex imageMutex_;
     sound_mind::codec::StreamImage currentImage_;

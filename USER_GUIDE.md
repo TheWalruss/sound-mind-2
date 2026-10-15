@@ -1770,20 +1770,35 @@ recording is in progress.
 
 ## Loop Mode
 
-The **Loop** panel turns the Studio into a fixed-length loop pedal:
-**Start Loop** begins continuously capturing input in Duration-length
-passes, playing the previous pass back while it records the next. By
-default each new pass records over the last one, same as a standard loop
-pedal; check **Freeze Loop** to freeze whatever's currently playing so it
-just repeats instead of being overwritten. Input and output devices are
-chosen from [Configure Devices](#configure-devices) - open it directly
-with this panel's own **Configure Devices** button; a device change
-takes effect the next time you start the loop, not immediately. Both
-devices are locked (can't be changed) while a loop is running.
+The **Loop** panel turns the Studio into a loop station that plays along
+with your whole project:
 
-While a pass is being captured, the canvas grows continuously as audio
-comes in, rather than waiting silently until the whole pass finishes -
-watch the spectrogram fill in live, in real time.
+- **Start Loop** plays the whole project from the start and, at the same
+  time, records your input into the **Loop Input** layer. (While the
+  project's sound is being prepared, the status bar says "Preparing
+  loop..." for a moment.)
+- When playback reaches the end, the take you just recorded replaces the
+  previous one, and playback carries on from the start - you hear the new
+  take straight away, together with the rest of the project, while the
+  next pass records.
+- Check **Freeze Loop** to stop recording and keep the current take: the
+  project and that take keep playing, pass after pass, uninterrupted.
+  Uncheck it to start recording again at the beginning of the next pass.
+- The Loop Input layer's own **Gain** and **Balance** (and hiding or
+  muting it) apply to the take as you play. Edits to the rest of the
+  project are heard from the next pass on.
+- The playback position bar sweeps across the canvas as the loop plays,
+  and the Loop Input layer shows each take once its pass is complete.
+
+While a loop is running, filters and blend modes on layers *above* Loop
+Input don't apply to the live take yet - once you stop, ordinary
+playback includes them as usual.
+
+Input and output devices are chosen from [Configure
+Devices](#configure-devices) - open it directly with this panel's own
+**Configure Devices** button; a device change takes effect the next time
+you start the loop, not immediately. Both devices are locked (can't be
+changed) while a loop is running.
 
 ## Configure Devices
 

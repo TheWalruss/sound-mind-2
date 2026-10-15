@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
 #include <utility>
 
 #include "sound_mind/codec/stream_codec.h"
@@ -15,50 +14,43 @@ LoopEngine::LoopEngine(sound_mind::codec::StreamCodecConfig config, std::size_t 
     : juce::Thread("LoopEngine"),
       deviceMode_(deviceMode),
       config_(config),
-      // A 0-length loop would make the wrap arithmetic in processBlock()/
-      // processPendingAudio() undefined (division/modulo by zero) - see the
-      // constructor's own docs. Callers are expected never to actually pass
-      // 0 in practice (a project's duration is always positive).
       loopLengthSamples_(std::max<std::size_t>(loopLengthSamples, 1)),
-      captureRingLeft_(static_cast<std::size_t>(kRingCapacity), 0.0f),
-      captureRingRight_(static_cast<std::size_t>(kRingCapacity), 0.0f),
       previewEncoder_(config) {
-    for (int slot = 0; slot < 2; ++slot) {
-        playbackLeft_[static_cast<std::size_t>(slot)].assign(loopLengthSamples_, 0.0f);
-        playbackRight_[static_cast<std::size_t>(slot)].assign(loopLengthSamples_, 0.0f);
+    backing_.sampleRateHz = config_.sampleRateHz;
+    backing_.left.assign(loopLengthSamples_, 0.0f);
+    backing_.right.assign(loopLengthSamples_, 0.0f);
+    for (std::size_t take = 0; take < 2; ++take) {
+        takeLeft_[take].assign(loopLengthSamples_, 0.0f);
+        takeRight_[take].assign(loopLengthSamples_, 0.0f);
     }
 }
 
-LoopEngine::~LoopEngine() {
-    stop();
-}
+LoopEngine::~LoopEngine() { stop(); }
 
 void LoopEngine::start() {
     if (running_.load(std::memory_order_relaxed)) {
         return;
     }
 
-    // Reset all loop-cycle state, so a second start()/stop() cycle behaves
-    // exactly like a freshly constructed engine - see start()'s own docs.
-    pendingLoopLeft_.clear();
-    pendingLoopRight_.clear();
-    for (int slot = 0; slot < 2; ++slot) {
-        std::fill(playbackLeft_[static_cast<std::size_t>(slot)].begin(),
-                   playbackLeft_[static_cast<std::size_t>(slot)].end(), 0.0f);
-        std::fill(playbackRight_[static_cast<std::size_t>(slot)].begin(),
-                   playbackRight_[static_cast<std::size_t>(slot)].end(), 0.0f);
+    for (std::size_t take = 0; take < 2; ++take) {
+        std::fill(takeLeft_[take].begin(), takeLeft_[take].end(), 0.0f);
+        std::fill(takeRight_[take].begin(), takeRight_[take].end(), 0.0f);
     }
-    activeSlot_.store(0, std::memory_order_relaxed);
-    readingSlot_ = 0;
-    playPos_ = 0;
-    capturedSamplesTotal_.store(0, std::memory_order_relaxed);
-    loopsDecoded_.store(0, std::memory_order_relaxed);
+    swapInStagedBacking();
+    playingTake_.store(0, std::memory_order_relaxed);
+    position_ = 0;
+    recording_ = !frozen_.load(std::memory_order_relaxed);
+    recordingNow_.store(recording_, std::memory_order_relaxed);
+    publishedPosition_.store(0, std::memory_order_relaxed);
+    takesCompleted_.store(0, std::memory_order_relaxed);
+    encodedTakes_ = 0;
+    previewTake_ = 0;
+    previewFed_ = 0;
+    previewEncoder_.reset();
     {
-        std::lock_guard<std::mutex> lock(imageMutex_);
+        const std::lock_guard<std::mutex> lock(imageMutex_);
         currentImage_ = sound_mind::codec::StreamImage{};
     }
-    previewEncoder_.reset();
-    previewPushedSamples_ = 0;
     deviceProblem_.clear();
 
     if (deviceMode_ == AudioDeviceMode::Real) {
@@ -84,28 +76,19 @@ void LoopEngine::stop() {
     if (!running_.load(std::memory_order_relaxed)) {
         return;
     }
-
     stopThread(1000);
-
     if (deviceAvailable_) {
         deviceManager_.removeAudioCallback(this);
         deviceAvailable_ = false;
     }
-
     running_.store(false, std::memory_order_relaxed);
 }
 
-bool LoopEngine::isRunning() const noexcept {
-    return running_.load(std::memory_order_relaxed);
-}
+bool LoopEngine::isRunning() const noexcept { return running_.load(std::memory_order_relaxed); }
 
-bool LoopEngine::isDeviceAvailable() const noexcept {
-    return deviceAvailable_;
-}
+bool LoopEngine::isDeviceAvailable() const noexcept { return deviceAvailable_; }
 
-const std::string& LoopEngine::deviceProblem() const noexcept {
-    return deviceProblem_;
-}
+const std::string& LoopEngine::deviceProblem() const noexcept { return deviceProblem_; }
 
 std::vector<std::string> LoopEngine::availableInputDeviceNames() {
     return availableAudioDeviceNames(deviceManager_, true);
@@ -115,21 +98,13 @@ std::vector<std::string> LoopEngine::availableOutputDeviceNames() {
     return availableAudioDeviceNames(deviceManager_, false);
 }
 
-void LoopEngine::setPreferredInputDevice(std::string deviceName) {
-    preferredInputDevice_ = std::move(deviceName);
-}
+void LoopEngine::setPreferredInputDevice(std::string deviceName) { preferredInputDevice_ = std::move(deviceName); }
 
-const std::string& LoopEngine::preferredInputDevice() const noexcept {
-    return preferredInputDevice_;
-}
+const std::string& LoopEngine::preferredInputDevice() const noexcept { return preferredInputDevice_; }
 
-void LoopEngine::setPreferredOutputDevice(std::string deviceName) {
-    preferredOutputDevice_ = std::move(deviceName);
-}
+void LoopEngine::setPreferredOutputDevice(std::string deviceName) { preferredOutputDevice_ = std::move(deviceName); }
 
-const std::string& LoopEngine::preferredOutputDevice() const noexcept {
-    return preferredOutputDevice_;
-}
+const std::string& LoopEngine::preferredOutputDevice() const noexcept { return preferredOutputDevice_; }
 
 void LoopEngine::setInputGain(float gain) noexcept {
     inputGain_.store(std::clamp(gain, 0.0f, kMaxGain), std::memory_order_relaxed);
@@ -139,16 +114,38 @@ float LoopEngine::inputGain() const noexcept { return inputGain_.load(std::memor
 
 float LoopEngine::currentInputLevel() const noexcept { return currentInputLevel_.load(std::memory_order_relaxed); }
 
-void LoopEngine::setKeepLooping(bool keepLooping) noexcept {
-    keepLooping_.store(keepLooping, std::memory_order_relaxed);
+bool LoopEngine::setBackingAudio(sound_mind::codec::AudioBuffer&& audio) {
+    if (audio.frameCount() != loopLengthSamples_ || audio.sampleRateHz != config_.sampleRateHz) {
+        return false;
+    }
+    {
+        const std::lock_guard<std::mutex> lock(stagedMutex_);
+        stagedBacking_ = std::move(audio);
+        hasStagedBacking_.store(true, std::memory_order_release);
+    }
+    if (!running_.load(std::memory_order_relaxed)) {
+        swapInStagedBacking();  // idle: no audio thread to wait for.
+    }
+    return true;
 }
 
-bool LoopEngine::keepLooping() const noexcept {
-    return keepLooping_.load(std::memory_order_relaxed);
+void LoopEngine::setTakeGains(float left, float right) noexcept {
+    takeGainLeft_.store(left, std::memory_order_relaxed);
+    takeGainRight_.store(right, std::memory_order_relaxed);
 }
+
+void LoopEngine::setFrozen(bool frozen) noexcept { frozen_.store(frozen, std::memory_order_relaxed); }
+
+bool LoopEngine::frozen() const noexcept { return frozen_.load(std::memory_order_relaxed); }
+
+std::size_t LoopEngine::playbackPositionSamples() const noexcept {
+    return publishedPosition_.load(std::memory_order_relaxed);
+}
+
+std::uint64_t LoopEngine::takesCompleted() const noexcept { return takesCompleted_.load(std::memory_order_acquire); }
 
 sound_mind::codec::StreamImage LoopEngine::currentImage() const {
-    std::lock_guard<std::mutex> lock(imageMutex_);
+    const std::lock_guard<std::mutex> lock(imageMutex_);
     return currentImage_;
 }
 
@@ -162,14 +159,18 @@ sound_mind::codec::StreamImage LoopEngine::emptyImage() const {
     return sound_mind::codec::encode(silence, config_);
 }
 
-std::uint64_t LoopEngine::loopsCaptured() const noexcept {
-    return capturedSamplesTotal_.load(std::memory_order_relaxed) / static_cast<std::uint64_t>(loopLengthSamples_);
-}
-
-std::uint64_t LoopEngine::loopsBehind() const noexcept {
-    const std::uint64_t captured = loopsCaptured();
-    const std::uint64_t decoded = loopsDecoded_.load(std::memory_order_relaxed);
-    return captured > decoded ? captured - decoded : 0;
+void LoopEngine::swapInStagedBacking() noexcept {
+    if (!hasStagedBacking_.load(std::memory_order_acquire)) {
+        return;
+    }
+    // try_lock: the audio thread must never wait on the UI thread - if it's
+    // mid-setBackingAudio(), the next pass start picks it up instead.
+    std::unique_lock<std::mutex> lock(stagedMutex_, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        return;
+    }
+    std::swap(backing_, stagedBacking_);  // vector pointer swaps only: no allocation.
+    hasStagedBacking_.store(false, std::memory_order_release);
 }
 
 void LoopEngine::processBlock(const float* const* inputChannelData, int numInputChannels,
@@ -177,139 +178,104 @@ void LoopEngine::processBlock(const float* const* inputChannelData, int numInput
     if (numSamples <= 0) {
         return;
     }
-
-    // Capture side: while "Keep looping" is on, newly captured input is
-    // simply never recorded - see setKeepLooping()'s docs - so the last
-    // successfully processed loop just keeps replaying, untouched, below.
-    if (!keepLooping_.load(std::memory_order_relaxed) && numInputChannels > 0 && inputChannelData != nullptr) {
-        const float gain = inputGain_.load(std::memory_order_relaxed);
-        float peak = 0.0f;
-        auto writeScope = captureFifo_.write(numSamples);
-        int inputIndex = 0;
-        writeScope.forEach([&](int ringIndex) {
-            const float left = inputChannelData[0][inputIndex] * gain;
-            const float right = (numInputChannels > 1) ? inputChannelData[1][inputIndex] * gain : left;
-            captureRingLeft_[static_cast<std::size_t>(ringIndex)] = left;
-            captureRingRight_[static_cast<std::size_t>(ringIndex)] = right;
-            peak = std::max({peak, std::abs(left), std::abs(right)});
-            ++inputIndex;
-        });
-        currentInputLevel_.store(peak, std::memory_order_relaxed);
-        // Any input samples that didn't fit (the worker thread falling
-        // behind) are simply dropped, not blocked on - an audio callback
-        // must never wait. A rare, accepted degradation, not a crash.
-        capturedSamplesTotal_.fetch_add(static_cast<std::uint64_t>(numSamples), std::memory_order_relaxed);
+    const bool frozen = frozen_.load(std::memory_order_relaxed);
+    if (frozen) {
+        recording_ = false;  // see setFrozen() - stops immediately.
     }
+    const bool haveInput = numInputChannels > 0 && inputChannelData != nullptr;
+    const bool haveOutput = numOutputChannels > 0 && outputChannelData != nullptr;
+    const float inputGain = inputGain_.load(std::memory_order_relaxed);
+    const float takeGainLeft = takeGainLeft_.load(std::memory_order_relaxed);
+    const float takeGainRight = takeGainRight_.load(std::memory_order_relaxed);
+    int playing = playingTake_.load(std::memory_order_relaxed);
+    float peak = 0.0f;
 
-    if (numOutputChannels <= 0 || outputChannelData == nullptr) {
-        return;
-    }
-
-    // Playback side: read sequentially through readingSlot_, wrapping - and
-    // only then re-checking which slot is active - at this loop's own
-    // boundary. See the class docs' latency note for exactly what this
-    // means for how soon a captured loop is actually heard.
     for (int i = 0; i < numSamples; ++i) {
-        outputChannelData[0][i] = playbackLeft_[static_cast<std::size_t>(readingSlot_)][playPos_];
-        if (numOutputChannels > 1) {
-            outputChannelData[1][i] = playbackRight_[static_cast<std::size_t>(readingSlot_)][playPos_];
+        const auto playingIndex = static_cast<std::size_t>(playing);
+        const auto recordingIndex = static_cast<std::size_t>(1 - playing);
+        if (haveOutput) {
+            outputChannelData[0][i] = backing_.left[position_] + takeLeft_[playingIndex][position_] * takeGainLeft;
+            if (numOutputChannels > 1) {
+                outputChannelData[1][i] =
+                    backing_.right[position_] + takeRight_[playingIndex][position_] * takeGainRight;
+            }
         }
-        ++playPos_;
-        if (playPos_ >= loopLengthSamples_) {
-            playPos_ = 0;
-            readingSlot_ = activeSlot_.load(std::memory_order_acquire);
+        if (haveInput) {
+            const float left = inputChannelData[0][i] * inputGain;
+            const float right = (numInputChannels > 1 ? inputChannelData[1][i] : inputChannelData[0][i]) * inputGain;
+            peak = std::max({peak, std::abs(left), std::abs(right)});
+            if (recording_) {
+                takeLeft_[recordingIndex][position_] = left;
+                takeRight_[recordingIndex][position_] = right;
+            }
+        }
+
+        ++position_;
+        if (position_ >= loopLengthSamples_) {
+            position_ = 0;
+            if (recording_) {
+                playing = 1 - playing;
+                playingTake_.store(playing, std::memory_order_relaxed);
+                takesCompleted_.fetch_add(1, std::memory_order_release);
+            }
+            recording_ = !frozen;
+            swapInStagedBacking();
         }
     }
-    for (int channel = 2; channel < numOutputChannels; ++channel) {
-        std::fill_n(outputChannelData[channel], numSamples, 0.0f);
+
+    if (haveInput) {
+        currentInputLevel_.store(peak, std::memory_order_relaxed);
     }
+    if (haveOutput) {
+        for (int channel = 2; channel < numOutputChannels; ++channel) {
+            std::fill_n(outputChannelData[channel], numSamples, 0.0f);
+        }
+    }
+    publishedPosition_.store(position_, std::memory_order_relaxed);
+    recordingNow_.store(recording_, std::memory_order_relaxed);
 }
 
 void LoopEngine::processPendingAudio() {
-    const int available = captureFifo_.getNumReady();
-    if (available > 0) {
-        const std::size_t previousSize = pendingLoopLeft_.size();
-        pendingLoopLeft_.resize(previousSize + static_cast<std::size_t>(available));
-        pendingLoopRight_.resize(previousSize + static_cast<std::size_t>(available));
-        auto readScope = captureFifo_.read(available);
-        int idx = 0;
-        readScope.forEach([&](int ringIndex) {
-            pendingLoopLeft_[previousSize + static_cast<std::size_t>(idx)] =
-                captureRingLeft_[static_cast<std::size_t>(ringIndex)];
-            pendingLoopRight_[previousSize + static_cast<std::size_t>(idx)] =
-                captureRingRight_[static_cast<std::size_t>(ringIndex)];
-            ++idx;
-        });
-    }
+    const std::uint64_t completed = takesCompleted_.load(std::memory_order_acquire);
+    const int playing = playingTake_.load(std::memory_order_relaxed);
 
-    // Feed the live preview encoder whatever new audio has accumulated in
-    // pendingLoopLeft_/Right_ since it was last fed (tracked by
-    // previewPushedSamples_) - covers everything newly drained above, plus
-    // (if the worker has fallen behind) any earlier backlog not yet pushed.
-    // See LoopEngine's own class docs on currentPreviewImage()'s `v0.0.41.1`
-    // addition, and the loop-boundary re-sync below for why this can be fed
-    // audio spanning more than one loop before any reset happens.
-    if (pendingLoopLeft_.size() > previewPushedSamples_) {
-        const std::size_t newCount = pendingLoopLeft_.size() - previewPushedSamples_;
-        previewEncoder_.pushSamples(pendingLoopLeft_.data() + previewPushedSamples_,
-                                     pendingLoopRight_.data() + previewPushedSamples_, newCount);
-        previewPushedSamples_ = pendingLoopLeft_.size();
-    }
-
-    // Process every whole loop now accumulated - normally at most one, but
-    // more than one can be queued if the worker has fallen behind (see
-    // loopsBehind()'s docs) or a caller (a test, in particular) feeds
-    // several loops' worth of capture in a single processBlock() call
-    // before ever draining it.
-    while (pendingLoopLeft_.size() >= loopLengthSamples_) {
-        sound_mind::codec::AudioBuffer captured;
-        captured.sampleRateHz = config_.sampleRateHz;
-        captured.left.assign(pendingLoopLeft_.begin(), pendingLoopLeft_.begin() + static_cast<long>(loopLengthSamples_));
-        captured.right.assign(pendingLoopRight_.begin(),
-                                pendingLoopRight_.begin() + static_cast<long>(loopLengthSamples_));
-        pendingLoopLeft_.erase(pendingLoopLeft_.begin(), pendingLoopLeft_.begin() + static_cast<long>(loopLengthSamples_));
-        pendingLoopRight_.erase(pendingLoopRight_.begin(),
-                                  pendingLoopRight_.begin() + static_cast<long>(loopLengthSamples_));
-
-        // A loop boundary was just crossed: previewEncoder_ resets so the
-        // next loop's own preview starts fresh (see currentPreviewImage()'s
-        // own docs) - but it may already hold audio belonging to the loop
-        // that's just starting (fed above, before this loop's own slice was
-        // erased), so previewPushedSamples_ shifts down by the same amount
-        // pendingLoopLeft_/Right_ just did, and whatever of it remains gets
-        // re-pushed into the freshly-reset encoder immediately, rather than
-        // waiting for the next processPendingAudio() call to notice it's
-        // "new" again.
-        previewPushedSamples_ =
-            previewPushedSamples_ > loopLengthSamples_ ? previewPushedSamples_ - loopLengthSamples_ : 0;
-        previewEncoder_.reset();
-        if (previewPushedSamples_ > 0) {
-            previewEncoder_.pushSamples(pendingLoopLeft_.data(), pendingLoopRight_.data(), previewPushedSamples_);
-        }
-
-        sound_mind::codec::StreamImage image = sound_mind::codec::encode(captured, config_);
-        const sound_mind::codec::AudioBuffer decoded = sound_mind::codec::decode(image);
-
-        const int nextSlot = 1 - activeSlot_.load(std::memory_order_relaxed);
-        auto& nextLeft = playbackLeft_[static_cast<std::size_t>(nextSlot)];
-        auto& nextRight = playbackRight_[static_cast<std::size_t>(nextSlot)];
-        const std::size_t copyCount = std::min(loopLengthSamples_, decoded.frameCount());
-        std::copy_n(decoded.left.data(), copyCount, nextLeft.begin());
-        std::copy_n(decoded.right.data(), copyCount, nextRight.begin());
-        if (copyCount < loopLengthSamples_) {
-            // decode() is documented to trim to the exact sample count it
-            // was given to encode - this only guards against that contract
-            // ever changing out from under this class.
-            std::fill(nextLeft.begin() + static_cast<long>(copyCount), nextLeft.end(), 0.0f);
-            std::fill(nextRight.begin() + static_cast<long>(copyCount), nextRight.end(), 0.0f);
-        }
-        activeSlot_.store(nextSlot, std::memory_order_release);
-
+    // A newly finished take is the one now playing: read-only for a whole
+    // pass, so encoding it here never races the audio thread's writes.
+    if (completed != encodedTakes_) {
+        sound_mind::codec::AudioBuffer take;
+        take.sampleRateHz = config_.sampleRateHz;
+        take.left = takeLeft_[static_cast<std::size_t>(playing)];
+        take.right = takeRight_[static_cast<std::size_t>(playing)];
+        sound_mind::codec::StreamImage image = sound_mind::codec::encode(take, config_);
         {
-            std::lock_guard<std::mutex> lock(imageMutex_);
+            const std::lock_guard<std::mutex> lock(imageMutex_);
             currentImage_ = std::move(image);
         }
-        loopsDecoded_.fetch_add(1, std::memory_order_relaxed);
+        encodedTakes_ = completed;
+    }
+
+    // The live preview follows the take being recorded: the samples before
+    // the published position were written in this pass and won't change.
+    if (completed != previewTake_) {
+        previewEncoder_.reset();
+        previewFed_ = 0;
+        previewTake_ = completed;
+    }
+    if (!recordingNow_.load(std::memory_order_relaxed)) {
+        // Frozen, or unfrozen but waiting for the next pass: nothing is
+        // being recorded, so the preview shows nothing.
+        if (previewFed_ > 0) {
+            previewEncoder_.reset();
+            previewFed_ = 0;
+        }
+        return;
+    }
+    const std::size_t recorded = publishedPosition_.load(std::memory_order_relaxed);
+    if (recorded > previewFed_) {
+        const auto recording = static_cast<std::size_t>(1 - playing);
+        previewEncoder_.pushSamples(takeLeft_[recording].data() + previewFed_, takeRight_[recording].data() + previewFed_,
+                                     recorded - previewFed_);
+        previewFed_ = recorded;
     }
 }
 

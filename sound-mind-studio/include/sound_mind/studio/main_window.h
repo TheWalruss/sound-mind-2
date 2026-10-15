@@ -3304,6 +3304,22 @@ private:
     /// a loop boundary - see currentPreviewImage()'s own docs.
     void updateLoopLayer();
 
+    /**
+     * @brief Prepares Loop Mode's own project audio in the background: the
+     *        whole project composited exactly as Playback would, but with
+     *        the Loop layer itself left out (the engine mixes the live take
+     *        in on its own - see `LoopEngine`), decoded and fitted to one
+     *        loop. Called when Loop Mode starts and after every edit while
+     *        it runs; a request while one is already in flight is coalesced
+     *        into one follow-up. See pollLoopBacking().
+     */
+    void scheduleLoopBacking();
+
+    /// @brief Finishes a scheduleLoopBacking() task: starts Loop Mode if
+    ///        this was its start-up preparation, otherwise hands the fresh
+    ///        audio to the running engine (applied at the next pass start).
+    void pollLoopBacking();
+
     /// @brief recordDrainTimer_'s slot: moves whatever's newly captured
     /// out of recordEngine_'s ring buffer, while Recording is running -
     /// see RecordEngine::drainAvailable()'s docs for why this needs to
@@ -3895,6 +3911,19 @@ private:
     /// future layer-list operations) can reallocate, invalidating a raw
     /// pointer held across such a call - see layerById().
     std::optional<sound_mind::core::LayerId> loopLayerId_;
+    /// @brief See scheduleLoopBacking(). The task is declared after the
+    ///        result it writes, so it's destroyed (and its thread joined)
+    ///        first.
+    std::optional<sound_mind::codec::AudioBuffer> loopBackingResult_;
+    std::unique_ptr<sound_mind::core::BackgroundTask> loopBackingTask_;
+    bool loopBackingDirty_ = false;
+    QTimer* loopBackingTimer_ = nullptr;
+    /// @brief Loop Mode was started and is waiting for its first project
+    ///        audio before the engine actually starts.
+    bool loopStartPending_ = false;
+    /// @brief The last LoopEngine::takesCompleted() copied into the Loop
+    ///        layer - see updateLoopLayer().
+    std::uint64_t loopTakesShown_ = 0;
 
     /// @brief Constructed in the member-initializer list (not a fixed
     /// in-class default) since it needs `audioDeviceMode_`'s value, which

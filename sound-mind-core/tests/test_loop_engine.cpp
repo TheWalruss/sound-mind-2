@@ -8,335 +8,285 @@
 
 #include "sound_mind/core/loop_engine.h"
 
+using sound_mind::codec::AudioBuffer;
 using sound_mind::codec::StreamCodecConfig;
 using sound_mind::core::AudioDeviceMode;
 using sound_mind::core::LoopEngine;
 
 namespace {
 
-/// @brief A mono sine tone, as a plain sample vector - LoopEngine::
-/// processBlock() takes raw channel pointers, matching a real audio
-/// callback's own shape.
+/// @brief Drives LoopEngine::processBlock() with plain vectors, the way a
+/// real audio callback would - stereo out, mono or stereo in.
+struct Block {
+    std::vector<float> inLeft;
+    std::vector<float> inRight;
+    std::vector<float> outLeft;
+    std::vector<float> outRight;
+
+    explicit Block(std::size_t samples, float inputValue = 0.0f)
+        : inLeft(samples, inputValue), inRight(samples, inputValue), outLeft(samples, 0.0f), outRight(samples, 0.0f) {}
+
+    void run(LoopEngine& engine) {
+        const float* inputs[2] = {inLeft.data(), inRight.data()};
+        float* outputs[2] = {outLeft.data(), outRight.data()};
+        engine.processBlock(inputs, 2, outputs, 2, static_cast<int>(outLeft.size()));
+    }
+};
+
+AudioBuffer constantAudio(std::size_t samples, float left, float right, std::uint32_t sampleRateHz = 44100) {
+    AudioBuffer audio;
+    audio.sampleRateHz = sampleRateHz;
+    audio.left.assign(samples, left);
+    audio.right.assign(samples, right);
+    return audio;
+}
+
 std::vector<float> makeSineTone(float frequencyHz, std::size_t sampleCount, std::uint32_t sampleRateHz) {
     std::vector<float> samples(sampleCount);
     for (std::size_t i = 0; i < sampleCount; ++i) {
-        samples[i] =
-            std::sin(2.0f * std::numbers::pi_v<float> * frequencyHz * static_cast<float>(i) / static_cast<float>(sampleRateHz));
+        samples[i] = 0.5f * std::sin(2.0f * std::numbers::pi_v<float> * frequencyHz * static_cast<float>(i) /
+                                     static_cast<float>(sampleRateHz));
     }
     return samples;
 }
 
 }  // namespace
 
-TEST_CASE("LoopEngine starts with no image, not running, and keepLooping off", "[loop_engine]") {
+TEST_CASE("A fresh LoopEngine is idle, unfrozen, silent and at position 0", "[loop_engine]") {
     LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
     CHECK_FALSE(engine.isRunning());
     CHECK_FALSE(engine.isDeviceAvailable());
-    CHECK_FALSE(engine.keepLooping());
+    CHECK_FALSE(engine.frozen());
+    CHECK(engine.takesCompleted() == 0);
+    CHECK(engine.playbackPositionSamples() == 0);
+    CHECK(engine.loopLengthSamples() == 1024);
     CHECK(engine.currentImage().frameCount == 0);
     CHECK(engine.currentPreviewImage().frameCount == 0);
-    CHECK(engine.loopsCaptured() == 0);
-    CHECK(engine.loopsBehind() == 0);
-}
-
-TEST_CASE("A fresh LoopEngine has unity input gain and no input level", "[loop_engine]") {
-    const LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
     CHECK(engine.inputGain() == 1.0f);
     CHECK(engine.currentInputLevel() == 0.0f);
 }
 
 TEST_CASE("LoopEngine::setInputGain clamps to [0, kMaxGain]", "[loop_engine]") {
     LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
-
     engine.setInputGain(-1.0f);
     CHECK(engine.inputGain() == 0.0f);
-
     engine.setInputGain(LoopEngine::kMaxGain + 1.0f);
     CHECK(engine.inputGain() == LoopEngine::kMaxGain);
-
-    engine.setInputGain(1.5f);
-    CHECK(engine.inputGain() == 1.5f);
 }
 
-TEST_CASE("LoopEngine::processBlock applies inputGain to captured audio", "[loop_engine]") {
-    const StreamCodecConfig config;
-    constexpr std::size_t loopLen = 64;
-    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
-    engine.setInputGain(0.5f);
-
-    std::vector<float> input(loopLen, 0.0f);
-    input[5] = 1.0f;
-    const float* inputChannels[1] = {input.data()};
-    std::vector<float> scratchOut(loopLen, 0.0f);
-    float* outputChannels[1] = {scratchOut.data()};
-
-    engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(loopLen));
-
-    CHECK(engine.currentInputLevel() == Catch::Approx(0.5f));
-}
-
-TEST_CASE("A fresh LoopEngine prefers the default input/output devices", "[loop_engine]") {
-    const LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
+TEST_CASE("Device preferences are stored for the next start()", "[loop_engine]") {
+    LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
     CHECK(engine.preferredInputDevice().empty());
-    CHECK(engine.preferredOutputDevice().empty());
+    engine.setPreferredInputDevice("Mic");
+    engine.setPreferredOutputDevice("Speakers");
+    CHECK(engine.preferredInputDevice() == "Mic");
+    CHECK(engine.preferredOutputDevice() == "Speakers");
+    static_cast<void>(engine.availableInputDeviceNames());
+    static_cast<void>(engine.availableOutputDeviceNames());
 }
 
-TEST_CASE("setPreferredInputDevice/setPreferredOutputDevice store the preference for the next start()",
-          "[loop_engine]") {
-    LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
-    engine.setPreferredInputDevice("Some Microphone");
-    engine.setPreferredOutputDevice("Some Speakers");
-    CHECK(engine.preferredInputDevice() == "Some Microphone");
-    CHECK(engine.preferredOutputDevice() == "Some Speakers");
-}
-
-TEST_CASE("availableInputDeviceNames/availableOutputDeviceNames are callable without crashing", "[loop_engine]") {
-    LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
-    const auto inputs = engine.availableInputDeviceNames();
-    const auto outputs = engine.availableOutputDeviceNames();
-    // No real device is guaranteed in a CI/test environment - just confirm
-    // the calls are well-formed.
-    CHECK(inputs == engine.availableInputDeviceNames());
-    CHECK(outputs == engine.availableOutputDeviceNames());
-}
-
-TEST_CASE("emptyImage returns a silent, correctly-dimensioned placeholder without touching currentImage()",
-          "[loop_engine]") {
-    const StreamCodecConfig config;
-    constexpr std::size_t loopLen = 64;
-    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
-
-    const sound_mind::codec::StreamImage placeholder = engine.emptyImage();
-
-    CHECK(placeholder.frameCount > 0);
-    CHECK(placeholder.config.binCount == config.binCount);
-    CHECK(placeholder.sampleCount == loopLen);
-    // currentImage() is untouched - emptyImage() is a pure function of this
-    // engine's own config/loop length, independent of running state.
-    CHECK(engine.currentImage().frameCount == 0);
-
-    // Callable before start() too, not just at any point after.
-    LoopEngine neverStarted(config, loopLen, AudioDeviceMode::None);
-    CHECK(neverStarted.emptyImage().frameCount == placeholder.frameCount);
-}
-
-TEST_CASE("LoopEngine::start with AudioDeviceMode::None never opens a real device", "[loop_engine]") {
+TEST_CASE("start() with AudioDeviceMode::None runs without opening a device", "[loop_engine]") {
     LoopEngine engine(StreamCodecConfig{}, 1024, AudioDeviceMode::None);
     engine.start();
     CHECK(engine.isRunning());
     CHECK_FALSE(engine.isDeviceAvailable());
-    CHECK(engine.deviceProblem().empty());  // None mode wants no device - nothing to report.
     engine.stop();
     CHECK_FALSE(engine.isRunning());
 }
 
-TEST_CASE("processPendingAudio does nothing until a whole loop has been captured", "[loop_engine]") {
+TEST_CASE("emptyImage is a silent image as long as one loop", "[loop_engine]") {
     const StreamCodecConfig config;
-    constexpr std::size_t loopLen = 64;
-    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
-
-    const std::vector<float> input = makeSineTone(440.0f, loopLen - 1, config.sampleRateHz);
-    const float* inputChannels[1] = {input.data()};
-    std::vector<float> scratchOut(input.size(), 0.0f);
-    float* outputChannels[1] = {scratchOut.data()};
-
-    engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(input.size()));
-    engine.processPendingAudio();
-
-    CHECK(engine.currentImage().frameCount == 0);
-    CHECK(engine.loopsCaptured() == 0);
+    LoopEngine engine(config, 8192, AudioDeviceMode::None);
+    const auto image = engine.emptyImage();
+    CHECK(image.frameCount > 0);
+    CHECK(image.sampleCount == 8192);
 }
 
-TEST_CASE("A completed loop is encoded and decoded, updating currentImage()/loopsCaptured()", "[loop_engine]") {
-    const StreamCodecConfig config;
-    constexpr std::size_t loopLen = 64;
-    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
-
-    const std::vector<float> input = makeSineTone(440.0f, loopLen, config.sampleRateHz);
-    const float* inputChannels[1] = {input.data()};
-    std::vector<float> scratchOut(input.size(), 0.0f);
-    float* outputChannels[1] = {scratchOut.data()};
-
-    engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(input.size()));
-    engine.processPendingAudio();
-
-    CHECK(engine.currentImage().frameCount > 0);
-    CHECK(engine.loopsCaptured() == 1);
-    CHECK(engine.loopsBehind() == 0);
-}
-
-TEST_CASE(
-    "Even with the worker keeping up perfectly, a captured loop is first heard two playback loops later - "
-    "see LoopEngine's own docs for why this fixed baseline is structural, not a bug",
-    "[loop_engine]") {
-    const StreamCodecConfig config;
-    constexpr std::size_t loopLen = 32;
-    constexpr std::size_t chunk = 4;
-    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
-
-    const std::vector<float> loop0Tone = makeSineTone(440.0f, loopLen, config.sampleRateHz);
-    const std::vector<float> silence(loopLen, 0.0f);
-
-    // Feed three whole loops in small chunks (simulating real callback
-    // timing), draining the worker after every chunk so it comfortably
-    // keeps up: loop 0 captures a real tone, loops 1 and 2 capture silence
-    // (their content is irrelevant - only what's *played back* during them
-    // is under test here).
-    std::vector<float> output(loopLen * 3, -1.0f);
-    auto feedLoop = [&](const std::vector<float>& captureInput, std::size_t outputOffset) {
-        for (std::size_t offset = 0; offset < loopLen; offset += chunk) {
-            const float* in[1] = {captureInput.data() + offset};
-            float* out[1] = {output.data() + outputOffset + offset};
-            engine.processBlock(in, 1, out, 1, static_cast<int>(chunk));
-            engine.processPendingAudio();
-        }
-    };
-    feedLoop(loop0Tone, 0);
-    feedLoop(silence, loopLen);
-    feedLoop(silence, loopLen * 2);
-
-    CHECK(engine.loopsCaptured() == 3);
-    CHECK(engine.loopsBehind() == 0);  // the worker never fell behind - see the fixed-baseline note above.
-
-    const auto isZero = [](float sample) { return sample == 0.0f; };
-    const bool playbackLoop0Silent = std::all_of(output.begin(), output.begin() + static_cast<long>(loopLen), isZero);
-    const bool playbackLoop1Silent = std::all_of(output.begin() + static_cast<long>(loopLen),
-                                                  output.begin() + static_cast<long>(loopLen * 2), isZero);
-    const bool playbackLoop2AnyNonZero =
-        std::any_of(output.begin() + static_cast<long>(loopLen * 2), output.end(), [](float s) { return s != 0.0f; });
-
-    CHECK(playbackLoop0Silent);
-    CHECK(playbackLoop1Silent);
-    CHECK(playbackLoop2AnyNonZero);
-}
-
-TEST_CASE("keepLooping discards newly captured input instead of recording over the last take", "[loop_engine]") {
-    const StreamCodecConfig config;
-    constexpr std::size_t loopLen = 32;
-    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
-    engine.setKeepLooping(true);
-    CHECK(engine.keepLooping());
-
-    const std::vector<float> input = makeSineTone(440.0f, loopLen * 2, config.sampleRateHz);
-    const float* inputChannels[1] = {input.data()};
-    std::vector<float> scratchOut(input.size(), 0.0f);
-    float* outputChannels[1] = {scratchOut.data()};
-
-    engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(input.size()));
-    engine.processPendingAudio();
-
-    // Nothing was ever captured - see processBlock()'s docs.
-    CHECK(engine.loopsCaptured() == 0);
-    CHECK(engine.currentImage().frameCount == 0);
-}
-
-TEST_CASE("currentPreviewImage grows incrementally as a loop is captured, resetting once the loop completes",
-          "[loop_engine]") {
-    const StreamCodecConfig config;
-    constexpr std::size_t loopLen = 4000;  // several incremental frames' worth (fftSize = hopLength*4 = 1764).
-    constexpr std::size_t chunk = 500;
-    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
-
-    const std::vector<float> tone = makeSineTone(440.0f, loopLen, config.sampleRateHz);
-    std::vector<float> scratchOut(chunk, 0.0f);
-    float* outputChannels[1] = {scratchOut.data()};
-
-    std::uint32_t previousFrameCount = 0;
-    bool sawGrowth = false;
-    for (std::size_t offset = 0; offset < loopLen; offset += chunk) {
-        const float* inputChannels[1] = {tone.data() + offset};
-        engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(chunk));
-        engine.processPendingAudio();
-
-        const std::uint32_t frameCount = engine.currentPreviewImage().frameCount;
-        const bool loopJustCompleted = offset + chunk >= loopLen;
-        if (!loopJustCompleted) {
-            CHECK(frameCount >= previousFrameCount);  // never shrinks mid-loop.
-        }
-        if (frameCount > previousFrameCount) {
-            sawGrowth = true;
-        }
-        previousFrameCount = frameCount;
+TEST_CASE("The output plays the staged project audio from the start, wrapping at the loop length", "[loop_engine]") {
+    constexpr std::size_t loopLen = 8;
+    LoopEngine engine(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    AudioBuffer backing = constantAudio(loopLen, 0.0f, 0.0f);
+    for (std::size_t i = 0; i < loopLen; ++i) {
+        backing.left[i] = static_cast<float>(i);
+        backing.right[i] = -static_cast<float>(i);
     }
+    REQUIRE(engine.setBackingAudio(std::move(backing)));
 
-    CHECK(sawGrowth);
-    CHECK(engine.currentImage().frameCount > 0);        // the loop completed...
-    CHECK(engine.currentPreviewImage().frameCount == 0);  // ...and the preview reset for the next one.
+    Block block(12);
+    block.run(engine);
+
+    for (std::size_t i = 0; i < 12; ++i) {
+        CHECK(block.outLeft[i] == static_cast<float>(i % loopLen));
+        CHECK(block.outRight[i] == -static_cast<float>(i % loopLen));
+    }
+    CHECK(engine.playbackPositionSamples() == 4);
 }
 
-TEST_CASE("currentPreviewImage resyncs correctly when multiple loops complete within a single processPendingAudio call",
+TEST_CASE("setBackingAudio rejects audio that isn't exactly one loop long", "[loop_engine]") {
+    LoopEngine engine(StreamCodecConfig{}, 8, AudioDeviceMode::None);
+    CHECK_FALSE(engine.setBackingAudio(constantAudio(7, 0.0f, 0.0f)));
+    CHECK(engine.setBackingAudio(constantAudio(8, 0.0f, 0.0f)));
+}
+
+TEST_CASE("Replacing the project audio while running takes effect at the next loop start, not mid-loop",
           "[loop_engine]") {
-    const StreamCodecConfig config;
-    constexpr std::size_t loopLen = 2000;
-    constexpr std::size_t trailingLeftover = 1000;
-    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
+    constexpr std::size_t loopLen = 8;
+    LoopEngine engine(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    REQUIRE(engine.setBackingAudio(constantAudio(loopLen, 1.0f, 1.0f)));
+    engine.start();  // while idle, new project audio applies immediately instead.
+    Block first(4);
+    first.run(engine);  // position 4 of 8.
 
-    const std::vector<float> input = makeSineTone(440.0f, loopLen * 2 + trailingLeftover, config.sampleRateHz);
-    const float* inputChannels[1] = {input.data()};
-    std::vector<float> scratchOut(input.size(), 0.0f);
-    float* outputChannels[1] = {scratchOut.data()};
+    REQUIRE(engine.setBackingAudio(constantAudio(loopLen, 2.0f, 2.0f)));
+    Block rest(8);
+    rest.run(engine);
 
-    // Feed two whole loops plus a partial third loop's worth in one shot,
-    // without ever draining the worker in between - simulates falling
-    // behind, then catching up in a single processPendingAudio() call (see
-    // the analogous loopsBehind() test above).
-    engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(input.size()));
-    engine.processPendingAudio();
-
-    CHECK(engine.loopsCaptured() == 2);
-    CHECK(engine.loopsBehind() == 0);
-    // The preview should reflect only the third loop's own leftover
-    // samples, correctly resynced across both loop-boundary resets - not
-    // left stale, or holding audio belonging to an already-completed loop.
-    const auto preview = engine.currentPreviewImage();
-    CHECK(preview.sampleCount == trailingLeftover);
-    CHECK(preview.frameCount == 0);  // not enough for a full frame yet.
-}
-
-TEST_CASE("start() resets currentPreviewImage back to empty, same as currentImage", "[loop_engine]") {
-    const StreamCodecConfig config;
-    constexpr std::size_t loopLen = 2000;
-    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
-
-    const std::vector<float> tone = makeSineTone(440.0f, loopLen, config.sampleRateHz);
-    const float* inputChannels[1] = {tone.data()};
-    std::vector<float> scratchOut(tone.size(), 0.0f);
-    float* outputChannels[1] = {scratchOut.data()};
-
-    engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(tone.size()));
-    engine.processPendingAudio();
-    REQUIRE(engine.currentImage().frameCount > 0);
-
+    for (std::size_t i = 0; i < 4; ++i) {
+        CHECK(rest.outLeft[i] == 1.0f);  // the rest of the current pass.
+    }
+    for (std::size_t i = 4; i < 8; ++i) {
+        CHECK(rest.outLeft[i] == 2.0f);  // the next pass.
+    }
     engine.stop();
-    engine.start();
-
-    CHECK(engine.currentImage().frameCount == 0);
-    CHECK(engine.currentPreviewImage().frameCount == 0);
 }
 
-TEST_CASE("loopsBehind reflects loops captured but not yet processed by the worker", "[loop_engine]") {
+TEST_CASE("A take recorded during one pass plays back during the next, mixed with the project",
+          "[loop_engine]") {
+    constexpr std::size_t loopLen = 8;
+    LoopEngine engine(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    REQUIRE(engine.setBackingAudio(constantAudio(loopLen, 0.25f, 0.25f)));
+
+    Block firstPass(loopLen, 0.5f);  // the input during pass 1.
+    firstPass.run(engine);
+    for (const float sample : firstPass.outLeft) {
+        CHECK(sample == 0.25f);  // no take yet - just the project.
+    }
+    CHECK(engine.takesCompleted() == 1);
+
+    Block secondPass(loopLen, 0.0f);
+    secondPass.run(engine);
+    for (const float sample : secondPass.outLeft) {
+        CHECK(sample == Catch::Approx(0.75f));  // project + the pass-1 take.
+    }
+}
+
+TEST_CASE("The take's own left/right gains scale it in the mix", "[loop_engine]") {
+    constexpr std::size_t loopLen = 4;
+    LoopEngine engine(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    engine.setTakeGains(0.5f, 0.0f);
+
+    Block firstPass(loopLen, 1.0f);
+    firstPass.run(engine);
+    Block secondPass(loopLen, 0.0f);
+    secondPass.run(engine);
+
+    CHECK(secondPass.outLeft[0] == Catch::Approx(0.5f));
+    CHECK(secondPass.outRight[0] == Catch::Approx(0.0f));
+}
+
+TEST_CASE("Freezing keeps the current take and stops recording; unfreezing starts a fresh take at the next pass",
+          "[loop_engine]") {
+    constexpr std::size_t loopLen = 4;
+    LoopEngine engine(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+
+    Block pass1(loopLen, 0.5f);
+    pass1.run(engine);  // take = 0.5.
+    engine.setFrozen(true);
+    CHECK(engine.frozen());
+
+    Block pass2(loopLen, 0.9f);  // ignored while frozen.
+    pass2.run(engine);
+    Block pass3(loopLen, 0.0f);
+    pass3.run(engine);
+    CHECK(pass2.outLeft[0] == Catch::Approx(0.5f));
+    CHECK(pass3.outLeft[0] == Catch::Approx(0.5f));  // still the frozen take.
+    CHECK(engine.takesCompleted() == 1);
+
+    // Unfreezing mid-pass doesn't record a partial take over the frozen one.
+    Block half(2, 0.2f);
+    engine.setFrozen(false);
+    half.run(engine);
+    Block restOfPass(2, 0.2f);
+    restOfPass.run(engine);
+    CHECK(engine.takesCompleted() == 1);
+    Block nextPass(loopLen, 0.3f);  // recorded.
+    nextPass.run(engine);
+    CHECK(engine.takesCompleted() == 2);
+    Block after(loopLen, 0.0f);
+    after.run(engine);
+    CHECK(after.outLeft[0] == Catch::Approx(0.3f));
+}
+
+TEST_CASE("Captured input is scaled by the input gain and reported as the input level", "[loop_engine]") {
+    constexpr std::size_t loopLen = 4;
+    LoopEngine engine(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    engine.setInputGain(0.5f);
+    Block pass1(loopLen, 0.8f);
+    pass1.run(engine);
+    CHECK(engine.currentInputLevel() == Catch::Approx(0.4f));
+    Block pass2(loopLen, 0.0f);
+    pass2.run(engine);
+    CHECK(pass2.outLeft[0] == Catch::Approx(0.4f));
+}
+
+TEST_CASE("processPendingAudio encodes each finished take into currentImage", "[loop_engine]") {
     const StreamCodecConfig config;
-    constexpr std::size_t loopLen = 32;
+    const std::size_t loopLen = 8192;
     LoopEngine engine(config, loopLen, AudioDeviceMode::None);
+    const auto tone = makeSineTone(1000.0f, loopLen, config.sampleRateHz);
+    Block pass(loopLen);
+    pass.inLeft = tone;
+    pass.inRight = tone;
+    pass.run(engine);
 
-    const std::vector<float> input = makeSineTone(440.0f, loopLen * 3, config.sampleRateHz);
-    const float* inputChannels[1] = {input.data()};
-    std::vector<float> scratchOut(input.size(), 0.0f);
-    float* outputChannels[1] = {scratchOut.data()};
-
-    // Feed three whole loops in one go, without ever draining the worker in
-    // between - simulates it having fallen behind by two whole loops (the
-    // third/most recent loop is "the just-completed one", not itself a
-    // backlog - see loopsBehind()'s docs).
-    engine.processBlock(inputChannels, 1, outputChannels, 1, static_cast<int>(input.size()));
-
-    CHECK(engine.loopsCaptured() == 3);
-    CHECK(engine.loopsBehind() == 3);
-
-    // One processPendingAudio() call drains everything queued, a whole loop
-    // at a time.
     engine.processPendingAudio();
 
-    CHECK(engine.loopsBehind() == 0);
-    CHECK(engine.loopsCaptured() == 3);
+    const auto image = engine.currentImage();
+    REQUIRE(image.frameCount > 0);
+    CHECK(image.sampleCount == loopLen);
+    const float peakDb = *std::max_element(image.leftMagnitudeDb.begin(), image.leftMagnitudeDb.end());
+    CHECK(peakDb > -12.0f);  // a 0.5-amplitude tone, about -6 dBFS.
+}
+
+TEST_CASE("currentPreviewImage grows during a pass and starts over at the next one", "[loop_engine]") {
+    const StreamCodecConfig config;
+    const std::size_t loopLen = 16384;
+    LoopEngine engine(config, loopLen, AudioDeviceMode::None);
+    const auto tone = makeSineTone(1000.0f, loopLen, config.sampleRateHz);
+
+    Block firstHalf(loopLen / 2);
+    firstHalf.inLeft.assign(tone.begin(), tone.begin() + static_cast<long>(loopLen / 2));
+    firstHalf.inRight = firstHalf.inLeft;
+    firstHalf.run(engine);
+    engine.processPendingAudio();
+    const auto halfway = engine.currentPreviewImage().frameCount;
+    CHECK(halfway > 0);
+
+    Block secondHalf(loopLen / 2);
+    secondHalf.inLeft.assign(tone.begin() + static_cast<long>(loopLen / 2), tone.end());
+    secondHalf.inRight = secondHalf.inLeft;
+    secondHalf.run(engine);
+    Block bitOfNext(1024);
+    bitOfNext.run(engine);
+    engine.processPendingAudio();
+
+    CHECK(engine.currentPreviewImage().frameCount < halfway);
+}
+
+TEST_CASE("start() resets position, takes and images", "[loop_engine]") {
+    constexpr std::size_t loopLen = 4;
+    LoopEngine engine(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    Block pass(loopLen + 1, 0.5f);
+    pass.run(engine);
+    REQUIRE(engine.takesCompleted() == 1);
+
+    engine.start();
+    CHECK(engine.playbackPositionSamples() == 0);
+    CHECK(engine.takesCompleted() == 0);
+    CHECK(engine.currentImage().frameCount == 0);
+    engine.stop();
+
+    Block silent(loopLen, 0.0f);
+    silent.run(engine);
+    CHECK(silent.outLeft[0] == 0.0f);  // the old take is gone.
 }

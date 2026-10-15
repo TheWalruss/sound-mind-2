@@ -6,6 +6,22 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.35.1] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.75.1`, installment A: Loop Mode rebuilt to your spec.
+
+### Changed
+
+- **Loop Mode now plays the whole project while it records.** Start Loop plays the project from the start and records your input into the Loop Input layer at the same time. At the end, the new take replaces the previous one and playback continues from the start - the new take is heard straight away, with the rest of the project. Before, Loop Mode played back only your own takes, two passes late, and never the project.
+- **Freeze Loop** stops recording and keeps the current take while the project and that take keep playing; unfreezing starts recording again at the next pass.
+- The Loop Input layer's Gain, Balance, hide and mute apply to the take live; edits to the rest of the project are heard from the next pass.
+- **The playback position bar now sweeps across the canvas while looping.**
+
+### Known limitation
+
+- While looping, filters and blend modes on layers above Loop Input don't apply to the live take; ordinary playback after stopping includes them.
+- The canvas no longer grows live while a take is recorded; the take appears when its pass completes. A "live-encoding view" option comes in the next installment.
+
 ## [0.1.34.2] - 2026-10-15
 
 ### Fixed (developer-facing)
