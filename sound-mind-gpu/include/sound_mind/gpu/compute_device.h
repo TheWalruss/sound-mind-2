@@ -27,7 +27,9 @@ enum class AdapterKind {
     ///        hardware; exists here so the real D3D12 code path (device,
     ///        pipeline, dispatch, readback) can be exercised and tested
     ///        even on a machine with no GPU at all - not a performance
-    ///        claim.
+    ///        claim. Microsoft's Basic Render Driver (vendor 0x1414,
+    ///        device 0x8C), which virtual machines often list without the
+    ///        software flag, counts as this too.
     Warp,
 };
 

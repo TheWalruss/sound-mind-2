@@ -1956,6 +1956,7 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - a theme test matched its forbidden property name inside a stylesheet comment;
       - a `MindWaveController` test predated the "Create New MindWave..." combo entry.
     - **`MainWindowTest` wait loops are bounded.** Its 43 `while (!button->isHidden()) QTest::qWait(5);` loops became `QTRY_VERIFY_WITH_TIMEOUT(..., 120000)`, so a background task that never finishes fails with a location instead of spinning until the CTest timeout.
+    - **Update, `v0.1.34.2`:** GitHub's runners expose Microsoft's Basic Render Driver (vendor 0x1414, device 0x8C) without `DXGI_ADAPTER_FLAG_SOFTWARE`, so `ComputeDevice::create()` picked it as "hardware" and the skip never applied. It is now skipped in the hardware pass and reached as WARP.
     - **GPU-vs-CPU timing assertions skip on WARP.** The six "measurably faster than the CPU reference" tests in `test_compute_device.cpp` now go through `checkGpuFasterThanCpu()`, which only asserts on a hardware adapter. On WARP (Microsoft's CPU-side rasterizer, which GitHub's GPU-less runners get) it records a `WARN` and skips; the correctness checks in each test still run. The timing race against WARP was the CI failure (`medianBlur2DVarying`).
 
 230. **Layer deletion removes its content for good; export renders the full composite; the canvas refreshes on structural changes.** Settled in `v0.1.31.1`, Pre-Beta Plan milestone `v0.Y.71.1`.

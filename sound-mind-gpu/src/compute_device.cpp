@@ -254,7 +254,13 @@ ComPtr<ID3D12Device> createHardwareDevice(IDXGIFactory4* factory) {
         }
         DXGI_ADAPTER_DESC1 desc{};
         adapter->GetDesc1(&desc);
-        if ((desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0) {
+        // Microsoft's Basic Render Driver is WARP under another name; on
+        // virtual machines (CI runners included) it's often listed without
+        // the software flag, which made a CPU rasterizer pass as hardware.
+        constexpr UINT kMicrosoftVendorId = 0x1414;
+        constexpr UINT kBasicRenderDriverDeviceId = 0x8C;
+        const bool basicRenderDriver = desc.VendorId == kMicrosoftVendorId && desc.DeviceId == kBasicRenderDriverDeviceId;
+        if ((desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0 || basicRenderDriver) {
             continue;  // DXGI's own software-adapter listing - WARP is requested explicitly below instead.
         }
         if (ComPtr<ID3D12Device> device = tryCreateDevice(adapter.Get())) {

@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.34.2] - 2026-10-15
+
+### Fixed (developer-facing)
+
+- Microsoft's Basic Render Driver - the software adapter virtual machines, including GitHub's CI runners, often list without the software flag - is now recognized as WARP. CI's GPU timing tests were treating it as a real GPU and failing.
+
 ## [0.1.34.1] - 2026-10-15
 
 Pre-Beta Plan milestone `v0.Y.74.1`: brush and Paint tool fixes from manual testing.
