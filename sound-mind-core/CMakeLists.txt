@@ -70,6 +70,7 @@ add_library(sound-mind-core
     src/filter_preset.cpp
     src/tool_configuration_preview.cpp
     src/filter_preview.cpp
+    src/guide_path_operation.cpp
     src/grid_preset.cpp
 )
 

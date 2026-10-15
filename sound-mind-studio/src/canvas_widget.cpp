@@ -17,6 +17,7 @@
 
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/polar_projection.h"
+#include "sound_mind/core/guide_path_operation.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
@@ -153,8 +154,13 @@ void CanvasWidget::setToolMode(ToolMode mode) {
     paintStrokeActive_ = false;
     pickStrokeActive_ = false;
     selectStrokeActive_ = false;
+    pathStrokeActive_ = false;
     rotateHandleDragActive_ = false;
     update();
+}
+
+QColor CanvasWidget::guidePathColor(bool branching) {
+    return branching ? QColor(255, 64, 200) : QColor(0, 200, 255);
 }
 
 void CanvasWidget::setPaintPreviewPath(sound_mind::core::Path path) {
@@ -503,6 +509,10 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
             // after them so both sets of reference lines sit together,
             // under every interactive overlay.
             drawChordPreview(painter);
+
+            // Silent guide paths - drawn above the reference lines, under
+            // the live preview and highlights, like any other object.
+            drawGuidePaths(painter);
         }
 
         // MindWave Preview (see setMindWavePreview()'s own docs) - a
@@ -797,6 +807,35 @@ void CanvasWidget::drawOperationOverlays(QPainter& painter) const {
     }
 }
 
+void CanvasWidget::drawGuidePaths(QPainter& painter) const {
+    painter.setBrush(Qt::NoBrush);
+    for (const sound_mind::core::Layer& layer : project_->layers()) {
+        if (!layer.visible()) {
+            continue;
+        }
+        for (const sound_mind::core::Operation* operation :
+             project_->operationLog().activeOperationsTargeting(layer.id())) {
+            const auto* guide = dynamic_cast<const sound_mind::core::GuidePathOperation*>(operation);
+            if (guide == nullptr || guide->isEmpty()) {
+                continue;
+            }
+            const QColor color = guidePathColor(guide->isBranching());
+            for (const sound_mind::core::BranchGraft& branch : guide->branches()) {
+                const QPainterPath path = toPainterPath(branch.path);
+                painter.setPen(QPen(Qt::black, 4));
+                painter.drawPath(path);
+                painter.setPen(QPen(color, 2));
+                painter.drawPath(path);
+                if (branch.parentIndex.has_value() && !branch.path.nodes().empty()) {
+                    painter.setPen(QPen(color, 2, Qt::DashLine));
+                    painter.drawLine(timeFrequencyToWidgetPoint(branch.graftPoint),
+                                     timeFrequencyToWidgetPoint(branch.path.nodes().front().anchor));
+                }
+            }
+        }
+    }
+}
+
 void CanvasWidget::drawPreviewPathNodes(QPainter& painter) const {
     constexpr double kNodeRadius = 3.0;
     constexpr double kSelectedNodeRadius = 5.0;
@@ -923,12 +962,11 @@ void CanvasWidget::mousePressEvent(QMouseEvent* event) {
         selectStrokeActive_ = true;
         emit selectStrokeStarted(*point, event->modifiers());
     } else if (toolMode_ == ToolMode::Path) {
-        // Path mode: no "active" bookkeeping - see pathNodePlaced()'s own
-        // docs for why a single press is the whole gesture.
-        emit pathNodePlaced(*point);
+        pathStrokeActive_ = true;
+        emit pathStrokeStarted(*point);
     } else {
-        // ChordStamp mode: same single-press-is-the-whole-gesture shape as
-        // Path above - see chordStampRequested()'s own docs.
+        // ChordStamp mode: a single press is the whole gesture - see
+        // chordStampRequested()'s own docs.
         emit chordStampRequested(*point);
     }
 }
@@ -949,6 +987,12 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
     if (toolMode_ == ToolMode::Pick && pickStrokeActive_) {
         if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
             emit pickStrokeContinued(*point);
+        }
+        return;
+    }
+    if (toolMode_ == ToolMode::Path && pathStrokeActive_) {
+        if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
+            emit pathStrokeContinued(*point);
         }
         return;
     }
@@ -991,6 +1035,11 @@ void CanvasWidget::mouseReleaseEvent(QMouseEvent* event) {
     if (toolMode_ == ToolMode::Pick && pickStrokeActive_) {
         pickStrokeActive_ = false;
         emit pickStrokeEnded();
+        return;
+    }
+    if (toolMode_ == ToolMode::Path && pathStrokeActive_) {
+        pathStrokeActive_ = false;
+        emit pathStrokeEnded();
         return;
     }
     if (toolMode_ == ToolMode::Select && rotateHandleDragActive_) {

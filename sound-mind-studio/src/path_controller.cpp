@@ -1,7 +1,11 @@
 #include "sound_mind/studio/path_controller.h"
 
+#include <algorithm>
+#include <memory>
+
+#include "sound_mind/core/guide_path_operation.h"
 #include "sound_mind/core/operation_log.h"
-#include "sound_mind/core/paint_operation.h"
+#include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/paint_controller.h"
 
 namespace sound_mind::studio {
@@ -11,99 +15,70 @@ PathController::PathController(PaintController* paintController, QObject* parent
 
 void PathController::setProject(sound_mind::core::Project* project) {
     project_ = project;
-    placementActive_ = false;
-    targetLayer_ = 0;
-    path_ = sound_mind::core::Path{};
-    lastCursor_.reset();
+    cancelPath();
+}
+
+void PathController::beginPath(sound_mind::core::LayerId targetLayer, sound_mind::core::TimeFrequencyPoint point) {
+    if (project_ == nullptr || inProgress_) {
+        return;
+    }
+    inProgress_ = true;
+    targetLayer_ = targetLayer;
+    points_.assign(1, point);
+    previewPath_ = sound_mind::core::Path{};
+}
+
+void PathController::continuePath(sound_mind::core::TimeFrequencyPoint point) {
+    if (!inProgress_) {
+        return;
+    }
+    points_.push_back(point);
+    previewPath_ = fittedPath();
     emit pathChanged();
 }
 
-void PathController::placeNode(sound_mind::core::LayerId targetLayer, sound_mind::core::TimeFrequencyPoint point) {
-    if (project_ == nullptr) {
-        return;
+std::optional<sound_mind::core::OperationId> PathController::endPath() {
+    if (!inProgress_) {
+        return std::nullopt;
     }
-    if (!placementActive_) {
-        placementActive_ = true;
-        targetLayer_ = targetLayer;
-        path_ = sound_mind::core::Path{};
-    }
-
-    sound_mind::core::PathNode node;
-    node.anchor = point;
-    node.type = defaultNodeType_;
-    if (defaultNodeType_ == sound_mind::core::PathNodeType::Smooth) {
-        // Collapsed onto the anchor itself - a freshly placed node with no
-        // curve pulled out of it yet, per PathNode's own docs. Real handle
-        // dragging is a follow-up installment (see the class's own docs).
-        node.handleIn = point;
-        node.handleOut = point;
-    }
-    path_.addNode(node);
-    // lastCursor_ is deliberately left alone here, not set to `point` -
-    // the live rubber-band segment currentPreviewPath() draws only
-    // reflects an actual updateCursor() call, never synthesized from the
-    // node just placed (which would draw a spurious zero-length segment
-    // until the cursor genuinely moves again).
-
+    inProgress_ = false;
+    const bool moved = std::any_of(points_.begin(), points_.end(), [this](const auto& point) {
+        return point.timeSeconds != points_.front().timeSeconds || point.frequencyHz != points_.front().frequencyHz;
+    });
+    sound_mind::core::Path path = moved ? fittedPath() : sound_mind::core::Path{};
+    points_.clear();
+    previewPath_ = sound_mind::core::Path{};
     emit pathChanged();
-}
-
-void PathController::updateCursor(sound_mind::core::TimeFrequencyPoint point) {
-    if (!placementActive_) {
-        return;
+    if (project_ == nullptr || path.nodes().size() < 2) {
+        return std::nullopt;
     }
-    lastCursor_ = point;
-    emit pathChanged();
-}
-
-void PathController::finishPath() {
-    if (!placementActive_ || path_.nodes().empty()) {
-        return;
-    }
-    placementActive_ = false;
-
-    sound_mind::core::Path finalPath = path_;
-    // Seed the new path's own gradient from the tool's default - see
-    // PaintController::endStroke()'s own docs for the identical precedent.
-    finalPath.gradient() = toolConfig_->defaultGradient();
 
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
-    log.append(std::make_unique<sound_mind::core::PaintOperation>(id, targetLayer_, std::move(finalPath),
-                                                                    toolConfig_->clone()));
-    paintController_->notifyOperationCommitted(tr("Painted path"));
-
-    const sound_mind::core::LayerId paintedLayer = targetLayer_;
-    path_ = sound_mind::core::Path{};
-    lastCursor_.reset();
-
-    paintController_->rebuildLayerContent(paintedLayer);
-    emit contentChanged(paintedLayer);
-    emit pathChanged();
+    std::vector<sound_mind::core::BranchGraft> branches{
+        sound_mind::core::BranchGraft{std::move(path), std::nullopt, sound_mind::core::TimeFrequencyPoint{}}};
+    log.append(std::make_unique<sound_mind::core::GuidePathOperation>(id, targetLayer_, std::move(branches)));
+    paintController_->notifyOperationCommitted(tr("Drew path"));
+    emit contentChanged(targetLayer_);
+    return id;
 }
 
 void PathController::cancelPath() {
-    if (!placementActive_) {
-        return;
+    const bool hadPreview = inProgress_ || !previewPath_.nodes().empty();
+    inProgress_ = false;
+    points_.clear();
+    previewPath_ = sound_mind::core::Path{};
+    if (hadPreview) {
+        emit pathChanged();
     }
-    placementActive_ = false;
-    path_ = sound_mind::core::Path{};
-    lastCursor_.reset();
-    emit pathChanged();
 }
 
-sound_mind::core::Path PathController::currentPreviewPath() const {
-    if (!placementActive_) {
-        return sound_mind::core::Path{};
+sound_mind::core::Path PathController::fittedPath() const {
+    if (points_.size() < 2 || project_ == nullptr) {
+        return {};
     }
-    sound_mind::core::Path preview = path_;
-    if (lastCursor_.has_value() && !path_.nodes().empty()) {
-        sound_mind::core::PathNode cursorNode;
-        cursorNode.anchor = *lastCursor_;
-        cursorNode.type = sound_mind::core::PathNodeType::Corner;
-        preview.addNode(cursorNode);
-    }
-    return preview;
+    return sound_mind::core::fitPathToPoints(points_, sound_mind::core::frequencyToTimeScaleFor(project_->settings()),
+                                             /*simplifyToleranceSeconds=*/0.01);
 }
 
 }  // namespace sound_mind::studio

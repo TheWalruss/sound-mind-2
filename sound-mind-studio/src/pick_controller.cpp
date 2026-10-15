@@ -6,6 +6,7 @@
 
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/gradient.h"
+#include "sound_mind/core/guide_path_operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
@@ -63,6 +64,20 @@ double frequencyBinDelta(sound_mind::core::TimeFrequencyPoint from, sound_mind::
                           const sound_mind::codec::StreamCodecConfig& config) {
     return sound_mind::core::frequencyToBinIndex(static_cast<float>(to.frequencyHz), config) -
            sound_mind::core::frequencyToBinIndex(static_cast<float>(from.frequencyHz), config);
+}
+
+/// @brief The editable path of `operation`: a painted stroke's own path, or
+/// a regular (single-branch) guide path's only branch. `nullptr` for any
+/// other kind, including a branching guide path.
+const sound_mind::core::Path* editablePathOf(const sound_mind::core::Operation* operation) {
+    if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(operation)) {
+        return &paint->path();
+    }
+    if (const auto* guide = dynamic_cast<const sound_mind::core::GuidePathOperation*>(operation);
+        guide != nullptr && guide->branches().size() == 1) {
+        return &guide->branches().front().path;
+    }
+    return nullptr;
 }
 
 /// @brief A closed, four-corner rectangular outline Path tracing `rect` -
@@ -126,6 +141,10 @@ bool PickController::pick(sound_mind::core::LayerId layer, sound_mind::core::Tim
     std::vector<const sound_mind::core::Operation*> candidates;
     for (auto it = operations.rbegin(); it != operations.rend(); ++it) {
         const sound_mind::core::Operation* operation = *it;
+        if (const auto* guide = dynamic_cast<const sound_mind::core::GuidePathOperation*>(operation);
+            guide != nullptr && guide->isEmpty()) {
+            continue;  // a deleted guide path's tombstone - nothing to pick.
+        }
         double timePadding = kMinimumPickPaddingSeconds;
         if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(operation)) {
             timePadding = std::max(timePadding, paint->config().size());
@@ -245,11 +264,11 @@ std::optional<sound_mind::core::Path> PickController::selectedPath() const {
     if (!pickedOperationId_.has_value()) {
         return std::nullopt;
     }
-    const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_);
-    if (paint == nullptr) {
+    const sound_mind::core::Path* path = editablePathOf(pickedOperation_);
+    if (path == nullptr) {
         return std::nullopt;
     }
-    return paint->path();
+    return *path;
 }
 
 void PickController::continueMove(sound_mind::core::TimeFrequencyPoint point) {
@@ -274,8 +293,8 @@ void PickController::continueMove(sound_mind::core::TimeFrequencyPoint point) {
     const double deltaTimeSeconds = point.timeSeconds - dragAnchor_.timeSeconds;
     const double deltaFrequencyBins = frequencyBinDelta(dragAnchor_, point, config);
 
-    if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_)) {
-        previewPath_ = paint->path().translated(deltaTimeSeconds, deltaFrequencyBins, config);
+    if (const sound_mind::core::Path* path = editablePathOf(pickedOperation_)) {
+        previewPath_ = path->translated(deltaTimeSeconds, deltaFrequencyBins, config);
     } else {
         previewPath_ = outlinePathFor(
             sound_mind::core::translated(pickedOperation_->bounds(), deltaTimeSeconds, deltaFrequencyBins, config));
@@ -389,11 +408,11 @@ bool PickController::beginPathEdit() {
     if (!pickedOperationId_.has_value()) {
         return false;
     }
-    const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_);
-    if (paint == nullptr) {
+    const sound_mind::core::Path* path = editablePathOf(pickedOperation_);
+    if (path == nullptr) {
         return false;
     }
-    pathEditSession_.begin(paint->path());
+    pathEditSession_.begin(*path);
     emit pathChanged();
     return true;
 }
@@ -417,10 +436,24 @@ void PickController::commitPathEdit() {
     if (!pathEditSession_.isActive()) {
         return;
     }
+    if (const auto* guide = dynamic_cast<const sound_mind::core::GuidePathOperation*>(pickedOperation_);
+        guide != nullptr && guide->branches().size() == 1) {
+        std::vector<sound_mind::core::BranchGraft> branches = guide->branches();
+        branches.front().path = pathEditSession_.previewPath();
+        sound_mind::core::OperationLog& log = project_->operationLog();
+        const sound_mind::core::OperationId newId = log.reserveId();
+        pathEditSession_.end();
+        commitReplacement(std::make_unique<sound_mind::core::GuidePathOperation>(newId, pickedLayer_,
+                                                                                 std::move(branches), pickedOperationId_),
+                          tr("Edited picked path"));
+        previewPath_ = sound_mind::core::Path{};
+        emit pathChanged();
+        return;
+    }
     const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_);
     if (paint == nullptr) {
-        // Defensive: beginPathEdit() only ever activates for a
-        // PaintOperation, and nothing else changes pickedOperation_
+        // Defensive: beginPathEdit() only ever activates for a stroke or a
+        // regular guide path, and nothing else changes pickedOperation_
         // while a path edit is active.
         cancelPathEdit();
         return;

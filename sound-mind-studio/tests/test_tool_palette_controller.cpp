@@ -85,8 +85,10 @@ void ToolPaletteControllerTest::beginAndCancelEachToolDoesNotCrash() {
     controller.clearPickSelection();
     controller.beginSelectionDrag(layerId, point);
     controller.cancelSelectionDrag();
-    controller.placePathNode(layerId, point);
-    controller.cancelPathPlacement();
+    controller.beginPathStroke(layerId, point);
+    controller.continuePathStroke(TimeFrequencyPoint{0.2, 600.0});
+    controller.cancelPathStroke();
+    controller.endPathStroke();
 }
 
 void ToolPaletteControllerTest::undoAndRedoOnEmptyHistoryDoNotCrash() {
@@ -98,15 +100,6 @@ void ToolPaletteControllerTest::undoAndRedoOnEmptyHistoryDoNotCrash() {
 
     controller.undo();
     controller.redo();
-}
-
-void ToolPaletteControllerTest::setPathPlacesSmoothNodesDoesNotCrash() {
-    CanvasWidget canvas;
-    ToolConfigurationPanel panel;
-    ToolPaletteController controller(&canvas, &panel);
-
-    controller.setPathPlacesSmoothNodes(true);
-    controller.setPathPlacesSmoothNodes(false);
 }
 
 void ToolPaletteControllerTest::setGridSnappingDoesNotCrash() {

@@ -1525,33 +1525,23 @@ with each other, and a Rectangle selection can be rotated.
 ## Path Tool
 
 Choose **Path** from the **Tool** dropdown to switch the canvas into Path
-mode; choose **Pan** (or any other tool) to leave it. While it's on, each
-click on the canvas places one more node, building a path
-one node at a time - a live line always shows the path built so far, plus
-a segment out to wherever the cursor currently is.
+mode; choose **Pan** (or any other tool) to leave it. Draw with it exactly
+like the Paint tool - press, drag, release - and the line you drew is kept
+as a **path**, smoothed into curves as you go. Unlike a brush stroke, a path
+is **silent**: it paints nothing and changes nothing you hear. It's a guide
+you can use afterwards:
 
-- **Finish** it - **Edit → Path Tool → Finish Path** commits the path as a new,
-  undoable paint object (using the current Painting brush's own color/
-  opacity settings), exactly like a freehand stroke.
-- **Cancel** it - **Edit → Path Tool → Cancel Path** discards everything placed so
-  far instead.
-- **Smooth Nodes** - a toolbar checkbox next to the Tool dropdown
-  controls which node type the *next* click places: unchecked (the
-  default) places a sharp-cornered node, checked places a smooth one.
-  Flip it mid-path to mix both kinds in the same path. Only appears while
-  it means something - while you're placing a new path, or while an
-  existing one is [Picked](#pick) (freehand-drawn or placed this way,
-  either counts) - hidden the rest of the time.
+- It's drawn on the canvas as a **cyan** line on every visible layer. A
+  **branching path** (see [Pick](#pick)'s Branching Curve editor) is drawn
+  in **pink**, with a dashed join where each branch grows out of another.
+- [Pick](#pick) it to select, move or delete it, or to **edit its nodes**
+  (**Edit → Path Editing → Edit Path**) exactly like a painted stroke's.
+- Use it anywhere a Picked stroke's path is used: **Create Resonance from
+  Picked Path...**, **Use Picked Path as MindWave Shape**, or as a branch in
+  the Branching Curve editor.
 
-A path placed this way becomes a real paint object once finished, exactly
-like a freehand stroke - it's selectable/movable/modifiable/deletable
-with [Pick](#pick) afterward, the same as anything painted by hand.
-
-Reshaping an already-placed path's own nodes and handles is [Pick](#pick)'s
-own job, not the Path tool's - see its own "Edit its own path" bullet.
-Inserting a node (other than at either end, by placing a new path that
-starts/ends where the old one did) isn't here yet; see
-[What's Not Here Yet](#whats-not-here-yet).
+A press without dragging draws nothing. Each finished path is one undoable
+step, and switching tools mid-drag discards the line being drawn.
 
 ## Chord Generator
 
@@ -2280,9 +2270,8 @@ what's designed for them:
   own exact formula is still an explicitly provisional first attempt, not
   a finished design.
 
-The [Path Tool](#path-tool) (see above) only places new paths today; once
-a path is placed, reshaping it is Pick's job (see [Pick](#pick) above,
-"Edit its own path") rather than the Path tool's own:
+Once a path is drawn with the [Path Tool](#path-tool), reshaping it is
+Pick's job (see [Pick](#pick) above, "Edit its own path"):
 
 - Inserting or removing a node from an already-placed path (other than
   deleting the single selected node) still isn't here - see the Pick

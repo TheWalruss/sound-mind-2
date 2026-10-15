@@ -4,6 +4,7 @@
 
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/gradient.h"
+#include "sound_mind/core/guide_path_operation.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/operation_log.h"
@@ -181,6 +182,12 @@ std::unique_ptr<sound_mind::core::Operation> PaintController::makeDeletionTombst
                           : paint->config().clone();
         return std::make_unique<sound_mind::core::PaintOperation>(newId, layer, sound_mind::core::Path{},
                                                                    std::move(config), operation.id());
+    }
+    if (dynamic_cast<const sound_mind::core::GuidePathOperation*>(&operation) != nullptr) {
+        // Silent to begin with, so an empty one is enough - a silence Fill
+        // would erase whatever is painted underneath it.
+        return std::make_unique<sound_mind::core::GuidePathOperation>(
+            newId, layer, std::vector<sound_mind::core::BranchGraft>{}, operation.id());
     }
     return std::make_unique<sound_mind::core::FillOperation>(newId, layer, operation.bounds(),
                                                              sound_mind::core::silenceGradient(), operation.id());

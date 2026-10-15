@@ -1,3 +1,4 @@
+#include "sound_mind/core/guide_path_operation.h"
 #include "sound_mind/core/operation_log.h"
 
 #include <algorithm>
@@ -180,6 +181,7 @@ constexpr const char* kFillOperationKind = "fill";
 constexpr const char* kPasteOperationKind = "paste";
 constexpr const char* kSequenceOperationKind = "sequence";
 constexpr const char* kFilterOperationKind = "filter";
+constexpr const char* kGuidePathOperationKind = "guidePath";
 
 /// @brief Writes `operation`'s own `id`/`supersedes`/`targetLayer` fields
 /// into `entry` - the three keys every concrete `LayerContentOperation`
@@ -218,12 +220,11 @@ CommonOperationFields readCommonOperationFields(const nlohmann::json& entry) {
 void to_json(nlohmann::json& json, const OperationLog& log) {
     nlohmann::json operations = nlohmann::json::array();
     for (const auto& operation : log.operations_) {
-        // A plain if/else-if dispatch, not a visitor - five concrete
+        // A plain if/else-if dispatch, not a visitor - six concrete
         // subtypes (PaintOperation, FillOperation, PasteOperation,
-        // SequenceOperation, FilterOperation) is still few enough that a
-        // real dispatch mechanism would be speculative machinery for a
-        // problem this doesn't have yet; revisit if a sixth subtype makes
-        // the chain unwieldy.
+        // SequenceOperation, FilterOperation, GuidePathOperation) is still
+        // few enough that a real dispatch mechanism would be speculative
+        // machinery for a problem this doesn't have yet.
         if (const auto* paint = dynamic_cast<const PaintOperation*>(operation.get())) {
             nlohmann::json entry;
             entry["kind"] = kPaintOperationKind;
@@ -268,6 +269,12 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
             if (filter->boundary()) {
                 entry["boundary"] = *filter->boundary();
             }
+            operations.push_back(std::move(entry));
+        } else if (const auto* guide = dynamic_cast<const GuidePathOperation*>(operation.get())) {
+            nlohmann::json entry;
+            entry["kind"] = kGuidePathOperationKind;
+            writeCommonOperationFields(entry, *guide);
+            entry["branches"] = guide->branches();
             operations.push_back(std::move(entry));
         }
     }
@@ -329,6 +336,11 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
                 log.operations_.push_back(std::make_unique<FilterOperation>(
                     fields.id, fields.targetLayer, bounds, std::move(config), fields.supersedes,
                     std::move(boundary)));
+            } else if (kind == kGuidePathOperationKind) {
+                const CommonOperationFields fields = readCommonOperationFields(entry);
+                std::vector<BranchGraft> branches = entry.at("branches").get<std::vector<BranchGraft>>();
+                log.operations_.push_back(std::make_unique<GuidePathOperation>(fields.id, fields.targetLayer,
+                                                                               std::move(branches), fields.supersedes));
             } else {
                 throw std::invalid_argument("OperationLog: unrecognized operation kind \"" + kind + "\"");
             }

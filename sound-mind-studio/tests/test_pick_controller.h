@@ -67,4 +67,8 @@ private slots:
 
     void selectedPathReturnsTheGeometryOfASelectedPaintOperation();
     void selectedPathIsNulloptForAFillOrPasteSelectionOrNoSelection();
+    void aGuidePathIsPickableAndExposesItsPath();
+    void editingAPickedGuidePathCommitsAGuidePath();
+    void deletingAPickedGuidePathLeavesPaintedContentUntouched();
+    void aDeletedGuidePathIsNoLongerPickable();
 };

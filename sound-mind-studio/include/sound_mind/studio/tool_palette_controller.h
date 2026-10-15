@@ -187,12 +187,21 @@ public:
     ///        `MainWindow` before turning Select mode off.
     void cancelRotateDrag();
 
-    /// @brief Places the next Path tool node - forwards to
-    ///        `PathController::placeNode()`.
-    /// @param layer Which layer the path is being placed onto - resolved
+    /// @brief Starts a Path tool stroke - forwards to
+    ///        `PathController::beginPath()`.
+    /// @param layer Which layer the guide path will belong to - resolved
     ///        by the caller, not by this class.
-    /// @param point Where to place the node.
-    void placePathNode(sound_mind::core::LayerId layer, sound_mind::core::TimeFrequencyPoint point);
+    /// @param point The press position.
+    void beginPathStroke(sound_mind::core::LayerId layer, sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief Continues the Path tool stroke - forwards to
+    ///        `PathController::continuePath()`.
+    /// @param point The cursor's new position.
+    void continuePathStroke(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief Ends the Path tool stroke, committing a guide path - forwards
+    ///        to `PathController::endPath()`.
+    void endPathStroke();
 
     /// @brief Cancels any in-progress freehand stroke - forwards to
     ///        `PaintController::cancelStroke()`. Called by `MainWindow`
@@ -209,10 +218,10 @@ public:
     ///        `MainWindow` before turning Select mode off.
     void cancelSelectionDrag();
 
-    /// @brief Discards any in-progress Path node placement - forwards to
+    /// @brief Discards any in-progress Path tool stroke - forwards to
     ///        `PathController::cancelPath()`. Called by `MainWindow`
     ///        before turning Path mode off.
-    void cancelPathPlacement();
+    void cancelPathStroke();
 
     /// @brief Undoes the most recent paint stroke - forwards to
     ///        `PaintController::undo()`.
@@ -308,16 +317,6 @@ public:
     /// @return The selected `Operation::id()`, or `std::nullopt` if
     ///         nothing is currently Picked.
     [[nodiscard]] std::optional<sound_mind::core::OperationId> selectedOperationId() const;
-
-    /// @brief Whether the Path tool is currently mid-placement (a first
-    ///        node placed, no `finishPath()`/`cancelPath()` yet) - forwards
-    ///        to `PathController::isPlacementInProgress()`. Half of the
-    ///        signal behind `MainWindow`'s own Smooth Nodes gating (`v0.Y.
-    ///        58.1`'s "Reduce top-level buttons") - the other half is
-    ///        `selectedPath()` above.
-    /// @return `true` while a new path is being placed.
-    [[nodiscard]] bool isPathPlacementInProgress() const;
-
     /// @brief The currently Picked object's own paste blend mode, if any -
     ///        forwards to `PickController::selectedPasteBlendMode()`. The
     ///        mechanism behind pre-filling Selection Configuration's own
@@ -403,21 +402,6 @@ public:
     /// @param layer The operation's own target layer.
     /// @param operationId The operation to select.
     void selectOperation(sound_mind::core::LayerId layer, sound_mind::core::OperationId operationId);
-
-    /// @brief Finishes the Path tool's own in-progress node placement -
-    ///        forwards to `PathController::finishPath()`.
-    void finishPath();
-
-    /// @brief Discards the Path tool's own in-progress node placement -
-    ///        forwards to `PathController::cancelPath()`.
-    void cancelPath();
-
-    /// @brief Sets which node type the Path tool places next - forwards
-    ///        to `PathController::setDefaultNodeType()`.
-    /// @param smooth `true` for `PathNodeType::Smooth`; `false` for
-    ///        `PathNodeType::Corner`.
-    void setPathPlacesSmoothNodes(bool smooth);
-
     /**
      * @brief Sets the Chord Generator's own current parameters - forwards
      *        to `ChordGeneratorController::setParams()`.

@@ -50,9 +50,10 @@ private slots:
     void setSelectionBoundsDrawsAHighlight();
     void setSelectionBoundsWithNoValueDrawsNothing();
     void setSelectionHasMaskShapeStillDrawsTheRectangleDashed();
-    void mousePressInPathModeEmitsPathNodePlacedWithAConvertedPoint();
-    void mouseMoveAfterPressInPathModeDoesNotEmitPathNodePlacedAgain();
-    void mouseReleaseInPathModeDoesNotEmitPathNodePlacedAgain();
+    void mousePressInPathModeEmitsPathStrokeStartedWithAConvertedPoint();
+    void mouseDragInPathModeEmitsPathStrokeContinuedThenEnded();
+    void aGuidePathIsDrawnInItsOwnColor();
+    void aBranchingPathIsDrawnInADifferentColor();
     void setVerticalAxisLabelModeChangesWhatsDrawnNearTheLeftEdge();
     void setHorizontalAxisLabelModeChangesWhatsDrawnNearTheBottomEdge();
     void setFrequencyGridConfigDrawsHorizontalLines();

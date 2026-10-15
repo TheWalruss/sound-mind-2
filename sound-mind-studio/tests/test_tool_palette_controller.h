@@ -10,7 +10,6 @@ private slots:
     void setProjectDoesNotCrash();
     void beginAndCancelEachToolDoesNotCrash();
     void undoAndRedoOnEmptyHistoryDoNotCrash();
-    void setPathPlacesSmoothNodesDoesNotCrash();
     void setGridSnappingDoesNotCrash();
     void pasteIntoWithNothingCopiedReturnsNullopt();
     void copyAndCutWithNoSelectionDoNotCrash();

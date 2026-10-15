@@ -2103,6 +2103,29 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `FilterConfigurationPanelTest`: button emits; sync doesn't.
       - `MainWindowTest`: the first render loops; an edit re-renders at the same length; toggling off or starting playback stops it.
 
+239. **Silent guide paths and the freehand Path tool.** Settled in `v0.1.37.1`, Pre-Beta Plan milestone `v0.Y.77.1` installment A (decisions in the roadmap's milestone entry).
+    - **`GuidePathOperation`** (`guide_path_operation.h`) is a sixth `LayerContentOperation`. It holds `std::vector<BranchGraft>` - the type the branching-curve session and `curveGraphFromBranches()` already use - so one class covers both a regular path (one branch) and a branching path (several).
+      - It's silent by construction: `rebuildPaintedContent()` only dispatches the kinds that paint, so it's skipped.
+      - `bounds()` is the union of the branches.
+      - `translatedCopy()` moves each branch path and graft point by the same bin-space shift.
+      - JSON kind is `guidePath`, with `branches`.
+      - An empty one is its deletion tombstone. `PaintController::makeDeletionTombstone()` makes that rather than the usual silence Fill, which would erase what's painted underneath, and Pick skips it.
+    - **`PathController`** was rewritten as freehand capture: `beginPath()`/`continuePath()`/`endPath()`/`cancelPath()`, with the same live `fitPathToPoints()` fitting as `PaintController`.
+      - It commits a single-branch guide path as one undo step (`notifyOperationCommitted`). A press with no drag commits nothing.
+      - No layer rebuild is needed, since the content can't have changed.
+      - `CanvasWidget` Path mode now emits `pathStrokeStarted/Continued/Ended` instead of `pathNodePlaced`.
+      - The click-per-node API, its default-node-type setting, the toolbar's Smooth Nodes toggle (`updateSmoothNodesGuardrail()`), and Edit → Path Tool → Finish/Cancel Path are removed. They only made sense for click placement; node-type conversion while editing is unchanged.
+    - **Pick:** `editablePathOf()` treats a regular guide path like a stroke for `selectedPath()`, the move preview, `beginPathEdit()` and `commitPathEdit()`. The last commits a new `GuidePathOperation` superseding the original. So **Create Resonance from Picked Path**, **Use Picked Path as MindWave Shape** and the Branching Curve session accept guide paths with no further change. A branching path is pickable, movable and deletable, but has no single path to edit.
+    - **Canvas:** `drawGuidePaths()` draws every guide path on every visible layer, always, since nothing else shows it's there. It uses `guidePathColor(branching)` (cyan / pink) over a black halo, with a dashed join from each graft point to its branch's start. It's skipped in polar view like the other line overlays.
+    - **Tests:**
+      - Core: branch kinds, bounds, translation, JSON round trip, silence.
+      - `PathControllerTest`, rewritten: 8 cases.
+      - `PickControllerTest`: 4 new cases.
+      - `CanvasWidgetTest`: drag signals and both colors.
+      - `MainWindowTest`: drag commits, leaving mid-drag commits nothing, edit and delete.
+      - `ToolPaletteControllerTest`: updated.
+      - Removed: the Smooth Nodes / Finish Path tests and their features.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

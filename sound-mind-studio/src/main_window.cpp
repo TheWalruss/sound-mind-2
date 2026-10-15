@@ -584,7 +584,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         if (const auto mode = toolPaletteController_->selectedPasteBlendMode(); mode.has_value()) {
             selectionConfigurationPanel_->setPasteBlendMode(*mode);
         }
-        updateSmoothNodesGuardrail();
     });
     connect(canvas_, &CanvasWidget::paintStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
         if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
@@ -629,12 +628,17 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     });
     connect(canvas_, &CanvasWidget::selectionRotateEnded, this,
             [this]() { toolPaletteController_->endRotateDrag(); });
-    connect(canvas_, &CanvasWidget::pathNodePlaced, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+    // The Path tool draws a silent guide path freehand (v0.Y.77.1) - the
+    // same Started/Continued/Ended drag shape as Paint.
+    connect(canvas_, &CanvasWidget::pathStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
         if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
-            toolPaletteController_->placePathNode(*layerId, point);
-            updateSmoothNodesGuardrail();
+            toolPaletteController_->beginPathStroke(*layerId, point);
         }
     });
+    connect(canvas_, &CanvasWidget::pathStrokeContinued, this, [this](sound_mind::core::TimeFrequencyPoint point) {
+        toolPaletteController_->continuePathStroke(point);
+    });
+    connect(canvas_, &CanvasWidget::pathStrokeEnded, this, [this]() { toolPaletteController_->endPathStroke(); });
     // Chords/Arpeggiator/Sequencer, Installment B (v0.0.40.2) - only
     // point.timeSeconds is used (see CanvasWidget::chordStampRequested()'s
     // own docs on why point.frequencyHz is deliberately ignored: a chord's
@@ -1282,18 +1286,6 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     decreaseLayerOpacityAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_PageDown));
     connect(decreaseLayerOpacityAction, &QAction::triggered, this, &MainWindow::decreaseSelectedLayerOpacity);
 
-    // Paths & Grids (v0.Y.26.1): ends/discards the Path tool's own in-
-    // progress node placement - see finishPath()'s/cancelPath()'s own
-    // docs. No standard shortcut for either (matching Fill Selection's
-    // own no-shortcut choice above); both are no-ops when nothing's being
-    // placed, the same "always present" choice deleteAction makes.
-    QMenu* pathToolMenu = editMenu->addMenu(tr("Path &Tool"));
-    QAction* finishPathAction = pathToolMenu->addAction(tr("&Finish Path"));
-    connect(finishPathAction, &QAction::triggered, this, &MainWindow::finishPath);
-
-    QAction* cancelPathAction = pathToolMenu->addAction(tr("Cance&l Path"));
-    connect(cancelPathAction, &QAction::triggered, this, &MainWindow::cancelPath);
-
     // Canvas Navigation's own Zoom feature (docs/sound-mind-design.md) -
     // keybinding mnemonic: Alt = frequency axis, Shift = time axis, Ctrl =
     // proportional control, repurposed here as "coarser step" since plain
@@ -1531,29 +1523,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     toolButton_->setToolTip(tr("Choose the canvas's current input tool"));
     transportToolBar->addWidget(toolButton_);
 
-    // The Path tool's own "standing default" node type (see
-    // PathController::setDefaultNodeType()'s own docs) - deliberately
-    // independent of tool-mode exclusivity (not reset by
-    // setExclusiveToolMode(), not affected by switching tools) since it's
-    // a placement preference, not a mode of its own. Constructed *before*
-    // panAction_->setChecked(true) below - that call's own
-    // setExclusiveToolMode() cascade ends with updateSmoothNodesGuardrail(),
-    // which touches smoothNodesAction_, so it must already exist by then.
-    smoothNodesAction_ = transportToolBar->addAction(tr("Smooth Nodes"));
-    smoothNodesAction_->setObjectName(QStringLiteral("smoothNodesAction"));
-    smoothNodesAction_->setCheckable(true);
-    connect(smoothNodesAction_, &QAction::toggled, this, &MainWindow::setPathPlacesSmoothNodes);
-
     // Establishes the "exactly one of the six is checked" invariant
-    // setExclusiveToolMode() relies on from here on, sets toolButton_'s own
-    // initial label - matches ToolMode::None already being the documented
-    // default (see paintModeIsOffByDefault()'s own test) - and, via that
-    // same call's cascade, establishes smoothNodesAction_'s own correct
-    // initial disabled state (nothing Picked, no placement in progress
-    // yet). Unlike updateMindGrainGuardrails(), whose "no project open"
-    // default already matches a plain QAction's own default-enabled state,
-    // Smooth Nodes' correct fresh-window state is disabled, the opposite
-    // of that default - see updateSmoothNodesGuardrail()'s own docs.
+    // setExclusiveToolMode() relies on from here on, and sets toolButton_'s
+    // own initial label - matches ToolMode::None already being the
+    // documented default (see paintModeIsOffByDefault()'s own test).
     panAction_->setChecked(true);
 
     // As of v0.Y.16.1 (Transport Panels): Play/Pause/Stop/Loop/Record are
@@ -2179,12 +2152,6 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // from whatever the guardrail last computed - see
     // updateMindGrainGuardrails()'s own docs.
     updateMindGrainGuardrails();
-    // Belt-and-suspenders, the same reasoning as the explicit
-    // canvas_->setToolMode(None) call in the project-switch reset above -
-    // usually already correct via setExclusiveToolMode()'s own cascade
-    // (tool-mode resets clear any Pick selection/path placement along the
-    // way), but explicit here too rather than relying on that timing.
-    updateSmoothNodesGuardrail();
 }
 
 void MainWindow::newProject() {
@@ -3384,7 +3351,7 @@ void MainWindow::setSelectModeEnabled(bool enabled) {
 
 void MainWindow::setPathModeEnabled(bool enabled) {
     if (!enabled) {
-        toolPaletteController_->cancelPathPlacement();
+        toolPaletteController_->cancelPathStroke();
         canvas_->setPaintPreviewPath(sound_mind::core::Path{});
     }
     setExclusiveToolMode(pathAction_, enabled, CanvasWidget::ToolMode::Path);
@@ -3423,11 +3390,6 @@ void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWi
     pathAction_->setChecked(checkedAction == pathAction_);
     chordAction_->setChecked(checkedAction == chordAction_);
     updateToolButtonLabel();
-    // Path placement gets cancelled above (setPathModeEnabled(false)'s own
-    // cancelPathPlacement() call, before this method even runs) whenever
-    // Path mode is left - recomputing here picks that up, alongside every
-    // other tool-mode transition.
-    updateSmoothNodesGuardrail();
 }
 
 void MainWindow::updateToolButtonLabel() {
@@ -3501,20 +3463,6 @@ void MainWindow::updateMindGrainGuardrails() {
         // string).
         paintAction_->setToolTip(paintAction_->text());
     }
-}
-
-void MainWindow::updateSmoothNodesGuardrail() {
-    // Hidden entirely rather than merely disabled, as of a real-world
-    // testing pass (2026-09-29, confirmed with the user) - a grayed-out
-    // button for something that's essentially never applicable (only while
-    // actively editing a path) was judged more confusing clutter than a
-    // helpful hint, unlike the Mind Grain guardrail's own gray-out-with-
-    // tooltip treatment (updateMindGrainGuardrails()), where Paint stays a
-    // meaningful, commonly-reachable option even when temporarily
-    // disallowed on one particular layer.
-    const bool applicable =
-        toolPaletteController_->selectedPath().has_value() || toolPaletteController_->isPathPlacementInProgress();
-    smoothNodesAction_->setVisible(applicable);
 }
 
 void MainWindow::updateConfiguredDeviceLockState() {
@@ -3704,18 +3652,6 @@ void MainWindow::stopToolConfigurationPreview() {
 }
 
 void MainWindow::deselect() { toolPaletteController_->clearSelection(); }
-
-void MainWindow::finishPath() {
-    toolPaletteController_->finishPath();
-    updateSmoothNodesGuardrail();
-}
-
-void MainWindow::cancelPath() {
-    toolPaletteController_->cancelPath();
-    updateSmoothNodesGuardrail();
-}
-
-void MainWindow::setPathPlacesSmoothNodes(bool smooth) { toolPaletteController_->setPathPlacesSmoothNodes(smooth); }
 
 void MainWindow::fillSelectionWith(QColor color) {
     sound_mind::core::Gradient gradient;

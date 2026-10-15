@@ -6,6 +6,15 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.37.1] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.77.1` (Paths, selection and context menus), installment A.
+
+### Changed
+
+- **The Path tool draws freehand, like the Paint tool, but paints nothing.** The result is a silent path on the layer that can be Picked, moved, node-edited, deleted, and used for Resonance Profiles, MindWave shapes and the Branching Curve editor. This replaces placing a path one click at a time; the Smooth Nodes toggle and **Edit → Path Tool → Finish/Cancel Path** are gone.
+- **Paths are drawn on the canvas in their own colors**, cyan for a regular path and pink for a branching one.
+
 ## [0.1.36.1] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.76.1` - Filter preview.

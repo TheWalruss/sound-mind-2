@@ -266,13 +266,9 @@ private slots:
     void cancelBranchingCurveDiscardsTheSession();
     void createResonanceFromPickedGraphNamedBuildsFromEveryBranchAndEndsTheSession();
     void createResonanceFromPickedGraphNamedIsANoOpWithNoSessionActive();
-    void clickingInPathModePlacesNodesAndFinishPathCommitsANewPaintObject();
-    void cancelPathDiscardsInProgressPlacementWithoutCommittingAnything();
-    void smoothNodesToggleAffectsSubsequentlyPlacedNodes();
-    void smoothNodesActionIsHiddenWithNoProjectOpen();
-    void smoothNodesActionBecomesVisibleWhilePlacingANewPathAndHiddenAfterFinishing();
-    void smoothNodesActionBecomesVisibleWhileAStrokeIsPickedAndHiddenAfterDeselecting();
-    void finishPathWithNoNodesPlacedIsANoOp();
+    void draggingInPathModeCommitsASilentGuidePath();
+    void leavingPathModeMidDragCommitsNothing();
+    void aPickedGuidePathCanBeEditedAndDeleted();
     void settingANewProjectResetsPathModeToOff();
     void pastedContentIsPickableAndMovable();
     void movingAPastedRegionPreservesItsOwnVerticalShapeAndOrientation();

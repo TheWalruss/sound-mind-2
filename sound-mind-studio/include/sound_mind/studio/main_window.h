@@ -2130,36 +2130,6 @@ public slots:
     /// @param startTimeOffsetSeconds Defaults to `0.0` ("no offset").
     void captureMindGrainWithDetails(const std::string& name, double fundamentalFrequencyHz = 0.0,
                                        double startTimeOffsetSeconds = 0.0);
-
-    /**
-     * @brief Finishes the Path tool's own in-progress node placement,
-     *        committing it as a new paint object - the actual work behind
-     *        the Edit menu's "Finish Path" action. Delegates to
-     *        `PathController::finishPath()`; a no-op if no placement is in
-     *        progress.
-     */
-    void finishPath();
-
-    /// @brief Discards the Path tool's own in-progress node placement
-    ///        without committing anything - the actual work behind the
-    ///        Edit menu's "Cancel Path" action. Delegates to
-    ///        `PathController::cancelPath()`; a no-op if no placement is
-    ///        in progress.
-    void cancelPath();
-
-    /**
-     * @brief Sets which node type the Path tool places next - the actual
-     *        work behind the toolbar's "Smooth Nodes" checkable toggle.
-     *
-     * Delegates to `PathController::setDefaultNodeType()` - see its own
-     * docs (the design doc's own "standing default that can be flipped at
-     * any time"). Affects only nodes placed after this call.
-     *
-     * @param smooth `true` for `PathNodeType::Smooth`; `false` for
-     *        `PathNodeType::Corner` (the default).
-     */
-    void setPathPlacesSmoothNodes(bool smooth);
-
 public:
     /**
      * @brief Opens the project at `path` as the current project, without
@@ -3212,40 +3182,6 @@ private:
      * name forever.
      */
     void updateMindGrainGuardrails();
-
-    /**
-     * @brief Shows/hides `smoothNodesAction_` to match whether it's
-     *        currently applicable - `v0.Y.58.1`'s "Reduce top-level
-     *        buttons" ("Smooth Nodes should only be available when a path
-     *        is Picked or newly created"). Originally a gray-out-when-
-     *        inapplicable (`setEnabled()`) treatment; changed to hide
-     *        outright (`setVisible()`) in a follow-up real-world testing
-     *        pass (2026-09-29, confirmed with the user) - unlike the Mind
-     *        Grain guardrail's own gray-out (`updateMindGrainGuardrails()`,
-     *        where Paint stays a commonly-reachable option even when
-     *        temporarily disallowed on one layer), Smooth Nodes is
-     *        essentially never applicable, so a permanently-grayed button
-     *        read as clutter rather than a helpful hint.
-     *
-     * Applicable whenever either is true: `toolPaletteController_->
-     * selectedPath()` has a value (Pick currently has a `PaintOperation`
-     * selected - freehand-drawn or Path-tool-placed alike, since Smooth
-     * Nodes governs node type for editing *any* path's nodes, not only
-     * ones placed via the Path tool), or `toolPaletteController_->
-     * isPathPlacementInProgress()` (the Path tool is mid-placement, before
-     * `finishPath()`/`cancelPath()`). Hidden otherwise - its own *checked*
-     * state (the standing default node type preference) is left untouched
-     * either way, since hiding it only means "not applicable right now,"
-     * not "turn this preference off."
-     *
-     * Called from every place either input could have changed: `pan`/
-     * `paint`/`pick`/`select`/`path`/`chord` mode switching
-     * (`setExclusiveToolMode()`), Pick's own selection changing
-     * (`pickSelectionChanged()`), a path node being placed
-     * (`CanvasWidget::pathNodePlaced`), and `finishPath()`/`cancelPath()`.
-     */
-    void updateSmoothNodesGuardrail();
-
     /**
      * @brief Enables/disables Configure Devices' own input and output
      *        device pickers (both `DeviceConfigurationWidget` instances,
@@ -3805,18 +3741,6 @@ private:
     /// selectAction_/pathAction_ by setExclusiveToolMode(); kept as a
     /// member for the same setProject()-resets-it reason as paintAction_.
     QAction* chordAction_ = nullptr;
-
-    /// @brief The toolbar's "Smooth Nodes" checkable toggle - the Path
-    /// tool's own standing default node type (see
-    /// `PathController::setDefaultNodeType()`'s own docs), independent of
-    /// (and not reset by) which tool mode is currently active. Its own
-    /// *checked* state is a standing preference, untouched by tool
-    /// switching; its *visible* state is gated by
-    /// `updateSmoothNodesGuardrail()` (`v0.Y.58.1`, hidden rather than
-    /// merely disabled as of a 2026-09-29 follow-up) to whether a path is
-    /// currently Picked or being newly placed.
-    QAction* smoothNodesAction_ = nullptr;
-
     /// @brief The Edit menu's Image Mode checkable toggle (`v0.Y.47.1`,
     /// Principal Modes) - checked while the current project's own
     /// `PrincipalMode` is `Image`. Kept as a member since, unlike Hardware

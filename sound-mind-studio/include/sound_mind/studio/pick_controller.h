@@ -260,10 +260,10 @@ public:
      *        reads its own `Path` from here - no dedicated curve-drawing
      *        mode needed at all. An owned copy, same "owned, not shared"
      *        reasoning `selectedConfiguration()`'s own docs give.
-     * @return The selected object's own path, or `std::nullopt` if
-     *         nothing is selected, or the selected object isn't a
-     *         `PaintOperation` (a `FillOperation`/`PasteOperation` has no
-     *         `Path` of its own).
+     * @return The selected object's own path - a `PaintOperation`'s, or a
+     *         regular (single-branch) `GuidePathOperation`'s - or
+     *         `std::nullopt` if nothing is selected, or the selected object
+     *         has no single path (a Fill, a Paste, a branching guide path).
      */
     [[nodiscard]] std::optional<sound_mind::core::Path> selectedPath() const;
 
@@ -460,7 +460,8 @@ public:
      *        own Path - see the class's own docs.
      *
      * A no-op (returns `false`) if nothing is selected, or the selection
-     * isn't a `PaintOperation` (only a stroke has a Path to edit).
+     * has no single Path to edit (only a stroke or a regular guide path
+     * does - see selectedPath()).
      * Otherwise, copies the selected object's own current Path into
      * `currentPreviewPath()` (visible immediately) with no node selected
      * yet, and switches pick()/continueMove()/endMove() into node-editing
@@ -536,7 +537,9 @@ public:
      *        superseding the original operation - a no-op if a path edit
      *        isn't active.
      *
-     * A new `PaintOperation` with `currentPreviewPath()`'s own edited
+     * A regular guide path is superseded by a new `GuidePathOperation`
+     * holding the edited path. A stroke becomes a new `PaintOperation`
+     * with `currentPreviewPath()`'s own edited
      * geometry but the original's own gradient and tool configuration
      * unchanged (editing geometry shouldn't silently reset color or
      * opacity), superseding the one edited - the same non-mutating

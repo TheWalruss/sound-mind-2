@@ -9,6 +9,7 @@
 
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/gradient.h"
+#include "sound_mind/core/guide_path_operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
@@ -1613,4 +1614,105 @@ void PickControllerTest::selectedPathIsNulloptForAFillOrPasteSelectionOrNoSelect
 
     QVERIFY(controller.pick(layerId, TimeFrequencyPoint{1.1, 500.0}));
     QVERIFY(!controller.selectedPath().has_value());
+}
+
+namespace {
+
+/// @brief A single-branch guide path from (0.2 s, 400 Hz) to (0.6 s, 800 Hz).
+OperationId addGuidePath(Project& project, LayerId layer) {
+    Path path;
+    PathNode start;
+    start.anchor = TimeFrequencyPoint{0.2, 400.0};
+    start.type = PathNodeType::Corner;
+    PathNode end;
+    end.anchor = TimeFrequencyPoint{0.6, 800.0};
+    end.type = PathNodeType::Corner;
+    path.addNode(start);
+    path.addNode(end);
+    auto& log = project.operationLog();
+    const OperationId id = log.reserveId();
+    log.append(std::make_unique<sound_mind::core::GuidePathOperation>(
+        id, layer, std::vector<sound_mind::core::BranchGraft>{{std::move(path), std::nullopt, TimeFrequencyPoint{}}}));
+    return id;
+}
+
+}  // namespace
+
+void PickControllerTest::aGuidePathIsPickableAndExposesItsPath() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId id = addGuidePath(project, layerId);
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.4, 600.0}));
+
+    QCOMPARE(*controller.selectedOperationId(), id);
+    QVERIFY(controller.selectedPath().has_value());
+    QCOMPARE(controller.selectedPath()->nodes().size(), std::size_t{2});
+    QVERIFY(controller.selectedConfiguration() == nullptr);  // nothing to reopen in Tool Configuration.
+}
+
+void PickControllerTest::editingAPickedGuidePathCommitsAGuidePath() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId id = addGuidePath(project, layerId);
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.4, 600.0}));
+
+    QVERIFY(controller.beginPathEdit());
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.6, 800.0}));  // the end node.
+    controller.continueMove(TimeFrequencyPoint{0.7, 800.0});
+    controller.endMove();
+    controller.commitPathEdit();
+
+    const auto* edited =
+        dynamic_cast<const sound_mind::core::GuidePathOperation*>(&project.operationLog().at(project.operationLog().size() - 1));
+    QVERIFY(edited != nullptr);
+    QCOMPARE(*edited->supersedes(), id);
+    QVERIFY(qAbs(edited->branches().front().path.nodes().back().anchor.timeSeconds - 0.7) < 1e-6);
+}
+
+void PickControllerTest::deletingAPickedGuidePathLeavesPaintedContentUntouched() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.2, 400.0, 0.6, 800.0, makeOpaqueTool());
+    addGuidePath(project, layerId);
+    PaintController paintController;
+    paintController.setProject(&project);
+    paintController.rebuildLayerContent(layerId);
+    const auto before = project.layerById(layerId)->content()->leftMagnitudeDb;
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.4, 600.0}));
+    QVERIFY(dynamic_cast<const sound_mind::core::GuidePathOperation*>(
+                &project.operationLog().at(1)) != nullptr);  // the guide path is topmost, so it's picked.
+
+    controller.deleteSelection();
+
+    const auto* tombstone =
+        dynamic_cast<const sound_mind::core::GuidePathOperation*>(&project.operationLog().at(project.operationLog().size() - 1));
+    QVERIFY(tombstone != nullptr);
+    QVERIFY(tombstone->isEmpty());
+    QVERIFY(project.layerById(layerId)->content()->leftMagnitudeDb == before);
+}
+
+void PickControllerTest::aDeletedGuidePathIsNoLongerPickable() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addGuidePath(project, layerId);
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.4, 600.0}));
+    controller.deleteSelection();
+
+    QVERIFY(!controller.pick(layerId, TimeFrequencyPoint{0.0, 20.0}));
+    QVERIFY(!controller.pick(layerId, TimeFrequencyPoint{0.4, 600.0}));
 }

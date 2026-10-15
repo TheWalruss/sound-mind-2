@@ -97,12 +97,6 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
     // a second one - Paint/Pick/Path are mutually exclusive tool modes, so
     // only one of them ever has a real preview to show at once.
     pathController_ = new PathController(paintController_, this);
-    connect(canvas_, &CanvasWidget::cursorMoved, this,
-            [this](QPointF, std::optional<sound_mind::core::TimeFrequencyPoint> domainPoint) {
-                if (domainPoint.has_value()) {
-                    pathController_->updateCursor(*domainPoint);
-                }
-            });
     connect(pathController_, &PathController::pathChanged, this,
             [this]() { canvas_->setPaintPreviewPath(pathController_->currentPreviewPath()); });
     connect(pathController_, &PathController::contentChanged, this, [this](sound_mind::core::LayerId layer) {
@@ -115,7 +109,6 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
     // panel's own docs) - applied here so a stroke painted before ever
     // opening the panel still paints something visible.
     paintController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration().clone());
-    pathController_->setToolConfiguration(toolConfigurationPanel_->toolConfiguration().clone());
     connect(toolConfigurationPanel_, &ToolConfigurationPanel::toolConfigurationChanged, this,
             [this](const sound_mind::core::ToolConfiguration& config) {
                 // Each setToolConfiguration() below takes ownership, so
@@ -123,7 +116,6 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
                 // independent clone() - the same unique_ptr can't be
                 // handed to three separate owners.
                 paintController_->setToolConfiguration(config.clone());
-                pathController_->setToolConfiguration(config.clone());
                 // Also applies to whatever's currently Picked, if anything
                 // - see PickController::applyToolConfiguration()'s own
                 // docs on why this is safe to do unconditionally alongside
@@ -199,10 +191,16 @@ void ToolPaletteController::beginSelectionDrag(sound_mind::core::LayerId layer,
     selectionController_->beginSelectionDrag(layer, point);
 }
 
-void ToolPaletteController::placePathNode(sound_mind::core::LayerId layer,
-                                           sound_mind::core::TimeFrequencyPoint point) {
-    pathController_->placeNode(layer, point);
+void ToolPaletteController::beginPathStroke(sound_mind::core::LayerId layer,
+                                             sound_mind::core::TimeFrequencyPoint point) {
+    pathController_->beginPath(layer, point);
 }
+
+void ToolPaletteController::continuePathStroke(sound_mind::core::TimeFrequencyPoint point) {
+    pathController_->continuePath(point);
+}
+
+void ToolPaletteController::endPathStroke() { pathController_->endPath(); }
 
 void ToolPaletteController::cancelPaintStroke() { paintController_->cancelStroke(); }
 
@@ -236,7 +234,7 @@ void ToolPaletteController::endRotateDrag() { selectionController_->endRotateDra
 
 void ToolPaletteController::cancelRotateDrag() { selectionController_->cancelRotateDrag(); }
 
-void ToolPaletteController::cancelPathPlacement() { pathController_->cancelPath(); }
+void ToolPaletteController::cancelPathStroke() { pathController_->cancelPath(); }
 
 void ToolPaletteController::undo() { paintController_->undo(); }
 
@@ -285,8 +283,6 @@ std::optional<sound_mind::core::OperationId> ToolPaletteController::selectedOper
     return pickController_->selectedOperationId();
 }
 
-bool ToolPaletteController::isPathPlacementInProgress() const { return pathController_->isPlacementInProgress(); }
-
 std::optional<sound_mind::core::BlendMode> ToolPaletteController::selectedPasteBlendMode() const {
     return pickController_->selectedPasteBlendMode();
 }
@@ -326,13 +322,5 @@ void ToolPaletteController::selectOperation(sound_mind::core::LayerId layer, sou
     pickController_->selectOperation(layer, operationId);
 }
 
-void ToolPaletteController::finishPath() { pathController_->finishPath(); }
-
-void ToolPaletteController::cancelPath() { pathController_->cancelPath(); }
-
-void ToolPaletteController::setPathPlacesSmoothNodes(bool smooth) {
-    pathController_->setDefaultNodeType(smooth ? sound_mind::core::PathNodeType::Smooth
-                                                : sound_mind::core::PathNodeType::Corner);
-}
 
 }  // namespace sound_mind::studio

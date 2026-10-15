@@ -11,6 +11,7 @@
 #include <QtTest/QtTest>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/guide_path_operation.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_wave.h"
@@ -1069,58 +1070,6 @@ void CanvasWidgetTest::selectionBoundaryHighlightAlsoHidesWhenNeitherPickNorSele
     QCOMPARE(widget.grab().toImage().pixelColor(20, 10), QColor(0, 255, 0));
 }
 
-void CanvasWidgetTest::mousePressInPathModeEmitsPathNodePlacedWithAConvertedPoint() {
-    const ProjectSettings settings = mouseConversionTestSettings();
-    const Project project = Project::createNew(settings);
-    const auto config = sound_mind::core::streamCodecConfigFor(settings);
-
-    CanvasWidget widget;
-    widget.setProject(&project);
-    widget.resize(100, 50);
-    widget.setToolMode(CanvasWidget::ToolMode::Path);
-
-    std::optional<TimeFrequencyPoint> received;
-    QObject::connect(&widget, &CanvasWidget::pathNodePlaced, [&](TimeFrequencyPoint point) { received = point; });
-
-    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
-
-    QVERIFY(received.has_value());
-    const double expectedTime = sound_mind::core::frameIndexToTime(30.0, config);
-    const float expectedFrequency = sound_mind::core::binIndexToFrequency(40.0f, config);  // see the Paint-mode test's own comment.
-    QVERIFY(qAbs(received->timeSeconds - expectedTime) < 0.01);
-    QVERIFY(qAbs(received->frequencyHz - expectedFrequency) < 1.0);
-}
-
-void CanvasWidgetTest::mouseMoveAfterPressInPathModeDoesNotEmitPathNodePlacedAgain() {
-    const Project project = Project::createNew(mouseConversionTestSettings());
-    CanvasWidget widget;
-    widget.setProject(&project);
-    widget.resize(100, 50);
-    widget.setToolMode(CanvasWidget::ToolMode::Path);
-    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
-    QSignalSpy spy(&widget, &CanvasWidget::pathNodePlaced);
-
-    // Path mode has no drag continuation - see pathNodePlaced()'s own
-    // docs - so moving with the button held places nothing further.
-    QTest::mouseMove(&widget, QPoint(40, 20));
-
-    QCOMPARE(spy.count(), 0);
-}
-
-void CanvasWidgetTest::mouseReleaseInPathModeDoesNotEmitPathNodePlacedAgain() {
-    const Project project = Project::createNew(mouseConversionTestSettings());
-    CanvasWidget widget;
-    widget.setProject(&project);
-    widget.resize(100, 50);
-    widget.setToolMode(CanvasWidget::ToolMode::Path);
-    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
-    QSignalSpy spy(&widget, &CanvasWidget::pathNodePlaced);
-
-    QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
-
-    QCOMPARE(spy.count(), 0);
-}
-
 void CanvasWidgetTest::setVerticalAxisLabelModeChangesWhatsDrawnNearTheLeftEdge() {
     const Project project = Project::createNew(mouseConversionTestSettings());
     CanvasWidget widget;
@@ -1955,4 +1904,101 @@ void CanvasWidgetTest::aLiveOverlayIsDrawnOnTopEvenWithNoOtherContent() {
 
     widget.setLiveOverlay(std::nullopt);
     QVERIFY(widget.grab().toImage().pixelColor(10, 10).red() != 255);
+}
+
+void CanvasWidgetTest::mousePressInPathModeEmitsPathStrokeStartedWithAConvertedPoint() {
+    const ProjectSettings settings = mouseConversionTestSettings();
+    const Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Path);
+    std::optional<TimeFrequencyPoint> received;
+    QObject::connect(&widget, &CanvasWidget::pathStrokeStarted, [&](TimeFrequencyPoint point) { received = point; });
+
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+
+    QVERIFY(received.has_value());
+    const double expectedTime = sound_mind::core::frameIndexToTime(30.0, config);
+    const float expectedFrequency = sound_mind::core::binIndexToFrequency(40.0f, config);  // see the Paint-mode test's own comment.
+    QVERIFY(qAbs(received->timeSeconds - expectedTime) < 0.01);
+    QVERIFY(qAbs(received->frequencyHz - expectedFrequency) < 1.0);
+}
+
+void CanvasWidgetTest::mouseDragInPathModeEmitsPathStrokeContinuedThenEnded() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Path);
+    QSignalSpy continued(&widget, &CanvasWidget::pathStrokeContinued);
+    QSignalSpy ended(&widget, &CanvasWidget::pathStrokeEnded);
+
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(30, 10));
+    QMouseEvent move(QEvent::MouseMove, QPointF(40, 20), widget.mapToGlobal(QPointF(40, 20)), Qt::NoButton,
+                     Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&widget, &move);
+    QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(40, 20));
+
+    QCOMPARE(continued.count(), 1);
+    QCOMPARE(ended.count(), 1);
+}
+
+namespace {
+
+/// @brief Whether any pixel in column `x` of `image` is within a small
+/// distance of `color` - a line drawn with a 2-pixel pen crosses it.
+bool columnContainsColor(const QImage& image, int x, const QColor& color) {
+    for (int y = 0; y < image.height(); ++y) {
+        const QColor pixel = image.pixelColor(x, y);
+        if (std::abs(pixel.red() - color.red()) + std::abs(pixel.green() - color.green()) +
+                std::abs(pixel.blue() - color.blue()) <
+            30) {
+            return true;
+        }
+    }
+    return false;
+}
+
+sound_mind::core::Path horizontalPath(double startSeconds, double endSeconds, double frequencyHz) {
+    sound_mind::core::Path path;
+    sound_mind::core::PathNode a;
+    a.anchor = TimeFrequencyPoint{startSeconds, frequencyHz};
+    a.type = sound_mind::core::PathNodeType::Corner;
+    sound_mind::core::PathNode b = a;
+    b.anchor.timeSeconds = endSeconds;
+    path.addNode(a);
+    path.addNode(b);
+    return path;
+}
+
+QImage renderWithGuide(std::vector<sound_mind::core::BranchGraft> branches) {
+    Project project = Project::createNew(mouseConversionTestSettings());
+    const auto layerId = project.addLayer(sound_mind::core::Layer(0, "Guides", sound_mind::core::LayerType::Normal));
+    auto& log = project.operationLog();
+    log.append(std::make_unique<sound_mind::core::GuidePathOperation>(log.reserveId(), layerId, std::move(branches)));
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    return widget.grab().toImage();
+}
+
+}  // namespace
+
+void CanvasWidgetTest::aGuidePathIsDrawnInItsOwnColor() {
+    const QImage image = renderWithGuide(
+        {sound_mind::core::BranchGraft{horizontalPath(0.1, 0.9, 1000.0), std::nullopt, TimeFrequencyPoint{}}});
+    QVERIFY(columnContainsColor(image, 50, CanvasWidget::guidePathColor(false)));
+    QVERIFY(!columnContainsColor(image, 50, CanvasWidget::guidePathColor(true)));
+}
+
+void CanvasWidgetTest::aBranchingPathIsDrawnInADifferentColor() {
+    QVERIFY(CanvasWidget::guidePathColor(true) != CanvasWidget::guidePathColor(false));
+    const QImage image = renderWithGuide(
+        {sound_mind::core::BranchGraft{horizontalPath(0.1, 0.9, 1000.0), std::nullopt, TimeFrequencyPoint{}},
+         sound_mind::core::BranchGraft{horizontalPath(0.5, 0.9, 400.0), std::size_t{0},
+                                       TimeFrequencyPoint{0.5, 1000.0}}});
+    QVERIFY(columnContainsColor(image, 70, CanvasWidget::guidePathColor(true)));
+    QVERIFY(!columnContainsColor(image, 70, CanvasWidget::guidePathColor(false)));
 }

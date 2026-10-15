@@ -7,6 +7,7 @@
 #include <QImage>
 #include <QPainterPath>
 #include <QRectF>
+#include <QColor>
 #include <QWidget>
 
 #include "sound_mind/core/compositor.h"
@@ -230,19 +231,15 @@ public:
      * paintStrokeEnded() instead, `Pick` makes the same gesture emit
      * pickStrokeStarted()/pickStrokeContinued()/pickStrokeEnded() instead,
      * `Select` makes it emit selectStrokeStarted()/selectStrokeContinued()/
-     * selectStrokeEnded() instead, `Path` makes each individual left-
-     * button press (no drag/release counterpart - see pathNodePlaced()'s
-     * own docs) emit pathNodePlaced() instead, and `ChordStamp` makes each
-     * individual left-button press (the same single-press-is-the-whole-
-     * gesture shape as `Path`, not a drag) emit chordStampRequested()
+     * selectStrokeEnded() instead, `Path` makes the same kind of drag emit
+     * pathStrokeStarted()/pathStrokeContinued()/pathStrokeEnded(), and
+     * `ChordStamp` makes each individual left-button press (a single press
+     * is the whole gesture, not a drag) emit chordStampRequested()
      * instead. Exactly one mode is active at a time. Switching away from
-     * `Paint`/`Pick`/`Select` cancels whatever gesture was mid-flight in it
-     * (a real mouse-up may never arrive - e.g. the toolbar button was
-     * clicked instead); `Path`/`ChordStamp` have no such in-widget state to
-     * cancel (see pathNodePlaced()'s own docs) - `Path`'s own in-progress
-     * node sequence lives in `PathController` instead, cancelled from
-     * there, and `ChordStamp`'s own single-press gesture has no
-     * in-progress state at all to begin with.
+     * `Paint`/`Pick`/`Select`/`Path` cancels whatever gesture was
+     * mid-flight in it (a real mouse-up may never arrive - e.g. the
+     * toolbar button was clicked instead); `ChordStamp`'s own single-press
+     * gesture has no in-progress state at all to begin with.
      *
      * Also repaints - `ChordStamp` specifically gates the Chord Overlay
      * (see `setChordGeneratorPanelVisible()`'s own docs), so switching
@@ -252,6 +249,12 @@ public:
      * @param mode The new tool mode.
      */
     void setToolMode(ToolMode mode);
+
+    /// @brief The color the canvas draws a silent guide path in - one for a
+    ///        regular path, a clearly different one for a branching path.
+    /// @param branching Whether the path has more than one branch.
+    /// @return The color.
+    [[nodiscard]] static QColor guidePathColor(bool branching);
 
     /// @brief The canvas's current mouse-interaction mode.
     /// @return The mode set via setToolMode(); `None` by default.
@@ -758,29 +761,22 @@ signals:
      */
     void contextMenuRequested(sound_mind::core::TimeFrequencyPoint point, QPoint globalPos);
 
-    /**
-     * @brief A new Path node was placed (`Path` tool mode, left button
-     *        pressed).
-     *
-     * Unlike Paint/Pick/Select's own Started/Continued/Ended triples, a
-     * single press is the *whole* gesture - dragging before release, or
-     * the eventual release itself, changes nothing (`mouseMoveEvent()`/
-     * `mouseReleaseEvent()` do nothing extra for `Path` mode beyond the
-     * unconditional cursorMoved() every mode already gets). Placing many
-     * nodes across many separate presses, and deciding when the whole
-     * path is finished or cancelled, is `PathController`'s own job, not
-     * this widget's - the same "purely presentational, already-converted
-     * points only" split every other tool mode already follows.
-     *
-     * @param point The press position, converted to time/frequency space.
-     */
-    void pathNodePlaced(sound_mind::core::TimeFrequencyPoint point);
+    /// @brief A Path tool stroke started (`Path` tool mode, left button
+    ///        pressed) - see `PathController::beginPath()`.
+    /// @param point The press position, converted to time/frequency space.
+    void pathStrokeStarted(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief The Path tool stroke continued (left button held and moved).
+    /// @param point The new position, converted to time/frequency space.
+    void pathStrokeContinued(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief The Path tool stroke ended (left button released).
+    void pathStrokeEnded();
 
     /**
      * @brief A chord/arpeggio stamp was requested (`ChordStamp` tool mode,
      *        left button pressed) - the same single-press-is-the-whole-
-     *        gesture shape as pathNodePlaced()'s own docs describe, for the
-     *        same reason (no drag/release counterpart).
+     *        gesture (no drag/release counterpart).
      *
      * `point`'s own `frequencyHz` is deliberately **not** used by
      * `ChordGeneratorController::stampAt()` - only `timeSeconds` is: a
@@ -956,6 +952,15 @@ private:
     ///        paintEvent().
     void drawOperationOverlays(QPainter& painter) const;
 
+    /// @brief Draws every silent guide path (`GuidePathOperation`) on every
+    ///        visible layer, in guidePathColor() over a black halo, with a
+    ///        dashed join where a branch grafts onto its parent. Always
+    ///        drawn - unlike a painted stroke, a guide path has nothing
+    ///        else on the canvas to show it's there.
+    /// @param painter The painter to draw with - already set up by
+    ///        paintEvent().
+    void drawGuidePaths(QPainter& painter) const;
+
     /// @brief Converts a Path into a `QPainterPath` in widget-pixel space,
     ///        via timeFrequencyToWidgetPoint() - the shared geometry
     ///        behind both the live preview and Show path geometry's own
@@ -1078,6 +1083,7 @@ private:
     bool paintStrokeActive_ = false;
     bool pickStrokeActive_ = false;
     bool selectStrokeActive_ = false;
+    bool pathStrokeActive_ = false;
     sound_mind::core::Path paintPreviewPath_;
     std::optional<std::size_t> previewSelectedNodeIndex_;
     std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;

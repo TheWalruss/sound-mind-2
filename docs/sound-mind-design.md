@@ -236,11 +236,17 @@ A MindWave being built or tuned can be previewed directly on the canvas, before 
 
 ## Paths
 
-A **Path** is a segmented cubic Bézier curve that a brush stamps along its length. Every stroke ends up with one, one way or another — see [Painting](#painting) for how a freehand stroke gets there automatically, in real time, as opposed to the Path tool's own deliberate, node-by-node route described below. Whichever way a Path was built, it's ideal for melodic lines, precise spectral contours, and rhythmically-timed patterns that would be hard to hold steady by hand alone.
+A **Path** is a segmented cubic Bézier curve that a brush stamps along its length. Every stroke ends up with one, one way or another — see [Painting](#painting) for how a freehand stroke gets there automatically, in real time, as opposed to a silent guide path drawn with the Path tool (see [Guide Paths and Branching Paths](#guide-paths-and-branching-paths)). Whichever way a Path was built, it's ideal for melodic lines, precise spectral contours, and rhythmically-timed patterns that would be hard to hold steady by hand alone.
+
+### Guide Paths and Branching Paths
+
+The **Path tool** draws a path exactly the way the Paint tool draws a stroke, freehand and curve-fitted live, but stamps nothing: the result is a silent **guide path** on the layer, drawn on the canvas in its own color. It can be Picked, moved, deleted and node-edited like any stroke, stroked with a brush afterwards, and used as the source curve for a Resonance Profile or a MindWave shape.
+
+A **branching path** is a guide path made of several strokes, each later one grafted onto an earlier one: a tree rather than a line. It is drawn in a second, clearly different color, and is what a Resonance Profile's branching geometry comes from. One is made by merging several Picked paths (the fewest, shortest connecting edges that join them into one tree, a minimum spanning tree over the paths) or by finishing the Branching Curve editor.
 
 ### Placing and Editing
 
-A path is built in two phases: first its nodes are placed one at a time, previewing the path as it grows; then, once placing ends, the same path is entered into an edit phase, where any node can be moved, converted, inserted, or deleted, and any handle can be dragged to reshape the path around it.
+A path is built in two phases: first it is drawn (freehand, or as a brush stroke), previewing the path as it grows; then the same path can be entered into an edit phase, where any node can be moved, converted, inserted, or deleted, and any handle can be dragged to reshape the path around it.
 
 Every node is one of two types:
 
@@ -291,7 +297,7 @@ A mouse or trackpad is the baseline input device; support for a pressure-sensiti
 
 ### Freehand Path Capture
 
-A freehand stroke doesn't just record raw motion — its raw mouse/tablet input is curve-fitted into a genuine [Path](#paths) in real time, continuously, as the cursor moves: a sparse set of smooth Bézier nodes tracking the actual motion, the same representation the Path tool's own deliberate node placement produces, just arrived at automatically instead. The Path is rendered live as it's captured, growing with the stroke, so the artist always sees exactly what geometry the stroke is turning into, not just a raw ink trail.
+A freehand stroke doesn't just record raw motion — its raw mouse/tablet input is curve-fitted into a genuine [Path](#paths) in real time, continuously, as the cursor moves: a sparse set of smooth Bézier nodes tracking the actual motion, the same representation a guide path drawn with the Path tool has. The Path is rendered live as it's captured, growing with the stroke, so the artist always sees exactly what geometry the stroke is turning into, not just a raw ink trail.
 
 Capturing and rendering that Path stays perfectly responsive to the cursor no matter what — the motion itself must never feel laggy. Actually *applying* the paint along the Path is allowed to trail the cursor by a small, barely-perceptible delay if that's what keeps the capture and its live preview smooth; the felt responsiveness of the stroke's motion takes priority over the painted result appearing the instant the cursor does.
 
