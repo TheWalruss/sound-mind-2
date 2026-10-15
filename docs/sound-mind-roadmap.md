@@ -1125,7 +1125,7 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 - **Operation history persisted with the project**, so a project can be re-rendered from scratch if necessary - this is exactly the "final Project file schema" decision the *Explicit non-goals* section above already named as a deliberate near-beta concern (expect `Y` to move once, here).
 - **A "filter preview" control** - loops a few seconds of audio through an in-progress filter configuration live, so a user can tune by ear without processing the whole canvas first.
 - ~~A resource browser panel~~ and ~~SoundMind "Toolkit" collections~~ (both extending `v0.Y.57.1`'s own "Portable Resources" milestone, above) - **folded into that milestone's own Installments C and D, 2026-10-09**, now that Portable Resources itself has been scoped into concrete installments to build them on, rather than left as a vaguer, unscoped pair of backlog entries.
-- **A correct Pool reflection-padding implementation** (see `v0.Y.64.1` above and `docs/sound-mind-architecture.md`'s Decision #205) - two attempts deferred after a real, measured gain-error problem; needs either a new mechanism or validation against a reference NSGT implementation.
+- **[Moved to after Beta, 2026-10-15]** **A correct Pool reflection-padding implementation** (see `v0.Y.64.1` above and `docs/sound-mind-architecture.md`'s Decision #205) - two attempts deferred after a real, measured gain-error problem; needs either a new mechanism or validation against a reference NSGT implementation.
 
 **Backlog - from manual testing, 2026-10-11** (items 1-4 are being built immediately; 5-6 are backlog only):
 
@@ -1169,16 +1169,18 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 - **Procedural brush tips: configurable shape "thickness".** E.g. the line width of a +-shaped brush, or the particle size of the spatter and dapple tips.
 - **Text tool**, working very much like the legacy implementation (previous Python codebase, `../sound-mind/`), which worked great.
 
-### Pre-Beta Plan (drafted 2026-10-15)
+### Pre-Beta Plan (drafted 2026-10-15, decisions folded in the same day)
 
 This sequences everything in the backlog blocks above into concrete Beta Readiness Loop iterations. The backlog bullets stay as they are, as the record of what was asked; this section is the order of work. Roadmap `v0.Y.70.1` corresponds to version `0.1.30.x` (the current build is `0.1.29.6`). Each milestone bumps `Z`; each installment within it bumps `W`. Every installment follows the normal CLAUDE.md workflow.
+
+**Standing decision (2026-10-15): disregard file-format and backward-compatibility concerns completely until after Beta.** Old projects don't need to keep loading, so there are no lenient-read shims, migration paths or load-time notices for changes made before Beta. This overrides the usual "ask on file-format compatibility" stance for this period only.
 
 **Ordering rationale.**
 1. Get the test suite and CI trustworthy first, because everything after it leans on the regression suite.
 2. Fix outright correctness bugs next.
 3. Remove MindWave Superpositions before the numeric-input overhaul, so the overhaul doesn't migrate controls that are about to be deleted.
-4. Build the shared numeric-input widget before any milestone that adds new numeric controls (brush thickness, noise generators, analysis settings), so those are built once on the new widget.
-5. Do the one planned breaking file-format change (operation history) last, so the schema decision can take in every field the earlier milestones add.
+4. Build the shared numeric-input widget before any milestone that adds new numeric controls (brush thickness, generators, analysis settings), so those are built once on the new widget.
+5. Persist operation history last, so the project schema settles once, after every field the earlier milestones add.
 
 **Sizes:** S ≈ one installment, M ≈ 2-3, L ≈ 4+.
 
@@ -1197,7 +1199,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 
 - **Deleting a layer leaves its content behind.**
   - *Root cause, confirmed:* `Project::addLayer()` allocates `max(existing id) + 1`, so deleting the newest layer and adding another reuses its `LayerId`. Anything still keyed by that id (caches, undo entries, overlays) reattaches to the new layer.
-  - *Fix:* a monotonic `nextLayerId_` counter, persisted in the project. It is read leniently and defaults to `max + 1`, so this is an additive change, not a `Y` bump. Also purge every per-layer cache on delete.
+  - *Fix:* a monotonic `nextLayerId_` counter, persisted in the project. Also purge every per-layer cache on delete.
   - *Then:* replace today's "Can't Delete Layer" refusal (Mind Grain dependents) with the requested choice: cascade-delete the dependent resources, or cancel.
 - **Export Audio and Export Video export only one layer.**
   - *Root cause, confirmed:* both route through `exportTopmostLayerAudioAsync()` / `exportTopmostLayerVideoAsync()`, a placeholder left over from before multi-layer compositing.
@@ -1206,8 +1208,8 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 
 #### `v0.Y.72.1` - Remove MindWave Superpositions (S)
 
-- The feature reaches `mind_wave`, `compositor`, `filter_application` and `mind_waves_panel` (about 32 references). Remove it from the UI, the evaluation path and the docs.
-- Old projects that contain superposition stacks need a load policy. This is a file-compatibility decision; see *Decisions to confirm*.
+- The feature reaches `mind_wave`, `compositor`, `filter_application` and `mind_waves_panel` (about 32 references). Remove it from the model, the JSON, the evaluation path, the UI and the docs.
+- No load-compatibility handling, per the standing decision above.
 
 #### `v0.Y.73.1` - Numeric input overhaul and intensity units (L)
 
@@ -1219,7 +1221,10 @@ This is the foundation milestone; later milestones build their new controls on i
   - commit on Enter or focus-out, never per keystroke.
 - **Migrate every existing spinbox** to it: about 92 spinboxes (68 double, 24 int) across 15 source files, one panel group per installment.
 - **Project-level decimal separator** ("." or ","), stored as a new `ProjectSettings` field.
-- **Intensity entry in dB or value.** "Value" is in [0, 1], with 0 = noise floor and 1 = maximum, mapped exactly as the codec computes it. Expose that mapping once from `sound-mind-core`, and use the same function for the display question below.
+- **Intensity entry in dB or value.**
+  - Each panel or logical control grouping gets its own dB/value toggle, applying to every intensity control in that group.
+  - "Value" is in [0, 1], with 0 = noise floor and 1 = maximum. Expose that mapping once from `sound-mind-core`, and use the same function for the display question below.
+  - What "maximum" means is still open; see *Decisions still open*.
 - **Canvas brightness vs audible intensity** (the 2026-10-11 item). Base the canvas color mapping on the same canonical intensity mapping, so what you see and the "value" you type agree.
 - **Layers panel Gain and Balance sliders:** add scale and labels, and apply on release instead of on every move.
 - *Performance:* commit-on-release and commit-on-Enter remove most of the redundant recompositing that makes today's sliders feel sluggish. Confirm with `sound-mind-benchmark` that no recomposite runs during a drag.
@@ -1229,7 +1234,7 @@ This is the foundation milestone; later milestones build their new controls on i
 - **Procedural tips.**
   - *Root cause, confirmed:* `footprintDistance()` in `paint_application.cpp` handles only Circle, Square and Diamond; the other eight shapes fall through to the circle case.
   - *Fix:* implement a real footprint for each tip (Triangle, Single Stroke, Cross, Star, Corner, Arc, Dot Spatter, Dapple).
-  - *Also:* add a new **thickness** parameter (line width for stroke-like tips, particle size for Spatter and Dapple). It is a new `ProceduralConfiguration` field, read leniently from JSON.
+  - *Also:* add a new **thickness** parameter (line width for stroke-like tips, particle size for Spatter and Dapple), as a new `ProceduralConfiguration` field.
 - **Canvas binding mode.**
   - Make the footprint isotropic in canvas pixels, so a circle stays round at every vertical position.
   - Count stamp intervals in pixels for both "along curve" and "frequency axis".
@@ -1249,7 +1254,12 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - **"Live-encoding view" checkbox:** incrementally encode the in-progress take and draw it on top with Normal compositing. When the box is off, the layer renders in its real stack position as usual.
 - *Performance:* the live encode runs off the audio thread, consuming the recording ring buffer in chunks. Measure it against the ~100 ms / ~250 ms latency targets.
 
-#### `v0.Y.76.1` - Paths, selection and context menus (L)
+#### `v0.Y.76.1` - Filter preview (M)
+
+- The queued "filter preview control": loop a few seconds of audio through the in-progress filter configuration live, so it can be tuned by ear.
+- Placed straight after Record and Loop because it reuses the same live looping and staged-audio swap machinery.
+
+#### `v0.Y.77.1` - Paths, selection and context menus (L)
 
 - **Path tool reworked as "paint without stamping".** After a stroke is drawn, its nodes are individually editable, as today.
 - **Distinct canvas colors** for regular paths and branching (Resonance) paths.
@@ -1258,35 +1268,39 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - **Rectangle multi-select with Pick:** delete, copy or move several objects at once. The selection model goes from one object to a set, and each bulk action is a single undo entry.
 - **Merge selected paths into one branching path.** Treat each path as a connected component, then add the k-1 shortest node-to-node connecting edges (a minimum spanning tree over the components, using Kruskal's algorithm on inter-component node pairs).
 
-#### `v0.Y.77.1` - Macro recording and macro video export (M, scope after investigation)
+#### `v0.Y.78.1` - Macro recording and macro video export (M, scope after investigation)
 
 - First reproduce and list the concrete problems; the backlog item has no detail yet.
 - Depends on `v0.Y.71.1`'s full-composite export.
 
-#### `v0.Y.78.1` - Text tool (M)
+#### `v0.Y.79.1` - Text tool (M)
 
 - Port the behavior of the legacy `tools/text_tool.py` (about 320 lines in `../sound-mind/`). Port the behavior, not the code, per CLAUDE.md.
 - Text is rasterized and painted through the normal paint pipeline, using `v0.Y.74.1`'s brush work.
 
-#### `v0.Y.79.1` - Noise generators (M)
+#### `v0.Y.80.1` - Generators (L)
 
-- **Noise colors:** white, pink, red/brownian, purple and gray, plus a custom-spectrum noise.
+- **Noise:** white, pink, red/brownian, purple and gray, plus a custom-spectrum noise. It is offered in two forms:
+  - **a Generate Layer type**, built on `v0.Y.51.1`'s Generate Layer infrastructure;
+  - **a MindWave generator type**, sharing the same noise core.
 - **MindWave bindings** for horizontal and vertical resolution (the time and frequency granularity of the noise cells), and for the custom spectrum.
-- Builds on `v0.Y.51.1`'s Generate Layer infrastructure.
+- **The Fractal and Streaming generator families,** deferred from `v0.Y.51.1`, finished here. They share the Order/Chaos axis the Lattice family established.
 
-#### `v0.Y.80.1` - Analysis tools (L)
+#### `v0.Y.81.1` - Analysis tools (L)
 
 - **Three tools,** each with visualizations, graphs and overlays:
   - **Goniometer / stereo width.**
   - **Loudness meter:** over time, per frequency band, peak and average, and per-layer contributions (average, peak, per band, over time). This extends `v0.Y.52.1`'s per-layer indicator.
   - **Pitch detection.**
+- **Output loudness normalization,** deferred from `v0.Y.52.1`: scale the output gain toward a target loudness set in Configure Devices, holding steady across pause and resume. It reuses the loudness meter's measurement.
 - The legacy `analysis/` modules (`loudness.py`, `stereo_width.py`, `pitch.py`) are the lessons-learned reference.
 - *Performance:* analysis runs on worker threads, never the GUI or audio thread. Per-band loudness over a whole project is a candidate for the GPU compute path.
 
-#### `v0.Y.81.1` - Operation history persisted with the project (L, the one planned `Y` bump)
+#### `v0.Y.82.1` - Operation history persisted with the project (L)
 
-- This is the "final Project file schema" decision already queued above. It is scheduled last so the schema takes in everything the earlier milestones add.
-- Gets its own architecture decision and a migration path for existing projects.
+- The queued item: a project can be re-rendered from scratch from its saved operation history.
+- Scheduled last so the schema settles once.
+- No migration path for older projects, per the standing decision above.
 
 #### Then: Beta readiness check
 
@@ -1297,19 +1311,18 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 
 The Beta Readiness Loop's "judged beta-ready" call happens here.
 
-**Decisions to confirm before the milestone that needs them:**
+**Moved to after Beta (2026-10-15):**
+- the remaining `v0.Y.52.1` analysis categories (spectral health, criticality/pattern);
+- a correct Pool reflection-padding implementation.
 
-1. *Superposition removal (`v0.Y.72.1`):* how to load old projects that contain superposition stacks. **Recommendation:** load them, drop the stacks, and show a one-time notice listing the affected MindWaves. This is lossy for those MindWaves; the alternative is refusing to open such projects.
-2. *dB/value unit choice (`v0.Y.73.1`):* one project-level setting, or a per-control toggle. **Recommendation:** a project setting next to the decimal separator. It is simpler, and it keeps every intensity control consistent.
-3. *What "maximum" means for value = 1 (`v0.Y.73.1`):* **Recommendation:** the codec's full-scale level. The canvas brightness mapping then uses the same 0-1 range, which also settles the brightness/intensity item.
-4. *Where noise lives (`v0.Y.79.1`):* **Recommendation:** a Generate Layer type, like Lattice. An "Add Noise" Filter could come later if wanted.
-5. *Older queued items not listed above:*
-   - the filter preview control
-   - output loudness normalization and the other `v0.Y.52.1` analysis categories (spectral health, criticality/pattern)
-   - the Fractal and Streaming generator families
-   - Pool reflection padding
+**Decisions still open:**
 
-   **Recommendation:** keep the filter preview control in the pre-Beta scope, slotted after `v0.Y.75.1` since it needs live audio looping. Move the rest to post-Beta.
+1. *What "maximum" (value = 1) means for intensity (`v0.Y.73.1`).*
+   - **Background.** Stream stores raw, unnormalized STFT magnitudes in dB, A-weighted. They are measured after a per-encode peak normalization that decode undoes. So a full-scale sine reads about 20·log10(fftSize/4) dB, roughly +54 dB at hop 512. The display and Pool quantization, meanwhile, assume [-96, 0] dB. That mismatch is the root of the brightness-vs-loudness item.
+   - **(A) Absolute full scale (recommended).** Calibrate stored dB to dBFS: remove the FFT-size gain and fold the normalization scale into the stored values. Then value = 1 is a full-scale tone, value = 0 is -96 dBFS, and the same mapping drives brightness. Requires a codec change, which is acceptable under the standing decision.
+   - **(B) Today's display range as-is.** 1 = the current 0 dB. The cheapest option, but 1 then sits about 50 dB below a full-scale tone, and the visual mismatch remains.
+   - **(C) Relative to the project's loudest cell.** Always uses the full range, but a typed value changes meaning whenever content changes. Bad for presets.
+   - **(D) Relative to the configured output target loudness**, plus headroom. Ties into output normalization, but makes painted values depend on device settings.
 
 ---
 
