@@ -47,6 +47,7 @@
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/codec/stream_incremental_encoder.h"
 #include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/gpu_compute_availability.h"
@@ -733,6 +734,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         hasUnsavedChanges_ = true;
         refreshHistoryPanel();
         refreshComposerPanel();
+        refreshRecordTargets();
     });
     connect(layerController_, &LayerController::layerRemoved, this,
             [this](sound_mind::core::LayerId id) { toolPaletteController_->forgetLayer(id); });
@@ -816,6 +818,18 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     recordPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, recordPanel_);
     connect(recordPanel_, &RecordPanel::toggleRequested, this, &MainWindow::toggleRecording);
+    connect(recordPanel_, &RecordPanel::liveViewToggled, this, [this](bool enabled) {
+        recordLiveView_ = enabled;
+        if (!enabled && recordEngine_.isRecording()) {
+            canvas_->setLiveOverlay(std::nullopt);
+        }
+    });
+    connect(loopPanel_, &LoopPanel::liveViewToggled, this, [this](bool enabled) {
+        loopLiveView_ = enabled;
+        if (!enabled) {
+            canvas_->setLiveOverlay(std::nullopt);
+        }
+    });
     connect(recordPanel_, &RecordPanel::configureDevicesRequested, this, &MainWindow::showConfigureDevicesPanel);
 
     loopPanel_ = new LoopPanel(this);
@@ -1616,7 +1630,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // loopUpdateTimer_, nothing visual depends on this cadence, so a
     // slower interval with a comfortable safety margin is fine.
     recordDrainTimer_ = new QTimer(this);
-    recordDrainTimer_->setInterval(100);
+    recordDrainTimer_->setInterval(33);  // also moves the playback position bar - see drainRecording().
     connect(recordDrainTimer_, &QTimer::timeout, this, &MainWindow::drainRecording);
 
     // No newProject() call here, per the Landing Page milestone (v0.Y.9.1):
@@ -2091,6 +2105,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
         principalModeAction_->setChecked(settings.principalMode == sound_mind::core::PrincipalMode::Image);
     }
     NumericFieldBase::setDecimalSeparator(settings.decimalSeparator);
+    refreshRecordTargets();
     toolConfigurationPanel_->setPrincipalMode(settings.principalMode);
     updateCanvasFit();
     (settings.decimalSeparator == sound_mind::core::DecimalSeparator::Comma ? decimalCommaAction_
@@ -4426,6 +4441,7 @@ void MainWindow::toggleLoopMode() {
         loopEngine_->stop();
         loopLayerId_.reset();
         canvas_->setPlayheadFraction(std::nullopt);
+        canvas_->setLiveOverlay(std::nullopt);
         loopPanel_->setRunning(false);
         updateConfiguredDeviceLockState();
         statusBar()->showMessage(tr("Loop stopped."), 5000);
@@ -4583,6 +4599,10 @@ void MainWindow::updateLoopLayer() {
         }
     }
 
+    if (loopLiveView_) {
+        canvas_->setLiveOverlay(loopEngine_->currentPreviewImage());
+    }
+
     const std::size_t length = loopEngine_->loopLengthSamples();
     canvas_->setPlayheadFraction(static_cast<double>(loopEngine_->playbackPositionSamples()) /
                                  static_cast<double>(std::max<std::size_t>(length, 1)));
@@ -4632,29 +4652,12 @@ void MainWindow::toggleRecording() {
         recordPanel_->setRecording(false);
         updateConfiguredDeviceLockState();
 
-        const sound_mind::codec::AudioBuffer& captured = recordEngine_.capturedAudio();
-        if (!project_ || captured.frameCount() == 0) {
+        canvas_->setPlayheadFraction(std::nullopt);
+        canvas_->setLiveOverlay(std::nullopt);
+        recordLiveEncoder_.reset();
+        recordLiveFed_ = 0;
+        if (!commitRecording(recordEngine_.capturedAudio())) {
             statusBar()->showMessage(tr("Recording stopped - nothing captured."), 5000);
-            return;
-        }
-
-        try {
-            // Encoded exactly as an imported file would be - a one-shot
-            // whole-buffer encode(), same as LoopEngine now does per loop
-            // (see its own docs) - just triggered once, at Recording's own
-            // end, rather than every loop.
-            const auto content =
-                sound_mind::codec::encode(captured, sound_mind::core::streamCodecConfigFor(project_->settings()));
-            sound_mind::core::Layer layer(0, tr("Recording").toStdString(), sound_mind::core::LayerType::Normal);
-            layer.setContent(content);
-            project_->addLayer(std::move(layer));
-            canvas_->invalidateCompositeAll();
-            playbackController_->invalidate();
-            hasUnsavedChanges_ = true;
-            layerController_->refreshLayersPanel();
-            statusBar()->showMessage(tr("Recording added as a new layer."), 5000);
-        } catch (const std::exception& e) {
-            QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));
         }
         return;
     }
@@ -4805,6 +4808,91 @@ void MainWindow::toggleTestOutputDevice(bool testing) {
 
 void MainWindow::drainRecording() {
     recordEngine_.drainAvailable();
+    if (recordLiveView_ && project_) {
+        const sound_mind::codec::AudioBuffer& captured = recordEngine_.capturedAudio();
+        if (!recordLiveEncoder_) {
+            recordLiveEncoder_ = std::make_unique<sound_mind::codec::StreamIncrementalEncoder>(
+                sound_mind::core::streamCodecConfigFor(project_->settings()));
+            recordLiveFed_ = 0;
+        }
+        if (captured.frameCount() > recordLiveFed_) {
+            recordLiveEncoder_->pushSamples(captured.left.data() + recordLiveFed_, captured.right.data() + recordLiveFed_,
+                                            captured.frameCount() - recordLiveFed_);
+            recordLiveFed_ = captured.frameCount();
+        }
+        canvas_->setLiveOverlay(recordLiveEncoder_->snapshot());
+    }
+    // The playback position bar follows the recording, from the canvas's
+    // own start, until it reaches the end.
+    if (project_) {
+        const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
+        const double canvasSamples =
+            static_cast<double>(project_->settings().canvasWidth) * static_cast<double>(config.hopLength);
+        const double recorded = static_cast<double>(recordEngine_.capturedAudio().frameCount());
+        canvas_->setPlayheadFraction(canvasSamples > 0.0 ? std::optional<double>(std::min(1.0, recorded / canvasSamples))
+                                                          : std::nullopt);
+    }
+}
+
+bool MainWindow::commitRecording(const sound_mind::codec::AudioBuffer& captured) {
+    if (!project_ || captured.frameCount() == 0) {
+        return false;
+    }
+    try {
+        // Encoded exactly as an imported file would be.
+        sound_mind::codec::StreamImage content =
+            sound_mind::codec::encode(captured, sound_mind::core::streamCodecConfigFor(project_->settings()));
+        const auto target = recordPanel_->targetLayerId();
+        sound_mind::core::Layer* existing = target.has_value() ? layerController_->layerById(*target) : nullptr;
+        if (existing != nullptr) {
+            const sound_mind::core::LayerId id = existing->id();
+            const std::optional<sound_mind::codec::StreamImage> previous = existing->content();
+            existing->setContent(content);
+            const auto setContent = [this, id](const std::optional<sound_mind::codec::StreamImage>& image) {
+                sound_mind::core::Layer* layer = layerController_->layerById(id);
+                if (layer != nullptr && image.has_value()) {
+                    layer->setContent(*image);
+                    canvas_->invalidateCompositeAll();
+                    playbackController_->invalidate();
+                    layerController_->refreshLayersPanel(id);
+                }
+            };
+            undoStack_.push({/*undo=*/[setContent, previous]() { setContent(previous); },
+                             /*redo=*/[setContent, content]() { setContent(content); },
+                             /*description=*/tr("Recorded over \"%1\"").arg(QString::fromStdString(existing->name()))});
+            refreshHistoryPanel();
+            statusBar()->showMessage(
+                tr("Recording replaced \"%1\".").arg(QString::fromStdString(existing->name())), 5000);
+        } else {
+            sound_mind::core::Layer layer(0, recordPanel_->newLayerName().toStdString(),
+                                          sound_mind::core::LayerType::Normal);
+            layer.setContent(std::move(content));
+            layer.setRecorded(true);
+            project_->addLayer(std::move(layer));
+            statusBar()->showMessage(tr("Recording added as a new layer."), 5000);
+        }
+        canvas_->invalidateCompositeAll();
+        playbackController_->invalidate();
+        hasUnsavedChanges_ = true;
+        layerController_->refreshLayersPanel();
+        refreshRecordTargets();
+        return true;
+    } catch (const std::exception& e) {
+        QMessageBox::critical(this, tr("Record Failed"), QString::fromStdString(e.what()));
+        return false;
+    }
+}
+
+void MainWindow::refreshRecordTargets() {
+    std::vector<std::pair<sound_mind::core::LayerId, QString>> targets;
+    if (project_) {
+        for (const sound_mind::core::Layer& layer : project_->layers()) {
+            if (layer.recorded()) {
+                targets.emplace_back(layer.id(), QString::fromStdString(layer.name()));
+            }
+        }
+    }
+    recordPanel_->setRecordedLayers(targets);
 }
 
 void MainWindow::pollTestInputLevel() {

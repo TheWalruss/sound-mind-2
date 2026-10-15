@@ -75,7 +75,12 @@ signals:
     ///        established).
     void configureDevicesRequested();
 
+    /// @brief The "Live-encoding view" checkbox was toggled.
+    /// @param enabled Whether to show the take being recorded live.
+    void liveViewToggled(bool enabled);
+
 private:
+    QCheckBox* liveViewCheckBox_ = nullptr;
     QPushButton* toggleButton_ = nullptr;
     QCheckBox* keepLoopingCheckBox_ = nullptr;
 };

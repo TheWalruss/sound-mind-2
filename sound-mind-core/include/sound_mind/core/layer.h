@@ -275,6 +275,15 @@ public:
     ///        balance()'s own docs.
     void setBalance(float balance) noexcept { balance_ = balance; }
 
+    /// @brief Whether this layer was made by Recording - what the Record
+    ///        panel lists as a target to record over.
+    /// @return `true` for a recorded layer; `false` by default.
+    [[nodiscard]] bool recorded() const noexcept { return recorded_; }
+
+    /// @brief Marks (or unmarks) this layer as made by Recording.
+    /// @param recorded The new mark.
+    void setRecorded(bool recorded) noexcept { recorded_ = recorded; }
+
     /**
      * @brief Sets whether this layer currently contributes to the project.
      * @param visible The new visibility. Not enforced here that a
@@ -392,6 +401,7 @@ private:
     float opacity_ = 1.0f;
     std::optional<MindWaveId> opacityMindWave_;
     float balance_ = 0.5f;
+    bool recorded_ = false;
     bool visible_ = true;
     bool muted_ = false;
     std::int64_t translationColumns_ = 0;

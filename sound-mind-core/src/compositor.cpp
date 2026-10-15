@@ -955,4 +955,23 @@ std::optional<StreamImage> compositeProjectCached(const Project& project, Compos
     return result;
 }
 
+void addNormalOverlay(StreamImage& composite, const StreamImage& overlay) {
+    const std::uint32_t frames = std::min(composite.frameCount, overlay.frameCount);
+    const std::uint32_t bins = std::min(composite.config.binCount, overlay.config.binCount);
+    for (std::uint32_t bin = 0; bin < bins; ++bin) {
+        for (std::uint32_t frame = 0; frame < frames; ++frame) {
+            const std::size_t target = cellIndex(bin, frame, composite.frameCount);
+            const std::size_t source = cellIndex(bin, frame, overlay.frameCount);
+            const BlendedCell base{composite.leftMagnitudeDb[target], composite.rightMagnitudeDb[target],
+                                    composite.sharedPhaseRadians[target]};
+            const BlendedCell top{overlay.leftMagnitudeDb[source], overlay.rightMagnitudeDb[source],
+                                   overlay.sharedPhaseRadians[source]};
+            const BlendedCell blended = applyBlendedCell(BlendMode::Normal, base, top, 1.0f);
+            composite.leftMagnitudeDb[target] = blended.leftMagnitudeDb;
+            composite.rightMagnitudeDb[target] = blended.rightMagnitudeDb;
+            composite.sharedPhaseRadians[target] = blended.phaseRadians;
+        }
+    }
+}
+
 }  // namespace sound_mind::core

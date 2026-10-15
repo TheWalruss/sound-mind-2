@@ -6714,3 +6714,57 @@ void MainWindowTest::imageModeFitsTheCanvasWithSquareCells() {
     QVERIFY(scrollArea != nullptr);
     QTRY_COMPARE(canvas->size(), scrollArea->viewport()->size());
 }
+
+namespace {
+
+sound_mind::codec::AudioBuffer recordedTone(float amplitude) {
+    sound_mind::codec::AudioBuffer audio;
+    audio.sampleRateHz = 44100;
+    audio.left.resize(8820);
+    for (std::size_t i = 0; i < audio.left.size(); ++i) {
+        audio.left[i] = amplitude * std::sin(2.0f * 3.14159265f * 440.0f * static_cast<float>(i) / 44100.0f);
+    }
+    audio.right = audio.left;
+    return audio;
+}
+
+}  // namespace
+
+void MainWindowTest::commitRecordingAddsANamedRecordedLayer() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* name = window.findChild<QLineEdit*>(QStringLiteral("recordNameEdit"));
+    QVERIFY(name != nullptr);
+    name->setText(QStringLiteral("Vocals"));
+    const std::size_t before = window.project()->layers().size();
+
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));
+
+    QCOMPARE(window.project()->layers().size(), before + 1);
+    const sound_mind::core::Layer& added = topmostNonEqualizerLayer(*window.project());
+    QCOMPARE(QString::fromStdString(added.name()), QStringLiteral("Vocals"));
+    QVERIFY(added.recorded());
+    auto* combo = window.findChild<QComboBox*>(QStringLiteral("recordTargetCombo"));
+    QVERIFY(combo != nullptr);
+    QCOMPARE(combo->count(), 2);  // "New recording layer" + Vocals.
+}
+
+void MainWindowTest::commitRecordingOverwritesTheChosenRecordedLayerUndoably() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));
+    const sound_mind::core::LayerId takeId = topmostNonEqualizerLayer(*window.project()).id();
+    const auto firstContent = *window.project()->layerById(takeId)->content();
+    const std::size_t layerCount = window.project()->layers().size();
+    auto* combo = window.findChild<QComboBox*>(QStringLiteral("recordTargetCombo"));
+    combo->setCurrentIndex(combo->findData(QVariant::fromValue(static_cast<qulonglong>(takeId))));
+
+    QVERIFY(window.commitRecording(recordedTone(0.05f)));
+
+    QCOMPARE(window.project()->layers().size(), layerCount);  // overwritten, not added.
+    const auto overwritten = *window.project()->layerById(takeId)->content();
+    QVERIFY(overwritten.leftMagnitudeDb != firstContent.leftMagnitudeDb);
+
+    window.undo();
+    QVERIFY(window.project()->layerById(takeId)->content()->leftMagnitudeDb == firstContent.leftMagnitudeDb);
+}

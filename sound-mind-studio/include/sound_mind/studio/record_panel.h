@@ -1,7 +1,18 @@
 #pragma once
 
-#include <QDockWidget>
+#include <optional>
+#include <utility>
+#include <vector>
 
+#include <QDockWidget>
+#include <QString>
+
+#include "sound_mind/core/layer.h"
+
+class QCheckBox;
+class QComboBox;
+class QLabel;
+class QLineEdit;
 class QPushButton;
 
 namespace sound_mind::studio {
@@ -46,6 +57,22 @@ public:
     /// @param recording Whether Recording is currently active.
     void setRecording(bool recording);
 
+    /**
+     * @brief Lists the project's recorded layers as targets to record over,
+     *        after "New recording layer" (always first). Keeps the current
+     *        choice if that layer is still listed; otherwise falls back to
+     *        a new layer.
+     * @param layers Each recorded layer's id and name, in display order.
+     */
+    void setRecordedLayers(const std::vector<std::pair<sound_mind::core::LayerId, QString>>& layers);
+
+    /// @return The recorded layer to overwrite, or `std::nullopt` to record
+    ///         into a new layer.
+    [[nodiscard]] std::optional<sound_mind::core::LayerId> targetLayerId() const;
+
+    /// @return The new layer's name, trimmed - "Recording" if left blank.
+    [[nodiscard]] QString newLayerName() const;
+
 signals:
     /// @brief The Start/Stop button was clicked.
     void toggleRequested();
@@ -57,8 +84,16 @@ signals:
     ///        established).
     void configureDevicesRequested();
 
+    /// @brief The "Live-encoding view" checkbox was toggled.
+    /// @param enabled Whether to show the take being recorded live.
+    void liveViewToggled(bool enabled);
+
 private:
+    QCheckBox* liveViewCheckBox_ = nullptr;
     QPushButton* toggleButton_ = nullptr;
+    QComboBox* targetCombo_ = nullptr;
+    QLineEdit* nameEdit_ = nullptr;
+    QLabel* nameLabel_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

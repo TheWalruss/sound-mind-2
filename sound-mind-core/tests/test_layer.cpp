@@ -304,3 +304,14 @@ TEST_CASE("A Layer's Pool content is not part of its JSON representation", "[cor
     REQUIRE(original.poolContent().has_value());
     REQUIRE_FALSE(restored.poolContent().has_value());
 }
+
+TEST_CASE("A Layer is not marked as recorded by default, and the mark round-trips through JSON", "[core][layer]") {
+    Layer layer(1, "Take", LayerType::Normal);
+    CHECK_FALSE(layer.recorded());
+    layer.setRecorded(true);
+
+    const nlohmann::json json = layer;
+    const Layer restored = json.get<Layer>();
+
+    CHECK(restored.recorded());
+}

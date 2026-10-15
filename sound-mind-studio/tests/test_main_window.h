@@ -337,4 +337,6 @@ private slots:
     void showClippingActionTogglesTheCanvasClipIndicator();
     void decimalSeparatorMenuSetsTheProjectSettingAndEveryNumericField();
     void imageModeFitsTheCanvasWithSquareCells();
+    void commitRecordingAddsANamedRecordedLayer();
+    void commitRecordingOverwritesTheChosenRecordedLayerUndoably();
 };

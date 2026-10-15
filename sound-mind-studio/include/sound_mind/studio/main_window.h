@@ -13,6 +13,7 @@
 #include <QUrl>
 
 #include "sound_mind/codec/audio_export.h"
+#include "sound_mind/codec/stream_incremental_encoder.h"
 #include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/background_task.h"
 #include "sound_mind/core/compositor.h"
@@ -1714,6 +1715,23 @@ public slots:
      * @param separator The mark to use.
      */
     void setDecimalSeparator(sound_mind::core::DecimalSeparator separator);
+
+    /**
+     * @brief Stores a finished recording where the Record panel says:
+     *        replacing the content of the chosen recorded layer (one
+     *        undoable step), or as a new layer with the panel's own name,
+     *        marked as recorded so it's offered as a target next time.
+     *        What toggleRecording() does when recording stops - public so
+     *        it can be tested without a real input device.
+     * @param captured The recorded audio.
+     * @return `false` (nothing changes) with no project open or nothing
+     *         captured.
+     */
+    bool commitRecording(const sound_mind::codec::AudioBuffer& captured);
+
+    /// @brief Gives the Record panel the project's current recorded layers
+    ///        as targets.
+    void refreshRecordTargets();
 
     /**
      * @brief Sizes the canvas for Fit to Window. In Image Mode, the canvas
@@ -3921,6 +3939,14 @@ private:
     /// @brief Loop Mode was started and is waiting for its first project
     ///        audio before the engine actually starts.
     bool loopStartPending_ = false;
+    /// @brief The Record/Loop panels' "Live-encoding view" choices - see
+    ///        CanvasWidget::setLiveOverlay().
+    bool recordLiveView_ = false;
+    bool loopLiveView_ = false;
+    /// @brief Encodes the recording in progress for Record's live view;
+    ///        recordLiveFed_ is how many captured samples it has seen.
+    std::unique_ptr<sound_mind::codec::StreamIncrementalEncoder> recordLiveEncoder_;
+    std::size_t recordLiveFed_ = 0;
     /// @brief The last LoopEngine::takesCompleted() copied into the Loop
     ///        layer - see updateLoopLayer().
     std::uint64_t loopTakesShown_ = 0;

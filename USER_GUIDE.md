@@ -1761,12 +1761,24 @@ length.
 
 ## Recording
 
-The **Record** panel has a single **Start Recording**/**Stop Recording**
-toggle, and its own **Configure Devices** button. Recording captures from
-the input device chosen in [Configure Devices](#configure-devices) into a
-brand-new layer, encoded the same way an imported file would be, the
-moment you stop. That input device (and its Gain) can't be changed while
-recording is in progress.
+The **Record** panel has a **Start Recording**/**Stop Recording** toggle,
+its own **Configure Devices** button, and two settings for where the
+recording goes:
+
+- **Record into** - **New recording layer** (the default) adds a brand-new
+  layer, named from the **Name** box (default "Recording"); or pick one of
+  your earlier recorded layers to record over it - its content is
+  replaced by the new recording (Edit → Undo brings the old one back).
+- **Live-encoding view** - shows the recording on the canvas as it comes
+  in. It's drawn on top of everything else rather than at its own place
+  in the layer stack (that would be too slow while recording); once you
+  stop, the recorded layer shows in the stack as usual.
+
+Recording captures from the input device chosen in [Configure
+Devices](#configure-devices), encoded the same way an imported file would
+be, the moment you stop. While recording, the playback position bar moves
+across the canvas to show how far you've got. That input device (and its
+Gain) can't be changed while recording is in progress.
 
 ## Loop Mode
 
@@ -1789,6 +1801,10 @@ with your whole project:
   project are heard from the next pass on.
 - The playback position bar sweeps across the canvas as the loop plays,
   and the Loop Input layer shows each take once its pass is complete.
+- Check **Live-encoding view** to watch the take being recorded appear on
+  the canvas as it comes in, drawn on top of everything else (not at the
+  Loop Input layer's own place in the stack, which would be too slow
+  while looping).
 
 While a loop is running, filters and blend modes on layers *above* Loop
 Input don't apply to the live take yet - once you stop, ordinary

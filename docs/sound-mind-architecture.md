@@ -2062,6 +2062,22 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **A bug caught while building it:** a bulk rename turned `isLoopModeRunning()`'s own body into a call to itself; the stack overflow surfaced as an access violation in every Loop `MainWindowTest`. Fixed before commit.
     - **Tests:** `test_loop_engine.cpp` rewritten (15 cases: backing playback and wrap, staged backing only at a pass start, take recorded then heard mixed, take gains, freeze/unfreeze-at-next-pass, input gain/level, take encoding, preview growth/reset, `start()` reset, devices). The 26 existing Loop-related `MainWindowTest` cases pass unchanged against the new start-up path.
 
+237. **Record target picker, recording playhead, and the live-encoding view.** Settled in `v0.1.35.2`, Pre-Beta Plan milestone `v0.Y.75.1` installments B and C, completing the milestone.
+    - **Recorded layers are marked:** `Layer::recorded()` (JSON `recorded`, default `false`), set on every layer Recording creates. This is the only reliable way to list "recorded layers" (names aren't).
+    - **Record panel:**
+      - `recordTargetCombo` offers "New recording layer" plus `setRecordedLayers()`; a removed target falls back to a new layer.
+      - `recordNameEdit` is shown only for a new layer; blank means "Recording".
+      - Both are locked while recording.
+    - **`MainWindow::commitRecording(audio)`** (public, so tests can drive it without an input device; what `toggleRecording()` calls on stop) encodes the take and either replaces the chosen recorded layer's content, as one `UndoStack` entry restoring or re-applying it, or adds a new named, marked layer. `refreshRecordTargets()` re-lists targets on project switch, `layersChanged()`, and after each commit.
+    - **Recording playhead:** `drainRecording()` (interval 100 -> 33 ms) sets the canvas playhead to recorded samples / the canvas's own sample length, clamped to the end.
+    - **Live-encoding view** (a "Live-encoding view" checkbox in both panels, session-only):
+      - `CanvasWidget::setLiveOverlay()` mixes an in-progress take on top of the whole composite with the new `sound_mind::core::addNormalOverlay()` (Normal blend at full opacity, from column 0, via `applyBlendedCell()`). On an empty project it draws onto a silent canvas-sized image.
+      - Loop feeds it `LoopEngine::currentPreviewImage()`.
+      - Record feeds a `StreamIncrementalEncoder` on the UI thread with each newly drained chunk (about 33 ms of audio per tick).
+      - Drawing on top rather than at the layer's real stack position is the user's own stated performance trade-off. With the view off, nothing changes from installment A: the layer updates in the stack when a take or recording completes.
+      - *Performance:* each tick with the view on recolours the full composite image once (no re-composite - the prefix cache is reused), the same cost as any other canvas repaint after a change.
+    - **Tests:** a core `Layer` round trip for `recorded()`; two `addNormalOverlay()` cases; `RecordPanelTest` (5 target cases plus live view); `LoopPanelTest` (live view); `CanvasWidgetTest::aLiveOverlayIsDrawnOnTopEvenWithNoOtherContent`; `MainWindowTest` (new named recorded layer; overwrite plus undo).
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

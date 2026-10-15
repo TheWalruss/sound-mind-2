@@ -412,4 +412,19 @@ private:
     const Project& project, CompositePrefixCache& cache, const std::function<bool()>& shouldCancel = nullptr,
     bool respectMute = false);
 
+/**
+ * @brief Mixes `overlay` onto `composite` as a Normal-blend layer at full
+ *        opacity, starting at column 0 - the "live-encoding view" of a
+ *        take being recorded, drawn on top of the whole stack rather than
+ *        at its real place in it (compositing it there every frame would
+ *        be too slow while recording).
+ *
+ * Covers columns `[0, min(overlay.frameCount, composite.frameCount))` and
+ * bins `[0, min(binCount))`; everything else is untouched.
+ *
+ * @param composite The composite to draw onto, in place.
+ * @param overlay The image to add.
+ */
+void addNormalOverlay(sound_mind::codec::StreamImage& composite, const sound_mind::codec::StreamImage& overlay);
+
 }  // namespace sound_mind::core

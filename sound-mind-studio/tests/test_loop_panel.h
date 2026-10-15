@@ -11,4 +11,5 @@ private slots:
     void keepLoopingCheckBoxEmitsKeepLoopingChanged();
     void keepLoopingCheckBoxIsLabeledFreezeLoop();
     void setKeepLoopingCheckedDoesNotEmitKeepLoopingChanged();
+    void liveViewCheckBoxEmitsLiveViewToggled();
 };

@@ -1247,7 +1247,7 @@ This is the foundation milestone; later milestones build their new controls on i
 - **Paint Tool gradient:** reuse `GradientEditorWidget`.
 - *Performance:* the footprint test runs per pixel per stamp. Keep each shape's test branch-light, and re-check the Paint benchmarks.
 
-#### `v0.Y.75.1` - Record and Loop (L)
+#### ✅ `v0.Y.75.1` - Record and Loop (L) - settled in `v0.1.35.1`-`v0.1.35.2`, see architecture Decisions #236-#237
 
 *Progress: installment A (Loop Mode rebuilt to spec, Freeze, playhead while looping) settled in `v0.1.35.1` - Decision #236.*
 

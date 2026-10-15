@@ -14,6 +14,7 @@ private slots:
     void addingALayerShowsWithoutAnExplicitInvalidate();
     void hidingALayerShowsWithoutAnExplicitInvalidate();
     void clipIndicatorMarksCellsAboveFullScaleOnlyWhileEnabled();
+    void aLiveOverlayIsDrawnOnTopEvenWithNoOtherContent();
     void skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt();
     void reflectsALayersTranslationColumns();
     void drawsAPlayheadLineAtTheGivenFraction();

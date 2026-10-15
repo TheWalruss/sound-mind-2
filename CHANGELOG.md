@@ -6,6 +6,16 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.35.2] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.75.1`, installments B and C - completes the milestone.
+
+### Added
+
+- **Choose where a recording goes.** The Record panel's **Record into** drop-down offers "New recording layer" (named from the **Name** box, default "Recording") or any earlier recorded layer, whose content the new recording replaces - undoable.
+- **Live-encoding view** checkboxes in the Record and Loop panels show the take being recorded as it comes in, drawn on top of the canvas.
+- **The playback position bar moves while recording**, showing how far the recording has got.
+
 ## [0.1.35.1] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.75.1`, installment A: Loop Mode rebuilt to your spec.
@@ -20,7 +30,6 @@ Pre-Beta Plan milestone `v0.Y.75.1`, installment A: Loop Mode rebuilt to your sp
 ### Known limitation
 
 - While looping, filters and blend modes on layers above Loop Input don't apply to the live take; ordinary playback after stopping includes them.
-- The canvas no longer grows live while a take is recorded; the take appears when its pass completes. A "live-encoding view" option comes in the next installment.
 
 ## [0.1.34.2] - 2026-10-15
 

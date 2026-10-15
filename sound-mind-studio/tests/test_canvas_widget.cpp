@@ -1937,3 +1937,22 @@ void CanvasWidgetTest::clipIndicatorMarksCellsAboveFullScaleOnlyWhileEnabled() {
     widget.setClipIndicatorEnabled(false);
     QCOMPARE(widget.grab().toImage().pixelColor(10, 10).green(), 255);
 }
+
+void CanvasWidgetTest::aLiveOverlayIsDrawnOnTopEvenWithNoOtherContent() {
+    ProjectSettings settings;
+    settings.canvasWidth = 2;
+    settings.canvasHeight = 2;
+    settings.binCount = 2;
+    Project project = Project::createNew(settings);
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(20, 20);
+    QVERIFY(widget.grab().toImage().pixelColor(10, 10).red() != 255);
+
+    widget.setLiveOverlay(redTwoByTwoContent());
+    QVERIFY(widget.hasLiveOverlay());
+    QCOMPARE(widget.grab().toImage().pixelColor(10, 10).red(), 255);
+
+    widget.setLiveOverlay(std::nullopt);
+    QVERIFY(widget.grab().toImage().pixelColor(10, 10).red() != 255);
+}

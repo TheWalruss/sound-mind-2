@@ -1420,3 +1420,53 @@ TEST_CASE("compositeProjectCached detects a respectMute change on its own and re
     CHECK(respectingMute->leftMagnitudeDb == freshRespectingMute->leftMagnitudeDb);
     CHECK(respectingMute->leftMagnitudeDb != respectingNothing->leftMagnitudeDb);
 }
+
+TEST_CASE("addNormalOverlay mixes an overlay onto the composite from column 0, Normal-blend", "[core][compositor]") {
+    // 3 bins x 4 frames composite; a 2-frame overlay.
+    StreamImage composite;
+    composite.config.binCount = 3;
+    composite.frameCount = 4;
+    composite.leftMagnitudeDb.assign(12, -200.0f);
+    composite.rightMagnitudeDb.assign(12, -200.0f);
+    composite.sharedPhaseRadians.assign(12, 0.0f);
+    composite.leftMagnitudeDb[sound_mind::core::cellIndex(1, 0, 4)] = -6.0f;
+    composite.rightMagnitudeDb[sound_mind::core::cellIndex(1, 0, 4)] = -6.0f;
+
+    StreamImage overlay;
+    overlay.config.binCount = 3;
+    overlay.frameCount = 2;
+    overlay.leftMagnitudeDb.assign(6, -20.0f);
+    overlay.rightMagnitudeDb.assign(6, -20.0f);
+    overlay.sharedPhaseRadians.assign(6, 0.0f);
+    overlay.leftMagnitudeDb[sound_mind::core::cellIndex(1, 0, 2)] = -6.0f;
+    overlay.rightMagnitudeDb[sound_mind::core::cellIndex(1, 0, 2)] = -6.0f;
+
+    sound_mind::core::addNormalOverlay(composite, overlay);
+
+    // Silent underneath: the overlay shows as itself.
+    CHECK(composite.leftMagnitudeDb[sound_mind::core::cellIndex(0, 1, 4)] == Catch::Approx(-20.0f).margin(0.01));
+    // Two equal in-phase contributions sum: +6 dB.
+    CHECK(composite.leftMagnitudeDb[sound_mind::core::cellIndex(1, 0, 4)] == Catch::Approx(0.0f).margin(0.05));
+    // Columns past the overlay's own end are untouched.
+    CHECK(composite.leftMagnitudeDb[sound_mind::core::cellIndex(0, 2, 4)] == -200.0f);
+}
+
+TEST_CASE("addNormalOverlay clips an overlay wider than the composite", "[core][compositor]") {
+    StreamImage composite;
+    composite.config.binCount = 2;
+    composite.frameCount = 2;
+    composite.leftMagnitudeDb.assign(4, -200.0f);
+    composite.rightMagnitudeDb.assign(4, -200.0f);
+    composite.sharedPhaseRadians.assign(4, 0.0f);
+    StreamImage overlay;
+    overlay.config.binCount = 2;
+    overlay.frameCount = 5;
+    overlay.leftMagnitudeDb.assign(10, -10.0f);
+    overlay.rightMagnitudeDb.assign(10, -10.0f);
+    overlay.sharedPhaseRadians.assign(10, 0.0f);
+
+    sound_mind::core::addNormalOverlay(composite, overlay);
+
+    CHECK(composite.frameCount == 2);
+    CHECK(composite.leftMagnitudeDb[sound_mind::core::cellIndex(1, 1, 2)] == Catch::Approx(-10.0f).margin(0.01));
+}

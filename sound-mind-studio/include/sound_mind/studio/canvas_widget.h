@@ -209,6 +209,18 @@ public:
     [[nodiscard]] bool clipIndicatorEnabled() const noexcept { return clipIndicatorEnabled_; }
 
     /**
+     * @brief Draws `overlay` - a take being recorded, encoded live - on top
+     *        of the whole composite as a Normal-blend layer from the
+     *        canvas's left edge (`sound_mind::core::addNormalOverlay()`),
+     *        or removes it. The Record/Loop panels' "Live-encoding view".
+     * @param overlay The image to show, or `std::nullopt` to show none.
+     */
+    void setLiveOverlay(std::optional<sound_mind::codec::StreamImage> overlay);
+
+    /// @return Whether a live overlay is currently set.
+    [[nodiscard]] bool hasLiveOverlay() const noexcept { return liveOverlay_.has_value(); }
+
+    /**
      * @brief Sets which kind of mouse interaction the canvas currently
      *        accepts.
      *
@@ -1057,6 +1069,8 @@ private:
     LayerStackSignature lastRenderedSignature_;
     /// @brief See setClipIndicatorEnabled().
     bool clipIndicatorEnabled_ = false;
+    /// @brief See setLiveOverlay().
+    std::optional<sound_mind::codec::StreamImage> liveOverlay_;
     std::optional<double> playheadFraction_;
     /// @brief See setPolarMode()'s own docs.
     bool polarMode_ = false;

@@ -9,6 +9,7 @@ void to_json(nlohmann::json& json, const Layer& layer) {
         {"type", layer.type_},
         {"opacity", layer.opacity_},
         {"balance", layer.balance_},
+        {"recorded", layer.recorded_},
         {"visible", layer.visible_},
         {"muted", layer.muted_},
         {"translationColumns", layer.translationColumns_},
@@ -33,6 +34,7 @@ void from_json(const nlohmann::json& json, Layer& layer) {
     // (Per-layer balance); a layer saved before this milestone was
     // implicitly always centered anyway.
     layer.balance_ = json.value("balance", 0.5f);
+    layer.recorded_ = json.value("recorded", false);
     // Lenient (defaults to true if absent) - didn't exist before v0.Y.13.1
     // (Layers Panel); requiring it here would make it a breaking change
     // to an already-established format, per the same reasoning

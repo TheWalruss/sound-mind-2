@@ -70,3 +70,16 @@ void LoopPanelTest::setKeepLoopingCheckedDoesNotEmitKeepLoopingChanged() {
     QVERIFY(checkBox != nullptr);
     QVERIFY(checkBox->isChecked());
 }
+
+void LoopPanelTest::liveViewCheckBoxEmitsLiveViewToggled() {
+    LoopPanel panel;
+    QSignalSpy spy(&panel, &LoopPanel::liveViewToggled);
+    auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("liveViewCheckBox"));
+    QVERIFY(checkBox != nullptr);
+    QVERIFY(!checkBox->isChecked());
+
+    checkBox->setChecked(true);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toBool(), true);
+}

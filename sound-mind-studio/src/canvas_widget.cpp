@@ -47,9 +47,26 @@ constexpr double kMaxZoomFactor = 16.0;
 /// see `CanvasWidget::compositeCache_`'s own docs.
 /// `markClipped` overlays the clip indicator - see
 /// `CanvasWidget::setClipIndicatorEnabled()`.
+/// `liveOverlay` (if any) is mixed on top first - see
+/// `CanvasWidget::setLiveOverlay()`.
 [[nodiscard]] std::optional<sound_mind::codec::RgbImage> renderComposite(
-    const sound_mind::core::Project& project, sound_mind::core::CompositePrefixCache& cache, bool markClipped) {
-    const auto composite = sound_mind::core::compositeProjectCached(project, cache);
+    const sound_mind::core::Project& project, sound_mind::core::CompositePrefixCache& cache, bool markClipped,
+    const std::optional<sound_mind::codec::StreamImage>& liveOverlay) {
+    auto composite = sound_mind::core::compositeProjectCached(project, cache);
+    if (liveOverlay.has_value() && liveOverlay->frameCount > 0) {
+        if (!composite.has_value()) {
+            // Nothing else has content yet: start from a silent canvas.
+            sound_mind::codec::StreamImage silent;
+            silent.config = sound_mind::core::streamCodecConfigFor(project.settings());
+            silent.frameCount = project.settings().canvasWidth;
+            const std::size_t cells = std::size_t{silent.config.binCount} * silent.frameCount;
+            silent.leftMagnitudeDb.assign(cells, -200.0f);
+            silent.rightMagnitudeDb.assign(cells, -200.0f);
+            silent.sharedPhaseRadians.assign(cells, 0.0f);
+            composite = std::move(silent);
+        }
+        sound_mind::core::addNormalOverlay(*composite, *liveOverlay);
+    }
     if (!composite.has_value()) {
         return std::nullopt;
     }
@@ -382,7 +399,7 @@ std::optional<sound_mind::codec::RgbImage> CanvasWidget::currentComposite() {
     if (lastRenderedGeneration_ == compositeGeneration_) {
         return lastRenderedComposite_;
     }
-    lastRenderedComposite_ = renderComposite(*project_, compositeCache_, clipIndicatorEnabled_);
+    lastRenderedComposite_ = renderComposite(*project_, compositeCache_, clipIndicatorEnabled_, liveOverlay_);
     lastRenderedGeneration_ = compositeGeneration_;
     lastRenderedSignature_ = std::move(signature);
     return lastRenderedComposite_;
@@ -402,6 +419,15 @@ CanvasWidget::LayerStackSignature CanvasWidget::layerStackSignature() const {
 
 void CanvasWidget::invalidateCompositeFrom(std::size_t layerIndex) {
     compositeCache_.invalidateFrom(layerIndex);
+    ++compositeGeneration_;
+    update();
+}
+
+void CanvasWidget::setLiveOverlay(std::optional<sound_mind::codec::StreamImage> overlay) {
+    if (!overlay.has_value() && !liveOverlay_.has_value()) {
+        return;
+    }
+    liveOverlay_ = std::move(overlay);
     ++compositeGeneration_;
     update();
 }

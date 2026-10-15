@@ -30,6 +30,12 @@ LoopPanel::LoopPanel(QWidget* parent) : QDockWidget(tr("Loop"), parent) {
     connect(keepLoopingCheckBox_, &QCheckBox::toggled, this, &LoopPanel::keepLoopingChanged);
     root->addWidget(keepLoopingCheckBox_);
 
+    liveViewCheckBox_ = new QCheckBox(tr("Live-encoding view"), container);
+    liveViewCheckBox_->setObjectName(QStringLiteral("liveViewCheckBox"));
+    liveViewCheckBox_->setToolTip(tr("Show the take being recorded, encoded live, drawn on top of the canvas (not at its place in the layer stack, which would be too slow while recording)"));
+    connect(liveViewCheckBox_, &QCheckBox::toggled, this, &LoopPanel::liveViewToggled);
+    root->addWidget(liveViewCheckBox_);
+
     auto* configureDevicesButton = new QPushButton(tr("Configure Devices"), container);
     configureDevicesButton->setObjectName(QStringLiteral("configureDevicesButton"));
     connect(configureDevicesButton, &QPushButton::clicked, this, &LoopPanel::configureDevicesRequested);
