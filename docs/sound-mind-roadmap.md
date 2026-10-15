@@ -1223,9 +1223,13 @@ This is the foundation milestone; later milestones build their new controls on i
 - **Project-level decimal separator** ("." or ","), stored as a new `ProjectSettings` field.
 - **Intensity entry in dB or value.**
   - Each panel or logical control grouping gets its own dB/value toggle, applying to every intensity control in that group.
-  - "Value" is in [0, 1], with 0 = noise floor and 1 = maximum. Expose that mapping once from `sound-mind-core`, and use the same function for the display question below.
-  - What "maximum" means is still open; see *Decisions still open*.
+  - "Value" is in [0, 1], with 0 = -96 dBFS (noise floor) and 1 = 0 dBFS, a full-scale tone. Expose that mapping once from `sound-mind-core`, and use the same function for the canvas display.
+- **Calibrate the codec to absolute dBFS** (decided 2026-10-15, option (A) below).
+  - Stored dB drops the FFT-size gain, so a full-scale sine reads 0 dB at any hop length.
+  - The per-encode input normalization is folded into the stored values, so stored levels are the real audible levels.
+  - The display, Pool quantization, blend modes, brush defaults, and filter dB parameters all move onto the same dBFS scale. The +45 dB brush default and the [-96, 0] display range are re-derived, not kept.
 - **Canvas brightness vs audible intensity** (the 2026-10-11 item). Base the canvas color mapping on the same canonical intensity mapping, so what you see and the "value" you type agree.
+- **Clip indicator overlay:** a toggleable canvas overlay marking cells above 1.0 (above full scale), since brightness alone saturates there.
 - **Layers panel Gain and Balance sliders:** add scale and labels, and apply on release instead of on every move.
 - *Performance:* commit-on-release and commit-on-Enter remove most of the redundant recompositing that makes today's sliders feel sluggish. Confirm with `sound-mind-benchmark` that no recomposite runs during a drag.
 
@@ -1292,6 +1296,8 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
   - **Goniometer / stereo width.**
   - **Loudness meter:** over time, per frequency band, peak and average, and per-layer contributions (average, peak, per band, over time). This extends `v0.Y.52.1`'s per-layer indicator.
   - **Pitch detection.**
+- **Peak/clip readout** in the loudness meter: true peak and a clip count/indicator for the output and per layer.
+- **Master limiter / soft clipper** (new item, 2026-10-15) at the end of the playback and export path. It is optional (user-switchable), real-time-safe (no allocation, no locks), and uses a short look-ahead. It exists because nothing in playback or export currently stops samples beyond ±1.0 from hard-clipping.
 - **Output loudness normalization,** deferred from `v0.Y.52.1`: scale the output gain toward a target loudness set in Configure Devices, holding steady across pause and resume. It reuses the loudness meter's measurement.
 - The legacy `analysis/` modules (`loudness.py`, `stereo_width.py`, `pitch.py`) are the lessons-learned reference.
 - *Performance:* analysis runs on worker threads, never the GUI or audio thread. Per-band loudness over a whole project is a candidate for the GPU compute path.
@@ -1315,14 +1321,12 @@ The Beta Readiness Loop's "judged beta-ready" call happens here.
 - the remaining `v0.Y.52.1` analysis categories (spectral health, criticality/pattern);
 - a correct Pool reflection-padding implementation.
 
-**Decisions still open:**
-
-1. *What "maximum" (value = 1) means for intensity (`v0.Y.73.1`).*
-   - **Background.** Stream stores raw, unnormalized STFT magnitudes in dB, A-weighted. They are measured after a per-encode peak normalization that decode undoes. So a full-scale sine reads about 20·log10(fftSize/4) dB, roughly +54 dB at hop 512. The display and Pool quantization, meanwhile, assume [-96, 0] dB. That mismatch is the root of the brightness-vs-loudness item.
-   - **(A) Absolute full scale (recommended).** Calibrate stored dB to dBFS: remove the FFT-size gain and fold the normalization scale into the stored values. Then value = 1 is a full-scale tone, value = 0 is -96 dBFS, and the same mapping drives brightness. Requires a codec change, which is acceptable under the standing decision.
-   - **(B) Today's display range as-is.** 1 = the current 0 dB. The cheapest option, but 1 then sits about 50 dB below a full-scale tone, and the visual mismatch remains.
-   - **(C) Relative to the project's loudest cell.** Always uses the full range, but a typed value changes meaning whenever content changes. Bad for presets.
-   - **(D) Relative to the configured output target loudness**, plus headroom. Ties into output normalization, but makes painted values depend on device settings.
+**Decisions resolved 2026-10-15:**
+- Intensity value 1.0 = absolute full scale (option (A)). The codec is calibrated to dBFS (`v0.Y.73.1`), paired with clip indicators (`v0.Y.73.1` and `v0.Y.81.1`), output loudness normalization, and an optional master limiter (`v0.Y.81.1`).
+- Rejected alternatives:
+  - (B) keep today's [-96, 0] display range, which leaves 1.0 about 50 dB below a full-scale tone;
+  - (C) relative to the project's loudest cell, where values change meaning as content changes;
+  - (D) relative to the output loudness target, which makes painted values depend on device settings.
 
 ---
 
