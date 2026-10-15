@@ -69,28 +69,27 @@ target_link_libraries(sound-mind-studio-tests
         Qt6::Test
 )
 
-# "-o -,txt" forces QTest's plain-text logger to write to stdout explicitly,
-# rather than silently falling back to whatever its own terminal-detection
-# picks. It does NOT reliably fix the underlying issue, though: on this
-# Windows/Arm64 setup, QTest's text logger has been confirmed (`v0.0.26.1`,
-# see docs/sound-mind-architecture.md's Decisions Made) to still produce no
-# PASS/FAIL detail at all once stdout is redirected or piped - true
-# regardless of shell (PowerShell, cmd.exe, Git Bash all show the same
-# silence) - which leaves ctest --output-on-failure with nothing
-# diagnosable for a failing run either. When that happens, the reliable
-# fallback is QTest's own `-o file,xml` structured logger pointed at a
-# real file (not stdout) - written deterministically regardless of
-# console/tty state - run against a *temporarily* stripped-down main.cpp
-# containing only the one suspect QObject test class (this binary drives
-# several through one shared main(), so a shared -o target only ever keeps
-# the *last* class's own results otherwise); restore main.cpp immediately
-# after, and `touch` it - `mv`/`cp` alone can leave a restored file's own
-# mtime *older* than an already-built binary, silently skipping the
-# recompile back to the real, multi-class version.
-add_test(NAME sound-mind-studio-tests COMMAND sound-mind-studio-tests -o -,txt)
+# One CTest test per QTest class, read from main.cpp's own
+# SM_TEST_CLASS_ENTRY(...) list (the single source of truth), so each
+# class gets its own timeout, pass/fail and --output-on-failure text
+# instead of one all-or-nothing run. With no -o, main.cpp logs each class
+# to a temporary file and copies it to stdout, since QTest's own text
+# logger doesn't reach a piped stdout on Windows.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp")
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp" smStudioTestClassLines REGEX "SM_TEST_CLASS_ENTRY[(][A-Za-z0-9_]+[)],")
+foreach(smStudioTestClassLine IN LISTS smStudioTestClassLines)
+    string(REGEX MATCH "SM_TEST_CLASS_ENTRY[(]([A-Za-z0-9_]+)[)]" smStudioTestClassMatch "${smStudioTestClassLine}")
+    set(smStudioTestClass "${CMAKE_MATCH_1}")
+    add_test(NAME sound-mind-studio-tests.${smStudioTestClass}
+             COMMAND sound-mind-studio-tests --class ${smStudioTestClass})
+    # No real display in CI - the offscreen platform plugin ships with the
+    # base Qt install, so QWidget-derived classes still construct and test.
+    set_tests_properties(sound-mind-studio-tests.${smStudioTestClass} PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        TIMEOUT 900)
+endforeach()
 
-# No real display in CI (or, per earlier this session, in this dev
-# environment either) - the offscreen platform plugin ships with the base
-# Qt install, so QWidget-derived classes can still be constructed and
-# tested without one.
-set_tests_properties(sound-mind-studio-tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+# MainWindowTest builds and tears down a full MainWindow for each of its
+# ~270 functions - about 38 minutes in a debug build on the dev machine,
+# far past the per-class default above.
+set_tests_properties(sound-mind-studio-tests.MainWindowTest PROPERTIES TIMEOUT 5400)

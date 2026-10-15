@@ -32,7 +32,7 @@ using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::SpatialPattern;
 using sound_mind::core::SteppedNoiseShape;
 
-constexpr std::array<std::pair<GeneratorType, const char*>, 8> kGeneratorTypes{{
+constexpr std::array<std::pair<GeneratorType, const char*>, 9> kGeneratorTypes{{
     {GeneratorType::Periodic, "Periodic"},
     {GeneratorType::Envelope, "Envelope"},
     {GeneratorType::SteppedNoise, "Stepped/Noise"},
@@ -41,6 +41,7 @@ constexpr std::array<std::pair<GeneratorType, const char*>, 8> kGeneratorTypes{{
     {GeneratorType::Drawn, "Drawn"},
     {GeneratorType::StepGrid, "Step Grid"},
     {GeneratorType::Continuous, "Continuous"},
+    {GeneratorType::Resonance, "Resonance"},
 }};
 
 constexpr std::array<std::pair<MindWaveAxis, const char*>, 2> kAxes{{

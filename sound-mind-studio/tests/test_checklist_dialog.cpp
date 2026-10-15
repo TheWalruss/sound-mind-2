@@ -31,7 +31,7 @@ void CheckListDialogTest::aShorterInitiallyCheckedListLeavesTheMissingTailUnchec
 
 void CheckListDialogTest::selectAllChecksEveryBox() {
     CheckListDialog dialog(QStringLiteral("Notes"), {QStringLiteral("A"), QStringLiteral("B")}, {false, false});
-    auto* selectAllButton = dialog.findChild<QPushButton*>();
+    auto* selectAllButton = dialog.findChild<QPushButton*>(QStringLiteral("selectAllButton"));
     QVERIFY(selectAllButton != nullptr);
     QCOMPARE(selectAllButton->text(), QStringLiteral("Select All"));
 
@@ -42,9 +42,8 @@ void CheckListDialogTest::selectAllChecksEveryBox() {
 
 void CheckListDialogTest::deselectAllUnchecksEveryBox() {
     CheckListDialog dialog(QStringLiteral("Notes"), {QStringLiteral("A"), QStringLiteral("B")}, {true, true});
-    const auto buttons = dialog.findChildren<QPushButton*>();
-    QCOMPARE(buttons.size(), 2);
-    auto* deselectAllButton = buttons.at(1);
+    auto* deselectAllButton = dialog.findChild<QPushButton*>(QStringLiteral("deselectAllButton"));
+    QVERIFY(deselectAllButton != nullptr);
     QCOMPARE(deselectAllButton->text(), QStringLiteral("Deselect All"));
 
     QTest::mouseClick(deselectAllButton, Qt::LeftButton);

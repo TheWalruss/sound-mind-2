@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.30.1] - 2026-10-15
+
+Pre-Beta Plan milestone `v0.Y.70.1`: test-suite and CI health.
+
+### Fixed
+
+- **Resonance can be picked as a MindWave generator type.** The MindWave editor's Generator Type list was missing it, though the rest of the Resonance editor existed.
+
+### Changed (developer-facing)
+
+- **Each Studio test class is now its own CTest test** (`sound-mind-studio-tests.<ClassName>`), registered from one list in `sound-mind-studio/tests/main.cpp`. Each class gets its own pass/fail and timeout, and its QTest log appears in `ctest --output-on-failure`. Run one class directly with `sound-mind-studio-tests --class <ClassName>`; `--list-classes` lists them.
+- **GPU-vs-CPU timing tests skip the timing comparison on the WARP software adapter** (GitHub's GPU-less CI runners). The correctness checks in those tests still run.
+- Fixed three tests that had gone stale or were brittle (checklist dialog button lookup, theme stylesheet comment, MindWave combo entry count).
+
 ## [0.1.29.6] - 2026-10-11
 
 Direct user feedback from manual testing (items 1-4 of the backlog list).

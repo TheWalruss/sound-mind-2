@@ -622,9 +622,7 @@ void MainWindowTest::startPlaybackPlaysAnImportedLayer() {
     window.startPlayback();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     QVERIFY(window.isPlaying());
 }
 
@@ -647,9 +645,7 @@ void MainWindowTest::pauseAndResumePlayback() {
     window.startPlayback();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     QVERIFY(window.isPlaying());
 
     window.pausePlayback();
@@ -672,9 +668,7 @@ void MainWindowTest::contentChangeDiscardsAlreadyPreparedPlaybackAudio() {
     window.startPlayback();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     window.pausePlayback();  // audio stays prepared (loaded) - only stopPlayback() discards it.
 
     // A paint/fill/paste commit changes what the composite would sound like;
@@ -686,9 +680,7 @@ void MainWindowTest::contentChangeDiscardsAlreadyPreparedPlaybackAudio() {
 
     window.startPlayback();
     QVERIFY(!compositeCancelButton->isHidden());  // re-compositing, not resuming stale audio.
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     QVERIFY(window.isPlaying());
 }
 
@@ -706,9 +698,7 @@ void MainWindowTest::editWhileRepeatingStagesFreshAudioWithoutInterruptingPlayba
     window.startPlayback();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     QVERIFY(window.isPlaying());
 
     auto* controller = window.findChild<sound_mind::studio::PlaybackController*>();
@@ -748,9 +738,7 @@ void MainWindowTest::stopPlaybackStopsIt() {
     window.startPlayback();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     QVERIFY(window.isPlaying());
 
     window.stopPlayback();
@@ -780,9 +768,7 @@ void MainWindowTest::startPlaybackRunsCompositeInTheBackgroundAndShowsTheCancelB
     // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isCompositingForPlayback().
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
 void MainWindowTest::cancelPlaybackCompositeDiscardsTheResultWithoutStartingPlayback() {
@@ -806,9 +792,7 @@ void MainWindowTest::cancelPlaybackCompositeDiscardsTheResultWithoutStartingPlay
     QVERIFY(window.isCompositingForPlayback());
 
     window.cancelPlaybackComposite();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
     // Nothing to roll back beyond discarding the computed result -
     // playbackController_ was never touched, matching Pool's own
@@ -842,9 +826,7 @@ void MainWindowTest::startPlaybackDoesNothingWhileAlreadyCompositing() {
     QVERIFY(window.statusBar()->currentMessage().contains(QStringLiteral("Already preparing")));
 
     window.cancelPlaybackComposite();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
 void MainWindowTest::closeRefusesWhileCompositingForPlayback() {
@@ -868,9 +850,7 @@ void MainWindowTest::closeRefusesWhileCompositingForPlayback() {
     QVERIFY(window.isCompositingForPlayback());
 
     window.cancelPlaybackComposite();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
 void MainWindowTest::newProjectRefusesWhileCompositingForPlayback() {
@@ -898,9 +878,7 @@ void MainWindowTest::newProjectRefusesWhileCompositingForPlayback() {
     QCOMPARE(window.project()->layers().size(), layerCountBefore);
 
     window.cancelPlaybackComposite();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
 void MainWindowTest::openProjectRefusesWhileCompositingForPlayback() {
@@ -924,9 +902,7 @@ void MainWindowTest::openProjectRefusesWhileCompositingForPlayback() {
     QVERIFY(window.isCompositingForPlayback());
 
     window.cancelPlaybackComposite();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
 void MainWindowTest::openProjectAtRefusesWhileCompositingForPlayback() {
@@ -955,9 +931,7 @@ void MainWindowTest::openProjectAtRefusesWhileCompositingForPlayback() {
     QVERIFY(window.isCompositingForPlayback());
 
     window.cancelPlaybackComposite();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
 void MainWindowTest::poolTopmostLayerNowFailsGracefullyWithNoContent() {
@@ -1055,9 +1029,7 @@ void MainWindowTest::layersPanelsPoolButtonPoolsTheSelectedLayerViaMainWindow() 
     QVERIFY(cancelButton != nullptr);
 
     poolButton->click();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
     QCOMPARE(window.project()->layerById(importedLayerId)->poolContent().has_value(), true);
 }
@@ -1085,9 +1057,7 @@ void MainWindowTest::poolTopmostLayerAsyncRunsInTheBackgroundAndShowsTheCancelBu
     // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isPoolRunning().
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
 void MainWindowTest::poolTopmostLayerAsyncCompletesSuccessfullyAndAppliesTheResult() {
@@ -1103,9 +1073,7 @@ void MainWindowTest::poolTopmostLayerAsyncCompletesSuccessfullyAndAppliesTheResu
     QVERIFY(cancelButton != nullptr);
 
     window.poolTopmostLayerAsync();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
     QCOMPARE(topmostNonEqualizerLayer(*window.project()).poolContent().has_value(), true);
     QVERIFY(window.statusBar()->currentMessage().contains(QStringLiteral("Pooled layer")));
@@ -1132,9 +1100,7 @@ void MainWindowTest::cancelPoolDiscardsTheComputedResultWithoutApplyingIt() {
     QVERIFY(window.isPoolRunning());
 
     window.cancelPool();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
     // The whole point of finding #12's own "rolls back" requirement: the
     // layer's own real content is untouched.
@@ -1163,9 +1129,7 @@ void MainWindowTest::poolTopmostLayerAsyncDoesNothingWhileAlreadyRunning() {
     QVERIFY(window.isPoolRunning());
 
     window.cancelPool();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
 void MainWindowTest::closeRefusesWhileAPoolIsRunning() {
@@ -1187,9 +1151,7 @@ void MainWindowTest::closeRefusesWhileAPoolIsRunning() {
     QVERIFY(window.isPoolRunning());
 
     window.cancelPool();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
 void MainWindowTest::newProjectRefusesWhileAPoolIsRunning() {
@@ -1211,9 +1173,7 @@ void MainWindowTest::newProjectRefusesWhileAPoolIsRunning() {
     QVERIFY(window.isPoolRunning());
 
     window.cancelPool();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
 void MainWindowTest::exportTopmostLayerAudioNowFailsGracefullyWithNoContent() {
@@ -1319,9 +1279,7 @@ void MainWindowTest::exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheC
     // own ~30fps timer (see its docs) reacts to that up to one tick later,
     // and this test's own qWait()-based poll would otherwise sometimes
     // race ahead of it.
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
     std::filesystem::remove(exportPath);
 }
 
@@ -1343,9 +1301,7 @@ void MainWindowTest::exportTopmostLayerVideoAsyncCompletesSuccessfullyAndHidesTh
     // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isExportRunning().
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
     QVERIFY(QFile::exists(QString::fromStdString(exportPath.string())));
     QVERIFY(QFile::exists(QString::fromStdString(exportPath.string())));
@@ -1381,9 +1337,7 @@ void MainWindowTest::cancelVideoExportStopsItAndDeletesThePartialFile() {
     // isExportRunning() - pollExportProgress()'s own file
     // deletion/status message below only happen once that poll actually
     // runs, up to one ~30fps tick after the background thread itself stops.
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
     QVERIFY(!QFile::exists(QString::fromStdString(exportPath.string())));
     QCOMPARE(window.statusBar()->currentMessage(), QStringLiteral("Video export cancelled."));
@@ -1419,9 +1373,7 @@ void MainWindowTest::exportTopmostLayerVideoAsyncDoesNothingWhileAlreadyRunning(
     // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isExportRunning().
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
     std::filesystem::remove(firstPath);
 }
 
@@ -1447,9 +1399,7 @@ void MainWindowTest::exportTopmostLayerAudioAsyncCompletesSuccessfullyAndHidesTh
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-audio-async.flac";
     window.exportTopmostLayerAudioAsync(exportPath, CompressedAudioFormat::Flac);
     QVERIFY(window.isExportRunning());
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
     QVERIFY(QFile::exists(QString::fromStdString(exportPath.string())));
     QVERIFY(window.statusBar()->currentMessage().contains(QStringLiteral("Exported audio")));
@@ -1480,9 +1430,7 @@ void MainWindowTest::cancelAudioExportStopsItAndDeletesThePartialFile() {
     QVERIFY(window.isExportRunning());
 
     window.cancelExport();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
     QVERIFY(!QFile::exists(QString::fromStdString(exportPath.string())));
     QCOMPARE(window.statusBar()->currentMessage(), QStringLiteral("Audio export cancelled."));
@@ -1514,9 +1462,7 @@ void MainWindowTest::exportTopmostLayerAudioAsyncDoesNothingWhileAVideoExportIsR
     QVERIFY(!QFile::exists(QString::fromStdString(audioPath.string())));
 
     window.cancelExport();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
     std::filesystem::remove(videoPath);
 }
 
@@ -2605,9 +2551,7 @@ void MainWindowTest::playbackPanelButtonsDriveRealPlayback() {
     playButton->click();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     QVERIFY(window.isPlaying());
 
     stopButton->click();
@@ -2930,9 +2874,7 @@ void MainWindowTest::importAudioSnippetsAsyncRunsInTheBackgroundAndShowsTheCance
     // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isImportRunning().
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
     std::filesystem::remove(path);
     std::filesystem::remove(projectPath);
 }
@@ -2951,9 +2893,7 @@ void MainWindowTest::importAudioSnippetsAsyncCompletesSuccessfullyAndAddsTheLaye
     QVERIFY(cancelButton != nullptr);
 
     window.importAudioSnippetsAsync(path, {0, 1});
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
     QCOMPARE(window.project()->layers().size(), layerCountBefore + 2);
     QVERIFY(window.statusBar()->currentMessage().contains(QStringLiteral("Imported")));
@@ -2987,9 +2927,7 @@ void MainWindowTest::cancelImportDiscardsTheEncodedLayersWithoutAddingThem() {
     QVERIFY(window.isImportRunning());
 
     window.cancelImport();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
     // The whole point of finding #12's own "rolls back" requirement:
     // nothing partially encoded ever reached the project.
@@ -3027,9 +2965,7 @@ void MainWindowTest::importAudioSnippetsAsyncDoesNothingWhileAlreadyRunning() {
     QVERIFY(window.isImportRunning());
 
     window.cancelImport();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
     QCOMPARE(window.project()->layers().size(), layerCountBefore);
 
     std::filesystem::remove(path);
@@ -3060,9 +2996,7 @@ void MainWindowTest::closeRefusesWhileAnImportIsRunning() {
     QVERIFY(window.isImportRunning());
 
     window.cancelImport();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
     std::filesystem::remove(path);
     std::filesystem::remove(projectPath);
 }
@@ -3095,9 +3029,7 @@ void MainWindowTest::newProjectRefusesWhileAnImportIsRunning() {
     QCOMPARE(window.project()->layers().size(), layerCountBefore);
 
     window.cancelImport();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
     std::filesystem::remove(path);
     std::filesystem::remove(projectPath);
 }
@@ -3126,9 +3058,7 @@ void MainWindowTest::openProjectRefusesWhileAnImportIsRunning() {
     QVERIFY(window.isImportRunning());
 
     window.cancelImport();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
     std::filesystem::remove(path);
     std::filesystem::remove(projectPath);
 }
@@ -3161,9 +3091,7 @@ void MainWindowTest::openProjectAtRefusesWhileAnImportIsRunning() {
     QVERIFY(window.isImportRunning());
 
     window.cancelImport();
-    while (!cancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
     std::filesystem::remove(path);
     std::filesystem::remove(projectPath);
 }
@@ -3745,9 +3673,7 @@ void MainWindowTest::startPlaybackSetsThePlaybackPanelDuration() {
     window.startPlayback();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
 
     auto* panel = window.findChild<PlaybackPanel*>();
     QVERIFY(panel != nullptr);
@@ -3772,9 +3698,7 @@ void MainWindowTest::seekPlaybackMovesThePlaybackPosition() {
     window.startPlayback();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     window.seekPlayback(5.0);
 
     auto* panel = window.findChild<PlaybackPanel*>();
@@ -3800,9 +3724,7 @@ void MainWindowTest::stopPlaybackResetsThePlaybackPanelPosition() {
     window.startPlayback();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     window.seekPlayback(5.0);
 
     window.stopPlayback();
@@ -3847,9 +3769,7 @@ void MainWindowTest::paintingWhileRepeatIsOffDoesNotInterruptPlayback() {
     window.startPlayback();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     window.seekPlayback(1.5);  // "0:01 / 0:02".
     QVERIFY(window.isPlaying());
 
@@ -3893,9 +3813,7 @@ void MainWindowTest::paintingWhileRepeatIsOnWithDeltaScopeJumpsPlaybackToTheEdit
     window.startPlayback();  // starts at "0:00 / 0:02" - never seeked.
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
 
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);
@@ -3937,9 +3855,7 @@ void MainWindowTest::paintingWhileRepeatIsOnWithTrackScopeKeepsTheSamePosition()
     window.startPlayback();
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
     window.seekPlayback(1.5);  // "0:01 / 0:02".
 
     auto* canvas = window.findChild<CanvasWidget*>();
@@ -3982,9 +3898,7 @@ void MainWindowTest::paintingWhileRepeatIsOnWithReviewScopeWrapsToTheTrackStartN
     window.startPlayback();  // starts at "0:00 / 0:02" - never seeked.
     auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
     QVERIFY(compositeCancelButton != nullptr);
-    while (!compositeCancelButton->isHidden()) {
-        QTest::qWait(5);
-    }
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
 
     auto* canvas = window.findChild<CanvasWidget*>();
     QVERIFY(canvas != nullptr);

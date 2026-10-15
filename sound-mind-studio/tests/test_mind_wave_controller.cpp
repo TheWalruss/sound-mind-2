@@ -247,14 +247,15 @@ void MindWaveControllerTest::refreshMindWavesPanelPushesTheLibraryIntoBothPanels
     QCOMPARE(fixture.mindWavesPanel.findChild<QListWidget*>(QStringLiteral("mindWavesList"))->count(), 1);
     const auto layerCombos = fixture.layersPanel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo"));
     QCOMPARE(layerCombos.size(), 1);
-    // "None" plus the one MindWave just added.
-    QCOMPARE(layerCombos.front()->count(), 2);
+    // "None", the one MindWave just added, and the trailing "Create New
+    // MindWave..." entry every binding combo carries.
+    QCOMPARE(layerCombos.front()->count(), 3);
     // FilterConfigurationPanel gets the same list too (v0.Y.31.1
     // Installment D3) - its own combos exist regardless of the currently
     // selected FilterType, so no equivalent setLayers()-style setup is
     // needed first.
     QCOMPARE(fixture.filterConfigurationPanel.findChild<QComboBox*>(QStringLiteral("blurSigmaMindWaveCombo"))->count(),
-             2);
+             3);
 }
 
 void MindWaveControllerTest::refreshMindWavesPanelPopulatesItsOwnPerRowMiniPreview() {

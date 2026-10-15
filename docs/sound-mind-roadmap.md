@@ -1184,7 +1184,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 
 **Sizes:** S ≈ one installment, M ≈ 2-3, L ≈ 4+.
 
-#### `v0.Y.70.1` - Test-suite and CI health (S)
+#### ✅ `v0.Y.70.1` - Test-suite and CI health (S) - settled in `v0.1.30.1`, see architecture Decision #229
 
 - **The three failing studio tests:**
   - `CheckListDialogTest::deselectAllUnchecksEveryBox`

@@ -578,7 +578,7 @@ shape instead of staying fixed.
   create a different project, or when you close this panel.
 - Selecting a MindWave shows its own editor: a **Generator Type** (Periodic,
   Envelope, Stepped/Noise, Spatial, Fractal, Drawn, Step Grid, Continuous,
-  or Resonant) and that type's own plain numeric parameters - a period, a
+  or Resonance) and that type's own plain numeric parameters - a period, a
   phase, a seed, and so on. This is a bare-bones, functional editor, not a
   polished one yet - there are no dials or drawing tools here, just fields
   to type numbers into. Every MindWave also has **Reversed** (run the

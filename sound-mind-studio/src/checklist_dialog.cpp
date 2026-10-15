@@ -19,6 +19,8 @@ CheckListDialog::CheckListDialog(const QString& title, const QStringList& labels
 
     auto* selectAllButton = new QPushButton(tr("Select All"), this);
     auto* deselectAllButton = new QPushButton(tr("Deselect All"), this);
+    selectAllButton->setObjectName(QStringLiteral("selectAllButton"));
+    deselectAllButton->setObjectName(QStringLiteral("deselectAllButton"));
     auto* buttonsRow = new QHBoxLayout();
     buttonsRow->addWidget(selectAllButton);
     buttonsRow->addWidget(deselectAllButton);

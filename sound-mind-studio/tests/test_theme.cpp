@@ -1,6 +1,7 @@
 #include "test_theme.h"
 
 #include <QIcon>
+#include <QRegularExpression>
 #include <QString>
 #include <QtTest/QtTest>
 
@@ -40,6 +41,9 @@ void ThemeTest::studioStyleSheetDoesNotSuppressTheDockWidgetCloseIcon() {
     // has QDockWidget::DockWidgetClosable - a regression guard against
     // reintroducing that specific override, not against QDockWidget
     // styling in general.
-    const QString style = studioStyleSheet();
+    // Comments are stripped first - the stylesheet's own explanatory
+    // comment names the property, which isn't an override.
+    QString style = studioStyleSheet();
+    style.remove(QRegularExpression(QStringLiteral("/[*].*?[*]/"), QRegularExpression::DotMatchesEverythingOption));
     QVERIFY(!style.contains(QStringLiteral("titlebar-close-icon"), Qt::CaseInsensitive));
 }

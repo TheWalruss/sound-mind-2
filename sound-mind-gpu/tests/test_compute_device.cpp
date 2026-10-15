@@ -40,6 +40,19 @@ ComputeDevice& sharedDevice() {
     return device;
 }
 
+/// @brief Asserts the GPU path beat the CPU reference - but only on a real
+/// hardware adapter. WARP is Microsoft's CPU-side software rasterizer (what
+/// GitHub's GPU-less CI runners get), so a timing race against it says
+/// nothing about the GPU path and only makes CI flaky.
+void checkGpuFasterThanCpu(std::chrono::steady_clock::duration gpuDuration,
+                           std::chrono::steady_clock::duration cpuDuration) {
+    if (sharedDevice().adapterKind() == AdapterKind::Warp) {
+        WARN("WARP (software) adapter - skipping the GPU-vs-CPU timing comparison.");
+        return;
+    }
+    CHECK(gpuDuration < cpuDuration);
+}
+
 // ---------------------------------------------------------------------------
 // Independent CPU reference implementations - sound-mind-gpu doesn't (and
 // per docs/sound-mind-architecture.md's own Build & Module Layout,
@@ -504,7 +517,7 @@ TEST_CASE("gaussianBlur2D is measurably faster than the CPU reference on a large
 
     INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
                   << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    CHECK(gpuDuration < cpuDuration);
+    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
 }
 
 // ---------------------------------------------------------------------------
@@ -696,7 +709,7 @@ TEST_CASE("gaussianBlur2DVarying is measurably faster than the CPU reference on 
 
     INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
                   << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    CHECK(gpuDuration < cpuDuration);
+    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
 }
 
 // ---------------------------------------------------------------------------
@@ -759,7 +772,7 @@ TEST_CASE("medianBlur2DVarying is measurably faster than the CPU reference on a 
 
     INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
                   << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    CHECK(gpuDuration < cpuDuration);
+    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
 }
 
 // ---------------------------------------------------------------------------
@@ -830,7 +843,7 @@ TEST_CASE("directionalBlur2DVarying is measurably faster than the CPU reference 
 
     INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
                   << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    CHECK(gpuDuration < cpuDuration);
+    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
 }
 
 // ---------------------------------------------------------------------------
@@ -1093,7 +1106,7 @@ TEST_CASE("mixAmplitudePhaseSignal is measurably faster than the CPU reference o
 
     INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
                   << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    CHECK(gpuDuration < cpuDuration);
+    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
 }
 
 // ---------------------------------------------------------------------------
@@ -1174,5 +1187,5 @@ TEST_CASE("fractalField is measurably faster than the CPU reference on a large f
 
     INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
                   << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    CHECK(gpuDuration < cpuDuration);
+    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
 }

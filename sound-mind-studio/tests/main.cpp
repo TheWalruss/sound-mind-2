@@ -3,13 +3,28 @@
  * @brief Runs every QTest test class in this directory from one binary.
  *
  * QTEST_MAIN() generates a main() for a single test class; combining
- * several into one CTest-registered executable means driving QTest::qExec
- * manually instead, sharing one QApplication across all of them (QWidget
- * construction needs one). Run with QT_QPA_PLATFORM=offscreen - see this
- * target's CMakeLists.txt - since CI has no real display.
+ * several into one executable means driving QTest::qExec manually instead,
+ * sharing one QApplication (QWidget construction needs one). Run with
+ * QT_QPA_PLATFORM=offscreen - see this target's CMakeLists.txt - since CI
+ * has no real display.
+ *
+ * Every class is listed once in kTestClasses below via SM_TEST_CLASS(). The
+ * CMakeLists.txt next to this file reads that same list and registers each
+ * class as its own CTest test (`--class <Name>`), so each class gets its own
+ * timeout, pass/fail and output. With no `--class`, every class runs in
+ * order. `--list-classes` prints the registered names.
  */
 
+#include <array>
+#include <cstdio>
+#include <cstring>
+#include <memory>
+#include <vector>
+
 #include <QApplication>
+#include <QDir>
+#include <QFile>
+#include <QStringList>
 #include <QStandardPaths>
 #include <QtTest/QtTest>
 
@@ -73,7 +88,102 @@
 #include "test_undo_stack.h"
 #include "test_waveform_preview_widget.h"
 
+namespace {
+
+struct TestClassEntry {
+    const char* name;
+    std::unique_ptr<QObject> (*make)();
+};
+
+// clang-format off
+#define SM_TEST_CLASS_ENTRY(TestType) \
+    TestClassEntry{#TestType, []() -> std::unique_ptr<QObject> { return std::make_unique<TestType>(); }}
+
+const std::array kTestClasses{
+    SM_TEST_CLASS_ENTRY(CanvasWidgetTest),
+    SM_TEST_CLASS_ENTRY(CheckListDialogTest),
+    SM_TEST_CLASS_ENTRY(ChordGeneratorControllerTest),
+    SM_TEST_CLASS_ENTRY(ChordGeneratorPanelTest),
+    SM_TEST_CLASS_ENTRY(ConfigureDevicesPanelTest),
+    SM_TEST_CLASS_ENTRY(LandingPageTest),
+    SM_TEST_CLASS_ENTRY(LayerControllerTest),
+    SM_TEST_CLASS_ENTRY(MainWindowTest),
+    SM_TEST_CLASS_ENTRY(RecentProjectsTest),
+    SM_TEST_CLASS_ENTRY(RotaryDialWidgetTest),
+    SM_TEST_CLASS_ENTRY(WaveformPreviewWidgetTest),
+    SM_TEST_CLASS_ENTRY(ThemeTest),
+    SM_TEST_CLASS_ENTRY(CreateProjectWizardTest),
+    SM_TEST_CLASS_ENTRY(LayersPanelTest),
+    SM_TEST_CLASS_ENTRY(LoopPanelTest),
+    SM_TEST_CLASS_ENTRY(MacroRecorderTest),
+    SM_TEST_CLASS_ENTRY(RecordPanelTest),
+    SM_TEST_CLASS_ENTRY(PlaybackPanelTest),
+    SM_TEST_CLASS_ENTRY(PlaybackControllerTest),
+    SM_TEST_CLASS_ENTRY(PaintControllerTest),
+    SM_TEST_CLASS_ENTRY(PickControllerTest),
+    SM_TEST_CLASS_ENTRY(PathControllerTest),
+    SM_TEST_CLASS_ENTRY(PathEditSessionTest),
+    SM_TEST_CLASS_ENTRY(SelectionControllerTest),
+    SM_TEST_CLASS_ENTRY(SelectionConfigurationPanelTest),
+    SM_TEST_CLASS_ENTRY(ToolConfigurationPanelTest),
+    SM_TEST_CLASS_ENTRY(ToolPaletteControllerTest),
+    SM_TEST_CLASS_ENTRY(AudioSnippetPickerDialogTest),
+    SM_TEST_CLASS_ENTRY(ImageScalePickerDialogTest),
+    SM_TEST_CLASS_ENTRY(PolarOriginDialogTest),
+    SM_TEST_CLASS_ENTRY(ImportHelpersTest),
+    SM_TEST_CLASS_ENTRY(DeviceComboHelpersTest),
+    SM_TEST_CLASS_ENTRY(DeviceConfigurationWidgetTest),
+    SM_TEST_CLASS_ENTRY(ImportExportTest),
+    SM_TEST_CLASS_ENTRY(AxisLabelsTest),
+    SM_TEST_CLASS_ENTRY(BranchCurveSessionTest),
+    SM_TEST_CLASS_ENTRY(GridPanelTest),
+    SM_TEST_CLASS_ENTRY(HarmonicSeriesWidgetTest),
+    SM_TEST_CLASS_ENTRY(HistoryPanelTest),
+    SM_TEST_CLASS_ENTRY(GridConfigTest),
+    SM_TEST_CLASS_ENTRY(FilterConfigurationPanelTest),
+    SM_TEST_CLASS_ENTRY(GeneratorDialogTest),
+    SM_TEST_CLASS_ENTRY(GradientBarWidgetTest),
+    SM_TEST_CLASS_ENTRY(EqualizerCurveWidgetTest),
+    SM_TEST_CLASS_ENTRY(GradientEditorWidgetTest),
+    SM_TEST_CLASS_ENTRY(ToneCurveEditorTest),
+    SM_TEST_CLASS_ENTRY(MindWaveEditorTest),
+    SM_TEST_CLASS_ENTRY(PresetIndicatorLabelTest),
+    SM_TEST_CLASS_ENTRY(MindWavesPanelTest),
+    SM_TEST_CLASS_ENTRY(NameCollisionDialogTest),
+    SM_TEST_CLASS_ENTRY(MindCaptureDialogTest),
+    SM_TEST_CLASS_ENTRY(MidiImportTest),
+    SM_TEST_CLASS_ENTRY(MidiConfigurationPanelTest),
+    SM_TEST_CLASS_ENTRY(MidiImportDialogTest),
+    SM_TEST_CLASS_ENTRY(MindWaveControllerTest),
+    SM_TEST_CLASS_ENTRY(ResourceBrowserPanelTest),
+    SM_TEST_CLASS_ENTRY(ResourceBrowserControllerTest),
+    SM_TEST_CLASS_ENTRY(UndoStackTest),
+    SM_TEST_CLASS_ENTRY(AboutDialogTest),
+};
+// clang-format on
+
+}  // namespace
+
 int main(int argc, char** argv) {
+    // Unbuffered, so QTest's text output survives even when stdout is a
+    // pipe (ctest) and the process exits abnormally before a flush.
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
+
+    const char* onlyClass = nullptr;
+    bool listClasses = false;
+    std::vector<char*> qtArgs;
+    for (int i = 0; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--class") == 0 && i + 1 < argc) {
+            onlyClass = argv[++i];
+        } else if (std::strcmp(argv[i], "--list-classes") == 0) {
+            listClasses = true;
+        } else {
+            qtArgs.push_back(argv[i]);
+        }
+    }
+    int qtArgc = static_cast<int>(qtArgs.size());
+    qtArgs.push_back(nullptr);
+
     // Redirects ini-format QSettings storage (MainWindow's recentProjects_,
     // in particular - see main_window.h's docs) to a sandboxed test
     // location, so running this suite never touches - or pollutes with
@@ -81,191 +191,60 @@ int main(int argc, char** argv) {
     // persisted settings on this machine.
     QStandardPaths::setTestModeEnabled(true);
 
-    QApplication app(argc, argv);
+    QApplication app(qtArgc, qtArgs.data());
 
     // See main.cpp's own comment - the same static-library resource
     // gotcha applies here too: LandingPageTest/ThemeTest need
     // ":/ChooseAgainLarge.png" to actually resolve.
     Q_INIT_RESOURCE(app);
 
-    int status = 0;
+    if (listClasses) {
+        for (const auto& entry : kTestClasses) {
+            std::printf("%s\n", entry.name);
+        }
+        return 0;
+    }
 
-    CanvasWidgetTest canvasWidgetTest;
-    status |= QTest::qExec(&canvasWidgetTest, argc, argv);
+    // QTest's text logger doesn't write to a piped stdout on Windows when
+    // no console is attached (it targets the debugger output instead), so
+    // ctest would see nothing. Unless the caller chose its own -o, log each
+    // class to a temporary file and copy that to stdout afterwards.
+    QStringList baseArgs;
+    bool callerChoseOutput = false;
+    for (int i = 0; i < qtArgc; ++i) {
+        baseArgs << QString::fromLocal8Bit(qtArgs[static_cast<std::size_t>(i)]);
+        callerChoseOutput = callerChoseOutput || std::strcmp(qtArgs[static_cast<std::size_t>(i)], "-o") == 0;
+    }
 
-    CheckListDialogTest checkListDialogTest;
-    status |= QTest::qExec(&checkListDialogTest, argc, argv);
-
-    ChordGeneratorControllerTest chordGeneratorControllerTest;
-    status |= QTest::qExec(&chordGeneratorControllerTest, argc, argv);
-
-    ChordGeneratorPanelTest chordGeneratorPanelTest;
-    status |= QTest::qExec(&chordGeneratorPanelTest, argc, argv);
-
-    ConfigureDevicesPanelTest configureDevicesPanelTest;
-    status |= QTest::qExec(&configureDevicesPanelTest, argc, argv);
-
-    LandingPageTest landingPageTest;
-    status |= QTest::qExec(&landingPageTest, argc, argv);
-
-    LayerControllerTest layerControllerTest;
-    status |= QTest::qExec(&layerControllerTest, argc, argv);
-
-    MainWindowTest mainWindowTest;
-    status |= QTest::qExec(&mainWindowTest, argc, argv);
-
-    RecentProjectsTest recentProjectsTest;
-    status |= QTest::qExec(&recentProjectsTest, argc, argv);
-
-    RotaryDialWidgetTest rotaryDialWidgetTest;
-    status |= QTest::qExec(&rotaryDialWidgetTest, argc, argv);
-
-    WaveformPreviewWidgetTest waveformPreviewWidgetTest;
-    status |= QTest::qExec(&waveformPreviewWidgetTest, argc, argv);
-
-    ThemeTest themeTest;
-    status |= QTest::qExec(&themeTest, argc, argv);
-
-    CreateProjectWizardTest createProjectWizardTest;
-    status |= QTest::qExec(&createProjectWizardTest, argc, argv);
-
-    LayersPanelTest layersPanelTest;
-    status |= QTest::qExec(&layersPanelTest, argc, argv);
-
-    LoopPanelTest loopPanelTest;
-    status |= QTest::qExec(&loopPanelTest, argc, argv);
-
-    MacroRecorderTest macroRecorderTest;
-    status |= QTest::qExec(&macroRecorderTest, argc, argv);
-
-    RecordPanelTest recordPanelTest;
-    status |= QTest::qExec(&recordPanelTest, argc, argv);
-
-    PlaybackPanelTest playbackPanelTest;
-    status |= QTest::qExec(&playbackPanelTest, argc, argv);
-
-    PlaybackControllerTest playbackControllerTest;
-    status |= QTest::qExec(&playbackControllerTest, argc, argv);
-
-    PaintControllerTest paintControllerTest;
-    status |= QTest::qExec(&paintControllerTest, argc, argv);
-
-    PickControllerTest pickControllerTest;
-    status |= QTest::qExec(&pickControllerTest, argc, argv);
-
-    PathControllerTest pathControllerTest;
-    status |= QTest::qExec(&pathControllerTest, argc, argv);
-
-    PathEditSessionTest pathEditSessionTest;
-    status |= QTest::qExec(&pathEditSessionTest, argc, argv);
-
-    SelectionControllerTest selectionControllerTest;
-    status |= QTest::qExec(&selectionControllerTest, argc, argv);
-
-    SelectionConfigurationPanelTest selectionConfigurationPanelTest;
-    status |= QTest::qExec(&selectionConfigurationPanelTest, argc, argv);
-
-    ToolConfigurationPanelTest toolConfigurationPanelTest;
-    status |= QTest::qExec(&toolConfigurationPanelTest, argc, argv);
-
-    ToolPaletteControllerTest toolPaletteControllerTest;
-    status |= QTest::qExec(&toolPaletteControllerTest, argc, argv);
-
-    AudioSnippetPickerDialogTest audioSnippetPickerDialogTest;
-    status |= QTest::qExec(&audioSnippetPickerDialogTest, argc, argv);
-
-    ImageScalePickerDialogTest imageScalePickerDialogTest;
-    status |= QTest::qExec(&imageScalePickerDialogTest, argc, argv);
-
-    PolarOriginDialogTest polarOriginDialogTest;
-    status |= QTest::qExec(&polarOriginDialogTest, argc, argv);
-
-    ImportHelpersTest importHelpersTest;
-    status |= QTest::qExec(&importHelpersTest, argc, argv);
-
-    DeviceComboHelpersTest deviceComboHelpersTest;
-    status |= QTest::qExec(&deviceComboHelpersTest, argc, argv);
-
-    DeviceConfigurationWidgetTest deviceConfigurationWidgetTest;
-    status |= QTest::qExec(&deviceConfigurationWidgetTest, argc, argv);
-
-    ImportExportTest importExportTest;
-    status |= QTest::qExec(&importExportTest, argc, argv);
-
-    AxisLabelsTest axisLabelsTest;
-    status |= QTest::qExec(&axisLabelsTest, argc, argv);
-
-    BranchCurveSessionTest branchCurveSessionTest;
-    status |= QTest::qExec(&branchCurveSessionTest, argc, argv);
-
-    GridPanelTest gridPanelTest;
-    status |= QTest::qExec(&gridPanelTest, argc, argv);
-
-    HarmonicSeriesWidgetTest harmonicSeriesWidgetTest;
-    status |= QTest::qExec(&harmonicSeriesWidgetTest, argc, argv);
-
-    HistoryPanelTest historyPanelTest;
-    status |= QTest::qExec(&historyPanelTest, argc, argv);
-
-    GridConfigTest gridConfigTest;
-    status |= QTest::qExec(&gridConfigTest, argc, argv);
-
-    FilterConfigurationPanelTest filterConfigurationPanelTest;
-    status |= QTest::qExec(&filterConfigurationPanelTest, argc, argv);
-
-    GeneratorDialogTest generatorDialogTest;
-    status |= QTest::qExec(&generatorDialogTest, argc, argv);
-
-    GradientBarWidgetTest gradientBarWidgetTest;
-    status |= QTest::qExec(&gradientBarWidgetTest, argc, argv);
-
-    EqualizerCurveWidgetTest equalizerCurveWidgetTest;
-    status |= QTest::qExec(&equalizerCurveWidgetTest, argc, argv);
-
-    GradientEditorWidgetTest gradientEditorWidgetTest;
-    status |= QTest::qExec(&gradientEditorWidgetTest, argc, argv);
-
-    ToneCurveEditorTest toneCurveEditorTest;
-    status |= QTest::qExec(&toneCurveEditorTest, argc, argv);
-
-    MindWaveEditorTest mindWaveEditorTest;
-    status |= QTest::qExec(&mindWaveEditorTest, argc, argv);
-
-    PresetIndicatorLabelTest presetIndicatorLabelTest;
-    status |= QTest::qExec(&presetIndicatorLabelTest, argc, argv);
-
-    MindWavesPanelTest mindWavesPanelTest;
-    status |= QTest::qExec(&mindWavesPanelTest, argc, argv);
-
-    NameCollisionDialogTest nameCollisionDialogTest;
-    status |= QTest::qExec(&nameCollisionDialogTest, argc, argv);
-
-    MindCaptureDialogTest mindCaptureDialogTest;
-    status |= QTest::qExec(&mindCaptureDialogTest, argc, argv);
-
-    MidiImportTest midiImportTest;
-    status |= QTest::qExec(&midiImportTest, argc, argv);
-
-    MidiConfigurationPanelTest midiConfigurationPanelTest;
-    status |= QTest::qExec(&midiConfigurationPanelTest, argc, argv);
-
-    MidiImportDialogTest midiImportDialogTest;
-    status |= QTest::qExec(&midiImportDialogTest, argc, argv);
-
-    MindWaveControllerTest mindWaveControllerTest;
-    status |= QTest::qExec(&mindWaveControllerTest, argc, argv);
-
-    ResourceBrowserPanelTest resourceBrowserPanelTest;
-    status |= QTest::qExec(&resourceBrowserPanelTest, argc, argv);
-
-    ResourceBrowserControllerTest resourceBrowserControllerTest;
-    status |= QTest::qExec(&resourceBrowserControllerTest, argc, argv);
-
-    UndoStackTest undoStackTest;
-    status |= QTest::qExec(&undoStackTest, argc, argv);
-
-    AboutDialogTest aboutDialogTest;
-    status |= QTest::qExec(&aboutDialogTest, argc, argv);
-
-    return status;
+    bool matched = false;
+    int failedClasses = 0;
+    for (const auto& entry : kTestClasses) {
+        if (onlyClass != nullptr && std::strcmp(onlyClass, entry.name) != 0) {
+            continue;
+        }
+        matched = true;
+        const auto testObject = entry.make();
+        if (callerChoseOutput) {
+            failedClasses += QTest::qExec(testObject.get(), baseArgs) != 0 ? 1 : 0;
+            continue;
+        }
+        const QString logPath = QDir::temp().filePath(QStringLiteral("sound-mind-studio-tests-%1-%2.txt")
+                                                          .arg(QCoreApplication::applicationPid())
+                                                          .arg(QString::fromLatin1(entry.name)));
+        QStringList args = baseArgs;
+        args << QStringLiteral("-o") << logPath + QStringLiteral(",txt");
+        failedClasses += QTest::qExec(testObject.get(), args) != 0 ? 1 : 0;
+        QFile log(logPath);
+        if (log.open(QIODevice::ReadOnly)) {
+            const QByteArray text = log.readAll();
+            std::fwrite(text.constData(), 1, static_cast<std::size_t>(text.size()), stdout);
+            log.close();
+            log.remove();
+        }
+    }
+    if (onlyClass != nullptr && !matched) {
+        std::fprintf(stderr, "Unknown test class: %s\n", onlyClass);
+        return 2;
+    }
+    return failedClasses == 0 ? 0 : 1;
 }
