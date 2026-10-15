@@ -1206,7 +1206,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
   - *Fix:* render the full composite through the same path playback preparation uses.
 - **The canvas doesn't refresh after an import or a first project open.** Reproduce it under a test first, then fix the missing invalidation.
 
-#### `v0.Y.72.1` - Remove MindWave Superpositions (S)
+#### ✅ `v0.Y.72.1` - Remove MindWave Superpositions (S) - settled in `v0.1.32.1`, see architecture Decision #231
 
 - The feature reaches `mind_wave`, `compositor`, `filter_application` and `mind_waves_panel` (about 32 references). Remove it from the model, the JSON, the evaluation path, the UI and the docs.
 - No load-compatibility handling, per the standing decision above.

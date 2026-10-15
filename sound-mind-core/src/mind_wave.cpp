@@ -180,24 +180,6 @@ double midpointDisplacement(double t, double left, double right, double leftValu
                                  nodeIndex * 2 + 1, roughness, seed);
 }
 
-/// @brief Folds `member` into `running`, per `SuperpositionBlendMode`'s
-/// own docs.
-double foldSuperposition(SuperpositionBlendMode mode, double running, double member) {
-    switch (mode) {
-        case SuperpositionBlendMode::Multiply:
-            return running * member;
-        case SuperpositionBlendMode::Add:
-            return running + member;
-        case SuperpositionBlendMode::Min:
-            return std::min(running, member);
-        case SuperpositionBlendMode::Max:
-            return std::max(running, member);
-        case SuperpositionBlendMode::Average:
-            return (running + member) / 2.0;
-    }
-    return running;  // Unreachable - defensive only.
-}
-
 /// @brief How many straight sub-segments each edge of a `GeneratorType::Drawn`
 /// path is tessellated into before `evaluateDrawnPath()`'s own crossing
 /// search runs - the same fixed, generous count `containsPoint()`'s own
@@ -543,10 +525,6 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
         result = 1.0 - std::clamp(result, 0.0, 1.0);
     }
 
-    for (const MindWave& member : superpositionStack_) {
-        result = foldSuperposition(superpositionBlendMode_, result, static_cast<double>(member.evaluate(point, config)));
-    }
-
     return static_cast<float>(std::clamp(result, 0.0, 1.0));
 }
 
@@ -559,7 +537,7 @@ float mindWaveValueAt(const MindWave& wave, std::uint32_t bin, std::uint32_t fra
 
 std::optional<std::vector<float>> MindWave::tryEvaluateFractalFieldOnGpu(
     const sound_mind::codec::StreamCodecConfig& config, std::uint32_t canvasWidth) const {
-    if (type_ != GeneratorType::Fractal || hasWarpSource() || !superpositionStack_.empty() || reversed_ || inverted_) {
+    if (type_ != GeneratorType::Fractal || hasWarpSource() || reversed_ || inverted_) {
         return std::nullopt;
     }
     sound_mind::gpu::ComputeDevice* device = sound_mind::core::detail::gpuComputeDeviceOrNull();
@@ -664,12 +642,10 @@ void to_json(nlohmann::json& json, const MindWave& mindWave) {
                           {"domainWarpStrength", mindWave.domainWarpStrength()},
                           {"fractalRoughness", mindWave.fractalRoughness()},
                           {"fractalIterations", mindWave.fractalIterations()},
-                          {"superpositionStack", mindWave.superpositionStack()},
-                          {"superpositionBlendMode", mindWave.superpositionBlendMode()},
                           {"warpStrength", mindWave.warpStrength()}};
-    // Mirrors superpositionStack's own representation: a JSON array of size
-    // 0 or 1, not a nullable single value - consistent with warpSourceStack_
-    // reusing the same vector-of-0-or-1 pattern internally (see hasWarpSource()'s docs).
+    // A JSON array of size 0 or 1, not a nullable single value - matching
+    // warpSourceStack_'s own vector-of-0-or-1 representation (see
+    // hasWarpSource()'s docs).
     json["warpSourceStack"] =
         mindWave.hasWarpSource() ? nlohmann::json::array({mindWave.warpSource()}) : nlohmann::json::array();
     json["drawnPath"] = mindWave.drawnPath();
@@ -711,8 +687,6 @@ void from_json(const nlohmann::json& json, MindWave& mindWave) {
     mindWave.setDomainWarpStrength(json.at("domainWarpStrength").get<double>());
     mindWave.setFractalRoughness(json.at("fractalRoughness").get<double>());
     mindWave.setFractalIterations(json.at("fractalIterations").get<int>());
-    mindWave.setSuperpositionStack(json.at("superpositionStack").get<std::vector<MindWave>>());
-    mindWave.setSuperpositionBlendMode(json.at("superpositionBlendMode").get<SuperpositionBlendMode>());
 
     // Warp (warpSourceStack/warpStrength) was added in v0.Y.39.1, after
     // MindWave had already shipped and been saved in real project files -

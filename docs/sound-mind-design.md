@@ -170,7 +170,7 @@ A **MindWave** is a named parametric waveform that produces a per-pixel scalar f
 Rather than a long flat menu of named pattern types, MindWaves are meant to be built from a small set of primitives that compose:
 
 - a handful of **generator types** — periodic, envelope, stepped/noise, spatial, fractal, drawn, and step-grid (see [MindWave Functions](#mindwave-functions));
-- **field operators** — superposition (combining two fields into one), warp (one field distorting the coordinates another is sampled at), and reduce (collapsing a 2D field to a 1D signal) (see [Field Operators](#field-operators));
+- **field operators** — warp (one field distorting the coordinates another is sampled at), and reduce (collapsing a 2D field to a 1D signal) (see [Field Operators](#field-operators));
 - and, recursively, a generator's own parameters — its period, its phase, its centre — can themselves be bound to another MindWave.
 
 That last point is what makes the system more powerful without growing the list of named functions: a sine whose period is itself driven by a slow noise field behaves like nothing in a flat catalogue of presets, without needing to be one. Complexity comes from composing a few simple, well-understood pieces rather than from adding more of them. How a person actually chooses and tunes these pieces is a separate, and still open, interaction-design question — see [Continuous Controls](#continuous-controls) for one promising direction, not yet a complete answer.
@@ -217,11 +217,12 @@ A MindWave's shape comes from one of a small family of generator types:
 
 ### Field Operators
 
-Beyond generator types, three operators reshape or combine fields:
+Beyond generator types, two operators reshape fields:
 
-- **Superposition** — combines any two or more MindWaves into one, layering them together the same way layers themselves composite, with a chosen blend (multiply, add, min, max, average) determining how each one folds into the running result. Combined with recursive parameter binding, superposition is how genuinely complex, interference-like patterns are built from a small number of simple, well-understood pieces.
 - **Warp** — one field distorts the coordinates another field is sampled at, rather than blending values with it — the general form of what a single named "domain-warped noise" function already does, made available between any two fields rather than baked into one.
 - **Reduce** — collapses a 2D field into an ordinary 1D signal, by slicing or integrating along one axis (typically frequency). This is the bridge between a MindWave's native spatial shading and a conventional, single-value-over-time control signal — useful wherever something downstream only wants the latter, such as a real-time instrument voice.
+
+*Superposition* (combining two or more MindWaves into one with a blend mode — multiply, add, min, max, average) was part of this design and was built, but was removed on 2026-10-15 by the user's decision. It can be redeveloped later if it proves useful.
 
 ### Continuous Controls
 

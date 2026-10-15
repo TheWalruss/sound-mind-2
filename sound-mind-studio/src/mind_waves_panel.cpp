@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include <QCheckBox>
-#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -27,7 +26,6 @@ using sound_mind::core::GeneratorType;
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::NamedResonanceProfile;
-using sound_mind::core::SuperpositionBlendMode;
 
 /// @brief A short display name for `type` - used as a row's own type
 /// badge, and to label each stack member. A small, independent copy of
@@ -196,89 +194,10 @@ MindWavesPanel::MindWavesPanel(QWidget* parent) : QDockWidget(tr("MindWaves"), p
             [this](const MindWave&) { emitCurrentMindWaveChanged(); });
     root->addWidget(mindWaveEditor_);
 
-    auto* stackLabel = new QLabel(tr("Superposition"));
-    root->addWidget(stackLabel);
-
-    auto* stackButtonRow = new QHBoxLayout();
-    addMemberButton_ = new QPushButton(tr("+ Add Member"));
-    addMemberButton_->setObjectName(QStringLiteral("addMemberButton"));
-    connect(addMemberButton_, &QPushButton::clicked, this, [this]() {
-        if (!selectedMindWaveId_.has_value()) {
-            return;
-        }
-        currentStack_.push_back(MindWave{});
-        refreshStackList();
-        stackList_->setCurrentRow(static_cast<int>(currentStack_.size()) - 1);
-        emitCurrentMindWaveChanged();
-    });
-    stackButtonRow->addWidget(addMemberButton_);
-
-    removeMemberButton_ = new QPushButton(tr("- Remove Member"));
-    removeMemberButton_->setObjectName(QStringLiteral("removeMemberButton"));
-    connect(removeMemberButton_, &QPushButton::clicked, this, [this]() {
-        if (!selectedStackMemberIndex_.has_value()) {
-            return;
-        }
-        currentStack_.erase(currentStack_.begin() + *selectedStackMemberIndex_);
-        selectedStackMemberIndex_.reset();
-        stackMemberEditor_->setEnabled(false);
-        refreshStackList();
-        emitCurrentMindWaveChanged();
-    });
-    stackButtonRow->addWidget(removeMemberButton_);
-    root->addLayout(stackButtonRow);
-
-    auto* blendForm = new QHBoxLayout();
-    blendModeLabel_ = new QLabel(tr("Blend Mode:"));
-    blendForm->addWidget(blendModeLabel_);
-    blendModeCombo_ = new QComboBox();
-    blendModeCombo_->setObjectName(QStringLiteral("blendModeCombo"));
-    blendModeCombo_->addItem(tr("Multiply"), QVariant::fromValue(static_cast<int>(SuperpositionBlendMode::Multiply)));
-    blendModeCombo_->addItem(tr("Add"), QVariant::fromValue(static_cast<int>(SuperpositionBlendMode::Add)));
-    blendModeCombo_->addItem(tr("Min"), QVariant::fromValue(static_cast<int>(SuperpositionBlendMode::Min)));
-    blendModeCombo_->addItem(tr("Max"), QVariant::fromValue(static_cast<int>(SuperpositionBlendMode::Max)));
-    blendModeCombo_->addItem(tr("Average"), QVariant::fromValue(static_cast<int>(SuperpositionBlendMode::Average)));
-    connect(blendModeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
-        currentBlendMode_ = static_cast<SuperpositionBlendMode>(blendModeCombo_->itemData(index).toInt());
-        emitCurrentMindWaveChanged();
-    });
-    blendForm->addWidget(blendModeCombo_, 1);
-    root->addLayout(blendForm);
-
-    stackList_ = new QListWidget();
-    stackList_->setObjectName(QStringLiteral("stackList"));
-    stackList_->setSelectionMode(QListWidget::SingleSelection);
-    stackList_->setMaximumHeight(100);
-    connect(stackList_, &QListWidget::currentRowChanged, this, [this](int row) {
-        if (row < 0 || row >= static_cast<int>(currentStack_.size())) {
-            selectedStackMemberIndex_.reset();
-            stackMemberEditor_->setEnabled(false);
-            return;
-        }
-        selectedStackMemberIndex_ = row;
-        stackMemberEditor_->setEnabled(true);
-        stackMemberEditor_->setMindWave(currentStack_[static_cast<std::size_t>(row)]);
-    });
-    root->addWidget(stackList_);
-
-    stackMemberEditor_ = new MindWaveEditor();
-    stackMemberEditor_->setObjectName(QStringLiteral("stackMemberEditor"));
-    stackMemberEditor_->setEnabled(false);
-    connect(stackMemberEditor_, &MindWaveEditor::mindWaveChanged, this, [this](const MindWave& wave) {
-        if (!selectedStackMemberIndex_.has_value()) {
-            return;
-        }
-        currentStack_[static_cast<std::size_t>(*selectedStackMemberIndex_)] = wave;
-        emitCurrentMindWaveChanged();
-    });
-    root->addWidget(stackMemberEditor_, 1);
-
     // --- Warp (v0.Y.39.1 Installment A) -----------------------------------
     // One field distorts the coordinates another is sampled at - see
-    // MindWave::hasWarpSource()'s own docs. A single 0-or-1 slot, not a
-    // list (unlike Superposition above), so this section reuses the same
-    // "checkbox enables a single nested editor" shape rather than
-    // stackList_'s own add/remove list.
+    // MindWave::hasWarpSource()'s own docs. A single 0-or-1 slot, so a
+    // checkbox enables a single nested editor.
     auto* warpHeaderRow = new QHBoxLayout();
     warpEnabledCheckBox_ = new QCheckBox(tr("Enable Warp"));
     warpEnabledCheckBox_->setObjectName(QStringLiteral("warpEnabledCheckBox"));
@@ -323,7 +242,6 @@ MindWavesPanel::MindWavesPanel(QWidget* parent) : QDockWidget(tr("MindWaves"), p
         selectedMindWaveId_ = selected.id;
         mindWaveEditor_->setEnabled(true);
         mindWaveEditor_->setMindWave(selected.wave);
-        loadStackState(selected.wave);
         loadWarpState(selected.wave);
         emit selectionChanged(selected.id);
     });
@@ -333,8 +251,8 @@ MindWavesPanel::MindWavesPanel(QWidget* parent) : QDockWidget(tr("MindWaves"), p
     // uses (FilterConfigurationPanel, ToolConfigurationPanel, GridPanel,
     // PlaybackPanel, RecordPanel, LoopPanel). Without it, `container`'s own
     // QVBoxLayout forces this dock's minimum height up to fit everything
-    // at once - two uncapped MindWaveEditors plus the library list plus
-    // the superposition controls - which is genuinely too tall to fit a
+    // at once - two uncapped MindWaveEditors plus the library list and
+    // the Warp controls - which is genuinely too tall to fit a
     // typical dock area and, critically, can't be shrunk below that either.
     // `setWidgetResizable(true)` lets the dock resize freely regardless of
     // that content height, with a scrollbar picking up whatever doesn't fit.
@@ -342,25 +260,6 @@ MindWavesPanel::MindWavesPanel(QWidget* parent) : QDockWidget(tr("MindWaves"), p
     scrollArea->setWidget(container);
     scrollArea->setWidgetResizable(true);
     setWidget(scrollArea);
-
-    // currentStack_ starts empty (no selection yet) - this establishes the
-    // correct initial hidden state for the Superposition section's own
-    // controls (see refreshStackList()'s own docs) rather than leaving them
-    // at Qt's default-visible state until the first real selection.
-    refreshStackList();
-}
-
-void MindWavesPanel::loadStackState(const MindWave& wave) {
-    currentStack_ = wave.superpositionStack();
-    currentBlendMode_ = wave.superpositionBlendMode();
-    selectedStackMemberIndex_.reset();
-    stackMemberEditor_->setEnabled(false);
-
-    const QSignalBlocker blendBlocker(blendModeCombo_);
-    const int blendIndex = blendModeCombo_->findData(QVariant::fromValue(static_cast<int>(currentBlendMode_)));
-    blendModeCombo_->setCurrentIndex(blendIndex >= 0 ? blendIndex : 0);
-
-    refreshStackList();
 }
 
 void MindWavesPanel::loadWarpState(const MindWave& wave) {
@@ -377,32 +276,11 @@ void MindWavesPanel::loadWarpState(const MindWave& wave) {
     warpSourceEditor_->setEnabled(currentWarpEnabled_);
 }
 
-void MindWavesPanel::refreshStackList() {
-    const QSignalBlocker listBlocker(stackList_);
-    stackList_->clear();
-    for (std::size_t i = 0; i < currentStack_.size(); ++i) {
-        auto* item = new QListWidgetItem(
-            tr("%1: %2").arg(i + 1).arg(generatorTypeBadge(currentStack_[i].type())));
-        stackList_->addItem(item);
-    }
-
-    // See this method's own docs - addMemberButton_ (and the "Superposition"
-    // label) are the only controls still shown with an empty stack.
-    const bool hasMembers = !currentStack_.empty();
-    removeMemberButton_->setVisible(hasMembers);
-    blendModeLabel_->setVisible(hasMembers);
-    blendModeCombo_->setVisible(hasMembers);
-    stackList_->setVisible(hasMembers);
-    stackMemberEditor_->setVisible(hasMembers);
-}
-
 void MindWavesPanel::emitCurrentMindWaveChanged() {
     if (!selectedMindWaveId_.has_value()) {
         return;
     }
     MindWave composite = mindWaveEditor_->mindWave();
-    composite.setSuperpositionStack(currentStack_);
-    composite.setSuperpositionBlendMode(currentBlendMode_);
     if (currentWarpEnabled_) {
         composite.setWarpSource(currentWarpSource_);
     } else {
@@ -422,9 +300,6 @@ void MindWavesPanel::setMindWaves(const std::vector<RowData>& entries) {
         if (!stillPresent) {
             selectedMindWaveId_.reset();
             mindWaveEditor_->setEnabled(false);
-            stackMemberEditor_->setEnabled(false);
-            currentStack_.clear();
-            selectedStackMemberIndex_.reset();
             currentWarpEnabled_ = false;
             currentWarpSource_ = MindWave{};
             warpEnabledCheckBox_->setChecked(false);
@@ -472,7 +347,6 @@ void MindWavesPanel::setMindWaves(const std::vector<RowData>& entries) {
         const RowData& row = entries[static_cast<std::size_t>(rowToReselect)];
         list_->setCurrentRow(rowToReselect);
         mindWaveEditor_->setMindWave(row.wave);
-        loadStackState(row.wave);
         loadWarpState(row.wave);
     }
 }
@@ -484,18 +358,14 @@ void MindWavesPanel::setPreviewImages(const std::map<MindWaveId, QImage>& previe
 
 void MindWavesPanel::setAvailableResonanceProfiles(const std::vector<NamedResonanceProfile>& profiles) {
     mindWaveEditor_->setAvailableResonanceProfiles(profiles);
-    stackMemberEditor_->setAvailableResonanceProfiles(profiles);
     warpSourceEditor_->setAvailableResonanceProfiles(profiles);
 }
 
 void MindWavesPanel::clearSelection() {
     selectedMindWaveId_.reset();
-    selectedStackMemberIndex_.reset();
-    currentStack_.clear();
     currentWarpEnabled_ = false;
     currentWarpSource_ = MindWave{};
     mindWaveEditor_->setEnabled(false);
-    stackMemberEditor_->setEnabled(false);
     warpEnabledCheckBox_->setChecked(false);
     warpSourceEditor_->setEnabled(false);
     warpStrengthSpinBox_->setEnabled(false);

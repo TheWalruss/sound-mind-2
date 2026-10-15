@@ -20,7 +20,6 @@
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::NamedResonanceProfile;
-using sound_mind::core::SuperpositionBlendMode;
 using sound_mind::studio::MindWaveEditor;
 using sound_mind::studio::MindWavesPanel;
 
@@ -122,139 +121,18 @@ void MindWavesPanelTest::editingTheTopEditorEmitsMindWaveChangedWithTheSelectedI
     QCOMPARE(receivedWave->period(), 4.0);
 }
 
-void MindWavesPanelTest::addingAStackMemberGrowsTheStackAndEmits() {
-    MindWavesPanel panel;
-    panel.setMindWaves(twoRows());
-    panel.selectMindWave(1);
-    int emitCount = 0;
-    std::optional<MindWave> receivedWave;
-    connect(&panel, &MindWavesPanel::mindWaveChanged,
-            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
-
-    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")), Qt::LeftButton);
-
-    QCOMPARE(emitCount, 1);
-    QVERIFY(receivedWave.has_value());
-    QCOMPARE(receivedWave->superpositionStack().size(), std::size_t{1});
-    QCOMPARE(panel.findChild<QListWidget*>(QStringLiteral("stackList"))->count(), 1);
-}
-
-void MindWavesPanelTest::removingASelectedStackMemberShrinksTheStackAndEmits() {
-    MindWavesPanel panel;
-    panel.setMindWaves(twoRows());
-    panel.selectMindWave(1);
-    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")), Qt::LeftButton);
-    auto* stackList = panel.findChild<QListWidget*>(QStringLiteral("stackList"));
-    stackList->setCurrentRow(0);
-    int emitCount = 0;
-    std::optional<MindWave> receivedWave;
-    connect(&panel, &MindWavesPanel::mindWaveChanged,
-            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
-
-    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton")), Qt::LeftButton);
-
-    QCOMPARE(emitCount, 1);
-    QVERIFY(receivedWave.has_value());
-    QCOMPARE(receivedWave->superpositionStack().size(), std::size_t{0});
-    QCOMPARE(stackList->count(), 0);
-}
-
-void MindWavesPanelTest::superpositionControlsStayHiddenWithAnEmptyStack() {
-    // Real-world testing pass, 2026-09-20, finding #11: a fresh selection
-    // with no superposition stack yet shouldn't show the full set of
-    // stack-editing controls - just "Superposition" and "+ Add Member",
-    // the one control actually usable from an empty stack.
+void MindWavesPanelTest::panelHasNoSuperpositionControls() {
+    // MindWave Superpositions were removed in v0.1.32.1.
     MindWavesPanel panel;
     panel.setMindWaves(twoRows());
     panel.selectMindWave(1);
 
-    QVERIFY(!panel.findChild<QPushButton*>(QStringLiteral("addMemberButton"))->isHidden());
-    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton"))->isHidden());
-    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"))->isHidden());
-    QVERIFY(panel.findChild<QListWidget*>(QStringLiteral("stackList"))->isHidden());
-    QVERIFY(panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))->isHidden());
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")) == nullptr);
+    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton")) == nullptr);
+    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo")) == nullptr);
+    QVERIFY(panel.findChild<QListWidget*>(QStringLiteral("stackList")) == nullptr);
+    QVERIFY(panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor")) == nullptr);
 }
-
-void MindWavesPanelTest::addingTheFirstStackMemberRevealsTheSuperpositionControls() {
-    MindWavesPanel panel;
-    panel.setMindWaves(twoRows());
-    panel.selectMindWave(1);
-
-    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")), Qt::LeftButton);
-
-    QVERIFY(!panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton"))->isHidden());
-    QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"))->isHidden());
-    QVERIFY(!panel.findChild<QListWidget*>(QStringLiteral("stackList"))->isHidden());
-    QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))->isHidden());
-}
-
-void MindWavesPanelTest::removingTheLastStackMemberHidesTheSuperpositionControlsAgain() {
-    MindWavesPanel panel;
-    panel.setMindWaves(twoRows());
-    panel.selectMindWave(1);
-    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")), Qt::LeftButton);
-    panel.findChild<QListWidget*>(QStringLiteral("stackList"))->setCurrentRow(0);
-
-    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton")), Qt::LeftButton);
-
-    QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton"))->isHidden());
-    QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"))->isHidden());
-    QVERIFY(panel.findChild<QListWidget*>(QStringLiteral("stackList"))->isHidden());
-    QVERIFY(panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))->isHidden());
-}
-
-void MindWavesPanelTest::selectingARowWithAnExistingStackShowsTheSuperpositionControlsImmediately() {
-    MindWavesPanel panel;
-    auto rows = twoRows();
-    rows[1].wave.setSuperpositionStack({MindWave{}});
-    panel.setMindWaves(rows);
-
-    panel.selectMindWave(2);
-
-    QVERIFY(!panel.findChild<QPushButton*>(QStringLiteral("removeMemberButton"))->isHidden());
-    QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"))->isHidden());
-    QVERIFY(!panel.findChild<QListWidget*>(QStringLiteral("stackList"))->isHidden());
-}
-
-void MindWavesPanelTest::editingASelectedStackMemberUpdatesThatIndexAndEmits() {
-    MindWavesPanel panel;
-    panel.setMindWaves(twoRows());
-    panel.selectMindWave(1);
-    QTest::mouseClick(panel.findChild<QPushButton*>(QStringLiteral("addMemberButton")), Qt::LeftButton);
-    panel.findChild<QListWidget*>(QStringLiteral("stackList"))->setCurrentRow(0);
-    int emitCount = 0;
-    std::optional<MindWave> receivedWave;
-    connect(&panel, &MindWavesPanel::mindWaveChanged,
-            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
-
-    panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))
-        ->findChild<QDoubleSpinBox*>(QStringLiteral("periodSpinBox"))
-        ->setValue(9.0);
-
-    QCOMPARE(emitCount, 1);
-    QVERIFY(receivedWave.has_value());
-    const auto stack = receivedWave->superpositionStack();
-    QCOMPARE(stack.size(), std::size_t{1});
-    QCOMPARE(stack.front().period(), 9.0);
-}
-
-void MindWavesPanelTest::changingBlendModeEmits() {
-    MindWavesPanel panel;
-    panel.setMindWaves(twoRows());
-    panel.selectMindWave(1);
-    int emitCount = 0;
-    std::optional<MindWave> receivedWave;
-    connect(&panel, &MindWavesPanel::mindWaveChanged,
-            [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
-
-    auto* blendCombo = panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo"));
-    blendCombo->setCurrentIndex(blendCombo->findData(QVariant::fromValue(static_cast<int>(SuperpositionBlendMode::Add))));
-
-    QCOMPARE(emitCount, 1);
-    QVERIFY(receivedWave.has_value());
-    QCOMPARE(receivedWave->superpositionBlendMode(), SuperpositionBlendMode::Add);
-}
-
 void MindWavesPanelTest::enablingWarpEmitsAndSetsHasWarpSourceOnTheComposite() {
     MindWavesPanel panel;
     panel.setMindWaves(twoRows());
@@ -411,7 +289,6 @@ void MindWavesPanelTest::clearSelectionDisablesBothEditorsAndEmits() {
     QVERIFY(!panel.selectedMindWaveId().has_value());
     QCOMPARE(spy.count(), 1);
     QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"))->isEnabled());
-    QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("stackMemberEditor"))->isEnabled());
 }
 
 void MindWavesPanelTest::contentIsInAResizableScrollAreaSoThePanelCanShrinkBelowItsFullHeight() {
@@ -424,8 +301,8 @@ void MindWavesPanelTest::contentIsInAResizableScrollAreaSoThePanelCanShrinkBelow
     // Select a MindWave so the top MindWaveEditor is actually populated
     // and enabled - this is the "MindWave editor is too tall" case being
     // guarded against: stacked below the (height-capped) library list,
-    // an uncapped MindWaveEditor plus the superposition controls plus a
-    // second uncapped MindWaveEditor comfortably exceed a typical dock's
+    // an uncapped MindWaveEditor plus the Warp controls and a second
+    // uncapped MindWaveEditor comfortably exceed a typical dock's
     // available height once laid out in full. The panel's own
     // minimumSizeHint() must stay small regardless of that real content
     // height - proving the QScrollArea, not the panel's own top-level
@@ -542,7 +419,7 @@ void MindWavesPanelTest::setAvailableResonanceProfilesForwardsToAllThreeEmbedded
     panel.setAvailableResonanceProfiles(profiles);
 
     for (const QString& objectName :
-         {QStringLiteral("mindWaveEditor"), QStringLiteral("stackMemberEditor"), QStringLiteral("warpSourceEditor")}) {
+         {QStringLiteral("mindWaveEditor"), QStringLiteral("warpSourceEditor")}) {
         auto* editor = panel.findChild<MindWaveEditor*>(objectName);
         QVERIFY(editor != nullptr);
         auto* combo = editor->findChild<QComboBox*>(QStringLiteral("resonanceProfileCombo"));

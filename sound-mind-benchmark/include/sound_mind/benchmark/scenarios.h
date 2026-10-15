@@ -26,8 +26,8 @@ namespace sound_mind::benchmark {
 ///        `sound_mind::core::GeneratorType` at a shared field size, a
 ///        field-size sweep for `Fractal` (the generator with the most
 ///        obviously-scaling-with-detail cost, via its own iteration
-///        count), and a Superposition stack-depth sweep (1/2/4/8 stacked
-///        waves).
+///        count). (A Superposition stack-depth sweep was removed with that
+///        feature in `v0.1.32.1`.)
 [[nodiscard]] std::vector<BenchmarkCase> buildMindWaveScenarios();
 
 /// @brief Every compositing-related `BenchmarkCase` -

@@ -27,7 +27,6 @@ using sound_mind::core::reduceMindWaveToSignal;
 using sound_mind::core::ResonanceProfileId;
 using sound_mind::core::SpatialPattern;
 using sound_mind::core::SteppedNoiseShape;
-using sound_mind::core::SuperpositionBlendMode;
 using sound_mind::core::TimeFrequencyPoint;
 
 namespace {
@@ -183,8 +182,7 @@ TEST_CASE("A MindWave round-trips through JSON unchanged", "[core][mind_wave]") 
     REQUIRE(restored.phaseRadians() == original.phaseRadians());
 }
 
-// --- Installment B: the rest of the v1 generator catalogue, plus
-// superposition -----------------------------------------------------
+// --- Installment B: the rest of the v1 generator catalogue ----------
 
 TEST_CASE("Periodic Triangle/Square/Sawtooth/Pulse take their expected shape",
           "[core][mind_wave]") {
@@ -322,23 +320,6 @@ TEST_CASE("inverted flips every value to 1 - value, and is off by default", "[co
         const float plain = wave.evaluate(TimeFrequencyPoint{t, 1000.0}, config);
         REQUIRE(inverted.evaluate(TimeFrequencyPoint{t, 1000.0}, config) == Catch::Approx(1.0f - plain).margin(1e-5));
     }
-}
-
-TEST_CASE("inverted applies to a MindWave's own generator before its superposition stack", "[core][mind_wave]") {
-    MindWave member;
-    member.setType(GeneratorType::StepGrid);
-    member.setStepGridValues({1.0});
-    MindWave base;
-    base.setPeriodicWaveform(PeriodicWaveform::Square);
-    base.setInverted(true);
-    base.setSuperpositionStack({member});
-    base.setSuperpositionBlendMode(SuperpositionBlendMode::Multiply);
-    const auto config = testConfig();
-
-    // Square is 1.0 for p < 0.5; inverted -> 0.0, times member 1.0 -> 0.0.
-    // Second half: square 0.0 -> inverted 1.0, times 1.0 -> 1.0.
-    REQUIRE(base.evaluate(TimeFrequencyPoint{0.25, 1000.0}, config) == Catch::Approx(0.0f));
-    REQUIRE(base.evaluate(TimeFrequencyPoint{0.75, 1000.0}, config) == Catch::Approx(1.0f));
 }
 
 TEST_CASE("Envelope Peak is a bell centered on envelopeCenter, narrower at higher steepness", "[core][mind_wave]") {
@@ -515,71 +496,8 @@ TEST_CASE("Fractal is deterministic, seed-dependent, and repeats every period",
     REQUIRE(differentSeed.evaluate(TimeFrequencyPoint{0.37, 1000.0}, config) != first);
 }
 
-TEST_CASE("An empty superposition stack leaves evaluate() unchanged", "[core][mind_wave]") {
-    const MindWave wave;  // Default sine, empty stack.
-    REQUIRE(wave.superpositionStack().empty());
-    REQUIRE(wave.evaluate(TimeFrequencyPoint{0.25, 1000.0}, testConfig()) ==
-            Catch::Approx(1.0f));  // Unchanged from the plain-sine test's own expectation.
-}
-
-TEST_CASE("Superposition folds each stack member per the chosen blend mode", "[core][mind_wave]") {
-    const auto config = testConfig();
-    const TimeFrequencyPoint point{0.0, 1000.0};
-
-    MindWave base;  // sine, t=0 -> 0.5
-    MindWave member;
-    member.setPeriodicWaveform(PeriodicWaveform::Square);  // t=0 -> 1.0
-    member.setPeriod(4.0);
-
-    const float baseValue = base.evaluate(point, config);
-    const float memberValue = member.evaluate(point, config);
-    REQUIRE(baseValue == Catch::Approx(0.5f));
-    REQUIRE(memberValue == Catch::Approx(1.0f));
-
-    auto withMode = [&](SuperpositionBlendMode mode) {
-        MindWave combined = base;
-        combined.setSuperpositionStack({member});
-        combined.setSuperpositionBlendMode(mode);
-        return combined.evaluate(point, config);
-    };
-
-    REQUIRE(withMode(SuperpositionBlendMode::Multiply) == Catch::Approx(baseValue * memberValue));
-    REQUIRE(withMode(SuperpositionBlendMode::Add) == Catch::Approx(std::min(1.0f, baseValue + memberValue)));
-    REQUIRE(withMode(SuperpositionBlendMode::Min) == Catch::Approx(std::min(baseValue, memberValue)));
-    REQUIRE(withMode(SuperpositionBlendMode::Max) == Catch::Approx(std::max(baseValue, memberValue)));
-    REQUIRE(withMode(SuperpositionBlendMode::Average) == Catch::Approx((baseValue + memberValue) / 2.0f));
-}
-
-TEST_CASE("Superposition supports nested stacks (a member with its own stack)", "[core][mind_wave]") {
-    MindWave innermost;
-    innermost.setPeriodicWaveform(PeriodicWaveform::Square);
-    innermost.setPeriod(4.0);
-
-    MindWave middle;
-    middle.setPeriodicWaveform(PeriodicWaveform::Sawtooth);
-    middle.setPeriod(4.0);
-    middle.setSuperpositionStack({innermost});
-    middle.setSuperpositionBlendMode(SuperpositionBlendMode::Add);
-
-    MindWave outer;
-    outer.setSuperpositionStack({middle});
-    outer.setSuperpositionBlendMode(SuperpositionBlendMode::Multiply);
-
-    const auto config = testConfig();
-    const float value = outer.evaluate(TimeFrequencyPoint{0.0, 1000.0}, config);
-    REQUIRE(std::isfinite(value));
-    REQUIRE(value >= 0.0f);
-    REQUIRE(value <= 1.0f);
-}
-
-TEST_CASE("A MindWave with every new generator field and a superposition stack round-trips through JSON",
+TEST_CASE("A MindWave with every new generator field round-trips through JSON",
           "[core][mind_wave]") {
-    MindWave member;
-    member.setType(GeneratorType::Fractal);
-    member.setSeed(123);
-    member.setFractalRoughness(0.4);
-    member.setFractalIterations(5);
-
     MindWave original;
     original.setType(GeneratorType::Spatial);
     original.setSpatialPattern(SpatialPattern::Cellular);
@@ -599,8 +517,6 @@ TEST_CASE("A MindWave with every new generator field and a superposition stack r
     original.setStepCount(8);
     original.setFractalRoughness(0.6);
     original.setFractalIterations(9);
-    original.setSuperpositionStack({member});
-    original.setSuperpositionBlendMode(SuperpositionBlendMode::Max);
 
     const nlohmann::json json = original;
     const MindWave restored = json.get<MindWave>();
@@ -623,12 +539,12 @@ TEST_CASE("A MindWave with every new generator field and a superposition stack r
     REQUIRE(restored.stepCount() == original.stepCount());
     REQUIRE(restored.fractalRoughness() == original.fractalRoughness());
     REQUIRE(restored.fractalIterations() == original.fractalIterations());
-    REQUIRE(restored.superpositionBlendMode() == original.superpositionBlendMode());
-    REQUIRE(restored.superpositionStack().size() == 1);
-    REQUIRE(restored.superpositionStack()[0].type() == GeneratorType::Fractal);
-    REQUIRE(restored.superpositionStack()[0].seed() == 123);
-    REQUIRE(restored.superpositionStack()[0].fractalRoughness() == Catch::Approx(0.4));
-    REQUIRE(restored.superpositionStack()[0].fractalIterations() == 5);
+}
+
+TEST_CASE("A MindWave's JSON carries no superposition fields (removed in v0.1.32.1)", "[core][mind_wave]") {
+    const nlohmann::json json = MindWave{};
+    CHECK_FALSE(json.contains("superpositionStack"));
+    CHECK_FALSE(json.contains("superpositionBlendMode"));
 }
 
 // --- v0.Y.39.1 Installment A: Warp/Reduce field operators -------------
@@ -1323,33 +1239,6 @@ TEST_CASE("evaluateMindWaveField's own Fractal GPU fast path declines (falls bac
     wave.setFractalIterations(4);
     wave.setWarpSource(warpSource);
     wave.setWarpStrength(0.5);
-    const auto config = testConfig();
-    constexpr std::uint32_t canvasWidth = 5;
-
-    const auto field = sound_mind::core::evaluateMindWaveField(wave, config, canvasWidth);
-
-    REQUIRE(field.size() == std::size_t{config.binCount} * canvasWidth);
-    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
-        const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), config);
-        for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {
-            const float expected = wave.evaluate(
-                TimeFrequencyPoint{sound_mind::core::frameIndexToTime(frame, config), frequencyHz}, config);
-            CHECK(field[sound_mind::core::cellIndex(bin, frame, canvasWidth)] == Catch::Approx(expected));
-        }
-    }
-}
-
-TEST_CASE("evaluateMindWaveField's own Fractal GPU fast path declines when a superposition stack is present, and "
-          "the result still matches evaluate() exactly as before",
-          "[core][mind_wave][gpu]") {
-    MindWave member;
-    member.setType(GeneratorType::Periodic);
-
-    MindWave wave;
-    wave.setType(GeneratorType::Fractal);
-    wave.setAxis(MindWaveAxis::Time);
-    wave.setFractalIterations(4);
-    wave.setSuperpositionStack({member});
     const auto config = testConfig();
     constexpr std::uint32_t canvasWidth = 5;
 

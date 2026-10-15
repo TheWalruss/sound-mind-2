@@ -18,7 +18,6 @@ using sound_mind::core::MindWave;
 using sound_mind::core::Path;
 using sound_mind::core::PathNode;
 using sound_mind::core::PathNodeType;
-using sound_mind::core::SuperpositionBlendMode;
 using sound_mind::core::TimeFrequencyPoint;
 
 struct FieldSize {
@@ -64,8 +63,8 @@ Path makeDrawnShapePath() {
 
 /// @param gpuEligible Whether this case's own generator type has a real
 ///        GPU-accelerated field path - `GeneratorType::Fractal` only, as
-///        of `v0.1.6.4` (`evaluateMindWaveField()`'s own unwarped,
-///        non-superposition-stacked fast path) - see
+///        of `v0.1.6.4` (`evaluateMindWaveField()`'s own unwarped fast
+///        path) - see
 ///        `MindWave::tryEvaluateFractalFieldOnGpu()`'s own docs. Every
 ///        other generator type stays CPU-only, so defaults to `false`.
 BenchmarkCase makeMindWaveCase(std::string name, const MindWave& wave, const FieldSize& size,
@@ -123,44 +122,12 @@ void appendFractalFieldSizeSweep(std::vector<BenchmarkCase>& cases) {
     }
 }
 
-/// @brief Superposition stack-depth sweep (1/2/4/8 stacked waves) -
-/// answers "does combining several MindWaves meaningfully add up", per
-/// `docs/sound-mind-benchmarking.md`'s own "Scenario catalog".
-void appendSuperpositionStackDepthSweep(std::vector<BenchmarkCase>& cases) {
-    for (const int depth : {1, 2, 4, 8}) {
-        MindWave wave;
-        wave.setType(GeneratorType::Periodic);
-        std::vector<MindWave> stack;
-        stack.reserve(static_cast<std::size_t>(depth) - 1);
-        for (int i = 1; i < depth; ++i) {
-            MindWave member;
-            member.setType(GeneratorType::Fractal);
-            member.setFractalIterations(4);
-            stack.push_back(member);
-        }
-        wave.setSuperpositionStack(std::move(stack));
-        wave.setSuperpositionBlendMode(SuperpositionBlendMode::Add);
-
-        nlohmann::json parameters;
-        parameters["stackDepth"] = depth;
-        auto waveCopy = std::make_shared<MindWave>(wave);
-        auto config = std::make_shared<StreamCodecConfig>(codecConfigFor(kMediumField));
-        const std::uint32_t canvasWidth = kMediumField.canvasWidth;
-        cases.push_back(BenchmarkCase{"Superposition stackDepth=" + std::to_string(depth), "mindWave", parameters,
-                                       false, [waveCopy, config, canvasWidth]() {
-                                           const auto field = evaluateMindWaveField(*waveCopy, *config, canvasWidth);
-                                           static_cast<void>(field);
-                                       }});
-    }
-}
-
 }  // namespace
 
 std::vector<BenchmarkCase> buildMindWaveScenarios() {
     std::vector<BenchmarkCase> cases;
     appendOneBaselineCasePerGeneratorType(cases);
     appendFractalFieldSizeSweep(cases);
-    appendSuperpositionStackDepthSweep(cases);
     return cases;
 }
 

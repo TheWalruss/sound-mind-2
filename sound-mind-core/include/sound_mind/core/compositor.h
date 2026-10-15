@@ -350,8 +350,8 @@ public:
     void invalidateFrom(std::size_t layerIndex) noexcept;
 
     /// @brief Marks everything stale - call after editing any MindWave's
-    ///        own value (generator type, parameters, superposition
-    ///        stack, or warp source) anywhere in the project's library.
+    ///        own value (generator type, parameters, or warp source)
+    ///        anywhere in the project's library.
     ///        Structural changes (adding/removing/reordering a layer)
     ///        and a `respectMute`/output-shape change don't need this -
     ///        `compositeProjectCached()` detects those on its own.

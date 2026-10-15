@@ -12,14 +12,7 @@ private slots:
     void deletingARowEmitsDeleteRequestedWithItsId();
     void renamingARowEmitsRenameRequestedWithItsId();
     void editingTheTopEditorEmitsMindWaveChangedWithTheSelectedId();
-    void addingAStackMemberGrowsTheStackAndEmits();
-    void removingASelectedStackMemberShrinksTheStackAndEmits();
-    void superpositionControlsStayHiddenWithAnEmptyStack();
-    void addingTheFirstStackMemberRevealsTheSuperpositionControls();
-    void removingTheLastStackMemberHidesTheSuperpositionControlsAgain();
-    void selectingARowWithAnExistingStackShowsTheSuperpositionControlsImmediately();
-    void editingASelectedStackMemberUpdatesThatIndexAndEmits();
-    void changingBlendModeEmits();
+    void panelHasNoSuperpositionControls();
     void selectMindWaveSelectsAnExistingRowAndNoOpsForUnknownId();
     void setMindWavesPreservesSelectionAndRedisplaysFromTheNewData();
     void setMindWavesDropsSelectionWhenTheIdIsGone();

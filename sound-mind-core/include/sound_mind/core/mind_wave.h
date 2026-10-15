@@ -195,39 +195,6 @@ NLOHMANN_JSON_SERIALIZE_ENUM(SpatialPattern, {
 // clang-format on
 
 /**
- * @brief How a superposed `MindWave` folds into the running result - see
- *        `docs/sound-mind-design.md`'s "Field Operators": "Superposition
- *        ... layering them together the same way layers themselves
- *        composite, with a chosen blend (multiply, add, min, max, average)
- *        determining how each one folds into the running result."
- *
- * @note `Average` folds pairwise, in stack order (`running = (running +
- *       member) / 2`, one member at a time) - the same "folds into the
- *       running result" mechanism the other four modes use, not a single
- *       statistical mean across every member at once. With more than one
- *       stack member, later members therefore weigh more heavily than
- *       earlier ones; documented here as a known v1 simplification rather
- *       than a claimed true average.
- */
-enum class SuperpositionBlendMode {
-    Multiply,
-    Add,
-    Min,
-    Max,
-    Average,
-};
-
-// clang-format off
-NLOHMANN_JSON_SERIALIZE_ENUM(SuperpositionBlendMode, {
-    {SuperpositionBlendMode::Multiply, "multiply"},
-    {SuperpositionBlendMode::Add, "add"},
-    {SuperpositionBlendMode::Min, "min"},
-    {SuperpositionBlendMode::Max, "max"},
-    {SuperpositionBlendMode::Average, "average"},
-})
-// clang-format on
-
-/**
  * @brief A parametric waveform producing a per-cell scalar field in
  *        `[0, 1]` across the canvas - see `docs/sound-mind-design.md`'s
  *        "Low Frequency Oscillations (MindWaves)".
@@ -241,8 +208,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(SuperpositionBlendMode, {
  *
  * **`v0.Y.31.1`, Installment B**: fills out the rest of the v1 generator
  * catalogue (`Envelope`, `SteppedNoise`, `Spatial`, `Fractal`, and
- * `Periodic`'s remaining four waveforms) plus superposition
- * (`superpositionStack()`/`superpositionBlendMode()`). Deliberately flat
+ * `Periodic`'s remaining four waveforms). (It also added superposition,
+ * removed again in `v0.1.32.1`.) Deliberately flat
  * fields for every generator type, not a tagged union/`std::variant` - the
  * same reasoning `FilterConfiguration`'s own docs (and `docs/sound-mind-
  * architecture.md`'s Decision #34) already give: plain typed fields stay
@@ -323,8 +290,7 @@ public:
     /**
      * @brief Whether this MindWave's own generator output is flipped to
      *        `1 - value` (a polarity/sign inversion within `[0, 1]`).
-     *        Applied to this MindWave's own generator result *before* its
-     *        `superpositionStack()` folds in, so members are unaffected.
+     *        Applied to this MindWave's own generator result.
      * @return `true` if inverted; `false` by default.
      */
     [[nodiscard]] bool inverted() const noexcept { return inverted_; }
@@ -602,48 +568,16 @@ public:
     void setFractalIterations(int iterations) noexcept { fractalIterations_ = iterations; }
 
     /**
-     * @brief The other MindWaves this one's own field is combined with,
-     *        via `superpositionBlendMode()`, after this MindWave's own
-     *        generator is evaluated - see `docs/sound-mind-design.md`'s
-     *        "Field Operators" ("Superposition"). Empty by default - a
-     *        fresh MindWave superposes nothing, matching this class's own
-     *        "nothing happens by accident beyond the base generator"
-     *        default philosophy.
-     * @return The current superposition stack, in fold order.
-     */
-    [[nodiscard]] const std::vector<MindWave>& superpositionStack() const noexcept { return superpositionStack_; }
-
-    /// @brief Mutable access to the superposition stack, for in-place edits.
-    /// @return The current superposition stack.
-    [[nodiscard]] std::vector<MindWave>& superpositionStack() noexcept { return superpositionStack_; }
-
-    /// @brief Sets the superposition stack wholesale.
-    /// @param stack The new stack, in fold order.
-    void setSuperpositionStack(std::vector<MindWave> stack) { superpositionStack_ = std::move(stack); }
-
-    /// @brief How each `superpositionStack()` member folds into the
-    ///        running result - see `SuperpositionBlendMode`'s own docs.
-    ///        Meaningless while `superpositionStack()` is empty.
-    /// @return The current blend mode.
-    [[nodiscard]] SuperpositionBlendMode superpositionBlendMode() const noexcept { return superpositionBlendMode_; }
-
-    /// @brief Sets how each superposed MindWave folds into the running result.
-    /// @param mode The new blend mode.
-    void setSuperpositionBlendMode(SuperpositionBlendMode mode) noexcept { superpositionBlendMode_ = mode; }
-
-    /**
      * @brief Whether this MindWave's own sampling coordinate is displaced
      *        by another MindWave before its own generator runs - see
      *        `docs/sound-mind-design.md`'s "Field Operators" ("Warp - one
      *        field distorts the coordinates another field is sampled at").
      *        `v0.Y.39.1` Installment A.
      *
-     * A single optional source, not a stack (unlike `superpositionStack()`) -
-     * the design doc names Warp as a two-field relationship, not an
-     * N-way fold. Represented internally as a 0-or-1-length
-     * `std::vector<MindWave>` (the same "container of itself" trick
-     * `superpositionStack_` already establishes and this codebase's own
-     * build already proves compiles - `std::optional<MindWave>` as a
+     * A single optional source - the design doc names Warp as a two-field
+     * relationship. Represented internally as a 0-or-1-length
+     * `std::vector<MindWave>` (a "container of itself" this codebase's own
+     * build proves compiles - `std::optional<MindWave>` as a
      * direct member has no equivalent incomplete-type guarantee from the
      * standard) rather than exposing that representation directly.
      *
@@ -870,8 +804,7 @@ public:
     }
 
     /**
-     * @brief This MindWave's own field value at `point`, after superposing
-     *        `superpositionStack()` (if any) on top of its own generator.
+     * @brief This MindWave's own field value at `point`.
      *
      * The frequency axis is log-scaled (see `frequencyToBinIndex()`'s own
      * docs), so a `period()` expressed in raw Hz would pack a different
@@ -895,16 +828,10 @@ public:
      * method reads `point`. This is the general form
      * `SpatialPattern::DomainWarpedNoise` already establishes for one
      * fixed, built-in noise field, now available between any two MindWaves
-     * (`docs/sound-mind-design.md`'s own framing). Warping and superposing
-     * are independent: `superpositionStack()` members are still evaluated
-     * at the original, unwarped `point` - warp only distorts what *this*
-     * MindWave's own generator samples from, not what its superposition
-     * partners do.
+     * (`docs/sound-mind-design.md`'s own framing).
      *
-     * The result is always clamped to `[0, 1]` before returning, regardless
-     * of which generator shape or superposition blend produced it -
-     * defensive only, since e.g. `SuperpositionBlendMode::Add` can
-     * otherwise exceed `1.0`.
+     * The result is always clamped to `[0, 1]` before returning, whichever
+     * generator shape produced it.
      *
      * `GeneratorType::Drawn` (`v0.Y.39.1` Installment B) reads `point` the
      * same way every other generator does (`axisPosition`, already
@@ -971,8 +898,6 @@ private:
     double domainWarpStrength_ = 1.0;
     double fractalRoughness_ = 0.5;
     int fractalIterations_ = 8;
-    std::vector<MindWave> superpositionStack_;
-    SuperpositionBlendMode superpositionBlendMode_ = SuperpositionBlendMode::Multiply;
     std::vector<MindWave> warpSourceStack_;
     double warpStrength_ = 1.0;
     bool reversed_ = false;
@@ -1022,16 +947,14 @@ private:
     ///        field size, with no shared state across cells to cache the
     ///        way `GeneratorType::Drawn`'s own fix did).
     ///
-    /// Scoped to the plain, unwarped, no-superposition-stack case only:
-    /// `hasWarpSource()` makes each cell's own axis position depend on
-    /// another MindWave's own per-cell field (potentially itself
-    /// expensive, and not necessarily resolvable without its own per-cell
-    /// CPU evaluation), and a non-empty `superpositionStack()` needs its
-    /// own members folded in per cell after this method's own formula
-    /// (`evaluate()`'s own post-`switch` loop) - neither is something this
-    /// one-dispatch fast path attempts to replicate, so both return
+    /// Scoped to the plain, unwarped case only: `hasWarpSource()` makes
+    /// each cell's own axis position depend on another MindWave's own
+    /// per-cell field (potentially itself expensive, and not necessarily
+    /// resolvable without its own per-cell CPU evaluation) - not something
+    /// this one-dispatch fast path attempts to replicate, so it returns
     /// `std::nullopt` rather than producing a silently incomplete result.
-    /// A warped or superposition-stacked Fractal MindWave falls back to
+    /// The same goes for `reversed()`/`inverted()`. A warped Fractal
+    /// MindWave falls back to
     /// the existing per-cell CPU path exactly as before this installment,
     /// not a regression, just not (yet) accelerated. Likewise returns
     /// `std::nullopt` if `type_` isn't `Fractal`, or no GPU device is
@@ -1173,8 +1096,8 @@ void from_json(const nlohmann::json& json, MindWave& mindWave);
  *        rather than adding id/name fields to `MindWave` itself.
  *
  * `MindWave` itself stays exactly the bare value type it's always been -
- * still the right shape for a `superpositionStack()` member, which never
- * needs (and should never carry) its own identity. Only a MindWave actually
+ * still the right shape for a nested MindWave (e.g. a warp source), which
+ * never needs (and should never carry) its own identity. Only a MindWave actually
  * registered in a `Project`'s own `Project::mindWaves()` collection - the
  * kind something else can bind to by id - gets one of these.
  *

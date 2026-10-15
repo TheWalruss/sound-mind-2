@@ -176,8 +176,8 @@ public:
      * Switches the entry's own `type()` to `GeneratorType::Drawn` as part
      * of the same action, the same way applying Warp doesn't require the
      * target selection to already be some special pre-existing kind -
-     * every other field (`period()`, `phaseRadians()`, the superposition
-     * stack, warp) is left exactly as it was, so a MindWave already tuned
+     * every other field (`period()`, `phaseRadians()`, warp) is left
+     * exactly as it was, so a MindWave already tuned
      * in other respects keeps that tuning after gaining a drawn shape.
      *
      * @param id The library entry to capture into. A no-op if no project is

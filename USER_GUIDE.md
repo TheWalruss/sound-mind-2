@@ -574,8 +574,8 @@ shape instead of staying fixed.
   MindWave-bound opacity.
 - **Preview** shows the currently selected MindWave's own field directly
   on the canvas, as a live grayscale overlay (black where it's 0, white
-  where it's 1) - updating instantly as you change its generator type,
-  parameters, or superposition stack, and as you select a different
+  where it's 1) - updating instantly as you change its generator type
+  or parameters, and as you select a different
   MindWave while Preview stays on. A judgment aid only - it never affects
   the actual composite, and switches off automatically when you open or
   create a different project, or when you close this panel.
@@ -626,12 +626,6 @@ MindWave Shape**
   [Pick](#pick)'s "Create Resonance from Picked Path..." for how
   to capture one). With nothing picked yet, or nothing captured in the
   project at all, the generator produces a flat neutral value instead.
-- **Superposition** lets one MindWave combine several others together
-  (multiply, add, min, max, or average) - **+ Add Member** starts the
-  first one. The rest of Superposition's own controls (**- Remove
-  Member**, the Blend Mode drop-down, and the small member list/editor)
-  stay hidden until at least one member exists, then appear for managing
-  them, each editable the same way as a top-level MindWave.
 - **Warp** lets one MindWave distort the position another is sampled at,
   giving a wavier, less mechanically regular result than either shape
   alone - check **Enable Warp** to reveal a **Strength** spin box and a
@@ -1949,15 +1943,18 @@ expected, so you know what's actually driving it.
 - **MindWaves**: a plain **Fractal**-type MindWave (see
   [MindWaves](#mindwaves) above) evaluates on the GPU when Hardware
   Acceleration is on, and scales well to large canvases as a result. If
-  you combine a Fractal MindWave with **Warp**, or use one as a
-  **Superposition** member, it falls back to evaluating on the CPU
-  instead - still correct, just not GPU-accelerated in that combination
-  yet.
+  you combine a Fractal MindWave with **Warp**, or turn on **Reversed**
+  or **Inverted**, it falls back to evaluating on the CPU instead - still
+  correct, just not GPU-accelerated in that combination yet.
 - **Painting**: the **Heal** and **Soften** brushes blend each stroke
   toward a local average of the surrounding content - both stay fast
   regardless of how large you set the brush's own **Size**.
 
 ## What's Not Here Yet
+
+**Superposition** (combining several MindWaves into one with a blend
+mode) was removed in v0.1.32.1. It may come back later in a different
+form.
 
 The [design document](docs/sound-mind-design.md) describes the Studio's
 full intended scope - analysis tools, Sound Flower's polar view, chord/
@@ -2164,7 +2161,7 @@ what's designed for them:
   the real-time synthesis sense (there is no live playback voice here yet)
   - it only shapes how a painted stroke's own stamps vary, the same as
   Opacity/Size/Color do.
-- **Warp and Reduce exist now**, alongside Superposition - Warp (one field
+- **Warp and Reduce exist now** - Warp (one field
   distorting where another samples from) is directly editable in the
   MindWaves panel; Reduce (collapsing a field to a plain control signal)
   has no standalone UI of its own yet - Vibrato/Tremolo above are its only

@@ -60,7 +60,7 @@ An initial version of the `EdgePreservingBlur`/`Convolve` sweeps used `{3, 9, 25
 
 - **One baseline case per `GeneratorType`** (all 9), evaluated as a full field at a medium canvas width.
 - **Fractal field-size sweep**: `Fractal` (the generator whose cost most directly scales with per-cell iteration count) across small/medium/large field sizes.
-- **Superposition stack-depth sweep**: `{1, 2, 4, 8}` stacked waves - answers "does combining several MindWaves meaningfully add up."
+- ~~**Superposition stack-depth sweep**~~ - removed in `v0.1.32.1` along with MindWave Superpositions.
 
 ### Compositing (`compositing_scenarios.cpp`)
 

@@ -1978,6 +1978,17 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - *Fix, as a safety net in the widget:* `currentComposite()` also compares a cheap per-layer signature (id, visible, muted, has-content) and recomputes when it changed. In-place edits to existing content still require an explicit invalidate, by design (the existing stale-until-invalidated test still holds).
       - The "on first opening a project" report didn't reproduce from code reading: `setProject()` already resets the composite. It is expected to be the same missing-invalidate pattern on a later content change, which the signature check now also covers; to be confirmed manually.
 
+231. **MindWave Superpositions removed.** Settled in `v0.1.32.1`, Pre-Beta Plan milestone `v0.Y.72.1`, by the user's decision (2026-10-15): the feature "isn't working well" in manual testing, and it can be redeveloped later if it proves useful.
+    - **Removed:**
+      - `SuperpositionBlendMode`;
+      - `MindWave::superpositionStack()` / `setSuperpositionStack()` / `superpositionBlendMode()` / `setSuperpositionBlendMode()`, the fold in `evaluate()`, and their JSON fields;
+      - the MindWaves panel's Superposition section (member list, add/remove, blend combo, member editor);
+      - the benchmark's Superposition stack-depth sweep.
+    - The panel now has two `MindWaveEditor`s (top-level and warp source).
+    - `docs/sound-mind-design.md`'s "Field Operators" records the removal.
+    - **No compatibility handling**, per the standing pre-Beta decision to ignore file-format compatibility. A project whose MindWaves still carry `superpositionStack` JSON simply has those fields ignored on load (the reader never asks for them), so such a MindWave loads as its own base generator only.
+    - **Tests:** a new core test checks that a MindWave's JSON carries no superposition fields, and a new panel test checks that the Superposition controls are gone. The superposition-specific tests were deleted with the feature.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

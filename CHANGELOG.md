@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.32.1] - 2026-10-15
+
+Pre-Beta Plan milestone `v0.Y.72.1`.
+
+### Removed
+
+- **MindWave Superpositions.** The Superposition section of the MindWaves panel (+ Add Member, - Remove Member, Blend Mode, and the member list and editor) is gone, along with superposition support in MindWaves themselves. Projects saved with superposition stacks are not supported.
+
 ## [0.1.31.1] - 2026-10-15
 
 Pre-Beta Plan milestone `v0.Y.71.1`: correctness bugs from manual testing.

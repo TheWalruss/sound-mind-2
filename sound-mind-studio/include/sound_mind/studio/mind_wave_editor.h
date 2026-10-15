@@ -33,7 +33,7 @@ class WaveformPreviewWidget;
  * every edit emits mindWaveChanged() with this editor's own current,
  * complete `MindWave`; nothing here knows about `Project`, `NamedMindWave`,
  * or identity of any kind - `MindWavesPanel` is what threads an edited
- * value back into the right library entry (or superposition-stack slot).
+ * value back into the right library entry (or warp-source slot).
  *
  * **One `QGroupBox` per `GeneratorType`, mirroring `FilterConfigurationPanel`'s
  * own "show only the active type's own group" pattern exactly.** A few
@@ -48,11 +48,10 @@ class WaveformPreviewWidget;
  * same kind `FilterConfigurationPanel`'s own always-visible `Pulse`-only
  * duty cycle field already accepts within its own `Periodic` group.
  *
- * **No superposition-stack editing here** - this widget edits exactly one
- * generator's own parameters. `MindWavesPanel` reuses this same class
- * (once for the top-level `MindWave`, once for whichever stack member is
- * currently selected) rather than teaching this widget to recurse into
- * `superpositionStack()` itself.
+ * **One generator only** - this widget edits exactly one generator's own
+ * parameters. `MindWavesPanel` reuses this same class (once for the
+ * top-level `MindWave`, once for its warp source) rather than teaching
+ * this widget to recurse into nested MindWaves itself.
  *
  * `v0.Y.39.1` Installment B adds a `GeneratorType::Drawn` group with no
  * editable controls of its own (see `drawnGroup_`'s own docs); Installment
@@ -101,10 +100,9 @@ public:
      * indistinguishable from a real edit and re-apply the unchanged value
      * right back onto whatever was just selected.
      *
-     * @param wave The MindWave to display. Its own `superpositionStack()`/
-     *        `superpositionBlendMode()` are preserved internally (round-
-     *        tripped through mindWave()) but have no controls of their
-     *        own here - see this class's own docs.
+     * @param wave The MindWave to display. Fields with no controls here
+     *        (e.g. its warp source, a Drawn path) are preserved internally
+     *        and round-tripped through mindWave().
      */
     void setMindWave(const sound_mind::core::MindWave& wave);
 
@@ -136,9 +134,8 @@ public:
 signals:
     /// @brief Emitted whenever any control changes.
     /// @param wave This editor's own new, complete MindWave - including
-    ///        whatever `superpositionStack()`/`superpositionBlendMode()`
-    ///        `setMindWave()` last loaded, untouched by this editor's own
-    ///        controls.
+    ///        whatever fields without controls here `setMindWave()` last
+    ///        loaded, untouched.
     void mindWaveChanged(const sound_mind::core::MindWave& wave);
 
 private:

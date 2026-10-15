@@ -12,9 +12,7 @@
 #include "sound_mind/core/resonance_profile.h"
 
 class QCheckBox;
-class QComboBox;
 class QDoubleSpinBox;
-class QLabel;
 class QListWidget;
 class QListWidgetItem;
 class QPushButton;
@@ -33,32 +31,23 @@ class MindWaveEditor;
  * connects to its own handlers - no `Project`/`NamedMindWave` mutation
  * happens here.
  *
- * **Three `MindWaveEditor`s, not one**: the top one edits whichever library
- * entry is currently selected in the list above it; the second edits
- * whichever entry of *that* MindWave's own `superpositionStack()` is
- * currently selected in the smaller list beside it (confirmed with the
- * user: a minimal nested editor, one level deep - a stack member's own
- * further-nested stack, if it somehow has one, isn't reachable through
- * this UI); the third (`v0.Y.39.1` Installment A) edits the selected
- * entry's own `warpSource()`, shown/enabled only while an "Enable Warp"
- * checkbox is checked - the same one-level-deep nesting limit, for the
- * same reason, applied to `warpSourceStack_`'s own vector-of-0-or-1
- * representation (see `MindWave::hasWarpSource()`'s own docs) instead of
- * an arbitrary-length list. Every edit anywhere - the top editor, the
- * stack list itself (add/remove), the stack member editor, the blend mode
- * combo, the Warp checkbox/strength spin box, or the warp source editor -
- * reconstructs this panel's own current, complete `MindWave` (top-level
- * generator parameters from the top editor, `superpositionStack()`/
- * `superpositionBlendMode()` from this panel's own tracked stack state,
- * `warpSource()`/`warpStrength()` from this panel's own tracked warp
- * state) and emits exactly one mindWaveChanged() with it, the same "emit
+ * **Two `MindWaveEditor`s**: the top one edits whichever library entry is
+ * currently selected in the list above it; the second (`v0.Y.39.1`
+ * Installment A) edits the selected entry's own `warpSource()`,
+ * shown/enabled only while an "Enable Warp" checkbox is checked - one
+ * level deep (see `MindWave::hasWarpSource()`'s own docs). (A third, for
+ * Superposition stack members, was removed with that feature in
+ * `v0.1.32.1`.) Every edit anywhere - the top editor, the Warp
+ * checkbox/strength spin box, or the warp source editor - reconstructs
+ * this panel's own current, complete `MindWave` (top-level generator
+ * parameters from the top editor, `warpSource()`/`warpStrength()` from
+ * this panel's own tracked warp state) and emits exactly one
+ * mindWaveChanged() with it, the same "emit
  * the whole thing, not a per-field delta" convention
  * `FilterConfigurationPanel` already established.
  *
  * **Preview**: a checkable toggle previews the currently selected
- * entry's own complete field (top-level generator plus its full
- * superposition stack - never a lone stack member in isolation) as a
- * live grayscale overlay on the canvas, per
+ * entry's own complete field as a live grayscale overlay on the canvas, per
  * `docs/sound-mind-design.md`'s "Low Frequency Oscillations" - see
  * previewToggled()'s own docs. This panel only ever emits the toggle;
  * `MindWaveController` owns deciding *what* to preview and pushing it to
@@ -214,49 +203,22 @@ signals:
     void previewToggled(bool enabled);
 
 private:
-    /// @brief Rebuilds `stackList_` from `currentStack_`, then shows or
-    ///        hides the rest of the Superposition section
-    ///        (`removeMemberButton_`/`blendModeLabel_`/`blendModeCombo_`/
-    ///        `stackList_`/`stackMemberEditor_`) depending on whether
-    ///        `currentStack_` is empty - real-world testing pass,
-    ///        2026-09-20, finding #11: a full set of stack-editing controls
-    ///        is clutter with nothing in the stack yet. `addMemberButton_`
-    ///        (and the "Superposition" label) stay visible unconditionally
-    ///        - the one control still usable, and needed, from an empty
-    ///        stack.
-    void refreshStackList();
-
     /// @brief Reconstructs this panel's own current, complete MindWave
-    ///        (top editor + currentStack_/currentBlendMode_) and emits
+    ///        (top editor + the tracked warp state) and emits
     ///        mindWaveChanged() with it - a no-op if nothing is selected.
     void emitCurrentMindWaveChanged();
 
-    /// @brief Loads `wave`'s own superposition stack/blend mode into
-    ///        currentStack_/currentBlendMode_/the blend combo, refreshes
-    ///        stackList_, and clears the stack member selection - the
-    ///        shared setup a fresh library selection and a mindWaveChanged
-    ///        refresh both need.
-    void loadStackState(const sound_mind::core::MindWave& wave);
-
     /// @brief Loads `wave`'s own warp source/strength into
     ///        currentWarpEnabled_/currentWarpSource_/currentWarpStrength_/
-    ///        the checkbox/spin box/warpSourceEditor_ - the Warp
-    ///        counterpart to loadStackState(), called alongside it at
-    ///        every site that needs one (see that method's own docs).
-    ///        `v0.Y.39.1` Installment A.
+    ///        the checkbox/spin box/warpSourceEditor_ - the shared setup a
+    ///        fresh library selection and a setMindWaves() refresh both
+    ///        need. `v0.Y.39.1` Installment A.
     void loadWarpState(const sound_mind::core::MindWave& wave);
 
     QPushButton* addButton_ = nullptr;
     QPushButton* previewButton_ = nullptr;
     QListWidget* list_ = nullptr;
     MindWaveEditor* mindWaveEditor_ = nullptr;
-
-    QListWidget* stackList_ = nullptr;
-    QPushButton* addMemberButton_ = nullptr;
-    QPushButton* removeMemberButton_ = nullptr;
-    QLabel* blendModeLabel_ = nullptr;
-    QComboBox* blendModeCombo_ = nullptr;
-    MindWaveEditor* stackMemberEditor_ = nullptr;
 
     /// @brief The rows as of the last setMindWaves() call - used to look
     /// up the currently selected entry's own data.
@@ -268,24 +230,10 @@ private:
     /// @brief See selectedMindWaveId()'s own docs.
     std::optional<sound_mind::core::MindWaveId> selectedMindWaveId_;
 
-    /// @brief The selected library entry's own superposition stack, kept
-    /// here (not read back from mindWaveEditor_, which has no controls
-    /// for it) so it survives independently of the top editor's own
-    /// generator-parameter edits.
-    std::vector<sound_mind::core::MindWave> currentStack_;
-
-    /// @brief The selected library entry's own blend mode - see
-    /// currentStack_'s own docs for why this lives here, not on
-    /// mindWaveEditor_.
-    sound_mind::core::SuperpositionBlendMode currentBlendMode_ = sound_mind::core::SuperpositionBlendMode::Multiply;
-
-    /// @brief Which currentStack_ index the bottom editor currently shows,
-    /// if any.
-    std::optional<int> selectedStackMemberIndex_;
-
-    /// @brief The selected library entry's own `hasWarpSource()` - see
-    /// currentStack_'s own docs for why this lives here, not on
-    /// mindWaveEditor_. `v0.Y.39.1` Installment A.
+    /// @brief The selected library entry's own `hasWarpSource()` - kept
+    /// here, not read back from mindWaveEditor_ (which has no controls
+    /// for it), so it survives the top editor's own generator-parameter
+    /// edits. `v0.Y.39.1` Installment A.
     bool currentWarpEnabled_ = false;
 
     /// @brief The selected library entry's own `warpSource()`, meaningful

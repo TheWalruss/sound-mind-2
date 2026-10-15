@@ -235,23 +235,6 @@ void MindWaveEditorTest::setMindWaveSyncsEveryControlWithoutEmitting() {
     QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("fractalGroup"))->isHidden());
 }
 
-void MindWaveEditorTest::setMindWavePreservesSuperpositionStackAndBlendMode() {
-    MindWaveEditor editor;
-    MindWave member;
-    member.setPeriod(2.0);
-    MindWave wave;
-    wave.setSuperpositionStack({member});
-    wave.setSuperpositionBlendMode(sound_mind::core::SuperpositionBlendMode::Max);
-
-    editor.setMindWave(wave);
-
-    // No controls edit the stack/blend mode - mindWave() should still
-    // round-trip them unchanged, since MindWavesPanel relies on this to
-    // avoid needing to re-merge them itself after every top-level edit.
-    QCOMPARE(editor.mindWave().superpositionStack().size(), std::size_t{1});
-    QCOMPARE(editor.mindWave().superpositionBlendMode(), sound_mind::core::SuperpositionBlendMode::Max);
-}
-
 void MindWaveEditorTest::switchingToDrawnShowsOnlyItsOwnGroup() {
     MindWaveEditor editor;
     auto* combo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
@@ -295,9 +278,7 @@ void MindWaveEditorTest::aLoadedDrawnMindWaveWithACapturedPathShowsTheNodeCountA
     auto* label = editor.findChild<QLabel*>(QStringLiteral("drawnStatusLabel"));
     QVERIFY(label->text().contains(QStringLiteral("2")));
     // No controls edit drawnPath() here - mindWave() should still round-trip
-    // it unchanged, the same "preserved but not editable here" contract
-    // setMindWavePreservesSuperpositionStackAndBlendMode() already
-    // establishes for the superposition stack/blend mode.
+    // it unchanged ("preserved but not editable here").
     QCOMPARE(editor.mindWave().drawnPath().nodes().size(), std::size_t{2});
 }
 
