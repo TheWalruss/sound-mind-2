@@ -222,6 +222,13 @@ Every number setting is a **slider with a text box** beside it:
 **Edit → Decimal Separator** chooses whether numbers are shown with a
 period (1.5) or a comma (1,5). It's saved with the project.
 
+Wherever you set a loudness level - a stroke's **Left/Right Intensity**,
+Spectral Gate's **Noise floor** - a small **dB / value** drop-down beside
+those fields switches how they're shown: in dB (-96 to 0), or as a value
+from 0 (silence) to 1 (full scale), the same scale the canvas's
+brightness uses. It's only a display choice; switching never changes the
+level itself.
+
 ### Brightness and clipping
 
 The canvas's brightness follows how loud each spot really is, on one
@@ -453,10 +460,13 @@ stroke paints into) to reveal its full set of controls:
   locked, and show their lock icon whether selected or not.
 - A **type tag**, for any layer type other than the ordinary kind you get
   from importing.
-- An **opacity slider**, a **balance slider** (pans this layer's own
-  contribution between left and right - centered leaves it completely
-  unchanged; panning either way holds the channel you're panning toward
-  at full strength and fades out only the other one), an
+- A **Gain** slider (the layer's opacity, 0-100%), a **Balance** slider
+  (pans this layer's own contribution between left and right - centered
+  leaves it completely unchanged; panning either way holds the channel
+  you're panning toward at full strength and fades out only the other
+  one), each with tick marks and a readout beside it ("75%", "C",
+  "L 40%"). Drag freely: the readout follows the handle, and the change
+  is applied when you let go (arrow keys apply straight away). Also an
   **opacity-MindWave combo** (see [MindWaves](#mindwaves) below),
   **translation**/**rescale** number fields (see
   [Layer Timing](#layer-timing) below), and a **Blend Mode** combo (see

@@ -1,7 +1,10 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 
+#include <QComboBox>
+#include <QPointer>
 #include <QString>
 #include <QWidget>
 
@@ -12,6 +15,21 @@ class QLineEdit;
 class QSlider;
 
 namespace sound_mind::studio {
+
+/**
+ * @brief How an intensity field shows its level - the dB/value toggle.
+ *
+ * Values are always stored, emitted and set in dBFS; only the display
+ * (text box and unit label) changes. `Value` shows
+ * `sound_mind::codec::dbfsToIntensityValue()` - 0 at the -96 dBFS noise
+ * floor, 1 at 0 dBFS full scale - the same scale the canvas's own
+ * brightness uses. Since that mapping is linear in dB, the slider is the
+ * same in both units.
+ */
+enum class IntensityUnit {
+    Decibels,
+    Value,
+};
 
 /**
  * @brief Parses a number typed by a person, leniently.
@@ -101,6 +119,16 @@ public:
     /// @return The field's own slider.
     [[nodiscard]] QSlider* slider() const noexcept { return slider_; }
 
+    /// @brief Shows this field's dBFS value in `unit` - see IntensityUnit.
+    ///        Only meaningful for a field holding an absolute dBFS level.
+    ///        Changes the display only; never emits.
+    /// @param unit The unit to show.
+    void setIntensityUnit(IntensityUnit unit);
+
+    /// @brief The unit currently shown - see setIntensityUnit().
+    /// @return `Decibels` unless changed.
+    [[nodiscard]] IntensityUnit intensityUnit() const noexcept { return intensityUnit_; }
+
     /// @brief Whether the slider maps position to value logarithmically
     ///        (equal slider distance = equal ratio), for wide positive
     ///        ranges such as Hz. Ignored while the minimum isn't positive.
@@ -144,6 +172,9 @@ protected:
 
 private:
     void commitText();
+    [[nodiscard]] double toDisplay(double value) const;
+    [[nodiscard]] double fromDisplay(double displayed) const;
+    [[nodiscard]] int displayDecimals() const noexcept;
     void commitValue(double value);
     void refreshText();
     void refreshSlider();
@@ -161,6 +192,10 @@ private:
     double value_ = 0.0;
     int decimals_ = 2;
     bool logarithmic_ = false;
+    IntensityUnit intensityUnit_ = IntensityUnit::Decibels;
+    /// @brief The suffix set via setSuffix(), restored when switching back
+    ///        to `Decibels`.
+    QString nativeSuffix_;
 };
 
 /**
@@ -245,6 +280,37 @@ signals:
 
 protected:
     void emitValueChanged() override;
+};
+
+/**
+ * @brief The dB/value toggle for one panel or logical group of intensity
+ *        fields: a small combo ("dB" / "value", object name
+ *        `intensityUnitCombo`) that applies its choice to every field
+ *        added to it. Session-only - not saved.
+ * @note GUI thread only.
+ */
+class IntensityUnitSelector : public QComboBox {
+    Q_OBJECT
+
+public:
+    /// @param parent The parent widget, if any.
+    explicit IntensityUnitSelector(QWidget* parent = nullptr);
+
+    /// @brief Adds `field` to this group, applying the current unit to it.
+    /// @param field A field holding an absolute dBFS level.
+    void addField(NumericFieldBase* field);
+
+    /// @brief Selects `unit` and applies it to every field in the group.
+    /// @param unit The unit to show.
+    void setUnit(IntensityUnit unit);
+
+    /// @return The currently selected unit.
+    [[nodiscard]] IntensityUnit unit() const;
+
+private:
+    void applyToFields();
+
+    std::vector<QPointer<NumericFieldBase>> fields_;
 };
 
 }  // namespace sound_mind::studio

@@ -12,6 +12,8 @@
 using sound_mind::core::DecimalSeparator;
 using sound_mind::studio::formatNumber;
 using sound_mind::studio::IntegerField;
+using sound_mind::studio::IntensityUnit;
+using sound_mind::studio::IntensityUnitSelector;
 using sound_mind::studio::NumericField;
 using sound_mind::studio::parseLenientNumber;
 
@@ -194,4 +196,45 @@ void NumericFieldTest::integerFieldRoundsAndEmitsAnInt() {
     QCOMPARE(spy.at(0).at(0).toInt(), 4);
     QCOMPARE(field.value(), 4);
     QCOMPARE(field.lineEdit()->text(), QStringLiteral("4"));
+}
+
+void NumericFieldTest::intensityValueUnitShowsAndAcceptsTheCanonicalValue() {
+    NumericField field;
+    field.setRange(-96.0, 0.0);
+    field.setDecimals(1);
+    field.setSuffix(QStringLiteral(" dB"));
+    field.setValue(-48.0);
+    QSignalSpy spy(&field, &NumericField::valueChanged);
+
+    field.setIntensityUnit(IntensityUnit::Value);
+    QCOMPARE(field.lineEdit()->text(), QStringLiteral("0.5"));
+    QVERIFY(field.suffix().isEmpty());
+    QCOMPARE(spy.count(), 0);  // a display change, not a value change.
+
+    typeAndCommit(field, QStringLiteral("0.25"));
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(field.value(), -72.0);  // values stay in dB.
+
+    field.setIntensityUnit(IntensityUnit::Decibels);
+    QCOMPARE(field.lineEdit()->text(), QStringLiteral("-72"));
+    QCOMPARE(field.suffix(), QStringLiteral("dB"));
+}
+
+void NumericFieldTest::intensityUnitSelectorSwitchesEveryFieldInItsGroup() {
+    NumericField first;
+    NumericField second;
+    for (NumericField* field : {&first, &second}) {
+        field->setRange(-96.0, 0.0);
+        field->setValue(0.0);
+    }
+    IntensityUnitSelector selector;
+    selector.addField(&first);
+    selector.addField(&second);
+    QCOMPARE(selector.unit(), IntensityUnit::Decibels);
+
+    selector.setUnit(IntensityUnit::Value);
+
+    QCOMPARE(first.lineEdit()->text(), QStringLiteral("1"));
+    QCOMPARE(second.lineEdit()->text(), QStringLiteral("1"));
+    QCOMPARE(first.intensityUnit(), IntensityUnit::Value);
 }

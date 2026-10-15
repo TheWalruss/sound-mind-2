@@ -23,4 +23,6 @@ private slots:
     void aLogarithmicSliderPlacesTheGeometricMidpointInTheMiddle();
 
     void integerFieldRoundsAndEmitsAnInt();
+    void intensityValueUnitShowsAndAcceptsTheCanonicalValue();
+    void intensityUnitSelectorSwitchesEveryFieldInItsGroup();
 };

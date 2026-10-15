@@ -429,6 +429,9 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     noiseFloorSpinBox_->setRange(-96.0, 0.0);
     noiseFloorSpinBox_->setSingleStep(1.0);
     noiseFloorSpinBox_->setSuffix(QStringLiteral(" dB"));
+    auto* noiseFloorUnitSelector = new IntensityUnitSelector(denoiseGroup_);
+    noiseFloorUnitSelector->addField(noiseFloorSpinBox_);
+    denoiseForm->addRow(tr("Noise floor in:"), noiseFloorUnitSelector);
     connect(noiseFloorSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setNoiseFloorDb(static_cast<float>(value));
         emitConfigChanged();

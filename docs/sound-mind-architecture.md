@@ -2017,6 +2017,19 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Optional logarithmic slider** (`setLogarithmicSlider()`) for wide positive ranges; not yet switched on for any existing field (a per-field judgment for the panel-by-panel pass that adds the dB/value toggle).
     - **Tests:** `NumericFieldTest` (15 cases - parsing, formatting, commit-only emission, revert, clamp, spin-box-compatible `setValue()`, slider preview/release/step, separator change, log slider, integer rounding); a core round trip for the new setting; a `MainWindowTest` case for the menu. Every existing panel test passed unchanged after the swap.
 
+234. **dB/value intensity toggle per control group; Gain/Balance sliders apply on release.** Settled in `v0.1.33.3`, Pre-Beta Plan milestone `v0.Y.73.1` installment C, completing the milestone. Per the user's decision (2026-10-15), the toggle is per panel or logical control grouping, not one global setting.
+    - **`IntensityUnit`** (`Decibels`/`Value`) on `NumericFieldBase`:
+      - Values are always stored, emitted and set in dBFS; `Value` only changes the text (via `sound_mind::codec::dbfsToIntensityValue()`/`intensityValueToDbfs()`, Decision #232; 3 decimals, about 0.1 dB) and hides the dB suffix.
+      - Since the mapping is linear in dB, the slider is identical in both units.
+      - Typed values are read in the shown unit.
+    - **`IntensityUnitSelector`** (a `QComboBox`, object name `intensityUnitCombo`) switches every field added to it. Session-only (not saved).
+    - **Fields that got one:**
+      - the gradient editor's Left/Right Intensity (shown and hidden with them), so every brush and filter gradient;
+      - Spectral Gate's Noise floor.
+    - **Deliberately left out:** relative dB amounts (speckle threshold, reduction, grain amount), which aren't absolute levels on the 0..1 scale.
+    - **Layers panel Gain (opacity) and Balance sliders:** a shared `applyOnRelease()` helper emits on `sliderReleased`, or on `valueChanged` only when the slider isn't being dragged (keyboard/page/groove steps). The previous per-pixel emission re-composited the canvas and invalidated playback audio continuously, which was the "not very responsive" finding. Each slider now has a caption, tick marks (Gain every 25%, Balance at L/C/R) and a live readout label (`gainReadout`: "75%"; `balanceReadout`: "C", "L 40%", "R 100%").
+    - **Tests:** `NumericFieldTest` (value unit display/entry, selector group switching); `GradientEditorWidgetTest` (only intensity fields switch, not opacity); `FilterConfigurationPanelTest` (Spectral Gate's own selector); `LayersPanelTest` (no emission while dragging and one on release, labels/ticks/readouts).
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

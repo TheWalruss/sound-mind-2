@@ -1,10 +1,11 @@
 #include "sound_mind/studio/mind_capture_dialog.h"
-#include "sound_mind/studio/numeric_field.h"
 
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QVBoxLayout>
+
+#include "sound_mind/studio/numeric_field.h"
 
 namespace sound_mind::studio {
 

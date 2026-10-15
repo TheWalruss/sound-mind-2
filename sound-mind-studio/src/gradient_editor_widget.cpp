@@ -60,6 +60,10 @@ GradientEditorWidget::GradientEditorWidget(QWidget* parent) : QWidget(parent) {
     rightIntensitySpinBox_ = makeIntensitySpinBox(this, QStringLiteral("gradientRightIntensitySpinBox"));
     leftOpacitySpinBox_ = makeOpacitySpinBox(this, QStringLiteral("gradientLeftOpacitySpinBox"));
     rightOpacitySpinBox_ = makeOpacitySpinBox(this, QStringLiteral("gradientRightOpacitySpinBox"));
+    intensityUnitSelector_ = new IntensityUnitSelector(this);
+    intensityUnitSelector_->addField(leftIntensitySpinBox_);
+    intensityUnitSelector_->addField(rightIntensitySpinBox_);
+    valuesForm->addRow(tr("Intensity in:"), intensityUnitSelector_);
     valuesForm->addRow(tr("Left Intensity:"), leftIntensitySpinBox_);
     valuesForm->addRow(tr("Right Intensity:"), rightIntensitySpinBox_);
     valuesForm->addRow(tr("Left Opacity:"), leftOpacitySpinBox_);
@@ -69,6 +73,7 @@ GradientEditorWidget::GradientEditorWidget(QWidget* parent) : QWidget(parent) {
     rightIntensityLabel_ = qobject_cast<QLabel*>(valuesForm->labelForField(rightIntensitySpinBox_));
     leftOpacityLabel_ = qobject_cast<QLabel*>(valuesForm->labelForField(leftOpacitySpinBox_));
     rightOpacityLabel_ = qobject_cast<QLabel*>(valuesForm->labelForField(rightOpacitySpinBox_));
+    intensityUnitLabel_ = qobject_cast<QLabel*>(valuesForm->labelForField(intensityUnitSelector_));
 
     // Link Channels - each spin box mirrors onto its own opposite-channel
     // counterpart first (only while checked), then both feed the same
@@ -179,6 +184,10 @@ void GradientEditorWidget::updateIntensityFieldVisibility() {
     const bool show = intensityVisible_ && !cutMode_;
     leftIntensitySpinBox_->setVisible(show);
     rightIntensitySpinBox_->setVisible(show);
+    intensityUnitSelector_->setVisible(show);
+    if (intensityUnitLabel_ != nullptr) {
+        intensityUnitLabel_->setVisible(show);
+    }
     if (leftIntensityLabel_ != nullptr) {
         leftIntensityLabel_->setVisible(show);
     }

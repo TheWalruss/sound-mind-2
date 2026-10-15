@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.33.3] - 2026-10-15
+
+Pre-Beta Plan milestone `v0.Y.73.1`, installment C - completes the milestone.
+
+### Added
+
+- **dB / value toggle for intensity.** The gradient editor's Left/Right Intensity fields (brush strokes, filter gradients) and Spectral Gate's Noise floor each get a small "dB / value" drop-down. Value runs from 0 (silence, -96 dB) to 1 (full scale, 0 dB) - the same scale as canvas brightness. Display only; the stored level never changes.
+
+### Changed
+
+- **Layers panel Gain and Balance sliders** are labelled, have tick marks and a live readout ("75%", "C", "L 40%"), and apply when you let go instead of re-rendering on every pixel dragged - dragging is smooth again. Arrow keys still apply immediately.
+
 ## [0.1.33.2] - 2026-10-15
 
 Pre-Beta Plan milestone `v0.Y.73.1`, installment B: number fields.

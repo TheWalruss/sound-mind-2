@@ -1,6 +1,8 @@
 #include "test_gradient_editor_widget.h"
 
 #include <QCheckBox>
+#include <QComboBox>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
@@ -145,4 +147,19 @@ void GradientEditorWidgetTest::setGradientSyncsWithoutEmittingIncludingLinkChann
 
     QCOMPARE(spy.count(), 0);
     QVERIFY(editor.findChild<QCheckBox*>(QStringLiteral("gradientLinkChannelsCheckBox"))->isChecked());
+}
+
+void GradientEditorWidgetTest::intensityUnitComboSwitchesOnlyTheIntensityFieldsToValue() {
+    sound_mind::studio::GradientEditorWidget editor;
+    auto* combo = editor.findChild<QComboBox*>(QStringLiteral("intensityUnitCombo"));
+    auto* intensity = editor.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"));
+    auto* opacity = editor.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"));
+    QVERIFY(combo != nullptr && intensity != nullptr && opacity != nullptr);
+    intensity->setValue(-48.0);
+    const QString opacityText = opacity->lineEdit()->text();
+
+    combo->setCurrentIndex(combo->findData(static_cast<int>(sound_mind::studio::IntensityUnit::Value)));
+
+    QCOMPARE(intensity->lineEdit()->text(), QStringLiteral("0.5"));
+    QCOMPARE(opacity->lineEdit()->text(), opacityText);
 }

@@ -149,6 +149,10 @@ private:
     QLabel* rightIntensityLabel_ = nullptr;
     QLabel* leftOpacityLabel_ = nullptr;
     QLabel* rightOpacityLabel_ = nullptr;
+    /// @brief The intensity fields' own dB/value toggle - shown and hidden
+    ///        together with them.
+    IntensityUnitSelector* intensityUnitSelector_ = nullptr;
+    QLabel* intensityUnitLabel_ = nullptr;
     QCheckBox* linkChannelsCheckBox_;
     QPushButton* deleteStopButton_;
     bool cutMode_ = false;

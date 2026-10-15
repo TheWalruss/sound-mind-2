@@ -1,5 +1,7 @@
 #include "sound_mind/studio/numeric_field.h"
 
+#include "sound_mind/codec/color_mapping.h"
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -134,7 +136,8 @@ NumericFieldBase::NumericFieldBase(QWidget* parent) : QWidget(parent) {
 
     connect(lineEdit_, &QLineEdit::editingFinished, this, &NumericFieldBase::commitText);
     connect(slider_, &QSlider::sliderMoved, this, [this](int position) {
-        lineEdit_->setText(formatNumber(clampAndRound(sliderPositionToValue(position)), decimals_, currentSeparator()));
+        lineEdit_->setText(formatNumber(toDisplay(clampAndRound(sliderPositionToValue(position))), displayDecimals(),
+                                        currentSeparator()));
     });
     connect(slider_, &QSlider::sliderReleased, this,
             [this]() { commitValue(sliderPositionToValue(slider_->value())); });
@@ -152,8 +155,33 @@ NumericFieldBase::NumericFieldBase(QWidget* parent) : QWidget(parent) {
 NumericFieldBase::~NumericFieldBase() { std::erase(liveFields(), this); }
 
 void NumericFieldBase::setSuffix(const QString& suffix) {
-    suffixLabel_->setText(suffix.trimmed());
-    suffixLabel_->setVisible(!suffix.trimmed().isEmpty());
+    nativeSuffix_ = suffix.trimmed();
+    const QString shown = intensityUnit_ == IntensityUnit::Value ? QString() : nativeSuffix_;
+    suffixLabel_->setText(shown);
+    suffixLabel_->setVisible(!shown.isEmpty());
+}
+
+void NumericFieldBase::setIntensityUnit(IntensityUnit unit) {
+    intensityUnit_ = unit;
+    setSuffix(nativeSuffix_);
+    refreshText();
+}
+
+double NumericFieldBase::toDisplay(double value) const {
+    return intensityUnit_ == IntensityUnit::Value
+               ? static_cast<double>(sound_mind::codec::dbfsToIntensityValue(static_cast<float>(value)))
+               : value;
+}
+
+double NumericFieldBase::fromDisplay(double displayed) const {
+    return intensityUnit_ == IntensityUnit::Value
+               ? static_cast<double>(sound_mind::codec::intensityValueToDbfs(static_cast<float>(displayed)))
+               : displayed;
+}
+
+int NumericFieldBase::displayDecimals() const noexcept {
+    // A value of 0..1 spans 96 dB, so 3 places is about 0.1 dB resolution.
+    return intensityUnit_ == IntensityUnit::Value ? 3 : decimals_;
 }
 
 QString NumericFieldBase::suffix() const { return suffixLabel_->text(); }
@@ -207,7 +235,7 @@ void NumericFieldBase::commitText() {
         refreshText();
         return;
     }
-    commitValue(*parsed);
+    commitValue(fromDisplay(*parsed));
 }
 
 void NumericFieldBase::commitValue(double value) {
@@ -218,7 +246,7 @@ void NumericFieldBase::commitValue(double value) {
 
 void NumericFieldBase::refreshText() {
     const QSignalBlocker blocker(lineEdit_);
-    lineEdit_->setText(formatNumber(value_, decimals_, currentSeparator()));
+    lineEdit_->setText(formatNumber(toDisplay(value_), displayDecimals(), currentSeparator()));
 }
 
 void NumericFieldBase::refreshSlider() {
@@ -302,5 +330,32 @@ int IntegerField::minimum() const noexcept { return static_cast<int>(std::lround
 int IntegerField::maximum() const noexcept { return static_cast<int>(std::lround(maximumInternal())); }
 
 void IntegerField::emitValueChanged() { emit valueChanged(value()); }
+
+// --- IntensityUnitSelector -------------------------------------------------
+
+IntensityUnitSelector::IntensityUnitSelector(QWidget* parent) : QComboBox(parent) {
+    setObjectName(QStringLiteral("intensityUnitCombo"));
+    setToolTip(tr("Show intensity in dB, or as a value from 0 (silence) to 1 (full scale)"));
+    addItem(tr("dB"), static_cast<int>(IntensityUnit::Decibels));
+    addItem(tr("value"), static_cast<int>(IntensityUnit::Value));
+    connect(this, &QComboBox::currentIndexChanged, this, [this]() { applyToFields(); });
+}
+
+void IntensityUnitSelector::addField(NumericFieldBase* field) {
+    fields_.emplace_back(field);
+    field->setIntensityUnit(unit());
+}
+
+void IntensityUnitSelector::setUnit(IntensityUnit unit) { setCurrentIndex(findData(static_cast<int>(unit))); }
+
+IntensityUnit IntensityUnitSelector::unit() const { return static_cast<IntensityUnit>(currentData().toInt()); }
+
+void IntensityUnitSelector::applyToFields() {
+    for (const auto& field : fields_) {
+        if (field != nullptr) {
+            field->setIntensityUnit(unit());
+        }
+    }
+}
 
 }  // namespace sound_mind::studio

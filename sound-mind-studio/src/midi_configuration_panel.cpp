@@ -1,5 +1,4 @@
 #include "sound_mind/studio/midi_configuration_panel.h"
-#include "sound_mind/studio/numeric_field.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
@@ -10,6 +9,8 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include "sound_mind/studio/numeric_field.h"
 
 namespace sound_mind::studio {
 

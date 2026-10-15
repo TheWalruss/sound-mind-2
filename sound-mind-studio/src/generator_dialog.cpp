@@ -1,5 +1,4 @@
 #include "sound_mind/studio/generator_dialog.h"
-#include "sound_mind/studio/numeric_field.h"
 
 #include <limits>
 #include <random>
@@ -11,6 +10,8 @@
 #include <QPushButton>
 #include <QSlider>
 #include <QVBoxLayout>
+
+#include "sound_mind/studio/numeric_field.h"
 
 namespace sound_mind::studio {
 

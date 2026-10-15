@@ -1107,3 +1107,56 @@ void LayersPanelTest::setLiveLoudnessDisplayIsANoOpForAnUnknownId() {
     QVERIFY(label != nullptr);
     QCOMPARE(label->text(), QStringLiteral("avg -18.0 dB / peak -6.0 dB"));
 }
+
+void LayersPanelTest::draggingTheGainAndBalanceSlidersEmitsOnlyOnRelease() {
+    // Manual-testing finding: dragging re-rendered the canvas on every
+    // pixel. Both sliders now apply on release.
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));
+    QSignalSpy gainSpy(&panel, &LayersPanel::opacityChanged);
+    QSignalSpy balanceSpy(&panel, &LayersPanel::balanceChanged);
+    auto* gain = panel.findChild<QSlider*>(QStringLiteral("opacitySlider"));
+    auto* balance = panel.findChild<QSlider*>(QStringLiteral("balanceSlider"));
+    QVERIFY(gain != nullptr && balance != nullptr);
+
+    gain->setSliderDown(true);
+    gain->setSliderPosition(30);
+    gain->setSliderPosition(40);
+    balance->setSliderDown(true);
+    balance->setSliderPosition(80);
+    QCOMPARE(gainSpy.count(), 0);
+    QCOMPARE(balanceSpy.count(), 0);
+
+    gain->setSliderDown(false);
+    balance->setSliderDown(false);
+    QCOMPARE(gainSpy.count(), 1);
+    QCOMPARE(gainSpy.at(0).at(1).toFloat(), 0.40f);
+    QCOMPARE(balanceSpy.count(), 1);
+    QCOMPARE(balanceSpy.at(0).at(1).toFloat(), 0.80f);
+}
+
+void LayersPanelTest::gainAndBalanceSlidersHaveLabelsAndLiveReadouts() {
+    LayersPanel panel;
+    panel.setLayers(twoNormalLayers());
+    panel.selectLayer(static_cast<LayerId>(1));
+    auto* gain = panel.findChild<QSlider*>(QStringLiteral("opacitySlider"));
+    auto* balance = panel.findChild<QSlider*>(QStringLiteral("balanceSlider"));
+    auto* gainReadout = panel.findChild<QLabel*>(QStringLiteral("gainReadout"));
+    auto* balanceReadout = panel.findChild<QLabel*>(QStringLiteral("balanceReadout"));
+    QVERIFY(gain != nullptr && balance != nullptr && gainReadout != nullptr && balanceReadout != nullptr);
+    QVERIFY(gain->tickPosition() != QSlider::NoTicks);
+    QVERIFY(balance->tickPosition() != QSlider::NoTicks);
+
+    // The readouts follow the handle while dragging, before anything applies.
+    gain->setSliderDown(true);
+    gain->setSliderPosition(50);
+    QCOMPARE(gainReadout->text(), QStringLiteral("50%"));
+    balance->setSliderDown(true);
+    balance->setSliderPosition(50);
+    QCOMPARE(balanceReadout->text(), QStringLiteral("C"));
+    balance->setSliderPosition(25);
+    QCOMPARE(balanceReadout->text(), QStringLiteral("L 50%"));
+    balance->setSliderPosition(100);
+    QCOMPARE(balanceReadout->text(), QStringLiteral("R 100%"));
+}

@@ -1211,9 +1211,9 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 - The feature reaches `mind_wave`, `compositor`, `filter_application` and `mind_waves_panel` (about 32 references). Remove it from the model, the JSON, the evaluation path, the UI and the docs.
 - No load-compatibility handling, per the standing decision above.
 
-#### `v0.Y.73.1` - Numeric input overhaul and intensity units (L)
+#### ✅ `v0.Y.73.1` - Numeric input overhaul and intensity units (L) - settled in `v0.1.33.1`-`v0.1.33.3`, see architecture Decisions #232-#234
 
-*Progress: installment A (dBFS calibration, canonical intensity mapping, brightness, clip indicator) settled in `v0.1.33.1` - Decision #232. Installment B (`NumericField`/`IntegerField` replacing every spin box, apply-on-commit, lenient parsing, decimal separator) settled in `v0.1.33.2` - Decision #233.*
+*Progress: installment A (dBFS calibration, canonical intensity mapping, brightness, clip indicator) settled in `v0.1.33.1` - Decision #232. Installment B (`NumericField`/`IntegerField` replacing every spin box, apply-on-commit, lenient parsing, decimal separator) settled in `v0.1.33.2` - Decision #233. Installment C (per-group dB/value toggle; Gain/Balance sliders apply on release) settled in `v0.1.33.3` - Decision #234.*
 
 This is the foundation milestone; later milestones build their new controls on it.
 

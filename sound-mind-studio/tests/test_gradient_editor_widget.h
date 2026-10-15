@@ -15,4 +15,5 @@ private slots:
     void deleteStopButtonIsDisabledForEndpointsAndEnabledForInterior();
     void deleteStopButtonRemovesTheSelectedInteriorStop();
     void setGradientSyncsWithoutEmittingIncludingLinkChannels();
+    void intensityUnitComboSwitchesOnlyTheIntensityFieldsToValue();
 };

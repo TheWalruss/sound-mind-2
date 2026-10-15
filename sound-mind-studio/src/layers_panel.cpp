@@ -1,9 +1,8 @@
 #include "sound_mind/studio/layers_panel.h"
-#include "sound_mind/studio/numeric_field.h"
 
 #include <algorithm>
-
 #include <array>
+#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <utility>
@@ -31,9 +30,42 @@
 #include <QVBoxLayout>
 #include <QVariant>
 
+#include "sound_mind/studio/numeric_field.h"
+
 namespace sound_mind::studio {
 
 namespace {
+
+/// @brief The Gain readout text for a 0..100 slider position.
+QString gainReadoutText(int value) { return QStringLiteral("%1%").arg(value); }
+
+/// @brief The Balance readout text for a 0..100 slider position: "C" at the
+///        centre, otherwise the side and how far toward it ("L 50%").
+QString balanceReadoutText(int value) {
+    if (value == 50) {
+        return QStringLiteral("C");
+    }
+    const int amount = std::abs(value - 50) * 2;
+    return QStringLiteral("%1 %2%").arg(value < 50 ? QStringLiteral("L") : QStringLiteral("R")).arg(amount);
+}
+
+/// @brief Wires `slider` so `apply` runs on release, or immediately for a
+///        step that isn't a drag (arrow keys, Page Up/Down, a groove
+///        click), while `readout` follows the handle live via `format`.
+template <typename Apply>
+void applyOnRelease(QSlider* slider, QLabel* readout, QString (*format)(int), Apply apply) {
+    readout->setText(format(slider->value()));
+    QObject::connect(slider, &QSlider::sliderMoved, readout, [readout, format](int value) {
+        readout->setText(format(value));
+    });
+    QObject::connect(slider, &QSlider::sliderReleased, slider, [slider, apply]() { apply(slider->value()); });
+    QObject::connect(slider, &QSlider::valueChanged, slider, [slider, readout, format, apply](int value) {
+        readout->setText(format(value));
+        if (!slider->isSliderDown()) {
+            apply(value);
+        }
+    });
+}
 
 using sound_mind::core::BlendMode;
 using sound_mind::core::LayerId;
@@ -567,14 +599,26 @@ public:
             auto* controlsRowOne = new QHBoxLayout();
             controlsRowOne->setSpacing(4);
 
+            // Gain (the layer's own opacity) and Balance apply on release,
+            // not per pixel dragged - every change re-renders the canvas
+            // and playback audio, which made dragging sluggish (manual-
+            // testing finding, 2026-10-13). A readout beside each follows
+            // the handle live. See applyOnRelease().
+            controlsRowOne->addWidget(new QLabel(tr("Gain")));
             auto* opacitySlider = new QSlider(Qt::Horizontal);
             opacitySlider->setObjectName(QStringLiteral("opacitySlider"));
             opacitySlider->setRange(0, 100);
             opacitySlider->setValue(static_cast<int>(data.opacity * 100.0f));
-            opacitySlider->setToolTip(tr("Layer opacity"));
-            connect(opacitySlider, &QSlider::valueChanged, this,
-                    [this](int value) { emit opacityChanged(id_, static_cast<float>(value) / 100.0f); });
+            opacitySlider->setTickPosition(QSlider::TicksBelow);
+            opacitySlider->setTickInterval(25);
+            opacitySlider->setToolTip(tr("Layer gain (opacity) - 0% silent, 100% full"));
+            auto* gainReadout = new QLabel();
+            gainReadout->setObjectName(QStringLiteral("gainReadout"));
+            gainReadout->setMinimumWidth(36);
+            applyOnRelease(opacitySlider, gainReadout, &gainReadoutText,
+                           [this](int value) { emit opacityChanged(id_, static_cast<float>(value) / 100.0f); });
             controlsRowOne->addWidget(opacitySlider, 1);
+            controlsRowOne->addWidget(gainReadout);
 
             // Per-layer balance (v0.Y.46.1 Installment C, "Layers Panel &
             // Editing Enhancements v2") - alongside opacity: opacity
@@ -582,14 +626,21 @@ public:
             // controls how that contribution splits between channels.
             // `50` (the slider's own midpoint) is a true no-op, matching
             // Layer::balance()'s own default/no-op value of `0.5`.
+            controlsRowOne->addWidget(new QLabel(tr("Balance")));
             auto* balanceSlider = new QSlider(Qt::Horizontal);
             balanceSlider->setObjectName(QStringLiteral("balanceSlider"));
             balanceSlider->setRange(0, 100);
             balanceSlider->setValue(static_cast<int>(data.balance * 100.0f));
-            balanceSlider->setToolTip(tr("Layer stereo balance (left/right)"));
-            connect(balanceSlider, &QSlider::valueChanged, this,
-                    [this](int value) { emit balanceChanged(id_, static_cast<float>(value) / 100.0f); });
+            balanceSlider->setTickPosition(QSlider::TicksBelow);
+            balanceSlider->setTickInterval(50);
+            balanceSlider->setToolTip(tr("Layer stereo balance - left, centre, right"));
+            auto* balanceReadout = new QLabel();
+            balanceReadout->setObjectName(QStringLiteral("balanceReadout"));
+            balanceReadout->setMinimumWidth(44);
+            applyOnRelease(balanceSlider, balanceReadout, &balanceReadoutText,
+                           [this](int value) { emit balanceChanged(id_, static_cast<float>(value) / 100.0f); });
             controlsRowOne->addWidget(balanceSlider, 1);
+            controlsRowOne->addWidget(balanceReadout);
 
             // MindWave opacity binding (v0.Y.31.1 Installment C2) - "None"
             // (a plain scalar opacity, the default) always first, then

@@ -72,4 +72,6 @@ private slots:
     void aRowWithNoLoudnessDisplayTextHasNoLoudnessLabelAtAll();
     void setLiveLoudnessDisplayUpdatesOnlyTheGivenRowsLabelWithoutARebuild();
     void setLiveLoudnessDisplayIsANoOpForAnUnknownId();
+    void draggingTheGainAndBalanceSlidersEmitsOnlyOnRelease();
+    void gainAndBalanceSlidersHaveLabelsAndLiveReadouts();
 };

@@ -1,5 +1,4 @@
 #include "sound_mind/studio/create_project_wizard.h"
-#include "sound_mind/studio/numeric_field.h"
 
 #include <cmath>
 
@@ -10,6 +9,8 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
+
+#include "sound_mind/studio/numeric_field.h"
 
 namespace sound_mind::studio {
 

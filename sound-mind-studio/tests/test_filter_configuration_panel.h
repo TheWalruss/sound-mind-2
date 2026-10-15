@@ -103,4 +103,5 @@ private slots:
     void selectingALoadedFilterPresetAppliesItEmitsChangedAndResetsTheComboToThePlaceholder();
     void presetIndicatorShowsLoadedPresetThenModifiedThenClearsOnExternalSet();
     void presetIndicatorFollowsSaveAndIsClearedWhenThePresetDisappears();
+    void noiseFloorHasItsOwnIntensityUnitCombo();
 };

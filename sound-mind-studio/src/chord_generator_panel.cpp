@@ -1,5 +1,4 @@
 #include "sound_mind/studio/chord_generator_panel.h"
-#include "sound_mind/studio/numeric_field.h"
 
 #include <algorithm>
 #include <array>
@@ -19,6 +18,7 @@
 
 #include "sound_mind/core/music_theory.h"
 #include "sound_mind/core/sequence_notation.h"
+#include "sound_mind/studio/numeric_field.h"
 
 namespace sound_mind::studio {
 

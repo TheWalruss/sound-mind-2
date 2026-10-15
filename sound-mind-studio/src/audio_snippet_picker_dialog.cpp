@@ -1,11 +1,12 @@
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
-#include "sound_mind/studio/numeric_field.h"
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QListWidget>
 #include <QVBoxLayout>
+
+#include "sound_mind/studio/numeric_field.h"
 
 namespace sound_mind::studio {
 

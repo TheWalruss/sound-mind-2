@@ -8,6 +8,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QLineEdit>
 #include <QGroupBox>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -1460,4 +1461,18 @@ void FilterConfigurationPanelTest::presetIndicatorFollowsSaveAndIsClearedWhenThe
 
     panel.setAvailableFilterPresets({});
     QVERIFY(!indicator->hasActivePreset());
+}
+
+void FilterConfigurationPanelTest::noiseFloorHasItsOwnIntensityUnitCombo() {
+    FilterConfigurationPanel panel;
+    auto* group = panel.findChild<QWidget*>(QStringLiteral("denoiseGroup"));
+    QVERIFY(group != nullptr);
+    auto* combo = group->findChild<QComboBox*>(QStringLiteral("intensityUnitCombo"));
+    auto* noiseFloor = panel.findChild<NumericField*>(QStringLiteral("noiseFloorSpinBox"));
+    QVERIFY(combo != nullptr && noiseFloor != nullptr);
+    noiseFloor->setValue(-24.0);
+
+    combo->setCurrentIndex(combo->findData(static_cast<int>(sound_mind::studio::IntensityUnit::Value)));
+
+    QCOMPARE(noiseFloor->lineEdit()->text(), QStringLiteral("0.75"));
 }
