@@ -1706,6 +1706,16 @@ public slots:
     void setPrincipalMode(bool imageModeEnabled);
 
     /**
+     * @brief Sets which decimal mark every numeric field shows and accepts
+     *        (Edit -> Decimal Separator), and stores it in the open
+     *        project's own settings - see `ProjectSettings::
+     *        decimalSeparator`. Applied app-wide immediately; with no
+     *        project open, only the display changes.
+     * @param separator The mark to use.
+     */
+    void setDecimalSeparator(sound_mind::core::DecimalSeparator separator);
+
+    /**
      * @brief Starts or stops macroRecorder_ - `v0.Y.49.1` (Macro Mode)
      *        Installment A's own transport toolbar toggle.
      *
@@ -3716,6 +3726,11 @@ private:
     /// `setChecked()`, the same pattern its own initial-state application
     /// already uses) every time `setProject()` loads a different project.
     QAction* principalModeAction_ = nullptr;
+    /// @brief Edit -> Decimal Separator's two exclusive choices - re-synced
+    ///        from each project's own setting in setProject(), like
+    ///        principalModeAction_.
+    QAction* decimalPeriodAction_ = nullptr;
+    QAction* decimalCommaAction_ = nullptr;
 
     /// @brief Re-entrancy guard shared by every Right-dock-area panel's
     /// own `visibilityChanged()`-to-`raise()` connection (Decision #216) -

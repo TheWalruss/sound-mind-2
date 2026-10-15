@@ -1,15 +1,14 @@
 #include "sound_mind/studio/create_project_wizard.h"
+#include "sound_mind/studio/numeric_field.h"
 
 #include <cmath>
 
 #include <QDialogButtonBox>
-#include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QSpinBox>
 #include <QVBoxLayout>
 
 namespace sound_mind::studio {
@@ -38,7 +37,7 @@ CreateProjectWizard::CreateProjectWizard(QWidget* parent) : QDialog(parent) {
     locationRow->addLayout(locationHBox);
     mainForm->addRow(tr("Save Folder:"), locationRow);
 
-    durationSecondsSpin_ = new QDoubleSpinBox();
+    durationSecondsSpin_ = new NumericField();
     durationSecondsSpin_->setObjectName(QStringLiteral("durationSpin"));
     durationSecondsSpin_->setRange(0.1, 36000.0);
     durationSecondsSpin_->setDecimals(2);
@@ -62,34 +61,34 @@ CreateProjectWizard::CreateProjectWizard(QWidget* parent) : QDialog(parent) {
 
     auto* advancedForm = new QFormLayout(advancedContainer_);
 
-    sampleRateSpin_ = new QSpinBox();
+    sampleRateSpin_ = new IntegerField();
     sampleRateSpin_->setObjectName(QStringLiteral("sampleRateSpin"));
     sampleRateSpin_->setRange(8000, 192000);
     sampleRateSpin_->setSuffix(tr(" Hz"));
     sampleRateSpin_->setValue(static_cast<int>(defaults.sampleRateHz));
     advancedForm->addRow(tr("Sample Rate:"), sampleRateSpin_);
 
-    minFrequencySpin_ = new QSpinBox();
+    minFrequencySpin_ = new IntegerField();
     minFrequencySpin_->setObjectName(QStringLiteral("minFrequencySpin"));
     minFrequencySpin_->setRange(1, 96000);
     minFrequencySpin_->setSuffix(tr(" Hz"));
     minFrequencySpin_->setValue(static_cast<int>(defaults.minFrequencyHz));
     advancedForm->addRow(tr("Min Frequency:"), minFrequencySpin_);
 
-    maxFrequencySpin_ = new QSpinBox();
+    maxFrequencySpin_ = new IntegerField();
     maxFrequencySpin_->setObjectName(QStringLiteral("maxFrequencySpin"));
     maxFrequencySpin_->setRange(1, 192000);
     maxFrequencySpin_->setSuffix(tr(" Hz"));
     maxFrequencySpin_->setValue(static_cast<int>(defaults.maxFrequencyHz));
     advancedForm->addRow(tr("Max Frequency:"), maxFrequencySpin_);
 
-    binCountSpin_ = new QSpinBox();
+    binCountSpin_ = new IntegerField();
     binCountSpin_->setObjectName(QStringLiteral("binCountSpin"));
     binCountSpin_->setRange(32, 8192);
     binCountSpin_->setValue(static_cast<int>(defaults.binCount));
     advancedForm->addRow(tr("Bin Count:"), binCountSpin_);
 
-    timestepMsSpin_ = new QDoubleSpinBox();
+    timestepMsSpin_ = new NumericField();
     timestepMsSpin_->setObjectName(QStringLiteral("timestepSpin"));
     timestepMsSpin_->setRange(0.1, 1000.0);
     timestepMsSpin_->setDecimals(2);

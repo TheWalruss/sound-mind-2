@@ -5,7 +5,8 @@
 
 #include <QDialog>
 
-class QDoubleSpinBox;
+#include "sound_mind/studio/numeric_field.h"
+
 class QListWidget;
 
 namespace sound_mind::studio {
@@ -116,7 +117,7 @@ private:
     ///        need.
     void populateList(const std::vector<RowData>& snippets);
 
-    QDoubleSpinBox* offsetSpinBox_ = nullptr;
+    NumericField* offsetSpinBox_ = nullptr;
     QListWidget* list_ = nullptr;
 };
 

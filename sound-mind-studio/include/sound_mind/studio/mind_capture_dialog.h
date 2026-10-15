@@ -3,7 +3,8 @@
 #include <QDialog>
 #include <QString>
 
-class QDoubleSpinBox;
+#include "sound_mind/studio/numeric_field.h"
+
 class QLineEdit;
 
 namespace sound_mind::studio {
@@ -69,8 +70,8 @@ public:
 
 private:
     QLineEdit* nameLineEdit_ = nullptr;
-    QDoubleSpinBox* fundamentalFrequencySpinBox_ = nullptr;
-    QDoubleSpinBox* startTimeOffsetSpinBox_ = nullptr;
+    NumericField* fundamentalFrequencySpinBox_ = nullptr;
+    NumericField* startTimeOffsetSpinBox_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

@@ -3,9 +3,9 @@
 #include <QDialog>
 
 #include "sound_mind/core/generator_configuration.h"
+#include "sound_mind/studio/numeric_field.h"
 
 class QSlider;
-class QSpinBox;
 
 namespace sound_mind::studio {
 
@@ -52,7 +52,7 @@ private:
     void randomizeSeed();
 
     QSlider* orderChaosSlider_ = nullptr;
-    QSpinBox* seedSpinBox_ = nullptr;
+    IntegerField* seedSpinBox_ = nullptr;
 };
 
 }  // namespace sound_mind::studio

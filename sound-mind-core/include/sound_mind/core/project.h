@@ -264,6 +264,13 @@ public:
     /// @param mode The mode to switch to.
     void setPrincipalMode(PrincipalMode mode) noexcept { settings_.principalMode = mode; }
 
+    /// @brief Changes which decimal mark numeric fields show and accept
+    ///        for this project - see `ProjectSettings::decimalSeparator`.
+    ///        A display preference only; nothing else in the project
+    ///        changes.
+    /// @param separator The mark to use.
+    void setDecimalSeparator(DecimalSeparator separator) noexcept { settings_.decimalSeparator = separator; }
+
     /// @brief This project's layer stack, in bottom-to-top order.
     /// @return The layers this project currently holds.
     [[nodiscard]] const std::vector<Layer>& layers() const noexcept { return layers_; }

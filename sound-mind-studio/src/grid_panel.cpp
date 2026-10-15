@@ -7,7 +7,6 @@
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -23,6 +22,7 @@
 
 #include "sound_mind/core/music_theory.h"
 #include "sound_mind/studio/checklist_dialog.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/preset_indicator_label.h"
 
 namespace sound_mind::studio {
@@ -268,12 +268,12 @@ GridPanel::GridPanel(QWidget* parent) : QDockWidget(tr("Grid"), parent) {
     });
     frequencyForm->addRow(harmonicSeriesCheckBox_);
 
-    harmonicFundamentalSpinBox_ = new QDoubleSpinBox(frequencyGroup);
+    harmonicFundamentalSpinBox_ = new NumericField(frequencyGroup);
     harmonicFundamentalSpinBox_->setObjectName(QStringLiteral("harmonicFundamentalSpinBox"));
     harmonicFundamentalSpinBox_->setRange(1.0, 20000.0);
     harmonicFundamentalSpinBox_->setSuffix(QStringLiteral(" Hz"));
     harmonicFundamentalSpinBox_->setValue(frequencyGridConfig_.harmonicFundamentalHz);
-    connect(harmonicFundamentalSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(harmonicFundamentalSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         frequencyGridConfig_.harmonicFundamentalHz = value;
         emitFrequencyGridConfigChanged();
     });
@@ -314,12 +314,12 @@ GridPanel::GridPanel(QWidget* parent) : QDockWidget(tr("Grid"), parent) {
     });
     frequencyForm->addRow(tr("Line color:"), frequencyGridColorButton_);
 
-    frequencyGridWidthSpinBox_ = new QDoubleSpinBox(frequencyGroup);
+    frequencyGridWidthSpinBox_ = new NumericField(frequencyGroup);
     frequencyGridWidthSpinBox_->setObjectName(QStringLiteral("frequencyGridWidthSpinBox"));
     frequencyGridWidthSpinBox_->setRange(1.0, 10.0);
     frequencyGridWidthSpinBox_->setSuffix(QStringLiteral(" px"));
     frequencyGridWidthSpinBox_->setValue(frequencyGridConfig_.lineWidthPixels);
-    connect(frequencyGridWidthSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(frequencyGridWidthSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         frequencyGridConfig_.lineWidthPixels = value;
         emitFrequencyGridConfigChanged();
     });
@@ -355,12 +355,12 @@ GridPanel::GridPanel(QWidget* parent) : QDockWidget(tr("Grid"), parent) {
     });
     timingForm->addRow(tr("Mode:"), timingGridModeCombo_);
 
-    timingGridIntervalSpinBox_ = new QDoubleSpinBox(timingGroup);
+    timingGridIntervalSpinBox_ = new NumericField(timingGroup);
     timingGridIntervalSpinBox_->setObjectName(QStringLiteral("timingGridIntervalSpinBox"));
     timingGridIntervalSpinBox_->setRange(0.01, 3600.0);
     timingGridIntervalSpinBox_->setSuffix(QStringLiteral(" s"));
     timingGridIntervalSpinBox_->setValue(timingGridConfig_.intervalSeconds);
-    connect(timingGridIntervalSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(timingGridIntervalSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         timingGridConfig_.intervalSeconds = value;
         emitTimingGridConfigChanged();
     });
@@ -395,12 +395,12 @@ GridPanel::GridPanel(QWidget* parent) : QDockWidget(tr("Grid"), parent) {
     });
     timingForm->addRow(tr("Line color:"), timingGridColorButton_);
 
-    timingGridWidthSpinBox_ = new QDoubleSpinBox(timingGroup);
+    timingGridWidthSpinBox_ = new NumericField(timingGroup);
     timingGridWidthSpinBox_->setObjectName(QStringLiteral("timingGridWidthSpinBox"));
     timingGridWidthSpinBox_->setRange(1.0, 10.0);
     timingGridWidthSpinBox_->setSuffix(QStringLiteral(" px"));
     timingGridWidthSpinBox_->setValue(timingGridConfig_.lineWidthPixels);
-    connect(timingGridWidthSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(timingGridWidthSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         timingGridConfig_.lineWidthPixels = value;
         emitTimingGridConfigChanged();
     });

@@ -2,19 +2,20 @@
 
 #include <optional>
 
-#include <QDoubleSpinBox>
 #include <QImage>
 #include <QLabel>
 #include <QSignalSpy>
-#include <QSpinBox>
 #include <QtMath>
 #include <QtTest/QtTest>
 
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/polar_origin_dialog.h"
 
 using sound_mind::studio::PolarImportParams;
 using sound_mind::studio::PolarOriginDialog;
 using sound_mind::studio::PolarOriginPickerWidget;
+using sound_mind::studio::NumericField;
+using sound_mind::studio::IntegerField;
 
 namespace {
 
@@ -177,11 +178,11 @@ void PolarOriginDialogTest::pressingAwayFromAnyHandleStartsNoDrag() {
 void PolarOriginDialogTest::dialogSpinboxesStartFromThePickersOwnDefaults() {
     PolarOriginDialog dialog(makeTestImage(100, 60));
 
-    auto* originXSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("originXSpinBox"));
-    auto* originYSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("originYSpinBox"));
-    auto* radiusSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("radiusSpinBox"));
-    auto* arcStartSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("arcStartSpinBox"));
-    auto* arcEndSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("arcEndSpinBox"));
+    auto* originXSpinBox = dialog.findChild<NumericField*>(QStringLiteral("originXSpinBox"));
+    auto* originYSpinBox = dialog.findChild<NumericField*>(QStringLiteral("originYSpinBox"));
+    auto* radiusSpinBox = dialog.findChild<NumericField*>(QStringLiteral("radiusSpinBox"));
+    auto* arcStartSpinBox = dialog.findChild<NumericField*>(QStringLiteral("arcStartSpinBox"));
+    auto* arcEndSpinBox = dialog.findChild<NumericField*>(QStringLiteral("arcEndSpinBox"));
     QVERIFY(originXSpinBox != nullptr);
     QVERIFY(originYSpinBox != nullptr);
     QVERIFY(radiusSpinBox != nullptr);
@@ -197,7 +198,7 @@ void PolarOriginDialogTest::dialogSpinboxesStartFromThePickersOwnDefaults() {
 
 void PolarOriginDialogTest::editingASpinboxMovesThePickersOwnHandle() {
     PolarOriginDialog dialog(makeTestImage(100, 60));
-    auto* originXSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("originXSpinBox"));
+    auto* originXSpinBox = dialog.findChild<NumericField*>(QStringLiteral("originXSpinBox"));
     auto* picker = dialog.findChild<PolarOriginPickerWidget*>(QStringLiteral("picker"));
     QVERIFY(originXSpinBox != nullptr);
     QVERIFY(picker != nullptr);
@@ -210,7 +211,7 @@ void PolarOriginDialogTest::editingASpinboxMovesThePickersOwnHandle() {
 void PolarOriginDialogTest::draggingThePickerUpdatesTheSpinboxes() {
     PolarOriginDialog dialog(makeTestImage(100, 60));
     auto* picker = dialog.findChild<PolarOriginPickerWidget*>(QStringLiteral("picker"));
-    auto* originXSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("originXSpinBox"));
+    auto* originXSpinBox = dialog.findChild<NumericField*>(QStringLiteral("originXSpinBox"));
     QVERIFY(picker != nullptr);
     QVERIFY(originXSpinBox != nullptr);
     picker->resize(200, 200);
@@ -225,8 +226,8 @@ void PolarOriginDialogTest::draggingThePickerUpdatesTheSpinboxes() {
 
 void PolarOriginDialogTest::outputWidthTracksTheRadiusUntilEditedDirectly() {
     PolarOriginDialog dialog(makeTestImage(100, 60));  // defaultOutputWidth left at 0 - tracks the radius.
-    auto* radiusSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("radiusSpinBox"));
-    auto* outputWidthSpinBox = dialog.findChild<QSpinBox*>(QStringLiteral("outputWidthSpinBox"));
+    auto* radiusSpinBox = dialog.findChild<NumericField*>(QStringLiteral("radiusSpinBox"));
+    auto* outputWidthSpinBox = dialog.findChild<IntegerField*>(QStringLiteral("outputWidthSpinBox"));
     QVERIFY(radiusSpinBox != nullptr);
     QVERIFY(outputWidthSpinBox != nullptr);
 
@@ -266,7 +267,7 @@ void PolarOriginDialogTest::initialParamsSeedsThePickerAndSpinboxesInsteadOfTheD
     PolarOriginDialog dialog(makeTestImage(100, 60), initial);
 
     auto* picker = dialog.findChild<PolarOriginPickerWidget*>(QStringLiteral("picker"));
-    auto* outputWidthSpinBox = dialog.findChild<QSpinBox*>(QStringLiteral("outputWidthSpinBox"));
+    auto* outputWidthSpinBox = dialog.findChild<IntegerField*>(QStringLiteral("outputWidthSpinBox"));
     QVERIFY(picker != nullptr);
     QVERIFY(outputWidthSpinBox != nullptr);
 
@@ -280,8 +281,8 @@ void PolarOriginDialogTest::initialParamsSeedsThePickerAndSpinboxesInsteadOfTheD
 
 void PolarOriginDialogTest::paramsReflectsTheCurrentPickerState() {
     PolarOriginDialog dialog(makeTestImage(100, 60));
-    auto* originXSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("originXSpinBox"));
-    auto* outputWidthSpinBox = dialog.findChild<QSpinBox*>(QStringLiteral("outputWidthSpinBox"));
+    auto* originXSpinBox = dialog.findChild<NumericField*>(QStringLiteral("originXSpinBox"));
+    auto* outputWidthSpinBox = dialog.findChild<IntegerField*>(QStringLiteral("outputWidthSpinBox"));
     QVERIFY(originXSpinBox != nullptr);
     QVERIFY(outputWidthSpinBox != nullptr);
 

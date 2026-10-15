@@ -7,13 +7,12 @@
 
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/resonance_profile.h"
+#include "sound_mind/studio/numeric_field.h"
 
 class QCheckBox;
 class QComboBox;
-class QDoubleSpinBox;
 class QGroupBox;
 class QLabel;
-class QSpinBox;
 class QVBoxLayout;
 
 namespace sound_mind::studio {
@@ -196,38 +195,38 @@ private:
     QComboBox* generatorTypeCombo_ = nullptr;
     QLabel* axisLabel_ = nullptr;
     QComboBox* axisCombo_ = nullptr;
-    QDoubleSpinBox* periodSpinBox_ = nullptr;
-    QDoubleSpinBox* phaseSpinBox_ = nullptr;
+    NumericField* periodSpinBox_ = nullptr;
+    NumericField* phaseSpinBox_ = nullptr;
     QCheckBox* reversedCheckBox_ = nullptr;
     QCheckBox* invertedCheckBox_ = nullptr;
-    QSpinBox* seedSpinBox_ = nullptr;
-    QDoubleSpinBox* noiseScaleSpinBox_ = nullptr;
-    QSpinBox* noiseOctavesSpinBox_ = nullptr;
-    QDoubleSpinBox* noisePersistenceSpinBox_ = nullptr;
+    IntegerField* seedSpinBox_ = nullptr;
+    NumericField* noiseScaleSpinBox_ = nullptr;
+    IntegerField* noiseOctavesSpinBox_ = nullptr;
+    NumericField* noisePersistenceSpinBox_ = nullptr;
 
     QGroupBox* periodicGroup_ = nullptr;
     QComboBox* periodicWaveformCombo_ = nullptr;
-    QDoubleSpinBox* dutyCycleSpinBox_ = nullptr;
+    NumericField* dutyCycleSpinBox_ = nullptr;
 
     QGroupBox* envelopeGroup_ = nullptr;
     QComboBox* envelopeShapeCombo_ = nullptr;
-    QDoubleSpinBox* envelopeCenterSpinBox_ = nullptr;
-    QDoubleSpinBox* envelopeSteepnessSpinBox_ = nullptr;
-    QDoubleSpinBox* decayRateSpinBox_ = nullptr;
+    NumericField* envelopeCenterSpinBox_ = nullptr;
+    NumericField* envelopeSteepnessSpinBox_ = nullptr;
+    NumericField* decayRateSpinBox_ = nullptr;
 
     QGroupBox* steppedNoiseGroup_ = nullptr;
     QComboBox* steppedNoiseShapeCombo_ = nullptr;
-    QSpinBox* stepCountSpinBox_ = nullptr;
+    IntegerField* stepCountSpinBox_ = nullptr;
 
     QGroupBox* spatialGroup_ = nullptr;
     QComboBox* spatialPatternCombo_ = nullptr;
-    QDoubleSpinBox* spatialCenterXSpinBox_ = nullptr;
-    QDoubleSpinBox* spatialCenterYSpinBox_ = nullptr;
-    QDoubleSpinBox* domainWarpStrengthSpinBox_ = nullptr;
+    NumericField* spatialCenterXSpinBox_ = nullptr;
+    NumericField* spatialCenterYSpinBox_ = nullptr;
+    NumericField* domainWarpStrengthSpinBox_ = nullptr;
 
     QGroupBox* fractalGroup_ = nullptr;
-    QDoubleSpinBox* fractalRoughnessSpinBox_ = nullptr;
-    QSpinBox* fractalIterationsSpinBox_ = nullptr;
+    NumericField* fractalRoughnessSpinBox_ = nullptr;
+    IntegerField* fractalIterationsSpinBox_ = nullptr;
 
     /// @brief `GeneratorType::Drawn`'s own group - `v0.Y.39.1` Installment
     ///        B. No editable controls of its own: `drawnPath()` is captured
@@ -244,18 +243,18 @@ private:
     ///        `rebuildStepGridValueRows()`'s own docs) - no rich visual
     ///        grid editor, per the milestone's own confirmed scope.
     QGroupBox* stepGridGroup_ = nullptr;
-    QSpinBox* stepGridCountSpinBox_ = nullptr;
+    IntegerField* stepGridCountSpinBox_ = nullptr;
     QVBoxLayout* stepGridValuesLayout_ = nullptr;
-    std::vector<QDoubleSpinBox*> stepGridValueSpinBoxes_;
+    std::vector<NumericField*> stepGridValueSpinBoxes_;
 
     /// @brief `GeneratorType::Continuous`'s own group - `v0.Y.39.1`
     ///        Installment D's three spin boxes (Shape/Skew/Character),
     ///        plus `v0.Y.58.1`'s own `continuousPreviewWidget_`/dial trio -
     ///        see this class's own docs.
     QGroupBox* continuousGroup_ = nullptr;
-    QDoubleSpinBox* continuousShapeSpinBox_ = nullptr;
-    QDoubleSpinBox* continuousSkewSpinBox_ = nullptr;
-    QDoubleSpinBox* continuousCharacterSpinBox_ = nullptr;
+    NumericField* continuousShapeSpinBox_ = nullptr;
+    NumericField* continuousSkewSpinBox_ = nullptr;
+    NumericField* continuousCharacterSpinBox_ = nullptr;
 
     /// @brief Live plot of `wave_`'s own resulting Continuous shape - see
     ///        updateContinuousPreview()'s own docs.

@@ -2,13 +2,14 @@
 
 #include <QPushButton>
 #include <QSlider>
-#include <QSpinBox>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/generator_dialog.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::core::GeneratorFamily;
 using sound_mind::studio::GeneratorDialog;
+using sound_mind::studio::IntegerField;
 
 void GeneratorDialogTest::defaultsToLatticeFamilyAndCenteredOrderChaos() {
     GeneratorDialog dialog;
@@ -31,7 +32,7 @@ void GeneratorDialogTest::movingTheSliderChangesOrderChaos() {
 
 void GeneratorDialogTest::randomizeButtonChangesTheSeed() {
     GeneratorDialog dialog;
-    auto* seedSpinBox = dialog.findChild<QSpinBox*>(QStringLiteral("seedSpinBox"));
+    auto* seedSpinBox = dialog.findChild<IntegerField*>(QStringLiteral("seedSpinBox"));
     auto* randomizeButton = dialog.findChild<QPushButton*>(QStringLiteral("randomizeSeedButton"));
     QVERIFY(seedSpinBox != nullptr);
     QVERIFY(randomizeButton != nullptr);

@@ -67,6 +67,7 @@ add_library(sound-mind-studio-lib
     src/mind_wave_editor.cpp
     src/mind_waves_panel.cpp
     src/name_collision_dialog.cpp
+    src/numeric_field.cpp
     src/paint_controller.cpp
     src/path_controller.cpp
     src/path_edit_session.cpp
@@ -141,6 +142,7 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/resource_browser_panel.h
     include/sound_mind/studio/rotary_dial_widget.h
     include/sound_mind/studio/selection_configuration_panel.h
+    include/sound_mind/studio/numeric_field.h
     include/sound_mind/studio/preset_indicator_label.h
     include/sound_mind/studio/selection_controller.h
     include/sound_mind/studio/theme.h

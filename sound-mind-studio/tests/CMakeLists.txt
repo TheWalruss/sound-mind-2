@@ -42,6 +42,7 @@ add_executable(sound-mind-studio-tests
     test_preset_indicator_label.cpp
     test_mind_waves_panel.cpp
     test_name_collision_dialog.cpp
+    test_numeric_field.cpp
     test_paint_controller.cpp
     test_path_controller.cpp
     test_path_edit_session.cpp

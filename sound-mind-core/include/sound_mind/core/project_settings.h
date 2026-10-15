@@ -53,10 +53,24 @@ enum class PrincipalMode {
     Image,
 };
 
+/// @brief Which character numeric fields use as the decimal mark, per
+///        project - a user choice, since "1,5" and "1.5" are both common.
+///        Only affects how numbers are shown and typed; nothing stored
+///        changes.
+enum class DecimalSeparator {
+    Period,
+    Comma,
+};
+
+
 // clang-format off
 NLOHMANN_JSON_SERIALIZE_ENUM(PrincipalMode, {
     {PrincipalMode::Sound, "sound"},
     {PrincipalMode::Image, "image"},
+})
+NLOHMANN_JSON_SERIALIZE_ENUM(DecimalSeparator, {
+    {DecimalSeparator::Period, "period"},
+    {DecimalSeparator::Comma, "comma"},
 })
 // clang-format on
 
@@ -121,6 +135,10 @@ struct ProjectSettings {
     /// that existed before `v0.Y.47.1` - a project file saved before this
     /// milestone loads as `Sound`, exactly matching what it always did.
     PrincipalMode principalMode = PrincipalMode::Sound;
+
+    /// @brief The decimal mark numeric fields show and accept - see
+    ///        `DecimalSeparator`. Period by default.
+    DecimalSeparator decimalSeparator = DecimalSeparator::Period;
 };
 
 /// @brief Serializes settings to their JSON representation.

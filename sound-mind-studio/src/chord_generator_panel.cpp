@@ -1,4 +1,5 @@
 #include "sound_mind/studio/chord_generator_panel.h"
+#include "sound_mind/studio/numeric_field.h"
 
 #include <algorithm>
 #include <array>
@@ -6,13 +7,11 @@
 #include <utility>
 
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QSignalBlocker>
-#include <QSpinBox>
 #include <QStringList>
 #include <QVBoxLayout>
 #include <QVariant>
@@ -124,11 +123,11 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
     connect(rootCombo_, &QComboBox::currentIndexChanged, this, [this](int) { emitParamsChanged(); });
     topForm->addRow(tr("Root:"), rootCombo_);
 
-    octaveSpinBox_ = new QSpinBox(container);
+    octaveSpinBox_ = new IntegerField(container);
     octaveSpinBox_->setObjectName(QStringLiteral("chordOctaveSpinBox"));
     octaveSpinBox_->setRange(-1, 9);
     octaveSpinBox_->setValue(4);
-    connect(octaveSpinBox_, &QSpinBox::valueChanged, this, [this](int) { emitParamsChanged(); });
+    connect(octaveSpinBox_, &IntegerField::valueChanged, this, [this](int) { emitParamsChanged(); });
     topForm->addRow(tr("Octave:"), octaveSpinBox_);
 
     categoryCombo_ = new QComboBox(chordBuilderGroup_);
@@ -179,13 +178,13 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
     auto* blockForm = new QFormLayout(blockGroup_);
     blockForm->setContentsMargins(0, 0, 0, 0);
 
-    blockDurationSpinBox_ = new QDoubleSpinBox(blockGroup_);
+    blockDurationSpinBox_ = new NumericField(blockGroup_);
     blockDurationSpinBox_->setObjectName(QStringLiteral("chordBlockDurationSpinBox"));
     blockDurationSpinBox_->setRange(0.01, 600.0);
     blockDurationSpinBox_->setSingleStep(0.1);
     blockDurationSpinBox_->setSuffix(tr(" s"));
     blockDurationSpinBox_->setValue(params_.blockDurationSeconds);
-    connect(blockDurationSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(blockDurationSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         params_.blockDurationSeconds = value;
         emitParamsChanged();
     });
@@ -219,20 +218,20 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
     });
     arpeggioForm->addRow(tr("Custom Sequence:"), customIndicesLineEdit_);
 
-    randomSeedSpinBox_ = new QSpinBox(arpeggioGroup_);
+    randomSeedSpinBox_ = new IntegerField(arpeggioGroup_);
     randomSeedSpinBox_->setObjectName(QStringLiteral("chordRandomSeedSpinBox"));
     randomSeedSpinBox_->setRange(0, 999999);
-    connect(randomSeedSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(randomSeedSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         params_.randomSeed = static_cast<std::uint64_t>(value);
         emitParamsChanged();
     });
     arpeggioForm->addRow(tr("Random Seed:"), randomSeedSpinBox_);
 
-    bpmSpinBox_ = new QDoubleSpinBox(arpeggioGroup_);
+    bpmSpinBox_ = new NumericField(arpeggioGroup_);
     bpmSpinBox_->setObjectName(QStringLiteral("chordBpmSpinBox"));
     bpmSpinBox_->setRange(1.0, 999.0);
     bpmSpinBox_->setValue(params_.bpm);
-    connect(bpmSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(bpmSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         params_.bpm = value;
         emitParamsChanged();
     });
@@ -250,22 +249,22 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
     });
     arpeggioForm->addRow(tr("Subdivision:"), subdivisionCombo_);
 
-    noteDurationPercentSpinBox_ = new QSpinBox(arpeggioGroup_);
+    noteDurationPercentSpinBox_ = new IntegerField(arpeggioGroup_);
     noteDurationPercentSpinBox_->setObjectName(QStringLiteral("chordNoteDurationPercentSpinBox"));
     noteDurationPercentSpinBox_->setRange(1, 100);
     noteDurationPercentSpinBox_->setValue(static_cast<int>(params_.noteDurationFraction * 100.0));
     noteDurationPercentSpinBox_->setSuffix(tr("%"));
-    connect(noteDurationPercentSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(noteDurationPercentSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         params_.noteDurationFraction = static_cast<double>(value) / 100.0;
         emitParamsChanged();
     });
     arpeggioForm->addRow(tr("Note Duration:"), noteDurationPercentSpinBox_);
 
-    repeatsSpinBox_ = new QSpinBox(arpeggioGroup_);
+    repeatsSpinBox_ = new IntegerField(arpeggioGroup_);
     repeatsSpinBox_->setObjectName(QStringLiteral("chordRepeatsSpinBox"));
     repeatsSpinBox_->setRange(1, 64);
     repeatsSpinBox_->setValue(params_.repeats);
-    connect(repeatsSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(repeatsSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         params_.repeats = value;
         emitParamsChanged();
     });
@@ -293,19 +292,19 @@ ChordGeneratorPanel::ChordGeneratorPanel(QWidget* parent) : QDockWidget(tr("Chor
     notationLayout->addWidget(notationErrorLabel_);
 
     auto* notationForm = new QFormLayout();
-    notationBpmSpinBox_ = new QDoubleSpinBox(notationGroup_);
+    notationBpmSpinBox_ = new NumericField(notationGroup_);
     notationBpmSpinBox_->setObjectName(QStringLiteral("chordNotationBpmSpinBox"));
     notationBpmSpinBox_->setRange(1.0, 999.0);
     notationBpmSpinBox_->setValue(120.0);
-    connect(notationBpmSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double) { emitNotationChanged(); });
+    connect(notationBpmSpinBox_, &NumericField::valueChanged, this, [this](double) { emitNotationChanged(); });
     notationForm->addRow(tr("BPM:"), notationBpmSpinBox_);
 
-    notationReferenceHzSpinBox_ = new QDoubleSpinBox(notationGroup_);
+    notationReferenceHzSpinBox_ = new NumericField(notationGroup_);
     notationReferenceHzSpinBox_->setObjectName(QStringLiteral("chordNotationReferenceHzSpinBox"));
     notationReferenceHzSpinBox_->setRange(1.0, 20000.0);
     notationReferenceHzSpinBox_->setValue(440.0);
     notationReferenceHzSpinBox_->setSuffix(tr(" Hz"));
-    connect(notationReferenceHzSpinBox_, &QDoubleSpinBox::valueChanged, this,
+    connect(notationReferenceHzSpinBox_, &NumericField::valueChanged, this,
             [this](double) { emitNotationChanged(); });
     notationForm->addRow(tr("Reference:"), notationReferenceHzSpinBox_);
 

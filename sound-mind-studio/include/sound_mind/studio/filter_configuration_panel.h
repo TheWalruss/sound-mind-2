@@ -12,15 +12,14 @@
 #include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/filter_preset.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/numeric_field.h"
 
 class QCheckBox;
 class QComboBox;
-class QDoubleSpinBox;
 class QGridLayout;
 class QGroupBox;
 class QLabel;
 class QPushButton;
-class QSpinBox;
 class QWidget;
 
 namespace sound_mind::studio {
@@ -444,21 +443,21 @@ private:
     QCheckBox* equalizerPreviewCheckBox_ = nullptr;
 
     QGroupBox* uniformBlurGroup_ = nullptr;
-    QDoubleSpinBox* blurSigmaSpinBox_ = nullptr;
+    NumericField* blurSigmaSpinBox_ = nullptr;
     QComboBox* blurSigmaMindWaveCombo_ = nullptr;
 
     QGroupBox* edgePreservingBlurGroup_ = nullptr;
-    QSpinBox* medianSizeSpinBox_ = nullptr;
+    IntegerField* medianSizeSpinBox_ = nullptr;
     QComboBox* medianSizeMindWaveCombo_ = nullptr;
 
     QGroupBox* directionalBlurGroup_ = nullptr;
-    QSpinBox* directionalBlurLengthSpinBox_ = nullptr;
+    IntegerField* directionalBlurLengthSpinBox_ = nullptr;
     QComboBox* directionalBlurLengthMindWaveCombo_ = nullptr;
-    QDoubleSpinBox* directionalBlurAngleSpinBox_ = nullptr;
+    NumericField* directionalBlurAngleSpinBox_ = nullptr;
     QComboBox* directionalBlurAngleMindWaveCombo_ = nullptr;
 
     QGroupBox* sharpenGroup_ = nullptr;
-    QDoubleSpinBox* sharpenAmountSpinBox_ = nullptr;
+    NumericField* sharpenAmountSpinBox_ = nullptr;
     QComboBox* sharpenAmountMindWaveCombo_ = nullptr;
 
     /// @brief See setAvailableMindWaves()'s own docs.
@@ -471,55 +470,55 @@ private:
     // spin boxes already are; grainSize has no combo of its own).
 
     QGroupBox* speckleAddGroup_ = nullptr;
-    QDoubleSpinBox* speckleAddDensitySpinBox_ = nullptr;
+    NumericField* speckleAddDensitySpinBox_ = nullptr;
     QComboBox* speckleAddDensityMindWaveCombo_ = nullptr;
-    QDoubleSpinBox* speckleAddIntensitySpinBox_ = nullptr;
+    NumericField* speckleAddIntensitySpinBox_ = nullptr;
     QComboBox* speckleAddIntensityMindWaveCombo_ = nullptr;
 
     QGroupBox* speckleRemoveGroup_ = nullptr;
-    QDoubleSpinBox* speckleThresholdSpinBox_ = nullptr;
+    NumericField* speckleThresholdSpinBox_ = nullptr;
     QComboBox* speckleThresholdMindWaveCombo_ = nullptr;
 
     QGroupBox* denoiseGroup_ = nullptr;
-    QDoubleSpinBox* noiseFloorSpinBox_ = nullptr;
+    NumericField* noiseFloorSpinBox_ = nullptr;
     QComboBox* noiseFloorMindWaveCombo_ = nullptr;
-    QDoubleSpinBox* reductionSpinBox_ = nullptr;
+    NumericField* reductionSpinBox_ = nullptr;
     QComboBox* reductionMindWaveCombo_ = nullptr;
 
     QGroupBox* bitDepthCrushGroup_ = nullptr;
-    QDoubleSpinBox* crushAmountSpinBox_ = nullptr;
+    NumericField* crushAmountSpinBox_ = nullptr;
     QComboBox* crushAmountMindWaveCombo_ = nullptr;
 
     QGroupBox* granularNoiseGroup_ = nullptr;
-    QSpinBox* grainSizeSpinBox_ = nullptr;
-    QDoubleSpinBox* grainAmountSpinBox_ = nullptr;
+    IntegerField* grainSizeSpinBox_ = nullptr;
+    NumericField* grainAmountSpinBox_ = nullptr;
     QComboBox* grainAmountMindWaveCombo_ = nullptr;
 
     QGroupBox* dynamicSpeckleGroup_ = nullptr;
-    QDoubleSpinBox* dynamicSpeckleDensitySpinBox_ = nullptr;
+    NumericField* dynamicSpeckleDensitySpinBox_ = nullptr;
     QComboBox* dynamicSpeckleDensityMindWaveCombo_ = nullptr;
-    QDoubleSpinBox* dynamicSpeckleIntensitySpinBox_ = nullptr;
+    NumericField* dynamicSpeckleIntensitySpinBox_ = nullptr;
     QComboBox* dynamicSpeckleIntensityMindWaveCombo_ = nullptr;
 
     QGroupBox* feedbackDistortionGroup_ = nullptr;
-    QDoubleSpinBox* feedbackAmountSpinBox_ = nullptr;
+    NumericField* feedbackAmountSpinBox_ = nullptr;
     QComboBox* feedbackAmountMindWaveCombo_ = nullptr;
 
     QGroupBox* spectralWavefoldGroup_ = nullptr;
-    QDoubleSpinBox* foldGainSpinBox_ = nullptr;
+    NumericField* foldGainSpinBox_ = nullptr;
     QComboBox* foldGainMindWaveCombo_ = nullptr;
 
     // --- v0.Y.36.1 Installment C: Geometric - all three parameters gained
     // MindWave-binding combos in v0.Y.38.1.
 
     QGroupBox* displaceGroup_ = nullptr;
-    QDoubleSpinBox* displaceDistanceSpinBox_ = nullptr;
+    NumericField* displaceDistanceSpinBox_ = nullptr;
     QComboBox* displaceDistanceMindWaveCombo_ = nullptr;
-    QDoubleSpinBox* displaceAngleSpinBox_ = nullptr;
+    NumericField* displaceAngleSpinBox_ = nullptr;
     QComboBox* displaceAngleMindWaveCombo_ = nullptr;
 
     QGroupBox* channelCycleGroup_ = nullptr;
-    QDoubleSpinBox* channelCycleAngleSpinBox_ = nullptr;
+    NumericField* channelCycleAngleSpinBox_ = nullptr;
     QComboBox* channelCycleAngleMindWaveCombo_ = nullptr;
 
     QGroupBox* toneCurveGroup_ = nullptr;
@@ -531,19 +530,19 @@ private:
     // own kernel size/normalize flag remain deliberately unbound.
 
     QGroupBox* channelBalanceGroup_ = nullptr;
-    QDoubleSpinBox* channelBalanceSpinBox_ = nullptr;
+    NumericField* channelBalanceSpinBox_ = nullptr;
     QComboBox* channelBalanceMindWaveCombo_ = nullptr;
 
     QGroupBox* invertGroup_ = nullptr;
 
     QGroupBox* convolveGroup_ = nullptr;
     QComboBox* convolvePresetCombo_ = nullptr;
-    QSpinBox* convolveKernelSizeSpinBox_ = nullptr;
+    IntegerField* convolveKernelSizeSpinBox_ = nullptr;
     QWidget* convolveKernelGridContainer_ = nullptr;
     QGridLayout* convolveKernelGridLayout_ = nullptr;
-    std::vector<QDoubleSpinBox*> convolveKernelSpinBoxes_;
+    std::vector<NumericField*> convolveKernelSpinBoxes_;
     QCheckBox* convolveNormalizeCheckBox_ = nullptr;
-    QDoubleSpinBox* convolveAmountSpinBox_ = nullptr;
+    NumericField* convolveAmountSpinBox_ = nullptr;
     QComboBox* convolveAmountMindWaveCombo_ = nullptr;
     QPushButton* convolveSaveKernelButton_ = nullptr;
     QComboBox* convolveLoadKernelCombo_ = nullptr;
@@ -562,12 +561,12 @@ private:
     // unbound, see this class's own docs.
 
     QGroupBox* spectralReverbGroup_ = nullptr;
-    QSpinBox* reverbPreDelaySpinBox_ = nullptr;
-    QSpinBox* reverbDecaySpinBox_ = nullptr;
-    QDoubleSpinBox* reverbRoomSizeSpinBox_ = nullptr;
-    QDoubleSpinBox* reverbDiffusionSpinBox_ = nullptr;
-    QDoubleSpinBox* reverbAbsorptionSpinBox_ = nullptr;
-    QDoubleSpinBox* reverbMixSpinBox_ = nullptr;
+    IntegerField* reverbPreDelaySpinBox_ = nullptr;
+    IntegerField* reverbDecaySpinBox_ = nullptr;
+    NumericField* reverbRoomSizeSpinBox_ = nullptr;
+    NumericField* reverbDiffusionSpinBox_ = nullptr;
+    NumericField* reverbAbsorptionSpinBox_ = nullptr;
+    NumericField* reverbMixSpinBox_ = nullptr;
     QComboBox* reverbMixMindWaveCombo_ = nullptr;
 
     // --- Downsample - real-world testing pass, 2026-09-20, finding #18.
@@ -578,7 +577,7 @@ private:
 
     QGroupBox* downsampleGroup_ = nullptr;
     QComboBox* downsampleModeCombo_ = nullptr;
-    QSpinBox* downsampleBlockSizeSpinBox_ = nullptr;
+    IntegerField* downsampleBlockSizeSpinBox_ = nullptr;
     QComboBox* downsampleBlockSizeMindWaveCombo_ = nullptr;
 };
 

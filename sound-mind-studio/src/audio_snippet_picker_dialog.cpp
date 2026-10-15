@@ -1,8 +1,8 @@
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
+#include "sound_mind/studio/numeric_field.h"
 
 #include <QCheckBox>
 #include <QDialogButtonBox>
-#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QListWidget>
 #include <QVBoxLayout>
@@ -30,7 +30,7 @@ AudioSnippetPickerDialog::AudioSnippetPickerDialog(const std::vector<RowData>& s
     auto* root = new QVBoxLayout(this);
 
     auto* offsetForm = new QFormLayout();
-    offsetSpinBox_ = new QDoubleSpinBox(this);
+    offsetSpinBox_ = new NumericField(this);
     offsetSpinBox_->setObjectName(QStringLiteral("offsetSpinBox"));
     offsetSpinBox_->setRange(0.0, 3600.0);
     offsetSpinBox_->setSingleStep(0.5);
@@ -39,7 +39,7 @@ AudioSnippetPickerDialog::AudioSnippetPickerDialog(const std::vector<RowData>& s
     offsetSpinBox_->setToolTip(
         tr("Discards this much audio off the very start before splitting, so the grid restarts fresh at that "
            "point - lets a point of interest land exactly on a snippet boundary."));
-    connect(offsetSpinBox_, &QDoubleSpinBox::valueChanged, this, &AudioSnippetPickerDialog::offsetChanged);
+    connect(offsetSpinBox_, &NumericField::valueChanged, this, &AudioSnippetPickerDialog::offsetChanged);
     offsetForm->addRow(tr("Offset:"), offsetSpinBox_);
     root->addLayout(offsetForm);
 

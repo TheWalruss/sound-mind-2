@@ -12,15 +12,14 @@
 #include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/core/tool_preset.h"
+#include "sound_mind/studio/numeric_field.h"
 
 class QCheckBox;
 class QComboBox;
-class QDoubleSpinBox;
 class QFormLayout;
 class QLabel;
 class QLineEdit;
 class QPushButton;
-class QSpinBox;
 class QVBoxLayout;
 class QWidget;
 
@@ -685,9 +684,9 @@ private:
     ///        `config_->type() == ToolType::Instrument` - see
     ///        updateVisibleToolTypeGroup()'s own docs.
     QWidget* instrumentGroup_ = nullptr;
-    QSpinBox* harmonicCountSpinBox_ = nullptr;
+    IntegerField* harmonicCountSpinBox_ = nullptr;
     QVBoxLayout* harmonicStrengthsLayout_ = nullptr;
-    std::vector<QDoubleSpinBox*> harmonicStrengthSpinBoxes_;
+    std::vector<NumericField*> harmonicStrengthSpinBoxes_;
     /// @brief The draggable bar-chart visual complement to
     ///        `harmonicStrengthSpinBoxes_` above - see
     ///        `HarmonicSeriesWidget`'s own docs. Kept in sync with the
@@ -696,14 +695,14 @@ private:
     ///        `FilterConfigurationPanel`'s own Equalizer section already
     ///        established.
     HarmonicSeriesWidget* harmonicSeriesWidget_ = nullptr;
-    QDoubleSpinBox* inharmonicitySpinBox_ = nullptr;
+    NumericField* inharmonicitySpinBox_ = nullptr;
 
     /// @brief Vibrato/tremolo binding controls - `v0.Y.39.1` Installment A.
     ///        See `setAvailableMindWaves()`'s own docs.
     QComboBox* vibratoMindWaveCombo_ = nullptr;
-    QDoubleSpinBox* vibratoDepthSpinBox_ = nullptr;
+    NumericField* vibratoDepthSpinBox_ = nullptr;
     QComboBox* tremoloMindWaveCombo_ = nullptr;
-    QDoubleSpinBox* tremoloDepthSpinBox_ = nullptr;
+    NumericField* tremoloDepthSpinBox_ = nullptr;
 
     /// @brief The project's current MindWave library, as id/name pairs -
     ///        see `setAvailableMindWaves()`'s own docs.
@@ -715,9 +714,9 @@ private:
     ///        updateVisibleToolTypeGroup()'s own docs.
     QWidget* resonanceGroup_ = nullptr;
     QComboBox* resonanceProfileCombo_ = nullptr;
-    QDoubleSpinBox* decayRateSpinBox_ = nullptr;
-    QDoubleSpinBox* frequencyScaleSpinBox_ = nullptr;
-    QDoubleSpinBox* timeSpanSpinBox_ = nullptr;
+    NumericField* decayRateSpinBox_ = nullptr;
+    NumericField* frequencyScaleSpinBox_ = nullptr;
+    NumericField* timeSpanSpinBox_ = nullptr;
 
     /// @brief `MindShotConfiguration`'s own controls, shown only while
     ///        `config_->type() == ToolType::MindShot` - see
@@ -739,7 +738,7 @@ private:
     ///        group added since Mind Grain's own - `Heal`/`Soften`/`Smudge`
     ///        (`v0.Y.34.1` Installment A/B) all needed none at all.
     QWidget* orderChaosGroup_ = nullptr;
-    QDoubleSpinBox* amountSpinBox_ = nullptr;
+    NumericField* amountSpinBox_ = nullptr;
 
     /// @brief Which project `mindShotCombo_`'s/`mindGrainCombo_`'s own
     ///        entries are drawn from - see setProject()'s own docs. Not
@@ -757,10 +756,10 @@ private:
     ///        per the current tool type - see that method's own docs.
     QFormLayout* sharedControlsForm_ = nullptr;
 
-    QDoubleSpinBox* falloffSpinBox_ = nullptr;
-    QDoubleSpinBox* sizeSpinBox_ = nullptr;
+    NumericField* falloffSpinBox_ = nullptr;
+    NumericField* sizeSpinBox_ = nullptr;
     QComboBox* stampModeCombo_ = nullptr;
-    QDoubleSpinBox* stampIntervalSpinBox_ = nullptr;
+    NumericField* stampIntervalSpinBox_ = nullptr;
     QLineEdit* stampIntervalPatternLineEdit_ = nullptr;
     QLabel* stampIntervalPatternErrorLabel_ = nullptr;
 

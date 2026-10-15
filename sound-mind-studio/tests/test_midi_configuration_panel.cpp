@@ -1,7 +1,6 @@
 #include "test_midi_configuration_panel.h"
 
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QtTest/QtTest>
@@ -11,6 +10,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/midi_configuration_panel.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::core::BrushTipShape;
 using sound_mind::core::MidiProgramMapping;
@@ -19,6 +19,7 @@ using sound_mind::core::Project;
 using sound_mind::core::ProjectSettings;
 using sound_mind::core::ToolPresetId;
 using sound_mind::studio::MidiConfigurationPanel;
+using sound_mind::studio::NumericField;
 
 namespace {
 
@@ -94,7 +95,7 @@ void MidiConfigurationPanelTest::changingDurationScaleUpdatesTheProjectsMapping(
     panel.refreshMappings();
 
     auto* table = panel.findChild<QTableWidget*>(QStringLiteral("midiMappingTable"));
-    auto* durationSpinBox = qobject_cast<QDoubleSpinBox*>(table->cellWidget(0, kDurationScaleColumn));
+    auto* durationSpinBox = qobject_cast<NumericField*>(table->cellWidget(0, kDurationScaleColumn));
     QVERIFY(durationSpinBox != nullptr);
 
     durationSpinBox->setValue(2.5);
@@ -112,7 +113,7 @@ void MidiConfigurationPanelTest::changingPitchOffsetUpdatesTheProjectsMapping() 
     panel.refreshMappings();
 
     auto* table = panel.findChild<QTableWidget*>(QStringLiteral("midiMappingTable"));
-    auto* pitchSpinBox = qobject_cast<QDoubleSpinBox*>(table->cellWidget(0, kPitchOffsetColumn));
+    auto* pitchSpinBox = qobject_cast<NumericField*>(table->cellWidget(0, kPitchOffsetColumn));
     QVERIFY(pitchSpinBox != nullptr);
 
     pitchSpinBox->setValue(-12.0);

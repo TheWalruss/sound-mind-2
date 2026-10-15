@@ -1448,3 +1448,14 @@ TEST_CASE("The next layer id survives a JSON round trip, so a reloaded project n
     CHECK(added != removed);
     CHECK(added > removed);
 }
+
+TEST_CASE("setDecimalSeparator changes only the project's decimal separator setting", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto before = project.settings();
+
+    project.setDecimalSeparator(sound_mind::core::DecimalSeparator::Comma);
+
+    CHECK(project.settings().decimalSeparator == sound_mind::core::DecimalSeparator::Comma);
+    CHECK(project.settings().canvasWidth == before.canvasWidth);
+    CHECK(project.settings().principalMode == before.principalMode);
+}

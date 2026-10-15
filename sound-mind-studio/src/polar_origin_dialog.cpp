@@ -1,3 +1,4 @@
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/polar_origin_dialog.h"
 
 #include <algorithm>
@@ -5,7 +6,6 @@
 
 #include <QColor>
 #include <QDialogButtonBox>
-#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -15,7 +15,6 @@
 #include <QPen>
 #include <QPixmap>
 #include <QSignalBlocker>
-#include <QSpinBox>
 #include <QVBoxLayout>
 #include <QtMath>
 
@@ -331,47 +330,47 @@ PolarOriginDialog::PolarOriginDialog(QImage sourceImage, std::optional<PolarImpo
     auto* leftForm = new QFormLayout();
     leftForm->setLabelAlignment(Qt::AlignRight);
 
-    originXSpinBox_ = new QDoubleSpinBox(this);
+    originXSpinBox_ = new NumericField(this);
     originXSpinBox_->setObjectName(QStringLiteral("originXSpinBox"));
     originXSpinBox_->setRange(0.0, 99999.0);
     originXSpinBox_->setDecimals(1);
     originXSpinBox_->setSuffix(tr(" px"));
-    connect(originXSpinBox_, &QDoubleSpinBox::valueChanged, this, &PolarOriginDialog::syncWidgetFromSpinboxes);
+    connect(originXSpinBox_, &NumericField::valueChanged, this, &PolarOriginDialog::syncWidgetFromSpinboxes);
     leftForm->addRow(tr("Origin X:"), originXSpinBox_);
 
-    originYSpinBox_ = new QDoubleSpinBox(this);
+    originYSpinBox_ = new NumericField(this);
     originYSpinBox_->setObjectName(QStringLiteral("originYSpinBox"));
     originYSpinBox_->setRange(0.0, 99999.0);
     originYSpinBox_->setDecimals(1);
     originYSpinBox_->setSuffix(tr(" px"));
-    connect(originYSpinBox_, &QDoubleSpinBox::valueChanged, this, &PolarOriginDialog::syncWidgetFromSpinboxes);
+    connect(originYSpinBox_, &NumericField::valueChanged, this, &PolarOriginDialog::syncWidgetFromSpinboxes);
     leftForm->addRow(tr("Origin Y:"), originYSpinBox_);
 
-    radiusSpinBox_ = new QDoubleSpinBox(this);
+    radiusSpinBox_ = new NumericField(this);
     radiusSpinBox_->setObjectName(QStringLiteral("radiusSpinBox"));
     radiusSpinBox_->setRange(1.0, 99999.0);
     radiusSpinBox_->setDecimals(1);
     radiusSpinBox_->setSuffix(tr(" px"));
-    connect(radiusSpinBox_, &QDoubleSpinBox::valueChanged, this, &PolarOriginDialog::syncWidgetFromSpinboxes);
+    connect(radiusSpinBox_, &NumericField::valueChanged, this, &PolarOriginDialog::syncWidgetFromSpinboxes);
     leftForm->addRow(tr("Radius:"), radiusSpinBox_);
 
-    arcStartSpinBox_ = new QDoubleSpinBox(this);
+    arcStartSpinBox_ = new NumericField(this);
     arcStartSpinBox_->setObjectName(QStringLiteral("arcStartSpinBox"));
     arcStartSpinBox_->setRange(0.0, 359.9);
     arcStartSpinBox_->setDecimals(1);
     arcStartSpinBox_->setSuffix(QStringLiteral("°"));
     arcStartSpinBox_->setToolTip(tr("Arc start angle (0 = 12 o'clock, clockwise)"));
-    connect(arcStartSpinBox_, &QDoubleSpinBox::valueChanged, this, &PolarOriginDialog::syncWidgetFromSpinboxes);
+    connect(arcStartSpinBox_, &NumericField::valueChanged, this, &PolarOriginDialog::syncWidgetFromSpinboxes);
     leftForm->addRow(tr("Arc start:"), arcStartSpinBox_);
 
-    arcEndSpinBox_ = new QDoubleSpinBox(this);
+    arcEndSpinBox_ = new NumericField(this);
     arcEndSpinBox_->setObjectName(QStringLiteral("arcEndSpinBox"));
     arcEndSpinBox_->setRange(0.0, 360.0);
     arcEndSpinBox_->setDecimals(1);
     arcEndSpinBox_->setSuffix(QStringLiteral("°"));
     arcEndSpinBox_->setToolTip(tr("Arc end angle (360 = full circle)"));
     arcEndSpinBox_->setValue(360.0);
-    connect(arcEndSpinBox_, &QDoubleSpinBox::valueChanged, this, &PolarOriginDialog::syncWidgetFromSpinboxes);
+    connect(arcEndSpinBox_, &NumericField::valueChanged, this, &PolarOriginDialog::syncWidgetFromSpinboxes);
     leftForm->addRow(tr("Arc end:"), arcEndSpinBox_);
 
     formRow->addLayout(leftForm);
@@ -380,14 +379,14 @@ PolarOriginDialog::PolarOriginDialog(QImage sourceImage, std::optional<PolarImpo
     auto* rightForm = new QFormLayout();
     rightForm->setLabelAlignment(Qt::AlignRight);
 
-    outputWidthSpinBox_ = new QSpinBox(this);
+    outputWidthSpinBox_ = new IntegerField(this);
     outputWidthSpinBox_->setObjectName(QStringLiteral("outputWidthSpinBox"));
     outputWidthSpinBox_->setRange(1, 65535);
     outputWidthSpinBox_->setSuffix(tr(" px"));
     outputWidthSpinBox_->setToolTip(
         tr("Width of the resulting rectangular layer (default: the project's own canvas width, else "
            "approximately 2*pi times the radius)"));
-    connect(outputWidthSpinBox_, &QSpinBox::valueChanged, this, [this](int) {
+    connect(outputWidthSpinBox_, &IntegerField::valueChanged, this, [this](int) {
         outputWidthTracksRadius_ = false;
         updateDurationLabel();
     });

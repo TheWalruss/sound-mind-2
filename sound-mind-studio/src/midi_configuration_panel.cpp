@@ -1,9 +1,9 @@
 #include "sound_mind/studio/midi_configuration_panel.h"
+#include "sound_mind/studio/numeric_field.h"
 
 #include <juce_audio_basics/juce_audio_basics.h>
 
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QPushButton>
@@ -201,19 +201,19 @@ void MidiConfigurationPanel::appendRow(const sound_mind::core::MidiProgramMappin
     });
     table_->setCellWidget(row, kToolPresetColumn, presetCombo);
 
-    auto* durationSpinBox = new QDoubleSpinBox(table_);
+    auto* durationSpinBox = new NumericField(table_);
     durationSpinBox->setRange(0.1, 10.0);
     durationSpinBox->setSingleStep(0.1);
     durationSpinBox->setValue(mapping.durationScale);
-    connect(durationSpinBox, &QDoubleSpinBox::valueChanged, this,
+    connect(durationSpinBox, &NumericField::valueChanged, this,
             [this, programNumber](double value) { handleDurationScaleChanged(programNumber, value); });
     table_->setCellWidget(row, kDurationScaleColumn, durationSpinBox);
 
-    auto* pitchSpinBox = new QDoubleSpinBox(table_);
+    auto* pitchSpinBox = new NumericField(table_);
     pitchSpinBox->setRange(-48.0, 48.0);
     pitchSpinBox->setSingleStep(1.0);
     pitchSpinBox->setValue(mapping.pitchOffsetSemitones);
-    connect(pitchSpinBox, &QDoubleSpinBox::valueChanged, this,
+    connect(pitchSpinBox, &NumericField::valueChanged, this,
             [this, programNumber](double value) { handlePitchOffsetChanged(programNumber, value); });
     table_->setCellWidget(row, kPitchOffsetColumn, pitchSpinBox);
 

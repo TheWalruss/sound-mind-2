@@ -15,6 +15,7 @@
 #include <string>
 
 #include <QAction>
+#include <QActionGroup>
 #include <QCloseEvent>
 #include <QCoreApplication>
 #include <QDesktopServices>
@@ -79,6 +80,7 @@
 #include "sound_mind/studio/mind_capture_dialog.h"
 #include "sound_mind/studio/mind_waves_panel.h"
 #include "sound_mind/studio/name_collision_dialog.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/playback_controller.h"
 #include "sound_mind/studio/playback_panel.h"
 #include "sound_mind/studio/qt_image_conversion.h"
@@ -1122,6 +1124,23 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
            "as an oval near the top of the frequency range and an egg shape near the bottom (Sound-mode)."));
     connect(principalModeAction_, &QAction::toggled, this, &MainWindow::setPrincipalMode);
 
+    // Per project, like Image Mode - see setDecimalSeparator().
+    QMenu* decimalSeparatorMenu = editMenu->addMenu(tr("Decimal &Separator"));
+    auto* decimalSeparatorGroup = new QActionGroup(this);
+    decimalPeriodAction_ = decimalSeparatorMenu->addAction(tr("Period (1.5)"));
+    decimalPeriodAction_->setObjectName(QStringLiteral("decimalPeriodAction"));
+    decimalCommaAction_ = decimalSeparatorMenu->addAction(tr("Comma (1,5)"));
+    decimalCommaAction_->setObjectName(QStringLiteral("decimalCommaAction"));
+    for (QAction* action : {decimalPeriodAction_, decimalCommaAction_}) {
+        action->setCheckable(true);
+        decimalSeparatorGroup->addAction(action);
+    }
+    decimalPeriodAction_->setChecked(true);
+    connect(decimalPeriodAction_, &QAction::triggered, this,
+            [this]() { setDecimalSeparator(sound_mind::core::DecimalSeparator::Period); });
+    connect(decimalCommaAction_, &QAction::triggered, this,
+            [this]() { setDecimalSeparator(sound_mind::core::DecimalSeparator::Comma); });
+
     editMenu->addSeparator();
 
     // Cut/Copy/Paste (v0.Y.25.2): the standard shortcuts every other
@@ -2061,6 +2080,10 @@ void MainWindow::setProject(sound_mind::core::Project project) {
         const QSignalBlocker blocker(principalModeAction_);
         principalModeAction_->setChecked(settings.principalMode == sound_mind::core::PrincipalMode::Image);
     }
+    NumericFieldBase::setDecimalSeparator(settings.decimalSeparator);
+    (settings.decimalSeparator == sound_mind::core::DecimalSeparator::Comma ? decimalCommaAction_
+                                                                             : decimalPeriodAction_)
+        ->setChecked(true);
     const auto config = sound_mind::core::streamCodecConfigFor(settings);
     const auto loopLengthSamples = static_cast<std::size_t>(settings.canvasWidth) * config.hopLength;
     loopEngine_ = std::make_unique<sound_mind::core::LoopEngine>(config, loopLengthSamples, audioDeviceMode_);
@@ -3711,6 +3734,15 @@ void MainWindow::setPrincipalMode(bool imageModeEnabled) {
     }
     project_->setPrincipalMode(imageModeEnabled ? sound_mind::core::PrincipalMode::Image
                                                  : sound_mind::core::PrincipalMode::Sound);
+    hasUnsavedChanges_ = true;
+}
+
+void MainWindow::setDecimalSeparator(sound_mind::core::DecimalSeparator separator) {
+    NumericFieldBase::setDecimalSeparator(separator);
+    if (!project_) {
+        return;
+    }
+    project_->setDecimalSeparator(separator);
     hasUnsavedChanges_ = true;
 }
 

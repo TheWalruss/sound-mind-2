@@ -7,11 +7,11 @@
 #include <QImage>
 #include <QWidget>
 
-class QDoubleSpinBox;
+#include "sound_mind/studio/numeric_field.h"
+
 class QLabel;
 class QMouseEvent;
 class QPaintEvent;
-class QSpinBox;
 
 namespace sound_mind::studio {
 
@@ -299,12 +299,12 @@ private:
     void updateOutputWidthFromRadius();
 
     PolarOriginPickerWidget* picker_ = nullptr;
-    QDoubleSpinBox* originXSpinBox_ = nullptr;
-    QDoubleSpinBox* originYSpinBox_ = nullptr;
-    QDoubleSpinBox* radiusSpinBox_ = nullptr;
-    QDoubleSpinBox* arcStartSpinBox_ = nullptr;
-    QDoubleSpinBox* arcEndSpinBox_ = nullptr;
-    QSpinBox* outputWidthSpinBox_ = nullptr;
+    NumericField* originXSpinBox_ = nullptr;
+    NumericField* originYSpinBox_ = nullptr;
+    NumericField* radiusSpinBox_ = nullptr;
+    NumericField* arcStartSpinBox_ = nullptr;
+    NumericField* arcEndSpinBox_ = nullptr;
+    IntegerField* outputWidthSpinBox_ = nullptr;
     QLabel* durationLabel_ = nullptr;
 
     /// @brief See the constructor's own docs.

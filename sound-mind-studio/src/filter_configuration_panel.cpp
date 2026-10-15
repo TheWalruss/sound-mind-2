@@ -9,7 +9,6 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -18,13 +17,13 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSignalBlocker>
-#include <QSpinBox>
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QWidget>
 
 #include "sound_mind/studio/equalizer_curve_widget.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/preset_indicator_label.h"
 #include "sound_mind/studio/tone_curve_editor.h"
 
@@ -232,12 +231,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     uniformBlurGroup_ = new QGroupBox(tr("Uniform Blur"), container);
     uniformBlurGroup_->setObjectName(QStringLiteral("uniformBlurGroup"));
     auto* uniformBlurForm = new QFormLayout(uniformBlurGroup_);
-    blurSigmaSpinBox_ = new QDoubleSpinBox(uniformBlurGroup_);
+    blurSigmaSpinBox_ = new NumericField(uniformBlurGroup_);
     blurSigmaSpinBox_->setObjectName(QStringLiteral("blurSigmaSpinBox"));
     blurSigmaSpinBox_->setRange(0.1, 50.0);
     blurSigmaSpinBox_->setSingleStep(0.1);
     blurSigmaSpinBox_->setDecimals(1);
-    connect(blurSigmaSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(blurSigmaSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setBlurSigma(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -253,13 +252,13 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     edgePreservingBlurGroup_ = new QGroupBox(tr("Edge-Preserving Blur"), container);
     edgePreservingBlurGroup_->setObjectName(QStringLiteral("edgePreservingBlurGroup"));
     auto* edgePreservingBlurForm = new QFormLayout(edgePreservingBlurGroup_);
-    medianSizeSpinBox_ = new QSpinBox(edgePreservingBlurGroup_);
+    medianSizeSpinBox_ = new IntegerField(edgePreservingBlurGroup_);
     medianSizeSpinBox_->setObjectName(QStringLiteral("medianSizeSpinBox"));
     medianSizeSpinBox_->setRange(3, 31);
     medianSizeSpinBox_->setToolTip(
         tr("The median window's own size, in bins/columns - an even value behaves as if rounded up to the next "
            "odd one."));
-    connect(medianSizeSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(medianSizeSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         config_.setMedianSize(value);
         emitConfigChanged();
     });
@@ -275,10 +274,10 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     directionalBlurGroup_ = new QGroupBox(tr("Directional Blur"), container);
     directionalBlurGroup_->setObjectName(QStringLiteral("directionalBlurGroup"));
     auto* directionalBlurForm = new QFormLayout(directionalBlurGroup_);
-    directionalBlurLengthSpinBox_ = new QSpinBox(directionalBlurGroup_);
+    directionalBlurLengthSpinBox_ = new IntegerField(directionalBlurGroup_);
     directionalBlurLengthSpinBox_->setObjectName(QStringLiteral("directionalBlurLengthSpinBox"));
     directionalBlurLengthSpinBox_->setRange(1, 200);
-    connect(directionalBlurLengthSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(directionalBlurLengthSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         config_.setDirectionalBlurLength(value);
         emitConfigChanged();
     });
@@ -292,7 +291,7 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     });
     directionalBlurForm->addRow(tr("Length:"),
                                  makeBoundFieldRow(directionalBlurLengthSpinBox_, directionalBlurLengthMindWaveCombo_));
-    directionalBlurAngleSpinBox_ = new QDoubleSpinBox(directionalBlurGroup_);
+    directionalBlurAngleSpinBox_ = new NumericField(directionalBlurGroup_);
     directionalBlurAngleSpinBox_->setObjectName(QStringLiteral("directionalBlurAngleSpinBox"));
     directionalBlurAngleSpinBox_->setRange(0.0, 360.0);
     directionalBlurAngleSpinBox_->setSingleStep(1.0);
@@ -300,7 +299,7 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     directionalBlurAngleSpinBox_->setSuffix(QStringLiteral("°"));
     directionalBlurAngleSpinBox_->setToolTip(
         tr("0° blurs along the time axis (columns), 90° along the frequency axis (bins)."));
-    connect(directionalBlurAngleSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(directionalBlurAngleSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setDirectionalBlurAngleDegrees(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -319,12 +318,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     sharpenGroup_ = new QGroupBox(tr("Sharpen"), container);
     sharpenGroup_->setObjectName(QStringLiteral("sharpenGroup"));
     auto* sharpenForm = new QFormLayout(sharpenGroup_);
-    sharpenAmountSpinBox_ = new QDoubleSpinBox(sharpenGroup_);
+    sharpenAmountSpinBox_ = new NumericField(sharpenGroup_);
     sharpenAmountSpinBox_->setObjectName(QStringLiteral("sharpenAmountSpinBox"));
     sharpenAmountSpinBox_->setRange(0.1, 5.0);
     sharpenAmountSpinBox_->setSingleStep(0.1);
     sharpenAmountSpinBox_->setDecimals(1);
-    connect(sharpenAmountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(sharpenAmountSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setSharpenAmount(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -341,12 +340,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     speckleAddGroup_ = new QGroupBox(tr("Speckle Add"), container);
     speckleAddGroup_->setObjectName(QStringLiteral("speckleAddGroup"));
     auto* speckleAddForm = new QFormLayout(speckleAddGroup_);
-    speckleAddDensitySpinBox_ = new QDoubleSpinBox(speckleAddGroup_);
+    speckleAddDensitySpinBox_ = new NumericField(speckleAddGroup_);
     speckleAddDensitySpinBox_->setObjectName(QStringLiteral("speckleAddDensitySpinBox"));
     speckleAddDensitySpinBox_->setRange(0.0, 1.0);
     speckleAddDensitySpinBox_->setSingleStep(0.01);
     speckleAddDensitySpinBox_->setDecimals(2);
-    connect(speckleAddDensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(speckleAddDensitySpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setSpeckleDensity(static_cast<float>(value));
         // Keeps DynamicSpeckle's own sibling widget in sync - see this
         // class's own docs on why the two share a field but not a widget.
@@ -368,12 +367,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     });
     speckleAddForm->addRow(tr("Density:"),
                             makeBoundFieldRow(speckleAddDensitySpinBox_, speckleAddDensityMindWaveCombo_));
-    speckleAddIntensitySpinBox_ = new QDoubleSpinBox(speckleAddGroup_);
+    speckleAddIntensitySpinBox_ = new NumericField(speckleAddGroup_);
     speckleAddIntensitySpinBox_->setObjectName(QStringLiteral("speckleAddIntensitySpinBox"));
     speckleAddIntensitySpinBox_->setRange(0.0, 1.0);
     speckleAddIntensitySpinBox_->setSingleStep(0.01);
     speckleAddIntensitySpinBox_->setDecimals(2);
-    connect(speckleAddIntensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(speckleAddIntensitySpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setSpeckleIntensity(static_cast<float>(value));
         const QSignalBlocker blocker(dynamicSpeckleIntensitySpinBox_);
         dynamicSpeckleIntensitySpinBox_->setValue(value);
@@ -401,12 +400,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     speckleRemoveGroup_ = new QGroupBox(tr("Speckle Remove"), container);
     speckleRemoveGroup_->setObjectName(QStringLiteral("speckleRemoveGroup"));
     auto* speckleRemoveForm = new QFormLayout(speckleRemoveGroup_);
-    speckleThresholdSpinBox_ = new QDoubleSpinBox(speckleRemoveGroup_);
+    speckleThresholdSpinBox_ = new NumericField(speckleRemoveGroup_);
     speckleThresholdSpinBox_->setObjectName(QStringLiteral("speckleThresholdSpinBox"));
     speckleThresholdSpinBox_->setRange(0.0, 96.0);
     speckleThresholdSpinBox_->setSingleStep(1.0);
     speckleThresholdSpinBox_->setSuffix(QStringLiteral(" dB"));
-    connect(speckleThresholdSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(speckleThresholdSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setSpeckleThresholdDb(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -425,12 +424,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     denoiseGroup_ = new QGroupBox(tr("Denoise"), container);
     denoiseGroup_->setObjectName(QStringLiteral("denoiseGroup"));
     auto* denoiseForm = new QFormLayout(denoiseGroup_);
-    noiseFloorSpinBox_ = new QDoubleSpinBox(denoiseGroup_);
+    noiseFloorSpinBox_ = new NumericField(denoiseGroup_);
     noiseFloorSpinBox_->setObjectName(QStringLiteral("noiseFloorSpinBox"));
     noiseFloorSpinBox_->setRange(-96.0, 0.0);
     noiseFloorSpinBox_->setSingleStep(1.0);
     noiseFloorSpinBox_->setSuffix(QStringLiteral(" dB"));
-    connect(noiseFloorSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(noiseFloorSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setNoiseFloorDb(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -442,12 +441,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         emitConfigChanged();
     });
     denoiseForm->addRow(tr("Noise Floor:"), makeBoundFieldRow(noiseFloorSpinBox_, noiseFloorMindWaveCombo_));
-    reductionSpinBox_ = new QDoubleSpinBox(denoiseGroup_);
+    reductionSpinBox_ = new NumericField(denoiseGroup_);
     reductionSpinBox_->setObjectName(QStringLiteral("reductionSpinBox"));
     reductionSpinBox_->setRange(0.0, 96.0);
     reductionSpinBox_->setSingleStep(1.0);
     reductionSpinBox_->setSuffix(QStringLiteral(" dB"));
-    connect(reductionSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(reductionSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setReductionDb(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -464,12 +463,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     bitDepthCrushGroup_ = new QGroupBox(tr("Bit-Depth Crush"), container);
     bitDepthCrushGroup_->setObjectName(QStringLiteral("bitDepthCrushGroup"));
     auto* bitDepthCrushForm = new QFormLayout(bitDepthCrushGroup_);
-    crushAmountSpinBox_ = new QDoubleSpinBox(bitDepthCrushGroup_);
+    crushAmountSpinBox_ = new NumericField(bitDepthCrushGroup_);
     crushAmountSpinBox_->setObjectName(QStringLiteral("crushAmountSpinBox"));
     crushAmountSpinBox_->setRange(0.0, 1.0);
     crushAmountSpinBox_->setSingleStep(0.01);
     crushAmountSpinBox_->setDecimals(2);
-    connect(crushAmountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(crushAmountSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setCrushAmount(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -486,21 +485,21 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     granularNoiseGroup_ = new QGroupBox(tr("Granular Noise"), container);
     granularNoiseGroup_->setObjectName(QStringLiteral("granularNoiseGroup"));
     auto* granularNoiseForm = new QFormLayout(granularNoiseGroup_);
-    grainSizeSpinBox_ = new QSpinBox(granularNoiseGroup_);
+    grainSizeSpinBox_ = new IntegerField(granularNoiseGroup_);
     grainSizeSpinBox_->setObjectName(QStringLiteral("grainSizeSpinBox"));
     grainSizeSpinBox_->setRange(1, 64);
     grainSizeSpinBox_->setToolTip(tr("The grain block's own size, in bins/columns."));
-    connect(grainSizeSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(grainSizeSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         config_.setGrainSize(value);
         emitConfigChanged();
     });
     granularNoiseForm->addRow(tr("Grain Size:"), grainSizeSpinBox_);
-    grainAmountSpinBox_ = new QDoubleSpinBox(granularNoiseGroup_);
+    grainAmountSpinBox_ = new NumericField(granularNoiseGroup_);
     grainAmountSpinBox_->setObjectName(QStringLiteral("grainAmountSpinBox"));
     grainAmountSpinBox_->setRange(0.0, 50.0);
     grainAmountSpinBox_->setSingleStep(0.5);
     grainAmountSpinBox_->setSuffix(QStringLiteral(" dB"));
-    connect(grainAmountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(grainAmountSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setGrainAmountDb(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -520,12 +519,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     dynamicSpeckleGroup_ = new QGroupBox(tr("Dynamic Speckle"), container);
     dynamicSpeckleGroup_->setObjectName(QStringLiteral("dynamicSpeckleGroup"));
     auto* dynamicSpeckleForm = new QFormLayout(dynamicSpeckleGroup_);
-    dynamicSpeckleDensitySpinBox_ = new QDoubleSpinBox(dynamicSpeckleGroup_);
+    dynamicSpeckleDensitySpinBox_ = new NumericField(dynamicSpeckleGroup_);
     dynamicSpeckleDensitySpinBox_->setObjectName(QStringLiteral("dynamicSpeckleDensitySpinBox"));
     dynamicSpeckleDensitySpinBox_->setRange(0.0, 1.0);
     dynamicSpeckleDensitySpinBox_->setSingleStep(0.01);
     dynamicSpeckleDensitySpinBox_->setDecimals(2);
-    connect(dynamicSpeckleDensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(dynamicSpeckleDensitySpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setSpeckleDensity(static_cast<float>(value));
         const QSignalBlocker blocker(speckleAddDensitySpinBox_);
         speckleAddDensitySpinBox_->setValue(value);
@@ -545,12 +544,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     });
     dynamicSpeckleForm->addRow(
         tr("Density:"), makeBoundFieldRow(dynamicSpeckleDensitySpinBox_, dynamicSpeckleDensityMindWaveCombo_));
-    dynamicSpeckleIntensitySpinBox_ = new QDoubleSpinBox(dynamicSpeckleGroup_);
+    dynamicSpeckleIntensitySpinBox_ = new NumericField(dynamicSpeckleGroup_);
     dynamicSpeckleIntensitySpinBox_->setObjectName(QStringLiteral("dynamicSpeckleIntensitySpinBox"));
     dynamicSpeckleIntensitySpinBox_->setRange(0.0, 1.0);
     dynamicSpeckleIntensitySpinBox_->setSingleStep(0.01);
     dynamicSpeckleIntensitySpinBox_->setDecimals(2);
-    connect(dynamicSpeckleIntensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(dynamicSpeckleIntensitySpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setSpeckleIntensity(static_cast<float>(value));
         const QSignalBlocker blocker(speckleAddIntensitySpinBox_);
         speckleAddIntensitySpinBox_->setValue(value);
@@ -578,12 +577,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     feedbackDistortionGroup_ = new QGroupBox(tr("Feedback Distortion"), container);
     feedbackDistortionGroup_->setObjectName(QStringLiteral("feedbackDistortionGroup"));
     auto* feedbackDistortionForm = new QFormLayout(feedbackDistortionGroup_);
-    feedbackAmountSpinBox_ = new QDoubleSpinBox(feedbackDistortionGroup_);
+    feedbackAmountSpinBox_ = new NumericField(feedbackDistortionGroup_);
     feedbackAmountSpinBox_->setObjectName(QStringLiteral("feedbackAmountSpinBox"));
     feedbackAmountSpinBox_->setRange(0.0, 0.99);
     feedbackAmountSpinBox_->setSingleStep(0.01);
     feedbackAmountSpinBox_->setDecimals(2);
-    connect(feedbackAmountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(feedbackAmountSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setFeedbackAmount(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -602,12 +601,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     spectralWavefoldGroup_ = new QGroupBox(tr("Spectral Wavefold"), container);
     spectralWavefoldGroup_->setObjectName(QStringLiteral("spectralWavefoldGroup"));
     auto* spectralWavefoldForm = new QFormLayout(spectralWavefoldGroup_);
-    foldGainSpinBox_ = new QDoubleSpinBox(spectralWavefoldGroup_);
+    foldGainSpinBox_ = new NumericField(spectralWavefoldGroup_);
     foldGainSpinBox_->setObjectName(QStringLiteral("foldGainSpinBox"));
     foldGainSpinBox_->setRange(1.0, 20.0);
     foldGainSpinBox_->setSingleStep(0.1);
     foldGainSpinBox_->setDecimals(1);
-    connect(foldGainSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(foldGainSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setFoldGain(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -624,11 +623,11 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     displaceGroup_ = new QGroupBox(tr("Displace"), container);
     displaceGroup_->setObjectName(QStringLiteral("displaceGroup"));
     auto* displaceForm = new QFormLayout(displaceGroup_);
-    displaceDistanceSpinBox_ = new QDoubleSpinBox(displaceGroup_);
+    displaceDistanceSpinBox_ = new NumericField(displaceGroup_);
     displaceDistanceSpinBox_->setObjectName(QStringLiteral("displaceDistanceSpinBox"));
     displaceDistanceSpinBox_->setRange(0.0, 500.0);
     displaceDistanceSpinBox_->setSingleStep(1.0);
-    connect(displaceDistanceSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(displaceDistanceSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setDisplaceDistance(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -641,7 +640,7 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     });
     displaceForm->addRow(tr("Distance:"),
                           makeBoundFieldRow(displaceDistanceSpinBox_, displaceDistanceMindWaveCombo_));
-    displaceAngleSpinBox_ = new QDoubleSpinBox(displaceGroup_);
+    displaceAngleSpinBox_ = new NumericField(displaceGroup_);
     displaceAngleSpinBox_->setObjectName(QStringLiteral("displaceAngleSpinBox"));
     displaceAngleSpinBox_->setRange(0.0, 360.0);
     displaceAngleSpinBox_->setSingleStep(1.0);
@@ -649,7 +648,7 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     displaceAngleSpinBox_->setSuffix(QStringLiteral("°"));
     displaceAngleSpinBox_->setToolTip(
         tr("0° shifts along the time axis (columns), 90° along the frequency axis (bins)."));
-    connect(displaceAngleSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(displaceAngleSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setDisplaceAngleDegrees(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -666,7 +665,7 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     channelCycleGroup_ = new QGroupBox(tr("Channel Cycle"), container);
     channelCycleGroup_->setObjectName(QStringLiteral("channelCycleGroup"));
     auto* channelCycleForm = new QFormLayout(channelCycleGroup_);
-    channelCycleAngleSpinBox_ = new QDoubleSpinBox(channelCycleGroup_);
+    channelCycleAngleSpinBox_ = new NumericField(channelCycleGroup_);
     channelCycleAngleSpinBox_->setObjectName(QStringLiteral("channelCycleAngleSpinBox"));
     channelCycleAngleSpinBox_->setRange(0.0, 360.0);
     channelCycleAngleSpinBox_->setSingleStep(1.0);
@@ -675,7 +674,7 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     channelCycleAngleSpinBox_->setToolTip(
         tr("0°/360° is no effect; every 120° is one full step rotating left loudness, right loudness, and phase "
            "into each other."));
-    connect(channelCycleAngleSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(channelCycleAngleSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setChannelCycleAngleDegrees(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -711,7 +710,7 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     channelBalanceGroup_ = new QGroupBox(tr("Channel Balance"), container);
     channelBalanceGroup_->setObjectName(QStringLiteral("channelBalanceGroup"));
     auto* channelBalanceForm = new QFormLayout(channelBalanceGroup_);
-    channelBalanceSpinBox_ = new QDoubleSpinBox(channelBalanceGroup_);
+    channelBalanceSpinBox_ = new NumericField(channelBalanceGroup_);
     channelBalanceSpinBox_->setObjectName(QStringLiteral("channelBalanceSpinBox"));
     channelBalanceSpinBox_->setRange(0.0, 1.0);
     channelBalanceSpinBox_->setSingleStep(0.05);
@@ -719,7 +718,7 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     channelBalanceSpinBox_->setToolTip(
         tr("0 sends all energy to the left channel, 1 to the right; 0.5 only reproduces the input exactly when "
            "left and right are already equal."));
-    connect(channelBalanceSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(channelBalanceSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setChannelBalance(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -776,14 +775,14 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     });
     convolveTopForm->addRow(tr("Preset:"), convolvePresetCombo_);
 
-    convolveKernelSizeSpinBox_ = new QSpinBox(convolveGroup_);
+    convolveKernelSizeSpinBox_ = new IntegerField(convolveGroup_);
     convolveKernelSizeSpinBox_->setObjectName(QStringLiteral("convolveKernelSizeSpinBox"));
     convolveKernelSizeSpinBox_->setRange(3, 21);
     convolveKernelSizeSpinBox_->setSingleStep(2);
     convolveKernelSizeSpinBox_->setToolTip(
         tr("Always odd - an even value is rounded up. Changing this replaces the current kernel with a fresh "
            "identity kernel of the new size."));
-    connect(convolveKernelSizeSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(convolveKernelSizeSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         const int size = std::max(3, value | 1);
         if (size != value) {
             const QSignalBlocker blocker(convolveKernelSizeSpinBox_);
@@ -817,12 +816,12 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     convolveLayout->addWidget(convolveNormalizeCheckBox_);
 
     auto* convolveBottomForm = new QFormLayout();
-    convolveAmountSpinBox_ = new QDoubleSpinBox(convolveGroup_);
+    convolveAmountSpinBox_ = new NumericField(convolveGroup_);
     convolveAmountSpinBox_->setObjectName(QStringLiteral("convolveAmountSpinBox"));
     convolveAmountSpinBox_->setRange(0.0, 1.0);
     convolveAmountSpinBox_->setSingleStep(0.05);
     convolveAmountSpinBox_->setDecimals(2);
-    connect(convolveAmountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(convolveAmountSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setConvolveAmount(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -879,61 +878,61 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     spectralReverbGroup_ = new QGroupBox(tr("Spectral Reverb"), container);
     spectralReverbGroup_->setObjectName(QStringLiteral("spectralReverbGroup"));
     auto* reverbForm = new QFormLayout(spectralReverbGroup_);
-    reverbPreDelaySpinBox_ = new QSpinBox(spectralReverbGroup_);
+    reverbPreDelaySpinBox_ = new IntegerField(spectralReverbGroup_);
     reverbPreDelaySpinBox_->setObjectName(QStringLiteral("reverbPreDelaySpinBox"));
     reverbPreDelaySpinBox_->setRange(0, 200);
-    connect(reverbPreDelaySpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(reverbPreDelaySpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         config_.setReverbPreDelayFrames(value);
         emitConfigChanged();
     });
     reverbForm->addRow(tr("Pre-Delay (frames):"), reverbPreDelaySpinBox_);
-    reverbDecaySpinBox_ = new QSpinBox(spectralReverbGroup_);
+    reverbDecaySpinBox_ = new IntegerField(spectralReverbGroup_);
     reverbDecaySpinBox_->setObjectName(QStringLiteral("reverbDecaySpinBox"));
     reverbDecaySpinBox_->setRange(1, 1000);
     reverbDecaySpinBox_->setToolTip(tr("The impulse response's own RT60 (-60dB point), before Room Size scales it."));
-    connect(reverbDecaySpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(reverbDecaySpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         config_.setReverbDecayFrames(value);
         emitConfigChanged();
     });
     reverbForm->addRow(tr("Decay (frames):"), reverbDecaySpinBox_);
-    reverbRoomSizeSpinBox_ = new QDoubleSpinBox(spectralReverbGroup_);
+    reverbRoomSizeSpinBox_ = new NumericField(spectralReverbGroup_);
     reverbRoomSizeSpinBox_->setObjectName(QStringLiteral("reverbRoomSizeSpinBox"));
     reverbRoomSizeSpinBox_->setRange(0.0, 1.0);
     reverbRoomSizeSpinBox_->setSingleStep(0.05);
     reverbRoomSizeSpinBox_->setDecimals(2);
     reverbRoomSizeSpinBox_->setToolTip(tr("Scales Decay down - a smaller room decays faster."));
-    connect(reverbRoomSizeSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(reverbRoomSizeSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setReverbRoomSize(static_cast<float>(value));
         emitConfigChanged();
     });
     reverbForm->addRow(tr("Room Size:"), reverbRoomSizeSpinBox_);
-    reverbDiffusionSpinBox_ = new QDoubleSpinBox(spectralReverbGroup_);
+    reverbDiffusionSpinBox_ = new NumericField(spectralReverbGroup_);
     reverbDiffusionSpinBox_->setObjectName(QStringLiteral("reverbDiffusionSpinBox"));
     reverbDiffusionSpinBox_->setRange(0.0, 1.0);
     reverbDiffusionSpinBox_->setSingleStep(0.05);
     reverbDiffusionSpinBox_->setDecimals(2);
-    connect(reverbDiffusionSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(reverbDiffusionSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setReverbDiffusion(static_cast<float>(value));
         emitConfigChanged();
     });
     reverbForm->addRow(tr("Diffusion:"), reverbDiffusionSpinBox_);
-    reverbAbsorptionSpinBox_ = new QDoubleSpinBox(spectralReverbGroup_);
+    reverbAbsorptionSpinBox_ = new NumericField(spectralReverbGroup_);
     reverbAbsorptionSpinBox_->setObjectName(QStringLiteral("reverbAbsorptionSpinBox"));
     reverbAbsorptionSpinBox_->setRange(0.0, 1.0);
     reverbAbsorptionSpinBox_->setSingleStep(0.05);
     reverbAbsorptionSpinBox_->setDecimals(2);
     reverbAbsorptionSpinBox_->setToolTip(tr("Damps higher encoded frequencies more, the way a real room would."));
-    connect(reverbAbsorptionSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(reverbAbsorptionSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setReverbAbsorption(static_cast<float>(value));
         emitConfigChanged();
     });
     reverbForm->addRow(tr("Absorption:"), reverbAbsorptionSpinBox_);
-    reverbMixSpinBox_ = new QDoubleSpinBox(spectralReverbGroup_);
+    reverbMixSpinBox_ = new NumericField(spectralReverbGroup_);
     reverbMixSpinBox_->setObjectName(QStringLiteral("reverbMixSpinBox"));
     reverbMixSpinBox_->setRange(0.0, 1.0);
     reverbMixSpinBox_->setSingleStep(0.05);
     reverbMixSpinBox_->setDecimals(2);
-    connect(reverbMixSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(reverbMixSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_.setReverbMix(static_cast<float>(value));
         emitConfigChanged();
     });
@@ -960,11 +959,11 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
         emitConfigChanged();
     });
     downsampleForm->addRow(tr("Mode:"), downsampleModeCombo_);
-    downsampleBlockSizeSpinBox_ = new QSpinBox(downsampleGroup_);
+    downsampleBlockSizeSpinBox_ = new IntegerField(downsampleGroup_);
     downsampleBlockSizeSpinBox_->setObjectName(QStringLiteral("downsampleBlockSizeSpinBox"));
     downsampleBlockSizeSpinBox_->setRange(1, 64);
     downsampleBlockSizeSpinBox_->setToolTip(tr("The pixelation block's own size, in bins/columns."));
-    connect(downsampleBlockSizeSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(downsampleBlockSizeSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         config_.setDownsampleBlockSize(value);
         emitConfigChanged();
     });
@@ -1287,7 +1286,7 @@ void FilterConfigurationPanel::rebuildConvolveKernelGrid(int size) {
     // widgets alive (with the same object names as their replacements)
     // until the next event loop iteration, so an immediate findChild()
     // lookup (as every test here does) would find the stale one instead.
-    for (QDoubleSpinBox* spinBox : convolveKernelSpinBoxes_) {
+    for (NumericField* spinBox : convolveKernelSpinBoxes_) {
         convolveKernelGridLayout_->removeWidget(spinBox);
         delete spinBox;
     }
@@ -1301,14 +1300,14 @@ void FilterConfigurationPanel::rebuildConvolveKernelGrid(int size) {
         for (int col = 0; col < size; ++col) {
             const std::size_t cell = static_cast<std::size_t>(row) * static_cast<std::size_t>(size) +
                                        static_cast<std::size_t>(col);
-            auto* spinBox = new QDoubleSpinBox(convolveKernelGridContainer_);
+            auto* spinBox = new NumericField(convolveKernelGridContainer_);
             spinBox->setObjectName(QStringLiteral("convolveKernelSpinBox_%1_%2").arg(row).arg(col));
             spinBox->setRange(-20.0, 20.0);
             spinBox->setSingleStep(0.1);
             spinBox->setDecimals(2);
             const QSignalBlocker blocker(spinBox);
             spinBox->setValue(reuseCurrentValues ? currentKernel[cell] : (row == center && col == center ? 1.0 : 0.0));
-            connect(spinBox, &QDoubleSpinBox::valueChanged, this,
+            connect(spinBox, &NumericField::valueChanged, this,
                     [this](double) { applyConvolveKernelFromGrid(); });
             convolveKernelGridLayout_->addWidget(spinBox, row, col);
             convolveKernelSpinBoxes_.push_back(spinBox);
@@ -1319,7 +1318,7 @@ void FilterConfigurationPanel::rebuildConvolveKernelGrid(int size) {
 void FilterConfigurationPanel::applyConvolveKernelFromGrid() {
     std::vector<float> kernel;
     kernel.reserve(convolveKernelSpinBoxes_.size());
-    for (QDoubleSpinBox* spinBox : convolveKernelSpinBoxes_) {
+    for (NumericField* spinBox : convolveKernelSpinBoxes_) {
         kernel.push_back(static_cast<float>(spinBox->value()));
     }
     config_.setConvolveKernel(std::move(kernel));

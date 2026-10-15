@@ -1,23 +1,24 @@
 #include "test_chord_generator_panel.h"
 
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QSignalSpy>
-#include <QSpinBox>
 #include <QWidget>
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/chord_generator.h"
 #include "sound_mind/studio/chord_generator_panel.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::core::ArpeggioOrder;
 using sound_mind::core::ChordCategory;
 using sound_mind::core::ChordGeneratorParams;
 using sound_mind::core::ChordPlaybackMode;
 using sound_mind::studio::ChordGeneratorPanel;
+using sound_mind::studio::NumericField;
+using sound_mind::studio::IntegerField;
 
 void ChordGeneratorPanelTest::freshPanelDefaultsToACMajorTriadInBlockMode() {
     ChordGeneratorPanel panel;
@@ -48,7 +49,7 @@ void ChordGeneratorPanelTest::changingCategoryRebuildsTheChordComboAndEmitsParam
 void ChordGeneratorPanelTest::changingRootOrOctaveUpdatesRootMidiNote() {
     ChordGeneratorPanel panel;
     auto* rootCombo = panel.findChild<QComboBox*>(QStringLiteral("chordRootCombo"));
-    auto* octaveSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("chordOctaveSpinBox"));
+    auto* octaveSpinBox = panel.findChild<IntegerField*>(QStringLiteral("chordOctaveSpinBox"));
     QVERIFY(rootCombo != nullptr);
     QVERIFY(octaveSpinBox != nullptr);
 
@@ -95,7 +96,7 @@ void ChordGeneratorPanelTest::randomOrderOnlyShowsTheRandomSeedSpinBox() {
     panel.show();
     auto* modeCombo = panel.findChild<QComboBox*>(QStringLiteral("chordModeCombo"));
     auto* orderCombo = panel.findChild<QComboBox*>(QStringLiteral("chordOrderCombo"));
-    auto* seedSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("chordRandomSeedSpinBox"));
+    auto* seedSpinBox = panel.findChild<IntegerField*>(QStringLiteral("chordRandomSeedSpinBox"));
     modeCombo->setCurrentIndex(1);  // Arpeggio
     QVERIFY(!seedSpinBox->isVisible());
 
@@ -158,8 +159,8 @@ void ChordGeneratorPanelTest::editingNotationTextEmitsNotationChangedWithCurrent
     ChordGeneratorPanel panel;
     auto* inputModeCombo = panel.findChild<QComboBox*>(QStringLiteral("chordInputModeCombo"));
     auto* notationTextEdit = panel.findChild<QPlainTextEdit*>(QStringLiteral("chordNotationTextEdit"));
-    auto* bpmSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("chordNotationBpmSpinBox"));
-    auto* referenceHzSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("chordNotationReferenceHzSpinBox"));
+    auto* bpmSpinBox = panel.findChild<NumericField*>(QStringLiteral("chordNotationBpmSpinBox"));
+    auto* referenceHzSpinBox = panel.findChild<NumericField*>(QStringLiteral("chordNotationReferenceHzSpinBox"));
     inputModeCombo->setCurrentIndex(1);  // Custom Notation
     bpmSpinBox->setValue(100.0);
     referenceHzSpinBox->setValue(432.0);

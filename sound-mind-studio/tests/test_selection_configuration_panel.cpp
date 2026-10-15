@@ -4,19 +4,20 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QWidget>
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/blend_mode.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/selection_configuration_panel.h"
 #include "sound_mind/studio/selection_controller.h"
 
 using sound_mind::core::BlendMode;
 using sound_mind::studio::SelectionConfigurationPanel;
 using sound_mind::studio::SelectionShape;
+using sound_mind::studio::NumericField;
 
 void SelectionConfigurationPanelTest::freshPanelDefaultsToRectangle() {
     const SelectionConfigurationPanel panel;
@@ -64,7 +65,7 @@ void SelectionConfigurationPanelTest::switchingToWandShowsTheWandGroupAndSwitchi
 
 void SelectionConfigurationPanelTest::changingToleranceEmitsWandToleranceChangedAndUpdatesWandTolerance() {
     SelectionConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("wandToleranceSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("wandToleranceSpinBox"));
     QVERIFY(spinBox != nullptr);
 
     std::optional<double> received;

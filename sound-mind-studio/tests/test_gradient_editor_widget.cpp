@@ -1,17 +1,18 @@
 #include "test_gradient_editor_widget.h"
 
 #include <QCheckBox>
-#include <QDoubleSpinBox>
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/gradient_bar_widget.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::core::Gradient;
 using sound_mind::studio::GradientBarWidget;
 using sound_mind::studio::GradientEditorWidget;
+using sound_mind::studio::NumericField;
 
 namespace {
 
@@ -45,17 +46,17 @@ void GradientEditorWidgetTest::spinBoxesReflectTheInitiallySelectedStop() {
     gradient.setStopValues(0, stop);
     editor.setGradient(gradient);
 
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->value(), -20.0);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightIntensitySpinBox"))->value(), -30.0);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->value(), 0.4);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightOpacitySpinBox"))->value(), 0.6);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->value(), -20.0);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("gradientRightIntensitySpinBox"))->value(), -30.0);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"))->value(), 0.4);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("gradientRightOpacitySpinBox"))->value(), 0.6);
 }
 
 void GradientEditorWidgetTest::editingASpinBoxUpdatesTheSelectedStopAndEmits() {
     GradientEditorWidget editor;
     QSignalSpy spy(&editor, &GradientEditorWidget::gradientChanged);
 
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->setValue(-15.0);
+    editor.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->setValue(-15.0);
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(editor.gradient().stops().front().leftIntensity, -15.0f);
@@ -66,7 +67,7 @@ void GradientEditorWidgetTest::linkChannelsMirrorsLeftEditsToRight() {
     GradientEditorWidget editor;
     editor.findChild<QCheckBox*>(QStringLiteral("gradientLinkChannelsCheckBox"))->setChecked(true);
 
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->setValue(-15.0);
+    editor.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->setValue(-15.0);
 
     QCOMPARE(editor.gradient().stops().front().leftIntensity, -15.0f);
     QCOMPARE(editor.gradient().stops().front().rightIntensity, -15.0f);
@@ -76,7 +77,7 @@ void GradientEditorWidgetTest::linkChannelsMirrorsRightEditsToLeft() {
     GradientEditorWidget editor;
     editor.findChild<QCheckBox*>(QStringLiteral("gradientLinkChannelsCheckBox"))->setChecked(true);
 
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightOpacitySpinBox"))->setValue(0.7);
+    editor.findChild<NumericField*>(QStringLiteral("gradientRightOpacitySpinBox"))->setValue(0.7);
 
     QCOMPARE(editor.gradient().stops().front().rightOpacity, 0.7f);
     QCOMPARE(editor.gradient().stops().front().leftOpacity, 0.7f);
@@ -97,7 +98,7 @@ void GradientEditorWidgetTest::selectingADifferentStopOnTheBarUpdatesTheSpinBoxe
     QTest::mousePress(bar, Qt::LeftButton, Qt::NoModifier, QPoint(xPosFor(0.5f), 24));
     QTest::mouseRelease(bar, Qt::LeftButton, Qt::NoModifier, QPoint(xPosFor(0.5f), 24));
 
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->value(), -10.0);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->value(), -10.0);
 }
 
 void GradientEditorWidgetTest::deleteStopButtonIsDisabledForEndpointsAndEnabledForInterior() {

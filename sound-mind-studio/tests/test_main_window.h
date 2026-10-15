@@ -335,4 +335,5 @@ private slots:
     void previewingTheCurrentToolConfigurationPlaysAudio();
     void previewToolConfigurationIsANoOpWithNoProjectOpen();
     void showClippingActionTogglesTheCanvasClipIndicator();
+    void decimalSeparatorMenuSetsTheProjectSettingAndEveryNumericField();
 };

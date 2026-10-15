@@ -4,16 +4,15 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QGroupBox>
 #include <QLabel>
 #include <QSignalSpy>
-#include <QSpinBox>
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/resonance_profile.h"
 #include "sound_mind/studio/mind_wave_editor.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/rotary_dial_widget.h"
 #include "sound_mind/studio/waveform_preview_widget.h"
 
@@ -31,6 +30,8 @@ using sound_mind::core::SteppedNoiseShape;
 using sound_mind::studio::MindWaveEditor;
 using sound_mind::studio::RotaryDialWidget;
 using sound_mind::studio::WaveformPreviewWidget;
+using sound_mind::studio::NumericField;
+using sound_mind::studio::IntegerField;
 
 void MindWaveEditorTest::freshEditorHasTheDefaultMindWave() {
     const MindWaveEditor editor;
@@ -83,12 +84,12 @@ void MindWaveEditorTest::changingPeriodPhaseSeedNoiseFieldsUpdateAndEmit() {
     MindWaveEditor editor;
     QSignalSpy spy(&editor, &MindWaveEditor::mindWaveChanged);
 
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("periodSpinBox"))->setValue(3.5);
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("phaseSpinBox"))->setValue(1.25);
-    editor.findChild<QSpinBox*>(QStringLiteral("seedSpinBox"))->setValue(42);
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("noiseScaleSpinBox"))->setValue(2.0);
-    editor.findChild<QSpinBox*>(QStringLiteral("noiseOctavesSpinBox"))->setValue(5);
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("noisePersistenceSpinBox"))->setValue(0.3);
+    editor.findChild<NumericField*>(QStringLiteral("periodSpinBox"))->setValue(3.5);
+    editor.findChild<NumericField*>(QStringLiteral("phaseSpinBox"))->setValue(1.25);
+    editor.findChild<IntegerField*>(QStringLiteral("seedSpinBox"))->setValue(42);
+    editor.findChild<NumericField*>(QStringLiteral("noiseScaleSpinBox"))->setValue(2.0);
+    editor.findChild<IntegerField*>(QStringLiteral("noiseOctavesSpinBox"))->setValue(5);
+    editor.findChild<NumericField*>(QStringLiteral("noisePersistenceSpinBox"))->setValue(0.3);
     auto* axisCombo = editor.findChild<QComboBox*>(QStringLiteral("axisCombo"));
     axisCombo->setCurrentIndex(axisCombo->findData(QVariant::fromValue(static_cast<int>(MindWaveAxis::Frequency))));
 
@@ -106,7 +107,7 @@ void MindWaveEditorTest::changingPeriodicWaveformAndDutyCycleUpdateAndEmit() {
     MindWaveEditor editor;
     auto* waveformCombo = editor.findChild<QComboBox*>(QStringLiteral("periodicWaveformCombo"));
     waveformCombo->setCurrentIndex(waveformCombo->findData(QVariant::fromValue(static_cast<int>(PeriodicWaveform::Pulse))));
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("dutyCycleSpinBox"))->setValue(0.25);
+    editor.findChild<NumericField*>(QStringLiteral("dutyCycleSpinBox"))->setValue(0.25);
 
     QCOMPARE(editor.mindWave().periodicWaveform(), PeriodicWaveform::Pulse);
     QCOMPARE(editor.mindWave().dutyCycle(), 0.25);
@@ -160,9 +161,9 @@ void MindWaveEditorTest::changingEnvelopeFieldsUpdateAndEmit() {
 
     auto* shapeCombo = editor.findChild<QComboBox*>(QStringLiteral("envelopeShapeCombo"));
     shapeCombo->setCurrentIndex(shapeCombo->findData(QVariant::fromValue(static_cast<int>(EnvelopeShape::SCurve))));
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("envelopeCenterSpinBox"))->setValue(2.0);
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("envelopeSteepnessSpinBox"))->setValue(4.0);
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("decayRateSpinBox"))->setValue(1.5);
+    editor.findChild<NumericField*>(QStringLiteral("envelopeCenterSpinBox"))->setValue(2.0);
+    editor.findChild<NumericField*>(QStringLiteral("envelopeSteepnessSpinBox"))->setValue(4.0);
+    editor.findChild<NumericField*>(QStringLiteral("decayRateSpinBox"))->setValue(1.5);
 
     QCOMPARE(editor.mindWave().type(), GeneratorType::Envelope);
     QCOMPARE(editor.mindWave().envelopeShape(), EnvelopeShape::SCurve);
@@ -179,7 +180,7 @@ void MindWaveEditorTest::changingSteppedNoiseFieldsUpdateAndEmit() {
 
     auto* shapeCombo = editor.findChild<QComboBox*>(QStringLiteral("steppedNoiseShapeCombo"));
     shapeCombo->setCurrentIndex(shapeCombo->findData(QVariant::fromValue(static_cast<int>(SteppedNoiseShape::FractalNoise))));
-    editor.findChild<QSpinBox*>(QStringLiteral("stepCountSpinBox"))->setValue(8);
+    editor.findChild<IntegerField*>(QStringLiteral("stepCountSpinBox"))->setValue(8);
 
     QCOMPARE(editor.mindWave().type(), GeneratorType::SteppedNoise);
     QCOMPARE(editor.mindWave().steppedNoiseShape(), SteppedNoiseShape::FractalNoise);
@@ -193,9 +194,9 @@ void MindWaveEditorTest::changingSpatialFieldsUpdateAndEmit() {
 
     auto* patternCombo = editor.findChild<QComboBox*>(QStringLiteral("spatialPatternCombo"));
     patternCombo->setCurrentIndex(patternCombo->findData(QVariant::fromValue(static_cast<int>(SpatialPattern::Cellular))));
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("spatialCenterXSpinBox"))->setValue(1.5);
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("spatialCenterYSpinBox"))->setValue(2.5);
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("domainWarpStrengthSpinBox"))->setValue(3.0);
+    editor.findChild<NumericField*>(QStringLiteral("spatialCenterXSpinBox"))->setValue(1.5);
+    editor.findChild<NumericField*>(QStringLiteral("spatialCenterYSpinBox"))->setValue(2.5);
+    editor.findChild<NumericField*>(QStringLiteral("domainWarpStrengthSpinBox"))->setValue(3.0);
 
     QCOMPARE(editor.mindWave().type(), GeneratorType::Spatial);
     QCOMPARE(editor.mindWave().spatialPattern(), SpatialPattern::Cellular);
@@ -209,8 +210,8 @@ void MindWaveEditorTest::changingFractalFieldsUpdateAndEmit() {
     auto* generatorCombo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
     generatorCombo->setCurrentIndex(generatorCombo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::Fractal))));
 
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("fractalRoughnessSpinBox"))->setValue(0.6);
-    editor.findChild<QSpinBox*>(QStringLiteral("fractalIterationsSpinBox"))->setValue(10);
+    editor.findChild<NumericField*>(QStringLiteral("fractalRoughnessSpinBox"))->setValue(0.6);
+    editor.findChild<IntegerField*>(QStringLiteral("fractalIterationsSpinBox"))->setValue(10);
 
     QCOMPARE(editor.mindWave().fractalRoughness(), 0.6);
     QCOMPARE(editor.mindWave().fractalIterations(), 10);
@@ -229,9 +230,9 @@ void MindWaveEditorTest::setMindWaveSyncsEveryControlWithoutEmitting() {
 
     QCOMPARE(spy.count(), 0);
     QCOMPARE(editor.mindWave().type(), GeneratorType::Fractal);
-    QCOMPARE(editor.findChild<QSpinBox*>(QStringLiteral("seedSpinBox"))->value(), 99);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("fractalRoughnessSpinBox"))->value(), 0.7);
-    QCOMPARE(editor.findChild<QSpinBox*>(QStringLiteral("fractalIterationsSpinBox"))->value(), 6);
+    QCOMPARE(editor.findChild<IntegerField*>(QStringLiteral("seedSpinBox"))->value(), 99);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("fractalRoughnessSpinBox"))->value(), 0.7);
+    QCOMPARE(editor.findChild<IntegerField*>(QStringLiteral("fractalIterationsSpinBox"))->value(), 6);
     QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("fractalGroup"))->isHidden());
 }
 
@@ -291,22 +292,22 @@ void MindWaveEditorTest::switchingToStepGridShowsOnlyItsOwnGroupWithTheDefaultFo
     QCOMPARE(editor.mindWave().type(), GeneratorType::StepGrid);
     QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("stepGridGroup"))->isHidden());
     QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("periodicGroup"))->isHidden());
-    QCOMPARE(editor.findChild<QSpinBox*>(QStringLiteral("stepGridCountSpinBox"))->value(), 4);
-    QVERIFY(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox4")) != nullptr);
+    QCOMPARE(editor.findChild<IntegerField*>(QStringLiteral("stepGridCountSpinBox"))->value(), 4);
+    QVERIFY(editor.findChild<NumericField*>(QStringLiteral("stepGridValueSpinBox4")) != nullptr);
 }
 
 void MindWaveEditorTest::changingStepGridCountResizesTheValueRows() {
     MindWaveEditor editor;
     auto* generatorCombo = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
     generatorCombo->setCurrentIndex(generatorCombo->findData(QVariant::fromValue(static_cast<int>(GeneratorType::StepGrid))));
-    auto* countSpinBox = editor.findChild<QSpinBox*>(QStringLiteral("stepGridCountSpinBox"));
+    auto* countSpinBox = editor.findChild<IntegerField*>(QStringLiteral("stepGridCountSpinBox"));
 
     countSpinBox->setValue(2);
-    QVERIFY(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox3")) == nullptr);
+    QVERIFY(editor.findChild<NumericField*>(QStringLiteral("stepGridValueSpinBox3")) == nullptr);
     QCOMPARE(editor.mindWave().stepGridValues().size(), std::size_t{2});
 
     countSpinBox->setValue(5);
-    QVERIFY(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox5")) != nullptr);
+    QVERIFY(editor.findChild<NumericField*>(QStringLiteral("stepGridValueSpinBox5")) != nullptr);
     QCOMPARE(editor.mindWave().stepGridValues().size(), std::size_t{5});
 }
 
@@ -317,7 +318,7 @@ void MindWaveEditorTest::changingAStepGridValueEmitsWithTheUpdatedValues() {
     std::optional<MindWave> received;
     connect(&editor, &MindWaveEditor::mindWaveChanged, [&](const MindWave& wave) { received = wave; });
 
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox2"))->setValue(0.1);
+    editor.findChild<NumericField*>(QStringLiteral("stepGridValueSpinBox2"))->setValue(0.1);
 
     QVERIFY(received.has_value());
     QCOMPARE(received->stepGridValues()[1], 0.1);
@@ -331,10 +332,10 @@ void MindWaveEditorTest::loadingAStepGridMindWaveSyncsTheCountAndEachStepsOwnVal
 
     editor.setMindWave(wave);
 
-    QCOMPARE(editor.findChild<QSpinBox*>(QStringLiteral("stepGridCountSpinBox"))->value(), 3);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox1"))->value(), 0.2);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox2"))->value(), 0.4);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("stepGridValueSpinBox3"))->value(), 0.6);
+    QCOMPARE(editor.findChild<IntegerField*>(QStringLiteral("stepGridCountSpinBox"))->value(), 3);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("stepGridValueSpinBox1"))->value(), 0.2);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("stepGridValueSpinBox2"))->value(), 0.4);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("stepGridValueSpinBox3"))->value(), 0.6);
     QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("stepGridGroup"))->isHidden());
 }
 
@@ -347,9 +348,9 @@ void MindWaveEditorTest::switchingToContinuousShowsOnlyItsOwnGroupWithTheDefault
     QCOMPARE(editor.mindWave().type(), GeneratorType::Continuous);
     QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("continuousGroup"))->isHidden());
     QVERIFY(editor.findChild<QGroupBox*>(QStringLiteral("periodicGroup"))->isHidden());
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->value(), 0.0);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousSkewSpinBox"))->value(), 0.5);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousCharacterSpinBox"))->value(), 0.0);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("continuousShapeSpinBox"))->value(), 0.0);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("continuousSkewSpinBox"))->value(), 0.5);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("continuousCharacterSpinBox"))->value(), 0.0);
     // v0.Y.58.1's own MindWave UI/UX uplift - a real RotaryDialWidget next
     // to each spin box, kept in sync, plus a live WaveformPreviewWidget
     // above all three - see MindWaveEditor's own docs.
@@ -366,14 +367,14 @@ void MindWaveEditorTest::changingShapeSkewOrCharacterUpdatesAndEmits() {
     std::optional<MindWave> received;
     connect(&editor, &MindWaveEditor::mindWaveChanged, [&](const MindWave& wave) { received = wave; });
 
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->setValue(0.7);
+    editor.findChild<NumericField*>(QStringLiteral("continuousShapeSpinBox"))->setValue(0.7);
     QVERIFY(received.has_value());
     QCOMPARE(received->continuousShape(), 0.7);
 
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousSkewSpinBox"))->setValue(0.2);
+    editor.findChild<NumericField*>(QStringLiteral("continuousSkewSpinBox"))->setValue(0.2);
     QCOMPARE(received->continuousSkew(), 0.2);
 
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousCharacterSpinBox"))->setValue(0.9);
+    editor.findChild<NumericField*>(QStringLiteral("continuousCharacterSpinBox"))->setValue(0.9);
     QCOMPARE(received->continuousCharacter(), 0.9);
 
     // Each spin-box edit above also keeps its own paired dial in sync.
@@ -402,7 +403,7 @@ void MindWaveEditorTest::draggingAContinuousDialUpdatesItsOwnSpinBoxAndEmits() {
 
     QVERIFY(received.has_value());
     QVERIFY(qAbs(received->continuousShape() - 0.6) < 0.01);
-    QVERIFY(qAbs(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->value() - 0.6) < 0.01);
+    QVERIFY(qAbs(editor.findChild<NumericField*>(QStringLiteral("continuousShapeSpinBox"))->value() - 0.6) < 0.01);
 }
 
 void MindWaveEditorTest::changingContinuousFieldsUpdatesTheLivePreview() {
@@ -413,7 +414,7 @@ void MindWaveEditorTest::changingContinuousFieldsUpdatesTheLivePreview() {
     QVERIFY(preview != nullptr);
     const auto flatSamples = preview->samples();
 
-    editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->setValue(1.0);
+    editor.findChild<NumericField*>(QStringLiteral("continuousShapeSpinBox"))->setValue(1.0);
 
     QVERIFY(preview->samples() != flatSamples);
 }
@@ -428,9 +429,9 @@ void MindWaveEditorTest::loadingAContinuousMindWaveSyncsAllThreeKnobs() {
 
     editor.setMindWave(wave);
 
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousShapeSpinBox"))->value(), 0.4);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousSkewSpinBox"))->value(), 0.1);
-    QCOMPARE(editor.findChild<QDoubleSpinBox*>(QStringLiteral("continuousCharacterSpinBox"))->value(), 0.8);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("continuousShapeSpinBox"))->value(), 0.4);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("continuousSkewSpinBox"))->value(), 0.1);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("continuousCharacterSpinBox"))->value(), 0.8);
     QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("continuousGroup"))->isHidden());
     QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousShapeDial"))->value(), 0.4);
     QCOMPARE(editor.findChild<RotaryDialWidget*>(QStringLiteral("continuousSkewDial"))->value(), 0.1);

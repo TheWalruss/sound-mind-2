@@ -10,9 +10,9 @@
 
 #include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/resonance_profile.h"
+#include "sound_mind/studio/numeric_field.h"
 
 class QCheckBox;
-class QDoubleSpinBox;
 class QListWidget;
 class QListWidgetItem;
 class QPushButton;
@@ -245,7 +245,7 @@ private:
     double currentWarpStrength_ = 1.0;
 
     QCheckBox* warpEnabledCheckBox_ = nullptr;
-    QDoubleSpinBox* warpStrengthSpinBox_ = nullptr;
+    NumericField* warpStrengthSpinBox_ = nullptr;
     MindWaveEditor* warpSourceEditor_ = nullptr;
 };
 

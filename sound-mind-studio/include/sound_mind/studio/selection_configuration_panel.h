@@ -3,11 +3,11 @@
 #include <QDockWidget>
 
 #include "sound_mind/core/blend_mode.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/selection_controller.h"
 
 class QCheckBox;
 class QComboBox;
-class QDoubleSpinBox;
 class QWidget;
 
 namespace sound_mind::studio {
@@ -135,7 +135,7 @@ private:
 
     QComboBox* selectionTypeCombo_ = nullptr;
     QWidget* wandGroup_ = nullptr;
-    QDoubleSpinBox* wandToleranceSpinBox_ = nullptr;
+    NumericField* wandToleranceSpinBox_ = nullptr;
     QCheckBox* wandHarmonicsAwareCheckBox_ = nullptr;
     QComboBox* pasteBlendModeCombo_ = nullptr;
 };

@@ -4,7 +4,6 @@
 
 #include <QApplication>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QEnterEvent>
 #include <QImage>
 #include <QLabel>
@@ -13,17 +12,19 @@
 #include <QScrollArea>
 #include <QSignalSpy>
 #include <QSlider>
-#include <QSpinBox>
 #include <QStackedLayout>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/layers_panel.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::core::BlendMode;
 using sound_mind::core::LayerId;
 using sound_mind::core::LayerType;
 using sound_mind::core::MindWaveId;
 using sound_mind::studio::LayersPanel;
+using sound_mind::studio::NumericField;
+using sound_mind::studio::IntegerField;
 
 namespace {
 
@@ -170,8 +171,8 @@ void LayersPanelTest::backgroundLayerHasNoOpacityOrTransformControls() {
 
     QVERIFY(panel.findChild<QSlider*>(QStringLiteral("opacitySlider")) == nullptr);
     QVERIFY(panel.findChild<QSlider*>(QStringLiteral("balanceSlider")) == nullptr);
-    QVERIFY(panel.findChild<QSpinBox*>(QStringLiteral("translationSpinBox")) == nullptr);
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")) == nullptr);
+    QVERIFY(panel.findChild<IntegerField*>(QStringLiteral("translationSpinBox")) == nullptr);
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("rescaleSpinBox")) == nullptr);
 }
 
 void LayersPanelTest::opacitySliderEmitsOpacityChanged() {
@@ -212,7 +213,7 @@ void LayersPanelTest::translationSpinBoxEmitsTranslationChanged() {
     panel.selectLayer(static_cast<LayerId>(1));  // "Bottom".
     QSignalSpy spy(&panel, &LayersPanel::translationChanged);
 
-    const auto spinBoxes = panel.findChildren<QSpinBox*>(QStringLiteral("translationSpinBox"));
+    const auto spinBoxes = panel.findChildren<IntegerField*>(QStringLiteral("translationSpinBox"));
     QCOMPARE(spinBoxes.size(), 1);
     spinBoxes.at(0)->setValue(150);
 
@@ -227,7 +228,7 @@ void LayersPanelTest::rescaleSpinBoxEmitsRescaleChanged() {
     panel.selectLayer(static_cast<LayerId>(1));  // "Bottom".
     QSignalSpy spy(&panel, &LayersPanel::rescaleChanged);
 
-    const auto spinBoxes = panel.findChildren<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox"));
+    const auto spinBoxes = panel.findChildren<NumericField*>(QStringLiteral("rescaleSpinBox"));
     QCOMPARE(spinBoxes.size(), 1);
     spinBoxes.at(0)->setValue(2.0);
 
@@ -249,8 +250,8 @@ void LayersPanelTest::unselectedRowsShowNoOpacityOrTransformOrBlendModeControls(
     QVERIFY(panel.findChild<QSlider*>(QStringLiteral("opacitySlider")) == nullptr);
     QVERIFY(panel.findChild<QSlider*>(QStringLiteral("balanceSlider")) == nullptr);
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("opacityMindWaveCombo")) == nullptr);
-    QVERIFY(panel.findChild<QSpinBox*>(QStringLiteral("translationSpinBox")) == nullptr);
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")) == nullptr);
+    QVERIFY(panel.findChild<IntegerField*>(QStringLiteral("translationSpinBox")) == nullptr);
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("rescaleSpinBox")) == nullptr);
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("blendModeCombo")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("duplicateButton")) == nullptr);
     QVERIFY(panel.findChild<QPushButton*>(QStringLiteral("cleanUpPhaseButton")) == nullptr);
@@ -297,8 +298,8 @@ void LayersPanelTest::selectingARowRevealsItsOwnControlsAndDeselectingHidesThemA
     QCOMPARE(panel.findChildren<QSlider*>(QStringLiteral("opacitySlider")).size(), 1);
     QCOMPARE(panel.findChildren<QSlider*>(QStringLiteral("balanceSlider")).size(), 1);
     QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("opacityMindWaveCombo")).size(), 1);
-    QCOMPARE(panel.findChildren<QSpinBox*>(QStringLiteral("translationSpinBox")).size(), 1);
-    QCOMPARE(panel.findChildren<QDoubleSpinBox*>(QStringLiteral("rescaleSpinBox")).size(), 1);
+    QCOMPARE(panel.findChildren<IntegerField*>(QStringLiteral("translationSpinBox")).size(), 1);
+    QCOMPARE(panel.findChildren<NumericField*>(QStringLiteral("rescaleSpinBox")).size(), 1);
     QCOMPARE(panel.findChildren<QComboBox*>(QStringLiteral("blendModeCombo")).size(), 1);
     QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("duplicateButton")).size(), 1);
     QCOMPARE(panel.findChildren<QWidget*>(QStringLiteral("dragHandle")).size(), 1);

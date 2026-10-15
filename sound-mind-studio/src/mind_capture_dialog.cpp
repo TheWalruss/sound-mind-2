@@ -1,7 +1,7 @@
 #include "sound_mind/studio/mind_capture_dialog.h"
+#include "sound_mind/studio/numeric_field.h"
 
 #include <QDialogButtonBox>
-#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QVBoxLayout>
@@ -19,7 +19,7 @@ MindCaptureDialog::MindCaptureDialog(const QString& windowTitle, const QString& 
     nameLineEdit_->setObjectName(QStringLiteral("nameLineEdit"));
     form->addRow(tr("Name:"), nameLineEdit_);
 
-    fundamentalFrequencySpinBox_ = new QDoubleSpinBox(this);
+    fundamentalFrequencySpinBox_ = new NumericField(this);
     fundamentalFrequencySpinBox_->setObjectName(QStringLiteral("fundamentalFrequencySpinBox"));
     fundamentalFrequencySpinBox_->setRange(0.0, 20000.0);
     fundamentalFrequencySpinBox_->setSingleStep(1.0);
@@ -31,7 +31,7 @@ MindCaptureDialog::MindCaptureDialog(const QString& windowTitle, const QString& 
            "\"not set\" - this capture always paints back verbatim, at every pitch, with no shifting at all."));
     form->addRow(tr("Fundamental Frequency:"), fundamentalFrequencySpinBox_);
 
-    startTimeOffsetSpinBox_ = new QDoubleSpinBox(this);
+    startTimeOffsetSpinBox_ = new NumericField(this);
     startTimeOffsetSpinBox_->setObjectName(QStringLiteral("startTimeOffsetSpinBox"));
     startTimeOffsetSpinBox_->setRange(0.0, 60.0);
     startTimeOffsetSpinBox_->setSingleStep(0.01);

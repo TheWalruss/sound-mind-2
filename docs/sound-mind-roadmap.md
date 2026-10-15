@@ -1213,7 +1213,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 
 #### `v0.Y.73.1` - Numeric input overhaul and intensity units (L)
 
-*Progress: installment A (dBFS calibration, canonical intensity mapping, brightness, clip indicator) settled in `v0.1.33.1` - Decision #232.*
+*Progress: installment A (dBFS calibration, canonical intensity mapping, brightness, clip indicator) settled in `v0.1.33.1` - Decision #232. Installment B (`NumericField`/`IntegerField` replacing every spin box, apply-on-commit, lenient parsing, decimal separator) settled in `v0.1.33.2` - Decision #233.*
 
 This is the foundation milestone; later milestones build their new controls on it.
 

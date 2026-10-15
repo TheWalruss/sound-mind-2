@@ -203,6 +203,25 @@ toolbar buttons):
   modifiers (Ctrl/Alt/Shift). An unmodified wheel scrolls the canvas
   instead, once it's larger than the visible area.
 
+### Number fields
+
+Every number setting is a **slider with a text box** beside it:
+
+- Drag the slider to pick any value in the allowed range. The text box
+  previews the value as you drag; it's applied when you let go.
+- Click the slider or use the arrow keys (once the slider has focus) to
+  nudge the value - that applies straight away.
+- Type an exact value in the text box. Nothing changes until you press
+  **Enter** or click elsewhere. Typing is forgiving: surrounding spaces,
+  leading or trailing zeros, and a unit after the number ("12 dB") are
+  all fine, and either `.` or `,` works as the decimal mark. Values
+  outside the allowed range are clamped to it, and anything that isn't a
+  number (e.g. "1.2.3") just reverts. The box then shows the value it
+  actually used.
+
+**Edit → Decimal Separator** chooses whether numbers are shown with a
+period (1.5) or a comma (1,5). It's saved with the project.
+
 ### Brightness and clipping
 
 The canvas's brightness follows how loud each spot really is, on one
@@ -265,8 +284,8 @@ The picker shows your source image with four draggable handles:
 | **Arc start** | Blue square on the ring | Where the unwrapped image's own left edge samples from (0° = twelve o'clock, clockwise) |
 | **Arc end** | Pink square on the ring | Where its own right edge samples from - equal to Arc start means a full circle |
 
-Every handle has a matching spinbox (Origin X/Y, Radius, Arc start/end in
-degrees) kept in sync both ways - drag a handle and its own spinbox
+Every handle has a matching number field (Origin X/Y, Radius, Arc start/end in
+degrees) kept in sync both ways - drag a handle and its own number field
 updates live; type a value and the handle jumps to match. An **Output
 width** field sets the unwrapped layer's own width in pixels - it starts
 out tracking the radius automatically (roughly enough pixels for square
@@ -439,7 +458,7 @@ stroke paints into) to reveal its full set of controls:
   unchanged; panning either way holds the channel you're panning toward
   at full strength and fades out only the other one), an
   **opacity-MindWave combo** (see [MindWaves](#mindwaves) below),
-  **translation**/**rescale** spin boxes (see
+  **translation**/**rescale** number fields (see
   [Layer Timing](#layer-timing) below), and a **Blend Mode** combo (see
   [Compositing](#compositing) below) - except on the **Background**
   layer's row, which has none of these: it's always fully opaque and
@@ -614,7 +633,7 @@ MindWave Shape**
   or instructions if nothing has been yet) - there's nothing else to type
   numbers into for this generator type.
 - **Step Grid** cycles through a hand-typed list of values instead of a
-  formula or a drawn curve: a **Steps** spin box sets how many, and each
+  formula or a drawn curve: a **Steps** number field sets how many, and each
   one gets its own plain value box (`0`-`1`) below it - a fresh Step Grid
   starts with four steps rising from `0.25` to `1.0`. Loops using the same
   **Period** control every other generator type has, one equal-length
@@ -639,7 +658,7 @@ MindWave Shape**
   project at all, the generator produces a flat neutral value instead.
 - **Warp** lets one MindWave distort the position another is sampled at,
   giving a wavier, less mechanically regular result than either shape
-  alone - check **Enable Warp** to reveal a **Strength** spin box and a
+  alone - check **Enable Warp** to reveal a **Strength** number field and a
   small nested editor for the warp source (its own generator type and
   parameters, edited the same way as a top-level MindWave). Higher
   strength values push the distortion further; unchecking Enable Warp
@@ -713,13 +732,13 @@ group's own controls while it was hidden.
 - **Sharpen** is Blur's own opposite, tightening detail instead of
   softening it - one **Amount** control (higher pushes further).
 - Each of those five controls (**Sigma**, **Size**, **Length**, **Angle**,
-  **Amount**) has its own MindWave combo right beside its spin box - the
+  **Amount**) has its own MindWave combo right beside its number field - the
   same **None**-or-pick-a-MindWave choice as a layer's own opacity
   binding (see [MindWaves](#mindwaves) above), but with a genuinely
   different effect here: binding one of these varies *that filter's own
   parameter* across the canvas, so the filter itself computes a different
   blur/sharpen at every cell instead of applying one fixed strength
-  everywhere. The spin box still sets that parameter's ceiling value
+  everywhere. The number field still sets that parameter's ceiling value
   (what the MindWave's own peak maps to); **None** leaves it at a flat,
   unvarying value the way it always worked before.
 - **Tone Curve** remaps loudness through a curve you draw yourself: click
@@ -952,7 +971,7 @@ panel (off by default) with the brush's own settings:
   Square, Diamond, and others - only Circle/Square/Diamond have a distinct
   shape so far; the rest currently paint the same as Circle).
 - **Harmonics** (Instrument only) - how many overtones above the
-  fundamental to synthesize, each with its own **strength** spin box
+  fundamental to synthesize, each with its own **strength** number field
   (fundamental first) - a fresh Instrument starts with a plausible
   falling four-harmonic series (`1.0, 0.5, 0.25, 0.125`). Each harmonic
   paints as a single exact-frequency spike rather than a soft geometric
@@ -967,7 +986,7 @@ panel (off by default) with the brush's own settings:
   overtones do (a piano string, for instance). `0` (the default) is
   perfectly harmonic; small positive values (try `0.01`-`0.05`) give
   higher harmonics an audibly metallic, bell-like stretch.
-- **Vibrato**/**Tremolo** (Instrument only) - each a depth spin box paired
+- **Vibrato**/**Tremolo** (Instrument only) - each a depth number field paired
   with a MindWave bind combo. Binding a MindWave makes it modulate pitch
   (Vibrato, in semitones) or strength (Tremolo, as a fraction toward
   silence) across the course of a stroke, following that MindWave's own
@@ -1113,7 +1132,7 @@ panel (off by default) with the brush's own settings:
     evenly-spaced frequency, the same idea rotated onto the other axis
     ("Interval" is in Hz).
 
-  Choosing any mode but Stroke enables the **Interval** spin box next
+  Choosing any mode but Stroke enables the **Interval** number field next
   to it, which sets the spacing (seconds for Along Curve/Time Axis, Hz for
   Frequency Axis) - it's disabled and ignored under Stroke, where an
   interval wouldn't mean anything. This is the same idea as the legacy
@@ -1535,7 +1554,7 @@ one's own longest note (or a rest) ends - use `z` to leave a gap. For
 example, `A4:0.5 z0.25 C5:0.5+E5:0.5` plays A4 for half a second, waits a
 quarter second, then plays C5 and E5 together for half a second. Typos are
 flagged immediately below the text box as you type, with **BPM** and
-**Reference** (tuning, in Hz) spin boxes controlling how beats-suffixed
+**Reference** (tuning, in Hz) number fields controlling how beats-suffixed
 durations and note names are resolved.
 
 While you're building a chord or arpeggio, its notes are drawn live as

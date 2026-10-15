@@ -4,24 +4,24 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSignalSpy>
-#include <QSpinBox>
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/resonance_profile.h"
 #include "sound_mind/studio/mind_wave_editor.h"
 #include "sound_mind/studio/mind_waves_panel.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::core::MindWave;
 using sound_mind::core::MindWaveId;
 using sound_mind::core::NamedResonanceProfile;
 using sound_mind::studio::MindWaveEditor;
 using sound_mind::studio::MindWavesPanel;
+using sound_mind::studio::NumericField;
 
 namespace {
 
@@ -112,7 +112,7 @@ void MindWavesPanelTest::editingTheTopEditorEmitsMindWaveChangedWithTheSelectedI
     });
 
     panel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"))
-        ->findChild<QDoubleSpinBox*>(QStringLiteral("periodSpinBox"))
+        ->findChild<NumericField*>(QStringLiteral("periodSpinBox"))
         ->setValue(4.0);
 
     QCOMPARE(emitCount, 1);
@@ -181,7 +181,7 @@ void MindWavesPanelTest::editingTheWarpSourceEditorUpdatesItAndEmits() {
             [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
 
     panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))
-        ->findChild<QDoubleSpinBox*>(QStringLiteral("periodSpinBox"))
+        ->findChild<NumericField*>(QStringLiteral("periodSpinBox"))
         ->setValue(7.0);
 
     QCOMPARE(emitCount, 1);
@@ -200,7 +200,7 @@ void MindWavesPanelTest::changingWarpStrengthEmitsWhileWarpIsEnabled() {
     connect(&panel, &MindWavesPanel::mindWaveChanged,
             [&](MindWaveId, const MindWave& wave) { ++emitCount; receivedWave = wave; });
 
-    panel.findChild<QDoubleSpinBox*>(QStringLiteral("warpStrengthSpinBox"))->setValue(2.5);
+    panel.findChild<NumericField*>(QStringLiteral("warpStrengthSpinBox"))->setValue(2.5);
 
     QCOMPARE(emitCount, 1);
     QVERIFY(receivedWave.has_value());
@@ -215,7 +215,7 @@ void MindWavesPanelTest::selectingARowWithNoWarpSourceLeavesTheWarpControlsDisab
 
     QVERIFY(!panel.findChild<QCheckBox*>(QStringLiteral("warpEnabledCheckBox"))->isChecked());
     QVERIFY(!panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))->isEnabled());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("warpStrengthSpinBox"))->isEnabled());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("warpStrengthSpinBox"))->isEnabled());
 }
 
 void MindWavesPanelTest::selectingARowWithAnExistingWarpSourcePopulatesTheCheckboxStrengthAndEditor() {
@@ -235,7 +235,7 @@ void MindWavesPanelTest::selectingARowWithAnExistingWarpSourcePopulatesTheCheckb
     panel.selectMindWave(9);
 
     QVERIFY(panel.findChild<QCheckBox*>(QStringLiteral("warpEnabledCheckBox"))->isChecked());
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("warpStrengthSpinBox"))->value(), 1.5);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("warpStrengthSpinBox"))->value(), 1.5);
     QVERIFY(panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))->isEnabled());
     QCOMPARE(panel.findChild<MindWaveEditor*>(QStringLiteral("warpSourceEditor"))->mindWave().period(), 3.0);
 }

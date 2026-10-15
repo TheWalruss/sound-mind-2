@@ -6,9 +6,9 @@
 
 #include "sound_mind/core/midi_program_mapping.h"
 #include "sound_mind/core/project.h"
+#include "sound_mind/studio/numeric_field.h"
 
 class QComboBox;
-class QDoubleSpinBox;
 class QPushButton;
 class QTableWidget;
 

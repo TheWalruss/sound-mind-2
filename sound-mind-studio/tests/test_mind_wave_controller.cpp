@@ -1,7 +1,6 @@
 #include "test_mind_wave_controller.h"
 
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
@@ -16,6 +15,7 @@
 #include "sound_mind/studio/mind_wave_controller.h"
 #include "sound_mind/studio/mind_wave_editor.h"
 #include "sound_mind/studio/mind_waves_panel.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 #include "sound_mind/studio/undo_stack.h"
 
@@ -34,6 +34,7 @@ using sound_mind::studio::MindWaveEditor;
 using sound_mind::studio::MindWavesPanel;
 using sound_mind::studio::ToolConfigurationPanel;
 using sound_mind::studio::UndoStack;
+using sound_mind::studio::NumericField;
 
 namespace {
 
@@ -360,7 +361,7 @@ void MindWaveControllerTest::editingTheSelectedMindWaveWhilePreviewingUpdatesThe
     // rather than calling updateMindWave() directly (which - in
     // production - only ever runs *in response to* that same signal).
     fixture.mindWavesPanel.findChild<MindWaveEditor*>(QStringLiteral("mindWaveEditor"))
-        ->findChild<QDoubleSpinBox*>(QStringLiteral("periodSpinBox"))
+        ->findChild<NumericField*>(QStringLiteral("periodSpinBox"))
         ->setValue(0.01);
 
     const QImage afterEdit = fixture.canvas.grab().toImage();

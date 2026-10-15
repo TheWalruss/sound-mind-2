@@ -1,4 +1,5 @@
 #include "sound_mind/studio/generator_dialog.h"
+#include "sound_mind/studio/numeric_field.h"
 
 #include <limits>
 #include <random>
@@ -9,7 +10,6 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSlider>
-#include <QSpinBox>
 #include <QVBoxLayout>
 
 namespace sound_mind::studio {
@@ -30,7 +30,7 @@ GeneratorDialog::GeneratorDialog(QWidget* parent) : QDialog(parent) {
     form->addRow(tr("Chaos ↔ Order"), orderChaosSlider_);
 
     auto* seedRow = new QHBoxLayout();
-    seedSpinBox_ = new QSpinBox();
+    seedSpinBox_ = new IntegerField();
     seedSpinBox_->setObjectName(QStringLiteral("seedSpinBox"));
     seedSpinBox_->setRange(0, std::numeric_limits<int>::max());
     seedSpinBox_->setToolTip(

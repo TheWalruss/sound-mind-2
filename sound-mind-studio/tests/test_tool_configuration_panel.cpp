@@ -8,13 +8,11 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSignalSpy>
-#include <QSpinBox>
 #include <QtTest/QtTest>
 
 #include "sound_mind/core/blend_mode.h"
@@ -25,6 +23,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
 #include "sound_mind/studio/harmonic_series_widget.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/preset_indicator_label.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
@@ -58,6 +57,8 @@ using sound_mind::core::ToolType;
 using sound_mind::studio::GradientEditorWidget;
 using sound_mind::studio::HarmonicSeriesWidget;
 using sound_mind::studio::ToolConfigurationPanel;
+using sound_mind::studio::NumericField;
+using sound_mind::studio::IntegerField;
 
 namespace {
 
@@ -136,7 +137,7 @@ void ToolConfigurationPanelTest::changingTheTipShapeEmitsToolConfigurationChange
 
 void ToolConfigurationPanelTest::changingFalloffEmitsToolConfigurationChanged() {
     ToolConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -148,7 +149,7 @@ void ToolConfigurationPanelTest::changingFalloffEmitsToolConfigurationChanged() 
 
 void ToolConfigurationPanelTest::changingSizeEmitsToolConfigurationChanged() {
     ToolConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -160,7 +161,7 @@ void ToolConfigurationPanelTest::changingSizeEmitsToolConfigurationChanged() {
 
 void ToolConfigurationPanelTest::editingTheGradientEditorUpdatesDefaultGradientAndEmits() {
     ToolConfigurationPanel panel;
-    auto* opacitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"));
+    auto* opacitySpinBox = panel.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"));
     QVERIFY(opacitySpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -200,7 +201,7 @@ void ToolConfigurationPanelTest::togglingShowPathGeometryEmitsItsOwnSignal() {
 void ToolConfigurationPanelTest::freshPanelHasStampModeStrokeAndTheIntervalSpinBoxDisabled() {
     const ToolConfigurationPanel panel;
     QCOMPARE(panel.toolConfiguration().stampMode(), StampMode::Stroke);
-    auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"));
+    auto* intervalSpinBox = panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"));
     QVERIFY(intervalSpinBox != nullptr);
     // Meaningless while Stroke - see ToolConfiguration::stampInterval()'s
     // own docs - so disabled rather than editable-but-ignored.
@@ -211,7 +212,7 @@ void ToolConfigurationPanelTest::changingTheStampModeEmitsToolConfigurationChang
     ToolConfigurationPanel panel;
     auto* combo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
     QVERIFY(combo != nullptr);
-    auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"));
+    auto* intervalSpinBox = panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"));
     QVERIFY(intervalSpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -224,7 +225,7 @@ void ToolConfigurationPanelTest::changingTheStampModeEmitsToolConfigurationChang
 
 void ToolConfigurationPanelTest::changingTheStampIntervalEmitsToolConfigurationChanged() {
     ToolConfigurationPanel panel;
-    auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"));
+    auto* intervalSpinBox = panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"));
     QVERIFY(intervalSpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -243,7 +244,7 @@ void ToolConfigurationPanelTest::loadingAConfigurationSyncsTheStampModeAndInterv
     panel.setToolConfiguration(config);
 
     auto* combo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
-    auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"));
+    auto* intervalSpinBox = panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"));
     QCOMPARE(combo->currentText(), QStringLiteral("Frequency Axis"));
     QCOMPARE(intervalSpinBox->value(), 150.0);
     QVERIFY(intervalSpinBox->isEnabled());
@@ -357,8 +358,8 @@ void ToolConfigurationPanelTest::switchingToolTypeToInstrumentShowsItsOwnGroupAn
 
 void ToolConfigurationPanelTest::switchingToolTypeToInstrumentPreservesSharedFields() {
     ToolConfigurationPanel panel;
-    auto* falloffSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"));
-    auto* sizeSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    auto* falloffSpinBox = panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"));
+    auto* sizeSpinBox = panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"));
     falloffSpinBox->setValue(0.6);
     sizeSpinBox->setValue(1.5);
 
@@ -387,34 +388,34 @@ void ToolConfigurationPanelTest::changingHarmonicCountResizesTheStrengthRows() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
-    auto* harmonicCountSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("harmonicCountSpinBox"));
+    auto* harmonicCountSpinBox = panel.findChild<IntegerField*>(QStringLiteral("harmonicCountSpinBox"));
 
     const int initialCount =
         static_cast<int>(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration())
                               .harmonicStrengths()
                               .size());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox%1").arg(initialCount)) !=
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("harmonicStrengthSpinBox%1").arg(initialCount)) !=
             nullptr);
 
     harmonicCountSpinBox->setValue(initialCount + 2);
 
     QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).harmonicStrengths().size(),
               std::size_t{static_cast<std::size_t>(initialCount) + 2});
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox%1").arg(initialCount + 2)) !=
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("harmonicStrengthSpinBox%1").arg(initialCount + 2)) !=
             nullptr);
 
     harmonicCountSpinBox->setValue(1);
 
     QCOMPARE(dynamic_cast<const InstrumentConfiguration&>(panel.toolConfiguration()).harmonicStrengths().size(),
               std::size_t{1});
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox2")) == nullptr);
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("harmonicStrengthSpinBox2")) == nullptr);
 }
 
 void ToolConfigurationPanelTest::changingAHarmonicStrengthEmitsToolConfigurationChanged() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
-    auto* firstHarmonicSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox1"));
+    auto* firstHarmonicSpinBox = panel.findChild<NumericField*>(QStringLiteral("harmonicStrengthSpinBox1"));
     QVERIFY(firstHarmonicSpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -429,7 +430,7 @@ void ToolConfigurationPanelTest::changingInharmonicityEmitsToolConfigurationChan
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
-    auto* inharmonicitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("inharmonicitySpinBox"));
+    auto* inharmonicitySpinBox = panel.findChild<NumericField*>(QStringLiteral("inharmonicitySpinBox"));
     QVERIFY(inharmonicitySpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -448,9 +449,9 @@ void ToolConfigurationPanelTest::loadingAnInstrumentConfigurationSyncsToolTypeAn
     panel.setToolConfiguration(config);
 
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
-    auto* harmonicCountSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("harmonicCountSpinBox"));
-    auto* inharmonicitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("inharmonicitySpinBox"));
-    auto* secondHarmonicSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox2"));
+    auto* harmonicCountSpinBox = panel.findChild<IntegerField*>(QStringLiteral("harmonicCountSpinBox"));
+    auto* inharmonicitySpinBox = panel.findChild<NumericField*>(QStringLiteral("inharmonicitySpinBox"));
+    auto* secondHarmonicSpinBox = panel.findChild<NumericField*>(QStringLiteral("harmonicStrengthSpinBox2"));
     auto* instrumentGroup = panel.findChild<QWidget*>(QStringLiteral("instrumentGroup"));
 
     QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Instrument"));
@@ -541,7 +542,7 @@ void ToolConfigurationPanelTest::changingVibratoDepthEmitsToolConfigurationChang
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
-    auto* vibratoDepthSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("vibratoDepthSpinBox"));
+    auto* vibratoDepthSpinBox = panel.findChild<NumericField*>(QStringLiteral("vibratoDepthSpinBox"));
     QVERIFY(vibratoDepthSpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -594,9 +595,9 @@ void ToolConfigurationPanelTest::loadingAnInstrumentConfigurationSyncsVibratoAnd
     panel.setToolConfiguration(config);
 
     auto* vibratoCombo = panel.findChild<QComboBox*>(QStringLiteral("vibratoMindWaveCombo"));
-    auto* vibratoDepthSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("vibratoDepthSpinBox"));
+    auto* vibratoDepthSpinBox = panel.findChild<NumericField*>(QStringLiteral("vibratoDepthSpinBox"));
     auto* tremoloCombo = panel.findChild<QComboBox*>(QStringLiteral("tremoloMindWaveCombo"));
-    auto* tremoloDepthSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("tremoloDepthSpinBox"));
+    auto* tremoloDepthSpinBox = panel.findChild<NumericField*>(QStringLiteral("tremoloDepthSpinBox"));
 
     QCOMPARE(vibratoCombo->currentText(), QStringLiteral("Slow Pulse"));
     QCOMPARE(vibratoDepthSpinBox->value(), 1.5);
@@ -610,7 +611,7 @@ void ToolConfigurationPanelTest::switchingAwayFromAndBackToInstrumentPreservesVi
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
     panel.setAvailableMindWaves({{MindWaveId{5}, QStringLiteral("Slow Pulse")}});
     panel.findChild<QComboBox*>(QStringLiteral("vibratoMindWaveCombo"))->setCurrentIndex(1);
-    panel.findChild<QDoubleSpinBox*>(QStringLiteral("vibratoDepthSpinBox"))->setValue(3.0);
+    panel.findChild<NumericField*>(QStringLiteral("vibratoDepthSpinBox"))->setValue(3.0);
 
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Procedural")));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
@@ -848,7 +849,7 @@ void ToolConfigurationPanelTest::changingDecayRateEmitsToolConfigurationChanged(
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonance")));
-    auto* decayRateSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("decayRateSpinBox"));
+    auto* decayRateSpinBox = panel.findChild<NumericField*>(QStringLiteral("decayRateSpinBox"));
     QVERIFY(decayRateSpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -873,7 +874,7 @@ void ToolConfigurationPanelTest::loadingAResonanceConfigurationSyncsToolTypeAndT
 
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     auto* resonantProfileCombo = panel.findChild<QComboBox*>(QStringLiteral("resonanceProfileCombo"));
-    auto* decayRateSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("decayRateSpinBox"));
+    auto* decayRateSpinBox = panel.findChild<NumericField*>(QStringLiteral("decayRateSpinBox"));
     auto* resonanceGroup = panel.findChild<QWidget*>(QStringLiteral("resonanceGroup"));
 
     QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Resonance"));
@@ -885,7 +886,7 @@ void ToolConfigurationPanelTest::loadingAResonanceConfigurationSyncsToolTypeAndT
 void ToolConfigurationPanelTest::switchingToolTypeToResonanceFixesFalloffAtZeroRegardlessOfThePriorTool() {
     ToolConfigurationPanel panel;  // Fresh - already Procedural.
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
-    auto* falloffSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"));
+    auto* falloffSpinBox = panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"));
     // Procedural's own default falloff is 0.5 - give it a distinctly
     // different, non-zero value so a carried-over value would be obvious.
     falloffSpinBox->setValue(0.9);
@@ -905,7 +906,7 @@ void ToolConfigurationPanelTest::changingFrequencyScaleEmitsToolConfigurationCha
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonance")));
-    auto* frequencyScaleSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("frequencyScaleSpinBox"));
+    auto* frequencyScaleSpinBox = panel.findChild<NumericField*>(QStringLiteral("frequencyScaleSpinBox"));
     QVERIFY(frequencyScaleSpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -920,7 +921,7 @@ void ToolConfigurationPanelTest::changingTimeSpanEmitsToolConfigurationChanged()
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Resonance")));
-    auto* timeSpanSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("timeSpanSpinBox"));
+    auto* timeSpanSpinBox = panel.findChild<NumericField*>(QStringLiteral("timeSpanSpinBox"));
     QVERIFY(timeSpanSpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -939,8 +940,8 @@ void ToolConfigurationPanelTest::loadingAResonanceConfigurationSyncsFrequencySca
 
     panel.setToolConfiguration(config);
 
-    auto* frequencyScaleSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("frequencyScaleSpinBox"));
-    auto* timeSpanSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("timeSpanSpinBox"));
+    auto* frequencyScaleSpinBox = panel.findChild<NumericField*>(QStringLiteral("frequencyScaleSpinBox"));
+    auto* timeSpanSpinBox = panel.findChild<NumericField*>(QStringLiteral("timeSpanSpinBox"));
     QCOMPARE(frequencyScaleSpinBox->value(), 4.0);
     QCOMPARE(timeSpanSpinBox->value(), 0.3);
 }
@@ -1250,8 +1251,8 @@ void ToolConfigurationPanelTest::switchingToolTypeToSoftenHidesEveryOtherGroup()
 
 void ToolConfigurationPanelTest::switchingToolTypeToHealPreservesSharedFields() {
     ToolConfigurationPanel panel;
-    auto* falloffSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"));
-    auto* sizeSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    auto* falloffSpinBox = panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"));
+    auto* sizeSpinBox = panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"));
     falloffSpinBox->setValue(0.6);
     sizeSpinBox->setValue(1.5);
 
@@ -1336,7 +1337,7 @@ void ToolConfigurationPanelTest::changingAmountEmitsToolConfigurationChanged() {
     ToolConfigurationPanel panel;
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Order/Chaos")));
-    auto* amountSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("amountSpinBox"));
+    auto* amountSpinBox = panel.findChild<NumericField*>(QStringLiteral("amountSpinBox"));
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
     amountSpinBox->setValue(-0.6);
@@ -1354,7 +1355,7 @@ void ToolConfigurationPanelTest::loadingAnOrderChaosConfigurationSyncsToolTypeAn
     panel.setToolConfiguration(config);
 
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
-    auto* amountSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("amountSpinBox"));
+    auto* amountSpinBox = panel.findChild<NumericField*>(QStringLiteral("amountSpinBox"));
     QCOMPARE(toolTypeCombo->currentText(), QStringLiteral("Order/Chaos"));
     QCOMPARE(amountSpinBox->value(), 0.35);
 }
@@ -1364,13 +1365,13 @@ void ToolConfigurationPanelTest::loadingAnOrderChaosConfigurationSyncsToolTypeAn
 void ToolConfigurationPanelTest::proceduralShowsEverySharedControl() {
     const ToolConfigurationPanel panel;  // Fresh - already Procedural.
 
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<GradientEditorWidget*>(QStringLiteral("gradientEditor"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
 }
 
 void ToolConfigurationPanelTest::mindShotHidesFalloffSizeAndGradientEditorButKeepsStampControls() {
@@ -1379,12 +1380,12 @@ void ToolConfigurationPanelTest::mindShotHidesFalloffSizeAndGradientEditorButKee
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Shot")));
 
     // Never consulted by applyMindShotPaintOperation() - see its own docs.
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"))->isHidden());
     QVERIFY(panel.findChild<GradientEditorWidget*>(QStringLiteral("gradientEditor"))->isHidden());
     // Still a real, meaningful placement choice.
     QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
 }
 
 void ToolConfigurationPanelTest::mindGrainHidesFalloffSizeAndGradientEditorButKeepsStampControls() {
@@ -1392,11 +1393,11 @@ void ToolConfigurationPanelTest::mindGrainHidesFalloffSizeAndGradientEditorButKe
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Mind Grain")));
 
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"))->isHidden());
     QVERIFY(panel.findChild<GradientEditorWidget*>(QStringLiteral("gradientEditor"))->isHidden());
     QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
 }
 
 void ToolConfigurationPanelTest::healHidesIntensityAndStampControlsButKeepsFalloffSizeAndOpacity() {
@@ -1405,14 +1406,14 @@ void ToolConfigurationPanelTest::healHidesIntensityAndStampControlsButKeepsFallo
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Heal")));
 
     // Real, load-bearing parameters for Heal.
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"))->isHidden());
     QVERIFY(!panel.findChild<GradientEditorWidget*>(QStringLiteral("gradientEditor"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
     // Never consulted by Heal's own blend - see HealConfiguration's docs.
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
 }
 
 void ToolConfigurationPanelTest::softenHidesIntensityAndStampControls() {
@@ -1420,12 +1421,12 @@ void ToolConfigurationPanelTest::softenHidesIntensityAndStampControls() {
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Soften")));
 
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
 }
 
 void ToolConfigurationPanelTest::smudgeHidesIntensityAndStampControls() {
@@ -1433,12 +1434,12 @@ void ToolConfigurationPanelTest::smudgeHidesIntensityAndStampControls() {
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Smudge")));
 
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
 }
 
 void ToolConfigurationPanelTest::resonanceHidesFalloffAndSizeButKeepsStampControlsAndGradientEditor() {
@@ -1448,12 +1449,12 @@ void ToolConfigurationPanelTest::resonanceHidesFalloffAndSizeButKeepsStampContro
 
     // Superseded by the dedicated Frequency Scale/Time Span controls in
     // resonanceGroup_ - see updateSharedControlVisibility()'s own docs.
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"))->isHidden());
     // Not a FixedStampPlacementConfiguration - stamps along the stroke
     // the same adjustable way Instrument does.
     QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
     // Still reads the gradient for its own target color/intensity.
     QVERIFY(!panel.findChild<GradientEditorWidget*>(QStringLiteral("gradientEditor"))->isHidden());
     // sizeMindWaveCombo_ stays with the broader gate, not the narrower
@@ -1467,12 +1468,12 @@ void ToolConfigurationPanelTest::orderChaosHidesIntensityAndStampControls() {
     auto* toolTypeCombo = panel.findChild<QComboBox*>(QStringLiteral("toolTypeCombo"));
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Order/Chaos")));
 
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
     QVERIFY(panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"))->isHidden());
 }
 
 void ToolConfigurationPanelTest::switchingFromHealBackToProceduralPreservesTheOriginalStampMode() {
@@ -1719,7 +1720,7 @@ void ToolConfigurationPanelTest::draggingTheHarmonicSeriesWidgetUpdatesASpinBoxA
     QVERIFY(harmonicSeriesWidget != nullptr);
     harmonicSeriesWidget->resize(240, 100);
     const std::size_t count = harmonicSeriesWidget->harmonicStrengths().size();
-    auto* firstHarmonicSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox1"));
+    auto* firstHarmonicSpinBox = panel.findChild<NumericField*>(QStringLiteral("harmonicStrengthSpinBox1"));
     QVERIFY(firstHarmonicSpinBox != nullptr);
     QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
 
@@ -1742,7 +1743,7 @@ void ToolConfigurationPanelTest::changingAHarmonicStrengthSpinBoxSyncsTheHarmoni
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
     auto* harmonicSeriesWidget = panel.findChild<HarmonicSeriesWidget*>(QStringLiteral("harmonicSeriesWidget"));
     QVERIFY(harmonicSeriesWidget != nullptr);
-    auto* firstHarmonicSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicStrengthSpinBox1"));
+    auto* firstHarmonicSpinBox = panel.findChild<NumericField*>(QStringLiteral("harmonicStrengthSpinBox1"));
     QVERIFY(firstHarmonicSpinBox != nullptr);
 
     firstHarmonicSpinBox->setValue(0.42);
@@ -1756,7 +1757,7 @@ void ToolConfigurationPanelTest::changingHarmonicCountResyncsTheHarmonicSeriesWi
     toolTypeCombo->setCurrentIndex(toolTypeCombo->findText(QStringLiteral("Instrument")));
     auto* harmonicSeriesWidget = panel.findChild<HarmonicSeriesWidget*>(QStringLiteral("harmonicSeriesWidget"));
     QVERIFY(harmonicSeriesWidget != nullptr);
-    auto* harmonicCountSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("harmonicCountSpinBox"));
+    auto* harmonicCountSpinBox = panel.findChild<IntegerField*>(QStringLiteral("harmonicCountSpinBox"));
     const int initialCount = static_cast<int>(harmonicSeriesWidget->harmonicStrengths().size());
 
     harmonicCountSpinBox->setValue(initialCount + 2);
@@ -1837,7 +1838,7 @@ void ToolConfigurationPanelTest::presetIndicatorShowsLoadedPresetThenModifiedThe
     panel.setProject(&project);
     auto* indicator = panel.findChild<sound_mind::studio::PresetIndicatorLabel*>();
     auto* combo = panel.findChild<QComboBox*>(QStringLiteral("toolPresetCombo"));
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("falloffSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("falloffSpinBox"));
     QVERIFY(indicator != nullptr && combo != nullptr && spinBox != nullptr);
     QVERIFY(!indicator->hasActivePreset());
 

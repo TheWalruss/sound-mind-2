@@ -3,16 +3,17 @@
 #include <filesystem>
 
 #include <QDialogButtonBox>
-#include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QSpinBox>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/create_project_wizard.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::core::ProjectSettings;
 using sound_mind::studio::CreateProjectWizard;
+using sound_mind::studio::NumericField;
+using sound_mind::studio::IntegerField;
 
 namespace {
 
@@ -108,10 +109,10 @@ void CreateProjectWizardTest::advancedFieldsAreHiddenUntilToggled() {
 
 void CreateProjectWizardTest::changingAdvancedFieldsChangesSettings() {
     CreateProjectWizard wizard;
-    auto* sampleRateSpin = wizard.findChild<QSpinBox*>(QStringLiteral("sampleRateSpin"));
-    auto* binCountSpin = wizard.findChild<QSpinBox*>(QStringLiteral("binCountSpin"));
-    auto* minFrequencySpin = wizard.findChild<QSpinBox*>(QStringLiteral("minFrequencySpin"));
-    auto* maxFrequencySpin = wizard.findChild<QSpinBox*>(QStringLiteral("maxFrequencySpin"));
+    auto* sampleRateSpin = wizard.findChild<IntegerField*>(QStringLiteral("sampleRateSpin"));
+    auto* binCountSpin = wizard.findChild<IntegerField*>(QStringLiteral("binCountSpin"));
+    auto* minFrequencySpin = wizard.findChild<IntegerField*>(QStringLiteral("minFrequencySpin"));
+    auto* maxFrequencySpin = wizard.findChild<IntegerField*>(QStringLiteral("maxFrequencySpin"));
     QVERIFY(sampleRateSpin != nullptr);
     QVERIFY(binCountSpin != nullptr);
     QVERIFY(minFrequencySpin != nullptr);
@@ -131,8 +132,8 @@ void CreateProjectWizardTest::changingAdvancedFieldsChangesSettings() {
 
 void CreateProjectWizardTest::durationDrivesCanvasWidthAtTheCurrentTimestep() {
     CreateProjectWizard wizard;
-    auto* durationSpin = wizard.findChild<QDoubleSpinBox*>(QStringLiteral("durationSpin"));
-    auto* timestepSpin = wizard.findChild<QDoubleSpinBox*>(QStringLiteral("timestepSpin"));
+    auto* durationSpin = wizard.findChild<NumericField*>(QStringLiteral("durationSpin"));
+    auto* timestepSpin = wizard.findChild<NumericField*>(QStringLiteral("timestepSpin"));
     QVERIFY(durationSpin != nullptr);
     QVERIFY(timestepSpin != nullptr);
 
@@ -144,7 +145,7 @@ void CreateProjectWizardTest::durationDrivesCanvasWidthAtTheCurrentTimestep() {
 
 void CreateProjectWizardTest::canvasHeightStaysEqualToBinCount() {
     CreateProjectWizard wizard;
-    auto* binCountSpin = wizard.findChild<QSpinBox*>(QStringLiteral("binCountSpin"));
+    auto* binCountSpin = wizard.findChild<IntegerField*>(QStringLiteral("binCountSpin"));
     QVERIFY(binCountSpin != nullptr);
     binCountSpin->setValue(256);
 

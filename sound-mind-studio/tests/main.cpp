@@ -67,6 +67,7 @@
 #include "test_preset_indicator_label.h"
 #include "test_mind_waves_panel.h"
 #include "test_name_collision_dialog.h"
+#include "test_numeric_field.h"
 #include "test_paint_controller.h"
 #include "test_path_controller.h"
 #include "test_path_edit_session.h"
@@ -150,6 +151,7 @@ const std::array kTestClasses{
     SM_TEST_CLASS_ENTRY(PresetIndicatorLabelTest),
     SM_TEST_CLASS_ENTRY(MindWavesPanelTest),
     SM_TEST_CLASS_ENTRY(NameCollisionDialogTest),
+    SM_TEST_CLASS_ENTRY(NumericFieldTest),
     SM_TEST_CLASS_ENTRY(MindCaptureDialogTest),
     SM_TEST_CLASS_ENTRY(MidiImportTest),
     SM_TEST_CLASS_ENTRY(MidiConfigurationPanelTest),

@@ -3,9 +3,9 @@
 #include <QWidget>
 
 #include "sound_mind/core/gradient.h"
+#include "sound_mind/studio/numeric_field.h"
 
 class QCheckBox;
-class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
 
@@ -141,10 +141,10 @@ private:
     void updateIntensityFieldVisibility();
 
     GradientBarWidget* bar_;
-    QDoubleSpinBox* leftIntensitySpinBox_;
-    QDoubleSpinBox* leftOpacitySpinBox_;
-    QDoubleSpinBox* rightIntensitySpinBox_;
-    QDoubleSpinBox* rightOpacitySpinBox_;
+    NumericField* leftIntensitySpinBox_;
+    NumericField* leftOpacitySpinBox_;
+    NumericField* rightIntensitySpinBox_;
+    NumericField* rightOpacitySpinBox_;
     QLabel* leftIntensityLabel_ = nullptr;
     QLabel* rightIntensityLabel_ = nullptr;
     QLabel* leftOpacityLabel_ = nullptr;

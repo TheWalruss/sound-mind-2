@@ -22,7 +22,7 @@ namespace sound_mind::studio {
  * Deliberately a general-purpose, `MindWave`-agnostic control - nothing
  * here knows about `GeneratorType::Continuous` or any other domain
  * concept, the same "purely presentational" division every other widget
- * in this codebase draws. A visual *complement* to a plain `QDoubleSpinBox`
+ * in this codebase draws. A visual *complement* to a plain `NumericField`
  * showing the same value, not a replacement for one - `MindWaveEditor`
  * embeds one of each side by side per Continuous field, mirroring the
  * `EqualizerCurveWidget`/`GradientEditorWidget` and `HarmonicSeriesWidget`/

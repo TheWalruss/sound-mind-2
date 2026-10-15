@@ -4,13 +4,12 @@
 #include <QString>
 
 #include "sound_mind/core/chord_generator.h"
+#include "sound_mind/studio/numeric_field.h"
 
 class QComboBox;
-class QDoubleSpinBox;
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
-class QSpinBox;
 class QWidget;
 
 namespace sound_mind::studio {
@@ -132,7 +131,7 @@ private:
     QWidget* chordBuilderGroup_ = nullptr;
 
     QComboBox* rootCombo_ = nullptr;
-    QSpinBox* octaveSpinBox_ = nullptr;
+    IntegerField* octaveSpinBox_ = nullptr;
     QComboBox* categoryCombo_ = nullptr;
     QComboBox* chordCombo_ = nullptr;
     QLabel* notesPreviewLabel_ = nullptr;
@@ -140,21 +139,21 @@ private:
     QComboBox* modeCombo_ = nullptr;
 
     QWidget* blockGroup_ = nullptr;
-    QDoubleSpinBox* blockDurationSpinBox_ = nullptr;
+    NumericField* blockDurationSpinBox_ = nullptr;
 
     QWidget* arpeggioGroup_ = nullptr;
     QComboBox* orderCombo_ = nullptr;
     QLineEdit* customIndicesLineEdit_ = nullptr;
-    QDoubleSpinBox* bpmSpinBox_ = nullptr;
+    NumericField* bpmSpinBox_ = nullptr;
     QComboBox* subdivisionCombo_ = nullptr;
-    QSpinBox* noteDurationPercentSpinBox_ = nullptr;
-    QSpinBox* repeatsSpinBox_ = nullptr;
-    QSpinBox* randomSeedSpinBox_ = nullptr;
+    IntegerField* noteDurationPercentSpinBox_ = nullptr;
+    IntegerField* repeatsSpinBox_ = nullptr;
+    IntegerField* randomSeedSpinBox_ = nullptr;
 
     QWidget* notationGroup_ = nullptr;
     QPlainTextEdit* notationTextEdit_ = nullptr;
-    QDoubleSpinBox* notationBpmSpinBox_ = nullptr;
-    QDoubleSpinBox* notationReferenceHzSpinBox_ = nullptr;
+    NumericField* notationBpmSpinBox_ = nullptr;
+    NumericField* notationReferenceHzSpinBox_ = nullptr;
     QLabel* notationErrorLabel_ = nullptr;
 
     sound_mind::core::ChordGeneratorParams params_;

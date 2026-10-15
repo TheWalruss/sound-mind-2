@@ -5,11 +5,10 @@
 #include <QDialog>
 
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/numeric_field.h"
 
 class QDialogButtonBox;
-class QDoubleSpinBox;
 class QLineEdit;
-class QSpinBox;
 class QWidget;
 
 namespace sound_mind::studio {
@@ -84,14 +83,14 @@ private slots:
 private:
     QLineEdit* nameEdit_ = nullptr;
     QLineEdit* locationEdit_ = nullptr;
-    QDoubleSpinBox* durationSecondsSpin_ = nullptr;
+    NumericField* durationSecondsSpin_ = nullptr;
 
     QWidget* advancedContainer_ = nullptr;
-    QSpinBox* sampleRateSpin_ = nullptr;
-    QSpinBox* binCountSpin_ = nullptr;
-    QSpinBox* minFrequencySpin_ = nullptr;
-    QSpinBox* maxFrequencySpin_ = nullptr;
-    QDoubleSpinBox* timestepMsSpin_ = nullptr;
+    IntegerField* sampleRateSpin_ = nullptr;
+    IntegerField* binCountSpin_ = nullptr;
+    IntegerField* minFrequencySpin_ = nullptr;
+    IntegerField* maxFrequencySpin_ = nullptr;
+    NumericField* timestepMsSpin_ = nullptr;
 
     QDialogButtonBox* buttonBox_ = nullptr;
 };

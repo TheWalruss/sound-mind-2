@@ -1,4 +1,5 @@
 #include "sound_mind/studio/layers_panel.h"
+#include "sound_mind/studio/numeric_field.h"
 
 #include <algorithm>
 
@@ -11,7 +12,6 @@
 #include <QApplication>
 #include <QColor>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QEnterEvent>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -27,7 +27,6 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSlider>
-#include <QSpinBox>
 #include <QStackedLayout>
 #include <QVBoxLayout>
 #include <QVariant>
@@ -630,23 +629,23 @@ public:
 
             // Time Alignment (v0.Y.21.1): two per-layer horizontal transform
             // controls - see sound_mind::core::Layer::translationColumns()/
-            // rescaleFactor()'s own docs for what each does. QSpinBox's range is
+            // rescaleFactor()'s own docs for what each does. IntegerField's range is
             // a plain `int`, not Layer's `std::int64_t` - a UI-level limit, the
             // same shape as opacitySlider's own float-via-0..100-int range
             // above; a shift of ±2^31 columns (millions of seconds at any
             // realistic hop length) is far beyond anything this control needs
             // to reach.
-            auto* translationSpinBox = new QSpinBox();
+            auto* translationSpinBox = new IntegerField();
             translationSpinBox->setObjectName(QStringLiteral("translationSpinBox"));
             translationSpinBox->setRange(-1'000'000, 1'000'000);
             translationSpinBox->setValue(static_cast<int>(data.translationColumns));
             translationSpinBox->setToolTip(
                 tr("Shift this layer's content earlier/later in time, in spectrogram columns"));
-            connect(translationSpinBox, &QSpinBox::valueChanged, this,
+            connect(translationSpinBox, &IntegerField::valueChanged, this,
                     [this](int value) { emit translationChanged(id_, static_cast<std::int64_t>(value)); });
             controlsRowTwo->addWidget(translationSpinBox, 1);
 
-            auto* rescaleSpinBox = new QDoubleSpinBox();
+            auto* rescaleSpinBox = new NumericField();
             rescaleSpinBox->setObjectName(QStringLiteral("rescaleSpinBox"));
             rescaleSpinBox->setRange(0.1, 10.0);
             rescaleSpinBox->setSingleStep(0.05);
@@ -654,7 +653,7 @@ public:
             rescaleSpinBox->setSuffix(QStringLiteral("x"));
             rescaleSpinBox->setValue(data.rescaleFactor);
             rescaleSpinBox->setToolTip(tr("Stretch/compress this layer's own timeline"));
-            connect(rescaleSpinBox, &QDoubleSpinBox::valueChanged, this,
+            connect(rescaleSpinBox, &NumericField::valueChanged, this,
                     [this](double value) { emit rescaleChanged(id_, value); });
             controlsRowTwo->addWidget(rescaleSpinBox, 1);
 

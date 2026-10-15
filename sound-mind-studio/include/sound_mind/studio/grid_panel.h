@@ -7,10 +7,10 @@
 
 #include "sound_mind/studio/axis_labels.h"
 #include "sound_mind/studio/grid_config.h"
+#include "sound_mind/studio/numeric_field.h"
 
 class QCheckBox;
 class QComboBox;
-class QDoubleSpinBox;
 class QLineEdit;
 class QPushButton;
 
@@ -301,19 +301,19 @@ private:
     QPushButton* notesButton_ = nullptr;
     QPushButton* octavesButton_ = nullptr;
     QCheckBox* harmonicSeriesCheckBox_ = nullptr;
-    QDoubleSpinBox* harmonicFundamentalSpinBox_ = nullptr;
+    NumericField* harmonicFundamentalSpinBox_ = nullptr;
     QCheckBox* customFrequenciesCheckBox_ = nullptr;
     QLineEdit* customFrequenciesLineEdit_ = nullptr;
     QPushButton* frequencyGridColorButton_ = nullptr;
-    QDoubleSpinBox* frequencyGridWidthSpinBox_ = nullptr;
+    NumericField* frequencyGridWidthSpinBox_ = nullptr;
     QComboBox* frequencyGridDashStyleCombo_ = nullptr;
 
     TimingGridConfig timingGridConfig_;
     QComboBox* timingGridModeCombo_ = nullptr;
-    QDoubleSpinBox* timingGridIntervalSpinBox_ = nullptr;
+    NumericField* timingGridIntervalSpinBox_ = nullptr;
     QComboBox* timingGridSubdivisionCombo_ = nullptr;
     QPushButton* timingGridColorButton_ = nullptr;
-    QDoubleSpinBox* timingGridWidthSpinBox_ = nullptr;
+    NumericField* timingGridWidthSpinBox_ = nullptr;
     QComboBox* timingGridDashStyleCombo_ = nullptr;
 
     bool snapToGridEnabled_ = false;

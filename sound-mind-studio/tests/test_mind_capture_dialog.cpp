@@ -1,12 +1,13 @@
 #include "test_mind_capture_dialog.h"
 
-#include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/mind_capture_dialog.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::studio::MindCaptureDialog;
+using sound_mind::studio::NumericField;
 
 void MindCaptureDialogTest::freshDialogHasTheGivenNameAndZeroForBothNumericFields() {
     const MindCaptureDialog dialog(QStringLiteral("Capture Mind Shot"), QStringLiteral("Mind Shot 1"));
@@ -32,8 +33,8 @@ void MindCaptureDialogTest::nameIsTrimmedOfLeadingAndTrailingWhitespace() {
 
 void MindCaptureDialogTest::fundamentalFrequencyHzAndStartTimeOffsetSecondsReflectTheSpinBoxes() {
     MindCaptureDialog dialog(QStringLiteral("Capture Mind Shot"), QStringLiteral("Mind Shot 1"));
-    auto* fundamentalFrequencySpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("fundamentalFrequencySpinBox"));
-    auto* startTimeOffsetSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("startTimeOffsetSpinBox"));
+    auto* fundamentalFrequencySpinBox = dialog.findChild<NumericField*>(QStringLiteral("fundamentalFrequencySpinBox"));
+    auto* startTimeOffsetSpinBox = dialog.findChild<NumericField*>(QStringLiteral("startTimeOffsetSpinBox"));
     QVERIFY(fundamentalFrequencySpinBox != nullptr);
     QVERIFY(startTimeOffsetSpinBox != nullptr);
 

@@ -8,14 +8,13 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QGroupBox>
 #include <QPushButton>
 #include <QSignalSpy>
-#include <QSpinBox>
 #include <QVariant>
 #include <QtTest/QtTest>
 
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/preset_indicator_label.h"
 #include "sound_mind/studio/equalizer_curve_widget.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
@@ -32,6 +31,8 @@ using sound_mind::studio::EqualizerCurveWidget;
 using sound_mind::studio::FilterConfigurationPanel;
 using sound_mind::studio::GradientBarWidget;
 using sound_mind::studio::ToneCurveEditor;
+using sound_mind::studio::NumericField;
+using sound_mind::studio::IntegerField;
 
 namespace {
 
@@ -76,7 +77,7 @@ void FilterConfigurationPanelTest::changingAStartSpinBoxUpdatesStop0AndEmitsFilt
     FilterConfigurationPanel panel;
     // The gradient editor's own selection defaults to stop 0 (t=0) - see
     // GradientBarWidget::setGradient()'s own docs.
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"));
     QVERIFY(spinBox != nullptr);
 
     std::optional<FilterConfiguration> received;
@@ -102,7 +103,7 @@ void FilterConfigurationPanelTest::changingAnEndSpinBoxUpdatesStop1AndEmitsFilte
     bar->resize(240, 48);
     QTest::mousePress(bar, Qt::LeftButton, Qt::NoModifier, QPoint(xPosFor(1.0f), 24));
     QTest::mouseRelease(bar, Qt::LeftButton, Qt::NoModifier, QPoint(xPosFor(1.0f), 24));
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightOpacitySpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("gradientRightOpacitySpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -129,10 +130,10 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsBothEndpointStopsW
     // checked via the model itself (already proven correct above and by
     // GradientEditorWidgetTest's own selection-sync tests), not by
     // reselecting it here too.
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->value(), -10.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightIntensitySpinBox"))->value(), -20.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->value(), 0.3);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightOpacitySpinBox"))->value(), 0.4);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->value(), -10.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("gradientRightIntensitySpinBox"))->value(), -20.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("gradientRightOpacitySpinBox"))->value(), 0.4);
     QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().leftIntensity, -30.0f);
     QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().rightIntensity, -40.0f);
     QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().leftOpacity, 0.5f);
@@ -172,7 +173,7 @@ void FilterConfigurationPanelTest::selectingAFilterTypeShowsOnlyThatTypesOwnGrou
 
 void FilterConfigurationPanelTest::changingBlurSigmaUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("blurSigmaSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("blurSigmaSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -184,7 +185,7 @@ void FilterConfigurationPanelTest::changingBlurSigmaUpdatesConfigAndEmits() {
 
 void FilterConfigurationPanelTest::changingMedianSizeUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QSpinBox*>(QStringLiteral("medianSizeSpinBox"));
+    auto* spinBox = panel.findChild<IntegerField*>(QStringLiteral("medianSizeSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -196,8 +197,8 @@ void FilterConfigurationPanelTest::changingMedianSizeUpdatesConfigAndEmits() {
 
 void FilterConfigurationPanelTest::changingDirectionalBlurLengthAndAngleUpdateConfigAndEmit() {
     FilterConfigurationPanel panel;
-    auto* lengthSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("directionalBlurLengthSpinBox"));
-    auto* angleSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("directionalBlurAngleSpinBox"));
+    auto* lengthSpinBox = panel.findChild<IntegerField*>(QStringLiteral("directionalBlurLengthSpinBox"));
+    auto* angleSpinBox = panel.findChild<NumericField*>(QStringLiteral("directionalBlurAngleSpinBox"));
     QVERIFY(lengthSpinBox != nullptr);
     QVERIFY(angleSpinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
@@ -212,7 +213,7 @@ void FilterConfigurationPanelTest::changingDirectionalBlurLengthAndAngleUpdateCo
 
 void FilterConfigurationPanelTest::changingSharpenAmountUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("sharpenAmountSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("sharpenAmountSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -238,11 +239,11 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheTypeComboAndNew
     QCOMPARE(spy.count(), 0);
     auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
     QCOMPARE(combo->currentData().toInt(), static_cast<int>(FilterType::Sharpen));
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("blurSigmaSpinBox"))->value(), 3.3);
-    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("medianSizeSpinBox"))->value(), 7);
-    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("directionalBlurLengthSpinBox"))->value(), 20);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("directionalBlurAngleSpinBox"))->value(), 45.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("sharpenAmountSpinBox"))->value(), 1.8);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("blurSigmaSpinBox"))->value(), 3.3);
+    QCOMPARE(panel.findChild<IntegerField*>(QStringLiteral("medianSizeSpinBox"))->value(), 7);
+    QCOMPARE(panel.findChild<IntegerField*>(QStringLiteral("directionalBlurLengthSpinBox"))->value(), 20);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("directionalBlurAngleSpinBox"))->value(), 45.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("sharpenAmountSpinBox"))->value(), 1.8);
     // Sharpen's own group is now the visible one.
     QVERIFY(panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
     QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("sharpenGroup"))->isHidden());
@@ -311,8 +312,8 @@ void FilterConfigurationPanelTest::equalizerModeHidesTheFilterTypeComboAndSwitch
     // switched into Cut mode (intensity hidden), rather than a second,
     // separate group - see setEqualizerMode()'s own docs.
     QVERIFY(!panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightIntensitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("gradientRightIntensitySpinBox"))->isHidden());
     // Equalizer usability overhaul (v0.1.3.20) - the vertical curve widget
     // and its own "Preview on Canvas" checkbox are Equalizer-mode-only,
     // same as the Cut-mode spin boxes above - see setEqualizerMode()'s own
@@ -329,8 +330,8 @@ void FilterConfigurationPanelTest::equalizerModeOffRestoresTheNormalPerTypeGroup
 
     QVERIFY(!panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
     QVERIFY(!panel.findChild<QWidget*>(QStringLiteral("frequencyAxisGradientSection"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
-    QVERIFY(!panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightIntensitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(!panel.findChild<NumericField*>(QStringLiteral("gradientRightIntensitySpinBox"))->isHidden());
     QVERIFY(panel.findChild<EqualizerCurveWidget*>(QStringLiteral("equalizerCurveWidget"))->isHidden());
     QVERIFY(panel.findChild<QCheckBox*>(QStringLiteral("equalizerPreviewCheckBox"))->isHidden());
 }
@@ -338,7 +339,7 @@ void FilterConfigurationPanelTest::equalizerModeOffRestoresTheNormalPerTypeGroup
 void FilterConfigurationPanelTest::editingACutSpinBoxWritesOpacityAndForcesIntensityToTheSilenceFloor() {
     FilterConfigurationPanel panel;
     panel.setEqualizerMode(true);
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -367,8 +368,8 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheCutSpinBoxesFro
     // setGradient() selects stop 0 - see
     // setFilterConfigurationSyncsBothEndpointStopsWithoutEmitting()'s own
     // comment on why the last stop is checked via the model instead.
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"))->value(), 0.3);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientRightOpacitySpinBox"))->value(), 0.4);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("gradientRightOpacitySpinBox"))->value(), 0.4);
     QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().leftOpacity, 0.5f);
     QCOMPARE(panel.filterConfiguration().frequencyGradient().stops().back().rightOpacity, 0.6f);
 }
@@ -378,7 +379,7 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsTheCutSpinBoxesFro
 void FilterConfigurationPanelTest::editingTheCutSpinBoxesSyncsTheEqualizerCurveWidget() {
     FilterConfigurationPanel panel;
     panel.setEqualizerMode(true);
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftOpacitySpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("gradientLeftOpacitySpinBox"));
     QVERIFY(spinBox != nullptr);
     auto* curveWidget = panel.findChild<EqualizerCurveWidget*>(QStringLiteral("equalizerCurveWidget"));
     QVERIFY(curveWidget != nullptr);
@@ -649,8 +650,8 @@ void FilterConfigurationPanelTest::selectingEachNoiseTypeShowsOnlyItsOwnGroup() 
 
 void FilterConfigurationPanelTest::changingSpeckleAddDensityAndIntensityUpdateConfigAndEmit() {
     FilterConfigurationPanel panel;
-    auto* densitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddDensitySpinBox"));
-    auto* intensitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddIntensitySpinBox"));
+    auto* densitySpinBox = panel.findChild<NumericField*>(QStringLiteral("speckleAddDensitySpinBox"));
+    auto* intensitySpinBox = panel.findChild<NumericField*>(QStringLiteral("speckleAddIntensitySpinBox"));
     QVERIFY(densitySpinBox != nullptr);
     QVERIFY(intensitySpinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
@@ -665,7 +666,7 @@ void FilterConfigurationPanelTest::changingSpeckleAddDensityAndIntensityUpdateCo
 
 void FilterConfigurationPanelTest::changingSpeckleThresholdUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleThresholdSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("speckleThresholdSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -677,8 +678,8 @@ void FilterConfigurationPanelTest::changingSpeckleThresholdUpdatesConfigAndEmits
 
 void FilterConfigurationPanelTest::changingDenoiseNoiseFloorAndReductionUpdateConfigAndEmit() {
     FilterConfigurationPanel panel;
-    auto* floorSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("noiseFloorSpinBox"));
-    auto* reductionSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("reductionSpinBox"));
+    auto* floorSpinBox = panel.findChild<NumericField*>(QStringLiteral("noiseFloorSpinBox"));
+    auto* reductionSpinBox = panel.findChild<NumericField*>(QStringLiteral("reductionSpinBox"));
     QVERIFY(floorSpinBox != nullptr);
     QVERIFY(reductionSpinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
@@ -693,7 +694,7 @@ void FilterConfigurationPanelTest::changingDenoiseNoiseFloorAndReductionUpdateCo
 
 void FilterConfigurationPanelTest::changingCrushAmountUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("crushAmountSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("crushAmountSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -705,8 +706,8 @@ void FilterConfigurationPanelTest::changingCrushAmountUpdatesConfigAndEmits() {
 
 void FilterConfigurationPanelTest::changingGrainSizeAndAmountUpdateConfigAndEmit() {
     FilterConfigurationPanel panel;
-    auto* sizeSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("grainSizeSpinBox"));
-    auto* amountSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("grainAmountSpinBox"));
+    auto* sizeSpinBox = panel.findChild<IntegerField*>(QStringLiteral("grainSizeSpinBox"));
+    auto* amountSpinBox = panel.findChild<NumericField*>(QStringLiteral("grainAmountSpinBox"));
     QVERIFY(sizeSpinBox != nullptr);
     QVERIFY(amountSpinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
@@ -721,8 +722,8 @@ void FilterConfigurationPanelTest::changingGrainSizeAndAmountUpdateConfigAndEmit
 
 void FilterConfigurationPanelTest::changingDynamicSpeckleDensityAndIntensityUpdateTheSameFieldsAsSpeckleAdd() {
     FilterConfigurationPanel panel;
-    auto* densitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("dynamicSpeckleDensitySpinBox"));
-    auto* intensitySpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("dynamicSpeckleIntensitySpinBox"));
+    auto* densitySpinBox = panel.findChild<NumericField*>(QStringLiteral("dynamicSpeckleDensitySpinBox"));
+    auto* intensitySpinBox = panel.findChild<NumericField*>(QStringLiteral("dynamicSpeckleIntensitySpinBox"));
     QVERIFY(densitySpinBox != nullptr);
     QVERIFY(intensitySpinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
@@ -734,13 +735,13 @@ void FilterConfigurationPanelTest::changingDynamicSpeckleDensityAndIntensityUpda
     // Shares SpeckleAdd's own underlying fields - see this class's own docs.
     QCOMPARE(panel.filterConfiguration().speckleDensity(), 0.4f);
     QCOMPARE(panel.filterConfiguration().speckleIntensity(), 0.7f);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddDensitySpinBox"))->value(), 0.4);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddIntensitySpinBox"))->value(), 0.7);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("speckleAddDensitySpinBox"))->value(), 0.4);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("speckleAddIntensitySpinBox"))->value(), 0.7);
 }
 
 void FilterConfigurationPanelTest::changingFeedbackAmountUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("feedbackAmountSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("feedbackAmountSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -752,7 +753,7 @@ void FilterConfigurationPanelTest::changingFeedbackAmountUpdatesConfigAndEmits()
 
 void FilterConfigurationPanelTest::changingFoldGainUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("foldGainSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("foldGainSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -781,18 +782,18 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsAllNoiseSpinBoxesW
     panel.setFilterConfiguration(config);
 
     QCOMPARE(spy.count(), 0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddDensitySpinBox"))->value(), 0.3);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleAddIntensitySpinBox"))->value(), 0.6);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("dynamicSpeckleDensitySpinBox"))->value(), 0.3);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("dynamicSpeckleIntensitySpinBox"))->value(), 0.6);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("speckleThresholdSpinBox"))->value(), 15.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("noiseFloorSpinBox"))->value(), -45.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reductionSpinBox"))->value(), 15.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("crushAmountSpinBox"))->value(), 0.4);
-    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("grainSizeSpinBox"))->value(), 6);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("grainAmountSpinBox"))->value(), 4.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("feedbackAmountSpinBox"))->value(), 0.6);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("foldGainSpinBox"))->value(), 3.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("speckleAddDensitySpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("speckleAddIntensitySpinBox"))->value(), 0.6);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("dynamicSpeckleDensitySpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("dynamicSpeckleIntensitySpinBox"))->value(), 0.6);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("speckleThresholdSpinBox"))->value(), 15.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("noiseFloorSpinBox"))->value(), -45.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("reductionSpinBox"))->value(), 15.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("crushAmountSpinBox"))->value(), 0.4);
+    QCOMPARE(panel.findChild<IntegerField*>(QStringLiteral("grainSizeSpinBox"))->value(), 6);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("grainAmountSpinBox"))->value(), 4.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("feedbackAmountSpinBox"))->value(), 0.6);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("foldGainSpinBox"))->value(), 3.0);
     // GranularNoise's own group is now the visible one.
     QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("granularNoiseGroup"))->isHidden());
 }
@@ -827,7 +828,7 @@ void FilterConfigurationPanelTest::selectingChannelBalanceInvertConvolveShowsOnl
 
 void FilterConfigurationPanelTest::changingChannelBalanceUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("channelBalanceSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("channelBalanceSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -841,7 +842,7 @@ void FilterConfigurationPanelTest::freshConvolveGroupHasAThreeByThreeIdentityGri
     const FilterConfigurationPanel panel;
     for (int row = 0; row < 3; ++row) {
         for (int col = 0; col < 3; ++col) {
-            auto* spinBox = panel.findChild<QDoubleSpinBox*>(
+            auto* spinBox = panel.findChild<NumericField*>(
                 QStringLiteral("convolveKernelSpinBox_%1_%2").arg(row).arg(col));
             QVERIFY(spinBox != nullptr);
             QCOMPARE(spinBox->value(), (row == 1 && col == 1) ? 1.0 : 0.0);
@@ -851,7 +852,7 @@ void FilterConfigurationPanelTest::freshConvolveGroupHasAThreeByThreeIdentityGri
 
 void FilterConfigurationPanelTest::editingAConvolveKernelCellUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* centerSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_1_1"));
+    auto* centerSpinBox = panel.findChild<NumericField*>(QStringLiteral("convolveKernelSpinBox_1_1"));
     QVERIFY(centerSpinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -866,8 +867,8 @@ void FilterConfigurationPanelTest::changingConvolveKernelSizeRebuildsTheGridAsAF
     FilterConfigurationPanel panel;
     // Edit the 3x3 kernel away from identity first, to confirm a size
     // change really does discard it rather than partially preserving it.
-    panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_0_0"))->setValue(9.0);
-    auto* sizeSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("convolveKernelSizeSpinBox"));
+    panel.findChild<NumericField*>(QStringLiteral("convolveKernelSpinBox_0_0"))->setValue(9.0);
+    auto* sizeSpinBox = panel.findChild<IntegerField*>(QStringLiteral("convolveKernelSizeSpinBox"));
     QVERIFY(sizeSpinBox != nullptr);
 
     sizeSpinBox->setValue(5);
@@ -875,10 +876,10 @@ void FilterConfigurationPanelTest::changingConvolveKernelSizeRebuildsTheGridAsAF
     QCOMPARE(panel.filterConfiguration().convolveKernelSize(), 5);
     QCOMPARE(panel.filterConfiguration().convolveKernel().size(), std::size_t{25});
     // Old 3x3 widgets are gone; a fresh 5x5 identity grid exists instead.
-    QVERIFY(panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_0_0")) != nullptr);
+    QVERIFY(panel.findChild<NumericField*>(QStringLiteral("convolveKernelSpinBox_0_0")) != nullptr);
     for (int row = 0; row < 5; ++row) {
         for (int col = 0; col < 5; ++col) {
-            auto* spinBox = panel.findChild<QDoubleSpinBox*>(
+            auto* spinBox = panel.findChild<NumericField*>(
                 QStringLiteral("convolveKernelSpinBox_%1_%2").arg(row).arg(col));
             QVERIFY(spinBox != nullptr);
             QCOMPARE(spinBox->value(), (row == 2 && col == 2) ? 1.0 : 0.0);
@@ -900,7 +901,7 @@ void FilterConfigurationPanelTest::selectingAConvolvePresetAppliesItAndResetsThe
               (std::vector<float>{0.0f, -1.0f, 0.0f, -1.0f, 5.0f, -1.0f, 0.0f, -1.0f, 0.0f}));
     QVERIFY(!panel.filterConfiguration().convolveNormalize());
     // The grid itself reflects the preset too, not just the model.
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_1_1"))->value(), 5.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("convolveKernelSpinBox_1_1"))->value(), 5.0);
     // A one-shot trigger - reset back to its own placeholder afterward.
     QCOMPARE(presetCombo->currentIndex(), 0);
 }
@@ -919,7 +920,7 @@ void FilterConfigurationPanelTest::togglingConvolveNormalizeUpdatesConfigAndEmit
 
 void FilterConfigurationPanelTest::changingConvolveAmountUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveAmountSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("convolveAmountSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -931,7 +932,7 @@ void FilterConfigurationPanelTest::changingConvolveAmountUpdatesConfigAndEmits()
 
 void FilterConfigurationPanelTest::clickingSaveAsNewKernelEmitsSaveConvolutionKernelRequestedWithTheCurrentKernel() {
     FilterConfigurationPanel panel;
-    panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_1_1"))->setValue(3.0);
+    panel.findChild<NumericField*>(QStringLiteral("convolveKernelSpinBox_1_1"))->setValue(3.0);
     panel.findChild<QCheckBox*>(QStringLiteral("convolveNormalizeCheckBox"))->setChecked(true);
     auto* button = panel.findChild<QPushButton*>(QStringLiteral("convolveSaveKernelButton"));
     QVERIFY(button != nullptr);
@@ -983,7 +984,7 @@ void FilterConfigurationPanelTest::selectingALoadedKernelAppliesItAndResetsTheCo
     QCOMPARE(panel.filterConfiguration().convolveKernel(), saved.coefficients);
     QVERIFY(panel.filterConfiguration().convolveNormalize());
     QVERIFY(panel.findChild<QCheckBox*>(QStringLiteral("convolveNormalizeCheckBox"))->isChecked());
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveKernelSpinBox_1_1"))->value(), 8.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("convolveKernelSpinBox_1_1"))->value(), 8.0);
     // A one-shot trigger - reset back to its own placeholder afterward.
     QCOMPARE(combo->currentIndex(), 0);
 }
@@ -1002,13 +1003,13 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsChannelBalanceAndT
     panel.setFilterConfiguration(config);
 
     QCOMPARE(spy.count(), 0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("channelBalanceSpinBox"))->value(), 0.3);
-    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("convolveKernelSizeSpinBox"))->value(), 5);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("channelBalanceSpinBox"))->value(), 0.3);
+    QCOMPARE(panel.findChild<IntegerField*>(QStringLiteral("convolveKernelSizeSpinBox"))->value(), 5);
     QCOMPARE(panel.findChild<QCheckBox*>(QStringLiteral("convolveNormalizeCheckBox"))->isChecked(), true);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("convolveAmountSpinBox"))->value(), 0.4);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("convolveAmountSpinBox"))->value(), 0.4);
     for (int row = 0; row < 5; ++row) {
         for (int col = 0; col < 5; ++col) {
-            auto* spinBox = panel.findChild<QDoubleSpinBox*>(
+            auto* spinBox = panel.findChild<NumericField*>(
                 QStringLiteral("convolveKernelSpinBox_%1_%2").arg(row).arg(col));
             QVERIFY(spinBox != nullptr);
             QCOMPARE(spinBox->value(), 2.0);
@@ -1046,8 +1047,8 @@ void FilterConfigurationPanelTest::selectingDisplaceAndChannelCycleShowsOnlyThat
 
 void FilterConfigurationPanelTest::changingDisplaceDistanceAndAngleUpdateConfigAndEmit() {
     FilterConfigurationPanel panel;
-    auto* distanceSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("displaceDistanceSpinBox"));
-    auto* angleSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("displaceAngleSpinBox"));
+    auto* distanceSpinBox = panel.findChild<NumericField*>(QStringLiteral("displaceDistanceSpinBox"));
+    auto* angleSpinBox = panel.findChild<NumericField*>(QStringLiteral("displaceAngleSpinBox"));
     QVERIFY(distanceSpinBox != nullptr);
     QVERIFY(angleSpinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
@@ -1062,7 +1063,7 @@ void FilterConfigurationPanelTest::changingDisplaceDistanceAndAngleUpdateConfigA
 
 void FilterConfigurationPanelTest::changingChannelCycleAngleUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("channelCycleAngleSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("channelCycleAngleSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
 
@@ -1084,9 +1085,9 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsDisplaceAndChannel
     panel.setFilterConfiguration(config);
 
     QCOMPARE(spy.count(), 0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("displaceDistanceSpinBox"))->value(), 42.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("displaceAngleSpinBox"))->value(), 90.0);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("channelCycleAngleSpinBox"))->value(), 240.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("displaceDistanceSpinBox"))->value(), 42.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("displaceAngleSpinBox"))->value(), 90.0);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("channelCycleAngleSpinBox"))->value(), 240.0);
     // ChannelCycle's own group is now the visible one.
     QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("channelCycleGroup"))->isHidden());
 }
@@ -1114,12 +1115,12 @@ void FilterConfigurationPanelTest::selectingSpectralReverbShowsOnlyItsOwnGroup()
 
 void FilterConfigurationPanelTest::changingEverySpectralReverbControlUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
-    auto* preDelaySpinBox = panel.findChild<QSpinBox*>(QStringLiteral("reverbPreDelaySpinBox"));
-    auto* decaySpinBox = panel.findChild<QSpinBox*>(QStringLiteral("reverbDecaySpinBox"));
-    auto* roomSizeSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbRoomSizeSpinBox"));
-    auto* diffusionSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbDiffusionSpinBox"));
-    auto* absorptionSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbAbsorptionSpinBox"));
-    auto* mixSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbMixSpinBox"));
+    auto* preDelaySpinBox = panel.findChild<IntegerField*>(QStringLiteral("reverbPreDelaySpinBox"));
+    auto* decaySpinBox = panel.findChild<IntegerField*>(QStringLiteral("reverbDecaySpinBox"));
+    auto* roomSizeSpinBox = panel.findChild<NumericField*>(QStringLiteral("reverbRoomSizeSpinBox"));
+    auto* diffusionSpinBox = panel.findChild<NumericField*>(QStringLiteral("reverbDiffusionSpinBox"));
+    auto* absorptionSpinBox = panel.findChild<NumericField*>(QStringLiteral("reverbAbsorptionSpinBox"));
+    auto* mixSpinBox = panel.findChild<NumericField*>(QStringLiteral("reverbMixSpinBox"));
     QVERIFY(preDelaySpinBox != nullptr);
     QVERIFY(decaySpinBox != nullptr);
     QVERIFY(roomSizeSpinBox != nullptr);
@@ -1159,12 +1160,12 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsSpectralReverbWith
     panel.setFilterConfiguration(config);
 
     QCOMPARE(spy.count(), 0);
-    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("reverbPreDelaySpinBox"))->value(), 5);
-    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("reverbDecaySpinBox"))->value(), 80);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbRoomSizeSpinBox"))->value(), 0.9);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbDiffusionSpinBox"))->value(), 0.2);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbAbsorptionSpinBox"))->value(), 0.7);
-    QCOMPARE(panel.findChild<QDoubleSpinBox*>(QStringLiteral("reverbMixSpinBox"))->value(), 0.8);
+    QCOMPARE(panel.findChild<IntegerField*>(QStringLiteral("reverbPreDelaySpinBox"))->value(), 5);
+    QCOMPARE(panel.findChild<IntegerField*>(QStringLiteral("reverbDecaySpinBox"))->value(), 80);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("reverbRoomSizeSpinBox"))->value(), 0.9);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("reverbDiffusionSpinBox"))->value(), 0.2);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("reverbAbsorptionSpinBox"))->value(), 0.7);
+    QCOMPARE(panel.findChild<NumericField*>(QStringLiteral("reverbMixSpinBox"))->value(), 0.8);
     // SpectralReverb's own group is now the visible one.
     QVERIFY(!panel.findChild<QGroupBox*>(QStringLiteral("spectralReverbGroup"))->isHidden());
 }
@@ -1193,7 +1194,7 @@ void FilterConfigurationPanelTest::selectingDownsampleShowsOnlyItsOwnGroup() {
 void FilterConfigurationPanelTest::changingEveryDownsampleControlUpdatesConfigAndEmits() {
     FilterConfigurationPanel panel;
     auto* modeCombo = panel.findChild<QComboBox*>(QStringLiteral("downsampleModeCombo"));
-    auto* blockSizeSpinBox = panel.findChild<QSpinBox*>(QStringLiteral("downsampleBlockSizeSpinBox"));
+    auto* blockSizeSpinBox = panel.findChild<IntegerField*>(QStringLiteral("downsampleBlockSizeSpinBox"));
     QVERIFY(modeCombo != nullptr);
     QVERIFY(blockSizeSpinBox != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::filterConfigurationChanged);
@@ -1239,7 +1240,7 @@ void FilterConfigurationPanelTest::setFilterConfigurationSyncsDownsampleWithoutE
     QCOMPARE(spy.count(), 0);
     auto* modeCombo = panel.findChild<QComboBox*>(QStringLiteral("downsampleModeCombo"));
     QCOMPARE(static_cast<DownsampleMode>(modeCombo->currentData().toInt()), DownsampleMode::BlockAverage);
-    QCOMPARE(panel.findChild<QSpinBox*>(QStringLiteral("downsampleBlockSizeSpinBox"))->value(), 9);
+    QCOMPARE(panel.findChild<IntegerField*>(QStringLiteral("downsampleBlockSizeSpinBox"))->value(), 9);
     QCOMPARE(panel.findChild<QComboBox*>(QStringLiteral("downsampleBlockSizeMindWaveCombo"))->currentText(),
              QStringLiteral("Slow Pulse"));
     // Downsample's own group is now the visible one.
@@ -1365,7 +1366,7 @@ void FilterConfigurationPanelTest::clickingSavePresetEmitsSavePresetRequestedWit
     // index (and so wouldn't fire currentIndexChanged at all).
     auto* typeCombo = panel.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
     typeCombo->setCurrentIndex(typeCombo->findData(QVariant::fromValue(static_cast<int>(FilterType::Sharpen))));
-    panel.findChild<QDoubleSpinBox*>(QStringLiteral("sharpenAmountSpinBox"))->setValue(0.5);
+    panel.findChild<NumericField*>(QStringLiteral("sharpenAmountSpinBox"))->setValue(0.5);
     auto* button = panel.findChild<QPushButton*>(QStringLiteral("savePresetButton"));
     QVERIFY(button != nullptr);
     QSignalSpy spy(&panel, &FilterConfigurationPanel::savePresetRequested);
@@ -1429,7 +1430,7 @@ void FilterConfigurationPanelTest::presetIndicatorShowsLoadedPresetThenModifiedT
     panel.setAvailableFilterPresets({saved});
     auto* indicator = panel.findChild<sound_mind::studio::PresetIndicatorLabel*>();
     auto* combo = panel.findChild<QComboBox*>(QStringLiteral("filterPresetCombo"));
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"));
     QVERIFY(indicator != nullptr && combo != nullptr && spinBox != nullptr);
     QVERIFY(!indicator->hasActivePreset());
 

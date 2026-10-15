@@ -6,7 +6,6 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -16,6 +15,7 @@
 #include "sound_mind/core/music_theory.h"
 #include "sound_mind/studio/grid_config.h"
 #include "sound_mind/studio/grid_panel.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/preset_indicator_label.h"
 
 using sound_mind::core::FrequencyGridPresetConfig;
@@ -29,6 +29,7 @@ using sound_mind::studio::HorizontalAxisLabelMode;
 using sound_mind::studio::TimingGridConfig;
 using sound_mind::studio::TimingGridMode;
 using sound_mind::studio::VerticalAxisLabelMode;
+using sound_mind::studio::NumericField;
 
 void GridPanelTest::freshPanelHasBothAxisLabelsOff() {
     const GridPanel panel;
@@ -91,7 +92,7 @@ void GridPanelTest::checkingNoteGridEmitsFrequencyGridConfigChanged() {
 void GridPanelTest::checkingHarmonicSeriesEnablesTheFundamentalSpinBoxAndEmits() {
     GridPanel panel;
     auto* checkBox = panel.findChild<QCheckBox*>(QStringLiteral("harmonicSeriesCheckBox"));
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicFundamentalSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("harmonicFundamentalSpinBox"));
     QVERIFY(checkBox != nullptr);
     QVERIFY(spinBox != nullptr);
     QVERIFY(!spinBox->isEnabled());
@@ -106,7 +107,7 @@ void GridPanelTest::checkingHarmonicSeriesEnablesTheFundamentalSpinBoxAndEmits()
 
 void GridPanelTest::changingTheHarmonicFundamentalEmitsFrequencyGridConfigChanged() {
     GridPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("harmonicFundamentalSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("harmonicFundamentalSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &GridPanel::frequencyGridConfigChanged);
 
@@ -151,7 +152,7 @@ void GridPanelTest::typingCustomFrequenciesParsesACommaSeparatedListIntoTheConfi
 
 void GridPanelTest::changingTheFrequencyGridWidthEmitsFrequencyGridConfigChanged() {
     GridPanel panel;
-    auto* spinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("frequencyGridWidthSpinBox"));
+    auto* spinBox = panel.findChild<NumericField*>(QStringLiteral("frequencyGridWidthSpinBox"));
     QVERIFY(spinBox != nullptr);
     QSignalSpy spy(&panel, &GridPanel::frequencyGridConfigChanged);
 
@@ -321,7 +322,7 @@ void GridPanelTest::applyOctaveSelectionExcludesUncheckedOctavesAndEmits() {
 void GridPanelTest::changingTheTimingGridModeToIntervalEnablesTheIntervalSpinBoxAndEmits() {
     GridPanel panel;
     auto* modeCombo = panel.findChild<QComboBox*>(QStringLiteral("timingGridModeCombo"));
-    auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("timingGridIntervalSpinBox"));
+    auto* intervalSpinBox = panel.findChild<NumericField*>(QStringLiteral("timingGridIntervalSpinBox"));
     QVERIFY(modeCombo != nullptr);
     QVERIFY(intervalSpinBox != nullptr);
     QVERIFY(!intervalSpinBox->isEnabled());
@@ -353,7 +354,7 @@ void GridPanelTest::changingTheTimingGridModeToTempoEnablesTheSubdivisionComboAn
 
 void GridPanelTest::changingTheTimingGridIntervalEmitsTimingGridConfigChanged() {
     GridPanel panel;
-    auto* intervalSpinBox = panel.findChild<QDoubleSpinBox*>(QStringLiteral("timingGridIntervalSpinBox"));
+    auto* intervalSpinBox = panel.findChild<NumericField*>(QStringLiteral("timingGridIntervalSpinBox"));
     QVERIFY(intervalSpinBox != nullptr);
     QSignalSpy spy(&panel, &GridPanel::timingGridConfigChanged);
 

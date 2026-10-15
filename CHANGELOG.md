@@ -6,6 +6,20 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.33.2] - 2026-10-15
+
+Pre-Beta Plan milestone `v0.Y.73.1`, installment B: number fields.
+
+### Changed
+
+- **Every number setting is now a slider plus a text box,** replacing the old spin boxes with their up/down arrows. Drag the slider to pick a value (applied when you let go), nudge it with the arrow keys, or type an exact value.
+- **Typed values apply when you press Enter or click elsewhere,** not on every keystroke - so typing "120" no longer applies 1, then 12, then 120.
+- **Typing is forgiving:** spaces, leading or trailing zeros, and a unit after the number are fine, and either `.` or `,` works as the decimal mark. Out-of-range values are clamped; text that isn't a number reverts.
+
+### Added
+
+- **Edit → Decimal Separator:** show numbers with a period (1.5) or a comma (1,5). Saved with the project.
+
 ## [0.1.33.1] - 2026-10-15
 
 Pre-Beta Plan milestone `v0.Y.73.1`, installment A: one absolute loudness scale.

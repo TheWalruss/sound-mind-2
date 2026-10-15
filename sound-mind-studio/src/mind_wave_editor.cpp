@@ -7,17 +7,16 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
-#include <QSpinBox>
 #include <QVBoxLayout>
 #include <QVariant>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/rotary_dial_widget.h"
 #include "sound_mind/studio/waveform_preview_widget.h"
 
@@ -103,9 +102,9 @@ QHBoxLayout* makeDialFieldRow(QWidget* dial, QWidget* spinBox) {
 /// scale...), unlike FilterConfigurationPanel's own tightly-ranged fields
 /// (a dB value, an opacity). Matches this editor's own "bare-bones" scope:
 /// plain numeric entry, not a validated/clamped control.
-QDoubleSpinBox* makeWideSpinBox(QWidget* parent, const QString& objectName, double minimum = -1'000'000.0,
+NumericField* makeWideSpinBox(QWidget* parent, const QString& objectName, double minimum = -1'000'000.0,
                                   double maximum = 1'000'000.0, int decimals = 3) {
-    auto* spinBox = new QDoubleSpinBox(parent);
+    auto* spinBox = new NumericField(parent);
     spinBox->setObjectName(objectName);
     spinBox->setRange(minimum, maximum);
     spinBox->setDecimals(decimals);
@@ -157,7 +156,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     periodSpinBox_->setToolTip(
         tr("Cycle length - seconds (Time axis) or bins (Frequency axis). Used by Periodic, Envelope's Decaying "
            "Oscillation, Stepped/Noise's Stepped, Spatial's Ripples/Checkerboard, and Fractal."));
-    connect(periodSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(periodSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setPeriod(value);
         emitChanged();
     });
@@ -165,7 +164,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
 
     phaseSpinBox_ = makeWideSpinBox(this, QStringLiteral("phaseSpinBox"));
     phaseSpinBox_->setToolTip(tr("Phase offset, in radians."));
-    connect(phaseSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(phaseSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setPhaseRadians(value);
         emitChanged();
     });
@@ -190,15 +189,15 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     });
     topForm->addRow(QString(), invertedCheckBox_);
 
-    seedSpinBox_ = new QSpinBox(this);
+    seedSpinBox_ = new IntegerField(this);
     seedSpinBox_->setObjectName(QStringLiteral("seedSpinBox"));
-    // MindWave::seed() is a full uint32_t; QSpinBox is int-only - a UI-
+    // MindWave::seed() is a full uint32_t; IntegerField is int-only - a UI-
     // level limit (matching LayersPanel's own translationSpinBox docs for
     // the same int-vs-wider-type shape), not a Core-side restriction.
     seedSpinBox_->setRange(0, std::numeric_limits<int>::max());
     seedSpinBox_->setToolTip(tr("Seed for every noise-based shape (Gaussian Noise, Fractal Noise, Cellular, "
                                  "Domain-Warped Noise, and Fractal)."));
-    connect(seedSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(seedSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         wave_.setSeed(static_cast<std::uint32_t>(value));
         emitChanged();
     });
@@ -206,29 +205,29 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
 
     noiseScaleSpinBox_ = makeWideSpinBox(this, QStringLiteral("noiseScaleSpinBox"), 0.000001, 1'000'000.0);
     noiseScaleSpinBox_->setToolTip(tr("Lattice/cell size for every noise-based shape."));
-    connect(noiseScaleSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(noiseScaleSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setNoiseScale(value);
         emitChanged();
     });
     topForm->addRow(tr("Noise Scale:"), noiseScaleSpinBox_);
 
-    noiseOctavesSpinBox_ = new QSpinBox(this);
+    noiseOctavesSpinBox_ = new IntegerField(this);
     noiseOctavesSpinBox_->setObjectName(QStringLiteral("noiseOctavesSpinBox"));
     noiseOctavesSpinBox_->setRange(1, 16);
     noiseOctavesSpinBox_->setToolTip(tr("Octave count for Fractal Noise and Domain-Warped Noise."));
-    connect(noiseOctavesSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(noiseOctavesSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         wave_.setNoiseOctaves(value);
         emitChanged();
     });
     topForm->addRow(tr("Noise Octaves:"), noiseOctavesSpinBox_);
 
-    noisePersistenceSpinBox_ = new QDoubleSpinBox(this);
+    noisePersistenceSpinBox_ = new NumericField(this);
     noisePersistenceSpinBox_->setObjectName(QStringLiteral("noisePersistenceSpinBox"));
     noisePersistenceSpinBox_->setRange(0.0, 1.0);
     noisePersistenceSpinBox_->setSingleStep(0.05);
     noisePersistenceSpinBox_->setDecimals(2);
     noisePersistenceSpinBox_->setToolTip(tr("Octave falloff for Fractal Noise and Domain-Warped Noise."));
-    connect(noisePersistenceSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(noisePersistenceSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setNoisePersistence(value);
         emitChanged();
     });
@@ -247,13 +246,13 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
         emitChanged();
     });
     periodicForm->addRow(tr("Waveform:"), periodicWaveformCombo_);
-    dutyCycleSpinBox_ = new QDoubleSpinBox(periodicGroup_);
+    dutyCycleSpinBox_ = new NumericField(periodicGroup_);
     dutyCycleSpinBox_->setObjectName(QStringLiteral("dutyCycleSpinBox"));
     dutyCycleSpinBox_->setRange(0.0, 1.0);
     dutyCycleSpinBox_->setSingleStep(0.05);
     dutyCycleSpinBox_->setDecimals(2);
     dutyCycleSpinBox_->setToolTip(tr("Pulse only - the default 0.5 makes Pulse identical to Square."));
-    connect(dutyCycleSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(dutyCycleSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setDutyCycle(value);
         emitChanged();
     });
@@ -272,21 +271,21 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     });
     envelopeForm->addRow(tr("Shape:"), envelopeShapeCombo_);
     envelopeCenterSpinBox_ = makeWideSpinBox(envelopeGroup_, QStringLiteral("envelopeCenterSpinBox"));
-    connect(envelopeCenterSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(envelopeCenterSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setEnvelopeCenter(value);
         emitChanged();
     });
     envelopeForm->addRow(tr("Center:"), envelopeCenterSpinBox_);
     envelopeSteepnessSpinBox_ = makeWideSpinBox(envelopeGroup_, QStringLiteral("envelopeSteepnessSpinBox"));
     envelopeSteepnessSpinBox_->setToolTip(tr("S-Curve only."));
-    connect(envelopeSteepnessSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(envelopeSteepnessSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setEnvelopeSteepness(value);
         emitChanged();
     });
     envelopeForm->addRow(tr("Steepness:"), envelopeSteepnessSpinBox_);
     decayRateSpinBox_ = makeWideSpinBox(envelopeGroup_, QStringLiteral("decayRateSpinBox"));
     decayRateSpinBox_->setToolTip(tr("Exponential Decay and Decaying Oscillation only."));
-    connect(decayRateSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(decayRateSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setDecayRate(value);
         emitChanged();
     });
@@ -304,11 +303,11 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
         emitChanged();
     });
     steppedNoiseForm->addRow(tr("Shape:"), steppedNoiseShapeCombo_);
-    stepCountSpinBox_ = new QSpinBox(steppedNoiseGroup_);
+    stepCountSpinBox_ = new IntegerField(steppedNoiseGroup_);
     stepCountSpinBox_->setObjectName(QStringLiteral("stepCountSpinBox"));
     stepCountSpinBox_->setRange(2, 64);
     stepCountSpinBox_->setToolTip(tr("Stepped only."));
-    connect(stepCountSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(stepCountSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         wave_.setStepCount(value);
         emitChanged();
     });
@@ -328,21 +327,21 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     spatialForm->addRow(tr("Pattern:"), spatialPatternCombo_);
     spatialCenterXSpinBox_ = makeWideSpinBox(spatialGroup_, QStringLiteral("spatialCenterXSpinBox"));
     spatialCenterXSpinBox_->setToolTip(tr("Ripples only - time-axis component, in seconds."));
-    connect(spatialCenterXSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(spatialCenterXSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setSpatialCenterX(value);
         emitChanged();
     });
     spatialForm->addRow(tr("Center X:"), spatialCenterXSpinBox_);
     spatialCenterYSpinBox_ = makeWideSpinBox(spatialGroup_, QStringLiteral("spatialCenterYSpinBox"));
     spatialCenterYSpinBox_->setToolTip(tr("Ripples only - frequency-axis component, in bins."));
-    connect(spatialCenterYSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(spatialCenterYSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setSpatialCenterY(value);
         emitChanged();
     });
     spatialForm->addRow(tr("Center Y:"), spatialCenterYSpinBox_);
     domainWarpStrengthSpinBox_ = makeWideSpinBox(spatialGroup_, QStringLiteral("domainWarpStrengthSpinBox"));
     domainWarpStrengthSpinBox_->setToolTip(tr("Domain-Warped Noise only."));
-    connect(domainWarpStrengthSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(domainWarpStrengthSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setDomainWarpStrength(value);
         emitChanged();
     });
@@ -352,20 +351,20 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     fractalGroup_ = new QGroupBox(tr("Fractal"), this);
     fractalGroup_->setObjectName(QStringLiteral("fractalGroup"));
     auto* fractalForm = new QFormLayout(fractalGroup_);
-    fractalRoughnessSpinBox_ = new QDoubleSpinBox(fractalGroup_);
+    fractalRoughnessSpinBox_ = new NumericField(fractalGroup_);
     fractalRoughnessSpinBox_->setObjectName(QStringLiteral("fractalRoughnessSpinBox"));
     fractalRoughnessSpinBox_->setRange(0.0, 1.0);
     fractalRoughnessSpinBox_->setSingleStep(0.05);
     fractalRoughnessSpinBox_->setDecimals(2);
-    connect(fractalRoughnessSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(fractalRoughnessSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setFractalRoughness(value);
         emitChanged();
     });
     fractalForm->addRow(tr("Roughness:"), fractalRoughnessSpinBox_);
-    fractalIterationsSpinBox_ = new QSpinBox(fractalGroup_);
+    fractalIterationsSpinBox_ = new IntegerField(fractalGroup_);
     fractalIterationsSpinBox_->setObjectName(QStringLiteral("fractalIterationsSpinBox"));
     fractalIterationsSpinBox_->setRange(0, 16);
-    connect(fractalIterationsSpinBox_, &QSpinBox::valueChanged, this, [this](int value) {
+    connect(fractalIterationsSpinBox_, &IntegerField::valueChanged, this, [this](int value) {
         wave_.setFractalIterations(value);
         emitChanged();
     });
@@ -386,10 +385,10 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     auto* stepGridLayout = new QVBoxLayout(stepGridGroup_);
 
     auto* stepGridForm = new QFormLayout();
-    stepGridCountSpinBox_ = new QSpinBox(stepGridGroup_);
+    stepGridCountSpinBox_ = new IntegerField(stepGridGroup_);
     stepGridCountSpinBox_->setObjectName(QStringLiteral("stepGridCountSpinBox"));
     stepGridCountSpinBox_->setRange(1, 32);
-    connect(stepGridCountSpinBox_, &QSpinBox::valueChanged, this, [this](int count) {
+    connect(stepGridCountSpinBox_, &IntegerField::valueChanged, this, [this](int count) {
         rebuildStepGridValueRows(static_cast<std::size_t>(count));
         wave_.setStepGridValues(currentStepGridValues());
         emitChanged();
@@ -414,7 +413,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
 
     auto* continuousForm = new QFormLayout();
 
-    continuousShapeSpinBox_ = new QDoubleSpinBox(continuousGroup_);
+    continuousShapeSpinBox_ = new NumericField(continuousGroup_);
     continuousShapeSpinBox_->setObjectName(QStringLiteral("continuousShapeSpinBox"));
     continuousShapeSpinBox_->setRange(0.0, 1.0);
     continuousShapeSpinBox_->setSingleStep(0.05);
@@ -422,7 +421,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     continuousShapeSpinBox_->setToolTip(tr("Sweeps from a clean sine cycle (0) toward fractal noise (1)."));
     continuousShapeDial_ = new RotaryDialWidget(continuousGroup_);
     continuousShapeDial_->setObjectName(QStringLiteral("continuousShapeDial"));
-    connect(continuousShapeSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(continuousShapeSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setContinuousShape(value);
         const QSignalBlocker blocker(continuousShapeDial_);
         continuousShapeDial_->setValue(value);
@@ -436,7 +435,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     });
     continuousForm->addRow(tr("Shape:"), makeDialFieldRow(continuousShapeDial_, continuousShapeSpinBox_));
 
-    continuousSkewSpinBox_ = new QDoubleSpinBox(continuousGroup_);
+    continuousSkewSpinBox_ = new NumericField(continuousGroup_);
     continuousSkewSpinBox_->setObjectName(QStringLiteral("continuousSkewSpinBox"));
     continuousSkewSpinBox_->setRange(0.0, 1.0);
     continuousSkewSpinBox_->setSingleStep(0.05);
@@ -444,7 +443,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     continuousSkewSpinBox_->setToolTip(tr("Biases the sine component earlier or later in its cycle - 0.5 is no bias."));
     continuousSkewDial_ = new RotaryDialWidget(continuousGroup_);
     continuousSkewDial_->setObjectName(QStringLiteral("continuousSkewDial"));
-    connect(continuousSkewSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(continuousSkewSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setContinuousSkew(value);
         const QSignalBlocker blocker(continuousSkewDial_);
         continuousSkewDial_->setValue(value);
@@ -458,7 +457,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     });
     continuousForm->addRow(tr("Skew:"), makeDialFieldRow(continuousSkewDial_, continuousSkewSpinBox_));
 
-    continuousCharacterSpinBox_ = new QDoubleSpinBox(continuousGroup_);
+    continuousCharacterSpinBox_ = new NumericField(continuousGroup_);
     continuousCharacterSpinBox_->setObjectName(QStringLiteral("continuousCharacterSpinBox"));
     continuousCharacterSpinBox_->setRange(0.0, 1.0);
     continuousCharacterSpinBox_->setSingleStep(0.05);
@@ -466,7 +465,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     continuousCharacterSpinBox_->setToolTip(tr("Layers fine turbulence on top, independent of Shape."));
     continuousCharacterDial_ = new RotaryDialWidget(continuousGroup_);
     continuousCharacterDial_->setObjectName(QStringLiteral("continuousCharacterDial"));
-    connect(continuousCharacterSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(continuousCharacterSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         wave_.setContinuousCharacter(value);
         const QSignalBlocker blocker(continuousCharacterDial_);
         continuousCharacterDial_->setValue(value);
@@ -531,7 +530,7 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     }
 
     // Seeded from wave_'s own defaults directly, the same reasoning as the
-    // step-grid rows just above - QDoubleSpinBox's own built-in default
+    // step-grid rows just above - NumericField's own built-in default
     // (0.0) happens to already match continuousShape()'s/
     // continuousCharacter()'s own defaults, but not continuousSkew()'s own
     // (0.5, a genuine neutral-bias position, not 0), so this can't be
@@ -709,21 +708,21 @@ void MindWaveEditor::rebuildStepGridValueRows(std::size_t count) {
     // own change or a fresh setMindWave() sync, never by one of these very
     // spin boxes' own signal still on the call stack.
     while (stepGridValueSpinBoxes_.size() > count) {
-        QDoubleSpinBox* spinBox = stepGridValueSpinBoxes_.back();
+        NumericField* spinBox = stepGridValueSpinBoxes_.back();
         stepGridValueSpinBoxes_.pop_back();
         stepGridValuesLayout_->removeWidget(spinBox);
         delete spinBox;
     }
     while (stepGridValueSpinBoxes_.size() < count) {
         const int stepNumber = static_cast<int>(stepGridValueSpinBoxes_.size()) + 1;
-        auto* spinBox = new QDoubleSpinBox(stepGridGroup_);
+        auto* spinBox = new NumericField(stepGridGroup_);
         spinBox->setObjectName(QStringLiteral("stepGridValueSpinBox%1").arg(stepNumber));
         spinBox->setRange(0.0, 1.0);
         spinBox->setSingleStep(0.05);
         spinBox->setDecimals(3);
         spinBox->setValue(0.5);
         spinBox->setPrefix(tr("Step %1: ").arg(stepNumber));
-        connect(spinBox, &QDoubleSpinBox::valueChanged, this, [this](double) {
+        connect(spinBox, &NumericField::valueChanged, this, [this](double) {
             wave_.setStepGridValues(currentStepGridValues());
             emitChanged();
         });
@@ -735,7 +734,7 @@ void MindWaveEditor::rebuildStepGridValueRows(std::size_t count) {
 std::vector<double> MindWaveEditor::currentStepGridValues() const {
     std::vector<double> values;
     values.reserve(stepGridValueSpinBoxes_.size());
-    for (const QDoubleSpinBox* spinBox : stepGridValueSpinBoxes_) {
+    for (const NumericField* spinBox : stepGridValueSpinBoxes_) {
         values.push_back(spinBox->value());
     }
     return values;

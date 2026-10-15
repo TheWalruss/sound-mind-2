@@ -18,6 +18,7 @@ void to_json(nlohmann::json& json, const ProjectSettings& settings) {
         {"minFrequencyHz", settings.minFrequencyHz},
         {"maxFrequencyHz", settings.maxFrequencyHz},
         {"principalMode", settings.principalMode},
+        {"decimalSeparator", settings.decimalSeparator},
     };
 }
 
@@ -45,6 +46,7 @@ void from_json(const nlohmann::json& json, ProjectSettings& settings) {
     // the three fields above; absent (every project saved before this
     // milestone) means Sound, exactly what always implicitly applied.
     settings.principalMode = json.value("principalMode", ProjectSettings{}.principalMode);
+    settings.decimalSeparator = json.value("decimalSeparator", ProjectSettings{}.decimalSeparator);
 }
 
 sound_mind::codec::StreamCodecConfig streamCodecConfigFor(const ProjectSettings& settings) {

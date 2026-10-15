@@ -1,7 +1,6 @@
 #include "sound_mind/studio/gradient_editor_widget.h"
 
 #include <QCheckBox>
-#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -10,6 +9,7 @@
 #include <QVBoxLayout>
 
 #include "sound_mind/studio/gradient_bar_widget.h"
+#include "sound_mind/studio/numeric_field.h"
 
 namespace sound_mind::studio {
 
@@ -23,8 +23,8 @@ constexpr float kSilenceFloorDb = -96.0f;
 /// @brief A `[-96, 0]` dBFS spin box - stored magnitudes are absolute dBFS
 /// (a full-scale tone at 0 dB), the same range `silenceGradient()`'s own
 /// floor and `color_mapping.cpp`'s own display range use.
-QDoubleSpinBox* makeIntensitySpinBox(QWidget* parent, const QString& objectName) {
-    auto* spinBox = new QDoubleSpinBox(parent);
+NumericField* makeIntensitySpinBox(QWidget* parent, const QString& objectName) {
+    auto* spinBox = new NumericField(parent);
     spinBox->setObjectName(objectName);
     spinBox->setRange(-96.0, 0.0);
     spinBox->setSingleStep(1.0);
@@ -34,8 +34,8 @@ QDoubleSpinBox* makeIntensitySpinBox(QWidget* parent, const QString& objectName)
 
 /// @brief A `[0, 1]` opacity spin box, matching `makeOpacitySpinBox()`'s
 /// own precedent in `filter_configuration_panel.cpp`.
-QDoubleSpinBox* makeOpacitySpinBox(QWidget* parent, const QString& objectName) {
-    auto* spinBox = new QDoubleSpinBox(parent);
+NumericField* makeOpacitySpinBox(QWidget* parent, const QString& objectName) {
+    auto* spinBox = new NumericField(parent);
     spinBox->setObjectName(objectName);
     spinBox->setRange(0.0, 1.0);
     spinBox->setSingleStep(0.05);
@@ -85,28 +85,28 @@ GradientEditorWidget::GradientEditorWidget(QWidget* parent) : QWidget(parent) {
     bottomRow->addWidget(deleteStopButton_);
     root->addLayout(bottomRow);
 
-    connect(leftIntensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(leftIntensitySpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (linkChannelsCheckBox_->isChecked()) {
             const QSignalBlocker blocker(rightIntensitySpinBox_);
             rightIntensitySpinBox_->setValue(value);
         }
         applyEditedStopValues();
     });
-    connect(rightIntensitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(rightIntensitySpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (linkChannelsCheckBox_->isChecked()) {
             const QSignalBlocker blocker(leftIntensitySpinBox_);
             leftIntensitySpinBox_->setValue(value);
         }
         applyEditedStopValues();
     });
-    connect(leftOpacitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(leftOpacitySpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (linkChannelsCheckBox_->isChecked()) {
             const QSignalBlocker blocker(rightOpacitySpinBox_);
             rightOpacitySpinBox_->setValue(value);
         }
         applyEditedStopValues();
     });
-    connect(rightOpacitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(rightOpacitySpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (linkChannelsCheckBox_->isChecked()) {
             const QSignalBlocker blocker(leftOpacitySpinBox_);
             leftOpacitySpinBox_->setValue(value);

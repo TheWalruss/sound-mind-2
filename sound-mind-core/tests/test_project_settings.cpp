@@ -34,6 +34,7 @@ TEST_CASE("ProjectSettings round-trips through JSON", "[core][project_settings]"
     original.minFrequencyHz = 30.0f;
     original.maxFrequencyHz = 18000.0f;
     original.principalMode = PrincipalMode::Image;
+    original.decimalSeparator = sound_mind::core::DecimalSeparator::Comma;
 
     const nlohmann::json json = original;
     const ProjectSettings restored = json.get<ProjectSettings>();
@@ -49,6 +50,11 @@ TEST_CASE("ProjectSettings round-trips through JSON", "[core][project_settings]"
     REQUIRE(restored.minFrequencyHz == original.minFrequencyHz);
     REQUIRE(restored.maxFrequencyHz == original.maxFrequencyHz);
     REQUIRE(restored.principalMode == original.principalMode);
+    REQUIRE(restored.decimalSeparator == original.decimalSeparator);
+}
+
+TEST_CASE("ProjectSettings' decimal separator defaults to a period", "[core][project_settings]") {
+    CHECK(ProjectSettings{}.decimalSeparator == sound_mind::core::DecimalSeparator::Period);
 }
 
 TEST_CASE("streamCodecConfigFor carries sample rate, bin count, and frequency range through unchanged",

@@ -1,3 +1,4 @@
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
 
 #include <algorithm>
@@ -8,7 +9,6 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -20,7 +20,6 @@
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QSize>
-#include <QSpinBox>
 #include <QVariant>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -279,10 +278,10 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     instrumentLayout->setContentsMargins(0, 0, 0, 0);
 
     auto* instrumentForm = new QFormLayout();
-    harmonicCountSpinBox_ = new QSpinBox(instrumentGroup_);
+    harmonicCountSpinBox_ = new IntegerField(instrumentGroup_);
     harmonicCountSpinBox_->setObjectName(QStringLiteral("harmonicCountSpinBox"));
     harmonicCountSpinBox_->setRange(1, kMaxHarmonics);
-    connect(harmonicCountSpinBox_, &QSpinBox::valueChanged, this, [this](int count) {
+    connect(harmonicCountSpinBox_, &IntegerField::valueChanged, this, [this](int count) {
         rebuildHarmonicStrengthRows(static_cast<std::size_t>(count));
         if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
             instrument->setHarmonicStrengths(currentHarmonicStrengths());
@@ -291,7 +290,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     });
     instrumentForm->addRow(tr("Harmonics:"), harmonicCountSpinBox_);
 
-    inharmonicitySpinBox_ = new QDoubleSpinBox(instrumentGroup_);
+    inharmonicitySpinBox_ = new NumericField(instrumentGroup_);
     inharmonicitySpinBox_->setObjectName(QStringLiteral("inharmonicitySpinBox"));
     inharmonicitySpinBox_->setRange(0.0, 1.0);
     inharmonicitySpinBox_->setSingleStep(0.001);
@@ -299,7 +298,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     inharmonicitySpinBox_->setToolTip(
         tr("How far the harmonic series stretches sharp of a pure integer series, the way a real vibrating "
            "body's own overtones do - 0 is perfectly harmonic."));
-    connect(inharmonicitySpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(inharmonicitySpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
             instrument->setInharmonicity(value);
             emitConfigChanged();
@@ -311,7 +310,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     // depth spin box plus a MindWave bind combo - see
     // InstrumentConfiguration::vibratoMindWave()'s own docs for the
     // pathT-sampled Reduce mechanism actually driving these.
-    vibratoDepthSpinBox_ = new QDoubleSpinBox(instrumentGroup_);
+    vibratoDepthSpinBox_ = new NumericField(instrumentGroup_);
     vibratoDepthSpinBox_->setObjectName(QStringLiteral("vibratoDepthSpinBox"));
     vibratoDepthSpinBox_->setRange(0.0, 24.0);
     vibratoDepthSpinBox_->setSingleStep(0.1);
@@ -319,7 +318,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     vibratoDepthSpinBox_->setToolTip(
         tr("How far vibrato bends each harmonic's own pitch, in semitones - meaningless while no MindWave is bound "
            "below."));
-    connect(vibratoDepthSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(vibratoDepthSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
             instrument->setVibratoDepthSemitones(value);
             emitConfigChanged();
@@ -335,7 +334,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     });
     instrumentForm->addRow(tr("Vibrato:"), makeBoundFieldRow(vibratoDepthSpinBox_, vibratoMindWaveCombo_));
 
-    tremoloDepthSpinBox_ = new QDoubleSpinBox(instrumentGroup_);
+    tremoloDepthSpinBox_ = new NumericField(instrumentGroup_);
     tremoloDepthSpinBox_->setObjectName(QStringLiteral("tremoloDepthSpinBox"));
     tremoloDepthSpinBox_->setRange(0.0, 1.0);
     tremoloDepthSpinBox_->setSingleStep(0.01);
@@ -343,7 +342,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     tremoloDepthSpinBox_->setToolTip(
         tr("How far tremolo dips each harmonic's own strength toward silence - meaningless while no MindWave is "
            "bound below."));
-    connect(tremoloDepthSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(tremoloDepthSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
             instrument->setTremoloDepth(value);
             emitConfigChanged();
@@ -400,7 +399,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
             &ToolConfigurationPanel::handleResonanceProfileComboChanged);
     resonanceForm->addRow(tr("Resonance Profile:"), resonanceProfileCombo_);
 
-    decayRateSpinBox_ = new QDoubleSpinBox(resonanceGroup_);
+    decayRateSpinBox_ = new NumericField(resonanceGroup_);
     decayRateSpinBox_->setObjectName(QStringLiteral("decayRateSpinBox"));
     decayRateSpinBox_->setRange(0.0, 20.0);
     decayRateSpinBox_->setSingleStep(0.1);
@@ -408,7 +407,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     decayRateSpinBox_->setToolTip(
         tr("How quickly loudness decays across the stroke, as if struck once at its own start - 0 is full, "
            "constant sustain."));
-    connect(decayRateSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(decayRateSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (auto* resonant = dynamic_cast<ResonanceConfiguration*>(config_.get())) {
             resonant->setDecayRate(value);
             emitConfigChanged();
@@ -422,7 +421,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     // a stamp's own time-axis length and a spectrum's own frequency
     // spread are independent artistic choices, confirmed with the user
     // after first proposing a dual-purpose "Brush Size does both" version.
-    frequencyScaleSpinBox_ = new QDoubleSpinBox(resonanceGroup_);
+    frequencyScaleSpinBox_ = new NumericField(resonanceGroup_);
     frequencyScaleSpinBox_->setObjectName(QStringLiteral("frequencyScaleSpinBox"));
     frequencyScaleSpinBox_->setRange(0.0, 10.0);
     frequencyScaleSpinBox_->setSingleStep(0.25);
@@ -431,7 +430,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     frequencyScaleSpinBox_->setToolTip(
         tr("How many octaves above the painted pitch the spectrum spreads - the bottom of the spectrum always "
            "stays on the painted pitch itself."));
-    connect(frequencyScaleSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(frequencyScaleSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (auto* resonant = dynamic_cast<ResonanceConfiguration*>(config_.get())) {
             resonant->setFrequencyScale(value);
             emitConfigChanged();
@@ -439,14 +438,14 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     });
     resonanceForm->addRow(tr("Frequency Scale:"), frequencyScaleSpinBox_);
 
-    timeSpanSpinBox_ = new QDoubleSpinBox(resonanceGroup_);
+    timeSpanSpinBox_ = new NumericField(resonanceGroup_);
     timeSpanSpinBox_->setObjectName(QStringLiteral("timeSpanSpinBox"));
     timeSpanSpinBox_->setRange(0.001, 10.0);
     timeSpanSpinBox_->setSingleStep(0.01);
     timeSpanSpinBox_->setDecimals(3);
     timeSpanSpinBox_->setSuffix(tr(" s"));
     timeSpanSpinBox_->setToolTip(tr("This brush's own stamp radius, in time - independent of Frequency Scale."));
-    connect(timeSpanSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(timeSpanSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (auto* resonant = dynamic_cast<ResonanceConfiguration*>(config_.get())) {
             resonant->setTimeSpan(value);
             emitConfigChanged();
@@ -491,7 +490,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     auto* orderChaosForm = new QFormLayout(orderChaosGroup_);
     orderChaosForm->setContentsMargins(0, 0, 0, 0);
 
-    amountSpinBox_ = new QDoubleSpinBox(orderChaosGroup_);
+    amountSpinBox_ = new NumericField(orderChaosGroup_);
     amountSpinBox_->setObjectName(QStringLiteral("amountSpinBox"));
     amountSpinBox_->setRange(-1.0, 1.0);
     amountSpinBox_->setSingleStep(0.05);
@@ -499,7 +498,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     amountSpinBox_->setToolTip(
         tr("Negative pushes toward Chaos (randomly scrambling pixel intensities), positive toward Order "
            "(concentrating them into a horizontal/vertical cross) - 0 has no effect."));
-    connect(amountSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(amountSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         if (auto* orderChaos = dynamic_cast<OrderChaosConfiguration*>(config_.get())) {
             orderChaos->setAmount(value);
             emitConfigChanged();
@@ -510,18 +509,18 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
 
     sharedControlsForm_ = new QFormLayout();
 
-    falloffSpinBox_ = new QDoubleSpinBox(container);
+    falloffSpinBox_ = new NumericField(container);
     falloffSpinBox_->setObjectName(QStringLiteral("falloffSpinBox"));
     falloffSpinBox_->setRange(0.0, 1.0);
     falloffSpinBox_->setSingleStep(0.05);
     falloffSpinBox_->setValue(config_->falloff());
-    connect(falloffSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(falloffSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_->setFalloff(static_cast<float>(value));
         emitConfigChanged();
     });
     sharedControlsForm_->addRow(tr("Falloff:"), falloffSpinBox_);
 
-    sizeSpinBox_ = new QDoubleSpinBox(container);
+    sizeSpinBox_ = new NumericField(container);
     sizeSpinBox_->setObjectName(QStringLiteral("sizeSpinBox"));
     sizeSpinBox_->setRange(0.001, 100.0);
     sizeSpinBox_->setSingleStep(0.01);
@@ -534,7 +533,7 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
         tr("The brush tip's own radius: in seconds on the time axis, and "
            "the equivalent frequency span on the frequency axis (using "
            "this project's own Hz-per-second scale)."));
-    connect(sizeSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(sizeSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_->setSize(value);
         emitConfigChanged();
     });
@@ -552,13 +551,13 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     });
     sharedControlsForm_->addRow(tr("Stamp Mode:"), stampModeCombo_);
 
-    stampIntervalSpinBox_ = new QDoubleSpinBox(container);
+    stampIntervalSpinBox_ = new NumericField(container);
     stampIntervalSpinBox_->setObjectName(QStringLiteral("stampIntervalSpinBox"));
     stampIntervalSpinBox_->setRange(0.001, 20000.0);
     stampIntervalSpinBox_->setSingleStep(0.01);
     stampIntervalSpinBox_->setDecimals(3);
     stampIntervalSpinBox_->setValue(config_->stampInterval());
-    connect(stampIntervalSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(stampIntervalSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         config_->setStampInterval(value);
         emitConfigChanged();
     });
@@ -939,21 +938,21 @@ void ToolConfigurationPanel::rebuildHarmonicStrengthRows(std::size_t count) {
     // and keeps findChild() (as tests use to check a shrunk row is really
     // gone) accurate without waiting on the event loop.
     while (harmonicStrengthSpinBoxes_.size() > count) {
-        QDoubleSpinBox* spinBox = harmonicStrengthSpinBoxes_.back();
+        NumericField* spinBox = harmonicStrengthSpinBoxes_.back();
         harmonicStrengthSpinBoxes_.pop_back();
         harmonicStrengthsLayout_->removeWidget(spinBox);
         delete spinBox;
     }
     while (harmonicStrengthSpinBoxes_.size() < count) {
         const int harmonicNumber = static_cast<int>(harmonicStrengthSpinBoxes_.size()) + 1;
-        auto* spinBox = new QDoubleSpinBox(instrumentGroup_);
+        auto* spinBox = new NumericField(instrumentGroup_);
         spinBox->setObjectName(QStringLiteral("harmonicStrengthSpinBox%1").arg(harmonicNumber));
         spinBox->setRange(0.0, 10.0);
         spinBox->setSingleStep(0.05);
         spinBox->setDecimals(3);
         spinBox->setValue(harmonicNumber == 1 ? 1.0 : 0.0);
         spinBox->setPrefix(harmonicNumber == 1 ? tr("Fundamental: ") : tr("Harmonic %1: ").arg(harmonicNumber));
-        connect(spinBox, &QDoubleSpinBox::valueChanged, this, [this](double) {
+        connect(spinBox, &NumericField::valueChanged, this, [this](double) {
             const auto strengths = currentHarmonicStrengths();
             if (auto* instrument = dynamic_cast<InstrumentConfiguration*>(config_.get())) {
                 instrument->setHarmonicStrengths(strengths);
@@ -974,7 +973,7 @@ void ToolConfigurationPanel::rebuildHarmonicStrengthRows(std::size_t count) {
 std::vector<double> ToolConfigurationPanel::currentHarmonicStrengths() const {
     std::vector<double> strengths;
     strengths.reserve(harmonicStrengthSpinBoxes_.size());
-    for (const QDoubleSpinBox* spinBox : harmonicStrengthSpinBoxes_) {
+    for (const NumericField* spinBox : harmonicStrengthSpinBoxes_) {
         strengths.push_back(spinBox->value());
     }
     return strengths;

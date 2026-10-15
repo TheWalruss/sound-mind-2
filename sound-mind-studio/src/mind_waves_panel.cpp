@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include <QCheckBox>
-#include <QDoubleSpinBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
@@ -17,6 +16,7 @@
 #include <QVariant>
 
 #include "sound_mind/studio/mind_wave_editor.h"
+#include "sound_mind/studio/numeric_field.h"
 
 namespace sound_mind::studio {
 
@@ -210,12 +210,12 @@ MindWavesPanel::MindWavesPanel(QWidget* parent) : QDockWidget(tr("MindWaves"), p
     warpHeaderRow->addWidget(warpEnabledCheckBox_);
 
     warpHeaderRow->addWidget(new QLabel(tr("Strength:")));
-    warpStrengthSpinBox_ = new QDoubleSpinBox();
+    warpStrengthSpinBox_ = new NumericField();
     warpStrengthSpinBox_->setObjectName(QStringLiteral("warpStrengthSpinBox"));
     warpStrengthSpinBox_->setRange(-10.0, 10.0);
     warpStrengthSpinBox_->setSingleStep(0.1);
     warpStrengthSpinBox_->setEnabled(false);
-    connect(warpStrengthSpinBox_, &QDoubleSpinBox::valueChanged, this, [this](double value) {
+    connect(warpStrengthSpinBox_, &NumericField::valueChanged, this, [this](double value) {
         currentWarpStrength_ = value;
         emitCurrentMindWaveChanged();
     });

@@ -15,7 +15,6 @@
 #include <QContextMenuEvent>
 #include <QCoreApplication>
 #include <QDir>
-#include <QDoubleSpinBox>
 #include <QEvent>
 #include <QFile>
 #include <QGroupBox>
@@ -60,6 +59,7 @@
 #include "sound_mind/studio/layers_panel.h"
 #include "sound_mind/studio/loop_panel.h"
 #include "sound_mind/studio/main_window.h"
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/tool_palette_controller.h"
 #include "sound_mind/studio/midi_configuration_panel.h"
 #include "sound_mind/studio/mind_waves_panel.h"
@@ -97,6 +97,7 @@ using sound_mind::studio::RecordPanel;
 using sound_mind::studio::ResourceBrowserPanel;
 using sound_mind::studio::SelectionConfigurationPanel;
 using sound_mind::studio::ToolConfigurationPanel;
+using sound_mind::studio::NumericField;
 
 namespace {
 
@@ -4523,19 +4524,19 @@ void MainWindowTest::selectingTheEqualizerLayerSwitchesTheFilterConfigurationPan
     // switched into Cut mode (intensity fields hidden) - see
     // FilterConfigurationPanel::setEqualizerMode()'s own docs - rather
     // than a second, separate "Cut" group.
-    QVERIFY(!filterPanel->findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(!filterPanel->findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
 
     const auto equalizerId = window.project()->layers().back().id();  // Always the topmost layer.
     layersPanel->selectLayer(equalizerId);
 
     QVERIFY(filterPanel->isEnabled());
     QVERIFY(filterPanel->findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
-    QVERIFY(filterPanel->findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(filterPanel->findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
 
     layersPanel->selectLayer(ordinaryFilterId);
 
     QVERIFY(!filterPanel->findChild<QComboBox*>(QStringLiteral("filterTypeCombo"))->isHidden());
-    QVERIFY(!filterPanel->findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
+    QVERIFY(!filterPanel->findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"))->isHidden());
 }
 
 void MainWindowTest::editingFilterConfigurationPanelWritesBackToTheSelectedLayer() {
@@ -4548,7 +4549,7 @@ void MainWindowTest::editingFilterConfigurationPanelWritesBackToTheSelectedLayer
     layersPanel->selectLayer(filterLayerId);
     auto* filterPanel = window.findChild<FilterConfigurationPanel*>();
     QVERIFY(filterPanel != nullptr);
-    auto* spinBox = filterPanel->findChild<QDoubleSpinBox*>(QStringLiteral("gradientLeftIntensitySpinBox"));
+    auto* spinBox = filterPanel->findChild<NumericField*>(QStringLiteral("gradientLeftIntensitySpinBox"));
     QVERIFY(spinBox != nullptr);
 
     spinBox->setValue(-15.0);
@@ -4674,7 +4675,7 @@ void MainWindowTest::pickingAPaintedStrokeLoadsItsSettingsIntoThePanel() {
 
     auto* panel = window.findChild<ToolConfigurationPanel*>();
     QVERIFY(panel != nullptr);
-    auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    auto* sizeSpinBox = panel->findChild<NumericField*>(QStringLiteral("sizeSpinBox"));
     QVERIFY(sizeSpinBox != nullptr);
     // Changes the "current brush" default away from what the stroke above
     // was actually painted with (ToolConfiguration's own default, 0.2) -
@@ -4774,7 +4775,7 @@ void MainWindowTest::pickingTheSameSpotTwiceSelectsTheOccludedStrokeUnderneath()
     canvas->setFixedSize(100, 50);
     auto* panel = window.findChild<ToolConfigurationPanel*>();
     QVERIFY(panel != nullptr);
-    auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    auto* sizeSpinBox = panel->findChild<NumericField*>(QStringLiteral("sizeSpinBox"));
     QVERIFY(sizeSpinBox != nullptr);
 
     // Two taps at the exact same spot - the second (larger-brushed) one
@@ -5713,7 +5714,7 @@ void MainWindowTest::pastedContentIsPickableAndMovable() {
     canvas->setFixedSize(100, 50);
     auto* panel = window.findChild<ToolConfigurationPanel*>();
     QVERIFY(panel != nullptr);
-    auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    auto* sizeSpinBox = panel->findChild<NumericField*>(QStringLiteral("sizeSpinBox"));
     QVERIFY(sizeSpinBox != nullptr);
 
     // Paint, select it, copy, then paste - lands back at the same spot,
@@ -5841,7 +5842,7 @@ void MainWindowTest::modifyingAPaintedStrokeAfterCuttingOverItKeepsTheCutRegionS
     canvas->setFixedSize(100, 50);
     auto* panel = window.findChild<ToolConfigurationPanel*>();
     QVERIFY(panel != nullptr);
-    auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    auto* sizeSpinBox = panel->findChild<NumericField*>(QStringLiteral("sizeSpinBox"));
     QVERIFY(sizeSpinBox != nullptr);
 
     // A single wide stroke spanning most of the canvas.
@@ -5938,7 +5939,7 @@ void MainWindowTest::bringPickedObjectToFrontMovesItAboveLaterStrokesOnTheSameLa
     canvas->setFixedSize(100, 50);
     auto* panel = window.findChild<ToolConfigurationPanel*>();
     QVERIFY(panel != nullptr);
-    auto* sizeSpinBox = panel->findChild<QDoubleSpinBox*>(QStringLiteral("sizeSpinBox"));
+    auto* sizeSpinBox = panel->findChild<NumericField*>(QStringLiteral("sizeSpinBox"));
     QVERIFY(sizeSpinBox != nullptr);
     sizeSpinBox->setValue(0.01);  // small and precise - see pickPadsHitTestingByTheOperationsOwnBrushSize's own docs.
 
@@ -6670,4 +6671,23 @@ void MainWindowTest::showClippingActionTogglesTheCanvasClipIndicator() {
     QVERIFY(canvas->clipIndicatorEnabled());
     action->trigger();
     QVERIFY(!canvas->clipIndicatorEnabled());
+}
+
+void MainWindowTest::decimalSeparatorMenuSetsTheProjectSettingAndEveryNumericField() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    auto* commaAction = window.findChild<QAction*>(QStringLiteral("decimalCommaAction"));
+    auto* periodAction = window.findChild<QAction*>(QStringLiteral("decimalPeriodAction"));
+    QVERIFY(commaAction != nullptr && periodAction != nullptr);
+    QVERIFY(periodAction->isChecked());
+
+    commaAction->trigger();
+
+    QCOMPARE(window.project()->settings().decimalSeparator, sound_mind::core::DecimalSeparator::Comma);
+    QCOMPARE(sound_mind::studio::NumericFieldBase::decimalSeparator(), sound_mind::core::DecimalSeparator::Comma);
+
+    // A fresh project brings its own (default, period) setting back.
+    createFreshTestProject(window);
+    QVERIFY(periodAction->isChecked());
+    QCOMPARE(sound_mind::studio::NumericFieldBase::decimalSeparator(), sound_mind::core::DecimalSeparator::Period);
 }

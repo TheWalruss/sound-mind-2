@@ -1,3 +1,4 @@
+#include "sound_mind/studio/numeric_field.h"
 #include "sound_mind/studio/selection_configuration_panel.h"
 
 #include <array>
@@ -5,7 +6,6 @@
 
 #include <QCheckBox>
 #include <QComboBox>
-#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QPushButton>
 #include <QSignalBlocker>
@@ -66,12 +66,12 @@ SelectionConfigurationPanel::SelectionConfigurationPanel(QWidget* parent)
     auto* wandForm = new QFormLayout(wandGroup_);
     wandForm->setContentsMargins(0, 0, 0, 0);
 
-    wandToleranceSpinBox_ = new QDoubleSpinBox(wandGroup_);
+    wandToleranceSpinBox_ = new NumericField(wandGroup_);
     wandToleranceSpinBox_->setObjectName(QStringLiteral("wandToleranceSpinBox"));
     wandToleranceSpinBox_->setRange(0.0, 100.0);
     wandToleranceSpinBox_->setSuffix(QStringLiteral("%"));
     wandToleranceSpinBox_->setValue(10.0);  // Matches SelectionController's own default.
-    connect(wandToleranceSpinBox_, &QDoubleSpinBox::valueChanged, this,
+    connect(wandToleranceSpinBox_, &NumericField::valueChanged, this,
             &SelectionConfigurationPanel::wandToleranceChanged);
     wandForm->addRow(tr("Tolerance:"), wandToleranceSpinBox_);
 

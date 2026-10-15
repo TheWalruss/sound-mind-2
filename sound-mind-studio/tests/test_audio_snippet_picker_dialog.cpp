@@ -3,14 +3,15 @@
 #include <algorithm>
 
 #include <QCheckBox>
-#include <QDoubleSpinBox>
 #include <QListWidget>
 #include <QSignalSpy>
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::studio::AudioSnippetPickerDialog;
+using sound_mind::studio::NumericField;
 
 namespace {
 
@@ -85,7 +86,7 @@ void AudioSnippetPickerDialogTest::changingTheOffsetSpinBoxEmitsOffsetChanged() 
     AudioSnippetPickerDialog dialog(threeSnippets());
     QSignalSpy spy(&dialog, &AudioSnippetPickerDialog::offsetChanged);
 
-    auto* offsetSpinBox = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("offsetSpinBox"));
+    auto* offsetSpinBox = dialog.findChild<NumericField*>(QStringLiteral("offsetSpinBox"));
     QVERIFY(offsetSpinBox != nullptr);
     offsetSpinBox->setValue(1.5);
 

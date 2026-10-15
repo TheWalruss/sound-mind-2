@@ -24,7 +24,7 @@ namespace sound_mind::studio {
  *        `EqualizerCurveWidget` closed out.
  *
  * A visual *complement* to `ToolConfigurationPanel`'s existing per-
- * harmonic `QDoubleSpinBox` rows, not a replacement - both edit the same
+ * harmonic `NumericField` rows, not a replacement - both edit the same
  * `std::vector<double>`, kept in sync by `ToolConfigurationPanel`
  * forwarding each one's own change onto the other. Unlike
  * `EqualizerCurveWidget`'s own `Gradient` (a variable-length list of
