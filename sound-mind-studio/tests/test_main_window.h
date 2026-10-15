@@ -336,4 +336,5 @@ private slots:
     void previewToolConfigurationIsANoOpWithNoProjectOpen();
     void showClippingActionTogglesTheCanvasClipIndicator();
     void decimalSeparatorMenuSetsTheProjectSettingAndEveryNumericField();
+    void imageModeFitsTheCanvasWithSquareCells();
 };

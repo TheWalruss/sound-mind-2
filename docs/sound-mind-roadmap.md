@@ -1235,7 +1235,7 @@ This is the foundation milestone; later milestones build their new controls on i
 - **Layers panel Gain and Balance sliders:** add scale and labels, and apply on release instead of on every move.
 - *Performance:* commit-on-release and commit-on-Enter remove most of the redundant recompositing that makes today's sliders feel sluggish. Confirm with `sound-mind-benchmark` that no recomposite runs during a drag.
 
-#### `v0.Y.74.1` - Brush and Paint tool (M)
+#### ✅ `v0.Y.74.1` - Brush and Paint tool (M) - settled in `v0.1.34.1`, see architecture Decision #235 ("canvas binding mode" = Edit -> Image Mode, confirmed with the user; the Paint Tool gradient item was the gradient bar collapsing in Tool Configuration)
 
 - **Procedural tips.**
   - *Root cause, confirmed:* `footprintDistance()` in `paint_application.cpp` handles only Circle, Square and Diamond; the other eight shapes fall through to the circle case.

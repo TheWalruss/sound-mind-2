@@ -124,6 +124,11 @@ public:
     /// @return A reasonable default size for this bar inside a panel.
     [[nodiscard]] QSize sizeHint() const override;
 
+    /// @return The smallest size that still shows the gradient and its
+    ///        stop handles - without it a crowded panel's layout could
+    ///        squeeze the bar to nothing.
+    [[nodiscard]] QSize minimumSizeHint() const override;
+
 signals:
     /// @brief Emitted whenever a drag, insert, or remove changes the
     ///        gradient.

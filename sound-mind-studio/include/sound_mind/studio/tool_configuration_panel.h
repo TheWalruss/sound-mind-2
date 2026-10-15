@@ -11,6 +11,7 @@
 
 #include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/tool_configuration.h"
+#include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/tool_preset.h"
 #include "sound_mind/studio/numeric_field.h"
 
@@ -317,6 +318,16 @@ public:
     void setActiveLayer(sound_mind::core::LayerId layer);
 
     /**
+     * @brief Tells the panel which Principal Mode the open project uses, so
+     *        the Stamp Interval field names the right unit: in Image Mode,
+     *        Along Curve spacing is in canvas pixels and Frequency Axis
+     *        spacing in frequency bins (see `sampleStroke()` in
+     *        `paint_application.cpp`); in Sound mode, seconds and Hz.
+     * @param mode The project's own Principal Mode.
+     */
+    void setPrincipalMode(sound_mind::core::PrincipalMode mode);
+
+    /**
      * @brief Sets the callback every MindWave-binding combo here
      *        (`vibratoMindWaveCombo_`/`tremoloMindWaveCombo_`/
      *        `opacityMindWaveCombo_`/`sizeMindWaveCombo_`/
@@ -378,6 +389,10 @@ signals:
 private:
     /// @brief Emits toolConfigurationChanged() with the current config_.
     void emitConfigChanged();
+
+    /// @brief Shows the Thickness field only for tip shapes that use it -
+    ///        not Circle, Square, Diamond or Triangle.
+    void updateTipThicknessVisibility();
 
     /// @brief Syncs stampIntervalSpinBox_'s own suffix/tooltip to
     ///        config_'s current `stampMode()`, and disables it entirely
@@ -661,6 +676,13 @@ private:
     ///        draw their own entries from.
     QComboBox* toolPresetCombo_ = nullptr;
     QPushButton* savePresetButton_ = nullptr;
+    /// @brief The Procedural tip's own thickness - see
+    ///        `ProceduralConfiguration::tipThickness()`. Shown only for
+    ///        shapes that use it (updateTipThicknessVisibility()).
+    NumericField* tipThicknessSpinBox_ = nullptr;
+    /// @brief See setPrincipalMode().
+    bool imageMode_ = false;
+    QLabel* tipThicknessLabel_ = nullptr;
     /// @brief Shows which Tool Preset is active and whether it has since been edited.
     PresetIndicatorLabel* presetIndicator_ = nullptr;
     QPushButton* deletePresetButton_ = nullptr;

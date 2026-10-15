@@ -155,4 +155,7 @@ private slots:
     void setPreviewPlayingTogglesWhichButtonIsShown();
     void presetIndicatorShowsLoadedPresetThenModifiedThenClearsOnExternalSet();
     void presetIndicatorFollowsSaveAndDelete();
+    void tipThicknessIsShownOnlyForShapesThatUseItAndUpdatesTheConfig();
+    void gradientBarKeepsAUsableHeightInACrowdedPanel();
+    void stampIntervalUnitsFollowThePrincipalMode();
 };

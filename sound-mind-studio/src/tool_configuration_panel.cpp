@@ -265,10 +265,30 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     connect(tipShapeCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
         if (auto* procedural = dynamic_cast<ProceduralConfiguration*>(config_.get())) {
             procedural->setTipShape(static_cast<BrushTipShape>(tipShapeCombo_->itemData(index).toInt()));
+            updateTipThicknessVisibility();
             emitConfigChanged();
         }
     });
     proceduralForm->addRow(tr("Tip Shape:"), tipShapeCombo_);
+
+    tipThicknessSpinBox_ = new NumericField(proceduralGroup_);
+    tipThicknessSpinBox_->setObjectName(QStringLiteral("tipThicknessSpinBox"));
+    tipThicknessSpinBox_->setRange(0.05, 1.0);
+    tipThicknessSpinBox_->setDecimals(2);
+    tipThicknessSpinBox_->setSingleStep(0.05);
+    tipThicknessSpinBox_->setValue(0.25);
+    tipThicknessSpinBox_->setToolTip(
+        tr("Line width of the Cross, Single Stroke, Corner, Arc and Star shapes, or dot size of Dot Spatter and "
+           "Dapple - as a fraction of the brush size"));
+    connect(tipThicknessSpinBox_, &NumericField::valueChanged, this, [this](double value) {
+        if (auto* procedural = dynamic_cast<ProceduralConfiguration*>(config_.get())) {
+            procedural->setTipThickness(value);
+            emitConfigChanged();
+        }
+    });
+    proceduralForm->addRow(tr("Thickness:"), tipThicknessSpinBox_);
+    tipThicknessLabel_ = qobject_cast<QLabel*>(proceduralForm->labelForField(tipThicknessSpinBox_));
+    updateTipThicknessVisibility();
     root->addWidget(proceduralGroup_);
 
     // --- Instrument's own group ------------------------------------------
@@ -712,6 +732,16 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     setWidget(scrollArea);
 }
 
+void ToolConfigurationPanel::updateTipThicknessVisibility() {
+    const auto shape = static_cast<BrushTipShape>(tipShapeCombo_->currentData().toInt());
+    const bool usesThickness = shape != BrushTipShape::Circle && shape != BrushTipShape::Square &&
+                               shape != BrushTipShape::Diamond && shape != BrushTipShape::Triangle;
+    tipThicknessSpinBox_->setVisible(usesThickness);
+    if (tipThicknessLabel_ != nullptr) {
+        tipThicknessLabel_->setVisible(usesThickness);
+    }
+}
+
 void ToolConfigurationPanel::emitConfigChanged() {
     presetIndicator_->markModified();
     emit toolConfigurationChanged(*config_);
@@ -997,6 +1027,9 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
         const QSignalBlocker blocker(tipShapeCombo_);
         const int index = tipShapeCombo_->findData(QVariant::fromValue(static_cast<int>(procedural->tipShape())));
         tipShapeCombo_->setCurrentIndex(index >= 0 ? index : 0);
+        const QSignalBlocker thicknessBlocker(tipThicknessSpinBox_);
+        tipThicknessSpinBox_->setValue(procedural->tipThickness());
+        updateTipThicknessVisibility();
     } else if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(config_.get())) {
         rebuildHarmonicStrengthRows(instrument->harmonicStrengths().size());
         {
@@ -1102,6 +1135,11 @@ void ToolConfigurationPanel::setToolConfiguration(const sound_mind::core::ToolCo
     }
 }
 
+void ToolConfigurationPanel::setPrincipalMode(sound_mind::core::PrincipalMode mode) {
+    imageMode_ = mode == sound_mind::core::PrincipalMode::Image;
+    updateStampIntervalAppearance();
+}
+
 void ToolConfigurationPanel::updateStampIntervalAppearance() {
     const bool active = config_->stampMode() != StampMode::Stroke;
     stampIntervalSpinBox_->setEnabled(active);
@@ -1126,6 +1164,13 @@ void ToolConfigurationPanel::updateStampIntervalAppearance() {
                    "raw input was drawn."));
             break;
         case StampMode::AlongCurve:
+            if (imageMode_) {
+                stampIntervalSpinBox_->setSuffix(QStringLiteral(" px (along curve)"));
+                stampIntervalSpinBox_->setToolTip(
+                    tr("Spacing between stamps along the path, in canvas pixels (Image Mode) - the same spacing "
+                       "everywhere on the canvas."));
+                break;
+            }
             stampIntervalSpinBox_->setSuffix(QStringLiteral(" s (along curve)"));
             stampIntervalSpinBox_->setToolTip(
                 tr("Spacing between stamps, measured along the path's own arc length - in the same seconds-"
@@ -1138,6 +1183,13 @@ void ToolConfigurationPanel::updateStampIntervalAppearance() {
                    "the path's own shape."));
             break;
         case StampMode::FrequencyAxis:
+            if (imageMode_) {
+                stampIntervalSpinBox_->setSuffix(QStringLiteral(" bins"));
+                stampIntervalSpinBox_->setToolTip(
+                    tr("Stamps everywhere the path crosses a horizontal line this many canvas pixels (frequency "
+                       "bins) apart (Image Mode)."));
+                break;
+            }
             stampIntervalSpinBox_->setSuffix(QStringLiteral(" Hz"));
             stampIntervalSpinBox_->setToolTip(
                 tr("Stamps everywhere the path crosses a frequency-axis line this many Hz apart, regardless of "

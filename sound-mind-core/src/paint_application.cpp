@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "sound_mind/core/blend_mode_application.h"
+#include "sound_mind/core/brush_tip.h"
 #include "sound_mind/core/fill_application.h"
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/filter_application.h"
@@ -139,7 +140,11 @@ StrokeSample lerpSample(const StrokeSample& a, const StrokeSample& b, double t) 
 /// `resolveStampIntervalPattern()` already guarantee this for a
 /// pattern-driven caller, and a non-positive step here would loop forever
 /// walking `total`.
-std::vector<StrokeSample> sampleStrokeAlongCurve(const std::vector<StrokeSample>& dense, double frequencyToTimeScale,
+/// `toPlane` maps a point into the plane arc length is measured in - the
+/// normalized seconds-equivalent space in Sound mode, canvas pixels
+/// (frame, bin) in Image mode; see sampleStroke().
+template <typename ToPlane>
+std::vector<StrokeSample> sampleStrokeAlongCurve(const std::vector<StrokeSample>& dense, ToPlane toPlane,
                                                    const std::vector<double>& intervalPattern) {
     std::vector<StrokeSample> result;
     if (dense.empty() || intervalPattern.empty()) {
@@ -152,9 +157,7 @@ std::vector<StrokeSample> sampleStrokeAlongCurve(const std::vector<StrokeSample>
 
     std::vector<double> cumulativeLength(dense.size(), 0.0);
     for (std::size_t i = 1; i < dense.size(); ++i) {
-        cumulativeLength[i] = cumulativeLength[i - 1] +
-                               distance(normalize(dense[i - 1].point, frequencyToTimeScale),
-                                        normalize(dense[i].point, frequencyToTimeScale));
+        cumulativeLength[i] = cumulativeLength[i - 1] + distance(toPlane(dense[i - 1].point), toPlane(dense[i].point));
     }
     const double total = cumulativeLength.back();
 
@@ -172,14 +175,6 @@ std::vector<StrokeSample> sampleStrokeAlongCurve(const std::vector<StrokeSample>
     return result;
 }
 
-/// @brief Which coordinate of a `TimeFrequencyPoint` `StampMode::TimeAxis`/
-/// `FrequencyAxis` measure crossings along.
-enum class StampAxis { Time, Frequency };
-
-double stampAxisCoordinate(const TimeFrequencyPoint& point, StampAxis axis) {
-    return axis == StampAxis::Time ? point.timeSeconds : point.frequencyHz;
-}
-
 /// @brief `dense`, re-sampled at every point it crosses `axis`'s own
 /// coordinate `start + k * interval` (for every integer `k`, in either
 /// direction of travel - a hop can cross more than one such line, and a
@@ -188,18 +183,21 @@ double stampAxisCoordinate(const TimeFrequencyPoint& point, StampAxis axis) {
 /// placement, `start` being `dense`'s own first point. Always includes
 /// `dense`'s own first point itself (`k = 0`), the one crossing no
 /// dense-to-dense hop could ever produce on its own.
+/// `coordinate` reads the axis coordinate crossings are counted along -
+/// seconds, Hz, or (Image mode) frequency bins; see sampleStroke().
+template <typename Coordinate>
 std::vector<StrokeSample> sampleStrokeAxisCrossings(const std::vector<StrokeSample>& dense, double interval,
-                                                      StampAxis axis) {
+                                                      Coordinate coordinate) {
     std::vector<StrokeSample> result;
     if (dense.empty() || interval <= 0.0) {
         return result;
     }
     result.push_back(dense.front());
 
-    const double start = stampAxisCoordinate(dense.front().point, axis);
+    const double start = coordinate(dense.front().point);
     for (std::size_t i = 0; i + 1 < dense.size(); ++i) {
-        const double c0 = stampAxisCoordinate(dense[i].point, axis);
-        const double c1 = stampAxisCoordinate(dense[i + 1].point, axis);
+        const double c0 = coordinate(dense[i].point);
+        const double c1 = coordinate(dense[i + 1].point);
         if (c0 == c1) {
             continue;  // No crossing possible along a hop parallel to this axis's own gridlines.
         }
@@ -241,16 +239,60 @@ std::vector<double> effectiveAlongCurveIntervals(const ToolConfiguration& toolCo
     return {toolConfig.stampInterval()};
 }
 
+/// @brief A stroke's own stamp positions, per `toolConfig.stampMode()`.
+///
+/// In `PrincipalMode::Image`, spacing is measured on the canvas itself:
+/// AlongCurve's arc length is in canvas pixels (frames across, bins up)
+/// and its `stampInterval()` is a pixel count; FrequencyAxis counts
+/// crossings every `stampInterval()` frequency bins rather than Hz. Both
+/// are floored at 1 pixel, so an interval left over from Sound mode can't
+/// explode into thousands of stamps. A beats/seconds interval pattern is
+/// converted to frames (one frame = one canvas pixel across). TimeAxis
+/// stays in seconds - frames are already linear in time. In Sound mode,
+/// spacing stays in the normalized seconds-equivalent space / Hz.
 std::vector<StrokeSample> sampleStroke(const Path& path, double frequencyToTimeScale,
-                                        const ToolConfiguration& toolConfig, double bpm) {
+                                        const ToolConfiguration& toolConfig, double bpm, PrincipalMode principalMode,
+                                        const sound_mind::codec::StreamCodecConfig& config) {
     const std::vector<StrokeSample> dense = sampleStrokeDense(path, frequencyToTimeScale);
+    const bool imageMode = principalMode == PrincipalMode::Image;
     switch (toolConfig.stampMode()) {
-        case StampMode::AlongCurve:
-            return sampleStrokeAlongCurve(dense, frequencyToTimeScale, effectiveAlongCurveIntervals(toolConfig, bpm));
+        case StampMode::AlongCurve: {
+            if (!imageMode) {
+                return sampleStrokeAlongCurve(
+                    dense, [frequencyToTimeScale](const TimeFrequencyPoint& p) { return normalize(p, frequencyToTimeScale); },
+                    effectiveAlongCurveIntervals(toolConfig, bpm));
+            }
+            std::vector<double> pixels;
+            if (toolConfig.stampIntervalPatternText().empty()) {
+                pixels.push_back(std::max(1.0, toolConfig.stampInterval()));
+            } else {
+                const double framesPerSecond = timeToFrameIndex(1.0, config) - timeToFrameIndex(0.0, config);
+                for (const double seconds : effectiveAlongCurveIntervals(toolConfig, bpm)) {
+                    pixels.push_back(std::max(1.0, seconds * framesPerSecond));
+                }
+            }
+            return sampleStrokeAlongCurve(
+                dense,
+                [&config](const TimeFrequencyPoint& p) {
+                    // Frames across and bins up, both one canvas pixel.
+                    return NormalizedPoint{timeToFrameIndex(p.timeSeconds, config),
+                                           static_cast<double>(frequencyToBinIndex(static_cast<float>(p.frequencyHz), config))};
+                },
+                pixels);
+        }
         case StampMode::TimeAxis:
-            return sampleStrokeAxisCrossings(dense, toolConfig.stampInterval(), StampAxis::Time);
+            return sampleStrokeAxisCrossings(dense, toolConfig.stampInterval(),
+                                             [](const TimeFrequencyPoint& p) { return p.timeSeconds; });
         case StampMode::FrequencyAxis:
-            return sampleStrokeAxisCrossings(dense, toolConfig.stampInterval(), StampAxis::Frequency);
+            if (imageMode) {
+                return sampleStrokeAxisCrossings(dense, std::max(1.0, toolConfig.stampInterval()),
+                                                 [&config](const TimeFrequencyPoint& p) {
+                                                     return static_cast<double>(
+                                                         frequencyToBinIndex(static_cast<float>(p.frequencyHz), config));
+                                                 });
+            }
+            return sampleStrokeAxisCrossings(dense, toolConfig.stampInterval(),
+                                             [](const TimeFrequencyPoint& p) { return p.frequencyHz; });
         case StampMode::Stroke:
         default:
             return dense;
@@ -400,23 +442,6 @@ StampParameters resolveStampParameters(const PaintParameterMindWaves& mindWaves,
     return result;
 }
 
-/// @brief The tip footprint's own normalized distance metric - `<= 1.0`
-/// means the pixel at `(dt, df)` (already divided by the tip's own frame/
-/// bin radius) falls within the stamp.
-double footprintDistance(BrushTipShape shape, double normalizedDt, double normalizedDf) {
-    switch (shape) {
-        case BrushTipShape::Square:
-            return std::max(std::abs(normalizedDt), std::abs(normalizedDf));
-        case BrushTipShape::Diamond:
-            return std::abs(normalizedDt) + std::abs(normalizedDf);
-        case BrushTipShape::Circle:
-        default:
-            // Every tip shape without its own real footprint yet falls
-            // back to Circle's - see applyPaintOperation()'s own docs.
-            return std::sqrt(normalizedDt * normalizedDt + normalizedDf * normalizedDf);
-    }
-}
-
 /// @brief `1` at the stamp's own center, fading to `0` at its edge over
 /// the outer `falloff` fraction of the radius - a hard edge exactly at
 /// the radius when `falloff == 0`.
@@ -523,7 +548,7 @@ void applyProceduralPaintOperation(const PaintOperation& operation, const Proced
             const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
             for (int bin = binLow; bin <= binHigh; ++bin) {
                 const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
-                const double dist = footprintDistance(toolConfig.tipShape(), normalizedDt, normalizedDf);
+                const double dist = brushTipDistance(toolConfig.tipShape(), normalizedDt, normalizedDf, toolConfig.tipThickness());
                 const float weight = falloffWeight(dist, toolConfig.falloff()) * params.opacityMultiplier;
                 if (weight <= 0.0f) {
                     continue;
@@ -1204,7 +1229,7 @@ void applyHealPaintOperation(const PaintOperation& operation, const HealConfigur
             const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
             for (int bin = binLow; bin <= binHigh; ++bin) {
                 const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
-                const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
+                const double dist = std::hypot(normalizedDt, normalizedDf);
                 const float weight = falloffWeight(dist, toolConfig.falloff()) * params.opacityMultiplier;
                 if (weight <= 0.0f) {
                     continue;
@@ -1268,7 +1293,7 @@ void applySoftenPaintOperation(const PaintOperation& operation, const SoftenConf
             const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
             for (int bin = binLow; bin <= binHigh; ++bin) {
                 const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
-                const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
+                const double dist = std::hypot(normalizedDt, normalizedDf);
                 const float weight = falloffWeight(dist, toolConfig.falloff()) * params.opacityMultiplier;
                 if (weight <= 0.0f) {
                     continue;
@@ -1401,7 +1426,7 @@ void applySmudgePaintOperation(const PaintOperation& operation, const SmudgeConf
             const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
             for (int bin = binLow; bin <= binHigh; ++bin) {
                 const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
-                const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
+                const double dist = std::hypot(normalizedDt, normalizedDf);
                 const float weight = falloffWeight(dist, toolConfig.falloff()) * params.opacityMultiplier;
                 if (weight <= 0.0f) {
                     continue;
@@ -1625,7 +1650,7 @@ void applyOrderChaosPaintOperation(const PaintOperation& operation, const OrderC
             const double normalizedDt = (static_cast<double>(frame) - frameCenter) / frameRadius;
             for (int bin = binLow; bin <= binHigh; ++bin) {
                 const double normalizedDf = (static_cast<double>(bin) - binCenter) / binRadius;
-                const double dist = footprintDistance(BrushTipShape::Circle, normalizedDt, normalizedDf);
+                const double dist = std::hypot(normalizedDt, normalizedDf);
                 const float weight = falloffWeight(dist, toolConfig.falloff()) * params.opacityMultiplier;
                 if (weight > 0.0f) {
                     pool.push_back(OrderChaosPoolEntry{frame, bin, weight});
@@ -1733,7 +1758,8 @@ void applyPaintOperation(const PaintOperation& operation, double frequencyToTime
     }
 
     const ToolConfiguration& toolConfig = operation.config();
-    const std::vector<StrokeSample> samples = sampleStroke(operation.path(), frequencyToTimeScale, toolConfig, bpm);
+    const std::vector<StrokeSample> samples =
+        sampleStroke(operation.path(), frequencyToTimeScale, toolConfig, bpm, principalMode, content.config);
     if (samples.empty()) {
         return;
     }

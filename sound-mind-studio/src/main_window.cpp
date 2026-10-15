@@ -21,6 +21,7 @@
 #include <QDesktopServices>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QEvent>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QImage>
@@ -222,9 +223,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     canvasScrollArea_->setWidget(canvas_);
     canvasScrollArea_->setWidgetResizable(true);
     canvasScrollArea_->setAlignment(Qt::AlignCenter);
-    connect(canvas_, &CanvasWidget::zoomModeChanged, this, [this](CanvasWidget::ZoomMode mode) {
-        canvasScrollArea_->setWidgetResizable(mode == CanvasWidget::ZoomMode::FitToWindow);
-    });
+    connect(canvas_, &CanvasWidget::zoomModeChanged, this, [this](CanvasWidget::ZoomMode) { updateCanvasFit(); });
+    // Image Mode's square-cell fit tracks the viewport's own size - see
+    // updateCanvasFit().
+    canvasScrollArea_->viewport()->installEventFilter(this);
 
     stack_ = new QStackedWidget(this);
     stack_->addWidget(landingPage_);      // index 0 - shown first, see setProject().
@@ -2081,6 +2083,8 @@ void MainWindow::setProject(sound_mind::core::Project project) {
         principalModeAction_->setChecked(settings.principalMode == sound_mind::core::PrincipalMode::Image);
     }
     NumericFieldBase::setDecimalSeparator(settings.decimalSeparator);
+    toolConfigurationPanel_->setPrincipalMode(settings.principalMode);
+    updateCanvasFit();
     (settings.decimalSeparator == sound_mind::core::DecimalSeparator::Comma ? decimalCommaAction_
                                                                              : decimalPeriodAction_)
         ->setChecked(true);
@@ -3735,6 +3739,33 @@ void MainWindow::setPrincipalMode(bool imageModeEnabled) {
     project_->setPrincipalMode(imageModeEnabled ? sound_mind::core::PrincipalMode::Image
                                                  : sound_mind::core::PrincipalMode::Sound);
     hasUnsavedChanges_ = true;
+    toolConfigurationPanel_->setPrincipalMode(project_->settings().principalMode);
+    updateCanvasFit();
+}
+
+void MainWindow::updateCanvasFit() {
+    const bool fitToWindow = canvas_->zoomMode() == CanvasWidget::ZoomMode::FitToWindow;
+    const bool squareCells = fitToWindow && project_.has_value() &&
+                             project_->settings().principalMode == sound_mind::core::PrincipalMode::Image;
+    if (!squareCells) {
+        canvasScrollArea_->setWidgetResizable(fitToWindow);
+        return;
+    }
+    canvasScrollArea_->setWidgetResizable(false);
+    const auto& settings = project_->settings();
+    const QSize available = canvasScrollArea_->viewport()->size();
+    const double columns = static_cast<double>(std::max<std::uint32_t>(settings.canvasWidth, 1));
+    const double rows = static_cast<double>(std::max<std::uint32_t>(settings.binCount, 1));
+    const double scale = std::min(available.width() / columns, available.height() / rows);
+    canvas_->resize(std::max(1, static_cast<int>(std::lround(columns * scale))),
+                    std::max(1, static_cast<int>(std::lround(rows * scale))));
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == canvasScrollArea_->viewport() && event->type() == QEvent::Resize) {
+        updateCanvasFit();
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
 
 void MainWindow::setDecimalSeparator(sound_mind::core::DecimalSeparator separator) {

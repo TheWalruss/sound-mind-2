@@ -49,6 +49,7 @@ add_library(sound-mind-core
     src/project_settings.cpp
     src/operation_log.cpp
     src/project.cpp
+    src/brush_tip.cpp
     src/compositor.cpp
     src/audio_device_list.cpp
     src/device_test_tone_player.cpp

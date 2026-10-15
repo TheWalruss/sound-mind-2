@@ -1,8 +1,11 @@
 #include "sound_mind/core/tool_configuration.h"
 
+#include <algorithm>
 #include <optional>
 #include <stdexcept>
 #include <string>
+
+#include "sound_mind/core/brush_tip.h"
 
 namespace sound_mind::core {
 
@@ -87,6 +90,10 @@ void readCommonToolConfigurationFields(const nlohmann::json& json, ToolConfigura
 
 }  // namespace
 
+void ProceduralConfiguration::setTipThickness(double thickness) noexcept {
+    tipThickness_ = std::clamp(thickness, kMinBrushTipThickness, kMaxBrushTipThickness);
+}
+
 void to_json(nlohmann::json& json, const ToolConfiguration& config) {
     // A plain if/else-if dispatch, not a visitor - two concrete subtypes
     // is still few enough that a real dispatch mechanism would be
@@ -96,6 +103,7 @@ void to_json(nlohmann::json& json, const ToolConfiguration& config) {
     if (const auto* procedural = dynamic_cast<const ProceduralConfiguration*>(&config)) {
         writeCommonToolConfigurationFields(json, config);
         json["tipShape"] = procedural->tipShape();
+        json["tipThickness"] = procedural->tipThickness();
     } else if (const auto* instrument = dynamic_cast<const InstrumentConfiguration*>(&config)) {
         writeCommonToolConfigurationFields(json, config);
         json["harmonicStrengths"] = instrument->harmonicStrengths();
@@ -163,6 +171,7 @@ std::unique_ptr<ToolConfiguration> toolConfigurationFromJson(const nlohmann::jso
     if (type == ToolType::Procedural) {
         auto procedural = std::make_unique<ProceduralConfiguration>();
         procedural->setTipShape(json.at("tipShape").get<BrushTipShape>());
+        procedural->setTipThickness(json.value("tipThickness", kDefaultBrushTipThickness));
         config = std::move(procedural);
     } else if (type == ToolType::Instrument) {
         auto instrument = std::make_unique<InstrumentConfiguration>();

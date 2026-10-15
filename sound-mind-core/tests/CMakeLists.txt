@@ -35,6 +35,7 @@ add_executable(sound-mind-core-tests
     test_layer.cpp
     test_project_settings.cpp
     test_project.cpp
+    test_brush_tip.cpp
     test_compositor.cpp
     test_gpu_compute_availability.cpp
     test_audio_device_list.cpp

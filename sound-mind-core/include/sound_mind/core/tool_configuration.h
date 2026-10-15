@@ -598,8 +598,20 @@ public:
     /// @param shape The new tip shape.
     void setTipShape(BrushTipShape shape) noexcept { tipShape_ = shape; }
 
+    /// @brief The tip's line width (Cross, Single Stroke, Corner, Arc,
+    ///        Star's arms) or dot size (Dot Spatter, Dapple), as a fraction
+    ///        of the tip's radius - see `brushTipDistance()`. Ignored by
+    ///        Circle, Square, Diamond and Triangle.
+    /// @return The thickness, in [0.05, 1]; 0.25 by default.
+    [[nodiscard]] double tipThickness() const noexcept { return tipThickness_; }
+
+    /// @brief Sets the tip thickness - see tipThickness().
+    /// @param thickness The new thickness; clamped to [0.05, 1].
+    void setTipThickness(double thickness) noexcept;
+
 private:
     BrushTipShape tipShape_ = BrushTipShape::Circle;
+    double tipThickness_ = 0.25;
 };
 
 /**

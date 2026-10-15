@@ -1,6 +1,7 @@
 #include "test_main_window.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -27,6 +28,7 @@
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QTabBar>
+#include <QScrollArea>
 #include <QSignalSpy>
 #include <QSlider>
 #include <QStatusBar>
@@ -6690,4 +6692,25 @@ void MainWindowTest::decimalSeparatorMenuSetsTheProjectSettingAndEveryNumericFie
     createFreshTestProject(window);
     QVERIFY(periodAction->isChecked());
     QCOMPARE(sound_mind::studio::NumericFieldBase::decimalSeparator(), sound_mind::core::DecimalSeparator::Period);
+}
+
+void MainWindowTest::imageModeFitsTheCanvasWithSquareCells() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    window.resize(1200, 600);
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(canvas != nullptr);
+    const auto& settings = window.project()->settings();
+    const double imageAspect = static_cast<double>(settings.canvasWidth) / static_cast<double>(settings.binCount);
+
+    window.setPrincipalMode(true);
+    QTRY_VERIFY(std::abs(static_cast<double>(canvas->width()) / canvas->height() - imageAspect) < 0.02);
+
+    // Back in Sound mode, the canvas fills the visible area again.
+    window.setPrincipalMode(false);
+    auto* scrollArea = window.findChild<QScrollArea*>();
+    QVERIFY(scrollArea != nullptr);
+    QTRY_COMPARE(canvas->size(), scrollArea->viewport()->size());
 }

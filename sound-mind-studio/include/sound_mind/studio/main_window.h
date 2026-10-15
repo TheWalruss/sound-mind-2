@@ -1716,6 +1716,16 @@ public slots:
     void setDecimalSeparator(sound_mind::core::DecimalSeparator separator);
 
     /**
+     * @brief Sizes the canvas for Fit to Window. In Image Mode, the canvas
+     *        gets the largest size that fits the visible area with square
+     *        cells (one frame as wide as one bin is tall), centred with
+     *        black bars - so a round brush stamp looks round. Otherwise it
+     *        simply fills the visible area, as before. Manual zoom is left
+     *        alone.
+     */
+    void updateCanvasFit();
+
+    /**
      * @brief Starts or stops macroRecorder_ - `v0.Y.49.1` (Macro Mode)
      *        Installment A's own transport toolbar toggle.
      *
@@ -2919,6 +2929,13 @@ public:
     bool openUserDocIfBundled(const QString& htmlFilename);
 
 protected:
+    /// @brief Re-runs updateCanvasFit() when the canvas's visible area is
+    ///        resized.
+    /// @param watched The object the event is for.
+    /// @param event The event.
+    /// @return Whatever `QMainWindow::eventFilter()` returns.
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
     /**
      * @brief Actually opens `url` via the OS's own default handler
      *        (`QDesktopServices::openUrl()`) - the one real side effect

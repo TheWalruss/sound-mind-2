@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.34.1] - 2026-10-15
+
+Pre-Beta Plan milestone `v0.Y.74.1`: brush and Paint tool fixes from manual testing.
+
+### Fixed
+
+- **Every brush tip shape now paints its own shape.** Triangle, Single Stroke, Cross, Star, Corner, Arc, Dot Spatter and Dapple used to paint plain circles.
+- **The stroke gradient's visual bar is back in Tool Configuration** - the strip where you click, drag and double-click stops. The panel's many rows squeezed it to nothing, leaving only its number fields.
+- **Image Mode keeps round brushes round on screen.** With Fit to Window, the canvas now keeps square cells (black bars fill any leftover space) instead of stretching to the window's shape.
+- **Image Mode stamp spacing is even across the canvas:** Along Curve spacing counts canvas pixels and Frequency Axis spacing counts frequency bins, instead of seconds-equivalents and Hz.
+
+### Added
+
+- **Tip Thickness** (Tool Configuration, Procedural): the line width of Single Stroke, Cross, Star, Corner and Arc, or the dot size of Dot Spatter and Dapple.
+
 ## [0.1.33.3] - 2026-10-15
 
 Pre-Beta Plan milestone `v0.Y.73.1`, installment C - completes the milestone.

@@ -2584,3 +2584,52 @@ TEST_CASE("applyPaintOperation's Procedural circle stamp still varies its own bi
     CHECK(highAffected > 0);
     CHECK(highAffected != lowAffected);
 }
+
+TEST_CASE("In Image mode, AlongCurve spaces stamps in canvas pixels", "[core][paint_application][image_mode]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path = makeUniformHorizontalPath(0.1, 0.5, 1000.0, -10.0f, 1.0f);
+    auto tool = makeCircleTool(0.005, 0.0f);
+    REQUIRE(timeToFrameIndex(0.005, config) - timeToFrameIndex(0.0, config) < 3.0);  // radius well under the gap.
+    tool->setStampMode(StampMode::AlongCurve);
+    tool->setStampInterval(10.0);  // pixels, in Image mode.
+
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
+    applyPaintOperation(op, 2000.0, content, {}, {}, PrincipalMode::Image);
+
+    const int bin = static_cast<int>(std::lround(static_cast<double>(frequencyToBinIndex(1000.0f, config))));
+    const double startFrame = timeToFrameIndex(0.1, config);
+    for (const int k : {0, 1, 2}) {
+        const int frame = static_cast<int>(std::lround(startFrame + 10.0 * k));
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, frame, bin)] == -10.0f);
+    }
+    const int between = static_cast<int>(std::lround(startFrame + 5.0));
+    REQUIRE(content.leftMagnitudeDb[pixelIndex(content, between, bin)] == 0.0f);
+}
+
+TEST_CASE("In Image mode, FrequencyAxis stamps every N frequency bins, not every N Hz",
+          "[core][paint_application][image_mode]") {
+    const auto config = makeTestConfig();
+    StreamImage content = makeBlankContent(config, 100);
+    const Path path =
+        makeUniformDiagonalPath(TimeFrequencyPoint{0.1, 400.0}, TimeFrequencyPoint{0.9, 1200.0}, -10.0f, 1.0f);
+    auto tool = makeCircleTool(0.02, 0.0f);  // at least one cell wide, so a stamp between cell centres still paints.
+    tool->setStampMode(StampMode::FrequencyAxis);
+    tool->setStampInterval(8.0);  // bins, in Image mode.
+
+    const PaintOperation op(1, LayerId{1}, path, std::move(tool));
+    applyPaintOperation(op, 2000.0, content, {}, {}, PrincipalMode::Image);
+
+    const double startBin = frequencyToBinIndex(400.0f, config);
+    for (const int k : {1, 2}) {
+        const double targetBin = startBin + 8.0 * k;
+        const double frequencyHz = binIndexToFrequency(static_cast<float>(targetBin), config);
+        if (frequencyHz > 1200.0) {
+            break;
+        }
+        const double t = 0.1 + 0.8 * (frequencyHz - 400.0) / 800.0;
+        const int frame = static_cast<int>(std::lround(timeToFrameIndex(t, config)));
+        REQUIRE(content.leftMagnitudeDb[pixelIndex(content, frame, static_cast<int>(std::lround(targetBin)))] ==
+                -10.0f);
+    }
+}

@@ -52,6 +52,8 @@ GradientBarWidget::GradientBarWidget(QWidget* parent) : QWidget(parent) {}
 
 QSize GradientBarWidget::sizeHint() const { return {240, 48}; }
 
+QSize GradientBarWidget::minimumSizeHint() const { return {120, 40}; }
+
 void GradientBarWidget::setGradient(sound_mind::core::Gradient gradient) {
     gradient_ = std::move(gradient);
     selectedIndex_ = 0;

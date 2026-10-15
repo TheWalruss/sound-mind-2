@@ -935,7 +935,11 @@ canvas's vertical axis is logarithmic, a circular stamp actually reads as
 a wide oval near the top of the frequency range and a tall egg shape near
 the bottom. Checked (Image-mode), a stamp instead keeps a fixed *pixel*
 footprint on the canvas - a circle looks like a circle no matter where you
-paint it, at the cost of a moved/painted sound's own pitch relationships
+paint it (with **Fit to Window** zoom, the canvas keeps square cells in
+Image-mode, with black bars filling any leftover space, so round stays
+round on screen), and Along Curve / Frequency Axis stamp spacing is
+counted in canvas pixels, so it's even across the whole canvas - at the
+cost of a moved/painted sound's own pitch relationships
 no longer lining up the way they would in Sound-mode. This is saved with
 the project, so it stays set the way you left it. Switching modes never
 changes anything you've already painted - only new strokes reflect it.
@@ -977,9 +981,15 @@ panel (off by default) with the brush's own settings:
   Switching still keeps every shared value as it was underneath, even a
   currently-hidden one - only the type-specific controls reset to the
   newly-picked type's own defaults.
-- **Tip Shape** (Procedural only) - the stroke's cross-section (Circle,
-  Square, Diamond, and others - only Circle/Square/Diamond have a distinct
-  shape so far; the rest currently paint the same as Circle).
+- **Tip Shape** (Procedural only) - the stroke's cross-section: Circle,
+  Square, Diamond, Triangle (pointing up), Single Stroke (one diagonal
+  bar), Cross (+), Star (five points), Corner (an L), Arc (the top half of
+  a ring), Dot Spatter (scattered small dots), or Dapple (a few large soft
+  blotches).
+- **Thickness** (Procedural only, for the shapes it applies to) - the line
+  width of Single Stroke, Cross, Star, Corner and Arc, or the dot size of
+  Dot Spatter and Dapple, as a fraction of Brush Size. Hidden for Circle,
+  Square, Diamond and Triangle.
 - **Harmonics** (Instrument only) - how many overtones above the
   fundamental to synthesize, each with its own **strength** number field
   (fundamental first) - a fresh Instrument starts with a plausible
@@ -1144,10 +1154,11 @@ panel (off by default) with the brush's own settings:
 
   Choosing any mode but Stroke enables the **Interval** number field next
   to it, which sets the spacing (seconds for Along Curve/Time Axis, Hz for
-  Frequency Axis) - it's disabled and ignored under Stroke, where an
-  interval wouldn't mean anything. This is the same idea as the legacy
-  Studio's "Curve" tool, minus its pixel-based unit (this build has no
-  canvas zoom yet, so seconds/Hz are the only units that make sense). For
+  Frequency Axis - or, with **Edit → Image Mode** on, canvas pixels for
+  Along Curve and frequency bins for Frequency Axis; the field's own unit
+  label always says which) - it's disabled and ignored under Stroke, where
+  an interval wouldn't mean anything. This is the same idea as the legacy
+  Studio's "Curve" tool. For
   Heal/Soften/Smudge/Order-Chaos, Interval is likewise hidden - it's always
   66% of Brush Size, so it stays proportional as Brush Size changes.
 - **Stamp Pattern** (Along Curve only) - an optional text field, shown right

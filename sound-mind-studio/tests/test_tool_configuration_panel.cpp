@@ -1871,3 +1871,69 @@ void ToolConfigurationPanelTest::presetIndicatorFollowsSaveAndDelete() {
     deleteButton->click();
     QVERIFY(!indicator->hasActivePreset());
 }
+
+void ToolConfigurationPanelTest::tipThicknessIsShownOnlyForShapesThatUseItAndUpdatesTheConfig() {
+    ToolConfigurationPanel panel;
+    auto* shapeCombo = panel.findChild<QComboBox*>(QStringLiteral("tipShapeCombo"));
+    auto* thickness = panel.findChild<NumericField*>(QStringLiteral("tipThicknessSpinBox"));
+    QVERIFY(shapeCombo != nullptr && thickness != nullptr);
+
+    // Circle (the default) has no thickness.
+    QVERIFY(thickness->isHidden());
+
+    shapeCombo->setCurrentIndex(shapeCombo->findData(QVariant::fromValue(static_cast<int>(BrushTipShape::Cross))));
+    QVERIFY(!thickness->isHidden());
+
+    thickness->setValue(0.5);
+    QCOMPARE(dynamic_cast<const ProceduralConfiguration&>(panel.toolConfiguration()).tipThickness(), 0.5);
+
+    shapeCombo->setCurrentIndex(shapeCombo->findData(QVariant::fromValue(static_cast<int>(BrushTipShape::Triangle))));
+    QVERIFY(thickness->isHidden());
+
+    // Loading a configuration shows its own thickness, without emitting.
+    ProceduralConfiguration loaded;
+    loaded.setTipShape(BrushTipShape::DotSpatter);
+    loaded.setTipThickness(0.1);
+    QSignalSpy spy(&panel, &ToolConfigurationPanel::toolConfigurationChanged);
+    panel.setToolConfiguration(loaded);
+    QCOMPARE(thickness->value(), 0.1);
+    QVERIFY(!thickness->isHidden());
+    QCOMPARE(spy.count(), 0);
+}
+
+void ToolConfigurationPanelTest::gradientBarKeepsAUsableHeightInACrowdedPanel() {
+    // Manual-testing finding: the panel's many rows squeezed the gradient's
+    // own visual bar (where stops are added, moved and removed) down to
+    // nothing, leaving only its number fields.
+    ToolConfigurationPanel panel;
+    panel.resize(400, 300);
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+
+    auto* bar = panel.findChild<QWidget*>(QStringLiteral("gradientBar"));
+    QVERIFY(bar != nullptr);
+    QVERIFY(bar->isVisible());
+    QVERIFY(bar->height() >= 32);
+}
+
+void ToolConfigurationPanelTest::stampIntervalUnitsFollowThePrincipalMode() {
+    ToolConfigurationPanel panel;
+    auto* stampModeCombo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
+    auto* interval = panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"));
+    QVERIFY(stampModeCombo != nullptr && interval != nullptr);
+    auto selectMode = [&](StampMode mode) {
+        stampModeCombo->setCurrentIndex(stampModeCombo->findData(QVariant::fromValue(static_cast<int>(mode))));
+    };
+
+    selectMode(StampMode::FrequencyAxis);
+    QVERIFY(interval->suffix().contains(QStringLiteral("Hz")));
+    panel.setPrincipalMode(sound_mind::core::PrincipalMode::Image);
+    QVERIFY(interval->suffix().contains(QStringLiteral("bins")));
+    selectMode(StampMode::AlongCurve);
+    QVERIFY(interval->suffix().contains(QStringLiteral("px")));
+    selectMode(StampMode::TimeAxis);
+    QCOMPARE(interval->suffix(), QStringLiteral("s"));
+    panel.setPrincipalMode(sound_mind::core::PrincipalMode::Sound);
+    selectMode(StampMode::AlongCurve);
+    QVERIFY(interval->suffix().startsWith(QStringLiteral("s")));
+}
