@@ -33,9 +33,17 @@ void PaintController::invalidateContentCaches() {
 }
 
 void PaintController::beginStroke(sound_mind::core::LayerId targetLayer, sound_mind::core::TimeFrequencyPoint point) {
-    if (project_ == nullptr || strokeInProgress_) {
+    if (project_ == nullptr || strokeInProgress_ || !canPaintOn(targetLayer)) {
         return;
     }
+    strokeInProgress_ = true;
+    strokeTargetLayer_ = targetLayer;
+    strokePoints_.clear();
+    strokePoints_.push_back(point);
+    previewPath_ = sound_mind::core::Path{};
+}
+
+bool PaintController::canPaintOn(sound_mind::core::LayerId targetLayer) const {
     // A Filter (or Equalizer) layer was never meant to hold its own
     // paintable amplitude content - it only composites-and-transforms the
     // layers beneath it (see docs/sound-mind-design.md's "Filter Layer").
@@ -45,7 +53,7 @@ void PaintController::beginStroke(sound_mind::core::LayerId targetLayer, sound_m
     // Mind Grain guard just below silently refuses rather than erroring.
     if (const auto* targetLayerPtr = project_->layerById(targetLayer);
         targetLayerPtr != nullptr && sound_mind::core::isFilterLayerType(targetLayerPtr->type())) {
-        return;
+        return false;
     }
     // Silent refusal to even start a Mind Grain stroke on/below its own
     // source layer - the backstop layer of defense described in
@@ -57,14 +65,10 @@ void PaintController::beginStroke(sound_mind::core::LayerId targetLayer, sound_m
     // discouraged.
     if (const auto* mindGrain = dynamic_cast<const sound_mind::core::MindGrainConfiguration*>(toolConfig_.get())) {
         if (!sound_mind::core::isLayerAbove(*project_, targetLayer, mindGrain->sourceLayerId())) {
-            return;
+            return false;
         }
     }
-    strokeInProgress_ = true;
-    strokeTargetLayer_ = targetLayer;
-    strokePoints_.clear();
-    strokePoints_.push_back(point);
-    previewPath_ = sound_mind::core::Path{};
+    return true;
 }
 
 void PaintController::continueStroke(sound_mind::core::TimeFrequencyPoint point) {
@@ -169,6 +173,51 @@ void PaintController::notifyOperationCommitted(const QString& description) {
     undoStack_->push({/*undo=*/[this]() { undo(); }, /*redo=*/[this]() { redo(); }, /*description=*/description});
 }
 
+void PaintController::notifyOperationsCommitted(std::size_t count, const QString& description) {
+    if (undoStack_ == nullptr || count == 0) {
+        return;
+    }
+    undoStack_->push({/*undo=*/
+                      [this, count]() {
+                          for (std::size_t i = 0; i < count; ++i) {
+                              undo();
+                          }
+                      },
+                      /*redo=*/
+                      [this, count]() {
+                          for (std::size_t i = 0; i < count; ++i) {
+                              redo();
+                          }
+                      },
+                      /*description=*/description});
+}
+
+std::size_t PaintController::strokePaths(sound_mind::core::LayerId layer,
+                                         const std::vector<sound_mind::core::Path>& paths,
+                                         const QString& description) {
+    if (project_ == nullptr || !canPaintOn(layer)) {
+        return 0;
+    }
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    std::size_t count = 0;
+    for (const sound_mind::core::Path& source : paths) {
+        if (source.nodes().empty()) {
+            continue;
+        }
+        sound_mind::core::Path path = source;
+        path.gradient() = toolConfig_->defaultGradient();
+        log.append(std::make_unique<sound_mind::core::PaintOperation>(log.reserveId(), layer, std::move(path),
+                                                                        toolConfig_->clone()));
+        ++count;
+    }
+    if (count == 0) {
+        return 0;
+    }
+    notifyOperationsCommitted(count, description);
+    rebuildLayerContent(layer);  // emits contentChanged().
+    return count;
+}
+
 std::unique_ptr<sound_mind::core::Operation> PaintController::makeDeletionTombstone(
     const sound_mind::core::Operation& operation, sound_mind::core::OperationId newId) {
     const sound_mind::core::LayerId layer = *operation.targetLayer();
@@ -231,21 +280,7 @@ void PaintController::deleteOperations(const std::vector<sound_mind::core::Opera
         log.append(std::move(tombstone));
     }
 
-    if (undoStack_ != nullptr) {
-        undoStack_->push({/*undo=*/
-                          [this, count]() {
-                              for (std::size_t i = 0; i < count; ++i) {
-                                  undo();
-                              }
-                          },
-                          /*redo=*/
-                          [this, count]() {
-                              for (std::size_t i = 0; i < count; ++i) {
-                                  redo();
-                              }
-                          },
-                          /*description=*/description});
-    }
+    notifyOperationsCommitted(count, description);
     for (const sound_mind::core::LayerId layer : touchedLayers) {
         rebuildLayerContent(layer);
         emit contentChanged(layer);

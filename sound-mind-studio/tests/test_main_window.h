@@ -338,4 +338,10 @@ private slots:
     void filterPreviewLoopsARenderOfThePanelConfiguration();
     void filterPreviewRerendersAfterAnEditKeepingItsLength();
     void filterPreviewStopsWhenToggledOffOrPlaybackStarts();
+    void editMenuGraysOutActionsThatDontApplyAndRestoresThemOnClose();
+    void editMenuEnablesPathActionsForAPickedGuidePath();
+    void strokePickedPathPaintsAlongTheGuideAsOneUndoStep();
+    void finishingABranchingCurveKeepsItAsABranchingPath();
+    void rightClickingAGuidePathShowsPathEntries();
+    void rightClickingEmptyCanvasGraysOutSelectionEntries();
 };

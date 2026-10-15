@@ -9,6 +9,7 @@
 
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_wave.h"
+#include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/tool_configuration.h"
@@ -694,4 +695,51 @@ void PaintControllerTest::deletingAMindGrainStrokeLeavesNoDependentOnItsSourceLa
     controller.deleteOperations({stroke}, QStringLiteral("Deleted"));
 
     QVERIFY(sound_mind::core::mindGrainOperationsBrokenByRemovingLayer(project, lower).empty());
+}
+
+namespace {
+
+sound_mind::core::Path twoNodePath(double startTime, double endTime, double frequencyHz) {
+    sound_mind::core::Path path;
+    sound_mind::core::PathNode a;
+    a.anchor = TimeFrequencyPoint{startTime, frequencyHz};
+    a.type = sound_mind::core::PathNodeType::Corner;
+    sound_mind::core::PathNode b = a;
+    b.anchor.timeSeconds = endTime;
+    path.addNode(a);
+    path.addNode(b);
+    return path;
+}
+
+}  // namespace
+
+void PaintControllerTest::strokePathsPaintsEachPathAsOneUndoStep() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    sound_mind::studio::UndoStack undoStack;
+    PaintController controller(&undoStack);
+    controller.setProject(&project);
+    QSignalSpy contentSpy(&controller, &PaintController::contentChanged);
+
+    const std::size_t painted = controller.strokePaths(
+        layerId, {twoNodePath(0.1, 0.3, 400.0), sound_mind::core::Path{}, twoNodePath(0.4, 0.6, 800.0)},
+        QStringLiteral("Stroked path"));
+
+    QCOMPARE(painted, std::size_t{2});  // the empty path is skipped.
+    QCOMPARE(project.operationLog().activeOperationsTargeting(layerId).size(), std::size_t{2});
+    QCOMPARE(undoStack.count(), std::size_t{1});
+    QCOMPARE(contentSpy.count(), 1);
+
+    undoStack.undo();
+    QVERIFY(project.operationLog().activeOperationsTargeting(layerId).empty());
+}
+
+void PaintControllerTest::strokePathsRefusesAFilterLayer() {
+    Project project = Project::createNew(testSettings());
+    const LayerId filterId = project.addLayer(Layer(0, "Filter", sound_mind::core::LayerType::Filter));
+    PaintController controller;
+    controller.setProject(&project);
+
+    QCOMPARE(controller.strokePaths(filterId, {twoNodePath(0.1, 0.3, 400.0)}, QStringLiteral("x")), std::size_t{0});
+    QCOMPARE(project.operationLog().size(), std::size_t{0});
 }

@@ -253,6 +253,25 @@ std::optional<sound_mind::core::BlendMode> PickController::selectedPasteBlendMod
     return paste->blendMode();
 }
 
+std::vector<sound_mind::core::BranchGraft> PickController::selectedBranches() const {
+    if (!pickedOperationId_.has_value()) {
+        return {};
+    }
+    if (const auto* guide = dynamic_cast<const sound_mind::core::GuidePathOperation*>(pickedOperation_)) {
+        return guide->branches();
+    }
+    if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_);
+        paint != nullptr && !paint->path().nodes().empty()) {
+        return {sound_mind::core::BranchGraft{paint->path(), std::nullopt, sound_mind::core::TimeFrequencyPoint{}}};
+    }
+    return {};
+}
+
+bool PickController::selectedIsGuidePath() const {
+    return pickedOperationId_.has_value() &&
+           dynamic_cast<const sound_mind::core::GuidePathOperation*>(pickedOperation_) != nullptr;
+}
+
 std::optional<sound_mind::core::TimeFrequencyRect> PickController::selectionBounds() const {
     if (!pickedOperationId_.has_value()) {
         return std::nullopt;

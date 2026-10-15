@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -1544,6 +1545,16 @@ public slots:
     ///        `PasteOperation` has no Path to edit).
     void editPickedPath();
 
+    /**
+     * @brief Paints the current tool configuration along the Picked path's
+     *        every branch, as one undoable step - the Edit menu's and the
+     *        right-click menu's "Stroke Path with Current Tool" (Pre-Beta
+     *        Plan `v0.Y.77.1`). The guide path itself stays. A no-op (with a
+     *        status-bar note) if nothing suitable is Picked or the layer
+     *        can't be painted on.
+     */
+    void strokePickedPath();
+
     /// @brief Converts the currently selected node (within an active path
     ///        edit) between `Corner` and `Smooth` - the actual work
     ///        behind the Edit menu's "Toggle Node Type" action. Delegates
@@ -1772,6 +1783,22 @@ public slots:
     void refreshRecordTargets();
 
     /**
+     * @brief Enables each registered Edit-menu action only if it applies
+     *        right now (something Picked, a selection, a clipboard, a path
+     *        edit, a Branching Curve session...), and each Edit submenu
+     *        only if at least one of its actions does. Runs every time the
+     *        Edit menu opens; restoreEditActions() re-enables everything
+     *        when it closes, so keyboard shortcuts - whose handlers are all
+     *        safe no-ops when they don't apply - keep working regardless of
+     *        when the state last changed.
+     */
+    void updateEditActionStates();
+
+    /// @brief Re-enables every action and submenu updateEditActionStates()
+    ///        may have disabled.
+    void restoreEditActions();
+
+    /**
      * @brief Sizes the canvas for Fit to Window. In Image Mode, the canvas
      *        gets the largest size that fits the visible area with square
      *        cells (one frame as wide as one bin is tall), centred with
@@ -1911,6 +1938,18 @@ public slots:
      * @param name Display name for the new library entry.
      */
     void createResonanceFromPickedPathNamed(const std::string& name);
+
+    /// @brief The resonance geometry of whatever is Picked: a branching
+    ///        guide path's every branch (`curveGraphFromBranches()`), or a
+    ///        single path (`curveGraphFromPath()`).
+    /// @return The graph, or `std::nullopt` with nothing suitable Picked.
+    [[nodiscard]] std::optional<sound_mind::core::CurveGraph> pickedResonanceGraph() const;
+
+    /// @brief Keeps the Branching Curve session's branches as a branching
+    ///        guide path on the trunk's own layer - called as the session
+    ///        finishes into a Resonance Profile, so the tree stays on the
+    ///        canvas.
+    void keepBranchingCurveAsPath();
 
     /**
      * @brief Starts a new `BranchCurveSession`, using whatever's currently
@@ -3741,6 +3780,13 @@ private:
     /// selectAction_/pathAction_ by setExclusiveToolMode(); kept as a
     /// member for the same setProject()-resets-it reason as paintAction_.
     QAction* chordAction_ = nullptr;
+
+    /// @brief Each Edit-menu action that only applies sometimes, with the
+    ///        condition under which it does - see updateEditActionStates().
+    std::vector<std::pair<QAction*, std::function<bool()>>> editActionConditions_;
+    /// @brief The Edit menu itself, whose submenus updateEditActionStates()
+    ///        grays out when nothing in them applies.
+    QMenu* editMenu_ = nullptr;
     /// @brief The Edit menu's Image Mode checkable toggle (`v0.Y.47.1`,
     /// Principal Modes) - checked while the current project's own
     /// `PrincipalMode` is `Image`. Kept as a member since, unlike Hardware

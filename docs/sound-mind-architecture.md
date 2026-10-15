@@ -2126,6 +2126,28 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `ToolPaletteControllerTest`: updated.
       - Removed: the Smooth Nodes / Finish Path tests and their features.
 
+240. **Path right-click entries, branching paths kept from the session, and graying out inapplicable menu entries.** Settled in `v0.1.37.2`, Pre-Beta Plan milestone `v0.Y.77.1` installment B.
+    - **Graying out, the Edit menu:** `MainWindow::editActionConditions_` pairs each sometimes-applicable action with a condition lambda.
+      - `updateEditActionStates()` runs on the Edit menu's `aboutToShow`. It sets each action's enabled state and grays a submenu when none of its entries applies.
+      - `restoreEditActions()` re-enables everything on `aboutToHide`.
+      - The alternative - keeping every action's enabled state live as the selection, clipboard, undo stack and so on change - would need a signal from each of those sources. If any one were ever missed, a shortcut would silently stop working, whereas every handler is already a safe no-op when it doesn't apply. So the state is computed only while it's visible.
+      - Image Mode, Decimal Separator and the Layers submenu stay always enabled.
+    - **Graying out, the right-click menus:** state is set as each menu is built.
+    - **Right-click entries:**
+      - A guide path gets **Stroke Path with Current Tool** and **Create Resonance Profile...**.
+      - **Edit Path** stays for strokes and regular paths only; a branching path has no single path.
+      - A painted stroke's menu is unchanged.
+    - **Stroke Path with Current Tool:** `PaintController::strokePaths()` appends one `PaintOperation` per branch, with the tool's default gradient, as a single undo step through the new `notifyOperationsCommitted(count)`. `deleteOperations()` now shares that helper. It refuses exactly where `beginStroke()` does, through the extracted `canPaintOn()`. The guide path itself stays.
+    - **Branches and resonance:**
+      - `PickController::selectedBranches()` gives any Picked guide path's branches, or a stroke's path as one trunk.
+      - `MainWindow::pickedResonanceGraph()` uses `curveGraphFromBranches()` for more than one branch, so **Create Resonance...** on a branching path uses the whole tree.
+      - Finishing the Branching Curve session calls `keepBranchingCurveAsPath()`, which commits the session's branches as a branching `GuidePathOperation` on the trunk's layer. The layer is found through the new `BranchCurveSession::trunkOperationId()`, and the commit goes through `PathController::addGuidePath()`.
+    - **Tests:**
+      - `PaintControllerTest`: stroke paths as one step; refusal on a Filter layer.
+      - `PickControllerTest`: `selectedBranches()`.
+      - `MainWindowTest`: Edit menu gray/restore; path entries enabled for a guide path; stroke as one undo step; the session keeping a branching path, and a Resonance from it matching the session's; guide-path right-click entries; empty-canvas entries grayed out.
+      - The Edit-menu structure test no longer expects the Path Tool submenu removed in #239.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

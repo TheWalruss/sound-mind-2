@@ -1121,7 +1121,7 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 
 **Backlog - queued for before Beta opens, not part of this iteration:**
 
-- ~~**Edit menu redesign - grouped into named, fold-out submenus**~~ - **settled in `v0.1.22.1`, 2026-10-10** (`docs/sound-mind-architecture.md`'s Decision #218). Still open, as its own explicit next step: graying out a group/action when its own precondition isn't met (e.g. **Edit → Path Editing → Edit Path** with nothing Picked).
+- ~~**Edit menu redesign - grouped into named, fold-out submenus**~~ - **settled in `v0.1.22.1`, 2026-10-10** (`docs/sound-mind-architecture.md`'s Decision #218). Its follow-up, graying out a group/action when its own precondition isn't met, was **done in `v0.1.37.2`** (Decision #240).
 - **Operation history persisted with the project**, so a project can be re-rendered from scratch if necessary - this is exactly the "final Project file schema" decision the *Explicit non-goals* section above already named as a deliberate near-beta concern (expect `Y` to move once, here).
 - **[Done in v0.1.36.1]** **A "filter preview" control** - loops a few seconds of audio through an in-progress filter configuration live, so a user can tune by ear without processing the whole canvas first.
 - ~~A resource browser panel~~ and ~~SoundMind "Toolkit" collections~~ (both extending `v0.Y.57.1`'s own "Portable Resources" milestone, above) - **folded into that milestone's own Installments C and D, 2026-10-09**, now that Portable Resources itself has been scoped into concrete installments to build them on, rather than left as a vaguer, unscoped pair of backlog entries.
@@ -1274,7 +1274,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 
 **Installments:**
 - ✅ **A** (`v0.1.37.1`, Decision #239): `GuidePathOperation`, the freehand Path tool, distinct canvas colors, Pick/edit/delete of guide paths; Smooth Nodes and Finish/Cancel Path removed.
-- **B**: right-click entries for paths and branching paths (Stroke Path with Current Tool, Create Resonance Profile, Edit Path), the Branching Curve session also creating a branching path, and graying out menu entries that don't apply.
+- ✅ **B** (`v0.1.37.2`, Decision #240): right-click entries for paths and branching paths (Stroke Path with Current Tool, Create Resonance Profile, Edit Path), the Branching Curve session also creating a branching path, and graying out menu entries that don't apply.
 - **C**: rectangle multi-select with Pick - delete, copy and move as one undo step.
 - **D**: merge selected paths into one branching path (minimum spanning tree).
 

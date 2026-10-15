@@ -71,4 +71,5 @@ private slots:
     void editingAPickedGuidePathCommitsAGuidePath();
     void deletingAPickedGuidePathLeavesPaintedContentUntouched();
     void aDeletedGuidePathIsNoLongerPickable();
+    void selectedBranchesCoversStrokesAndGuidePaths();
 };

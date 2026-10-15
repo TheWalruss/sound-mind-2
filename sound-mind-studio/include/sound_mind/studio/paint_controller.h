@@ -311,6 +311,34 @@ public:
     void notifyOperationCommitted(const QString& description);
 
     /**
+     * @brief notifyOperationCommitted() for `count` log entries appended
+     *        together - records them as a single UndoStack step, so one
+     *        undo/redo rolls back/replays all of them.
+     * @param count How many entries were just appended; `0` records nothing.
+     * @param description The History Panel's row text for the batch.
+     */
+    void notifyOperationsCommitted(std::size_t count, const QString& description);
+
+    /**
+     * @brief Paints the current tool configuration along each of `paths`
+     *        onto `layer`, as one undoable step - "Stroke Path with Current
+     *        Tool" (Pre-Beta Plan `v0.Y.77.1`). Each path becomes its own
+     *        `PaintOperation`, its gradient seeded from the tool's default
+     *        exactly like a freshly drawn stroke (endStroke()).
+     *
+     * Refuses exactly where beginStroke() does: a Filter/Equalizer layer,
+     * or a Mind Grain tool on or below its own source layer.
+     *
+     * @param layer The layer to paint onto.
+     * @param paths The paths to stroke; empty ones are skipped.
+     * @param description The History Panel's row text.
+     * @return How many strokes were painted (`0` if refused).
+     * @note GUI thread only.
+     */
+    std::size_t strokePaths(sound_mind::core::LayerId layer, const std::vector<sound_mind::core::Path>& paths,
+                            const QString& description);
+
+    /**
      * @brief Deletes every listed operation that is still active, as one
      *        undoable step.
      *
@@ -361,6 +389,10 @@ signals:
     void contentChanged(sound_mind::core::LayerId layer);
 
 private:
+    /// @brief Whether a stroke may be painted onto `layer` with the current
+    ///        tool - the shared refusal rules of beginStroke()/strokePaths().
+    [[nodiscard]] bool canPaintOn(sound_mind::core::LayerId layer) const;
+
     /// @brief The actual rebuild + cascade recursion behind
     ///        rebuildLayerContent() - see its own docs. `visited` is shared
     ///        across one whole outer call's own recursion, so a layer

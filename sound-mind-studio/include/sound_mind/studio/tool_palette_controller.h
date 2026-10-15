@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QString>
 
+#include "sound_mind/core/resonant_instrument.h"
 #include "sound_mind/core/filter_preview.h"
 #include "sound_mind/core/chord_generator.h"
 #include "sound_mind/core/filter_configuration.h"
@@ -338,6 +339,51 @@ public:
     ///        to `SelectionController::hasSelection()`.
     /// @return `true` if there's a selection to fill/copy/cut.
     [[nodiscard]] bool hasSelection() const;
+
+    /// @brief Whether there's anything on the clipboard to paste - forwards
+    ///        to `SelectionController::hasClipboard()`.
+    /// @return `true` after a Copy/Cut.
+    [[nodiscard]] bool hasClipboard() const;
+
+    /// @brief Forwards to `PickController::selectedBranches()`.
+    /// @return The Picked object's branches; empty with nothing suitable Picked.
+    [[nodiscard]] std::vector<sound_mind::core::BranchGraft> selectedBranches() const;
+
+    /// @brief Forwards to `PickController::selectedIsGuidePath()`.
+    /// @return `true` if a guide path is Picked.
+    [[nodiscard]] bool selectedIsGuidePath() const;
+
+    /// @brief Forwards to `PickController::selectedLayer()`.
+    /// @return The Picked object's layer, or `std::nullopt` with nothing Picked.
+    [[nodiscard]] std::optional<sound_mind::core::LayerId> selectedLayer() const;
+
+    /// @brief Whether a Picked path's nodes are being edited.
+    /// @return `PickController::isPathEditActive()`.
+    [[nodiscard]] bool isPathEditActive() const;
+
+    /// @brief Whether a node is selected in the path being edited.
+    /// @return `true` while a path edit has a selected node.
+    [[nodiscard]] bool hasSelectedPathNode() const;
+
+    /**
+     * @brief Paints the current tool configuration along every branch of
+     *        the Picked object (normally a guide path), on its own layer, as
+     *        one undoable step - "Stroke Path with Current Tool". The guide
+     *        path itself stays. See `PaintController::strokePaths()` for
+     *        when it refuses.
+     * @return How many strokes were painted.
+     */
+    std::size_t strokePickedPath();
+
+    /// @brief Commits a guide path built elsewhere - forwards to
+    ///        `PathController::addGuidePath()`.
+    /// @param layer The layer it belongs to.
+    /// @param branches Its strokes, trunk first.
+    /// @param description The History Panel's row text.
+    /// @return The new operation's id, or `std::nullopt` if nothing was committed.
+    std::optional<sound_mind::core::OperationId> addGuidePath(sound_mind::core::LayerId layer,
+                                                              std::vector<sound_mind::core::BranchGraft> branches,
+                                                              const QString& description);
 
     /// @brief Forwards to `SelectionController::committedSelection()`.
     /// @return The committed selection, or `std::nullopt` if there isn't one.

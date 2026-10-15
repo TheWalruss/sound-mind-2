@@ -53,13 +53,21 @@ std::optional<sound_mind::core::OperationId> PathController::endPath() {
         return std::nullopt;
     }
 
+    return addGuidePath(
+        targetLayer_, {sound_mind::core::BranchGraft{std::move(path), std::nullopt, sound_mind::core::TimeFrequencyPoint{}}},
+        tr("Drew path"));
+}
+
+std::optional<sound_mind::core::OperationId> PathController::addGuidePath(
+    sound_mind::core::LayerId layer, std::vector<sound_mind::core::BranchGraft> branches, const QString& description) {
+    if (project_ == nullptr || branches.empty()) {
+        return std::nullopt;
+    }
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId id = log.reserveId();
-    std::vector<sound_mind::core::BranchGraft> branches{
-        sound_mind::core::BranchGraft{std::move(path), std::nullopt, sound_mind::core::TimeFrequencyPoint{}}};
-    log.append(std::make_unique<sound_mind::core::GuidePathOperation>(id, targetLayer_, std::move(branches)));
-    paintController_->notifyOperationCommitted(tr("Drew path"));
-    emit contentChanged(targetLayer_);
+    log.append(std::make_unique<sound_mind::core::GuidePathOperation>(id, layer, std::move(branches)));
+    paintController_->notifyOperationCommitted(description);
+    emit contentChanged(layer);
     return id;
 }
 

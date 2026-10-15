@@ -1050,6 +1050,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // own precondition isn't met (e.g. "Edit Path" with nothing Picked)
     // is deliberately a separate, later step - confirmed with the user.
     QMenu* editMenu = menuBar()->addMenu(tr("&Edit"));
+    editMenu_ = editMenu;
+    // Pre-Beta Plan v0.Y.77.1: entries that don't apply right now are grayed
+    // out while the menu is open - see updateEditActionStates().
+    connect(editMenu, &QMenu::aboutToShow, this, &MainWindow::updateEditActionStates);
+    connect(editMenu, &QMenu::aboutToHide, this, &MainWindow::restoreEditActions);
     QAction* undoAction = editMenu->addAction(tr("&Undo"));
     undoAction->setShortcut(QKeySequence::Undo);
     connect(undoAction, &QAction::triggered, this, &MainWindow::undo);
@@ -1247,6 +1252,49 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         pickedPathToolsMenu->addAction(tr("Create Resonance from Picked &Graph..."));
     connect(createResonanceFromGraphAction, &QAction::triggered, this,
             &MainWindow::createResonanceFromPickedGraph);
+
+    // Pre-Beta Plan v0.Y.77.1: paints along a silent guide path.
+    QAction* strokePickedPathAction = pickedPathToolsMenu->addAction(tr("Stroke Picked Path with Current &Tool"));
+    connect(strokePickedPathAction, &QAction::triggered, this, &MainWindow::strokePickedPath);
+
+    // When each of the actions above applies - see updateEditActionStates().
+    {
+        ToolPaletteController* const palette = toolPaletteController_;
+        const auto picked = [palette]() { return palette->selectedOperationId().has_value(); };
+        const auto editing = [palette]() { return palette->isPathEditActive(); };
+        const auto singlePath = [palette]() { return palette->selectedPath().has_value(); };
+        const auto selection = [palette]() { return palette->hasSelection(); };
+        const auto session = [this]() { return branchCurveSession_.isActive(); };
+        editActionConditions_ = {
+            {undoAction, [this]() { return undoStack_.canUndo(); }},
+            {redoAction, [this]() { return undoStack_.canRedo(); }},
+            {deleteAction, [picked]() { return picked(); }},
+            {bringToFrontAction, [picked, editing]() { return picked() && !editing(); }},
+            {sendToBackAction, [picked, editing]() { return picked() && !editing(); }},
+            {bringForwardAction, [picked, editing]() { return picked() && !editing(); }},
+            {sendBackwardAction, [picked, editing]() { return picked() && !editing(); }},
+            {editPathAction, [singlePath, editing]() { return singlePath() && !editing(); }},
+            {toggleNodeTypeAction, [palette]() { return palette->hasSelectedPathNode(); }},
+            {applyPathEditAction, editing},
+            {cancelPathEditAction, editing},
+            {deselectAction, selection},
+            {fillAction, selection},
+            {applyFilterToSelectionAction, selection},
+            {cutAction, selection},
+            {copyAction, selection},
+            {pasteAction, [palette]() { return palette->hasClipboard(); }},
+            {captureMindShotAction, selection},
+            {captureMindGrainAction, selection},
+            {usePickedPathAsMindWaveShapeAction, singlePath},
+            {createResonanceAction, [palette]() { return !palette->selectedBranches().empty(); }},
+            {startBranchingCurveAction, [singlePath, session]() { return singlePath() && !session(); }},
+            {addBranchAction,
+             [this, singlePath]() { return branchCurveSession_.hasPendingGraft() && singlePath(); }},
+            {cancelBranchingCurveAction, session},
+            {createResonanceFromGraphAction, session},
+            {strokePickedPathAction, [palette]() { return palette->selectedIsGuidePath(); }},
+        };
+    }
 
     editMenu->addSeparator();
 
@@ -3577,6 +3625,44 @@ void MainWindow::applyPickedPathEdit() { toolPaletteController_->commitPathEdit(
 
 void MainWindow::cancelPickedPathEdit() { toolPaletteController_->cancelPathEdit(); }
 
+void MainWindow::updateEditActionStates() {
+    for (const auto& [action, applies] : editActionConditions_) {
+        action->setEnabled(applies());
+    }
+    // A submenu with nothing that applies is grayed out as a whole.
+    for (QAction* entry : editMenu_->actions()) {
+        QMenu* submenu = entry->menu();
+        if (submenu == nullptr) {
+            continue;
+        }
+        const auto submenuActions = submenu->actions();
+        entry->setEnabled(std::any_of(submenuActions.begin(), submenuActions.end(), [](QAction* action) {
+            return !action->isSeparator() && (action->isEnabled() || action->menu() != nullptr);
+        }));
+    }
+}
+
+void MainWindow::restoreEditActions() {
+    for (const auto& [action, applies] : editActionConditions_) {
+        action->setEnabled(true);
+    }
+    for (QAction* entry : editMenu_->actions()) {
+        entry->setEnabled(true);
+    }
+}
+
+void MainWindow::strokePickedPath() {
+    if (!project_.has_value() || toolPaletteController_->selectedBranches().empty()) {
+        return;
+    }
+    const std::size_t strokes = toolPaletteController_->strokePickedPath();
+    if (strokes == 0) {
+        statusBar()->showMessage(tr("Can't paint on this layer with the current tool."), 5000);
+        return;
+    }
+    statusBar()->showMessage(tr("Stroked the path with the current tool."), 5000);
+}
+
 void MainWindow::showCanvasContextMenu(sound_mind::core::TimeFrequencyPoint point, QPoint globalPos) {
     // "Right-clicking on an object on the canvas, or an empty part of
     // the canvas, shall cause a small menu to appear with likely
@@ -3604,10 +3690,23 @@ void MainWindow::showCanvasContextMenu(sound_mind::core::TimeFrequencyPoint poin
         toolPaletteController_->beginPick(*layerId, point);
     }
 
+    // Pre-Beta Plan v0.Y.77.1: a guide path (regular or branching) gets its
+    // own entries, and entries that don't apply here are grayed out.
     QMenu menu(this);
     if (toolPaletteController_->selectedOperationId().has_value()) {
-        QAction* editPath = menu.addAction(tr("Edit Path"));
-        connect(editPath, &QAction::triggered, this, &MainWindow::editPickedPath);
+        const bool guide = toolPaletteController_->selectedIsGuidePath();
+        const bool singlePath = toolPaletteController_->selectedPath().has_value();
+        if (!guide || singlePath) {
+            QAction* editPath = menu.addAction(tr("Edit Path"));
+            editPath->setEnabled(singlePath && !toolPaletteController_->isPathEditActive());
+            connect(editPath, &QAction::triggered, this, &MainWindow::editPickedPath);
+        }
+        if (guide) {
+            QAction* stroke = menu.addAction(tr("Stroke Path with Current Tool"));
+            connect(stroke, &QAction::triggered, this, &MainWindow::strokePickedPath);
+            QAction* resonance = menu.addAction(tr("Create Resonance Profile..."));
+            connect(resonance, &QAction::triggered, this, &MainWindow::createResonanceFromPickedPath);
+        }
         menu.addSeparator();
         QAction* bringToFront = menu.addAction(tr("Bring to Front"));
         connect(bringToFront, &QAction::triggered, this, &MainWindow::bringPickedObjectToFront);
@@ -3617,15 +3716,20 @@ void MainWindow::showCanvasContextMenu(sound_mind::core::TimeFrequencyPoint poin
         QAction* deleteObject = menu.addAction(tr("Delete"));
         connect(deleteObject, &QAction::triggered, this, &MainWindow::deletePickedObject);
     } else {
+        const bool selection = toolPaletteController_->hasSelection();
         QAction* pasteAction = menu.addAction(tr("Paste"));
+        pasteAction->setEnabled(toolPaletteController_->hasClipboard());
         connect(pasteAction, &QAction::triggered, this, &MainWindow::paste);
         menu.addSeparator();
         QAction* fill = menu.addAction(tr("Fill Selection..."));
+        fill->setEnabled(selection);
         connect(fill, &QAction::triggered, this, &MainWindow::fillSelection);
         QAction* applyFilter = menu.addAction(tr("Apply Filter to Selection"));
+        applyFilter->setEnabled(selection);
         connect(applyFilter, &QAction::triggered, this, &MainWindow::applyFilterToSelection);
         menu.addSeparator();
         QAction* deselectAction = menu.addAction(tr("Deselect"));
+        deselectAction->setEnabled(selection);
         connect(deselectAction, &QAction::triggered, this, &MainWindow::deselect);
     }
     menu.exec(globalPos);
@@ -3823,8 +3927,45 @@ void MainWindow::usePickedPathAsMindWaveShape() {
     mindWaveController_->setDrawnPath(*mindWaveId, *curve);
 }
 
+std::optional<sound_mind::core::CurveGraph> MainWindow::pickedResonanceGraph() const {
+    if (!project_.has_value()) {
+        return std::nullopt;
+    }
+    const auto branches = toolPaletteController_->selectedBranches();
+    const double scale = sound_mind::core::frequencyToTimeScaleFor(project_->settings());
+    if (branches.size() > 1) {
+        return sound_mind::core::curveGraphFromBranches(branches, scale, kResonanceNodeCount);
+    }
+    if (branches.size() == 1) {
+        return sound_mind::core::curveGraphFromPath(branches.front().path, scale, kResonanceNodeCount);
+    }
+    return std::nullopt;
+}
+
+void MainWindow::keepBranchingCurveAsPath() {
+    if (!branchCurveSession_.isActive() || branchCurveSession_.branches().empty()) {
+        return;
+    }
+    // The tree lives on whichever layer its trunk was drawn on.
+    const auto trunkId = branchCurveSession_.trunkOperationId();
+    std::optional<sound_mind::core::LayerId> layer;
+    const auto& log = project_->operationLog();
+    for (std::size_t i = 0; i < log.size() && trunkId.has_value(); ++i) {
+        if (log.at(i).id() == *trunkId) {
+            layer = log.at(i).targetLayer();
+            break;
+        }
+    }
+    if (!layer.has_value()) {
+        layer = layerController_->paintTargetLayerId();
+    }
+    if (layer.has_value()) {
+        toolPaletteController_->addGuidePath(*layer, branchCurveSession_.branches(), tr("Kept branching path"));
+    }
+}
+
 void MainWindow::createResonanceFromPickedPath() {
-    if (!project_.has_value() || !toolPaletteController_->selectedPath().has_value()) {
+    if (!project_.has_value() || toolPaletteController_->selectedBranches().empty()) {
         return;
     }
     const QString defaultName = tr("Resonance %1").arg(project_->resonanceProfiles().size() + 1);
@@ -3838,9 +3979,7 @@ void MainWindow::createResonanceFromPickedPath() {
         createResonanceFromPickedPathNamed(result.name);
         return;
     }
-    const auto curve = toolPaletteController_->selectedPath();
-    const auto graph = sound_mind::core::curveGraphFromPath(
-        *curve, sound_mind::core::frequencyToTimeScaleFor(project_->settings()), kResonanceNodeCount);
+    const auto graph = *pickedResonanceGraph();
     const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
     auto& profiles = project_->resonanceProfiles();
     const auto it = std::find_if(profiles.begin(), profiles.end(),
@@ -3857,13 +3996,12 @@ void MainWindow::createResonanceFromPickedPathNamed(const std::string& name) {
     if (!project_.has_value()) {
         return;
     }
-    const auto curve = toolPaletteController_->selectedPath();
-    if (!curve.has_value()) {
+    const auto pickedGraph = pickedResonanceGraph();
+    if (!pickedGraph.has_value()) {
         return;
     }
 
-    const auto graph = sound_mind::core::curveGraphFromPath(
-        *curve, sound_mind::core::frequencyToTimeScaleFor(project_->settings()), kResonanceNodeCount);
+    const auto& graph = *pickedGraph;
     const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
     project_->addResonanceProfile(name, spectrum, graph);
     // Unlike captureMindShot()/captureMindGrain() (wired through
@@ -3929,6 +4067,7 @@ void MainWindow::createResonanceFromPickedGraph() {
         it->spectrum = spectrum;
         it->sourceCurve = graph;
     }
+    keepBranchingCurveAsPath();
     branchCurveSession_.end();
     toolConfigurationPanel_->refreshResonanceProfiles();
     statusBar()->showMessage(
@@ -3945,6 +4084,7 @@ void MainWindow::createResonanceFromPickedGraphNamed(const std::string& name) {
         kResonanceNodeCount);
     const auto spectrum = sound_mind::core::computeWaveKernelSignature(graph, kResonanceSpectrumSize);
     project_->addResonanceProfile(name, spectrum, graph);
+    keepBranchingCurveAsPath();
     branchCurveSession_.end();
     // See createResonanceFromPickedPathNamed()'s own identical
     // comment - this capture writes directly to project_ too.

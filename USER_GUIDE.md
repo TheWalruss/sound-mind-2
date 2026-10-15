@@ -1319,8 +1319,9 @@ regardless of the "Show bounding boxes" setting - ready to:
   Forward** (Ctrl+Up), or **Send Backward** (Ctrl+Down). This only changes
   which object renders on top where they overlap - it doesn't move,
   modify, or select anything else.
-- **Edit its own path** - **Edit → Path Editing → Edit Path** (a brush stroke only;
-  a filled selection or a pasted region has no path to edit). Brings its
+- **Edit its own path** - **Edit → Path Editing → Edit Path** (a brush stroke or
+  a [Path Tool](#path-tool) path; a filled selection, a pasted region or a
+  branching path has no single path to edit). Brings its
   nodes and handles back onto the canvas as small dots:
   - **Click a node** to select it (shown larger, in white).
   - **Drag a node** to move it - its own handles (if any) move with it.
@@ -1349,9 +1350,25 @@ you reach the bottom.
 **Right-clicking** an object (in any tool mode, not just Pick) selects
 it and opens a small menu with **Edit Path**, **Bring to Front**,
 **Send to Back**, and **Delete** - the same actions as above, without
-reaching for the Edit menu. Right-clicking empty canvas space instead
-opens **Paste**, **Fill Selection...**, **Apply Filter to Selection**,
-and **Deselect** (see [Selection and Fill](#selection-and-fill) below).
+reaching for the Edit menu. A [Path Tool](#path-tool) path (or a
+branching path) also offers:
+
+- **Stroke Path with Current Tool** - paints along the path (every branch
+  of a branching path) with the brush currently set up in Tool
+  Configuration, as one undoable step. The path itself stays, so you can
+  stroke it again with a different brush.
+- **Create Resonance Profile...** - the same as **Create Resonance from
+  Picked Path...** below; for a branching path, every branch counts.
+
+Right-clicking empty canvas space instead opens **Paste**, **Fill
+Selection...**, **Apply Filter to Selection**, and **Deselect** (see
+[Selection and Fill](#selection-and-fill) below).
+
+Entries that don't apply right now - **Paste** with nothing copied, the
+selection entries with no selection, **Toggle Node Type** with no node
+selected, a whole submenu with nothing in it that applies - are **grayed
+out**, in the right-click menus and the **Edit** menu alike. Their keyboard
+shortcuts still work whenever they do apply.
 
 Move/Modify/Delete/a completed path edit are all undoable (Ctrl+Z), the
 same as painting a new stroke. Restacking currently isn't - if you bring
@@ -1491,7 +1508,8 @@ selection to a plain, axis-aligned rectangle.
   Create Resonance from Picked Path...** prompts for a name (defaulting
   to "Resonance 1", "Resonance 2", and so on; a name that's already taken
   offers Replace/Rename/Cancel), then
-  analyzes whichever path/stroke is currently Picked and stores the result
+  analyzes whichever path/stroke is currently Picked (every branch of a
+  branching path) and stores the result
   permanently under that name - a confirmation appears in the status bar.
   Pick **Resonance** as the Tool Type in
   [Painting](#painting)'s Tool Configuration panel and select it from the

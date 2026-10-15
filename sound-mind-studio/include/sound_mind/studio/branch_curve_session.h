@@ -103,6 +103,13 @@ public:
     /// @return The current branches; empty if not active.
     [[nodiscard]] const std::vector<sound_mind::core::BranchGraft>& branches() const noexcept { return branches_; }
 
+    /// @brief The `Operation::id()` the trunk came from - lets the caller
+    ///        find which layer the tree was drawn on.
+    /// @return The trunk's id, or `std::nullopt` if not active.
+    [[nodiscard]] std::optional<sound_mind::core::OperationId> trunkOperationId() const noexcept {
+        return branchOperationIds_.empty() ? std::nullopt : std::optional(branchOperationIds_.front());
+    }
+
 private:
     bool active_ = false;
     std::vector<sound_mind::core::BranchGraft> branches_;

@@ -6336,7 +6336,6 @@ void MainWindowTest::editMenuActionsAreGroupedIntoNamedSubmenus() {
     QMenu* captureMenu = findSubmenu(QStringLiteral("Ca&pture"));
     QMenu* pickedPathToolsMenu = findSubmenu(QStringLiteral("Picked Path &Tools"));
     QMenu* layersMenu = findSubmenu(QStringLiteral("&Layers"));
-    QMenu* pathToolMenu = findSubmenu(QStringLiteral("Path &Tool"));
     QVERIFY(stackOrderMenu != nullptr);
     QVERIFY(pathEditingMenu != nullptr);
     QVERIFY(selectionMenu != nullptr);
@@ -6344,7 +6343,6 @@ void MainWindowTest::editMenuActionsAreGroupedIntoNamedSubmenus() {
     QVERIFY(captureMenu != nullptr);
     QVERIFY(pickedPathToolsMenu != nullptr);
     QVERIFY(layersMenu != nullptr);
-    QVERIFY(pathToolMenu != nullptr);
 
     // Spot-check one representative action landed in the right submenu.
     auto containsText = [](QMenu* menu, const QString& text) {
@@ -6362,7 +6360,6 @@ void MainWindowTest::editMenuActionsAreGroupedIntoNamedSubmenus() {
     QVERIFY(containsText(captureMenu, QStringLiteral("Capture as &Mind Shot")));
     QVERIFY(containsText(pickedPathToolsMenu, QStringLiteral("Use Picked Path as MindWave &Shape")));
     QVERIFY(containsText(layersMenu, QStringLiteral("Select Layer &Above")));
-    QVERIFY(containsText(pathToolMenu, QStringLiteral("&Finish Path")));
 }
 
 namespace {
@@ -6683,16 +6680,25 @@ void MainWindowTest::filterPreviewStopsWhenToggledOffOrPlaybackStarts() {
 
 namespace {
 
-/// @brief Drags the Path tool from (20, 10) to (60, 30) in a few moves.
-void dragPath(CanvasWidget* canvas) {
-    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+/// @brief Drags the current tool from `from` to `to` in four moves.
+void dragBetween(CanvasWidget* canvas, QPoint from, QPoint to) {
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, from);
     for (int step = 1; step <= 4; ++step) {
-        QMouseEvent move(QEvent::MouseMove, QPointF(20 + 10 * step, 10 + 5 * step),
-                         canvas->mapToGlobal(QPointF(20 + 10 * step, 10 + 5 * step)), Qt::NoButton, Qt::LeftButton,
+        const QPointF point = QPointF(from) + (QPointF(to) - QPointF(from)) * (step / 4.0);
+        QMouseEvent move(QEvent::MouseMove, point, canvas->mapToGlobal(point), Qt::NoButton, Qt::LeftButton,
                          Qt::NoModifier);
         QApplication::sendEvent(canvas, &move);
     }
-    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, to);
+}
+
+/// @brief Drags the Path tool from (20, 10) to (60, 30).
+void dragPath(CanvasWidget* canvas) { dragBetween(canvas, QPoint(20, 10), QPoint(60, 30)); }
+
+/// @brief Clicks `canvas` once at `point` (Pick).
+void clickAt(CanvasWidget* canvas, QPoint point) {
+    QTest::mousePress(canvas, Qt::LeftButton, Qt::NoModifier, point);
+    QTest::mouseRelease(canvas, Qt::LeftButton, Qt::NoModifier, point);
 }
 
 }  // namespace
@@ -6761,4 +6767,207 @@ void MainWindowTest::aPickedGuidePathCanBeEditedAndDeleted() {
     const auto* tombstone = dynamic_cast<const sound_mind::core::GuidePathOperation*>(&log.at(log.size() - 1));
     QVERIFY(tombstone != nullptr);
     QVERIFY(tombstone->isEmpty());
+}
+
+namespace {
+
+QMenu* editMenuOf(const QMainWindow& window) {
+    for (QAction* topLevelAction : window.menuBar()->actions()) {
+        if (topLevelAction->text() == QStringLiteral("&Edit")) {
+            return topLevelAction->menu();
+        }
+    }
+    return nullptr;
+}
+
+/// @brief The action with `text` anywhere in `menu` or its submenus.
+QAction* findMenuAction(QMenu* menu, const QString& text) {
+    for (QAction* action : menu->actions()) {
+        if (action->text() == text) {
+            return action;
+        }
+        if (action->menu() != nullptr) {
+            if (QAction* found = findMenuAction(action->menu(), text)) {
+                return found;
+            }
+        }
+    }
+    return nullptr;
+}
+
+/// @brief Like shownContextMenuActionTexts(), but with each entry's enabled state.
+QList<QPair<QString, bool>> shownContextMenuActions(CanvasWidget* canvas, QPoint localPos) {
+    QList<QPair<QString, bool>> shown;
+    QTimer::singleShot(0, [&shown]() {
+        auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+        if (menu == nullptr) {
+            return;
+        }
+        for (QAction* action : menu->actions()) {
+            if (!action->isSeparator()) {
+                shown.append({action->text(), action->isEnabled()});
+            }
+        }
+        menu->close();
+    });
+    QContextMenuEvent event(QContextMenuEvent::Mouse, localPos, canvas->mapToGlobal(localPos));
+    QCoreApplication::sendEvent(canvas, &event);
+    return shown;
+}
+
+}  // namespace
+
+void MainWindowTest::editMenuGraysOutActionsThatDontApplyAndRestoresThemOnClose() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QMenu* editMenu = editMenuOf(window);
+    QVERIFY(editMenu != nullptr);
+
+    emit editMenu->aboutToShow();
+
+    QVERIFY(!findMenuAction(editMenu, QStringLiteral("&Delete"))->isEnabled());
+    QVERIFY(!findMenuAction(editMenu, QStringLiteral("&Edit Path"))->isEnabled());
+    QVERIFY(!findMenuAction(editMenu, QStringLiteral("Cu&t"))->isEnabled());
+    QVERIFY(!findMenuAction(editMenu, QStringLiteral("&Paste"))->isEnabled());
+    QVERIFY(!findMenuAction(editMenu, QStringLiteral("D&eselect"))->isEnabled());
+    // Nothing in Stack Order applies, so the submenu itself is grayed out.
+    QVERIFY(!findMenuAction(editMenu, QStringLiteral("&Stack Order"))->isEnabled());
+    // Always-applicable entries stay enabled.
+    QVERIFY(findMenuAction(editMenu, QStringLiteral("&Image Mode"))->isEnabled());
+    QVERIFY(findMenuAction(editMenu, QStringLiteral("&Layers"))->isEnabled());
+
+    emit editMenu->aboutToHide();
+
+    // Re-enabled, so keyboard shortcuts keep working.
+    QVERIFY(findMenuAction(editMenu, QStringLiteral("&Delete"))->isEnabled());
+    QVERIFY(findMenuAction(editMenu, QStringLiteral("&Stack Order"))->isEnabled());
+}
+
+void MainWindowTest::editMenuEnablesPathActionsForAPickedGuidePath() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-edit-menu-guide.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    canvas->setFixedSize(100, 50);
+    window.setPathModeEnabled(true);
+    dragPath(canvas);
+    window.setPickModeEnabled(true);
+    clickAt(canvas, QPoint(40, 20));
+    QMenu* editMenu = editMenuOf(window);
+
+    emit editMenu->aboutToShow();
+
+    QVERIFY(findMenuAction(editMenu, QStringLiteral("&Delete"))->isEnabled());
+    QVERIFY(findMenuAction(editMenu, QStringLiteral("&Edit Path"))->isEnabled());
+    QVERIFY(findMenuAction(editMenu, QStringLiteral("Stroke Picked Path with Current &Tool"))->isEnabled());
+    QVERIFY(findMenuAction(editMenu, QStringLiteral("Create &Resonance from Picked Path..."))->isEnabled());
+    QVERIFY(!findMenuAction(editMenu, QStringLiteral("Toggle &Node Type"))->isEnabled());
+    QVERIFY(!findMenuAction(editMenu, QStringLiteral("&Apply Path Edit"))->isEnabled());
+    emit editMenu->aboutToHide();
+}
+
+void MainWindowTest::strokePickedPathPaintsAlongTheGuideAsOneUndoStep() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-stroke-guide.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    canvas->setFixedSize(100, 50);
+    window.setPathModeEnabled(true);
+    dragPath(canvas);
+    window.setPickModeEnabled(true);
+    clickAt(canvas, QPoint(40, 20));
+    const auto& log = window.project()->operationLog();
+    const auto* guide = dynamic_cast<const sound_mind::core::GuidePathOperation*>(&log.at(0));
+    QVERIFY(guide != nullptr);
+
+    window.strokePickedPath();
+
+    QCOMPARE(log.size(), std::size_t{2});
+    const auto* stroke = dynamic_cast<const PaintOperation*>(&log.at(1));
+    QVERIFY(stroke != nullptr);
+    QCOMPARE(stroke->path().nodes().size(), guide->branches().front().path.nodes().size());
+    QCOMPARE(*stroke->targetLayer(), *guide->targetLayer());
+    const auto layer = *guide->targetLayer();
+    QCOMPARE(log.activeOperationsTargeting(layer).size(), std::size_t{2});  // the guide stays.
+
+    window.undo();
+    QCOMPARE(log.activeOperationsTargeting(layer).size(), std::size_t{1});
+}
+
+void MainWindowTest::finishingABranchingCurveKeepsItAsABranchingPath() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-branching-keep.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    canvas->setFixedSize(150, 50);
+
+    // A trunk, then a graft point on it, then a branch elsewhere.
+    window.setPathModeEnabled(true);
+    dragBetween(canvas, QPoint(10, 10), QPoint(50, 30));
+    window.setPickModeEnabled(true);
+    clickAt(canvas, QPoint(30, 20));
+    window.startBranchingCurveFromPickedPath();
+    clickAt(canvas, QPoint(30, 20));
+    window.setPathModeEnabled(true);
+    dragBetween(canvas, QPoint(90, 35), QPoint(130, 45));
+    window.setPickModeEnabled(true);
+    clickAt(canvas, QPoint(110, 40));
+    window.addPickedPathAsBranch();
+
+    window.createResonanceFromPickedGraphNamed("Tree");
+
+    QCOMPARE(window.project()->resonanceProfiles().size(), std::size_t{1});
+    const auto& log = window.project()->operationLog();
+    const auto* kept = dynamic_cast<const sound_mind::core::GuidePathOperation*>(&log.at(log.size() - 1));
+    QVERIFY(kept != nullptr);
+    QVERIFY(kept->isBranching());
+    QCOMPARE(kept->branches().size(), std::size_t{2});
+
+    // Picking the kept tree and making a Resonance from it uses every branch.
+    clickAt(canvas, QPoint(30, 20));
+    window.createResonanceFromPickedPathNamed("Tree Again");
+    QCOMPARE(window.project()->resonanceProfiles().size(), std::size_t{2});
+    QCOMPARE(window.project()->resonanceProfiles().at(1).sourceCurve.nodes().size(),
+             window.project()->resonanceProfiles().at(0).sourceCurve.nodes().size());
+}
+
+void MainWindowTest::rightClickingAGuidePathShowsPathEntries() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-context-menu-guide.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    canvas->resize(100, 50);
+    window.setPathModeEnabled(true);
+    dragPath(canvas);
+
+    const auto shown = shownContextMenuActions(canvas, QPoint(40, 20));
+
+    QStringList texts;
+    for (const auto& [text, enabled] : shown) {
+        texts << text;
+        QVERIFY2(enabled, qPrintable(text));
+    }
+    QCOMPARE(texts, QStringList({QStringLiteral("Edit Path"), QStringLiteral("Stroke Path with Current Tool"),
+                                 QStringLiteral("Create Resonance Profile..."), QStringLiteral("Bring to Front"),
+                                 QStringLiteral("Send to Back"), QStringLiteral("Delete")}));
+}
+
+void MainWindowTest::rightClickingEmptyCanvasGraysOutSelectionEntries() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-context-menu-gray.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    canvas->resize(100, 50);
+
+    const auto shown = shownContextMenuActions(canvas, QPoint(30, 10));
+
+    QCOMPARE(shown.size(), 4);
+    for (const auto& [text, enabled] : shown) {
+        QVERIFY2(!enabled, qPrintable(text));  // no clipboard, no selection.
+    }
 }

@@ -38,4 +38,6 @@ private slots:
     void rebuildLayerContentDoesNotRereadTheTremoloMindWaveLibraryWithoutInvalidateContentCaches();
     void deleteOperationsTombstonesEachStrokeAsOneUndoStep();
     void deletingAMindGrainStrokeLeavesNoDependentOnItsSourceLayer();
+    void strokePathsPaintsEachPathAsOneUndoStep();
+    void strokePathsRefusesAFilterLayer();
 };

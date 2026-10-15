@@ -6,6 +6,19 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.37.2] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.77.1`, installment B.
+
+### Added
+
+- **Right-click a path** for **Stroke Path with Current Tool** (paints along it with the current brush, keeping the path) and **Create Resonance Profile...**. Also on the Edit menu as **Picked Path Tools → Stroke Picked Path with Current Tool**.
+- **Finishing a Branching Curve keeps the tree on the canvas** as a branching path (pink). Picking it and choosing **Create Resonance...** uses every branch.
+
+### Changed
+
+- **Menu entries that don't apply are grayed out**, in the Edit menu (including whole submenus) and the right-click menus. Shortcuts keep working.
+
 ## [0.1.37.1] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.77.1` (Paths, selection and context menus), installment A.

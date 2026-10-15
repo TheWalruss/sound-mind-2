@@ -10,6 +10,7 @@
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/path.h"
+#include "sound_mind/core/resonant_instrument.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/grid_config.h"
@@ -281,6 +282,28 @@ public:
      *         reopen).
      */
     [[nodiscard]] std::optional<sound_mind::core::BlendMode> selectedPasteBlendMode() const;
+
+    /**
+     * @brief The selected object's geometry as branches - a guide path's
+     *        own (one for a regular path, several for a branching one), or
+     *        a painted stroke's path as a single trunk. What "Create
+     *        Resonance Profile" and "Stroke Path with Current Tool" work
+     *        from (Pre-Beta Plan `v0.Y.77.1`).
+     * @return The branches; empty if nothing is selected or the selected
+     *         object has no path (a Fill, a Paste).
+     */
+    [[nodiscard]] std::vector<sound_mind::core::BranchGraft> selectedBranches() const;
+
+    /// @brief Whether the selected object is a silent guide path (regular
+    ///        or branching).
+    /// @return `true` for a `GuidePathOperation`.
+    [[nodiscard]] bool selectedIsGuidePath() const;
+
+    /// @brief The selected object's own layer.
+    /// @return The layer, or `std::nullopt` if nothing is selected.
+    [[nodiscard]] std::optional<sound_mind::core::LayerId> selectedLayer() const noexcept {
+        return pickedOperationId_.has_value() ? std::optional(pickedLayer_) : std::nullopt;
+    }
 
     /**
      * @brief The currently-selected object's own stable identity -

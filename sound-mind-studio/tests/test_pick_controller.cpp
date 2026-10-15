@@ -1716,3 +1716,24 @@ void PickControllerTest::aDeletedGuidePathIsNoLongerPickable() {
     QVERIFY(!controller.pick(layerId, TimeFrequencyPoint{0.0, 20.0}));
     QVERIFY(!controller.pick(layerId, TimeFrequencyPoint{0.4, 600.0}));
 }
+
+void PickControllerTest::selectedBranchesCoversStrokesAndGuidePaths() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addPaintOperation(project, layerId, 0.05, 1500.0, 0.15, 1600.0, makeOpaqueTool(0.005));
+    addGuidePath(project, layerId);
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QVERIFY(controller.selectedBranches().empty());
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.1, 1550.0}));  // the stroke.
+    QCOMPARE(controller.selectedBranches().size(), std::size_t{1});
+    QVERIFY(!controller.selectedIsGuidePath());
+    QCOMPARE(*controller.selectedLayer(), layerId);
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.4, 600.0}));  // the guide path.
+    QCOMPARE(controller.selectedBranches().size(), std::size_t{1});
+    QVERIFY(controller.selectedIsGuidePath());
+}

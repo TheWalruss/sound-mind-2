@@ -293,6 +293,41 @@ void ToolPaletteController::applyPasteBlendMode(sound_mind::core::BlendMode mode
 
 bool ToolPaletteController::hasSelection() const { return selectionController_->hasSelection(); }
 
+bool ToolPaletteController::hasClipboard() const { return selectionController_->hasClipboard(); }
+
+std::vector<sound_mind::core::BranchGraft> ToolPaletteController::selectedBranches() const {
+    return pickController_->selectedBranches();
+}
+
+bool ToolPaletteController::selectedIsGuidePath() const { return pickController_->selectedIsGuidePath(); }
+
+std::optional<sound_mind::core::LayerId> ToolPaletteController::selectedLayer() const {
+    return pickController_->selectedLayer();
+}
+
+bool ToolPaletteController::isPathEditActive() const { return pickController_->isPathEditActive(); }
+
+bool ToolPaletteController::hasSelectedPathNode() const {
+    return pickController_->selectedPathNodeIndex().has_value();
+}
+
+std::size_t ToolPaletteController::strokePickedPath() {
+    const auto layer = pickController_->selectedLayer();
+    if (!layer.has_value()) {
+        return 0;
+    }
+    std::vector<sound_mind::core::Path> paths;
+    for (const sound_mind::core::BranchGraft& branch : pickController_->selectedBranches()) {
+        paths.push_back(branch.path);
+    }
+    return paintController_->strokePaths(*layer, paths, tr("Stroked path"));
+}
+
+std::optional<sound_mind::core::OperationId> ToolPaletteController::addGuidePath(
+    sound_mind::core::LayerId layer, std::vector<sound_mind::core::BranchGraft> branches, const QString& description) {
+    return pathController_->addGuidePath(layer, std::move(branches), description);
+}
+
 std::optional<sound_mind::core::FilterPreviewSelection> ToolPaletteController::committedSelection() const {
     return selectionController_->committedSelection();
 }

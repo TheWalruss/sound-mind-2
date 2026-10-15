@@ -7,6 +7,7 @@
 
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/project.h"
+#include "sound_mind/core/resonant_instrument.h"
 
 namespace sound_mind::studio {
 
@@ -78,6 +79,20 @@ public:
      *         committed.
      */
     std::optional<sound_mind::core::OperationId> endPath();
+
+    /**
+     * @brief Commits a guide path built elsewhere - e.g. the Branching
+     *        Curve session's branches - as one undoable step, exactly as
+     *        endPath() commits a drawn one. Emits contentChanged().
+     * @param layer The layer it belongs to.
+     * @param branches Its strokes, trunk first; nothing is committed if empty.
+     * @param description The History Panel's row text.
+     * @return The new operation's id, or `std::nullopt` if nothing was
+     *         committed (no project, or no branches).
+     */
+    std::optional<sound_mind::core::OperationId> addGuidePath(sound_mind::core::LayerId layer,
+                                                              std::vector<sound_mind::core::BranchGraft> branches,
+                                                              const QString& description);
 
     /// @brief Abandons the stroke in progress without committing anything -
     ///        a no-op if there isn't one. Emits pathChanged().
