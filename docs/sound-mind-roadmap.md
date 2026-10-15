@@ -1133,7 +1133,6 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 - **[Done in v0.1.29.6]** **Preset selection indicator** - when a preset (filter configuration, tool, grid...) is selected, show its name as the active preset; once any setting is changed afterwards, mark it modified with an asterisk and a color change.
 - **[Done in v0.1.29.6]** **MindWave polarity/direction/sign option** (e.g. exponential decay in reverse).
 - **[Done in v0.1.29.6]** **Additional MindWave functions** (peak, etc.).
-- **Remove MindWave Superpositions.** (Replaces the earlier "Superpositions aren't working well" item.) The feature can be redeveloped later if it proves useful.
 - **Visual brightness of painted content isn't clearly correlated with its audible intensity** - the canvas color mapping spans [-96, 0] dB while stored magnitudes are raw A-weighted STFT dB (full-scale tones near +52 dB); needs a design decision on the display mapping.
 
 **Backlog - from manual testing, 2026-10-13 (all to be fixed before Beta):**
@@ -1166,6 +1165,7 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
   - **Goniometer / stereo width.**
   - **Loudness meter:** loudness over time, loudness per frequency band, peak loudness, average loudness, and per-layer contributions (average, peak, per frequency band, over time).
   - **Pitch detection.**
+- **Remove MindWave Superpositions.** (Replaces the earlier "Superpositions aren't working well" item.) The feature can be redeveloped later if it proves useful.
 - **Procedural brush tips: configurable shape "thickness".** E.g. the line width of a +-shaped brush, or the particle size of the spatter and dapple tips.
 - **Text tool**, working very much like the legacy implementation (previous Python codebase, `../sound-mind/`), which worked great.
 
