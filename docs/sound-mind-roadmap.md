@@ -1180,7 +1180,8 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 2. Fix outright correctness bugs next.
 3. Remove MindWave Superpositions before the numeric-input overhaul, so the overhaul doesn't migrate controls that are about to be deleted.
 4. Build the shared numeric-input widget before any milestone that adds new numeric controls (brush thickness, generators, analysis settings), so those are built once on the new widget.
-5. Persist operation history last, so the project schema settles once, after every field the earlier milestones add.
+5. Persist operation history late, so the project schema settles once, after every field the earlier milestones add.
+6. Macro recording and macro video export come last of all (delayed by the user, 2026-10-16).
 
 **Sizes:** S ≈ one installment, M ≈ 2-3, L ≈ 4+.
 
@@ -1284,17 +1285,12 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - **Rectangle multi-select with Pick:** delete, copy or move several objects at once. The selection model goes from one object to a set, and each bulk action is a single undo entry.
 - **Merge selected paths into one branching path.** Treat each path as a connected component, then add the k-1 shortest node-to-node connecting edges (a minimum spanning tree over the components, using Kruskal's algorithm on inter-component node pairs).
 
-#### `v0.Y.78.1` - Macro recording and macro video export (M, scope after investigation)
-
-- First reproduce and list the concrete problems; the backlog item has no detail yet.
-- Depends on `v0.Y.71.1`'s full-composite export.
-
-#### `v0.Y.79.1` - Text tool (M)
+#### `v0.Y.78.1` - Text tool (M)
 
 - Port the behavior of the legacy `tools/text_tool.py` (about 320 lines in `../sound-mind/`). Port the behavior, not the code, per CLAUDE.md.
 - Text is rasterized and painted through the normal paint pipeline, using `v0.Y.74.1`'s brush work.
 
-#### `v0.Y.80.1` - Generators (L)
+#### `v0.Y.79.1` - Generators (L)
 
 - **Noise:** white, pink, red/brownian, purple and gray, plus a custom-spectrum noise. It is offered in two forms:
   - **a Generate Layer type**, built on `v0.Y.51.1`'s Generate Layer infrastructure;
@@ -1302,7 +1298,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - **MindWave bindings** for horizontal and vertical resolution (the time and frequency granularity of the noise cells), and for the custom spectrum.
 - **The Fractal and Streaming generator families,** deferred from `v0.Y.51.1`, finished here. They share the Order/Chaos axis the Lattice family established.
 
-#### `v0.Y.81.1` - Analysis tools (L)
+#### `v0.Y.80.1` - Analysis tools (L)
 
 - **Three tools,** each with visualizations, graphs and overlays:
   - **Goniometer / stereo width.**
@@ -1314,11 +1310,17 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - The legacy `analysis/` modules (`loudness.py`, `stereo_width.py`, `pitch.py`) are the lessons-learned reference.
 - *Performance:* analysis runs on worker threads, never the GUI or audio thread. Per-band loudness over a whole project is a candidate for the GPU compute path.
 
-#### `v0.Y.82.1` - Operation history persisted with the project (L)
+#### `v0.Y.81.1` - Operation history persisted with the project (L)
 
 - The queued item: a project can be re-rendered from scratch from its saved operation history.
 - Scheduled last so the schema settles once.
 - No migration path for older projects, per the standing decision above.
+
+#### `v0.Y.82.1` - Macro recording and macro video export (M, scope after investigation)
+
+- First reproduce and list the concrete problems; the backlog item has no detail yet.
+- Depends on `v0.Y.71.1`'s full-composite export.
+- **Delayed to last before the Beta readiness check** (user decision, 2026-10-16); it was originally `v0.Y.78.1`, and the milestones after it moved up one number.
 
 #### Then: Beta readiness check
 
@@ -1334,7 +1336,7 @@ The Beta Readiness Loop's "judged beta-ready" call happens here.
 - a correct Pool reflection-padding implementation.
 
 **Decisions resolved 2026-10-15:**
-- Intensity value 1.0 = absolute full scale (option (A)). The codec is calibrated to dBFS (`v0.Y.73.1`), paired with clip indicators (`v0.Y.73.1` and `v0.Y.81.1`), output loudness normalization, and an optional master limiter (`v0.Y.81.1`).
+- Intensity value 1.0 = absolute full scale (option (A)). The codec is calibrated to dBFS (`v0.Y.73.1`), paired with clip indicators (`v0.Y.73.1` and `v0.Y.80.1`), output loudness normalization, and an optional master limiter (`v0.Y.80.1`).
 - Rejected alternatives:
   - (B) keep today's [-96, 0] display range, which leaves 1.0 about 50 dB below a full-scale tone;
   - (C) relative to the project's loudest cell, where values change meaning as content changes;

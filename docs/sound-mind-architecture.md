@@ -2000,7 +2000,7 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `markClippedCells()` overwrites, in an RGB render, every cell above 0 dBFS on either channel with a magenta/black checker.
       - `CanvasWidget::setClipIndicatorEnabled()` applies it to the displayed composite. It bumps the composite generation only, since the cached prefix composite is unaffected.
       - The toggle is View -> Show Clipping (`showClippingAction`).
-      - The output-side counterparts (a peak/clip readout and an optional master limiter) are planned in `v0.Y.81.1`.
+      - The output-side counterparts (a peak/clip readout and an optional master limiter) are planned in `v0.Y.80.1`.
     - **Defaults re-derived:** the brush's own default intensity is -20 dBFS (was +45 on the old raw scale), and gradient-editor intensity spin boxes span [-96, 0] dBFS (were [-96, +60]). Relative dB parameters (thresholds, reductions, grain amount) are unaffected.
     - **No compatibility handling** (pre-Beta decision): Stream content saved before this reads about 50 dB hot.
     - **GPU timing tests made robust (test health, found while running this installment's regression):** the six "GPU measurably faster than CPU" tests failed about one run in three on the real GPU when other GPU work ran concurrently (one sample, first-dispatch costs included). `checkGpuFasterThanCpu()` now takes the CPU and GPU work as callables, does one untimed GPU warm-up, and compares the best of three timed runs on each side. It still skips on WARP (Decision #229).
