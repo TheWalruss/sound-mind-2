@@ -246,6 +246,13 @@ void ToolPaletteController::invalidateContentCaches() { paintController_->invali
 
 void ToolPaletteController::deleteSelection() { pickController_->deleteSelection(); }
 
+void ToolPaletteController::deleteOperations(const std::vector<sound_mind::core::OperationId>& ids,
+                                             const QString& description) {
+    paintController_->deleteOperations(ids, description);
+}
+
+void ToolPaletteController::forgetLayer(sound_mind::core::LayerId layer) { paintController_->forgetLayer(layer); }
+
 void ToolPaletteController::bringToFront() { pickController_->bringToFront(); }
 
 void ToolPaletteController::sendToBack() { pickController_->sendToBack(); }

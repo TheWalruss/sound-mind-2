@@ -310,6 +310,45 @@ public:
      */
     void notifyOperationCommitted(const QString& description);
 
+    /**
+     * @brief Deletes every listed operation that is still active, as one
+     *        undoable step.
+     *
+     * Each deletion appends a tombstone that supersedes the operation (see
+     * makeDeletionTombstone()), exactly as deleting a single Picked object
+     * does. One UndoStack entry covers the whole batch, so a single undo
+     * restores all of them. Ids that are unknown or no longer active are
+     * skipped; if none are left, nothing is appended or recorded.
+     *
+     * @param ids The operations to delete.
+     * @param description The History Panel's row text for the batch.
+     * @note GUI thread only.
+     */
+    void deleteOperations(const std::vector<sound_mind::core::OperationId>& ids, const QString& description);
+
+    /**
+     * @brief Drops everything cached for `layer` (its pre-paint base and its
+     *        replay cache). Call once a layer has been removed from the
+     *        project, so the memory is released and nothing stale lingers.
+     * @param layer The removed layer's id.
+     */
+    void forgetLayer(sound_mind::core::LayerId layer);
+
+    /**
+     * @brief Builds the zero-effect replacement that "deletes" `operation`
+     *        by superseding it.
+     *
+     * A PaintOperation becomes a copy with an empty path. Any other kind
+     * becomes a silence FillOperation over the same bounds (a Fill/Paste
+     * can't reduce to a literal zero-effect copy of itself).
+     *
+     * @param operation The operation to delete; must target a layer.
+     * @param newId A fresh id from OperationLog::reserveId().
+     * @return The tombstone, ready to append.
+     */
+    [[nodiscard]] static std::unique_ptr<sound_mind::core::Operation> makeDeletionTombstone(
+        const sound_mind::core::Operation& operation, sound_mind::core::OperationId newId);
+
 signals:
     /// @brief Emitted whenever the in-progress stroke's own live preview
     ///        Path changes (continueStroke()), and once more when it's

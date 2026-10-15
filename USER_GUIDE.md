@@ -450,7 +450,10 @@ stroke paints into) to reveal its full set of controls:
   [Pooling a Layer](#pooling-a-layer).
 - A **delete** button (×), for any layer except the locked one(s) - also
   appears just by hovering over the row, even without selecting it first,
-  so it's never more than a click away.
+  so it's never more than a click away. Deleting a layer deletes
+  everything painted on it. If Mind Grain strokes on other layers read
+  from it, you're asked whether to delete those strokes too or cancel. To keep a layer's content but get
+  it out of the way, hide it instead.
 - An **edit filter** button (⚙), always visible (no need to select the
   row first) on any **Filter** or **Equalizer** layer - jumps straight to
   that layer's own configuration, selecting it and opening the Filter
@@ -1787,11 +1790,12 @@ pooling had never been started.
 
 ## Exporting
 
-**File → Export Audio...** saves the topmost visible layer with content as
-FLAC, Ogg Vorbis, or MP3 (pick the format via the save dialog's file type).
+**File → Export Audio...** saves the whole mix - every visible, unmuted
+layer, with filters applied, exactly what Playback plays - as FLAC, Ogg
+Vorbis, or MP3 (pick the format via the save dialog's file type).
 
-**File → Export Video...** saves it as an MP4: the spectrogram, animated
-with the audio played alongside it.
+**File → Export Video...** saves it as an MP4: the composite spectrogram,
+animated with the mixed audio played alongside it.
 
 Both kinds of export run in the background - you can keep working while
 one encodes, and a small **✕** button appears in the status bar to cancel

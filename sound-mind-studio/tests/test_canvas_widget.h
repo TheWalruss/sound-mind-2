@@ -11,6 +11,8 @@ private slots:
     void rendersALayersContentInsteadOfThePlaceholder();
     void reusesACachedCompositeUntilInvalidateCompositeFromIsToldAboutAChange();
     void invalidateCompositeAllForcesARecomputeEvenWithoutAKnownIndex();
+    void addingALayerShowsWithoutAnExplicitInvalidate();
+    void hidingALayerShowsWithoutAnExplicitInvalidate();
     void skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt();
     void reflectsALayersTranslationColumns();
     void drawsAPlayheadLineAtTheGivenFraction();

@@ -36,4 +36,6 @@ private slots:
     void endStrokeWithAnInstrumentToolBoundToATremoloMindWaveResolvesItAgainstTheProject();
     void rebuildLayerContentRereadsTheTremoloMindWaveLibraryAfterInvalidateContentCaches();
     void rebuildLayerContentDoesNotRereadTheTremoloMindWaveLibraryWithoutInvalidateContentCaches();
+    void deleteOperationsTombstonesEachStrokeAsOneUndoStep();
+    void deletingAMindGrainStrokeLeavesNoDependentOnItsSourceLayer();
 };

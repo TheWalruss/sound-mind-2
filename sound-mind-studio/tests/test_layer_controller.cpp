@@ -10,6 +10,9 @@
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/mind_grain.h"
+#include "sound_mind/core/paint_operation.h"
+#include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/canvas_widget.h"
@@ -969,4 +972,81 @@ void LayerControllerTest::resetLoudnessDisplaysToStoppedValueRestoresTheAverageP
     auto* label = fixture.layersPanel.findChild<QLabel*>(QStringLiteral("loudnessLabel"));
     QVERIFY(label != nullptr);
     QCOMPARE(label->text(), QStringLiteral("avg -20.0 dB / peak -20.0 dB"));
+}
+
+namespace {
+
+/// @brief A project with a Mind Grain stroke on `upper` that reads live from
+/// `lower` - the dependency deleteLayer() asks about.
+struct MindGrainDependency {
+    Project project = Project::createNew(testSettings());
+    LayerId lower = 0;
+    LayerId upper = 0;
+    sound_mind::core::OperationId stroke = 0;
+
+    MindGrainDependency() {
+        lower = project.addLayer(Layer(0, "Source", LayerType::Normal));
+        upper = project.addLayer(Layer(0, "Painted", LayerType::Normal));
+        auto config = std::make_unique<sound_mind::core::MindGrainConfiguration>();
+        config->setReference(std::nullopt, lower, sound_mind::core::TimeFrequencyRect{});
+        sound_mind::core::Path path;
+        sound_mind::core::PathNode node;
+        node.anchor = sound_mind::core::TimeFrequencyPoint{0.1, 100.0};
+        path.addNode(node);
+        stroke = project.operationLog().reserveId();
+        project.operationLog().append(
+            std::make_unique<sound_mind::core::PaintOperation>(stroke, upper, path, std::move(config)));
+    }
+};
+
+}  // namespace
+
+void LayerControllerTest::deleteLayerEmitsLayerRemoved() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    const LayerId normalId = project.addLayer(Layer(0, "Normal", LayerType::Normal));
+    fixture.controller.setProject(&project);
+    QSignalSpy spy(&fixture.controller, &LayerController::layerRemoved);
+
+    fixture.controller.deleteLayer(normalId);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).value<LayerId>(), normalId);
+}
+
+void LayerControllerTest::deleteLayerWithMindGrainDependentsDeletesThemTooWhenConfirmed() {
+    Fixture fixture;
+    MindGrainDependency scene;
+    fixture.controller.setProject(&scene.project);
+    int askedCount = 0;
+    fixture.controller.setCascadeConfirmation([&askedCount](const QString&, int count) {
+        askedCount = count;
+        return true;
+    });
+    std::vector<sound_mind::core::OperationId> deleted;
+    fixture.controller.setOperationDeleter(
+        [&deleted](const std::vector<sound_mind::core::OperationId>& ids) { deleted = ids; });
+
+    fixture.controller.deleteLayer(scene.lower);
+
+    QCOMPARE(askedCount, 1);
+    QCOMPARE(deleted, std::vector<sound_mind::core::OperationId>{scene.stroke});
+    QVERIFY(fixture.controller.layerById(scene.lower) == nullptr);
+}
+
+void LayerControllerTest::deleteLayerWithMindGrainDependentsDoesNothingWhenCancelled() {
+    Fixture fixture;
+    MindGrainDependency scene;
+    fixture.controller.setProject(&scene.project);
+    fixture.controller.setCascadeConfirmation([](const QString&, int) { return false; });
+    bool deleterCalled = false;
+    fixture.controller.setOperationDeleter(
+        [&deleterCalled](const std::vector<sound_mind::core::OperationId>&) { deleterCalled = true; });
+    QSignalSpy spy(&fixture.controller, &LayerController::layerRemoved);
+
+    fixture.controller.deleteLayer(scene.lower);
+
+    QVERIFY(!deleterCalled);
+    QCOMPARE(spy.count(), 0);
+    QVERIFY(fixture.controller.layerById(scene.lower) != nullptr);
 }

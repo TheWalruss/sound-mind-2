@@ -1421,3 +1421,30 @@ TEST_CASE("Every named-resource library's nameExists() check is case-sensitive, 
     project.addGridPreset("Taken", FrequencyGridPresetConfig{}, TimingGridPresetConfig{}, false);
     REQUIRE(project.gridPresetNameExists("Taken"));
 }
+
+TEST_CASE("addLayer never reuses the id of a removed layer", "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto first = project.addLayer(Layer(0, "First", LayerType::Normal));
+    const auto second = project.addLayer(Layer(0, "Second", LayerType::Normal));
+    REQUIRE(project.removeLayer(second));
+
+    const auto third = project.addLayer(Layer(0, "Second", LayerType::Normal));
+
+    CHECK(third != second);
+    CHECK(third != first);
+    CHECK(third > second);
+}
+
+TEST_CASE("The next layer id survives a JSON round trip, so a reloaded project never reuses a removed id",
+          "[core][project]") {
+    Project project = Project::createNew(ProjectSettings{});
+    const auto removed = project.addLayer(Layer(0, "Gone", LayerType::Normal));
+    REQUIRE(project.removeLayer(removed));
+
+    const nlohmann::json json = project;
+    Project restored = json.get<Project>();
+    const auto added = restored.addLayer(Layer(0, "New", LayerType::Normal));
+
+    CHECK(added != removed);
+    CHECK(added > removed);
+}

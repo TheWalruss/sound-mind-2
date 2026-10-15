@@ -56,7 +56,7 @@ add_library(sound-mind-core
     src/loop_engine.cpp
     src/record_engine.cpp
     src/pooling.cpp
-    src/layer_export.cpp
+    src/project_export.cpp
     src/gpu_compute_access.cpp
     src/background_task.cpp
     src/generator.cpp

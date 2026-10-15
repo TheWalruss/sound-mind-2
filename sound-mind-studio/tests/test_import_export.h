@@ -26,7 +26,8 @@ private slots:
     void importImageFilesIntoImportsEachFileIndependentlyWhenNotSequential();
     void importImageFilesIntoAppliesCumulativeTranslationWhenSequential();
     void importImageFilesIntoReturnsZeroWhenNothingWasImported();
-    void exportLayerAudioNowWritesARealFile();
-    void exportLayerAudioNowFailsForAnUnrecognizedExtension();
-    void exportLayerVideoNowWritesARealFile();
+    void exportProjectAudioNowWritesARealFile();
+    void exportProjectAudioNowFailsForAnUnrecognizedExtension();
+    void exportProjectAudioNowFailsWithNothingToExport();
+    void exportProjectVideoNowWritesARealFile();
 };

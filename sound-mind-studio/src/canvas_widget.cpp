@@ -368,12 +368,30 @@ std::optional<sound_mind::codec::RgbImage> CanvasWidget::currentComposite() {
     if (project_ == nullptr) {
         return std::nullopt;
     }
+    auto signature = layerStackSignature();
+    if (signature != lastRenderedSignature_) {
+        compositeCache_.invalidateAll();
+        ++compositeGeneration_;
+    }
     if (lastRenderedGeneration_ == compositeGeneration_) {
         return lastRenderedComposite_;
     }
     lastRenderedComposite_ = renderComposite(*project_, compositeCache_);
     lastRenderedGeneration_ = compositeGeneration_;
+    lastRenderedSignature_ = std::move(signature);
     return lastRenderedComposite_;
+}
+
+CanvasWidget::LayerStackSignature CanvasWidget::layerStackSignature() const {
+    LayerStackSignature signature;
+    if (project_ == nullptr) {
+        return signature;
+    }
+    signature.reserve(project_->layers().size());
+    for (const sound_mind::core::Layer& layer : project_->layers()) {
+        signature.emplace_back(layer.id(), layer.visible(), layer.muted(), layer.content().has_value());
+    }
+    return signature;
 }
 
 void CanvasWidget::invalidateCompositeFrom(std::size_t layerIndex) {

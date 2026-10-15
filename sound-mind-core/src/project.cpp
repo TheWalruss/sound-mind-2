@@ -167,9 +167,11 @@ std::string Project::uniqueLayerName(const std::string& desiredName, std::option
 }
 
 LayerId Project::addLayer(Layer layer) {
-    const auto maxId = std::max_element(
-        layers_.begin(), layers_.end(), [](const Layer& a, const Layer& b) { return a.id() < b.id(); });
-    const LayerId newId = (maxId == layers_.end() ? kBackgroundLayerId : maxId->id()) + 1;
+    LayerId newId = std::max(nextLayerId_, kBackgroundLayerId + 1);
+    for (const Layer& existing : layers_) {
+        newId = std::max(newId, existing.id() + 1);
+    }
+    nextLayerId_ = newId + 1;
 
     layer.setId(newId);
     layer.setName(uniqueLayerName(layer.name()));
@@ -634,6 +636,7 @@ void to_json(nlohmann::json& json, const Project& project) {
     json = nlohmann::json{
         {"settings", project.settings_},
         {"layers", project.layers_},
+        {"nextLayerId", project.nextLayerId_},
         {"operationLog", project.operationLog_},
         {"mindWaves", project.mindWaves_},
         {"mindShots", project.mindShots_},
@@ -655,6 +658,7 @@ void from_json(const nlohmann::json& json, Project& project) {
     for (const auto& layerJson : json.at("layers")) {
         project.layers_.push_back(layerJson.get<Layer>());
     }
+    project.nextLayerId_ = json.value("nextLayerId", LayerId{1});
 
     // Lenient (defaults to empty if absent) - didn't exist before
     // v0.Y.31.1 Installment C1; a project saved before it had no

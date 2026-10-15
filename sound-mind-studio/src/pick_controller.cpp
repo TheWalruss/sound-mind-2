@@ -363,18 +363,7 @@ void PickController::deleteSelection() {
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId newId = log.reserveId();
 
-    std::unique_ptr<sound_mind::core::Operation> tombstone;
-    if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_)) {
-        tombstone = std::make_unique<sound_mind::core::PaintOperation>(
-            newId, pickedLayer_, sound_mind::core::Path{}, paint->config().clone(), pickedOperationId_);
-    } else {
-        // FillOperation/PasteOperation can't reduce to a literal zero-
-        // effect copy of themselves - see this method's own docs.
-        tombstone = std::make_unique<sound_mind::core::FillOperation>(
-            newId, pickedLayer_, pickedOperation_->bounds(), sound_mind::core::silenceGradient(), pickedOperationId_);
-    }
-
-    commitReplacement(std::move(tombstone), tr("Deleted picked object"));
+    commitReplacement(PaintController::makeDeletionTombstone(*pickedOperation_, newId), tr("Deleted picked object"));
     clearSelection();
 }
 

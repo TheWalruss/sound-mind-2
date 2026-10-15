@@ -77,7 +77,7 @@ public:
 
     /**
      * @brief The non-prompting core behind the inspector's "Export..."
-     *        button - the same `exportTopmostLayerAudioNow()`/
+     *        button - the same `exportCompositeAudioNow()`/
      *        `openProjectAt()` split `MainWindow` already establishes
      *        between "show a file dialog" and "do the actual work at a
      *        given path," so this is directly testable without a real

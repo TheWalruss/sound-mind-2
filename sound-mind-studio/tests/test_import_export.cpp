@@ -383,7 +383,7 @@ void ImportExportTest::importImageFilesIntoReturnsZeroWhenNothingWasImported() {
     QVERIFY(!errorMessage.isEmpty());
 }
 
-void ImportExportTest::exportLayerAudioNowWritesARealFile() {
+void ImportExportTest::exportProjectAudioNowWritesARealFile() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-audio-src.wav";
     writeTestWavFileWithFrameCount(wavPath, 4410);  // 0.1s.
     Project project = Project::createNew(smallCanvasProjectSettings());
@@ -391,10 +391,7 @@ void ImportExportTest::exportLayerAudioNowWritesARealFile() {
     std::filesystem::remove(wavPath);
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-audio.flac";
-    // Not project.layers().back() - that's the Equalizer layer; the
-    // snippet just imported sits just below it (addLayer()'s own docs).
-    const bool ok =
-        sound_mind::studio::exportLayerAudioNow(project.layers().at(project.layers().size() - 2), exportPath);
+    const bool ok = sound_mind::studio::exportProjectAudioNow(project, exportPath);
     const bool exists = std::filesystem::exists(exportPath);
     std::filesystem::remove(exportPath);
 
@@ -402,7 +399,7 @@ void ImportExportTest::exportLayerAudioNowWritesARealFile() {
     QVERIFY(exists);
 }
 
-void ImportExportTest::exportLayerAudioNowFailsForAnUnrecognizedExtension() {
+void ImportExportTest::exportProjectAudioNowFailsForAnUnrecognizedExtension() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-audio-bad-src.wav";
     writeTestWavFileWithFrameCount(wavPath, 4410);
     Project project = Project::createNew(smallCanvasProjectSettings());
@@ -410,16 +407,24 @@ void ImportExportTest::exportLayerAudioNowFailsForAnUnrecognizedExtension() {
     std::filesystem::remove(wavPath);
 
     QString errorMessage;
-    // Not project.layers().back() - see exportLayerAudioNowWritesARealFile()'s own comment.
-    const bool ok = sound_mind::studio::exportLayerAudioNow(
-        project.layers().at(project.layers().size() - 2),
-        std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-audio.xyz", &errorMessage);
+    const bool ok = sound_mind::studio::exportProjectAudioNow(
+        project, std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-audio.xyz", &errorMessage);
 
     QVERIFY(!ok);
     QVERIFY(!errorMessage.isEmpty());
 }
 
-void ImportExportTest::exportLayerVideoNowWritesARealFile() {
+void ImportExportTest::exportProjectAudioNowFailsWithNothingToExport() {
+    const Project project = Project::createNew(smallCanvasProjectSettings());
+    QString errorMessage;
+    const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-empty.flac";
+
+    QVERIFY(!sound_mind::studio::exportProjectAudioNow(project, exportPath, &errorMessage));
+    QVERIFY(!errorMessage.isEmpty());
+    QVERIFY(!std::filesystem::exists(exportPath));
+}
+
+void ImportExportTest::exportProjectVideoNowWritesARealFile() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-video-src.wav";
     writeTestWavFileWithFrameCount(wavPath, 4410);
     Project project = Project::createNew(smallCanvasProjectSettings());
@@ -427,9 +432,7 @@ void ImportExportTest::exportLayerVideoNowWritesARealFile() {
     std::filesystem::remove(wavPath);
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-ie-export-video.mp4";
-    // Not project.layers().back() - see exportLayerAudioNowWritesARealFile()'s own comment.
-    const bool ok = sound_mind::studio::exportLayerVideoNow(project.layers().at(project.layers().size() - 2),
-                                                             exportPath, project.settings().canvasWidth);
+    const bool ok = sound_mind::studio::exportProjectVideoNow(project, exportPath);
     const bool exists = std::filesystem::exists(exportPath);
     std::filesystem::remove(exportPath);
 

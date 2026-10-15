@@ -485,31 +485,47 @@ void LayerController::deleteLayer(sound_mind::core::LayerId id) {
         return;
     }
 
-    // Refuse (with an explanatory modal) rather than silently deleting a
-    // layer any active Mind Grain stroke elsewhere in the project reads
-    // its own content from live - see docs/sound-mind-design.md's "Mind
-    // Grains" ordering rule, and mindGrainOperationsBrokenByRemovingLayer()'s
-    // own docs.
+    // Active Mind Grain strokes elsewhere read this layer's content live -
+    // see docs/sound-mind-design.md's "Mind Grains" ordering rule. They go
+    // too, or nothing does.
     const auto broken = sound_mind::core::mindGrainOperationsBrokenByRemovingLayer(*project_, id);
     if (!broken.empty()) {
-        QMessageBox::warning(
-            canvas_, tr("Can't Delete Layer"),
-            tr("Deleting \"%1\" would break %2 Mind Grain stroke(s) painted elsewhere in this project - each one "
-               "reads its own painted content live from this layer, and would lose its source. Remove or repaint "
-               "those strokes first, or choose a different layer to delete.")
-                .arg(QString::fromStdString(layer->name()))
-                .arg(static_cast<int>(broken.size())));
-        return;
+        const QString layerName = QString::fromStdString(layer->name());
+        const bool confirmed = cascadeConfirmation_
+                                   ? cascadeConfirmation_(layerName, static_cast<int>(broken.size()))
+                                   : QMessageBox::question(
+                                         canvas_, tr("Delete Layer"),
+                                         tr("%2 Mind Grain stroke(s) painted on other layers read their content from "
+                                            "\"%1\". Delete those strokes along with the layer?\n\n"
+                                            "To keep everything, cancel and hide the layer instead.")
+                                             .arg(layerName)
+                                             .arg(static_cast<int>(broken.size())),
+                                         QMessageBox::Yes | QMessageBox::Cancel,
+                                         QMessageBox::Cancel) == QMessageBox::Yes;
+        if (!confirmed || !operationDeleter_) {
+            return;
+        }
+        operationDeleter_(broken);
     }
 
     if (project_->removeLayer(id)) {
         thumbnailCache_.erase(id);
         loudnessProfileCache_.erase(id);
+        emit layerRemoved(id);
         emit layersChanged();
         playbackController_->invalidate();
         canvas_->invalidateCompositeAll();  // Removing a layer is structural - see that method's own docs.
         refreshLayersPanel();
     }
+}
+
+void LayerController::setCascadeConfirmation(std::function<bool(const QString&, int)> confirm) {
+    cascadeConfirmation_ = std::move(confirm);
+}
+
+void LayerController::setOperationDeleter(
+    std::function<void(const std::vector<sound_mind::core::OperationId>&)> deleter) {
+    operationDeleter_ = std::move(deleter);
 }
 
 void LayerController::duplicateLayer(sound_mind::core::LayerId id) {

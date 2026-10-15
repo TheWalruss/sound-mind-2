@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <tuple>
 #include <unordered_map>
@@ -14,6 +15,7 @@
 #include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/generator_configuration.h"
 #include "sound_mind/core/layer.h"
+#include "sound_mind/core/operation.h"
 #include "sound_mind/core/project.h"
 
 namespace sound_mind::studio {
@@ -98,10 +100,10 @@ public:
     ///        to reflect it).
     void setProject(sound_mind::core::Project* project);
 
-    /// @brief The topmost *visible* layer with content, if any - the same
-    ///        notion of "the composite" `exportTopmostLayerAudioNow()`/
-    ///        `exportTopmostLayerVideoNow()`/`poolTopmostLayerNow()` all
-    ///        share.
+    /// @brief The topmost *visible* layer with content, if any - what
+    ///        `MainWindow::poolTopmostLayerNow()` resolves to. (Export
+    ///        renders the whole composite instead - see
+    ///        `MainWindow::exportCompositeAudioNow()`.)
     /// @return A mutable pointer to that layer, or `nullptr` if none
     ///         qualifies, or no project is set.
     [[nodiscard]] sound_mind::core::Layer* topmostLayerWithContent();
@@ -311,17 +313,41 @@ public:
     ///         exists, or `newName` is empty.
     bool renameLayerTo(sound_mind::core::LayerId id, const QString& newName);
 
-    /// @brief Deletes the layer with the given id. Refuses (no-op) for a
-    ///        `Background`/`Equalizer` layer, or if no layer with this id
-    ///        exists. Also refuses - showing an explanatory modal instead -
-    ///        if any active Mind Grain stroke elsewhere in the project
-    ///        reads its own content live from this layer (see
-    ///        `sound_mind::core::mindGrainOperationsBrokenByRemovingLayer()`'s
-    ///        own docs); the deletion is cancelled outright, not just
-    ///        warned about. Repaints the canvas and invalidates cached
-    ///        playback audio, then refreshes the Layers Panel, on success.
+    /// @brief Deletes the layer with the given id, and with it all of its
+    ///        content. Refuses (no-op) for a `Background`/`Equalizer`
+    ///        layer, or if no layer with this id exists.
+    ///
+    ///        If active Mind Grain strokes elsewhere in the project read
+    ///        their content live from this layer (see
+    ///        `sound_mind::core::mindGrainOperationsBrokenByRemovingLayer()`),
+    ///        the user is asked first (see setCascadeConfirmation()):
+    ///        delete those strokes too, or cancel. Cancelling leaves
+    ///        everything untouched. Confirming deletes the strokes through
+    ///        setOperationDeleter()'s callback (one undoable step) and then
+    ///        the layer.
+    ///
+    ///        The layer's own paint operations stay in the operation log but
+    ///        can never render again: layer ids are never reused (see
+    ///        `Project::addLayer()`), so nothing can attach to them.
+    ///        On success, emits layerRemoved() and layersChanged(), repaints
+    ///        the canvas, invalidates cached playback audio and refreshes the
+    ///        Layers Panel.
     /// @param id The layer to delete.
     void deleteLayer(sound_mind::core::LayerId id);
+
+    /// @brief Sets how deleteLayer() asks whether to cascade-delete
+    ///        dependent Mind Grain strokes. The default shows a Yes/Cancel
+    ///        `QMessageBox`; tests substitute a callback.
+    /// @param confirm Receives the layer's name and the number of dependent
+    ///        strokes; returns `true` to delete them along with the layer.
+    void setCascadeConfirmation(std::function<bool(const QString& layerName, int dependentCount)> confirm);
+
+    /// @brief Sets the callback deleteLayer() uses to delete dependent
+    ///        strokes - `MainWindow` routes it to
+    ///        `PaintController::deleteOperations()`. Without one, a layer
+    ///        with dependents is never deleted.
+    /// @param deleter Deletes the given operations as one undoable step.
+    void setOperationDeleter(std::function<void(const std::vector<sound_mind::core::OperationId>&)> deleter);
 
     /**
      * @brief Duplicates the layer with the given id - real-world testing
@@ -572,6 +598,12 @@ signals:
     ///        `MainWindow`'s own cue to mark `hasUnsavedChanges()`.
     void layersChanged();
 
+    /// @brief Emitted after deleteLayer() removed a layer, so per-layer
+    ///        state held elsewhere (e.g. `PaintController`'s caches) can be
+    ///        released.
+    /// @param id The removed layer's id.
+    void layerRemoved(sound_mind::core::LayerId id);
+
 private:
     /// @brief The currently selected layer's own index in `project_->
     ///        layers()`'s bottom-to-top order - shared by
@@ -691,6 +723,10 @@ private:
     ///        correctness - a stale entry for a since-deleted id is simply
     ///        never looked up again).
     std::unordered_map<sound_mind::core::LayerId, QImage> thumbnailCache_;
+    /// @brief See setCascadeConfirmation().
+    std::function<bool(const QString&, int)> cascadeConfirmation_;
+    /// @brief See setOperationDeleter().
+    std::function<void(const std::vector<sound_mind::core::OperationId>&)> operationDeleter_;
 
     /// @brief See loudnessProfileFor()'s own docs - discarded per-id the
     ///        same way, same call sites, as thumbnailCache_.

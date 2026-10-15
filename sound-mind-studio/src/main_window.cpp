@@ -50,7 +50,7 @@
 #include "sound_mind/core/gpu_compute_availability.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/layer.h"
-#include "sound_mind/core/layer_export.h"
+#include "sound_mind/core/project_export.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/operation_log.h"
@@ -160,7 +160,7 @@ constexpr std::size_t kResonanceSpectrumSize = 64;
 /// returned, defeating the whole point of showing progress before a slow
 /// operation starts. Export Video is the first exception (real-world
 /// testing pass, 2026-09-20, finding #12, Installment C) - see
-/// exportTopmostLayerVideoAsync()'s own docs for why it doesn't need this
+/// exportCompositeVideoAsync()'s own docs for why it doesn't need this
 /// helper at all: its own status bar message is shown right after actually
 /// starting the background encode, by which point Qt's event loop is about
 /// to run again on its own regardless.
@@ -427,8 +427,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
 
     // Real-world testing pass, 2026-09-20, finding #12 (a real, non-blocking
     // cancel affordance for long operations), Installments C (video)/E
-    // (audio) - see exportTopmostLayerVideoAsync()'s/
-    // exportTopmostLayerAudioAsync()'s own docs. Hidden until an export is
+    // (audio) - see exportCompositeVideoAsync()'s/
+    // exportCompositeAudioAsync()'s own docs. Hidden until an export is
     // actually running - see pollExportProgress().
     exportCancelButton_ = new QPushButton(tr("✕"));  // "✕".
     exportCancelButton_->setObjectName(QStringLiteral("exportCancelButton"));
@@ -724,6 +724,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         hasUnsavedChanges_ = true;
         refreshHistoryPanel();
         refreshComposerPanel();
+    });
+    connect(layerController_, &LayerController::layerRemoved, this,
+            [this](sound_mind::core::LayerId id) { toolPaletteController_->forgetLayer(id); });
+    layerController_->setOperationDeleter([this](const std::vector<sound_mind::core::OperationId>& ids) {
+        toolPaletteController_->deleteOperations(ids, tr("Deleted dependent Mind Grain strokes"));
     });
 
     // The MindWave library itself - add/remove/rename/edit - and keeping
@@ -2465,7 +2470,7 @@ bool MainWindow::finishMidiImport(const std::vector<sound_mind::core::LayerId>& 
         toolPaletteController_->rebuildLayerContent(layerId);
     }
 
-    canvas_->update();
+    canvas_->invalidateCompositeAll();
     playbackController_->invalidate();
     hasUnsavedChanges_ = true;
     layerController_->refreshLayersPanel();
@@ -2527,7 +2532,7 @@ bool MainWindow::importAudioSnippets(const std::filesystem::path& path, const st
         return false;
     }
 
-    canvas_->update();
+    canvas_->invalidateCompositeAll();
     // The topmost layer just changed - the next startPlayback() should
     // pick up the newly imported one instead of whatever was loaded
     // before, rather than silently keep playing stale content.
@@ -2607,7 +2612,7 @@ void MainWindow::pollImportProgress() {
                 project_->addLayer(std::move(layer));
             }
             importedLayers_.clear();
-            canvas_->update();
+            canvas_->invalidateCompositeAll();
             playbackController_->invalidate();
             hasUnsavedChanges_ = true;
             layerController_->refreshLayersPanel();
@@ -2650,7 +2655,7 @@ bool MainWindow::importImageFile(const std::filesystem::path& path, ImageScalePi
         return false;
     }
 
-    canvas_->update();
+    canvas_->invalidateCompositeAll();
     playbackController_->invalidate();
     hasUnsavedChanges_ = true;
     layerController_->refreshLayersPanel();
@@ -2676,7 +2681,7 @@ bool MainWindow::importImageFiles(const std::vector<std::filesystem::path>& path
         return false;
     }
 
-    canvas_->update();
+    canvas_->invalidateCompositeAll();
     playbackController_->invalidate();
     hasUnsavedChanges_ = true;
     layerController_->refreshLayersPanel();
@@ -2697,7 +2702,7 @@ void MainWindow::exportAudio() {
                                tr("Unrecognized audio file extension - use .flac, .ogg, or .mp3."));
         return;
     }
-    exportTopmostLayerAudioAsync(path, *format);
+    exportCompositeAudioAsync(path, *format);
 }
 
 void MainWindow::exportVideo() {
@@ -2706,7 +2711,7 @@ void MainWindow::exportVideo() {
     if (fileName.isEmpty()) {
         return;
     }
-    exportTopmostLayerVideoAsync(std::filesystem::path(fileName.toStdString()));
+    exportCompositeVideoAsync(std::filesystem::path(fileName.toStdString()));
 }
 
 void MainWindow::exportMacroVideo() {
@@ -2718,17 +2723,15 @@ void MainWindow::exportMacroVideo() {
     exportMacroVideoAsync(std::filesystem::path(fileName.toStdString()));
 }
 
-bool MainWindow::exportTopmostLayerAudioNow(const std::filesystem::path& path, QString* errorMessage) {
-    sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
-    if (layer == nullptr) {
+bool MainWindow::exportCompositeAudioNow(const std::filesystem::path& path, QString* errorMessage) {
+    if (!project_.has_value()) {
         if (errorMessage != nullptr) {
-            *errorMessage = tr("No layer with content to export.");
+            *errorMessage = tr("No project is open.");
         }
         return false;
     }
-
     showBusyStatus(statusBar(), tr("Exporting audio..."));
-    if (!sound_mind::studio::exportLayerAudioNow(*layer, path, errorMessage)) {
+    if (!sound_mind::studio::exportProjectAudioNow(*project_, path, errorMessage)) {
         statusBar()->clearMessage();
         return false;
     }
@@ -2736,17 +2739,15 @@ bool MainWindow::exportTopmostLayerAudioNow(const std::filesystem::path& path, Q
     return true;
 }
 
-bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, QString* errorMessage) {
-    sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
-    if (layer == nullptr) {
+bool MainWindow::exportCompositeVideoNow(const std::filesystem::path& path, QString* errorMessage) {
+    if (!project_.has_value()) {
         if (errorMessage != nullptr) {
-            *errorMessage = tr("No layer with content to export.");
+            *errorMessage = tr("No project is open.");
         }
         return false;
     }
-
     showBusyStatus(statusBar(), tr("Exporting video..."));
-    if (!sound_mind::studio::exportLayerVideoNow(*layer, path, project_->settings().canvasWidth, errorMessage)) {
+    if (!sound_mind::studio::exportProjectVideoNow(*project_, path, errorMessage)) {
         statusBar()->clearMessage();
         return false;
     }
@@ -2754,22 +2755,25 @@ bool MainWindow::exportTopmostLayerVideoNow(const std::filesystem::path& path, Q
     return true;
 }
 
-void MainWindow::exportTopmostLayerVideoAsync(const std::filesystem::path& path) {
+bool MainWindow::hasExportableContent() const {
+    if (!project_.has_value()) {
+        return false;
+    }
+    const auto& layers = project_->layers();
+    return std::any_of(layers.begin(), layers.end(), [](const sound_mind::core::Layer& layer) {
+        return layer.visible() && !layer.muted() && layer.content().has_value() &&
+               !sound_mind::core::isFilterLayerType(layer.type());
+    });
+}
+
+void MainWindow::exportCompositeVideoAsync(const std::filesystem::path& path) {
     if (isExportRunning()) {
         statusBar()->showMessage(tr("Already exporting - wait for it to finish, or cancel it, first."), 5000);
         return;
     }
-
-    sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
-    const auto audio = layer != nullptr ? sound_mind::core::decodeLayerForExport(*layer) : std::nullopt;
-    const auto canvas =
-        audio.has_value() ? sound_mind::core::renderLayer(*layer, project_->settings().canvasWidth) : std::nullopt;
-    if (!audio.has_value() || !canvas.has_value()) {
-        // Both decodeLayerForExport()/renderLayer() failing after a
-        // non-null layer would be the same "shouldn't happen given both
-        // read from the same layer state" case exportLayerVideo()'s own
-        // docs already note - treated identically here.
-        QMessageBox::critical(this, tr("Export Video Failed"), tr("No layer with content to export."));
+    if (!hasExportableContent()) {
+        QMessageBox::critical(this, tr("Export Video Failed"),
+                              tr("Nothing to export - no visible, unmuted layer has content."));
         return;
     }
 
@@ -2778,16 +2782,19 @@ void MainWindow::exportTopmostLayerVideoAsync(const std::filesystem::path& path)
     exportOutcome_ = ExportOutcome::Success;
     exportErrorMessage_.clear();
 
-    // audio/canvas captured by value: independent, owned copies the
-    // background thread can safely touch with no synchronization needed
-    // against project_/layer, which stay exclusively the UI thread's own -
-    // see this method's own docs.
+    // project_ copied by value - the background thread composites its own
+    // independent copy, so later edits on the UI thread can't race it.
     exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, audio = *audio, canvas = *canvas](sound_mind::core::CancellationToken& token) {
+        [this, path, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
+            const auto shouldCancel = [&token]() { return token.cancellationRequested(); };
             try {
-                sound_mind::codec::exportVideo(path, canvas, audio, /*frameRate=*/30,
-                                                [&token]() { return token.cancellationRequested(); });
+                if (!sound_mind::core::exportProjectVideo(projectCopy, path, /*frameRate=*/30, shouldCancel)) {
+                    exportOutcome_ = ExportOutcome::Failed;
+                    exportErrorMessage_ = tr("Nothing to export - no visible, unmuted layer has content.");
+                }
             } catch (const sound_mind::codec::ExportCancelled&) {
+                exportOutcome_ = ExportOutcome::Cancelled;
+            } catch (const sound_mind::core::CompositeCancelled&) {
                 exportOutcome_ = ExportOutcome::Cancelled;
             } catch (const std::exception& e) {
                 exportOutcome_ = ExportOutcome::Failed;
@@ -2801,17 +2808,15 @@ void MainWindow::exportTopmostLayerVideoAsync(const std::filesystem::path& path)
     exportProgressTimer_->start();
 }
 
-void MainWindow::exportTopmostLayerAudioAsync(const std::filesystem::path& path,
-                                               sound_mind::codec::CompressedAudioFormat format) {
+void MainWindow::exportCompositeAudioAsync(const std::filesystem::path& path,
+                                           sound_mind::codec::CompressedAudioFormat format) {
     if (isExportRunning()) {
         statusBar()->showMessage(tr("Already exporting - wait for it to finish, or cancel it, first."), 5000);
         return;
     }
-
-    sound_mind::core::Layer* layer = layerController_->topmostLayerWithContent();
-    const auto audio = layer != nullptr ? sound_mind::core::decodeLayerForExport(*layer) : std::nullopt;
-    if (!audio.has_value()) {
-        QMessageBox::critical(this, tr("Export Audio Failed"), tr("No layer with content to export."));
+    if (!hasExportableContent()) {
+        QMessageBox::critical(this, tr("Export Audio Failed"),
+                              tr("Nothing to export - no visible, unmuted layer has content."));
         return;
     }
 
@@ -2820,15 +2825,18 @@ void MainWindow::exportTopmostLayerAudioAsync(const std::filesystem::path& path,
     exportOutcome_ = ExportOutcome::Success;
     exportErrorMessage_.clear();
 
-    // audio captured by value - see exportTopmostLayerVideoAsync()'s own
-    // docs for why this is what makes the background thread safe against
-    // concurrent project edits.
+    // project_ copied by value - see exportCompositeVideoAsync().
     exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, format, audio = *audio](sound_mind::core::CancellationToken& token) {
+        [this, path, format, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
+            const auto shouldCancel = [&token]() { return token.cancellationRequested(); };
             try {
-                sound_mind::codec::exportCompressedAudio(path, audio, format,
-                                                          [&token]() { return token.cancellationRequested(); });
+                if (!sound_mind::core::exportProjectAudio(projectCopy, path, format, shouldCancel)) {
+                    exportOutcome_ = ExportOutcome::Failed;
+                    exportErrorMessage_ = tr("Nothing to export - no visible, unmuted layer has content.");
+                }
             } catch (const sound_mind::codec::ExportCancelled&) {
+                exportOutcome_ = ExportOutcome::Cancelled;
+            } catch (const sound_mind::core::CompositeCancelled&) {
                 exportOutcome_ = ExportOutcome::Cancelled;
             } catch (const std::exception& e) {
                 exportOutcome_ = ExportOutcome::Failed;
@@ -2965,7 +2973,7 @@ void MainWindow::exportMacroVideoAsync(const std::filesystem::path& path) {
 
     // segments/concatenatedAudio captured by value - independent, owned
     // copies the background thread can safely touch, the same reasoning
-    // exportTopmostLayerVideoAsync()'s own docs give (nothing here
+    // exportCompositeVideoAsync()'s own docs give (nothing here
     // touches project_/undoStack_ again once this point is reached).
     exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
         [this, path, segments, audio = concatenatedAudio](sound_mind::core::CancellationToken& token) {
@@ -4283,7 +4291,7 @@ void MainWindow::setPlaybackVolume(int percent) {
 void MainWindow::setHardwareAccelerationEnabled(bool enabled) {
     settings_.setValue(QStringLiteral("hardwareAccelerationEnabled"), enabled);
     sound_mind::core::setHardwareAccelerationEnabled(enabled);
-    canvas_->update();
+    canvas_->invalidateCompositeAll();
 }
 
 void MainWindow::setSoundFlowerModeEnabled(bool enabled) {
@@ -4378,7 +4386,7 @@ void MainWindow::toggleLoopMode() {
     }
     hasUnsavedChanges_ = true;
     layerController_->refreshLayersPanel();
-    canvas_->update();
+    canvas_->invalidateCompositeAll();
 
     loopEngine_->start();
     loopPanel_->setRunning(true);
@@ -4424,7 +4432,9 @@ void MainWindow::updateLoopLayer() {
     }
     if (image.frameCount > 0) {
         layer->setContent(std::move(image));
-        canvas_->update();
+        if (const auto index = project_->layerIndexById(*loopLayerId_)) {
+            canvas_->invalidateCompositeFrom(*index);
+        }
     }
 
     // The confirmed scope's "visible loop-delay indicator" - see
@@ -4497,7 +4507,7 @@ void MainWindow::toggleRecording() {
             sound_mind::core::Layer layer(0, tr("Recording").toStdString(), sound_mind::core::LayerType::Normal);
             layer.setContent(content);
             project_->addLayer(std::move(layer));
-            canvas_->update();
+            canvas_->invalidateCompositeAll();
             playbackController_->invalidate();
             hasUnsavedChanges_ = true;
             layerController_->refreshLayersPanel();
@@ -4849,7 +4859,7 @@ bool MainWindow::poolLayerNow(sound_mind::core::LayerId id, QString* errorMessag
             }
             return false;
         }
-        canvas_->update();
+        canvas_->invalidateCompositeAll();
         // The layer's content was just replaced with a fresh, pool-derived
         // Stream copy - the next startPlayback() should pick that up
         // rather than continue playing whatever was loaded before.
@@ -4964,7 +4974,7 @@ void MainWindow::pollPoolProgress() {
             if (layer != nullptr && pooledContent_.has_value()) {
                 layer->setPoolContent(std::move(pooledContent_->poolImage));
                 layer->setContent(std::move(pooledContent_->streamContent));
-                canvas_->update();
+                canvas_->invalidateCompositeAll();
                 // The layer's content was just replaced with a fresh,
                 // pool-derived Stream copy - the next startPlayback()
                 // should pick that up rather than continue playing

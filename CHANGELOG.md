@@ -6,7 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
-## [0.1.30.1] - 2026-10-15
+## [0.1.31.1] - 2026-10-15
+
+Pre-Beta Plan milestone `v0.Y.71.1`: correctness bugs from manual testing.
+
+### Fixed
+
+- **Deleting a layer deletes its content.** Previously, deleting a layer and then adding a new one could make the deleted layer's paint objects reappear on the new layer. Layer ids are now never reused.
+- **Export Audio and Export Video export the whole mix,** not just the topmost layer: every visible, unmuted layer, with filters applied - exactly what Playback plays.
+- **The canvas refreshes after importing audio, images or MIDI,** after Pooling, and while Recording or Looping. Previously it could keep showing the old picture until some other edit.
+
+### Changed
+
+- **Deleting a layer that Mind Grain strokes read from now offers to delete those strokes too,** instead of refusing. Choose Yes to delete the layer and the dependent strokes, or Cancel to keep everything. To keep the layer's content but get it out of the way, hide it instead.
+- Export always uses the composite's Stream-mode audio now, even for Pooled layers.
+
 
 Pre-Beta Plan milestone `v0.Y.70.1`: test-suite and CI health.
 

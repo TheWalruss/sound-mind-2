@@ -11,7 +11,7 @@
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/polar_projection.h"
 #include "sound_mind/codec/stream_codec.h"
-#include "sound_mind/core/layer_export.h"
+#include "sound_mind/core/project_export.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/import_helpers.h"
 #include "sound_mind/studio/qt_image_conversion.h"
@@ -286,8 +286,8 @@ int importImageFilesInto(sound_mind::core::Project& project, const std::vector<s
     return importedCount;
 }
 
-bool exportLayerAudioNow(const sound_mind::core::Layer& layer, const std::filesystem::path& path,
-                          QString* errorMessage) {
+bool exportProjectAudioNow(const sound_mind::core::Project& project, const std::filesystem::path& path,
+                           QString* errorMessage) {
     const auto format = audioFormatFromExtension(path);
     if (!format.has_value()) {
         if (errorMessage != nullptr) {
@@ -297,7 +297,13 @@ bool exportLayerAudioNow(const sound_mind::core::Layer& layer, const std::filesy
     }
 
     try {
-        return sound_mind::core::exportLayerAudio(layer, path, *format);
+        if (!sound_mind::core::exportProjectAudio(project, path, *format)) {
+            if (errorMessage != nullptr) {
+                *errorMessage = tr("Nothing to export - no visible, unmuted layer has content.");
+            }
+            return false;
+        }
+        return true;
     } catch (const std::exception& e) {
         if (errorMessage != nullptr) {
             *errorMessage = QString::fromStdString(e.what());
@@ -306,10 +312,16 @@ bool exportLayerAudioNow(const sound_mind::core::Layer& layer, const std::filesy
     }
 }
 
-bool exportLayerVideoNow(const sound_mind::core::Layer& layer, const std::filesystem::path& path,
-                          std::uint32_t canvasWidth, QString* errorMessage) {
+bool exportProjectVideoNow(const sound_mind::core::Project& project, const std::filesystem::path& path,
+                           QString* errorMessage) {
     try {
-        return sound_mind::core::exportLayerVideo(layer, path, canvasWidth);
+        if (!sound_mind::core::exportProjectVideo(project, path)) {
+            if (errorMessage != nullptr) {
+                *errorMessage = tr("Nothing to export - no visible, unmuted layer has content.");
+            }
+            return false;
+        }
+        return true;
     } catch (const std::exception& e) {
         if (errorMessage != nullptr) {
             *errorMessage = QString::fromStdString(e.what());

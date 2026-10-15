@@ -47,7 +47,7 @@ public:
  * Free functions, not a class - unlike `PlaybackController`, there's no
  * persistent engine or timer to own here, just project-mutating logic
  * that needs a `Project&`/`Layer` to work against, the same shape
- * `sound-mind-core`'s own `layer_export.h` already uses one level down.
+ * `sound-mind-core`'s own `project_export.h` already uses one level down.
  * Each function does the actual read/encode/decode/write work and mutates
  * `project` directly, but never touches UI: no status bar messages, no
  * `canvas_->update()`, no `hasUnsavedChanges_` - `MainWindow`'s own
@@ -248,38 +248,36 @@ public:
                                         std::optional<PolarImportParams> polarParams = std::nullopt);
 
 /**
- * @brief Exports `layer`'s audio to `path` (see
- *        `sound_mind::core::exportLayerAudio()` - Pool content when
- *        available, else a Stream-mode bounce).
+ * @brief Exports the whole project's audio to `path` - the full composite
+ *        Playback hears (see `sound_mind::core::exportProjectAudio()`).
  *
  * The compressed format (Flac/Ogg/Mp3) is inferred from `path`'s own
  * extension.
  *
- * @param layer The layer to export.
+ * @param project The project to export.
  * @param path Destination path; its extension selects the format.
  * @param errorMessage If non-null and this returns `false`, set to a
  *        human-readable description of what went wrong.
  * @return `true` on success; `false` if the extension didn't match a
- *         supported format, or the underlying codec export failed.
+ *         supported format, no layer contributes anything, or the
+ *         underlying export failed.
  */
-[[nodiscard]] bool exportLayerAudioNow(const sound_mind::core::Layer& layer, const std::filesystem::path& path,
-                                        QString* errorMessage = nullptr);
+[[nodiscard]] bool exportProjectAudioNow(const sound_mind::core::Project& project, const std::filesystem::path& path,
+                                          QString* errorMessage = nullptr);
 
 /**
- * @brief Exports `layer` as an MP4 video at `path` (see
- *        `sound_mind::core::exportLayerVideo()`): its rendered canvas
- *        animated with a playhead synced to its audio.
+ * @brief Exports the whole project as an MP4 video at `path` - the full
+ *        composite canvas animated with a playhead synced to the composite
+ *        audio (see `sound_mind::core::exportProjectVideo()`).
  *
- * @param layer The layer to export.
+ * @param project The project to export.
  * @param path Destination path.
- * @param canvasWidth The project's canvas width - passed through to
- *        `sound_mind::core::renderLayer()` via `exportLayerVideo()`.
  * @param errorMessage If non-null and this returns `false`, set to a
  *        human-readable description of what went wrong.
- * @return `true` on success; `false` if the underlying codec export
- *         failed.
+ * @return `true` on success; `false` if no layer contributes anything, or
+ *         the underlying export failed.
  */
-[[nodiscard]] bool exportLayerVideoNow(const sound_mind::core::Layer& layer, const std::filesystem::path& path,
-                                        std::uint32_t canvasWidth, QString* errorMessage = nullptr);
+[[nodiscard]] bool exportProjectVideoNow(const sound_mind::core::Project& project, const std::filesystem::path& path,
+                                          QString* errorMessage = nullptr);
 
 }  // namespace sound_mind::studio

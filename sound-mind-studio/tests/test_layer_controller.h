@@ -54,4 +54,7 @@ private slots:
     void refreshLayersPanelShowsAnAveragePeakLoudnessLabelForALayerWithContent();
     void updateLoudnessDisplaysShowsALivePositionValue();
     void resetLoudnessDisplaysToStoppedValueRestoresTheAveragePeakText();
+    void deleteLayerEmitsLayerRemoved();
+    void deleteLayerWithMindGrainDependentsDeletesThemTooWhenConfirmed();
+    void deleteLayerWithMindGrainDependentsDoesNothingWhenCancelled();
 };

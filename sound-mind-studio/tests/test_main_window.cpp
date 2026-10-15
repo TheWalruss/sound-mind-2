@@ -765,7 +765,7 @@ void MainWindowTest::startPlaybackRunsCompositeInTheBackgroundAndShowsTheCancelB
     QVERIFY(window.isCompositingForPlayback());
     QVERIFY(!cancelButton->isHidden());
 
-    // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
+    // See exportCompositeVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isCompositingForPlayback().
     QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
@@ -1054,7 +1054,7 @@ void MainWindowTest::poolTopmostLayerAsyncRunsInTheBackgroundAndShowsTheCancelBu
     QVERIFY(window.isPoolRunning());
     QVERIFY(!cancelButton->isHidden());
 
-    // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
+    // See exportCompositeVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isPoolRunning().
     QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
@@ -1176,16 +1176,16 @@ void MainWindowTest::newProjectRefusesWhileAPoolIsRunning() {
     QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 }
 
-void MainWindowTest::exportTopmostLayerAudioNowFailsGracefullyWithNoContent() {
+void MainWindowTest::exportCompositeAudioNowFailsGracefullyWithNoContent() {
     // A fresh project's Background/Equalizer layers have no content yet.
     TestMainWindow window;
     createFreshTestProject(window);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export.flac";
-    QVERIFY(!window.exportTopmostLayerAudioNow(path));
+    QVERIFY(!window.exportCompositeAudioNow(path));
     QVERIFY(!QFile::exists(QString::fromStdString(path.string())));
 }
 
-void MainWindowTest::exportTopmostLayerAudioNowExportsAnImportedLayer() {
+void MainWindowTest::exportCompositeAudioNowExportsAnImportedLayer() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-audio.wav";
     writeTestWavFile(wavPath);
 
@@ -1195,14 +1195,14 @@ void MainWindowTest::exportTopmostLayerAudioNowExportsAnImportedLayer() {
     std::filesystem::remove(wavPath);
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export.flac";
-    const bool ok = window.exportTopmostLayerAudioNow(exportPath);
+    const bool ok = window.exportCompositeAudioNow(exportPath);
 
     QVERIFY(ok);
     QVERIFY(QFile::exists(QString::fromStdString(exportPath.string())));
     std::filesystem::remove(exportPath);
 }
 
-void MainWindowTest::exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension() {
+void MainWindowTest::exportCompositeAudioNowFailsForAnUnrecognizedExtension() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-audio2.wav";
     writeTestWavFile(wavPath);
 
@@ -1213,20 +1213,20 @@ void MainWindowTest::exportTopmostLayerAudioNowFailsForAnUnrecognizedExtension()
 
     QString errorMessage;
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export.xyz";
-    QVERIFY(!window.exportTopmostLayerAudioNow(exportPath, &errorMessage));
+    QVERIFY(!window.exportCompositeAudioNow(exportPath, &errorMessage));
     QVERIFY(!errorMessage.isEmpty());
 }
 
-void MainWindowTest::exportTopmostLayerVideoNowFailsGracefullyWithNoContent() {
+void MainWindowTest::exportCompositeVideoNowFailsGracefullyWithNoContent() {
     // A fresh project's Background/Equalizer layers have no content yet.
     TestMainWindow window;
     createFreshTestProject(window);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-export.mp4";
-    QVERIFY(!window.exportTopmostLayerVideoNow(path));
+    QVERIFY(!window.exportCompositeVideoNow(path));
     QVERIFY(!QFile::exists(QString::fromStdString(path.string())));
 }
 
-void MainWindowTest::exportTopmostLayerVideoNowExportsAnImportedLayer() {
+void MainWindowTest::exportCompositeVideoNowExportsAnImportedLayer() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-video.wav";
     writeTestWavFile(wavPath);
 
@@ -1243,14 +1243,14 @@ void MainWindowTest::exportTopmostLayerVideoNowExportsAnImportedLayer() {
     std::filesystem::remove(wavPath);
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export.mp4";
-    const bool ok = window.exportTopmostLayerVideoNow(exportPath);
+    const bool ok = window.exportCompositeVideoNow(exportPath);
 
     QVERIFY(ok);
     QVERIFY(QFile::exists(QString::fromStdString(exportPath.string())));
     std::filesystem::remove(exportPath);
 }
 
-void MainWindowTest::exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton() {
+void MainWindowTest::exportCompositeVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton() {
     // Real-world testing pass, 2026-09-20, finding #12 ("a real,
     // non-blocking cancel affordance for long operations"), Installment C.
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-async.wav";
@@ -1267,7 +1267,7 @@ void MainWindowTest::exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheC
     QVERIFY(cancelButton->isHidden());
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-async.mp4";
-    window.exportTopmostLayerVideoAsync(exportPath);
+    window.exportCompositeVideoAsync(exportPath);
 
     // Genuinely still running, not already finished - a real background
     // thread, not a disguised synchronous call.
@@ -1283,7 +1283,7 @@ void MainWindowTest::exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheC
     std::filesystem::remove(exportPath);
 }
 
-void MainWindowTest::exportTopmostLayerVideoAsyncCompletesSuccessfullyAndHidesTheCancelButton() {
+void MainWindowTest::exportCompositeVideoAsyncCompletesSuccessfullyAndHidesTheCancelButton() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-async-success.wav";
     writeTestWavFile(wavPath);
 
@@ -1297,8 +1297,8 @@ void MainWindowTest::exportTopmostLayerVideoAsyncCompletesSuccessfullyAndHidesTh
     QVERIFY(cancelButton != nullptr);
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-async-success.mp4";
-    window.exportTopmostLayerVideoAsync(exportPath);
-    // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
+    window.exportCompositeVideoAsync(exportPath);
+    // See exportCompositeVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isExportRunning().
     QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
@@ -1328,11 +1328,11 @@ void MainWindowTest::cancelVideoExportStopsItAndDeletesThePartialFile() {
     QVERIFY(cancelButton != nullptr);
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-cancel.mp4";
-    window.exportTopmostLayerVideoAsync(exportPath);
+    window.exportCompositeVideoAsync(exportPath);
     QVERIFY(window.isExportRunning());
 
     window.cancelExport();
-    // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
+    // See exportCompositeVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isExportRunning() - pollExportProgress()'s own file
     // deletion/status message below only happen once that poll actually
@@ -1343,7 +1343,7 @@ void MainWindowTest::cancelVideoExportStopsItAndDeletesThePartialFile() {
     QCOMPARE(window.statusBar()->currentMessage(), QStringLiteral("Video export cancelled."));
 }
 
-void MainWindowTest::exportTopmostLayerVideoAsyncDoesNothingWhileAlreadyRunning() {
+void MainWindowTest::exportCompositeVideoAsyncDoesNothingWhileAlreadyRunning() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-already-running.wav";
     writeTestWavFileWithFrameCount(wavPath, 441000, 44100);  // 10 seconds - stays running for this whole test.
 
@@ -1359,28 +1359,28 @@ void MainWindowTest::exportTopmostLayerVideoAsyncDoesNothingWhileAlreadyRunning(
 
     const auto firstPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-first.mp4";
     const auto secondPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-second.mp4";
-    window.exportTopmostLayerVideoAsync(firstPath);
+    window.exportCompositeVideoAsync(firstPath);
     QVERIFY(window.isExportRunning());
 
     // A second call while the first is still running must not destroy (and
     // therefore block on joining) the still-running task - see
-    // exportTopmostLayerVideoAsync()'s own docs.
-    window.exportTopmostLayerVideoAsync(secondPath);
+    // exportCompositeVideoAsync()'s own docs.
+    window.exportCompositeVideoAsync(secondPath);
     QVERIFY(window.isExportRunning());
     QVERIFY(!QFile::exists(QString::fromStdString(secondPath.string())));
 
     window.cancelExport();
-    // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
+    // See exportCompositeVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isExportRunning().
     QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
     std::filesystem::remove(firstPath);
 }
 
-void MainWindowTest::exportTopmostLayerAudioAsyncCompletesSuccessfullyAndHidesTheCancelButton() {
+void MainWindowTest::exportCompositeAudioAsyncCompletesSuccessfullyAndHidesTheCancelButton() {
     // Real-world testing pass, 2026-09-20, finding #12 ("a real,
     // non-blocking cancel affordance for long operations"), Installment E -
-    // exportTopmostLayerAudioAsync() mirrors exportTopmostLayerVideoAsync()'s
+    // exportCompositeAudioAsync() mirrors exportCompositeVideoAsync()'s
     // own shape exactly (see its own tests above), so this only re-checks
     // the pieces genuinely specific to audio: the format parameter actually
     // reaches the encoder, and the status bar message says "audio".
@@ -1397,7 +1397,7 @@ void MainWindowTest::exportTopmostLayerAudioAsyncCompletesSuccessfullyAndHidesTh
     QVERIFY(cancelButton != nullptr);
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-audio-async.flac";
-    window.exportTopmostLayerAudioAsync(exportPath, CompressedAudioFormat::Flac);
+    window.exportCompositeAudioAsync(exportPath, CompressedAudioFormat::Flac);
     QVERIFY(window.isExportRunning());
     QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);
 
@@ -1426,7 +1426,7 @@ void MainWindowTest::cancelAudioExportStopsItAndDeletesThePartialFile() {
     QVERIFY(cancelButton != nullptr);
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-audio-cancel.flac";
-    window.exportTopmostLayerAudioAsync(exportPath, CompressedAudioFormat::Flac);
+    window.exportCompositeAudioAsync(exportPath, CompressedAudioFormat::Flac);
     QVERIFY(window.isExportRunning());
 
     window.cancelExport();
@@ -1436,9 +1436,9 @@ void MainWindowTest::cancelAudioExportStopsItAndDeletesThePartialFile() {
     QCOMPARE(window.statusBar()->currentMessage(), QStringLiteral("Audio export cancelled."));
 }
 
-void MainWindowTest::exportTopmostLayerAudioAsyncDoesNothingWhileAVideoExportIsRunning() {
+void MainWindowTest::exportCompositeAudioAsyncDoesNothingWhileAVideoExportIsRunning() {
     // Confirms video/audio async export genuinely share one slot (see
-    // exportTopmostLayerAudioAsync()'s own docs), not just that each
+    // exportCompositeAudioAsync()'s own docs), not just that each
     // individually refuses a second call of its own same kind.
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-mixed-kind.wav";
     writeTestWavFileWithFrameCount(wavPath, 441000, 44100);  // 10 seconds - stays running for this whole test.
@@ -1454,10 +1454,10 @@ void MainWindowTest::exportTopmostLayerAudioAsyncDoesNothingWhileAVideoExportIsR
 
     const auto videoPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-mixed-kind.mp4";
     const auto audioPath = std::filesystem::temp_directory_path() / "sound-mind-test-export-mixed-kind.flac";
-    window.exportTopmostLayerVideoAsync(videoPath);
+    window.exportCompositeVideoAsync(videoPath);
     QVERIFY(window.isExportRunning());
 
-    window.exportTopmostLayerAudioAsync(audioPath, CompressedAudioFormat::Flac);
+    window.exportCompositeAudioAsync(audioPath, CompressedAudioFormat::Flac);
     QVERIFY(window.isExportRunning());
     QVERIFY(!QFile::exists(QString::fromStdString(audioPath.string())));
 
@@ -1505,7 +1505,7 @@ void MainWindowTest::poolTopmostLayerNowShowsProgressThenCompletionInTheStatusBa
     QFile::remove(poolPngPath);
 }
 
-void MainWindowTest::exportTopmostLayerAudioNowShowsProgressThenCompletionInTheStatusBar() {
+void MainWindowTest::exportCompositeAudioNowShowsProgressThenCompletionInTheStatusBar() {
     const auto wavPath = std::filesystem::temp_directory_path() / "sound-mind-test-status-export.wav";
     writeTestWavFile(wavPath);
 
@@ -1516,7 +1516,7 @@ void MainWindowTest::exportTopmostLayerAudioNowShowsProgressThenCompletionInTheS
 
     const auto exportPath = std::filesystem::temp_directory_path() / "sound-mind-test-status-export.flac";
     QSignalSpy spy(window.statusBar(), &QStatusBar::messageChanged);
-    QVERIFY(window.exportTopmostLayerAudioNow(exportPath));
+    QVERIFY(window.exportCompositeAudioNow(exportPath));
     std::filesystem::remove(exportPath);
 
     QVERIFY(spy.count() >= 2);
@@ -1525,7 +1525,7 @@ void MainWindowTest::exportTopmostLayerAudioNowShowsProgressThenCompletionInTheS
 
 void MainWindowTest::aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMessage() {
     // No layer with content to export - fails, and shows a modal in the
-    // interactive path (exportAudio()), but exportTopmostLayerAudioNow()
+    // interactive path (exportAudio()), but exportCompositeAudioNow()
     // itself never shows dialogs (see its docs) - it should still leave the
     // status bar clean rather than stuck on an "Exporting..." message that
     // never actually completed.
@@ -1533,7 +1533,7 @@ void MainWindowTest::aFailedOperationClearsTheStatusBarRatherThanLeavingAStaleMe
     createFreshTestProject(window);
     const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-status-fail.flac";
 
-    QVERIFY(!window.exportTopmostLayerAudioNow(path));
+    QVERIFY(!window.exportCompositeAudioNow(path));
     QVERIFY(window.statusBar()->currentMessage().isEmpty());
 }
 
@@ -2871,7 +2871,7 @@ void MainWindowTest::importAudioSnippetsAsyncRunsInTheBackgroundAndShowsTheCance
     QVERIFY(window.isImportRunning());
     QVERIFY(!cancelButton->isHidden());
 
-    // See exportTopmostLayerVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
+    // See exportCompositeVideoAsyncRunsInTheBackgroundAndShowsTheCancelButton()'s
     // own comment on why this waits for the cancel button itself, not just
     // isImportRunning().
     QTRY_VERIFY_WITH_TIMEOUT(cancelButton->isHidden(), 120000);

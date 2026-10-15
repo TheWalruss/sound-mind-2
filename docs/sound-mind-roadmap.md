@@ -1195,7 +1195,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 - **`sound-mind-studio-tests` exit code.** It exits non-zero because of `MainWindowTest` (known issue). Also, the GUI-subsystem exe writes no QTest output when piped, which is why classes currently have to be run in isolation. Fix both so one run gives a trustworthy pass/fail.
 - **The GitHub CI Test-step failures**, not yet investigated.
 
-#### `v0.Y.71.1` - Correctness bugs (M)
+#### ✅ `v0.Y.71.1` - Correctness bugs (M) - settled in `v0.1.31.1`, see architecture Decision #230
 
 - **Deleting a layer leaves its content behind.**
   - *Root cause, confirmed:* `Project::addLayer()` allocates `max(existing id) + 1`, so deleting the newest layer and adding another reuses its `LayerId`. Anything still keyed by that id (caches, undo entries, overlays) reattaches to the new layer.

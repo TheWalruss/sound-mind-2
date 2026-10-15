@@ -1861,3 +1861,53 @@ void CanvasWidgetTest::contextMenuEventEmitsContextMenuRequestedWithAConvertedPo
     QCOMPARE(receivedPoint->timeSeconds, expectedTime);
     QCOMPARE(receivedGlobalPos, std::make_optional(widget.mapToGlobal(localPos)));
 }
+
+namespace {
+
+/// @brief A 2x2 layer, fully loud on the left channel (red on the canvas).
+StreamImage redTwoByTwoContent() {
+    StreamImage content;
+    content.config.binCount = 2;
+    content.frameCount = 2;
+    content.leftMagnitudeDb.assign(4, 0.0f);
+    content.rightMagnitudeDb.assign(4, -96.0f);
+    content.sharedPhaseRadians.assign(4, 0.0f);
+    return content;
+}
+
+}  // namespace
+
+void CanvasWidgetTest::addingALayerShowsWithoutAnExplicitInvalidate() {
+    // Import paths used to repaint without invalidating, leaving the
+    // previous (here: empty) composite on screen.
+    ProjectSettings settings;
+    settings.canvasWidth = 2;
+    Project project = Project::createNew(settings);
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(20, 20);
+    QVERIFY(widget.grab().toImage().pixelColor(10, 10).red() != 255);
+
+    Layer layer(0, "Imported", LayerType::Normal);
+    layer.setContent(redTwoByTwoContent());
+    project.addLayer(std::move(layer));
+
+    QCOMPARE(widget.grab().toImage().pixelColor(10, 10).red(), 255);
+}
+
+void CanvasWidgetTest::hidingALayerShowsWithoutAnExplicitInvalidate() {
+    ProjectSettings settings;
+    settings.canvasWidth = 2;
+    Project project = Project::createNew(settings);
+    Layer layer(0, "Imported", LayerType::Normal);
+    layer.setContent(redTwoByTwoContent());
+    const LayerId layerId = project.addLayer(std::move(layer));
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(20, 20);
+    QCOMPARE(widget.grab().toImage().pixelColor(10, 10).red(), 255);
+
+    project.layerById(layerId)->setVisible(false);
+
+    QVERIFY(widget.grab().toImage().pixelColor(10, 10).red() != 255);
+}

@@ -2,8 +2,10 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <QObject>
+#include <QString>
 
 #include "sound_mind/core/chord_generator.h"
 #include "sound_mind/core/filter_configuration.h"
@@ -229,6 +231,15 @@ public:
     /// @brief Deletes the currently Picked object - forwards to
     ///        `PickController::deleteSelection()`.
     void deleteSelection();
+
+    /// @brief Forwards to `PaintController::deleteOperations()`.
+    /// @param ids The operations to delete, as one undoable step.
+    /// @param description The History Panel's row text.
+    void deleteOperations(const std::vector<sound_mind::core::OperationId>& ids, const QString& description);
+
+    /// @brief Forwards to `PaintController::forgetLayer()`.
+    /// @param layer A layer that has just been removed from the project.
+    void forgetLayer(sound_mind::core::LayerId layer);
 
     /// @brief Moves the currently Picked object to the top of its own
     ///        layer's stack - forwards to `PickController::bringToFront()`.

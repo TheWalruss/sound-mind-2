@@ -13,6 +13,7 @@
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/tool_configuration.h"
 #include "sound_mind/studio/paint_controller.h"
+#include "sound_mind/studio/undo_stack.h"
 
 using sound_mind::core::InstrumentConfiguration;
 using sound_mind::core::Layer;
@@ -26,6 +27,7 @@ using sound_mind::core::ProjectSettings;
 using sound_mind::core::TimeFrequencyPoint;
 using sound_mind::core::TimeFrequencyRect;
 using sound_mind::studio::PaintController;
+using sound_mind::studio::UndoStack;
 
 namespace {
 
@@ -642,4 +644,54 @@ void PaintControllerTest::rebuildLayerContentDoesNotRereadTheTremoloMindWaveLibr
     const bool anyPainted = std::any_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
                                          [](float value) { return value != 0.0f; });
     QVERIFY(!anyPainted);
+}
+
+void PaintControllerTest::deleteOperationsTombstonesEachStrokeAsOneUndoStep() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    UndoStack undoStack;
+    PaintController controller(&undoStack);
+    controller.setProject(&project);
+    controller.setToolConfiguration(makeOpaqueTool());
+    controller.beginStroke(layerId, TimeFrequencyPoint{0.2, 500.0});
+    controller.endStroke();
+    const auto first = project.operationLog().at(project.operationLog().size() - 1).id();
+    controller.beginStroke(layerId, TimeFrequencyPoint{0.7, 1500.0});
+    controller.endStroke();
+    const auto second = project.operationLog().at(project.operationLog().size() - 1).id();
+    const std::size_t undoCountBefore = undoStack.count();
+
+    auto isSilent = [&]() {
+        const auto& content = *project.layerById(layerId)->content();
+        return std::all_of(content.leftMagnitudeDb.begin(), content.leftMagnitudeDb.end(),
+                           [](float value) { return value == 0.0f; });
+    };
+    QVERIFY(!isSilent());
+
+    controller.deleteOperations({first, second}, QStringLiteral("Deleted both"));
+    QVERIFY(isSilent());
+    QCOMPARE(undoStack.count(), undoCountBefore + 1);
+
+    undoStack.undo();
+    QVERIFY(!isSilent());
+    QCOMPARE(project.operationLog().activeOperationsTargeting(layerId).size(), std::size_t{2});
+}
+
+void PaintControllerTest::deletingAMindGrainStrokeLeavesNoDependentOnItsSourceLayer() {
+    Project project = Project::createNew(testSettings());
+    const LayerId lower = addBlankNormalLayer(project);
+    const LayerId upper = addBlankNormalLayer(project);
+    PaintController controller;
+    controller.setProject(&project);
+    auto config = std::make_unique<MindGrainConfiguration>();
+    config->setReference(std::nullopt, lower, TimeFrequencyRect{0.0, 1.0, 20.0, 2020.0});
+    controller.setToolConfiguration(std::move(config));
+    controller.beginStroke(upper, TimeFrequencyPoint{0.3, 500.0});
+    controller.endStroke();
+    const auto stroke = project.operationLog().at(project.operationLog().size() - 1).id();
+    QCOMPARE(sound_mind::core::mindGrainOperationsBrokenByRemovingLayer(project, lower).size(), std::size_t{1});
+
+    controller.deleteOperations({stroke}, QStringLiteral("Deleted"));
+
+    QVERIFY(sound_mind::core::mindGrainOperationsBrokenByRemovingLayer(project, lower).empty());
 }

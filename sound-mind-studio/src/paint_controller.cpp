@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "sound_mind/core/fill_operation.h"
+#include "sound_mind/core/gradient.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/operation_log.h"
@@ -164,6 +166,88 @@ void PaintController::notifyOperationCommitted(const QString& description) {
         return;
     }
     undoStack_->push({/*undo=*/[this]() { undo(); }, /*redo=*/[this]() { redo(); }, /*description=*/description});
+}
+
+std::unique_ptr<sound_mind::core::Operation> PaintController::makeDeletionTombstone(
+    const sound_mind::core::Operation& operation, sound_mind::core::OperationId newId) {
+    const sound_mind::core::LayerId layer = *operation.targetLayer();
+    if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(&operation)) {
+        // An empty path paints nothing whatever the config. A Mind Grain
+        // config would still name its source layer, though, and keep
+        // counting as a dependent of it - so it's swapped for a plain one.
+        auto config = dynamic_cast<const sound_mind::core::MindGrainConfiguration*>(&paint->config()) != nullptr
+                          ? std::unique_ptr<sound_mind::core::ToolConfiguration>(
+                                std::make_unique<sound_mind::core::ProceduralConfiguration>())
+                          : paint->config().clone();
+        return std::make_unique<sound_mind::core::PaintOperation>(newId, layer, sound_mind::core::Path{},
+                                                                   std::move(config), operation.id());
+    }
+    return std::make_unique<sound_mind::core::FillOperation>(newId, layer, operation.bounds(),
+                                                             sound_mind::core::silenceGradient(), operation.id());
+}
+
+void PaintController::deleteOperations(const std::vector<sound_mind::core::OperationId>& ids,
+                                       const QString& description) {
+    if (project_ == nullptr) {
+        return;
+    }
+    sound_mind::core::OperationLog& log = project_->operationLog();
+
+    std::vector<const sound_mind::core::Operation*> toDelete;
+    for (const sound_mind::core::OperationId id : ids) {
+        for (std::size_t i = 0; i < log.size(); ++i) {
+            const sound_mind::core::Operation& candidate = log.at(i);
+            if (candidate.id() != id || !candidate.targetLayer().has_value()) {
+                continue;
+            }
+            const auto active = log.activeOperationsTargeting(*candidate.targetLayer());
+            if (std::find(active.begin(), active.end(), &candidate) != active.end()) {
+                toDelete.push_back(&candidate);
+            }
+            break;
+        }
+    }
+    if (toDelete.empty()) {
+        return;
+    }
+
+    // Build every tombstone before appending any - append() may reallocate
+    // the log's own storage, which would invalidate the pointers above.
+    std::vector<std::unique_ptr<sound_mind::core::Operation>> tombstones;
+    std::unordered_set<sound_mind::core::LayerId> touchedLayers;
+    for (const sound_mind::core::Operation* operation : toDelete) {
+        touchedLayers.insert(*operation->targetLayer());
+        tombstones.push_back(makeDeletionTombstone(*operation, log.reserveId()));
+    }
+    const std::size_t count = tombstones.size();
+    for (auto& tombstone : tombstones) {
+        log.append(std::move(tombstone));
+    }
+
+    if (undoStack_ != nullptr) {
+        undoStack_->push({/*undo=*/
+                          [this, count]() {
+                              for (std::size_t i = 0; i < count; ++i) {
+                                  undo();
+                              }
+                          },
+                          /*redo=*/
+                          [this, count]() {
+                              for (std::size_t i = 0; i < count; ++i) {
+                                  redo();
+                              }
+                          },
+                          /*description=*/description});
+    }
+    for (const sound_mind::core::LayerId layer : touchedLayers) {
+        rebuildLayerContent(layer);
+        emit contentChanged(layer);
+    }
+}
+
+void PaintController::forgetLayer(sound_mind::core::LayerId layer) {
+    baseContent_.erase(layer);
+    contentCache_.erase(layer);
 }
 
 void PaintController::rebuildLayerContent(sound_mind::core::LayerId layer) {

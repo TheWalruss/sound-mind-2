@@ -185,7 +185,10 @@ public:
      *        are already taken. Its own name is passed through
      *        uniqueLayerName() too (`v0.Y.44.1`, Layers Panel Redesign) -
      *        a caller never needs to check for a name collision itself.
-     * @return The id actually assigned to the appended layer.
+     * @return The id actually assigned to the appended layer. Ids are
+     *         never reused, even after removeLayer() - anything still keyed
+     *         by a removed layer's id (caches, Pool files) can't attach to
+     *         a later layer. The counter is saved with the project.
      */
     LayerId addLayer(Layer layer);
 
@@ -944,6 +947,8 @@ public:
 private:
     ProjectSettings settings_;
     std::vector<Layer> layers_;
+    /// @brief The lowest id addLayer() may hand out next - see its docs.
+    LayerId nextLayerId_ = 1;
     OperationLog operationLog_;
     std::vector<NamedMindWave> mindWaves_;
     std::vector<NamedMindShot> mindShots_;

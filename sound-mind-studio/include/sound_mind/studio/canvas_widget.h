@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <tuple>
 #include <vector>
 
 #include <QImage>
@@ -997,7 +998,20 @@ private:
     ///        `compositeCache_`'s own finer-grained reuse even on a
     ///        cache miss here) and remembers the result. A no-op
     ///        returning `std::nullopt` if `project_` is `nullptr`.
+    ///        Also recomputes, without any explicit invalidate call, when
+    ///        the layer stack's structure changed (see
+    ///        `layerStackSignature()`) - a layer added/removed/reordered,
+    ///        shown/hidden/muted, or gaining/losing content. In-place edits
+    ///        to existing content still need an explicit invalidate.
     [[nodiscard]] std::optional<sound_mind::codec::RgbImage> currentComposite();
+
+    /// @brief One entry per layer, bottom to top: its id, visible, muted,
+    ///        and has-content flags - cheap enough to compare every paint.
+    using LayerStackSignature = std::vector<std::tuple<sound_mind::core::LayerId, bool, bool, bool>>;
+
+    /// @brief The current project's LayerStackSignature (empty with no
+    ///        project).
+    [[nodiscard]] LayerStackSignature layerStackSignature() const;
 
     const sound_mind::core::Project* project_ = nullptr;
     /// @brief `v0.1.7.1` (`docs/sound-mind-roadmap.md`'s targeted-
@@ -1024,6 +1038,9 @@ private:
     ///        as "nothing changed yet".
     std::optional<sound_mind::codec::RgbImage> lastRenderedComposite_;
     std::uint64_t lastRenderedGeneration_ = static_cast<std::uint64_t>(-1);
+    /// @brief The layerStackSignature() `lastRenderedComposite_` was
+    ///        computed against - see currentComposite().
+    LayerStackSignature lastRenderedSignature_;
     std::optional<double> playheadFraction_;
     /// @brief See setPolarMode()'s own docs.
     bool polarMode_ = false;
