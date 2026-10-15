@@ -157,6 +157,16 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
     presetIndicator_ = new PresetIndicatorLabel(container);
     root->addWidget(presetIndicator_);
 
+    // Pre-Beta Plan v0.Y.76.1: hear the configuration while tuning it - see
+    // previewToggled()'s docs.
+    previewButton_ = new QPushButton(tr("Loop Preview"), container);
+    previewButton_->setObjectName(QStringLiteral("filterPreviewButton"));
+    previewButton_->setCheckable(true);
+    previewButton_->setToolTip(tr("Loop a few seconds (the selection, or from the playback position) through this "
+                                  "filter, updating as you change it"));
+    connect(previewButton_, &QPushButton::toggled, this, &FilterConfigurationPanel::previewToggled);
+    root->addWidget(previewButton_);
+
     auto* typeForm = new QFormLayout();
     filterTypeCombo_ = new QComboBox(container);
     filterTypeCombo_->setObjectName(QStringLiteral("filterTypeCombo"));
@@ -996,6 +1006,11 @@ FilterConfigurationPanel::FilterConfigurationPanel(QWidget* parent)
 void FilterConfigurationPanel::emitConfigChanged() {
     presetIndicator_->markModified();
     emit filterConfigurationChanged(config_);
+}
+
+void FilterConfigurationPanel::setPreviewPlaying(bool playing) {
+    const QSignalBlocker blocker(previewButton_);
+    previewButton_->setChecked(playing);
 }
 
 void FilterConfigurationPanel::setActivePresetName(const QString& name) { presetIndicator_->setActivePreset(name); }

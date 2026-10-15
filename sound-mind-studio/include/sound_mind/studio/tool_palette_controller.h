@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QString>
 
+#include "sound_mind/core/filter_preview.h"
 #include "sound_mind/core/chord_generator.h"
 #include "sound_mind/core/filter_configuration.h"
 #include "sound_mind/core/gradient.h"
@@ -338,6 +339,10 @@ public:
     ///        to `SelectionController::hasSelection()`.
     /// @return `true` if there's a selection to fill/copy/cut.
     [[nodiscard]] bool hasSelection() const;
+
+    /// @brief Forwards to `SelectionController::committedSelection()`.
+    /// @return The committed selection, or `std::nullopt` if there isn't one.
+    [[nodiscard]] std::optional<sound_mind::core::FilterPreviewSelection> committedSelection() const;
 
     /// @brief Copies the current selection's own pixels onto the
     ///        clipboard - forwards to `SelectionController::

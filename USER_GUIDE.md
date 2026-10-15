@@ -696,6 +696,25 @@ way rather than starting from scratch. Whatever you last set stays in
 place for the *next* Filter layer too, so adding several in a row can
 start each one from the same settings.
 
+**Loop Preview** (just under the Filter Preset row) lets you tune a filter
+by ear. Click it and a few seconds loop over and over with the filter
+applied: your selection's time range if you have one, otherwise about 4
+seconds from the playback position. Every change you make in the panel is
+heard from the next time round the loop. What you hear depends on what's
+selected:
+
+- **A Filter (or Equalizer) layer selected** - the whole project, with that
+  layer using the settings you're dialling in: exactly what playback will
+  sound like.
+- **Otherwise, with a canvas selection** - the filter applied inside the
+  selection only, the way **Apply Filter to Selection** would, but without
+  changing anything until you actually apply it.
+- **Neither** - the filter applied to the whole mix, as if a Filter layer
+  sat at the top.
+
+Click **Loop Preview** again to stop. Starting normal playback, or opening
+another project, stops it too.
+
 The Tool, Filter and Grid panels all show the **active preset** just under their preset row: "Preset: <name>" after you load or save one, and "Preset: <name> * (modified)" in orange as soon as you change any setting afterwards.
 
 A **Filter Preset** row sits above the Filter Type dropdown - **Save...**

@@ -336,6 +336,13 @@ public:
      */
     void setActivePresetName(const QString& name);
 
+    /// @brief Syncs the "Loop Preview" button's checked state without
+    ///        emitting previewToggled() - `MainWindow` calls this when the
+    ///        preview starts, or stops on its own (no content, playback
+    ///        started, project switched).
+    /// @param playing Whether the filter preview is looping.
+    void setPreviewPlaying(bool playing);
+
 signals:
     /// @brief Emitted whenever any parameter control changes.
     /// @param config The panel's own new, complete configuration.
@@ -379,6 +386,16 @@ signals:
      * @param enabled The checkbox's own new checked state.
      */
     void equalizerPreviewToggled(bool enabled);
+
+    /**
+     * @brief The "Loop Preview" button was toggled - `MainWindow`'s cue to
+     *        start or stop looping a few seconds through this panel's
+     *        configuration, re-rendered after every edit
+     *        (`MainWindow::setFilterPreviewEnabled()`, Pre-Beta Plan
+     *        `v0.Y.76.1`).
+     * @param enabled Whether the preview should loop.
+     */
+    void previewToggled(bool enabled);
 
 private:
     /// @brief Emits filterConfigurationChanged() with the current config_.
@@ -550,6 +567,8 @@ private:
     std::vector<sound_mind::core::NamedConvolutionKernel> availableConvolutionKernels_;
 
     QPushButton* savePresetButton_ = nullptr;
+    /// @brief "Loop Preview" - see previewToggled()'s docs.
+    QPushButton* previewButton_ = nullptr;
     /// @brief Shows which Filter Preset is active and whether it has since been edited.
     PresetIndicatorLabel* presetIndicator_ = nullptr;
     QComboBox* filterPresetCombo_ = nullptr;

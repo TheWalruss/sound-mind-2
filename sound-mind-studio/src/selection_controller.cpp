@@ -459,6 +459,13 @@ void SelectionController::fill(const sound_mind::core::Gradient& gradient) {
     emit contentChanged(selectionLayer_);
 }
 
+std::optional<sound_mind::core::FilterPreviewSelection> SelectionController::committedSelection() const {
+    if (!committedBounds_.has_value()) {
+        return std::nullopt;
+    }
+    return sound_mind::core::FilterPreviewSelection{selectionLayer_, *committedBounds_, committedBoundary_};
+}
+
 void SelectionController::applyFilterToSelection(const sound_mind::core::FilterConfiguration& config) {
     if (!committedBounds_.has_value() || project_ == nullptr) {
         return;

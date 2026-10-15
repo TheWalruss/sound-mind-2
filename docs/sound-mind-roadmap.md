@@ -1123,7 +1123,7 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 
 - ~~**Edit menu redesign - grouped into named, fold-out submenus**~~ - **settled in `v0.1.22.1`, 2026-10-10** (`docs/sound-mind-architecture.md`'s Decision #218). Still open, as its own explicit next step: graying out a group/action when its own precondition isn't met (e.g. **Edit → Path Editing → Edit Path** with nothing Picked).
 - **Operation history persisted with the project**, so a project can be re-rendered from scratch if necessary - this is exactly the "final Project file schema" decision the *Explicit non-goals* section above already named as a deliberate near-beta concern (expect `Y` to move once, here).
-- **A "filter preview" control** - loops a few seconds of audio through an in-progress filter configuration live, so a user can tune by ear without processing the whole canvas first.
+- **[Done in v0.1.36.1]** **A "filter preview" control** - loops a few seconds of audio through an in-progress filter configuration live, so a user can tune by ear without processing the whole canvas first.
 - ~~A resource browser panel~~ and ~~SoundMind "Toolkit" collections~~ (both extending `v0.Y.57.1`'s own "Portable Resources" milestone, above) - **folded into that milestone's own Installments C and D, 2026-10-09**, now that Portable Resources itself has been scoped into concrete installments to build them on, rather than left as a vaguer, unscoped pair of backlog entries.
 - **[Moved to after Beta, 2026-10-15]** **A correct Pool reflection-padding implementation** (see `v0.Y.64.1` above and `docs/sound-mind-architecture.md`'s Decision #205) - two attempts deferred after a real, measured gain-error problem; needs either a new mechanism or validation against a reference NSGT implementation.
 
@@ -1262,7 +1262,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - **"Live-encoding view" checkbox:** incrementally encode the in-progress take and draw it on top with Normal compositing. When the box is off, the layer renders in its real stack position as usual.
 - *Performance:* the live encode runs off the audio thread, consuming the recording ring buffer in chunks. Measure it against the ~100 ms / ~250 ms latency targets.
 
-#### `v0.Y.76.1` - Filter preview (M)
+#### ✅ `v0.Y.76.1` - Filter preview (M) - settled in `v0.1.36.1`, see architecture Decision #238
 
 - The queued "filter preview control": loop a few seconds of audio through the in-progress filter configuration live, so it can be tuned by ear.
 - Placed straight after Record and Loop because it reuses the same live looping and staged-audio swap machinery.

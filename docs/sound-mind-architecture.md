@@ -2078,6 +2078,31 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - *Performance:* each tick with the view on recolours the full composite image once (no re-composite - the prefix cache is reused), the same cost as any other canvas repaint after a change.
     - **Tests:** a core `Layer` round trip for `recorded()`; two `addNormalOverlay()` cases; `RecordPanelTest` (5 target cases plus live view); `LoopPanelTest` (live view); `CanvasWidgetTest::aLiveOverlayIsDrawnOnTopEvenWithNoOtherContent`; `MainWindowTest` (new named recorded layer; overwrite plus undo).
 
+238. **Filter preview.** Settled in `v0.1.36.1`, Pre-Beta Plan milestone `v0.Y.76.1`.
+    - **Core, `filter_preview.h`:**
+      - `filterPreviewWindow()` picks the loop: the selection's time range (at least `kMinimumFilterPreviewSeconds`), else `kDefaultFilterPreviewSeconds` from the playback position, moved back to fit the canvas.
+      - `renderFilterPreview(project, FilterPreviewRequest)` copies the project and aims `config` at one of three targets, in order:
+        1. the selected Filter/Equalizer layer, whose configuration is replaced;
+        2. the committed selection (`FilterPreviewSelection`), baked into its layer with `applyFilterOperation()` exactly as "Apply Filter to Selection" would;
+        3. otherwise the whole mix, with `applyFilter()` after compositing.
+      - It then composites (respecting mute), crops whole frames, decodes, and fades both ends over `kFilterPreviewFadeSeconds` so the loop seam doesn't click.
+      - The length depends only on the window's duration, so successive renders can be `stageAudio()`'d.
+    - **Studio:**
+      - `FilterConfigurationPanel` has a checkable "Loop Preview" button (`previewToggled()`, plus `setPreviewPlaying()` to sync it without emitting).
+      - `SelectionController::committedSelection()` / `ToolPaletteController::committedSelection()` expose the selection as `FilterPreviewSelection`.
+      - `MainWindow::setFilterPreviewEnabled()` fixes the window, pauses main playback, and renders on a `BackgroundTask` (the Repeat-refresh pattern: a dirty flag coalesces edits made mid-render). It loops on a dedicated `PlaybackEngine`, created with the window's own `AudioDeviceMode`. Every later render is swapped in at the loop-back with `stageAudio()`, the same staged swap Repeat playback and Loop Mode use.
+      - `applyFilterConfiguration()` and `handleLayerSelectionChanged()` reschedule a render.
+      - Starting main playback, `setProject()`, or a render with nothing to hear stops it.
+    - **Why a separate engine, not main playback with a loop range:** the preview must leave the user's playback position, range and Repeat state untouched, and its audio isn't the project's (in the selection and whole-mix cases the filter isn't applied yet). It's the same isolation the Tool Configuration preview already has.
+    - *Performance:*
+      - Each render costs one full project composite plus one filter pass, the same as a Repeat refresh. It's off the UI thread, and an edit is heard at the next loop-back (at most one window, about 4 s, after the render finishes).
+      - Not yet optimized: compositing only the window plus a margin, and caching the composite beneath the target across edits. These are candidates if long projects make tuning sluggish.
+      - The audio thread only ever sees the existing try-lock staged swap.
+    - **Tests:**
+      - Core: 10 cases for the window rules, each target, constant length, fades, and an empty project.
+      - `FilterConfigurationPanelTest`: button emits; sync doesn't.
+      - `MainWindowTest`: the first render loops; an edit re-renders at the same length; toggling off or starting playback stops it.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

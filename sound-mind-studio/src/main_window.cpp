@@ -48,6 +48,7 @@
 #include "sound_mind/codec/rgb_image.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/codec/stream_incremental_encoder.h"
+#include "sound_mind/core/filter_preview.h"
 #include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/gpu_compute_availability.h"
@@ -497,6 +498,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     refreshTimer_ = new QTimer(this);
     refreshTimer_->setInterval(33);
     connect(refreshTimer_, &QTimer::timeout, this, &MainWindow::pollRepeatRefresh);
+    filterPreviewTimer_ = new QTimer(this);
+    filterPreviewTimer_->setInterval(33);
+    connect(filterPreviewTimer_, &QTimer::timeout, this, &MainWindow::pollFilterPreviewRender);
     connect(playbackController_, &PlaybackController::invalidated, this, &MainWindow::scheduleRepeatRefresh);
     connect(playbackController_, &PlaybackController::invalidated, this, [this]() {
         if (isLoopModeRunning()) {
@@ -724,6 +728,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             &MainWindow::saveFilterPreset);
     connect(filterConfigurationPanel_, &FilterConfigurationPanel::equalizerPreviewToggled, this,
             &MainWindow::setEqualizerPreviewEnabled);
+    connect(filterConfigurationPanel_, &FilterConfigurationPanel::previewToggled, this,
+            &MainWindow::setFilterPreviewEnabled);
 
     // Layer-stack lookup/mutation and Layers/Filter Configuration Panel
     // refresh - extracted as its own class (Refactor & Clean Up,
@@ -2019,6 +2025,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // v0.Y.10.1 note. Unconditional and idempotent (both engines' stop()
     // no-op when already stopped, or when loopEngine_ doesn't exist yet -
     // see its own docs), so this is always safe regardless of caller.
+    setFilterPreviewEnabled(false);
     loopUpdateTimer_->stop();
     if (loopEngine_) {
         loopEngine_->stop();
@@ -3254,6 +3261,8 @@ void MainWindow::handleLayerSelectionChanged(std::optional<sound_mind::core::Lay
     // is what just got (re)selected - see setEqualizerPreviewEnabled()'s/
     // FilterConfigurationPanel::setEqualizerPreviewChecked()'s own docs.
     filterConfigurationPanel_->setEqualizerPreviewChecked(equalizerPreviewEnabled_);
+    // The preview's target (Filter layer, selection, or whole mix) may have changed.
+    scheduleFilterPreviewRender();
 }
 
 void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfiguration& config) {
@@ -3272,6 +3281,8 @@ void MainWindow::applyFilterConfiguration(const sound_mind::core::FilterConfigur
     // enabled and the layer just edited actually was the Equalizer - see
     // updateEqualizerPreview()'s own docs.
     updateEqualizerPreview();
+    // Heard at the next loop-back - see setFilterPreviewEnabled().
+    scheduleFilterPreviewRender();
 }
 
 void MainWindow::setEqualizerPreviewEnabled(bool enabled) {
@@ -4256,6 +4267,9 @@ void MainWindow::refreshFilterPresetCombo() {
 }
 
 void MainWindow::startPlayback() {
+    if (filterPreviewActive_) {
+        setFilterPreviewEnabled(false);  // one thing heard at a time.
+    }
     if (!project_) {
         return;
     }
@@ -5299,6 +5313,122 @@ void MainWindow::pollRepeatRefresh() {
     syncPlaybackRangeToEngine();
     playbackController_->seek(currentPlaybackPositionSeconds_);
     playbackController_->play();
+}
+
+void MainWindow::setFilterPreviewEnabled(bool enabled) {
+    if (!enabled || !project_) {
+        filterPreviewActive_ = false;
+        filterPreviewDirty_ = false;
+        if (filterPreviewTask_) {
+            filterPreviewTask_->requestCancel();  // pollFilterPreviewRender() discards it.
+        }
+        if (filterPreviewEngine_) {
+            filterPreviewEngine_->stop();
+        }
+        if (filterConfigurationPanel_ != nullptr) {
+            filterConfigurationPanel_->setPreviewPlaying(false);
+        }
+        return;
+    }
+    if (filterPreviewActive_) {
+        return;
+    }
+    if (playbackController_->isPlaying()) {
+        pausePlayback();
+    }
+    const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
+    const double canvasSeconds = static_cast<double>(project_->settings().canvasWidth) *
+                                 static_cast<double>(config.hopLength) / static_cast<double>(config.sampleRateHz);
+    const auto selection = toolPaletteController_->committedSelection();
+    filterPreviewWindow_ = sound_mind::core::filterPreviewWindow(
+        currentPlaybackPositionSeconds_,
+        selection.has_value() ? std::optional<sound_mind::core::TimeFrequencyRect>(selection->bounds) : std::nullopt,
+        canvasSeconds);
+    if (!filterPreviewEngine_) {
+        filterPreviewEngine_ = std::make_unique<sound_mind::core::PlaybackEngine>(audioDeviceMode_);
+    }
+    filterPreviewEngine_->stop();
+    filterPreviewActive_ = true;
+    filterConfigurationPanel_->setPreviewPlaying(true);
+    statusBar()->showMessage(tr("Preparing filter preview..."), 3000);
+    scheduleFilterPreviewRender();
+}
+
+std::size_t MainWindow::filterPreviewLengthSamples() const noexcept {
+    return filterPreviewEngine_ ? filterPreviewEngine_->totalSamples() : 0;
+}
+
+void MainWindow::scheduleFilterPreviewRender() {
+    if (!filterPreviewActive_ || !project_) {
+        return;
+    }
+    if (filterPreviewTask_ && filterPreviewTask_->isRunning()) {
+        filterPreviewDirty_ = true;
+        return;
+    }
+    filterPreviewDirty_ = false;
+    filterPreviewResult_.reset();
+
+    sound_mind::core::FilterPreviewRequest request;
+    request.config = filterConfigurationPanel_->filterConfiguration();
+    if (const auto selected = layersPanel_->selectedLayerId()) {
+        const sound_mind::core::Layer* layer = project_->layerById(*selected);
+        if (layer != nullptr && sound_mind::core::isFilterLayerType(layer->type())) {
+            request.filterLayer = *selected;
+        }
+    }
+    request.selection = toolPaletteController_->committedSelection();
+    request.startSeconds = filterPreviewWindow_.first;
+    request.endSeconds = filterPreviewWindow_.second;
+    filterPreviewTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, projectCopy = *project_, request](sound_mind::core::CancellationToken& token) {
+            try {
+                filterPreviewResult_ = sound_mind::core::renderFilterPreview(
+                    projectCopy, request, [&token]() { return token.cancellationRequested(); });
+            } catch (const std::exception&) {
+                filterPreviewResult_.reset();  // cancelled or failed: keep looping the older audio.
+            }
+        });
+    filterPreviewTask_->start();
+    filterPreviewTimer_->start();
+}
+
+void MainWindow::pollFilterPreviewRender() {
+    if (!filterPreviewTask_ || filterPreviewTask_->isRunning()) {
+        return;
+    }
+    filterPreviewTimer_->stop();
+    filterPreviewTask_.reset();
+    auto result = std::move(filterPreviewResult_);
+    filterPreviewResult_.reset();
+
+    if (!filterPreviewActive_) {
+        return;
+    }
+    if (filterPreviewDirty_) {
+        scheduleFilterPreviewRender();
+        return;
+    }
+    if (!result.has_value() || result->frameCount() == 0) {
+        if (filterPreviewEngine_->totalSamples() == 0) {
+            statusBar()->showMessage(tr("Nothing to preview - the project has no content to filter yet."), 5000);
+            setFilterPreviewEnabled(false);
+        }
+        return;
+    }
+    ++filterPreviewRenders_;
+    if (filterPreviewEngine_->isPlaying() && filterPreviewEngine_->stageAudio(std::move(*result))) {
+        return;
+    }
+    filterPreviewEngine_->stop();
+    filterPreviewEngine_->loadAudio(std::move(*result));
+    filterPreviewEngine_->setPlaybackRange(/*loopEnabled=*/true, filterPreviewEngine_->totalSamples(), 0);
+    filterPreviewEngine_->play();
+    if (!filterPreviewEngine_->deviceProblem().empty()) {
+        statusBar()->showMessage(tr("Filter preview: no sound will be heard - %1")
+                                     .arg(QString::fromStdString(filterPreviewEngine_->deviceProblem())),
+                                 10000);
+    }
 }
 
 void MainWindow::cancelPlaybackComposite() {

@@ -6768,3 +6768,53 @@ void MainWindowTest::commitRecordingOverwritesTheChosenRecordedLayerUndoably() {
     window.undo();
     QVERIFY(window.project()->layerById(takeId)->content()->leftMagnitudeDb == firstContent.leftMagnitudeDb);
 }
+
+void MainWindowTest::filterPreviewLoopsARenderOfThePanelConfiguration() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));
+    auto* button = window.findChild<QPushButton*>(QStringLiteral("filterPreviewButton"));
+    QVERIFY(button != nullptr);
+
+    button->click();
+
+    QVERIFY(window.isFilterPreviewActive());
+    QTRY_VERIFY_WITH_TIMEOUT(window.filterPreviewRendersCompleted() == 1, 60000);
+    QVERIFY(window.filterPreviewLengthSamples() > 0);
+    QVERIFY(button->isChecked());
+}
+
+void MainWindowTest::filterPreviewRerendersAfterAnEditKeepingItsLength() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));
+    window.findChild<QPushButton*>(QStringLiteral("filterPreviewButton"))->click();
+    QTRY_VERIFY_WITH_TIMEOUT(window.filterPreviewRendersCompleted() == 1, 60000);
+    const std::size_t length = window.filterPreviewLengthSamples();
+
+    auto* type = window.findChild<QComboBox*>(QStringLiteral("filterTypeCombo"));
+    QVERIFY(type != nullptr);
+    type->setCurrentIndex((type->currentIndex() + 1) % type->count());
+
+    QTRY_VERIFY_WITH_TIMEOUT(window.filterPreviewRendersCompleted() >= 2, 60000);
+    QCOMPARE(window.filterPreviewLengthSamples(), length);
+}
+
+void MainWindowTest::filterPreviewStopsWhenToggledOffOrPlaybackStarts() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));
+    auto* button = window.findChild<QPushButton*>(QStringLiteral("filterPreviewButton"));
+
+    button->click();
+    QVERIFY(window.isFilterPreviewActive());
+    button->click();
+    QVERIFY(!window.isFilterPreviewActive());
+
+    button->click();
+    QVERIFY(window.isFilterPreviewActive());
+    window.startPlayback();
+    QVERIFY(!window.isFilterPreviewActive());
+    QVERIFY(!button->isChecked());
+    window.stopPlayback();
+}

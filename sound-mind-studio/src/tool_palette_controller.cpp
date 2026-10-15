@@ -297,6 +297,10 @@ void ToolPaletteController::applyPasteBlendMode(sound_mind::core::BlendMode mode
 
 bool ToolPaletteController::hasSelection() const { return selectionController_->hasSelection(); }
 
+std::optional<sound_mind::core::FilterPreviewSelection> ToolPaletteController::committedSelection() const {
+    return selectionController_->committedSelection();
+}
+
 void ToolPaletteController::copySelection() { selectionController_->copySelection(); }
 
 void ToolPaletteController::cutSelection() { selectionController_->cutSelection(); }

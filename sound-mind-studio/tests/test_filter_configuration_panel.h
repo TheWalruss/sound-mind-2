@@ -104,4 +104,6 @@ private slots:
     void presetIndicatorShowsLoadedPresetThenModifiedThenClearsOnExternalSet();
     void presetIndicatorFollowsSaveAndIsClearedWhenThePresetDisappears();
     void noiseFloorHasItsOwnIntensityUnitCombo();
+    void previewButtonEmitsPreviewToggled();
+    void setPreviewPlayingSyncsTheButtonWithoutEmitting();
 };

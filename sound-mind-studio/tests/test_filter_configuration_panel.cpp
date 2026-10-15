@@ -1476,3 +1476,32 @@ void FilterConfigurationPanelTest::noiseFloorHasItsOwnIntensityUnitCombo() {
 
     QCOMPARE(noiseFloor->lineEdit()->text(), QStringLiteral("0.75"));
 }
+
+void FilterConfigurationPanelTest::previewButtonEmitsPreviewToggled() {
+    FilterConfigurationPanel panel;
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::previewToggled);
+    auto* button = panel.findChild<QPushButton*>(QStringLiteral("filterPreviewButton"));
+    QVERIFY(button != nullptr);
+    QVERIFY(button->isCheckable());
+
+    button->click();
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.at(0).at(0).toBool(), true);
+
+    button->click();
+    QCOMPARE(spy.count(), 2);
+    QCOMPARE(spy.at(1).at(0).toBool(), false);
+}
+
+void FilterConfigurationPanelTest::setPreviewPlayingSyncsTheButtonWithoutEmitting() {
+    FilterConfigurationPanel panel;
+    QSignalSpy spy(&panel, &FilterConfigurationPanel::previewToggled);
+    auto* button = panel.findChild<QPushButton*>(QStringLiteral("filterPreviewButton"));
+    QVERIFY(button != nullptr);
+
+    panel.setPreviewPlaying(true);
+    QVERIFY(button->isChecked());
+    panel.setPreviewPlaying(false);
+    QVERIFY(!button->isChecked());
+    QCOMPARE(spy.count(), 0);
+}

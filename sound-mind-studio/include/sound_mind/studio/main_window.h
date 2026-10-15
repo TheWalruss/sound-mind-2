@@ -1612,6 +1612,44 @@ public slots:
     ///        `ToolConfigurationPanel::stopPreviewRequested()`.
     void stopToolConfigurationPreview();
 
+    /**
+     * @brief Starts or stops the filter preview - the Filter Configuration
+     *        panel's "Loop Preview" button (Pre-Beta Plan `v0.Y.76.1`).
+     *
+     * Starting fixes the looped window once
+     * (`sound_mind::core::filterPreviewWindow()`: the selection's time
+     * range, or a few seconds from the playback position), pauses main
+     * playback, and renders that window in the background
+     * (`sound_mind::core::renderFilterPreview()`) with the panel's current
+     * configuration aimed at the selected Filter layer, the selection, or
+     * the whole mix. The result loops on a dedicated `PlaybackEngine`;
+     * every later edit of the configuration (and every change of selected
+     * layer) re-renders it, and the new audio is swapped in at the next
+     * loop-back with `PlaybackEngine::stageAudio()`, so there's no gap.
+     *
+     * Stops on its own - unchecking the button - if there's nothing to
+     * hear, when main playback starts, or when the project changes. A
+     * no-op start with no project open.
+     *
+     * @param enabled `true` to start looping, `false` to stop.
+     * @note GUI thread only; rendering never runs on it.
+     */
+    void setFilterPreviewEnabled(bool enabled);
+
+    /// @brief Whether the filter preview is on - see setFilterPreviewEnabled().
+    /// @return `true` from the start until it stops.
+    [[nodiscard]] bool isFilterPreviewActive() const noexcept { return filterPreviewActive_; }
+
+    /// @brief How many filter preview renders have reached the preview
+    ///        engine since this window was created - lets a caller (or a
+    ///        test) tell that an edit has been heard.
+    /// @return The count.
+    [[nodiscard]] int filterPreviewRendersCompleted() const noexcept { return filterPreviewRenders_; }
+
+    /// @brief The length of the audio the filter preview loops.
+    /// @return The length in samples, or `0` before the first render.
+    [[nodiscard]] std::size_t filterPreviewLengthSamples() const noexcept;
+
     /// @brief Clears the current rectangular selection - the actual work
     ///        behind the Edit menu's Deselect action. Delegates to
     ///        `SelectionController::clearSelection()`; a no-op if there
@@ -3426,6 +3464,16 @@ private:
     /// re-runs if another change arrived meanwhile.
     void pollRepeatRefresh();
 
+    /// @brief Starts a background render of the filter preview, or marks
+    ///        one pending if a render is already running - see
+    ///        setFilterPreviewEnabled(). A no-op while the preview is off.
+    void scheduleFilterPreviewRender();
+
+    /// @brief Polled by `filterPreviewTimer_`: hands a finished render to
+    ///        the preview engine (staged, or loaded on the first render),
+    ///        or starts the pending one.
+    void pollFilterPreviewRender();
+
     /**
      * @brief Repeat Playback's/one-shot preview's shared edit hook -
      *        connected to `toolPaletteController_::contentChanged()`
@@ -4145,6 +4193,22 @@ private:
     QTimer* refreshTimer_ = nullptr;
     /// @brief A change arrived while refreshTask_ was running.
     bool refreshDirty_ = false;
+
+    /// @brief The filter preview's own looping engine, created on first use
+    ///        with audioDeviceMode_ - see setFilterPreviewEnabled().
+    std::unique_ptr<sound_mind::core::PlaybackEngine> filterPreviewEngine_;
+    bool filterPreviewActive_ = false;
+    /// @brief The looped window, `{start, end}` in seconds - fixed while
+    ///        the preview runs, so every render has the same length.
+    std::pair<double, double> filterPreviewWindow_{0.0, 0.0};
+    int filterPreviewRenders_ = 0;
+    /// @brief Result of filterPreviewTask_; declared first so the task is
+    ///        destroyed before it (same reasoning as refreshResult_).
+    std::optional<sound_mind::codec::AudioBuffer> filterPreviewResult_;
+    std::unique_ptr<sound_mind::core::BackgroundTask> filterPreviewTask_;
+    QTimer* filterPreviewTimer_ = nullptr;
+    /// @brief An edit arrived while filterPreviewTask_ was running.
+    bool filterPreviewDirty_ = false;
 
     /// @brief compositeTask_'s own work function's result on success -
     /// written just before it returns and read only after observing

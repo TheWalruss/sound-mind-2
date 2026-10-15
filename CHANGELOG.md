@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.36.1] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.76.1` - Filter preview.
+
+### Added
+
+- **Loop Preview** in the Filter Configuration panel loops a few seconds (the selection's time range, or about 4 s from the playback position) through the filter being configured, and every change is heard from the next pass of the loop. It previews the selected Filter layer in the full mix, a filter about to be applied to a selection (inside the selection only), or the whole mix.
+
 ## [0.1.35.2] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.75.1`, installments B and C - completes the milestone.

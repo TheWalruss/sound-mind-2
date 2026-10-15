@@ -7,6 +7,7 @@
 #include <QObject>
 
 #include "sound_mind/core/filter_configuration.h"
+#include "sound_mind/core/filter_preview.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
@@ -388,6 +389,12 @@ public:
     ///        mid-drag).
     /// @return `true` if a selection is committed; `false` otherwise.
     [[nodiscard]] bool hasSelection() const noexcept { return committedBounds_.has_value(); }
+
+    /// @brief The committed selection exactly as applyFilterToSelection()
+    ///        would use it - its layer, bounding box and shape - for the
+    ///        filter preview (`sound_mind::core::renderFilterPreview()`).
+    /// @return The selection, or `std::nullopt` if there isn't one.
+    [[nodiscard]] std::optional<sound_mind::core::FilterPreviewSelection> committedSelection() const;
 
     /**
      * @brief What to actually draw as the selection overlay's own bounding

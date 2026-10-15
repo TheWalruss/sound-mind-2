@@ -339,4 +339,7 @@ private slots:
     void imageModeFitsTheCanvasWithSquareCells();
     void commitRecordingAddsANamedRecordedLayer();
     void commitRecordingOverwritesTheChosenRecordedLayerUndoably();
+    void filterPreviewLoopsARenderOfThePanelConfiguration();
+    void filterPreviewRerendersAfterAnEditKeepingItsLength();
+    void filterPreviewStopsWhenToggledOffOrPlaybackStarts();
 };
