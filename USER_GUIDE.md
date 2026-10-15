@@ -203,6 +203,17 @@ toolbar buttons):
   modifiers (Ctrl/Alt/Shift). An unmodified wheel scrolls the canvas
   instead, once it's larger than the visible area.
 
+### Brightness and clipping
+
+The canvas's brightness follows how loud each spot really is, on one
+absolute scale: black is silence (-96 dBFS), full brightness is full scale
+(0 dBFS). Imported, recorded, and painted content all use this same scale.
+
+**View → Show Clipping** marks every spot louder than full scale with a
+magenta/black checker. Those spots will distort when played or exported
+- full brightness can't show how far over they are, so this is how to
+find them.
+
 ### Sound Flower (Polar View)
 
 **View → Sound Flower** (`Ctrl+Alt+F`) is a checkable action that projects
@@ -1136,9 +1147,13 @@ panel (off by default) with the brush's own settings:
   it (`0` leaves the canvas untouched, `1` paints at full strength). A
   gradient with more than two stops varies continuously along the
   stroke's own length as you draw it, the same way Fill Selection's own
-  gradient varies across a selection. The panel's own default (both
-  endpoint stops at `0` dB, full opacity) paints loud on both channels
-  equally at full strength right away, no setup required. Hidden for
+  gradient varies across a selection. Intensity is in dBFS, from -96
+  (silence) to 0 (full scale, as loud as a single tone can be without
+  distorting) - the same scale imported and recorded audio is shown on,
+  so a stroke as bright as some imported sound is also about as loud.
+  The panel's own default (both endpoint stops at -20 dB, full opacity)
+  paints clearly audibly on both channels right away, no setup
+  required. Hidden for
   Mind Shot and Mind Grain, which don't paint toward a fixed target at
   all; for Heal, Soften, Smudge, and Order/Chaos, only the Intensity
   fields hide - Opacity stays, as the blend's own strength (see each

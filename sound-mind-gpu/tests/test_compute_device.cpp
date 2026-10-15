@@ -40,17 +40,35 @@ ComputeDevice& sharedDevice() {
     return device;
 }
 
-/// @brief Asserts the GPU path beat the CPU reference - but only on a real
+/// @brief Asserts the GPU path beats the CPU reference - but only on a real
 /// hardware adapter. WARP is Microsoft's CPU-side software rasterizer (what
 /// GitHub's GPU-less CI runners get), so a timing race against it says
-/// nothing about the GPU path and only makes CI flaky.
-void checkGpuFasterThanCpu(std::chrono::steady_clock::duration gpuDuration,
-                           std::chrono::steady_clock::duration cpuDuration) {
+/// nothing about the GPU path and only makes CI flaky. One untimed GPU
+/// warm-up call (shader compile, first allocations), then the best of three
+/// timed runs on each side, so a single descheduled run or a concurrently
+/// busy GPU doesn't decide the result.
+template <typename CpuWork, typename GpuWork>
+void checkGpuFasterThanCpu(CpuWork&& cpu, GpuWork&& gpu) {
     if (sharedDevice().adapterKind() == AdapterKind::Warp) {
         WARN("WARP (software) adapter - skipping the GPU-vs-CPU timing comparison.");
         return;
     }
-    CHECK(gpuDuration < cpuDuration);
+    auto bestOfThree = [](auto& work) {
+        auto best = std::chrono::steady_clock::duration::max();
+        for (int run = 0; run < 3; ++run) {
+            const auto start = std::chrono::steady_clock::now();
+            work();
+            best = std::min(best, std::chrono::steady_clock::now() - start);
+        }
+        return best;
+    };
+    gpu();
+    const auto cpuBest = bestOfThree(cpu);
+    const auto gpuBest = bestOfThree(gpu);
+    INFO("best CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuBest).count()
+                      << " us, best GPU: " << std::chrono::duration_cast<std::chrono::microseconds>(gpuBest).count()
+                      << " us");
+    CHECK(gpuBest < cpuBest);
 }
 
 // ---------------------------------------------------------------------------
@@ -502,22 +520,16 @@ TEST_CASE("gaussianBlur2D is measurably faster than the CPU reference on a large
     }
     constexpr float sigma = 8.0f;  // A real kernel radius (32), not a trivial one.
 
-    const auto cpuStart = std::chrono::steady_clock::now();
     const auto cpuResult = referenceGaussianBlur2D(data, width, height, sigma);
-    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
-
-    const auto gpuStart = std::chrono::steady_clock::now();
     const auto gpuResult = sharedDevice().gaussianBlur2D(data, width, height, sigma);
-    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
 
     REQUIRE(gpuResult.size() == cpuResult.size());
     for (std::size_t i = 0; i < gpuResult.size(); i += 997) {  // Spot-check - correctness is this file's own other tests' job.
         CHECK(gpuResult[i] == Catch::Approx(cpuResult[i]).margin(0.01));
     }
 
-    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
-                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
+    checkGpuFasterThanCpu([&]() { static_cast<void>(referenceGaussianBlur2D(data, width, height, sigma)); },
+                          [&]() { static_cast<void>(sharedDevice().gaussianBlur2D(data, width, height, sigma)); });
 }
 
 // ---------------------------------------------------------------------------
@@ -694,22 +706,16 @@ TEST_CASE("gaussianBlur2DVarying is measurably faster than the CPU reference on 
     }
     const auto sigmaPerCell = varyingField(data.size(), 1.0f, 6.0f);  // A real, varied radius range.
 
-    const auto cpuStart = std::chrono::steady_clock::now();
     const auto cpuResult = referenceGaussianBlur2DVarying(data, width, height, sigmaPerCell);
-    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
-
-    const auto gpuStart = std::chrono::steady_clock::now();
     const auto gpuResult = sharedDevice().gaussianBlur2DVarying(data, width, height, sigmaPerCell);
-    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
 
     REQUIRE(gpuResult.size() == cpuResult.size());
     for (std::size_t i = 0; i < gpuResult.size(); i += 997) {
         CHECK(gpuResult[i] == Catch::Approx(cpuResult[i]).margin(0.01));
     }
 
-    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
-                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
+    checkGpuFasterThanCpu([&]() { static_cast<void>(referenceGaussianBlur2DVarying(data, width, height, sigmaPerCell)); },
+                          [&]() { static_cast<void>(sharedDevice().gaussianBlur2DVarying(data, width, height, sigmaPerCell)); });
 }
 
 // ---------------------------------------------------------------------------
@@ -757,22 +763,16 @@ TEST_CASE("medianBlur2DVarying is measurably faster than the CPU reference on a 
     }
     const auto sizePerCell = varyingField(data.size(), 3.0f, 15.0f);
 
-    const auto cpuStart = std::chrono::steady_clock::now();
     const auto cpuResult = referenceMedianBlur2DVarying(data, width, height, sizePerCell);
-    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
-
-    const auto gpuStart = std::chrono::steady_clock::now();
     const auto gpuResult = sharedDevice().medianBlur2DVarying(data, width, height, sizePerCell);
-    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
 
     REQUIRE(gpuResult.size() == cpuResult.size());
     for (std::size_t i = 0; i < gpuResult.size(); i += 997) {
         CHECK(gpuResult[i] == Catch::Approx(cpuResult[i]).margin(0.001));
     }
 
-    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
-                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
+    checkGpuFasterThanCpu([&]() { static_cast<void>(referenceMedianBlur2DVarying(data, width, height, sizePerCell)); },
+                          [&]() { static_cast<void>(sharedDevice().medianBlur2DVarying(data, width, height, sizePerCell)); });
 }
 
 // ---------------------------------------------------------------------------
@@ -828,22 +828,16 @@ TEST_CASE("directionalBlur2DVarying is measurably faster than the CPU reference 
     const auto lengthPerCell = varyingField(data.size(), 5.0f, 40.0f);
     const auto anglePerCell = varyingAngleField(data.size());
 
-    const auto cpuStart = std::chrono::steady_clock::now();
     const auto cpuResult = referenceDirectionalBlur2DVarying(data, width, height, lengthPerCell, anglePerCell);
-    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
-
-    const auto gpuStart = std::chrono::steady_clock::now();
     const auto gpuResult = sharedDevice().directionalBlur2DVarying(data, width, height, lengthPerCell, anglePerCell);
-    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
 
     REQUIRE(gpuResult.size() == cpuResult.size());
     for (std::size_t i = 0; i < gpuResult.size(); i += 997) {
         CHECK(gpuResult[i] == Catch::Approx(cpuResult[i]).margin(0.01));
     }
 
-    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
-                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
+    checkGpuFasterThanCpu([&]() { static_cast<void>(referenceDirectionalBlur2DVarying(data, width, height, lengthPerCell, anglePerCell)); },
+                          [&]() { static_cast<void>(sharedDevice().directionalBlur2DVarying(data, width, height, lengthPerCell, anglePerCell)); });
 }
 
 // ---------------------------------------------------------------------------
@@ -1091,22 +1085,16 @@ TEST_CASE("mixAmplitudePhaseSignal is measurably faster than the CPU reference o
 
     const std::vector<float> field = uniformField(count);
 
-    const auto cpuStart = std::chrono::steady_clock::now();
     const auto cpuResult = referenceMix(running, layer, 0.8f, field);
-    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
-
-    const auto gpuStart = std::chrono::steady_clock::now();
     const auto gpuResult = sharedDevice().mixAmplitudePhaseSignal(running, layer, 0.8f, field);
-    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
 
     REQUIRE(gpuResult.leftMagnitudeDb.size() == cpuResult.leftMagnitudeDb.size());
     for (std::size_t i = 0; i < count; i += 4999) {  // Spot-check - correctness is this file's own other tests' job.
         CHECK(gpuResult.leftMagnitudeDb[i] == Catch::Approx(cpuResult.leftMagnitudeDb[i]).margin(0.02));
     }
 
-    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
-                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
+    checkGpuFasterThanCpu([&]() { static_cast<void>(referenceMix(running, layer, 0.8f, field)); },
+                          [&]() { static_cast<void>(sharedDevice().mixAmplitudePhaseSignal(running, layer, 0.8f, field)); });
 }
 
 // ---------------------------------------------------------------------------
@@ -1168,24 +1156,26 @@ TEST_CASE("fractalField is measurably faster than the CPU reference on a large f
     constexpr float roughness = 0.5f;
     constexpr std::uint32_t seed = 7;
 
-    const auto cpuStart = std::chrono::steady_clock::now();
     std::vector<float> cpuResult(count);
     for (std::size_t i = 0; i < count; ++i) {
         cpuResult[i] = static_cast<float>(
             referenceMidpointDisplacement(tValues[i], 0.0, 1.0, 0.5, 0.5, iterations, 0, 0, roughness, seed));
     }
-    const auto cpuDuration = std::chrono::steady_clock::now() - cpuStart;
-
-    const auto gpuStart = std::chrono::steady_clock::now();
     const auto gpuResult = sharedDevice().fractalField(tValues, iterations, roughness, seed);
-    const auto gpuDuration = std::chrono::steady_clock::now() - gpuStart;
 
     REQUIRE(gpuResult.size() == cpuResult.size());
     for (std::size_t i = 0; i < count; i += 4999) {  // Spot-check - correctness is this file's own other tests' job.
         CHECK(gpuResult[i] == Catch::Approx(cpuResult[i]).margin(0.02));
     }
 
-    INFO("CPU: " << std::chrono::duration_cast<std::chrono::microseconds>(cpuDuration).count() << " us, GPU: "
-                  << std::chrono::duration_cast<std::chrono::microseconds>(gpuDuration).count() << " us");
-    checkGpuFasterThanCpu(gpuDuration, cpuDuration);
+    const auto cpuWork = [&]() {
+        std::vector<float> rerun(count);
+        for (std::size_t i = 0; i < count; ++i) {
+            rerun[i] = static_cast<float>(
+                referenceMidpointDisplacement(tValues[i], 0.0, 1.0, 0.5, 0.5, iterations, 0, 0, roughness, seed));
+        }
+        static_cast<void>(rerun);
+    };
+    checkGpuFasterThanCpu(cpuWork,
+                          [&]() { static_cast<void>(sharedDevice().fractalField(tValues, iterations, roughness, seed)); });
 }

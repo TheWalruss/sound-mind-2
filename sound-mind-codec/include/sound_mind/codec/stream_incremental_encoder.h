@@ -118,6 +118,10 @@ private:
     ///        causally-arriving stream doesn't have (see `encode()`'s own
     ///        docs for both).
     std::vector<float> weightDb_;
+    /// @brief The full-scale reference subtracted from every stored dB
+    ///        value, matching encode() exactly - so live-recorded content
+    ///        is on the same absolute dBFS scale as imported content.
+    float referenceDb_;
 
     std::vector<float> left_;
     std::vector<float> right_;

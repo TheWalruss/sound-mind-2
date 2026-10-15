@@ -661,16 +661,16 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     // Panel-own default: a real, fully-opaque brush (not the transparent
     // default a bare ToolConfiguration starts with - see its own docs) -
     // so a fresh stroke, painted before ever touching a control, is
-    // already visible rather than silently doing nothing. +45 dB on both
-    // channels is a comfortably audible level (0 dB painted ~50 dB under a
-    // normal imported tone) - loaded into gradientEditor_
+    // already visible rather than silently doing nothing. -20 dBFS on both
+    // channels is clearly audible, with headroom for a stroke spanning many
+    // frequency bins - loaded into gradientEditor_
     // right after (non-emitting - see GradientEditorWidget::setGradient()'s
     // own docs) so the panel's own displayed controls agree with config_
     // from the very start.
     {
         auto stop = config_->defaultGradient().stops().front();
-        stop.leftIntensity = 45.0f;
-        stop.rightIntensity = 45.0f;
+        stop.leftIntensity = -20.0f;
+        stop.rightIntensity = -20.0f;
         stop.leftOpacity = 1.0f;
         stop.rightOpacity = 1.0f;
         config_->defaultGradient().setStopValues(0, stop);

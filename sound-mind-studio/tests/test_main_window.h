@@ -334,4 +334,5 @@ private slots:
     // whatever it is").
     void previewingTheCurrentToolConfigurationPlaysAudio();
     void previewToolConfigurationIsANoOpWithNoProjectOpen();
+    void showClippingActionTogglesTheCanvasClipIndicator();
 };

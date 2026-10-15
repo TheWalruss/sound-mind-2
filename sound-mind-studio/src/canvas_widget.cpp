@@ -45,13 +45,19 @@ constexpr double kMaxZoomFactor = 16.0;
 /// placeholder every render path here used before it. `v0.1.7.1` moved
 /// this from the uncached `compositeProject()` to `compositeProjectCached()` -
 /// see `CanvasWidget::compositeCache_`'s own docs.
+/// `markClipped` overlays the clip indicator - see
+/// `CanvasWidget::setClipIndicatorEnabled()`.
 [[nodiscard]] std::optional<sound_mind::codec::RgbImage> renderComposite(
-    const sound_mind::core::Project& project, sound_mind::core::CompositePrefixCache& cache) {
+    const sound_mind::core::Project& project, sound_mind::core::CompositePrefixCache& cache, bool markClipped) {
     const auto composite = sound_mind::core::compositeProjectCached(project, cache);
     if (!composite.has_value()) {
         return std::nullopt;
     }
-    return sound_mind::codec::toRgbImage(*composite);
+    auto rgb = sound_mind::codec::toRgbImage(*composite);
+    if (markClipped) {
+        sound_mind::codec::markClippedCells(*composite, rgb);
+    }
+    return rgb;
 }
 
 /// @brief The topmost visible layer with content - unlike
@@ -376,7 +382,7 @@ std::optional<sound_mind::codec::RgbImage> CanvasWidget::currentComposite() {
     if (lastRenderedGeneration_ == compositeGeneration_) {
         return lastRenderedComposite_;
     }
-    lastRenderedComposite_ = renderComposite(*project_, compositeCache_);
+    lastRenderedComposite_ = renderComposite(*project_, compositeCache_, clipIndicatorEnabled_);
     lastRenderedGeneration_ = compositeGeneration_;
     lastRenderedSignature_ = std::move(signature);
     return lastRenderedComposite_;
@@ -396,6 +402,17 @@ CanvasWidget::LayerStackSignature CanvasWidget::layerStackSignature() const {
 
 void CanvasWidget::invalidateCompositeFrom(std::size_t layerIndex) {
     compositeCache_.invalidateFrom(layerIndex);
+    ++compositeGeneration_;
+    update();
+}
+
+void CanvasWidget::setClipIndicatorEnabled(bool enabled) {
+    if (clipIndicatorEnabled_ == enabled) {
+        return;
+    }
+    clipIndicatorEnabled_ = enabled;
+    // The cached prefix composite itself is unaffected - only the final
+    // RGB render differs - so bumping the generation is enough.
     ++compositeGeneration_;
     update();
 }

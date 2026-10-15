@@ -13,6 +13,7 @@ private slots:
     void invalidateCompositeAllForcesARecomputeEvenWithoutAKnownIndex();
     void addingALayerShowsWithoutAnExplicitInvalidate();
     void hidingALayerShowsWithoutAnExplicitInvalidate();
+    void clipIndicatorMarksCellsAboveFullScaleOnlyWhileEnabled();
     void skipsAHiddenTopmostLayerInFavorOfTheOneBelowIt();
     void reflectsALayersTranslationColumns();
     void drawsAPlayheadLineAtTheGivenFraction();

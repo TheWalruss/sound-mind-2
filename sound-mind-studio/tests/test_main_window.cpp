@@ -6657,3 +6657,17 @@ void MainWindowTest::previewToolConfigurationIsANoOpWithNoProjectOpen() {
     QVERIFY(!playButton->isHidden());
     QVERIFY(stopButton->isHidden());
 }
+
+void MainWindowTest::showClippingActionTogglesTheCanvasClipIndicator() {
+    TestMainWindow window;
+    auto* action = window.findChild<QAction*>(QStringLiteral("showClippingAction"));
+    auto* canvas = window.findChild<CanvasWidget*>();
+    QVERIFY(action != nullptr && canvas != nullptr);
+    QVERIFY(action->isCheckable());
+    QVERIFY(!canvas->clipIndicatorEnabled());
+
+    action->trigger();
+    QVERIFY(canvas->clipIndicatorEnabled());
+    action->trigger();
+    QVERIFY(!canvas->clipIndicatorEnabled());
+}

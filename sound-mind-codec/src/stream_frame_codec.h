@@ -32,6 +32,14 @@ constexpr float kMinLinearAmplitude = 1e-7f;
 /// VulkanSTFTBackend).
 [[nodiscard]] inline std::uint32_t fftSizeFor(std::uint32_t hopLength) noexcept { return hopLength * 4; }
 
+/// @brief The dB a full-scale (amplitude 1) sine's own FFT bin magnitude
+/// reads at this FFT size with a Hann window: 20*log10(fftSize/4). Encoders
+/// subtract it and decode() adds it back, so stored values are absolute
+/// dBFS - a full-scale tone at 0 dB at any hop length.
+[[nodiscard]] inline float fullScaleReferenceDb(std::uint32_t fftSize) noexcept {
+    return 20.0f * std::log10(static_cast<float>(fftSize) / 4.0f);
+}
+
 /// @brief A periodic Hann window of the given size.
 [[nodiscard]] inline std::vector<float> hannWindow(std::size_t size) {
     std::vector<float> window(size);

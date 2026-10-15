@@ -112,48 +112,53 @@ TEST_CASE("Encoding carries the codec config and sample count needed to decode",
     CHECK(image.leftMagnitudeDb.size() == static_cast<std::size_t>(image.config.binCount) * image.frameCount);
 }
 
-TEST_CASE("A quiet signal is normalized up toward 0.95 peak internally, but decodes back at its own original peak",
-          "[stream_codec]") {
+TEST_CASE("Stored levels are absolute dBFS: a full-scale 1 kHz sine's loudest cell reads about 0 dB at any hop length",
+          "[stream_codec][dbfs]") {
+    const AudioBuffer fullScale = makeSineTone(1000.0f, 0.5f, 44100);
+    for (const std::uint32_t hop : {256U, 512U, 1024U}) {
+        StreamCodecConfig config;
+        config.hopLength = hop;
+        const auto image = encode(fullScale, config);
+        const float peakDb = *std::max_element(image.leftMagnitudeDb.begin(), image.leftMagnitudeDb.end());
+        INFO("hop " << hop << ": peak " << peakDb << " dB");
+        CHECK(peakDb == Catch::Approx(0.0f).margin(2.0f));
+    }
+}
+
+TEST_CASE("Stored levels are absolute: a sine at 0.1 amplitude reads about 20 dB below a full-scale one",
+          "[stream_codec][dbfs]") {
+    const AudioBuffer loud = makeSineTone(1000.0f, 0.5f, 44100);
+    AudioBuffer quiet = loud;
+    for (float& sample : quiet.left) sample *= 0.1f;
+    for (float& sample : quiet.right) sample *= 0.1f;
+
+    const auto loudImage = encode(loud, StreamCodecConfig{});
+    const auto quietImage = encode(quiet, StreamCodecConfig{});
+    const float loudPeakDb = *std::max_element(loudImage.leftMagnitudeDb.begin(), loudImage.leftMagnitudeDb.end());
+    const float quietPeakDb = *std::max_element(quietImage.leftMagnitudeDb.begin(), quietImage.leftMagnitudeDb.end());
+
+    CHECK(quietPeakDb - loudPeakDb == Catch::Approx(-20.0f).margin(0.5f));
+}
+
+TEST_CASE("A quiet signal decodes back at its own original peak", "[stream_codec]") {
     AudioBuffer quiet = makeSineTone(1000.0f, 0.5f, 44100);
     for (float& sample : quiet.left) sample *= 0.1f;
     for (float& sample : quiet.right) sample *= 0.1f;
 
-    const auto image = encode(quiet, StreamCodecConfig{});
-    CHECK(image.inputNormalizationScale > 1.0f);  // boosted, since peak (0.1) is well below the 0.95 target.
-
-    const AudioBuffer decoded = decode(image);
-    // Measured away from the signal's own first/last ~2000 samples - the
-    // overlap-add reconstruction's own window coverage is thinner right at
-    // the very edges (a handful of samples see fewer overlapping analysis
-    // frames than the steady-state interior does), a real, pre-existing
-    // STFT edge characteristic unrelated to normalization - see
-    // docs/sound-mind-architecture.md's Known Issues for the full account.
-    // Checking the interior isolates normalization's own correctness from it.
+    const AudioBuffer decoded = decode(encode(quiet, StreamCodecConfig{}));
+    // Measured away from the first/last ~2000 samples - see
+    // docs/sound-mind-architecture.md's Known Issues #2 (STFT edge
+    // coverage).
     const float decodedPeak = *std::max_element(decoded.left.begin() + 2000, decoded.left.end() - 2000);
     CHECK(decodedPeak == Catch::Approx(0.1f).margin(0.01f));
 }
 
-TEST_CASE("A loud signal is normalized down toward 0.95 peak internally, but decodes back at its own original peak",
-          "[stream_codec]") {
-    const AudioBuffer loud = makeSineTone(1000.0f, 0.5f, 44100);  // unit amplitude - peak 1.0, above the 0.95 target.
+TEST_CASE("A full-scale signal decodes back at its own original peak", "[stream_codec]") {
+    const AudioBuffer loud = makeSineTone(1000.0f, 0.5f, 44100);
 
-    const auto image = encode(loud, StreamCodecConfig{});
-    CHECK(image.inputNormalizationScale < 1.0f);
-
-    const AudioBuffer decoded = decode(image);
-    // Measured away from the edges - see the quiet-signal test's own docs.
+    const AudioBuffer decoded = decode(encode(loud, StreamCodecConfig{}));
     const float decodedPeak = *std::max_element(decoded.left.begin() + 2000, decoded.left.end() - 2000);
     CHECK(decodedPeak == Catch::Approx(1.0f).margin(0.05f));
-}
-
-TEST_CASE("Silence normalizes to a scale of exactly 1.0 (nothing to measure a peak from)", "[stream_codec]") {
-    AudioBuffer silence;
-    silence.sampleRateHz = 44100;
-    silence.left.assign(4410, 0.0f);
-    silence.right.assign(4410, 0.0f);
-
-    const auto image = encode(silence, StreamCodecConfig{});
-    CHECK(image.inputNormalizationScale == 1.0f);
 }
 
 TEST_CASE("A-weighting makes a bass tone store measurably quieter than an equal-amplitude 1 kHz tone", "[stream_codec]") {

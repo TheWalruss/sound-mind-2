@@ -12,6 +12,7 @@ StreamIncrementalEncoder::StreamIncrementalEncoder(StreamCodecConfig config)
       window_(hannWindow(fftSize_)),
       linearBinIndex_(logBinToLinearBinIndex(config, fftSize_)),
       weightDb_(logBinWeightingDb(config)),
+      referenceDb_(fullScaleReferenceDb(fftSizeFor(config.hopLength))),
       // Pre-sized to fftSize_ once here, matching encode()'s own pattern -
       // extractFrame() fills exactly `frame.size()` samples, it doesn't
       // resize `frame` itself.
@@ -43,8 +44,8 @@ void StreamIncrementalEncoder::encodeFrameAt(std::ptrdiff_t startSample) {
         const SpectrumSample left = sampleSpectrum(spectrumLeftScratch_, index);
         const SpectrumSample right = sampleSpectrum(spectrumRightScratch_, index);
         const SpectrumSample mid = sampleSpectrum(spectrumMidScratch_, index);
-        leftDb[bin] = amplitudeToDb(left.magnitude) + weightDb_[bin];
-        rightDb[bin] = amplitudeToDb(right.magnitude) + weightDb_[bin];
+        leftDb[bin] = amplitudeToDb(left.magnitude) - referenceDb_ + weightDb_[bin];
+        rightDb[bin] = amplitudeToDb(right.magnitude) - referenceDb_ + weightDb_[bin];
         phase[bin] = std::atan2(mid.sinPhase, mid.cosPhase);
     }
 

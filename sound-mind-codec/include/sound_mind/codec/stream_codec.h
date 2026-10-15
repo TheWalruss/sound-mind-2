@@ -74,21 +74,13 @@ struct StreamImage {
     ///        number of hops.
     std::uint64_t sampleCount = 0;
 
-    /// @brief The gain `encode()` applied to the input audio before
-    ///        transforming it, so the stored amplitude makes good use of
-    ///        the dB range regardless of how quiet or loud the source was -
-    ///        `decode()` divides the final reconstructed audio by this same
-    ///        value, so the decoded result's absolute level always matches
-    ///        the original input exactly, independent of this internal
-    ///        choice. `1.0` for a signal already at (or silent, so there's
-    ///        nothing to measure a peak from) the target peak - see
-    ///        `encode()`'s own docs for the exact formula.
-    float inputNormalizationScale = 1.0f;
-
-    /// @brief Left channel amplitude, in dB, row-major `[bin][frame]`.
+    /// @brief Left channel amplitude, in dBFS (A-weighted), row-major
+    ///        `[bin][frame]` - a full-scale (amplitude 1) 1 kHz sine reads
+    ///        about 0 dB in its own bin, at any hop length; see encode().
     std::vector<float> leftMagnitudeDb;
 
-    /// @brief Right channel amplitude, in dB, row-major `[bin][frame]`.
+    /// @brief Right channel amplitude, in dBFS (A-weighted), row-major
+    ///        `[bin][frame]` - see leftMagnitudeDb.
     std::vector<float> rightMagnitudeDb;
 
     /// @brief The shared phase channel, in radians, row-major
@@ -100,21 +92,17 @@ struct StreamImage {
  * @brief Encodes stereo audio into the Stream codec's time-frequency
  *        representation.
  *
- * Three pre/post-processing steps wrap the core STFT, all per
- * `docs/sound-mind-codec-design.md` (and, before this, both tracked as open
- * items on `docs/sound-mind-architecture.md`'s *Decisions Needed*):
+ * Three pre/post-processing steps wrap the core STFT, per
+ * `docs/sound-mind-codec-design.md`:
  *
- * - **Input-level normalization.** The combined left/right peak (so stereo
- *   balance is preserved - a per-channel peak would scale each channel
- *   differently) is scaled toward a target of `0.95` before anything else
- *   happens: `scale = (peak > 0) ? 0.95f / peak : 1.0f`. This can scale a
- *   quiet signal *up* (so its stored amplitude makes good use of the dB
- *   range, instead of reading as near-black) or a loud signal *down* (so it
- *   doesn't sit right at the dB ceiling with no margin), and is always
- *   exactly reversible - `scale` is carried on the returned `StreamImage`
- *   (`inputNormalizationScale`) and `decode()` divides it back out, so the
- *   decoded audio's absolute level always matches the original input,
- *   regardless of this internal choice.
+ * - **Absolute dBFS calibration.** Each bin's FFT magnitude has
+ *   `20*log10(fftSize/4)` subtracted - the magnitude a full-scale sine's
+ *   own bin reads with this Hann window - so stored values are absolute
+ *   dBFS: a full-scale tone reads about 0 dB whatever the hop length, and
+ *   a quieter input reads correspondingly lower. `decode()` adds it back.
+ *   (This replaced a per-encode input normalization in `v0.1.33.1`, which
+ *   put every clip near the top of the range regardless of its real level
+ *   - see `docs/sound-mind-architecture.md`'s Decision #232.)
  * - **Reflection padding.** The signal is extended by
  *   `min(sampleRateHz / minFrequencyHz, numSamples - 1)` samples at each
  *   end, mirroring the signal's own content (not repeating the boundary
@@ -132,11 +120,9 @@ struct StreamImage {
  *   same offset back out before reconstructing audio, so this never
  *   affects the decoded result.
  *
- * `StreamIncrementalEncoder` deliberately does **not** apply normalization
- * or padding (both need knowledge of the whole signal's peak/extent, which
- * a live, causally-arriving stream doesn't have) - only A-weighting, which
- * is a pure per-bin, per-frame function with no such dependency. See that
- * class's own docs.
+ * `StreamIncrementalEncoder` applies the same calibration and A-weighting
+ * (both pure per-bin, per-frame functions), but not padding, which needs
+ * the whole signal's extent. See that class's own docs.
  *
  * @param audio The audio to encode.
  * @param config Encode parameters; the same values are needed again to
@@ -156,11 +142,9 @@ struct StreamImage {
 /**
  * @brief Decodes a Stream image back into stereo audio.
  *
- * Reverses both of encode()'s reversible steps: each bin's A-weighting
- * offset is subtracted before reconstructing amplitude, and the final
- * reconstructed audio is divided by `image.inputNormalizationScale` before
- * trimming - see encode()'s own docs for why both are exact inverses
- * regardless of what internal choice encode() made.
+ * Reverses encode()'s per-bin steps: each bin's A-weighting offset is
+ * subtracted and the full-scale reference added back before reconstructing
+ * amplitude, so the decoded audio is at the original absolute level.
  *
  * @param image The encoded representation to decode.
  * @return The reconstructed audio, trimmed to `image.sampleCount` samples.

@@ -73,21 +73,11 @@ TEST_CASE("StreamIncrementalEncoder produces the same data as encode() for the f
     std::vector<float> right;
     makeSineTone(1000.0f, 44100, config.sampleRateHz, left, right);
 
-    // Rescale to land at exactly encode()'s own 0.95 input-normalization
-    // target (see its own docs), so its gain is a no-op (scale == 1.0) and
-    // this direct encode()-vs-incremental comparison isn't confounded by a
-    // gain StreamIncrementalEncoder deliberately never applies (it can't
-    // know the whole stream's own future peak).
-    const float actualPeak = *std::max_element(left.begin(), left.end());
-    for (float& sample : left) sample *= 0.95f / actualPeak;
-    for (float& sample : right) sample *= 0.95f / actualPeak;
-
     sound_mind::codec::AudioBuffer audio;
     audio.sampleRateHz = config.sampleRateHz;
     audio.left = left;
     audio.right = right;
     const StreamImage wholeBuffer = encode(audio, config);
-    REQUIRE(wholeBuffer.inputNormalizationScale == Catch::Approx(1.0f).margin(0.001));
 
     StreamIncrementalEncoder encoder{config};
     encoder.pushSamples(left.data(), right.data(), left.size());
@@ -177,4 +167,28 @@ TEST_CASE("reset then pushSamples behaves exactly like a freshly constructed enc
     CHECK(reusedImage.leftMagnitudeDb == freshImage.leftMagnitudeDb);
     CHECK(reusedImage.rightMagnitudeDb == freshImage.rightMagnitudeDb);
     CHECK(reusedImage.sharedPhaseRadians == freshImage.sharedPhaseRadians);
+}
+
+TEST_CASE("StreamIncrementalEncoder stores the same absolute levels as encode()", "[stream_incremental_encoder][dbfs]") {
+    StreamCodecConfig config;
+    std::vector<float> left;
+    std::vector<float> right;
+    makeSineTone(1000.0f, 22050, config.sampleRateHz, left, right);
+    for (float& sample : left) sample *= 0.25f;
+    for (float& sample : right) sample *= 0.25f;
+
+    StreamIncrementalEncoder encoder{config};
+    encoder.pushSamples(left.data(), right.data(), left.size());
+    const StreamImage live = encoder.snapshot();
+
+    sound_mind::codec::AudioBuffer audio;
+    audio.sampleRateHz = config.sampleRateHz;
+    audio.left = left;
+    audio.right = right;
+    const StreamImage batch = encode(audio, config);
+
+    const float livePeakDb = *std::max_element(live.leftMagnitudeDb.begin(), live.leftMagnitudeDb.end());
+    const float batchPeakDb = *std::max_element(batch.leftMagnitudeDb.begin(), batch.leftMagnitudeDb.end());
+    CHECK(livePeakDb == Catch::Approx(batchPeakDb).margin(1.0f));
+    CHECK(livePeakDb == Catch::Approx(-12.04f).margin(2.0f));  // 20*log10(0.25)
 }

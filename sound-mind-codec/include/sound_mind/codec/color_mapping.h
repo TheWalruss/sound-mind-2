@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -8,6 +9,36 @@
 #include "sound_mind/codec/stream_codec.h"
 
 namespace sound_mind::codec {
+
+/// @brief The noise floor of the absolute dBFS scale every stored Stream
+///        magnitude uses - intensity value 0, and the darkest the canvas
+///        shows. See `StreamImage::leftMagnitudeDb`.
+inline constexpr float kNoiseFloorDbfs = -96.0f;
+
+/// @brief Full scale on that same dBFS scale - a full-scale (amplitude 1)
+///        sine's own level; intensity value 1, and the brightest the
+///        canvas shows.
+inline constexpr float kFullScaleDbfs = 0.0f;
+
+/**
+ * @brief The one canonical dBFS -> intensity value mapping: linear in dB,
+ *        0 at `kNoiseFloorDbfs`, 1 at `kFullScaleDbfs`. The canvas's own
+ *        brightness and every "value"-unit intensity control use exactly
+ *        this, so what you see and what you type agree.
+ * @param db A level in dBFS.
+ * @return The intensity value - not clamped, so above full scale reads
+ *         above 1 and below the floor reads below 0.
+ */
+[[nodiscard]] constexpr float dbfsToIntensityValue(float db) noexcept {
+    return (db - kNoiseFloorDbfs) / (kFullScaleDbfs - kNoiseFloorDbfs);
+}
+
+/// @brief The exact inverse of dbfsToIntensityValue().
+/// @param value An intensity value (0 = noise floor, 1 = full scale).
+/// @return The level in dBFS.
+[[nodiscard]] constexpr float intensityValueToDbfs(float value) noexcept {
+    return kNoiseFloorDbfs + value * (kFullScaleDbfs - kNoiseFloorDbfs);
+}
 
 /**
  * @brief Renders a StreamImage as a basic RGB composite, per
@@ -24,6 +55,17 @@ namespace sound_mind::codec {
  * @return The rendered RGB composite.
  */
 [[nodiscard]] RgbImage toRgbImage(const StreamImage& image);
+
+/**
+ * @brief Overwrites, in `rgb` (a toRgbImage() render of `image`), every
+ *        cell whose left or right level is above `kFullScaleDbfs` with a
+ *        magenta/black checker, so clipping stands out where brightness
+ *        alone has already saturated.
+ * @param image The Stream image `rgb` was rendered from.
+ * @param rgb The render to mark, in place; must match `image`'s size.
+ * @return How many cells were marked.
+ */
+std::size_t markClippedCells(const StreamImage& image, RgbImage& rgb);
 
 /**
  * @brief Renders a StreamImage as a single grayscale page, per

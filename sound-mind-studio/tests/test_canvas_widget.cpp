@@ -1911,3 +1911,29 @@ void CanvasWidgetTest::hidingALayerShowsWithoutAnExplicitInvalidate() {
 
     QVERIFY(widget.grab().toImage().pixelColor(10, 10).red() != 255);
 }
+
+void CanvasWidgetTest::clipIndicatorMarksCellsAboveFullScaleOnlyWhileEnabled() {
+    ProjectSettings settings;
+    settings.canvasWidth = 2;
+    Project project = Project::createNew(settings);
+    StreamImage overFullScale = redTwoByTwoContent();
+    overFullScale.leftMagnitudeDb.assign(4, 6.0f);
+    overFullScale.rightMagnitudeDb.assign(4, 6.0f);
+    Layer layer(0, "Loud", LayerType::Normal);
+    layer.setContent(overFullScale);
+    project.addLayer(std::move(layer));
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(20, 20);
+    QVERIFY(!widget.clipIndicatorEnabled());
+    // Both channels saturated: yellow, green fully on.
+    QCOMPARE(widget.grab().toImage().pixelColor(10, 10).green(), 255);
+
+    widget.setClipIndicatorEnabled(true);
+    QVERIFY(widget.clipIndicatorEnabled());
+    // Magenta/black checker - green off either way.
+    QCOMPARE(widget.grab().toImage().pixelColor(10, 10).green(), 0);
+
+    widget.setClipIndicatorEnabled(false);
+    QCOMPARE(widget.grab().toImage().pixelColor(10, 10).green(), 255);
+}

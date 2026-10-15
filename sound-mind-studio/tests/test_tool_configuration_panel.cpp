@@ -101,9 +101,10 @@ void ToolConfigurationPanelTest::freshPanelIsAnOpaqueCircularBrush() {
     QCOMPARE(dynamic_cast<const ProceduralConfiguration&>(config).tipShape(), BrushTipShape::Circle);
     QCOMPARE(config.defaultGradient().stops().front().leftOpacity, 1.0f);
     QCOMPARE(config.defaultGradient().stops().front().rightOpacity, 1.0f);
-    // +45 dB on both channels - audible next to a normal imported tone.
-    QCOMPARE(config.defaultGradient().stops().front().leftIntensity, 45.0f);
-    QCOMPARE(config.defaultGradient().stops().front().rightIntensity, 45.0f);
+    // -20 dBFS on both channels - clearly audible, with headroom for a
+    // stroke spanning many frequency bins.
+    QCOMPARE(config.defaultGradient().stops().front().leftIntensity, -20.0f);
+    QCOMPARE(config.defaultGradient().stops().front().rightIntensity, -20.0f);
 }
 
 void ToolConfigurationPanelTest::freshPanelHasBothOverlayCheckboxesOff() {

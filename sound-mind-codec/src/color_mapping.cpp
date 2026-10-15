@@ -9,15 +9,13 @@ namespace sound_mind::codec {
 
 namespace {
 
-// Matches the legacy Pool codec's dB floor convention (see
-// docs/legacy/CODEC_DETAILS.md section 2) - a reasonable, already-precedented
-// display range, even though Stream itself stores unclamped float dB.
-constexpr float kDisplayMinDb = -96.0f;
-constexpr float kDisplayMaxDb = 0.0f;
+// The display range is the absolute dBFS intensity scale itself - see
+// dbfsToIntensityValue() - so canvas brightness and typed intensity agree.
+constexpr float kDisplayMinDb = kNoiseFloorDbfs;
+constexpr float kDisplayMaxDb = kFullScaleDbfs;
 
 [[nodiscard]] std::uint8_t dbToByte(float db) noexcept {
-    const float clamped = std::clamp(db, kDisplayMinDb, kDisplayMaxDb);
-    const float normalized = (clamped - kDisplayMinDb) / (kDisplayMaxDb - kDisplayMinDb);
+    const float normalized = std::clamp(dbfsToIntensityValue(db), 0.0f, 1.0f);
     return static_cast<std::uint8_t>(std::lround(normalized * 255.0f));
 }
 
@@ -69,6 +67,28 @@ RgbImage toRgbImage(const StreamImage& image) {
         }
     }
     return rgb;
+}
+
+std::size_t markClippedCells(const StreamImage& image, RgbImage& rgb) {
+    const std::uint32_t binCount = image.config.binCount;
+    const std::uint32_t frameCount = image.frameCount;
+    std::size_t marked = 0;
+    for (std::uint32_t row = 0; row < binCount; ++row) {
+        const std::uint32_t bin = binCount - 1 - row;
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = static_cast<std::size_t>(bin) * frameCount + frame;
+            if (image.leftMagnitudeDb[cell] <= kFullScaleDbfs && image.rightMagnitudeDb[cell] <= kFullScaleDbfs) {
+                continue;
+            }
+            const std::size_t pixel = (static_cast<std::size_t>(row) * frameCount + frame) * 3;
+            const bool magenta = ((row + frame) % 2) == 0;
+            rgb.pixels[pixel + 0] = magenta ? 255 : 0;
+            rgb.pixels[pixel + 1] = 0;
+            rgb.pixels[pixel + 2] = magenta ? 255 : 0;
+            ++marked;
+        }
+    }
+    return marked;
 }
 
 RgbImage toGrayscaleImage(const StreamImage& image) {

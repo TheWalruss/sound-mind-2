@@ -14,6 +14,9 @@ using sound_mind::codec::StreamCodecConfig;
 using sound_mind::codec::StreamImage;
 using sound_mind::codec::toGrayscaleImage;
 using sound_mind::codec::toRgbImage;
+using sound_mind::codec::dbfsToIntensityValue;
+using sound_mind::codec::intensityValueToDbfs;
+using sound_mind::codec::markClippedCells;
 
 namespace {
 
@@ -158,4 +161,45 @@ TEST_CASE("toRgbImage(PoolImage) uses the same red/green/blue convention as the 
     CHECK(rgb.pixels[0] > 120);
     CHECK(rgb.pixels[0] < 135);
     CHECK(rgb.pixels[2] == 0);  // blue comes from left phase (-pi), not right's constant 1.0
+}
+
+TEST_CASE("The intensity value scale maps the noise floor to 0 and full scale to 1, linearly in dB",
+          "[color_mapping][intensity]") {
+    CHECK(dbfsToIntensityValue(-96.0f) == Catch::Approx(0.0f));
+    CHECK(dbfsToIntensityValue(0.0f) == Catch::Approx(1.0f));
+    CHECK(dbfsToIntensityValue(-48.0f) == Catch::Approx(0.5f));
+    // Not clamped - above full scale reads above 1, below the floor below 0.
+    CHECK(dbfsToIntensityValue(6.0f) > 1.0f);
+    CHECK(dbfsToIntensityValue(-120.0f) < 0.0f);
+    for (const float db : {-96.0f, -40.0f, -6.0f, 0.0f, 3.0f}) {
+        CHECK(intensityValueToDbfs(dbfsToIntensityValue(db)) == Catch::Approx(db).margin(1e-4));
+    }
+}
+
+TEST_CASE("markClippedCells marks exactly the cells above full scale on either channel",
+          "[color_mapping][intensity]") {
+    StreamImage image;
+    image.config.binCount = 2;
+    image.frameCount = 2;
+    image.sampleCount = 100;
+    // [bin][frame]: cell 0 left over, cell 1 right over, cell 2 exactly 0 dB, cell 3 quiet.
+    image.leftMagnitudeDb = {3.0f, -10.0f, 0.0f, -50.0f};
+    image.rightMagnitudeDb = {-10.0f, 1.0f, 0.0f, -50.0f};
+    image.sharedPhaseRadians = {0.0f, 0.0f, 0.0f, 0.0f};
+    RgbImage rgb = toRgbImage(image);
+    const RgbImage before = rgb;
+
+    const std::size_t marked = markClippedCells(image, rgb);
+
+    CHECK(marked == 2);
+    // Display rows are flipped (row 0 = highest bin), so bin 0 is row 1.
+    auto pixelChanged = [&](std::uint32_t row, std::uint32_t frame) {
+        const std::size_t i = (static_cast<std::size_t>(row) * rgb.width + frame) * 3;
+        return rgb.pixels[i] != before.pixels[i] || rgb.pixels[i + 1] != before.pixels[i + 1] ||
+               rgb.pixels[i + 2] != before.pixels[i + 2];
+    };
+    CHECK(pixelChanged(1, 0));        // bin 0, frame 0 - left over.
+    CHECK(pixelChanged(1, 1));        // bin 0, frame 1 - right over.
+    CHECK_FALSE(pixelChanged(0, 0));  // bin 1, frame 0 - exactly full scale.
+    CHECK_FALSE(pixelChanged(0, 1));  // bin 1, frame 1 - quiet.
 }

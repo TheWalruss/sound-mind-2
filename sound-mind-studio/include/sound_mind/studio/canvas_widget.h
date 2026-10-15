@@ -195,6 +195,20 @@ public:
     [[nodiscard]] bool polarMode() const noexcept { return polarMode_; }
 
     /**
+     * @brief Shows or hides the clip indicator: composite cells above full
+     *        scale (0 dBFS on either channel) drawn as a magenta/black
+     *        checker, since brightness alone saturates there (see
+     *        `sound_mind::codec::markClippedCells()`). Off by default.
+     *        Recomputes the displayed composite.
+     * @param enabled Whether to mark clipped cells.
+     */
+    void setClipIndicatorEnabled(bool enabled);
+
+    /// @brief Whether the clip indicator is on.
+    /// @return `true` if clipped cells are marked; `false` by default.
+    [[nodiscard]] bool clipIndicatorEnabled() const noexcept { return clipIndicatorEnabled_; }
+
+    /**
      * @brief Sets which kind of mouse interaction the canvas currently
      *        accepts.
      *
@@ -1041,6 +1055,8 @@ private:
     /// @brief The layerStackSignature() `lastRenderedComposite_` was
     ///        computed against - see currentComposite().
     LayerStackSignature lastRenderedSignature_;
+    /// @brief See setClipIndicatorEnabled().
+    bool clipIndicatorEnabled_ = false;
     std::optional<double> playheadFraction_;
     /// @brief See setPolarMode()'s own docs.
     bool polarMode_ = false;

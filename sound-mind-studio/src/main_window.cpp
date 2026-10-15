@@ -1337,6 +1337,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
            "outward from the centre. Painting works in polar mode."));
     connect(soundFlowerAction, &QAction::toggled, this, &MainWindow::setSoundFlowerModeEnabled);
 
+    QAction* showClippingAction = viewMenu->addAction(tr("Show &Clipping"));
+    showClippingAction->setObjectName(QStringLiteral("showClippingAction"));
+    showClippingAction->setCheckable(true);
+    showClippingAction->setToolTip(
+        tr("Mark every spot louder than full scale (0 dBFS) with a magenta/black\n"
+           "checker - those spots will distort (clip) when played or exported."));
+    connect(showClippingAction, &QAction::toggled, canvas_, &CanvasWidget::setClipIndicatorEnabled);
+
     // Composer Mode's own toggle, moved here from a standalone
     // transportToolBar action - real-world testing pass 2026-09-29,
     // confirmed with the user.

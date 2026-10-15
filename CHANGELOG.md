@@ -6,6 +6,27 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.33.1] - 2026-10-15
+
+Pre-Beta Plan milestone `v0.Y.73.1`, installment A: one absolute loudness scale.
+
+### Changed
+
+- **Brightness now matches loudness.** Imported, recorded, and painted content are all stored and shown on one absolute scale, dBFS: black is silence (-96 dB), full brightness is full scale (0 dB). Previously every imported clip was scaled toward full brightness whatever its real level, and recordings sat on a different scale again.
+- **Brush intensity is now in dBFS, from -96 to 0.** The default is -20 dB. (The old +45 dB default and +60 dB maximum only made sense on the previous, uncalibrated scale.)
+
+### Added
+
+- **View → Show Clipping** marks every spot louder than full scale (0 dBFS) with a magenta/black checker - those spots distort when played or exported.
+
+### Changed (developer-facing)
+
+- The GPU-vs-CPU timing tests warm up the GPU once and compare the best of three runs each, instead of a single sample - they were flaky when other GPU work ran at the same time.
+
+### Compatibility
+
+- Stream content saved by earlier versions is on the old scale and will look and sound about 50 dB too loud. Re-import it. (Not migrated, per the pre-Beta decision to ignore compatibility.)
+
 ## [0.1.32.1] - 2026-10-15
 
 Pre-Beta Plan milestone `v0.Y.72.1`.
