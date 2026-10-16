@@ -531,6 +531,13 @@ takes a **Seed**: the same seed always reproduces exactly the same result
 - **Lattice** - an organic, self-similar texture. The **Chaos ↔ Order**
   slider runs from broadband noise (Chaos) through rich, coherent texture
   (the middle) to smooth, rigid structure (Order).
+- **Fractal** - a branching tree of tones: one long tone across the canvas,
+  with branches sprouting from it at musical intervals, and branches from
+  those, each a little quieter. The **Chaos ↔ Order** slider sets how
+  orderly it is: toward Order, branches split evenly at octaves, fifths and
+  thirds and hold their pitch - a rigid, repeating shape; toward Chaos,
+  they sprout at random moments and intervals and slide in pitch; in
+  between, the branching melodic shapes it's meant for.
 - **Noise** - colored noise across the whole canvas:
   - **Color** - **White** (equal energy at every frequency), **Pink**
     (equal energy per octave - the most natural-sounding), **Red /
@@ -2203,10 +2210,10 @@ with one continuous audio track underneath and no audible restarts in
 the exported file. There's still no panel to inspect what a recorded
 macro actually contains, and it isn't saved with the project.
 
-**Generators**: **+ Generate Layer** offers the Lattice and Noise
-generators (see [Generating a Layer](#generating-a-layer)), and Noise is a
-MindWave type too. The design document's "Fractal" and "Streaming" families
-are still being built.
+**Generators**: **+ Generate Layer** offers the Lattice, Fractal and Noise
+generators (see [Generating a Layer](#generating-a-layer)), and
+Noise is a MindWave type too. The design document's "Streaming" family is
+still being built.
 
 **Analysis Tools** have taken their first step too: the Layers panel's own
 per-layer **loudness indicator** (see [Working with Layers](#working-with-layers)

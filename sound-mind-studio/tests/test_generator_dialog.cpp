@@ -109,3 +109,17 @@ void GeneratorDialogTest::theCustomSpectrumShowsOnlyForCustomNoise() {
     QVERIFY(!editor->parentWidget()->isHidden());
     QCOMPARE(dialog.configuration().noise.customSpectrum.stops().front().leftIntensity, -30.0f);
 }
+
+void GeneratorDialogTest::fractalIsOfferedOnTheOrderChaosAxis() {
+    GeneratorDialog dialog;
+    auto* family = dialog.findChild<QComboBox*>(QStringLiteral("generatorFamilyCombo"));
+    QVERIFY(family->findData(static_cast<int>(GeneratorFamily::Fractal)) >= 0);
+
+    choose(family, static_cast<int>(GeneratorFamily::Fractal));
+    dialog.findChild<QSlider*>(QStringLiteral("orderChaosSlider"))->setValue(-40);
+
+    QVERIFY(!dialog.findChild<QSlider*>(QStringLiteral("orderChaosSlider"))->isHidden());
+    QVERIFY(dialog.findChild<QGroupBox*>(QStringLiteral("noiseGroup"))->isHidden());
+    QCOMPARE(dialog.configuration().family, GeneratorFamily::Fractal);
+    QCOMPARE(dialog.configuration().orderChaos, -0.4);
+}

@@ -1301,7 +1301,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 **Installments:**
 - ✅ **A** (`v0.1.39.1`, Decision #244): noise as a Generate Layer type - the five colors and a custom spectrum, resolution and spectrum MindWave bindings, and a Generator choice in the dialog.
 - ✅ **B** (`v0.1.39.2`, Decision #245): noise as a MindWave generator type, on the same seeded noise core.
-- **C**: the Fractal family.
+- ✅ **C** (`v0.1.39.3`, Decision #246): the Fractal family.
 - **D**: the Streaming family.
 
 #### `v0.Y.80.1` - Analysis tools (L)

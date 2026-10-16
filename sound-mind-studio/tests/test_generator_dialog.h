@@ -12,4 +12,5 @@ private slots:
     void choosingNoiseShowsTheNoiseControlsAndHidesOrderChaos();
     void noiseSettingsAndBindingsReachTheConfiguration();
     void theCustomSpectrumShowsOnlyForCustomNoise();
+    void fractalIsOfferedOnTheOrderChaosAxis();
 };

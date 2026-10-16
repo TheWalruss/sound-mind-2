@@ -25,7 +25,7 @@ class GradientEditorWidget;
  *        generated from them (`sound_mind::core::generateContent()`).
  *
  * **Families offered:** Lattice (`v0.Y.51.1`) and, as of Pre-Beta Plan
- * `v0.Y.79.1`, Noise. The Order/Chaos slider applies to the order/chaos
+ * `v0.Y.79.1`, Fractal and Noise. The Order/Chaos slider applies to the order/chaos
  * families and is hidden for Noise; the seed applies to every family.
  *
  * **Noise group** (shown only for Noise): the color; the level (dB, with a

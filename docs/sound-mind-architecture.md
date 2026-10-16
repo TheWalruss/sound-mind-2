@@ -2249,6 +2249,31 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Core: 3 cases - one value per cell and seeded determinism; color ordering of mean step size (red < pink < white), purple's negative lag-1 correlation, Custom -2 matching Red; JSON round trip.
       - `MindWaveEditorTest`: 2 cases.
 
+246. **The Fractal generator family.** Settled in `v0.1.39.3`, Pre-Beta Plan milestone `v0.Y.79.1` installment C.
+    - **Grammar:** `generateFractalContent()` grows a seeded tree of tones. The trunk spans the canvas (rounded onto a bin in the lower-middle range). Breadth-first, each branch spawns children, up to depth 5 and while the parent lasts at least 8 frames. Each child gets:
+      - a start point along the parent;
+      - a length that's a share of the parent's remainder;
+      - a pitch interval from the parent's pitch there;
+      - optional drift;
+      - a level 6 dB or more lower.
+      - Breadth-first order consumes the seed's sequence in one fixed order, so results replay exactly.
+    - **Order/chaos:** with chaos = 1 - (orderChaos+1)/2, every choice is `mix(ordered, random)`:
+      - children 2 → 1-4;
+      - positions evenly split → random;
+      - lengths 0.6 → random;
+      - intervals from {+12, +7, +4, -12, +19} semitones → ±24 continuous;
+      - drift 0 → up to an octave over the branch;
+      - a rigid (drift-free) tone snaps exactly onto a bin.
+      - This realizes the design doc's "rigid toward order, broadband toward chaos, branching melodic shapes between."
+    - **Rendering:** `ToneCanvas` is shared with installment D.
+      - Each partial is a Gaussian ridge (σ 0.6 bins) with a 10% fade at each end. Its phase advances `2πf·hop/sampleRate` per frame at its current frequency, so it decodes as a clean, continuous tone rather than noise.
+      - Overlaps sum in linear amplitude; a cell keeps its loudest contribution's phase.
+    - **Studio:** `GeneratorDialog` offers Fractal on the order/chaos axis.
+    - **Tests:**
+      - Core: audible, seeded and branching; fewer distinct pitches toward order than chaos over 5 seeds; the trunk's per-frame phase advance matches its frequency, and it decodes finite and non-silent.
+      - The old "unimplemented families are silent" test now covers Streaming only.
+      - `GeneratorDialogTest`: Fractal offered with the slider.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

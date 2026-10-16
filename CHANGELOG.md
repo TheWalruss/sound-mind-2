@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.39.3] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.79.1` (Generators), installment C.
+
+### Added
+
+- **Fractal generator.** **+ Generate Layer → Fractal** grows a branching tree of tones from a seed: harmonic, evenly split and steady toward Order; random intervals, timing and pitch slides toward Chaos.
+
 ## [0.1.39.2] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.79.1` (Generators), installment B.

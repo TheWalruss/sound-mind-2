@@ -111,20 +111,14 @@ TEST_CASE("generateContent at full chaos (-1) varies more between neighboring ce
     CHECK(roughness(chaosContent) > roughness(orderContent));
 }
 
-TEST_CASE("generateContent returns silent content for the not-yet-implemented Fractal/Streaming families",
+TEST_CASE("generateContent returns silent content for the not-yet-implemented Streaming family",
           "[core][generator]") {
     const ProjectSettings settings = makeTestSettings();
-    GeneratorConfiguration fractalConfig;
-    fractalConfig.family = GeneratorFamily::Fractal;
     GeneratorConfiguration streamingConfig;
     streamingConfig.family = GeneratorFamily::Streaming;
 
-    const auto fractalContent = generateContent(fractalConfig, settings);
     const auto streamingContent = generateContent(streamingConfig, settings);
 
-    for (const float value : fractalContent.leftMagnitudeDb) {
-        REQUIRE(value <= -90.0f);
-    }
     for (const float value : streamingContent.leftMagnitudeDb) {
         REQUIRE(value <= -90.0f);
     }

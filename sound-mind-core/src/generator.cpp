@@ -1,6 +1,7 @@
 #include "sound_mind/core/generator.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <numbers>
@@ -160,6 +161,168 @@ sound_mind::codec::StreamImage generateLatticeContent(const GeneratorConfigurati
     return result;
 }
 
+/// @brief One tone line for the Fractal/Streaming families: from
+/// `startFrame` for `frames` frames, centred on (fractional) bin `startBin`
+/// and drifting `driftBinsPerFrame` per frame, at `levelDb`.
+struct Partial {
+    double startFrame = 0.0;
+    double frames = 0.0;
+    double startBin = 0.0;
+    double driftBinsPerFrame = 0.0;
+    double levelDb = -12.0;
+};
+
+/// @brief Accumulates tone lines into linear amplitudes, keeping each cell's
+/// phase from its loudest contribution, then writes them out as dB.
+class ToneCanvas {
+public:
+    ToneCanvas(const sound_mind::codec::StreamCodecConfig& config, std::uint32_t frameCount)
+        : config_(config),
+          frameCount_(frameCount),
+          amplitude_(std::size_t{config.binCount} * frameCount, 0.0f),
+          loudest_(amplitude_.size(), 0.0f),
+          phase_(amplitude_.size(), 0.0f) {}
+
+    /// @brief Draws `partial` as a narrow Gaussian ridge (about 1.4 bins
+    /// wide) with a short fade in and out, its phase advancing each frame by
+    /// `2*pi*f*hop/sampleRate` at its current frequency, so it decodes as a
+    /// clean, continuous tone. `initialPhase` is the phase at its first frame.
+    void draw(const Partial& partial, double initialPhase) {
+        const double fade = std::max(1.0, 0.1 * partial.frames);
+        const double gain = std::pow(10.0, partial.levelDb / 20.0);
+        const double phasePerHz = 2.0 * std::numbers::pi * config_.hopLength / config_.sampleRateHz;
+        double phase = initialPhase;
+        const auto first = static_cast<std::int64_t>(std::ceil(partial.startFrame));
+        for (std::int64_t frame = first; static_cast<double>(frame) < partial.startFrame + partial.frames; ++frame) {
+            const double t = static_cast<double>(frame) - partial.startFrame;
+            const double centre = partial.startBin + partial.driftBinsPerFrame * t;
+            const double frequencyHz = binIndexToFrequency(static_cast<float>(centre), config_);
+            if (frame > first) {
+                phase += phasePerHz * frequencyHz;
+            }
+            if (frame < 0 || frame >= static_cast<std::int64_t>(frameCount_)) {
+                continue;
+            }
+            const double envelope = gain * std::min({1.0, (t + 1.0) / fade, (partial.frames - t) / fade});
+            const auto lowBin = static_cast<std::int64_t>(std::floor(centre)) - 2;
+            for (std::int64_t bin = lowBin; bin <= lowBin + 5; ++bin) {
+                if (bin < 0 || bin >= static_cast<std::int64_t>(config_.binCount)) {
+                    continue;
+                }
+                const double distance = (static_cast<double>(bin) - centre) / 0.6;
+                const auto value = static_cast<float>(envelope * std::exp(-0.5 * distance * distance));
+                if (value < 1e-7f) {
+                    continue;
+                }
+                const std::size_t cell =
+                    cellIndex(static_cast<std::uint32_t>(bin), static_cast<std::uint32_t>(frame), frameCount_);
+                amplitude_[cell] += value;
+                if (value > loudest_[cell]) {
+                    loudest_[cell] = value;
+                    phase_[cell] = static_cast<float>(std::remainder(phase, 2.0 * std::numbers::pi));
+                }
+            }
+        }
+    }
+
+    /// @brief The accumulated tones as a layer's content, silent elsewhere.
+    [[nodiscard]] sound_mind::codec::StreamImage finish() const {
+        sound_mind::codec::StreamImage result = silentResult(config_, frameCount_);
+        for (std::size_t cell = 0; cell < amplitude_.size(); ++cell) {
+            if (amplitude_[cell] > 0.0f) {
+                result.leftMagnitudeDb[cell] = std::max(kNoiseSilenceDb, 20.0f * std::log10(amplitude_[cell]));
+                result.rightMagnitudeDb[cell] = result.leftMagnitudeDb[cell];
+                result.sharedPhaseRadians[cell] = phase_[cell];
+            }
+        }
+        return result;
+    }
+
+private:
+    sound_mind::codec::StreamCodecConfig config_;
+    std::uint32_t frameCount_;
+    std::vector<float> amplitude_;
+    std::vector<float> loudest_;
+    std::vector<float> phase_;
+};
+
+/**
+ * @brief `GeneratorFamily::Fractal` (Pre-Beta Plan `v0.Y.79.1`): a seeded
+ * branching grammar of tones - see the design doc's "Generators".
+ *
+ * A sustained trunk tone spans the canvas; every branch spawns children
+ * part-way along it, each starting at a pitch interval from its parent and
+ * lasting part of what's left, up to `kMaxDepth` levels deep, each level
+ * about 6 dB quieter. `config.orderChaos` blends every choice:
+ * - toward **order**: two children at evenly spaced points, harmonic
+ *   intervals (octave, fifth, third, octave below, twelfth), steady pitch,
+ *   on exact bins - rigid, repetitive structure;
+ * - toward **chaos**: one to four children at random points, arbitrary
+ *   intervals up to two octaves either way, random lengths and pitch drift;
+ * - in between, branching melodic and harmonic shapes that vary rather
+ *   than repeat.
+ */
+sound_mind::codec::StreamImage generateFractalContent(const GeneratorConfiguration& config,
+                                                       const sound_mind::codec::StreamCodecConfig& codecConfig,
+                                                       std::uint32_t frameCount) {
+    constexpr int kMaxDepth = 5;
+    constexpr std::array<double, 5> kHarmonicSemitones{12.0, 7.0, 4.0, -12.0, 19.0};
+    const double chaos = 1.0 - std::clamp((config.orderChaos + 1.0) / 2.0, 0.0, 1.0);
+    const double binsPerOctave =
+        static_cast<double>(codecConfig.binCount > 1 ? codecConfig.binCount - 1 : 1) /
+        std::log2(std::max(1.0001, static_cast<double>(codecConfig.maxFrequencyHz) / codecConfig.minFrequencyHz));
+    std::mt19937_64 rng(config.seed);
+    std::uniform_real_distribution<double> unit(0.0, 1.0);
+    const auto mix = [chaos](double ordered, double chaotic) { return ordered + chaos * (chaotic - ordered); };
+
+    std::vector<Partial> partials;
+    Partial trunk;
+    trunk.frames = frameCount;
+    trunk.startBin = std::round(codecConfig.binCount * (0.25 + 0.25 * unit(rng)));
+    partials.push_back(trunk);
+
+    // Breadth-first growth: the seed's random sequence is consumed in one
+    // fixed order.
+    std::vector<std::pair<std::size_t, int>> frontier{{0, 0}};
+    for (std::size_t next = 0; next < frontier.size(); ++next) {
+        const auto [parentIndex, depth] = frontier[next];
+        const Partial parent = partials[parentIndex];
+        if (depth >= kMaxDepth || parent.frames < 8.0) {
+            continue;
+        }
+        const int children = std::clamp(static_cast<int>(std::lround(mix(2.0, 1.0 + 3.0 * unit(rng)))), 1, 4);
+        for (int child = 0; child < children; ++child) {
+            const double position = mix((child + 1.0) / (children + 1.0), unit(rng));
+            Partial branch;
+            branch.startFrame = parent.startFrame + position * parent.frames;
+            const double remaining = parent.startFrame + parent.frames - branch.startFrame;
+            branch.frames = remaining * mix(0.6, 0.3 + 0.6 * unit(rng));
+            const std::size_t pick =
+                static_cast<std::size_t>(unit(rng) * static_cast<double>(kHarmonicSemitones.size())) %
+                kHarmonicSemitones.size();
+            const double semitones = mix(kHarmonicSemitones[pick], (unit(rng) * 2.0 - 1.0) * 24.0);
+            const double parentBinThere = parent.startBin + parent.driftBinsPerFrame * position * parent.frames;
+            branch.startBin = parentBinThere + semitones / 12.0 * binsPerOctave;
+            branch.driftBinsPerFrame = chaos * (unit(rng) * 2.0 - 1.0) * binsPerOctave / std::max(1.0, branch.frames);
+            if (branch.driftBinsPerFrame == 0.0) {
+                branch.startBin = std::round(branch.startBin);  // a rigid tone sits exactly on a bin.
+            }
+            branch.levelDb = parent.levelDb - 6.0 - chaos * 6.0 * unit(rng);
+            if (branch.startBin < 0.0 || branch.startBin > codecConfig.binCount - 1.0 || branch.frames < 2.0) {
+                continue;
+            }
+            partials.push_back(branch);
+            frontier.emplace_back(partials.size() - 1, depth + 1);
+        }
+    }
+
+    ToneCanvas canvas(codecConfig, frameCount);
+    for (const Partial& partial : partials) {
+        canvas.draw(partial, (unit(rng) * 2.0 - 1.0) * std::numbers::pi);
+    }
+    return canvas.finish();
+}
+
 /// @brief SplitMix64's finalizer - a fast, well-mixed 64-bit hash.
 std::uint64_t mix64(std::uint64_t value) noexcept {
     value += 0x9E3779B97F4A7C15ULL;
@@ -310,6 +473,7 @@ sound_mind::codec::StreamImage generateContent(const GeneratorConfiguration& con
         case GeneratorFamily::Noise:
             return generateNoiseContent(config, codecConfig, frameCount, resolveMindWave);
         case GeneratorFamily::Fractal:
+            return generateFractalContent(config, codecConfig, frameCount);
         case GeneratorFamily::Streaming:
         default:
             return silentResult(codecConfig, frameCount);

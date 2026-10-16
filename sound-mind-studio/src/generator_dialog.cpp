@@ -25,8 +25,9 @@ namespace {
 using sound_mind::core::GeneratorFamily;
 using sound_mind::core::NoiseColor;
 
-constexpr std::array<std::pair<GeneratorFamily, const char*>, 2> kFamilies{{
+constexpr std::array<std::pair<GeneratorFamily, const char*>, 3> kFamilies{{
     {GeneratorFamily::Lattice, "Lattice"},
+    {GeneratorFamily::Fractal, "Fractal"},
     {GeneratorFamily::Noise, "Noise"},
 }};
 
