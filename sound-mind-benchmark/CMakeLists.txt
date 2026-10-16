@@ -29,6 +29,9 @@ add_library(sound-mind-benchmark-lib
     src/paint_scenarios.cpp
     src/mind_wave_scenarios.cpp
     src/compositing_scenarios.cpp
+    src/codec_scenarios.cpp
+    src/analysis_scenarios.cpp
+    src/generator_scenarios.cpp
     include/sound_mind/benchmark/benchmark_case.h
     include/sound_mind/benchmark/benchmark_timer.h
     include/sound_mind/benchmark/benchmark_report.h

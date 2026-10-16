@@ -1191,8 +1191,9 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.78.1` | Text tool | `0.1.38.1` (follow-up `0.1.40.13`: editable after applying) | #243, #257 |
 | `v0.Y.79.1` | Generators | `0.1.39.1`-`0.1.39.4` (plus the codec fix `0.1.39.5`) | #244-#248 |
 | `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges; `0.1.40.13` belongs to `v0.Y.78.1`) | #249-#256 |
-| `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.41.x`)* | |
-| `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.42.x`)* | |
+| `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`- *(in progress)* | |
+| `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.42.x`)* | |
+| `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.43.x`)* | |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
 
 **Standing decision (2026-10-15): disregard file-format and backward-compatibility concerns completely until after Beta.** Old projects don't need to keep loading, so there are no lenient-read shims, migration paths or load-time notices for changes made before Beta. This overrides the usual "ask on file-format compatibility" stance for this period only.
@@ -1343,6 +1344,19 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - ✅ **B** (`v0.1.40.2`, Decision #250): goniometer and stereo width (over time, per band).
 - ✅ **C** (`v0.1.40.3`, Decision #251): pitch detection with a canvas overlay.
 - ✅ **D** (`v0.1.40.4`, Decision #252): master limiter (playback and export; on by default, -1 dBFS sample-peak ceiling) and output loudness normalization (off by default, target -14 LUFS, playback only), both in Configure Devices.
+
+#### `v0.Y.80.2` - Codec, analysis and noise acceleration (L) - inserted 2026-10-16 at the user's request
+
+The GPU-offloading candidates assessed on 2026-10-16, taken in the order recommended there:
+1. ✅ **Benchmarks first** (`v0.1.41.1`). Add codec (encode/decode), whole-analysis and per-stage analysis, and generator cases to `sound-mind-benchmark`, plus a `--category` filter, and record a baseline. Baseline (Release, Snapdragon X, 2026-10-16):
+   - encode 10/60/180 s: 212/1287/3859 ms; decode: 99/615/1856 ms;
+   - Analyze 1/4/8 layers of 30 s: 1.16/2.79/5.07 s (GPU on);
+   - stages at 60 s: loudness 381 ms, stereo 28 ms, band levels 49 ms, band widths 52 ms, pitch 113 ms (1 voice) / 161 ms (3 voices);
+   - noise layer 30/120 s: 115/486 ms; noise MindWave field: 236/941 ms; Fractal and Streaming layers: 3-51 ms.
+2. **CPU multithreading.** Nothing in the codec or the analysis used more than one thread; the dev machine has 12 cores. Parallelize `encode()`/`decode()` across frames (deterministic regardless of thread count) and the analysis's per-layer work, then re-measure.
+3. **GPU Stream decode/encode.** Decide on measured numbers whether a DirectX 12 FFT path is still worth it after step 2, and build it if so (no new third-party FFT dependency without asking).
+4. **Analysis on the GPU.** Per-band levels and widths, and pitch candidate scoring (per frame); the sequential parts (K-weighting, true peak, voice tracking) stay on the CPU.
+5. **Noise generation on the GPU.** The noise Generate Layer and the noise MindWave field (per-cell hashed randomness), the same shape as the Fractal field's existing GPU path.
 
 #### `v0.Y.81.1` - Operation history persisted with the project (L)
 

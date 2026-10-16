@@ -16,6 +16,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <string>
 #include <vector>
 
 #include "sound_mind/benchmark/benchmark_report.h"
@@ -59,23 +60,37 @@ void appendAllScenarios(std::vector<sound_mind::benchmark::BenchmarkCase>& cases
     append(sound_mind::benchmark::buildPaintScenarios());
     append(sound_mind::benchmark::buildMindWaveScenarios());
     append(sound_mind::benchmark::buildCompositingScenarios());
+    append(sound_mind::benchmark::buildCodecScenarios());
+    append(sound_mind::benchmark::buildAnalysisScenarios());
+    append(sound_mind::benchmark::buildGeneratorScenarios());
 }
 
 }  // namespace
 
 /// @brief Entry point - see this file's own `@file` docs above.
+/// @param argc Argument count.
+/// @param argv `--category <name>` (repeatable) runs only those categories
+///        (`filter`, `paint`, `mindWave`, `compositing`, `codec`,
+///        `analysis`, `generator`); none runs everything.
 /// @return Always `0` - this tool has no failure mode of its own to
 ///         signal; a case's own exception (if any) propagates and
 ///         terminates the process instead of being caught here.
-int main() {
+int main(int argc, char** argv) {
     if (std::string(SOUND_MIND_BENCHMARK_BUILD_CONFIG) != "Release") {
         std::cerr << "WARNING: this is a '" << SOUND_MIND_BENCHMARK_BUILD_CONFIG
                   << "' build, not Release - timings below are NOT representative of real-world performance. "
                      "Build and run the Release configuration instead.\n\n";
     }
 
+    std::vector<std::string> categories;
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (std::string(argv[i]) == "--category") {
+            categories.emplace_back(argv[++i]);
+        }
+    }
     std::vector<sound_mind::benchmark::BenchmarkCase> cases;
     appendAllScenarios(cases);
+    cases = sound_mind::benchmark::casesInCategories(std::move(cases), categories);
 
     sound_mind::benchmark::BenchmarkReport report;
     report.generatedAtUtc = currentUtcTimestamp();

@@ -3,6 +3,7 @@ find_package(Catch2 3 CONFIG REQUIRED)
 add_executable(sound-mind-benchmark-tests
     test_benchmark_timer.cpp
     test_benchmark_report.cpp
+    test_case_selection.cpp
 )
 
 target_link_libraries(sound-mind-benchmark-tests

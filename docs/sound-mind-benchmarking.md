@@ -22,7 +22,10 @@ Two purposes, in order:
 ```
 ./_build_release.bat --target sound-mind-benchmark
 ./build/release/sound-mind-benchmark/sound-mind-benchmark.exe
+./build/release/sound-mind-benchmark/sound-mind-benchmark.exe --category codec --category analysis
 ```
+
+`--category <name>` (repeatable, `v0.1.41.1`) runs only those categories - `filter`, `paint`, `mindWave`, `compositing`, `codec`, `analysis`, `generator` - for a quick before/after on one area; with none, everything runs.
 
 **Must be a Release build.** Debug's lack of optimization and iterator/bounds-checking overhead produce timings with no relationship to what a real user experiences - `main.cpp` checks `SOUND_MIND_BENCHMARK_BUILD_CONFIG` at startup and prints a loud warning (not a hard failure, so a quick Debug smoke test to confirm the suite itself still runs is still possible) if it wasn't built as Release.
 
@@ -67,6 +70,19 @@ An initial version of the `EdgePreservingBlur`/`Convolve` sweeps used `{3, 9, 25
 - **Layer-count sweep**: `{1, 5, 20, 50}` layers, `Normal` blend mode, GPU-eligible (`compositeProject()`'s per-layer mixing is one of the two GPU-eligible call sites in the whole codebase).
 - **Blend-mode sweep**: all 7 `BlendMode`s at a fixed, moderate layer count (10) - answers "did the user choose an expensive blend mode," GPU-eligible.
 - **`compositeProjectCached()` warm-cache sweep** (`appendCachedEditTopLayerSweep()`, `v0.1.7.1`): the same `{1, 5, 20, 50}` layer counts as the layer-count sweep above, but each case warms a `CompositePrefixCache` once, then times only `invalidateFrom(topIndex)` + `compositeProjectCached()` per call - the realistic "edit the layer you're looking at, every layer beneath it is untouched" case, directly comparable against the cold layer-count sweep's own numbers at the same `layerCount`. This is also the permanent regression check for `CompositePrefixCache`'s own memory budget being set sensibly - see `docs/sound-mind-architecture.md`'s Decision #201 for a real case where `layerCount=50` silently stopped benefiting from the cache at all once this budget was too small, caught by this exact sweep.
+
+### Codec (`codec_scenarios.cpp`, `v0.1.41.1`)
+
+- **`encode()` and `decode()`** of deterministic, music-like stereo audio (`musicLikeAudio()`: five harmonic voices over a moving root, plus a little noise - dense enough that no bin is trivially empty) at 10, 60 and 180 s, default settings (44.1 kHz, 441-sample hop, 512 bins). Every playback preparation, export, analysis, Repeat refresh and Pool goes through these.
+
+### Analysis (`analysis_scenarios.cpp`, `v0.1.41.1`)
+
+- **The whole `analyzeProjectLoudness()`** at 1, 4 and 8 layers of 30 s music-like content - GPU-eligible, since its composites go through the compositor's GPU mixing.
+- **Each stage on its own**, at 60 s: `measureLoudness()`, `measureStereo()`, `bandLevelsOverTime()`, `bandStereoWidths()`, and `detectPitches()` at 1 and 3 voices.
+
+### Generators (`generator_scenarios.cpp`, `v0.1.41.1`)
+
+- **Noise Generate Layers** (white and pink), the **Fractal** and **Streaming** families, and a **noise MindWave field** (`evaluateMindWaveField()`), at 3000- and 12000-frame canvases (30 s and 120 s).
 
 Every compositing case uses deterministic pseudo-random per-layer content (seeded differently per layer) rather than identical layers, since some blend modes (`Difference`, in particular) would otherwise degenerate into trivially cheap, branch-predictable work no real layered project would ever actually produce.
 

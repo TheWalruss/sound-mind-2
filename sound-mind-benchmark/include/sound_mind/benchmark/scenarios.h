@@ -1,8 +1,12 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
 #include <vector>
 
 #include "sound_mind/benchmark/benchmark_case.h"
+#include "sound_mind/codec/audio_buffer.h"
+#include "sound_mind/codec/stream_codec.h"
 
 namespace sound_mind::benchmark {
 
@@ -39,5 +43,45 @@ namespace sound_mind::benchmark {
 ///        edit's own recomposite) - directly comparable against the first
 ///        sweep's own cold numbers at the same `layerCount`.
 [[nodiscard]] std::vector<BenchmarkCase> buildCompositingScenarios();
+
+/// @brief The Stream codec (`v0.1.41.1`): `encode()` and `decode()` of
+///        music-like stereo audio at 10, 60 and 180 s, default settings -
+///        the transform under playback preparation, export, analysis,
+///        recording and Pool.
+[[nodiscard]] std::vector<BenchmarkCase> buildCodecScenarios();
+
+/// @brief The Analysis panel (`v0.1.41.1`): the whole
+///        `analyzeProjectLoudness()` at 1, 4 and 8 layers of 30 s
+///        (GPU-eligible, through compositing), and each stage on its own at
+///        60 s - loudness, stereo, per-band levels and widths, and pitch at
+///        1 and 3 voices.
+[[nodiscard]] std::vector<BenchmarkCase> buildAnalysisScenarios();
+
+/// @brief Generators (`v0.1.41.1`): white and pink noise Generate Layers,
+///        the Fractal and Streaming families, and a noise MindWave field, at
+///        30 s and 120 s canvases.
+[[nodiscard]] std::vector<BenchmarkCase> buildGeneratorScenarios();
+
+/// @brief The cases whose category is one of `categories` - the
+///        `--category` command-line filter. An empty list keeps every case.
+/// @param cases Every case.
+/// @param categories The categories to keep.
+/// @return The kept cases, in their original order.
+[[nodiscard]] std::vector<BenchmarkCase> casesInCategories(std::vector<BenchmarkCase> cases,
+                                                           const std::vector<std::string>& categories);
+
+/// @brief The codec settings the codec and analysis scenarios share - a
+///        default project's.
+/// @return The configuration.
+[[nodiscard]] sound_mind::codec::StreamCodecConfig defaultBenchmarkCodecConfig();
+
+/// @brief Deterministic, music-like stereo audio: a few harmonic voices
+///        moving through a short progression, plus a little noise.
+/// @param seconds The length.
+/// @param sampleRateHz The sample rate.
+/// @param seed Varies the noise, so layers built from it differ.
+/// @return The audio.
+[[nodiscard]] sound_mind::codec::AudioBuffer musicLikeAudio(double seconds, std::uint32_t sampleRateHz,
+                                                            unsigned seed);
 
 }  // namespace sound_mind::benchmark

@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.41.1] - 2026-10-16
+
+Roadmap slot `v0.Y.80.2` (codec, analysis and noise acceleration), step 1.
+
+### Changed (developer-facing)
+
+- **Benchmarks for the codec, the analysis and the generators.** `sound-mind-benchmark` gains three categories (`codec`, `analysis`, `generator`) and a `--category` filter. A baseline was recorded before any acceleration work.
+
 ## [0.1.40.13] - 2026-10-16
 
 ### Added
