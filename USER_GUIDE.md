@@ -20,19 +20,20 @@ in-app behavior is correct and this guide is due an update.
 9. [Pick](#pick)
 10. [Selection and Fill](#selection-and-fill)
 11. [Path Tool](#path-tool)
-12. [Chord Generator](#chord-generator)
-13. [Axis Labels](#axis-labels)
-14. [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid)
-15. [Playback](#playback)
-16. [Recording](#recording)
-17. [Loop Mode](#loop-mode)
-18. [Configure Devices](#configure-devices)
-19. [Pooling a Layer](#pooling-a-layer)
-20. [Exporting](#exporting)
-21. [Saving and Project Files](#saving-and-project-files)
-22. [Resource Browser](#resource-browser)
-23. [Performance](#performance)
-24. [What's Not Here Yet](#whats-not-here-yet)
+12. [Text Tool](#text-tool)
+13. [Chord Generator](#chord-generator)
+14. [Axis Labels](#axis-labels)
+15. [Overlay Grids and Snap to Grid](#overlay-grids-and-snap-to-grid)
+16. [Playback](#playback)
+17. [Recording](#recording)
+18. [Loop Mode](#loop-mode)
+19. [Configure Devices](#configure-devices)
+20. [Pooling a Layer](#pooling-a-layer)
+21. [Exporting](#exporting)
+22. [Saving and Project Files](#saving-and-project-files)
+23. [Resource Browser](#resource-browser)
+24. [Performance](#performance)
+25. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -1586,6 +1587,35 @@ you can use afterwards:
 
 A press without dragging draws nothing. Each finished path is one undoable
 step, and switching tools mid-drag discards the line being drawn.
+
+## Text Tool
+
+Choose **Text** from the **Tool** dropdown to write words onto the canvas -
+they're written as sound, so you can hear them and see them in the
+spectrum. The **Text Tool** panel opens alongside:
+
+1. **Place a box** - drag on the canvas to draw it (the text is stretched to
+   fill it), or just click to place a box the text's own size, centred where
+   you clicked. A dashed outline shows the box, with a live preview of the
+   text inside it.
+2. **Style it** in the panel - every change shows in the preview right away:
+   - **Text**, **Font**, **Size** (letter height in canvas cells), **Bold**,
+     **Italic**;
+   - **Left intensity** / **Right intensity** - how loud each channel is
+     written where a letter is solid (dB or a 0-1 value - use the unit
+     toggle); letter edges fade out smoothly;
+   - **Opacity** - scales the whole text's loudness;
+   - **Blend mode** - how it combines with what's already on the layer
+     (the same choices as Paste);
+   - **Rotation** - in degrees, counterclockwise.
+3. **Apply** writes it onto the active layer, as one undoable step. Only the
+   letters themselves are written - the space around and between them is
+   left exactly as it was.
+
+**Reset** discards the box without writing anything; switching to another
+tool does the same. Once applied, the text is an ordinary pasted object:
+[Pick](#pick) can move or delete it, but it can't be edited as text any
+more - to change the wording, delete it and write it again.
 
 ## Chord Generator
 

@@ -9,6 +9,7 @@
 #include "sound_mind/studio/chord_generator_controller.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/path_controller.h"
+#include "sound_mind/studio/text_controller.h"
 #include "sound_mind/studio/pick_controller.h"
 #include "sound_mind/studio/selection_controller.h"
 #include "sound_mind/studio/tool_configuration_panel.h"
@@ -100,6 +101,20 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
     // a second one - Paint/Pick/Path are mutually exclusive tool modes, so
     // only one of them ever has a real preview to show at once.
     pathController_ = new PathController(paintController_, this);
+
+    // The Text tool (v0.Y.78.1): the box follows the canvas's Text-mode
+    // drag; the preview follows the box and the text settings.
+    textController_ = new TextController(paintController_, this);
+    connect(textController_, &TextController::previewChanged, this, [this]() {
+        canvas_->setTextPreview(textController_->previewImage(), textController_->previewBounds());
+    });
+    connect(textController_, &TextController::contentChanged, this, [this](sound_mind::core::LayerId layer) {
+        canvas_->update();
+        emit contentChanged(layer);
+    });
+    connect(canvas_, &CanvasWidget::textBoxContinued, this,
+            [this](sound_mind::core::TimeFrequencyPoint point) { textController_->continueBox(point); });
+    connect(canvas_, &CanvasWidget::textBoxEnded, this, [this]() { textController_->endBox(); });
     connect(pathController_, &PathController::pathChanged, this,
             [this]() { canvas_->setPaintPreviewPath(pathController_->currentPreviewPath()); });
     connect(pathController_, &PathController::contentChanged, this, [this](sound_mind::core::LayerId layer) {
@@ -154,6 +169,7 @@ void ToolPaletteController::setProject(sound_mind::core::Project* project) {
     pickController_->setProject(project);
     selectionController_->setProject(project);
     pathController_->setProject(project);
+    textController_->setProject(project);
     chordGeneratorController_->setProject(project);
     toolConfigurationPanel_->setProject(project);
 }

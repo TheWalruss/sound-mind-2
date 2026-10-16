@@ -73,6 +73,7 @@ add_library(sound-mind-core
     src/guide_path_operation.cpp
     src/operation_clone.cpp
     src/path_merge.cpp
+    src/text_paste.cpp
     src/grid_preset.cpp
 )
 

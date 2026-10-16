@@ -155,6 +155,7 @@ void CanvasWidget::setToolMode(ToolMode mode) {
     pickStrokeActive_ = false;
     selectStrokeActive_ = false;
     pathStrokeActive_ = false;
+    textBoxActive_ = false;
     rotateHandleDragActive_ = false;
     update();
 }
@@ -175,6 +176,12 @@ void CanvasWidget::setPreviewSelectedNodeIndex(std::optional<std::size_t> index)
 
 void CanvasWidget::setPickMultiSelectionBounds(std::vector<sound_mind::core::TimeFrequencyRect> bounds) {
     pickMultiSelectionBounds_ = std::move(bounds);
+    update();
+}
+
+void CanvasWidget::setTextPreview(QImage image, std::optional<sound_mind::core::TimeFrequencyRect> bounds) {
+    textPreviewImage_ = std::move(image);
+    textPreviewBounds_ = bounds;
     update();
 }
 
@@ -636,6 +643,17 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
             painter.drawRect(widgetRectFor(bounds));
         }
     }
+    if (!polarMode_ && project_ != nullptr && textPreviewBounds_.has_value()) {
+        const QRectF box = widgetRectFor(*textPreviewBounds_);
+        if (!textPreviewImage_.isNull()) {
+            painter.drawImage(box, textPreviewImage_);
+        }
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(Qt::black, 1));
+        painter.drawRect(box);
+        painter.setPen(QPen(Qt::white, 1, Qt::DashLine));
+        painter.drawRect(box);
+    }
     if (!polarMode_ && project_ != nullptr && pickRubberBand_.has_value()) {
         painter.setBrush(Qt::NoBrush);
         painter.setPen(QPen(Qt::black, 1));
@@ -954,7 +972,7 @@ QRectF CanvasWidget::widgetRectFor(const sound_mind::core::TimeFrequencyRect& bo
 void CanvasWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton ||
         (toolMode_ != ToolMode::Paint && toolMode_ != ToolMode::Pick && toolMode_ != ToolMode::Select &&
-         toolMode_ != ToolMode::Path && toolMode_ != ToolMode::ChordStamp)) {
+         toolMode_ != ToolMode::Path && toolMode_ != ToolMode::ChordStamp && toolMode_ != ToolMode::Text)) {
         QWidget::mousePressEvent(event);
         return;
     }
@@ -988,6 +1006,9 @@ void CanvasWidget::mousePressEvent(QMouseEvent* event) {
     } else if (toolMode_ == ToolMode::Path) {
         pathStrokeActive_ = true;
         emit pathStrokeStarted(*point);
+    } else if (toolMode_ == ToolMode::Text) {
+        textBoxActive_ = true;
+        emit textBoxStarted(*point);
     } else {
         // ChordStamp mode: a single press is the whole gesture - see
         // chordStampRequested()'s own docs.
@@ -1017,6 +1038,12 @@ void CanvasWidget::mouseMoveEvent(QMouseEvent* event) {
     if (toolMode_ == ToolMode::Path && pathStrokeActive_) {
         if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
             emit pathStrokeContinued(*point);
+        }
+        return;
+    }
+    if (toolMode_ == ToolMode::Text && textBoxActive_) {
+        if (const auto point = widgetPointToTimeFrequency(event->position()); point.has_value()) {
+            emit textBoxContinued(*point);
         }
         return;
     }
@@ -1064,6 +1091,11 @@ void CanvasWidget::mouseReleaseEvent(QMouseEvent* event) {
     if (toolMode_ == ToolMode::Path && pathStrokeActive_) {
         pathStrokeActive_ = false;
         emit pathStrokeEnded();
+        return;
+    }
+    if (toolMode_ == ToolMode::Text && textBoxActive_) {
+        textBoxActive_ = false;
+        emit textBoxEnded();
         return;
     }
     if (toolMode_ == ToolMode::Select && rotateHandleDragActive_) {

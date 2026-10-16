@@ -28,6 +28,7 @@
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/branch_curve_session.h"
 #include "sound_mind/studio/canvas_widget.h"
+#include "sound_mind/studio/text_tool_panel.h"
 #include "sound_mind/studio/chord_generator_panel.h"
 #include "sound_mind/studio/configure_devices_panel.h"
 #include "sound_mind/studio/filter_configuration_panel.h"
@@ -1425,6 +1426,14 @@ public slots:
      *        `false` to return to plain, non-interactive display (Pan).
      */
     void setChordModeEnabled(bool enabled);
+
+    /**
+     * @brief Turns the Text tool on or off - the Tool dropdown's "Text"
+     *        (Pre-Beta Plan `v0.Y.78.1`). On, it shows the Text Tool panel;
+     *        off, it discards any box not yet applied. See `TextController`.
+     * @param enabled `true` to place text on the canvas.
+     */
+    void setTextModeEnabled(bool enabled);
 
     /**
      * @brief Undoes the most recent undoable edit, if any - the actual
@@ -3790,6 +3799,10 @@ private:
     /// selectAction_/pathAction_ by setExclusiveToolMode(); kept as a
     /// member for the same setProject()-resets-it reason as paintAction_.
     QAction* chordAction_ = nullptr;
+    /// @brief The Tool dropdown's "Text" - see setTextModeEnabled().
+    QAction* textAction_ = nullptr;
+    /// @brief The Text tool's panel - see `TextToolPanel`.
+    TextToolPanel* textToolPanel_ = nullptr;
 
     /// @brief Each Edit-menu action that only applies sometimes, with the
     ///        condition under which it does - see updateEditActionStates().

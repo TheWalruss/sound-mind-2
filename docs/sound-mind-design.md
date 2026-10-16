@@ -373,6 +373,10 @@ Radial blur — softens a region uniformly in every direction, rather than along
 
 Copies pixels from a source point to the cursor as you paint, offset consistently as the stroke moves.
 
+### Text
+
+Writes words onto a layer as sound. Place a box on the canvas (drag it out, or click for a box the text's own size), style the text - font, size, bold/italic, left/right intensity, opacity, blend mode, rotation - with a live preview, then apply it. Only the letters themselves are written, their antialiased edges fading out; the result is an ordinary pasted object afterwards, Pickable but no longer editable as text.
+
 ### Pick
 
 Every stroke — a paintbrush stamp or a Smudge/Order-Chaos/Heal/Soften/Clone pass, freehand or Path-driven — becomes a **paint object**: the same non-destructive operation described in [Non-destructive Processing](#non-destructive-processing), now made directly interactive on the canvas rather than only editable through undo. Picking a paint object selects it by clicking within its bounding box (the same box [Show bounding boxes](#tool-configuration) can make visible for every object at once, used here for hit-testing a single click) — once picked, it can be copied, moved, modified, or deleted, independent of any pixel-region [Selection](#selection).

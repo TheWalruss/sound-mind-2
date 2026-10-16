@@ -25,6 +25,7 @@ add_executable(sound-mind-core-tests
     test_guide_path_operation.cpp
     test_operation_clone.cpp
     test_path_merge.cpp
+    test_text_paste.cpp
     test_paste_operation.cpp
     test_sequence_operation.cpp
     test_sequence_application.cpp

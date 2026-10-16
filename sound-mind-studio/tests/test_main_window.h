@@ -347,4 +347,5 @@ private slots:
     void rectangleDragInPickModeSelectsAndDeletesSeveralObjects();
     void copyAndPastePickedObjectsDuplicatesThem();
     void mergingTwoPickedPathsMakesOneBranchingPath();
+    void textToolPlacesPreviewsAndAppliesText();
 };

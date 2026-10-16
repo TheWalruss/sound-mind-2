@@ -49,6 +49,7 @@
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/codec/stream_incremental_encoder.h"
 #include "sound_mind/core/filter_preview.h"
+#include "sound_mind/studio/text_controller.h"
 #include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/gpu_compute_availability.h"
@@ -516,6 +517,12 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     selectionConfigurationPanel_ = new SelectionConfigurationPanel(this);
     selectionConfigurationPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, selectionConfigurationPanel_);
+
+    // The Text tool's panel (v0.Y.78.1) - wired to its controller once
+    // toolPaletteController_ exists, below.
+    textToolPanel_ = new TextToolPanel(this);
+    textToolPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, textToolPanel_);
     connect(selectionConfigurationPanel_, &SelectionConfigurationPanel::selectionShapeChanged, this,
             [this](SelectionShape shape) { toolPaletteController_->setSelectionShape(shape); });
     connect(selectionConfigurationPanel_, &SelectionConfigurationPanel::wandToleranceChanged, this,
@@ -573,6 +580,20 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // ToolPaletteController's constructor at all (see that class's own docs
     // on why).
     toolPaletteController_->setChordParams(chordGeneratorPanel_->params());
+    {
+        TextController* text = toolPaletteController_->textController();
+        text->setSettings(textToolPanel_->settings());
+        connect(textToolPanel_, &TextToolPanel::settingsChanged, text, &TextController::setSettings);
+        connect(textToolPanel_, &TextToolPanel::applyRequested, this, [text]() { text->apply(); });
+        connect(textToolPanel_, &TextToolPanel::resetRequested, text, &TextController::reset);
+        connect(text, &TextController::previewChanged, this,
+                [this, text]() { textToolPanel_->setBoxPlaced(text->box().has_value()); });
+        connect(canvas_, &CanvasWidget::textBoxStarted, this, [this, text](sound_mind::core::TimeFrequencyPoint point) {
+            if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
+                text->beginBox(*layerId, point);
+            }
+        });
+    }
     // Real-world testing pass, 2026-09-20, finding #5: pre-fills Selection
     // Configuration's own Paste Blend Mode combo with a newly-Picked pasted
     // region's own real value, ready to reopen and adjust - the same
@@ -1555,6 +1576,11 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     chordAction_->setCheckable(true);
     connect(chordAction_, &QAction::toggled, this, &MainWindow::setChordModeEnabled);
 
+    // The Text tool (v0.Y.78.1) - see setTextModeEnabled().
+    textAction_ = new QAction(tr("Text"), this);
+    textAction_->setCheckable(true);
+    connect(textAction_, &QAction::toggled, this, &MainWindow::setTextModeEnabled);
+
     auto* toolMenu = new QMenu(this);
     toolMenu->setToolTipsVisible(true);
     toolMenu->addAction(panAction_);
@@ -1563,6 +1589,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     toolMenu->addAction(selectAction_);
     toolMenu->addAction(pathAction_);
     toolMenu->addAction(chordAction_);
+    toolMenu->addAction(textAction_);
 
     toolButton_ = new QToolButton(this);
     // QToolBar creates its own internal, unnamed QToolButton for every
@@ -2088,6 +2115,7 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     selectAction_->setChecked(false);
     pathAction_->setChecked(false);
     chordAction_->setChecked(false);
+    textAction_->setChecked(false);
     // Explicit, for the same "unconditional and idempotent" reasoning -
     // already true via setExclusiveToolMode()'s own fallback whenever one
     // of the five above was actually checked, a no-op otherwise.
@@ -3418,6 +3446,16 @@ void MainWindow::setChordModeEnabled(bool enabled) {
     setExclusiveToolMode(chordAction_, enabled, CanvasWidget::ToolMode::ChordStamp);
 }
 
+void MainWindow::setTextModeEnabled(bool enabled) {
+    if (!enabled) {
+        toolPaletteController_->textController()->reset();
+    } else {
+        textToolPanel_->show();
+        textToolPanel_->raise();
+    }
+    setExclusiveToolMode(textAction_, enabled, CanvasWidget::ToolMode::Text);
+}
+
 void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWidget::ToolMode mode) {
     canvas_->setToolMode(enabled ? mode : CanvasWidget::ToolMode::None);
 
@@ -3432,6 +3470,7 @@ void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWi
     const QSignalBlocker selectBlocker(selectAction_);
     const QSignalBlocker pathBlocker(pathAction_);
     const QSignalBlocker chordBlocker(chordAction_);
+    const QSignalBlocker textBlocker(textAction_);
     // When disabled, Pan (ToolMode::None's own entry) is the one left
     // checked - falls out of the same "exactly one of six checked"
     // invariant as the enabled case below, not a special case.
@@ -3442,12 +3481,14 @@ void MainWindow::setExclusiveToolMode(QAction* activated, bool enabled, CanvasWi
     selectAction_->setChecked(checkedAction == selectAction_);
     pathAction_->setChecked(checkedAction == pathAction_);
     chordAction_->setChecked(checkedAction == chordAction_);
+    textAction_->setChecked(checkedAction == textAction_);
     updateToolButtonLabel();
 }
 
 void MainWindow::updateToolButtonLabel() {
     QAction* checkedAction = panAction_;
-    for (QAction* candidate : {panAction_, paintAction_, pickAction_, selectAction_, pathAction_, chordAction_}) {
+    for (QAction* candidate :
+         {panAction_, paintAction_, pickAction_, selectAction_, pathAction_, chordAction_, textAction_}) {
         if (candidate->isChecked()) {
             checkedAction = candidate;
             break;

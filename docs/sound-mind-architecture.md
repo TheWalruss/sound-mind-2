@@ -2186,6 +2186,28 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `PickControllerTest`: merge consumes guides, keeps strokes, one undo step; needs two paths.
       - `MainWindowTest`: merge by menu after a rubber band; the multi-selection menu includes Merge.
 
+243. **The Text tool.** Settled in `v0.1.38.1`, Pre-Beta Plan milestone `v0.Y.78.1`. It ports the legacy `tools/text_tool.py` behavior (box by drag or click, styled live preview, Apply/Reset), not its code.
+    - **Split:** Core has no font engine, so glyphs are rasterized in the Studio. `TextController::renderGlyphs()` uses `QFont::setPixelSize(fontSize)`, so size means canvas cells whatever the screen DPI. It rotates with `QImage::transformed()`. `rasterize()` stretches to the box and reads alpha as coverage.
+    - **Core `makeTextPaste()`** (`text_paste.h`) turns a `GlyphRaster` into an ordinary `PasteOperation`:
+      - Each covered cell is written at `intensity + 20*log10(coverage*opacity)`, so edges fade.
+      - A **Mask** `SelectionRegion` covers only cells at or above `kTextCoverageThreshold`. Even an Overwrite blend leaves everything around and between the letters untouched; Paste itself has no per-cell alpha, and the mask is how the glyph shape is kept.
+      - The raster's top row lands on the highest bin.
+    - **Reuse:** applied text is therefore undoable, Pickable, movable, deletable and saved like any paste, with no new operation kind and no file-format change. As in the legacy tool, it isn't re-editable as text.
+    - **Deviation from the roadmap entry** ("rasterized and painted through the normal paint pipeline, using `v0.Y.74.1`'s brush work"): it goes through the *paste* pipeline instead. That matches the legacy tool's blit-with-blend-mode behavior, and stamping a brush along glyph outlines would neither reproduce filled letters nor their antialiasing.
+    - **Studio:**
+      - Canvas `ToolMode::Text` emits `textBoxStarted/Continued/Ended` and draws `setTextPreview()` (glyphs stretched into a dashed box).
+      - `ToolPaletteController` owns the `TextController`.
+      - `TextToolPanel` emits complete `TextSettings`. Its two intensity fields share an `IntensityUnitSelector`, and it offers the paste blend modes.
+      - `MainWindow::setTextModeEnabled()` joins the exclusive tool modes, shows the panel, and resets an unapplied box on leaving.
+      - A click (under `kMinimumDragCells` on both axes) sizes the box to the text, centred.
+    - **Tests infrastructure:** the offscreen QPA platform only searches Qt's own `lib/fonts`, which Qt no longer ships, so text rendered as nothing in tests. `tests/main.cpp` now points `QT_QPA_FONTDIR` at `%WINDIR%\Fonts` unless it's already set. The real app uses the Windows platform's own font database and is unaffected.
+    - **Tests:**
+      - Core: 3 cases - glyph cells only, with coverage fading; opacity and placement; empty or invisible text.
+      - `TextControllerTest`: 8 cases.
+      - `TextToolPanelTest`: 3 cases.
+      - `CanvasWidgetTest`: Text-mode signals and preview.
+      - `MainWindowTest`: the full tool flow - mode, panel, drag, preview, Apply, discard on leaving.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

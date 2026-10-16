@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.38.1] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.78.1` - Text tool.
+
+### Added
+
+- **Text tool.** Choose **Text** from the Tool dropdown, then drag a box (or click to place one sized to the text). Set the text, font, size, bold/italic, left/right intensity, opacity, blend mode and rotation in the **Text Tool** panel, with a live preview. **Apply** writes the letters onto the layer as sound (one undo step, Pickable afterwards); **Reset** discards the box.
+
 ## [0.1.37.4] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.77.1`, installment D - completes the milestone.

@@ -70,6 +70,8 @@
 #include "test_numeric_field.h"
 #include "test_paint_controller.h"
 #include "test_path_controller.h"
+#include "test_text_controller.h"
+#include "test_text_tool_panel.h"
 #include "test_path_edit_session.h"
 #include "test_pick_controller.h"
 #include "test_playback_controller.h"
@@ -123,6 +125,8 @@ const std::array kTestClasses{
     SM_TEST_CLASS_ENTRY(PaintControllerTest),
     SM_TEST_CLASS_ENTRY(PickControllerTest),
     SM_TEST_CLASS_ENTRY(PathControllerTest),
+    SM_TEST_CLASS_ENTRY(TextControllerTest),
+    SM_TEST_CLASS_ENTRY(TextToolPanelTest),
     SM_TEST_CLASS_ENTRY(PathEditSessionTest),
     SM_TEST_CLASS_ENTRY(SelectionControllerTest),
     SM_TEST_CLASS_ENTRY(SelectionConfigurationPanelTest),
@@ -192,6 +196,17 @@ int main(int argc, char** argv) {
     // throwaway test project paths - the real, installed Studio's own
     // persisted settings on this machine.
     QStandardPaths::setTestModeEnabled(true);
+
+    // The offscreen platform looks for fonts only in Qt's own lib/fonts,
+    // which Qt no longer ships - so text (the Text tool, v0.Y.78.1) would
+    // render as nothing. Point it at the system's fonts unless the caller
+    // already chose a directory.
+#ifdef _WIN32
+    if (qEnvironmentVariableIsEmpty("QT_QPA_FONTDIR")) {
+        const QString windowsDirectory = qEnvironmentVariable("WINDIR", QStringLiteral("C:/Windows"));
+        qputenv("QT_QPA_FONTDIR", QDir(windowsDirectory).filePath(QStringLiteral("Fonts")).toLocal8Bit());
+    }
+#endif
 
     QApplication app(qtArgc, qtArgs.data());
 

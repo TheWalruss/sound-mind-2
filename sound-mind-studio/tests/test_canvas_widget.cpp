@@ -2023,3 +2023,32 @@ void CanvasWidgetTest::pickMultiSelectionAndRubberBandAreDrawn() {
     widget.setPickRubberBand(std::nullopt);
     QVERIFY(widget.grab().toImage() == before);
 }
+
+void CanvasWidgetTest::textModeDragEmitsBoxSignalsAndAPreviewIsDrawn() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Text);
+    QSignalSpy started(&widget, &CanvasWidget::textBoxStarted);
+    QSignalSpy continued(&widget, &CanvasWidget::textBoxContinued);
+    QSignalSpy ended(&widget, &CanvasWidget::textBoxEnded);
+
+    QTest::mousePress(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(20, 10));
+    QMouseEvent move(QEvent::MouseMove, QPointF(60, 30), widget.mapToGlobal(QPointF(60, 30)), Qt::NoButton,
+                     Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&widget, &move);
+    QTest::mouseRelease(&widget, Qt::LeftButton, Qt::NoModifier, QPoint(60, 30));
+    QCOMPARE(started.count(), 1);
+    QCOMPARE(continued.count(), 1);
+    QCOMPARE(ended.count(), 1);
+
+    const QImage before = widget.grab().toImage();
+    QImage glyphs(10, 4, QImage::Format_ARGB32_Premultiplied);
+    glyphs.fill(Qt::white);
+    widget.setTextPreview(glyphs, sound_mind::core::TimeFrequencyRect{0.2, 0.6, 300.0, 900.0});
+    QVERIFY(widget.hasTextPreview());
+    QVERIFY(widget.grab().toImage() != before);
+    widget.setTextPreview(QImage{}, std::nullopt);
+    QVERIFY(!widget.hasTextPreview());
+}

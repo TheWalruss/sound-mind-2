@@ -107,4 +107,5 @@ private slots:
     void contextMenuEventWithNoProjectEmitsNothing();
     void contextMenuEventEmitsContextMenuRequestedWithAConvertedPointAndGlobalPos();
     void pickMultiSelectionAndRubberBandAreDrawn();
+    void textModeDragEmitsBoxSignalsAndAPreviewIsDrawn();
 };

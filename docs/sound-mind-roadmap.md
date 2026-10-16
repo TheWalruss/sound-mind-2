@@ -1285,7 +1285,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - **Rectangle multi-select with Pick:** delete, copy or move several objects at once. The selection model goes from one object to a set, and each bulk action is a single undo entry.
 - **Merge selected paths into one branching path.** Treat each path as a connected component, then add the k-1 shortest node-to-node connecting edges (a minimum spanning tree over the components, using Kruskal's algorithm on inter-component node pairs).
 
-#### `v0.Y.78.1` - Text tool (M)
+#### ✅ `v0.Y.78.1` - Text tool (M) - settled in `v0.1.38.1`, see architecture Decision #243
 
 - Port the behavior of the legacy `tools/text_tool.py` (about 320 lines in `../sound-mind/`). Port the behavior, not the code, per CLAUDE.md.
 - Text is rasterized and painted through the normal paint pipeline, using `v0.Y.74.1`'s brush work.

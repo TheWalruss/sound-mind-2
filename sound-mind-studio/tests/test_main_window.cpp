@@ -26,6 +26,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QTabBar>
 #include <QScrollArea>
@@ -50,6 +51,7 @@
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/text_tool_panel.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/chord_generator_panel.h"
 #include "sound_mind/studio/composer_panel.h"
@@ -7048,4 +7050,38 @@ void MainWindowTest::mergingTwoPickedPathsMakesOneBranchingPath() {
     window.undo();
     const auto layer = *log.at(0).targetLayer();
     QCOMPARE(log.activeOperationsTargeting(layer).size(), std::size_t{2});
+}
+
+void MainWindowTest::textToolPlacesPreviewsAndAppliesText() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-text-tool.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    canvas->setFixedSize(100, 50);
+    auto* panel = window.findChild<sound_mind::studio::TextToolPanel*>();
+    QVERIFY(panel != nullptr);
+
+    window.setTextModeEnabled(true);
+    QCOMPARE(canvas->toolMode(), CanvasWidget::ToolMode::Text);
+    QVERIFY(!panel->isHidden());
+    panel->findChild<QLineEdit*>(QStringLiteral("textEdit"))->setText(QStringLiteral("Hi"));
+    dragBetween(canvas, QPoint(10, 10), QPoint(80, 40));
+    QVERIFY(canvas->hasTextPreview());
+    auto* apply = panel->findChild<QPushButton*>(QStringLiteral("textApplyButton"));
+    QVERIFY(apply->isEnabled());
+
+    apply->click();
+
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+    QVERIFY(dynamic_cast<const sound_mind::core::PasteOperation*>(&window.project()->operationLog().at(0)) != nullptr);
+    QVERIFY(!canvas->hasTextPreview());
+    QVERIFY(!apply->isEnabled());
+
+    // Leaving the tool discards a box that wasn't applied.
+    dragBetween(canvas, QPoint(10, 10), QPoint(80, 40));
+    QVERIFY(canvas->hasTextPreview());
+    window.setTextModeEnabled(false);
+    QVERIFY(!canvas->hasTextPreview());
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
 }

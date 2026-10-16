@@ -26,6 +26,7 @@ class CanvasWidget;
 class ChordGeneratorController;
 class PaintController;
 class PathController;
+class TextController;
 class PickController;
 class SelectionController;
 class ToolConfigurationPanel;
@@ -345,6 +346,12 @@ public:
     /// @return `true` after a Copy/Cut.
     [[nodiscard]] bool hasClipboard() const;
 
+    /// @brief The Text tool's controller - see `TextController`. Owned by
+    ///        this object; wired to the canvas's Text-mode signals and its
+    ///        text preview.
+    /// @return The controller.
+    [[nodiscard]] TextController* textController() const noexcept { return textController_; }
+
     /// @brief Whether anything is Picked - one object or several.
     /// @return `true` with a single or multi Pick selection.
     [[nodiscard]] bool hasPickedObjects() const;
@@ -565,6 +572,7 @@ private:
     PickController* pickController_ = nullptr;
     SelectionController* selectionController_ = nullptr;
     PathController* pathController_ = nullptr;
+    TextController* textController_ = nullptr;
     /// @brief Whether objects were copied more recently than a region - see
     ///        pastesObjects().
     bool objectsCopiedLast_ = false;

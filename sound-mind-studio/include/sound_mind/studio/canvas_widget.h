@@ -73,8 +73,9 @@ public:
         Paint,  ///< Mouse drags/taps paint a freehand stroke.
         Pick,  ///< Mouse press selects a paint object; a drag moves it.
         Select,  ///< Mouse drag draws a rectangular selection.
-        Path,  ///< Each mouse press places one more Path node.
+        Path,  ///< Mouse drags draw a silent guide path.
         ChordStamp,  ///< Each mouse press stamps the Chord Generator's own current chord/arpeggio.
+        Text,  ///< Mouse drags (or a click) place the Text tool's box.
     };
 
     /// @brief Whether the canvas's own on-screen size tracks its
@@ -266,6 +267,17 @@ public:
     ///        rectangle Pick draws while dragging from empty space. Repaints.
     /// @param band The rectangle.
     void setPickRubberBand(std::optional<sound_mind::core::TimeFrequencyRect> band);
+
+    /// @brief Shows the Text tool's live preview: `image` (white glyphs)
+    ///        stretched over `bounds`, with a dashed outline; a null image
+    ///        draws just the outline. `std::nullopt` bounds hide it. Repaints.
+    /// @param image The rendered text.
+    /// @param bounds Where it goes.
+    void setTextPreview(QImage image, std::optional<sound_mind::core::TimeFrequencyRect> bounds);
+
+    /// @brief Whether a Text tool preview is showing.
+    /// @return `true` while setTextPreview() has bounds.
+    [[nodiscard]] bool hasTextPreview() const noexcept { return textPreviewBounds_.has_value(); }
 
     /// @brief The canvas's current mouse-interaction mode.
     /// @return The mode set via setToolMode(); `None` by default.
@@ -784,6 +796,18 @@ signals:
     /// @brief The Path tool stroke ended (left button released).
     void pathStrokeEnded();
 
+    /// @brief The Text tool's box started (`Text` mode, left button pressed)
+    ///        - see `TextController::beginBox()`.
+    /// @param point The press position, in time/frequency space.
+    void textBoxStarted(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief The Text tool's box is being dragged out.
+    /// @param point The new position, in time/frequency space.
+    void textBoxContinued(sound_mind::core::TimeFrequencyPoint point);
+
+    /// @brief The Text tool's box was released.
+    void textBoxEnded();
+
     /**
      * @brief A chord/arpeggio stamp was requested (`ChordStamp` tool mode,
      *        left button pressed) - the same single-press-is-the-whole-
@@ -1095,6 +1119,9 @@ private:
     bool pickStrokeActive_ = false;
     bool selectStrokeActive_ = false;
     bool pathStrokeActive_ = false;
+    bool textBoxActive_ = false;
+    QImage textPreviewImage_;
+    std::optional<sound_mind::core::TimeFrequencyRect> textPreviewBounds_;
     sound_mind::core::Path paintPreviewPath_;
     std::optional<std::size_t> previewSelectedNodeIndex_;
     std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;
