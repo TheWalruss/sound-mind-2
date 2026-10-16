@@ -182,7 +182,7 @@ double semitonesBetween(double a, double b) { return std::abs(12.0 * std::log2(a
 std::vector<std::vector<float>> detectPitches(const sound_mind::codec::StreamImage& content, int voiceCount,
                                               const PitchSettings& settings) {
     const int voices = std::clamp(voiceCount, 1, kMaxPitchVoices);
-    const auto frames = framePitchCandidates(content, voices, settings);
+    auto frames = framePitchCandidates(content, voices, settings);
     std::vector<std::vector<float>> tracks(static_cast<std::size_t>(voices),
                                            std::vector<float>(content.frameCount, 0.0f));
     if (frames.empty()) {
@@ -191,42 +191,50 @@ std::vector<std::vector<float>> detectPitches(const sound_mind::codec::StreamIma
     const double secondsPerFrame =
         static_cast<double>(content.config.hopLength) / static_cast<double>(content.config.sampleRateHz);
     const auto memoryFrames = static_cast<std::int64_t>(std::lround(0.25 / secondsPerFrame));
+    // A voice's register follows its own pitch with a ~2 s memory, so a
+    // part that moves over a song is followed.
+    const double registerRate = 1.0 - std::exp(-secondsPerFrame / 2.0);
 
-    struct TrackState {
+    struct VoiceState {
         double lastHz = 0.0;
         std::int64_t lastFrame = -1;
-        double logSum = 0.0;
-        std::size_t count = 0;
+        double registerLogHz = 0.0;  // a default until heard - see below.
     };
-    std::vector<TrackState> state(static_cast<std::size_t>(voices));
-    const auto cost = [&](std::size_t track, double hz, std::int64_t frame) {
-        const TrackState& t = state[track];
-        if (t.count == 0) {
-            return 13.0 + 1e-3 * static_cast<double>(track);  // a fresh track: dearer than an octave's leap.
+    std::vector<VoiceState> state(static_cast<std::size_t>(voices));
+    // Default registers, spread evenly (in log frequency) from about 800 Hz
+    // down to 80 Hz, highest voice first: two voices start near 450 and
+    // 140 Hz - a lone guitar line goes low, a singer coming in over it high.
+    for (int voice = 0; voice < voices; ++voice) {
+        const double t = (static_cast<double>(voice) + 0.5) / static_cast<double>(voices);
+        state[static_cast<std::size_t>(voice)].registerLogHz = std::log(800.0) + t * (std::log(80.0) - std::log(800.0));
+    }
+    const auto cost = [&](std::size_t voice, double hz, std::int64_t frame) {
+        const VoiceState& v = state[voice];
+        if (v.lastFrame >= 0 && frame - v.lastFrame <= memoryFrames) {
+            return semitonesBetween(hz, v.lastHz);
         }
-        if (frame - t.lastFrame <= memoryFrames) {
-            return semitonesBetween(hz, t.lastHz);
-        }
-        return 1.0 + semitonesBetween(hz, std::exp(t.logSum / static_cast<double>(t.count)));
+        return 1.0 + 0.5 * semitonesBetween(hz, std::exp(v.registerLogHz));
     };
-    // Leaving a weaker pitch unassigned: dearer than starting a fresh track,
-    // cheaper than forcing it onto a track far from its register (a stray
-    // second pitch where a note changes, say).
+    // Leaving a weaker pitch unassigned: cheaper than forcing it onto a voice
+    // far from it (a stray second pitch where a note changes, say).
     constexpr double kDropCost = 14.0;
 
     std::vector<std::optional<std::size_t>> best;
     std::vector<std::optional<std::size_t>> trial;
-    std::vector<bool> used(static_cast<std::size_t>(voices), false);
     for (std::size_t frame = 0; frame < frames.size(); ++frame) {
-        const auto& candidates = frames[frame];
+        auto& candidates = frames[frame];
         if (candidates.empty()) {
             continue;
         }
-        // Every way of giving each candidate its own track, or (all but the
-        // strongest) none - at most a few thousand ways for 6 voices.
+        const double strongestHz = candidates.front().hz;
+        // Highest pitch first: the assignment below keeps that order across
+        // voices, so voice 1 is never below voice 2 in any frame.
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const PitchCandidate& a, const PitchCandidate& b) { return a.hz > b.hz; });
         double bestCost = std::numeric_limits<double>::infinity();
         trial.assign(candidates.size(), std::nullopt);
-        const std::function<void(std::size_t, double)> search = [&](std::size_t c, double total) {
+        const std::function<void(std::size_t, std::size_t, double)> search = [&](std::size_t c, std::size_t firstVoice,
+                                                                                 double total) {
             if (total >= bestCost) {
                 return;
             }
@@ -235,50 +243,28 @@ std::vector<std::vector<float>> detectPitches(const sound_mind::codec::StreamIma
                 best = trial;
                 return;
             }
-            for (std::size_t track = 0; track < used.size(); ++track) {
-                if (used[track]) {
-                    continue;
-                }
-                used[track] = true;
-                trial[c] = track;
-                search(c + 1, total + cost(track, candidates[c].hz, static_cast<std::int64_t>(frame)));
-                used[track] = false;
+            for (std::size_t voice = firstVoice; voice < state.size(); ++voice) {
+                trial[c] = voice;
+                search(c + 1, voice + 1, total + cost(voice, candidates[c].hz, static_cast<std::int64_t>(frame)));
             }
-            if (c > 0) {
+            if (candidates[c].hz != strongestHz) {  // the frame's strongest pitch is always kept.
                 trial[c] = std::nullopt;
-                search(c + 1, total + kDropCost);
+                search(c + 1, firstVoice, total + kDropCost);
             }
         };
-        search(0, 0.0);
+        search(0, 0, 0.0);
         for (std::size_t c = 0; c < candidates.size(); ++c) {
             if (!best[c].has_value()) {
                 continue;
             }
-            TrackState& t = state[*best[c]];
-            t.lastHz = candidates[c].hz;
-            t.lastFrame = static_cast<std::int64_t>(frame);
-            t.logSum += std::log(candidates[c].hz);
-            ++t.count;
+            VoiceState& v = state[*best[c]];
+            const double logHz = std::log(candidates[c].hz);
+            v.registerLogHz = v.lastFrame < 0 ? logHz : v.registerLogHz + registerRate * (logHz - v.registerLogHz);
+            v.lastHz = candidates[c].hz;
+            v.lastFrame = static_cast<std::int64_t>(frame);
             tracks[*best[c]][frame] = static_cast<float>(candidates[c].hz);
         }
     }
-
-    // Highest voice first; unused tracks last.
-    const auto median = [](const std::vector<float>& track) {
-        std::vector<float> voiced;
-        for (const float hz : track) {
-            if (hz > 0.0f) {
-                voiced.push_back(hz);
-            }
-        }
-        if (voiced.empty()) {
-            return -1.0f;
-        }
-        std::nth_element(voiced.begin(), voiced.begin() + static_cast<std::ptrdiff_t>(voiced.size() / 2), voiced.end());
-        return voiced[voiced.size() / 2];
-    };
-    std::stable_sort(tracks.begin(), tracks.end(),
-                     [&](const std::vector<float>& a, const std::vector<float>& b) { return median(a) > median(b); });
     return tracks;
 }
 

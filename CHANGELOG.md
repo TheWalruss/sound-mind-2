@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.12] - 2026-10-16
+
+### Fixed
+
+- **Pitch voices no longer cross or swap.** On real music, the two voices kept swapping and both crowded into the same low register. Voices are now layers: voice 1 is always the highest pitch at each moment, voice 2 the next one down, and so on. Each voice starts from its own default register (with 2 voices, about 450 Hz and 140 Hz), so a guitar playing alone stays on the low voice and a singer coming in over it takes the high one.
+
 ## [0.1.40.11] - 2026-10-16
 
 ### Added

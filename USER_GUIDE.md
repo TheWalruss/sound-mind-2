@@ -2246,10 +2246,16 @@ once, such as a melody and a bassline:
   pitches) at that horizontal position.
 - **Voices** - how many simultaneous pitches to follow, from 1 to 6 (for
   example, 2 for a melody over a bassline). Each voice gets its own track
-  and color: voice 1 is the highest, the last voice the lowest. The
-  analysis keeps each voice on its own track, even when it pauses and
-  comes back. Changing it analyzes again by itself if there are results
-  showing, and it's remembered between sessions.
+  and color. The voices are layers from top to bottom: voice 1 is always
+  the highest pitch heard at that moment, the next voice the next one
+  down, and so on, so the lines never cross. Each voice also has a home
+  register that follows its own pitch, so a voice that pauses picks up
+  again where it was. Until a voice has been heard, its register is spread
+  across the range: with 2 voices, about 450 Hz and 140 Hz. A guitar or
+  bass playing alone therefore sits on the low voice, and a singer coming
+  in over it takes the high one. Changing the setting analyzes again by
+  itself if there are results showing, and it's remembered between
+  sessions.
   - With more than one voice, a row of checkboxes appears, one per voice
     in that voice's color, such as "Voice 1 (highest)" or "Voice 2
     (lowest)". Untick a voice to hide it from the graph, the readouts and

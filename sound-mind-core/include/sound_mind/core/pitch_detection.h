@@ -68,21 +68,22 @@ inline constexpr int kMaxPitchVoices = 6;
  * about one linear FFT bin (25 Hz at the defaults) beat against each other,
  * so the weaker voice can drop out now and then.
  *
- * **Tracking:** each frame's pitches are assigned to tracks, choosing the
- * assignment with the lowest total cost:
- * - a track heard within the last 250 ms costs the distance, in semitones,
+ * **Voices are ordered layers** (`v0.1.40.12`): voice 1 is the highest
+ * line, the last voice the lowest, and in every frame a higher pitch is on a
+ * higher voice - voices never cross. Each frame's pitches, highest first,
+ * go to voices in that same order, choosing - among the order-keeping
+ * assignments - the one with the lowest total cost:
+ * - a voice heard within the last 250 ms costs the distance, in semitones,
  *   from its last pitch;
- * - a track silent for longer costs 1 plus the distance from its average
- *   pitch so far, so it picks up again in its own register;
- * - a never-used track costs 13, more than an octave's leap, so a voice
- *   leaping around isn't split across tracks;
+ * - otherwise, 1 plus half the distance from the voice's **register**: a
+ *   running average of its own pitch with a ~2 s memory, or, until it's
+ *   first heard, a default spread evenly (in log frequency) from about
+ *   800 Hz down to 80 Hz - two voices start near 450 and 140 Hz, so a lone
+ *   bass or guitar line lands on the low voice and a singer coming in over
+ *   it takes the high one;
  * - leaving a pitch unassigned costs 14 - allowed for all but the frame's
  *   strongest, so a stray extra pitch (two notes seen at once just where a
- *   note changes, say) is dropped rather than pulling a silent track out
- *   of its register.
- * Finally the tracks are ordered by their median pitch, highest first:
- * track 0 is the top voice (usually the melody), the last the lowest
- * (usually the bass). Unused tracks come last, all `0`.
+ *   note changes, say) is dropped rather than pulled into a voice.
  *
  * @param content Layer or composite content.
  * @param voiceCount How many tracks, clamped to [1, `kMaxPitchVoices`].

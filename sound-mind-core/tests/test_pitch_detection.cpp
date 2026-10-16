@@ -66,6 +66,34 @@ sound_mind::codec::StreamImage twoVoices(double bassHz, double melodyA, double m
     return sound_mind::codec::encode(audio, config);
 }
 
+/// @brief A low line throughout and a higher one entering at `entry` (a
+///        fraction of the length), over optional white noise - a guitar,
+///        then a voice coming in over it.
+sound_mind::codec::StreamImage lateHighVoice(double lowHz, double highHz, double entry, double noise = 0.0) {
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 150;
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+    sound_mind::codec::AudioBuffer audio;
+    audio.sampleRateHz = config.sampleRateHz;
+    const auto count = static_cast<std::size_t>(settings.canvasWidth) * config.hopLength;
+    std::uint32_t random = 12345;
+    for (std::size_t i = 0; i < count; ++i) {
+        const double t = static_cast<double>(i) / config.sampleRateHz;
+        double value = 0.0;
+        for (int harmonic = 1; harmonic <= 5; ++harmonic) {
+            value += 0.2 / harmonic * std::sin(2.0 * std::numbers::pi * lowHz * harmonic * t);
+            if (static_cast<double>(i) >= entry * static_cast<double>(count)) {
+                value += 0.25 / harmonic * std::sin(2.0 * std::numbers::pi * highHz * harmonic * t);
+            }
+        }
+        random = random * 1664525u + 1013904223u;
+        value += noise * (static_cast<double>(random) / 4294967296.0 - 0.5);
+        audio.left.push_back(static_cast<float>(value));
+    }
+    audio.right = audio.left;
+    return sound_mind::codec::encode(audio, config);
+}
+
 }  // namespace
 
 TEST_CASE("detectPitch finds a harmonic tone's fundamental", "[core][pitch]") {
@@ -212,12 +240,38 @@ TEST_CASE("detectPitches with one voice matches detectPitch; extra voices stay s
     CHECK(single[0] == detectPitch(content));
     const auto three = detectPitches(content, 3);  // only one voice is there.
     REQUIRE(three.size() == 3);
-    CHECK(three[0][30] == Catch::Approx(220.0).epsilon(0.02));
-    std::size_t voicedExtras = 0;
+    // It sits on the voice whose default register suits it (3 voices: about
+    // 450, 250 and 140 Hz - 220 Hz is the middle one); the others stay silent.
+    CHECK(three[1][30] == Catch::Approx(220.0).epsilon(0.02));
+    std::size_t voicedElsewhere = 0;
     for (std::size_t frame = 0; frame < three[1].size(); ++frame) {
-        voicedExtras += (three[1][frame] > 0.0f ? 1 : 0) + (three[2][frame] > 0.0f ? 1 : 0);
+        voicedElsewhere += (three[0][frame] > 0.0f ? 1 : 0) + (three[2][frame] > 0.0f ? 1 : 0);
     }
-    CHECK(voicedExtras < three[1].size() / 10);  // at most stray frames.
+    CHECK(voicedElsewhere < three[1].size() / 10);  // at most stray frames.
     CHECK(detectPitches(content, 0).size() == 1);  // clamped.
     CHECK(detectPitches(content, 99).size() == static_cast<std::size_t>(sound_mind::core::kMaxPitchVoices));
 }
+
+// v0.1.40.12 - voices are ordered layers.
+TEST_CASE("A higher voice entering later takes voice 1; the lower line stays on voice 2", "[core][pitch]") {
+    const auto tracks = detectPitches(lateHighVoice(147.0, 330.0, 0.6), 2);
+    REQUIRE(tracks.size() == 2);
+    CHECK(tracks[1][30] == Catch::Approx(147.0).epsilon(0.03));  // the guitar alone: the low voice.
+    CHECK(tracks[0][30] == 0.0f);
+    CHECK(tracks[1][120] == Catch::Approx(147.0).epsilon(0.03));  // still there once the voice enters...
+    CHECK(tracks[0][120] == Catch::Approx(330.0).epsilon(0.03));  // ...which takes the high voice.
+}
+
+TEST_CASE("Voice 1 is never below voice 2, even over noise", "[core][pitch]") {
+    const auto tracks = detectPitches(lateHighVoice(147.0, 330.0, 0.3, 0.3), 2);
+    std::size_t both = 0;
+    for (std::size_t frame = 0; frame < tracks[0].size(); ++frame) {
+        if (tracks[0][frame] > 0.0f && tracks[1][frame] > 0.0f) {
+            ++both;
+            INFO("frame " << frame);
+            CHECK(tracks[0][frame] > tracks[1][frame]);
+        }
+    }
+    CHECK(both > 50);  // the two voices were really found together.
+}
+
