@@ -2,11 +2,13 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/loudness_meter.h"
+#include "sound_mind/core/stereo_analysis.h"
 #include "sound_mind/core/project.h"
 
 namespace sound_mind::core {
@@ -23,9 +25,10 @@ struct LayerLoudness {
 };
 
 /**
- * @brief The loudness meter's full report on a project (Pre-Beta Plan
- *        `v0.Y.80.1`): the mix as played, and each audible layer's own
- *        contribution.
+ * @brief The Analysis panel's full report on a project (Pre-Beta Plan
+ *        `v0.Y.80.1`): the mix as played - loudness, stereo image, per-band
+ *        views, and the decoded mix itself for the goniometer - and each
+ *        audible layer's own loudness contribution.
  */
 struct ProjectLoudnessReport {
     /// @brief The mix, exactly as playback hears it (respecting mute).
@@ -36,6 +39,14 @@ struct ProjectLoudnessReport {
     std::uint32_t frameCount = 0;
     /// @brief Seconds per frame - maps a band-level column to a time.
     double secondsPerFrame = 0.0;
+    /// @brief The mix's stereo image - see `measureStereo()`.
+    StereoMeasurement mixStereo;
+    /// @brief The mix's per-band stereo widths - see `bandStereoWidths()`.
+    std::vector<float> mixBandWidths;
+    /// @brief The decoded mix (shared, never modified) - the goniometer draws
+    ///        the samples around the playhead from it. Null if nothing is
+    ///        audible.
+    std::shared_ptr<const sound_mind::codec::AudioBuffer> mixAudio;
     /// @brief Each visible, unmuted, non-Filter layer with content, soloed
     ///        (every other layer muted), in stack order.
     std::vector<LayerLoudness> layers;

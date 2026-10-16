@@ -14,6 +14,9 @@ using sound_mind::core::LoudnessMeasurement;
 using sound_mind::core::ProjectLoudnessReport;
 using sound_mind::studio::AnalysisPanel;
 using sound_mind::studio::BandLevelsWidget;
+using sound_mind::studio::BandWidthBarsWidget;
+using sound_mind::studio::GoniometerWidget;
+using sound_mind::studio::StereoGraphWidget;
 using sound_mind::studio::LoudnessGraphWidget;
 
 namespace {
@@ -38,6 +41,11 @@ ProjectLoudnessReport twoLayerReport() {
     report.frameCount = 4;
     report.secondsPerFrame = 0.5;
     report.mixBandLevels.assign(sound_mind::core::loudnessBands().size() * 4, -30.0f);
+    report.mixStereo.correlation = 0.8;
+    report.mixStereo.width = 0.25;
+    report.mixStereo.correlationOverTime.assign(20, 0.75f);
+    report.mixStereo.widthOverTime.assign(20, 0.3f);
+    report.mixBandWidths = {0.0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
     report.layers.push_back(LayerLoudness{1, "Drums", steady(-16.0, 20)});
     report.layers.push_back(LayerLoudness{2, "Pad", steady(-24.0, 20)});
     return report;
@@ -143,4 +151,52 @@ void AnalysisPanelTest::formatLevelShowsADashAtTheFloor() {
     QCOMPARE(AnalysisPanel::formatLevel(sound_mind::core::kLoudnessFloorLufs, QStringLiteral("LUFS")),
              QStringLiteral("—"));
     QCOMPARE(AnalysisPanel::formatLevel(-9.04, QStringLiteral("dBTP")), QStringLiteral("-9.0 dBTP"));
+}
+
+void AnalysisPanelTest::setReportFillsTheStereoTab() {
+    AnalysisPanel panel;
+    panel.setReport(twoLayerReport());
+
+    QCOMPARE(text(panel, "correlationLabel"), QStringLiteral("0.80"));
+    QCOMPARE(text(panel, "stereoWidthLabel"), QStringLiteral("0.25"));
+    QVERIFY(panel.findChild<StereoGraphWidget*>()->hasData());
+    QCOMPARE(panel.findChild<BandWidthBarsWidget*>()->widths().size(), std::size_t{6});
+    panel.setPlaybackPosition(1.0);
+    QCOMPARE(text(panel, "correlationNowLabel"), QStringLiteral("0.75"));
+    QCOMPARE(text(panel, "stereoWidthNowLabel"), QStringLiteral("0.30"));
+
+    panel.clearReport();
+    QCOMPARE(text(panel, "correlationLabel"), QStringLiteral("—"));
+    QVERIFY(!panel.findChild<StereoGraphWidget*>()->hasData());
+}
+
+void AnalysisPanelTest::negativeCorrelationIsFlaggedInRed() {
+    AnalysisPanel panel;
+    auto report = twoLayerReport();
+    report.mixStereo.correlation = -0.4;
+    panel.setReport(report);
+    QVERIFY(panel.findChild<QLabel*>(QStringLiteral("correlationLabel"))->styleSheet().contains(QStringLiteral("color")));
+}
+
+void AnalysisPanelTest::theGoniometerPlotsMonoAsAVerticalLineAroundThePlayhead() {
+    auto audio = std::make_shared<sound_mind::codec::AudioBuffer>();
+    audio->sampleRateHz = 1000;
+    for (int i = 0; i < 10000; ++i) {
+        const float value = static_cast<float>(i % 7) / 10.0f;
+        audio->left.push_back(value);
+        audio->right.push_back(value);
+    }
+    GoniometerWidget goniometer;
+    QVERIFY(goniometer.points().empty());
+    goniometer.setAudio(audio);
+
+    goniometer.setPosition(5.0);
+    const auto around = goniometer.points();
+    QCOMPARE(static_cast<int>(around.size()), GoniometerWidget::kWindowSamples);
+    for (const QPointF& point : around) {
+        QVERIFY(std::abs(point.x()) < 1e-6);  // mono: no side.
+    }
+    goniometer.setPosition(std::nullopt);  // the whole buffer, spread out.
+    QVERIFY(!goniometer.points().empty());
+    QVERIFY(static_cast<int>(goniometer.points().size()) <= GoniometerWidget::kWindowSamples);
 }

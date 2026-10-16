@@ -13,4 +13,7 @@ private slots:
     void staleAndClearAndAnalyzingUpdateTheStatus();
     void analyzeButtonEmitsAnalyzeRequested();
     void formatLevelShowsADashAtTheFloor();
+    void setReportFillsTheStereoTab();
+    void negativeCorrelationIsFlaggedInRed();
+    void theGoniometerPlotsMonoAsAVerticalLineAroundThePlayhead();
 };

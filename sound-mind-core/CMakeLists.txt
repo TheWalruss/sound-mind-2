@@ -76,6 +76,7 @@ add_library(sound-mind-core
     src/text_paste.cpp
     src/loudness_meter.cpp
     src/project_analysis.cpp
+    src/stereo_analysis.cpp
     src/grid_preset.cpp
 )
 

@@ -2147,6 +2147,26 @@ say **Out of date** once you change the project, until you analyze again.
   loudness, loudest 3 s, true peak and clipped samples (red when
   clipping).
 
+### Stereo
+
+The **Stereo** tab (filled in by the same **Analyze**) shows the mix's
+stereo image:
+
+- **Correlation** - how alike the two channels are: **+1** is mono, **0**
+  means unrelated channels, and **below 0** (shown in **red**) means parts
+  of the left and right cancel each other out when the mix is played in
+  mono - on a phone speaker, say.
+- **Width** - **0** is mono, around **0.5** is a wide stereo image, **1**
+  is fully out of phase.
+- **At playhead** - both, at the playback position.
+- **The graph** shows correlation (blue, -1 at the bottom to +1 at the top,
+  with a dashed line at 0) and width (gold, 0 to 1) over time.
+- **The goniometer** plots the samples around the playback position (or
+  across the whole mix when stopped): mono shows as a vertical line, wide
+  stereo as a cloud, and out-of-phase sound leans toward horizontal.
+- **The width bars** show each frequency band's width - bass is usually
+  kept narrow, highs wider.
+
 ## Performance
 
 Most editing stays responsive on an ordinary machine, but a few things
@@ -2252,9 +2272,9 @@ macro actually contains, and it isn't saved with the project.
 
 
 **Analysis Tools**: the [Analysis](#analysis) panel's loudness meter and
-the Layers panel's per-layer loudness indicator are live. A goniometer and
-stereo width, pitch detection, a master limiter and output loudness
-normalization are being built next; the design document's spectral-health
+the Layers panel's per-layer loudness indicator are live. The Stereo tab
+(goniometer and stereo width) is live too. Pitch detection, a master limiter
+and output loudness normalization are being built next; the design document's spectral-health
 and criticality/pattern meters are planned for after Beta.
 
 **Sound Flower** (see [Canvas Navigation](#canvas-navigation) above) is

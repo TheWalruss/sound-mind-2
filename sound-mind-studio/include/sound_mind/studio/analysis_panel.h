@@ -14,12 +14,14 @@ class QTableWidget;
 namespace sound_mind::studio {
 
 class BandLevelsWidget;
+class BandWidthBarsWidget;
+class GoniometerWidget;
 class LoudnessGraphWidget;
+class StereoGraphWidget;
 
 /**
  * @brief The Analysis panel (Pre-Beta Plan `v0.Y.80.1`) - read-only meters
- *        that never change the project. This installment: the **Loudness**
- *        tab.
+ *        that never change the project, in tabs: **Loudness** and **Stereo**.
  *
  * **Loudness tab:**
  * - **Analyze** (analyzeRequested()) - `MainWindow` composites, decodes and
@@ -35,6 +37,12 @@ class LoudnessGraphWidget;
  *   playhead.
  * - Each audible layer's own contribution: integrated, loudest short-term,
  *   true peak and clips.
+ *
+ * **Stereo tab** (installment B): overall correlation and width, both at
+ * the playback position, a correlation/width graph over time, a goniometer
+ * of the samples around the playhead (or the whole mix when stopped), and
+ * per-band width bars. Negative correlation - channels that cancel when
+ * summed to mono - is flagged in red.
  *
  * The report describes the project as it was when analyzed; setStale()
  * says so once it has changed since.
@@ -98,6 +106,13 @@ private:
     LoudnessGraphWidget* graph_ = nullptr;
     BandLevelsWidget* bands_ = nullptr;
     QTableWidget* layerTable_ = nullptr;
+    QLabel* correlationLabel_ = nullptr;
+    QLabel* widthLabel_ = nullptr;
+    QLabel* correlationNowLabel_ = nullptr;
+    QLabel* widthNowLabel_ = nullptr;
+    StereoGraphWidget* stereoGraph_ = nullptr;
+    GoniometerWidget* goniometer_ = nullptr;
+    BandWidthBarsWidget* bandWidths_ = nullptr;
     std::optional<sound_mind::core::ProjectLoudnessReport> report_;
 };
 

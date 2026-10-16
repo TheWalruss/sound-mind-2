@@ -85,6 +85,34 @@ AnalysisPanel::AnalysisPanel(QWidget* parent) : QDockWidget(tr("Analysis"), pare
     root->addWidget(layerTable_, 1);
 
     tabs_->addTab(loudness, tr("Loudness"));
+
+    // --- Stereo (installment B) ---
+    auto* stereo = new QWidget(tabs_);
+    auto* stereoRoot = new QVBoxLayout(stereo);
+    auto* stereoSummary = new QFormLayout();
+    correlationLabel_ = makeReading(stereo, QStringLiteral("correlationLabel"));
+    correlationLabel_->setToolTip(tr("+1 mono, 0 unrelated channels, below 0 the channels cancel when summed to mono"));
+    stereoSummary->addRow(tr("Correlation:"), correlationLabel_);
+    widthLabel_ = makeReading(stereo, QStringLiteral("stereoWidthLabel"));
+    widthLabel_->setToolTip(tr("0 mono, about 0.5 wide, 1 fully out of phase"));
+    stereoSummary->addRow(tr("Width:"), widthLabel_);
+    correlationNowLabel_ = makeReading(stereo, QStringLiteral("correlationNowLabel"));
+    stereoSummary->addRow(tr("Correlation at playhead:"), correlationNowLabel_);
+    widthNowLabel_ = makeReading(stereo, QStringLiteral("stereoWidthNowLabel"));
+    stereoSummary->addRow(tr("Width at playhead:"), widthNowLabel_);
+    stereoRoot->addLayout(stereoSummary);
+    stereoGraph_ = new StereoGraphWidget(stereo);
+    stereoGraph_->setObjectName(QStringLiteral("stereoGraph"));
+    stereoRoot->addWidget(stereoGraph_);
+    auto* stereoBottom = new QHBoxLayout();
+    goniometer_ = new GoniometerWidget(stereo);
+    goniometer_->setObjectName(QStringLiteral("goniometer"));
+    stereoBottom->addWidget(goniometer_);
+    bandWidths_ = new BandWidthBarsWidget(stereo);
+    bandWidths_->setObjectName(QStringLiteral("bandWidths"));
+    stereoBottom->addWidget(bandWidths_, 1);
+    stereoRoot->addLayout(stereoBottom, 1);
+    tabs_->addTab(stereo, tr("Stereo"));
     setWidget(tabs_);
 }
 
@@ -108,6 +136,13 @@ void AnalysisPanel::setReport(const sound_mind::core::ProjectLoudnessReport& rep
     clipsLabel_->setText(QString::number(mix.clippedSamples));
     setWarning(clipsLabel_, mix.clippedSamples > 0);
     graph_->setSeries(mix.momentaryLufs, mix.shortTermLufs, sound_mind::core::kLoudnessStepSeconds);
+    correlationLabel_->setText(QString::number(report.mixStereo.correlation, 'f', 2));
+    setWarning(correlationLabel_, report.mixStereo.correlation < 0.0);
+    widthLabel_->setText(QString::number(report.mixStereo.width, 'f', 2));
+    stereoGraph_->setSeries(report.mixStereo.correlationOverTime, report.mixStereo.widthOverTime,
+                            sound_mind::core::kLoudnessStepSeconds);
+    goniometer_->setAudio(report.mixAudio);
+    bandWidths_->setWidths(report.mixBandWidths);
     bands_->setLevels(report.mixBandLevels, static_cast<int>(sound_mind::core::loudnessBands().size()),
                       static_cast<int>(report.frameCount), report.secondsPerFrame);
 
@@ -134,12 +169,16 @@ void AnalysisPanel::clearReport() {
     report_.reset();
     statusLabel_->setText(tr("Not analyzed yet."));
     for (QLabel* label : {integratedLabel_, maxShortTermLabel_, maxMomentaryLabel_, truePeakLabel_, samplePeakLabel_,
-                          clipsLabel_, momentaryNowLabel_, shortTermNowLabel_}) {
+                          clipsLabel_, momentaryNowLabel_, shortTermNowLabel_, correlationLabel_, widthLabel_,
+                          correlationNowLabel_, widthNowLabel_}) {
         label->setText(QStringLiteral("—"));
         setWarning(label, false);
     }
     graph_->setSeries({}, {}, sound_mind::core::kLoudnessStepSeconds);
     bands_->setLevels({}, 0, 0, 0.0);
+    stereoGraph_->setSeries({}, {}, sound_mind::core::kLoudnessStepSeconds);
+    goniometer_->setAudio(nullptr);
+    bandWidths_->setWidths({});
     layerTable_->setRowCount(0);
 }
 
@@ -161,17 +200,24 @@ void AnalysisPanel::setAnalyzing(bool analyzing) {
 void AnalysisPanel::setPlaybackPosition(std::optional<double> seconds) {
     graph_->setPlayhead(seconds);
     bands_->setPlayhead(seconds);
+    stereoGraph_->setPlayhead(seconds);
+    goniometer_->setPosition(seconds);
+    for (QLabel* label : {momentaryNowLabel_, shortTermNowLabel_, correlationNowLabel_, widthNowLabel_}) {
+        label->setText(QStringLiteral("—"));
+    }
     if (!report_.has_value() || !seconds.has_value()) {
-        momentaryNowLabel_->setText(QStringLiteral("—"));
-        shortTermNowLabel_->setText(QStringLiteral("—"));
         return;
     }
     // Reading i covers the window ending at (i + 1) steps.
     const auto& mix = report_->mix;
     const auto index = static_cast<std::ptrdiff_t>(*seconds / sound_mind::core::kLoudnessStepSeconds) - 1;
+    const auto& stereo = report_->mixStereo;
+    if (index >= 0 && index < static_cast<std::ptrdiff_t>(stereo.correlationOverTime.size())) {
+        correlationNowLabel_->setText(
+            QString::number(stereo.correlationOverTime[static_cast<std::size_t>(index)], 'f', 2));
+        widthNowLabel_->setText(QString::number(stereo.widthOverTime[static_cast<std::size_t>(index)], 'f', 2));
+    }
     if (index < 0 || index >= static_cast<std::ptrdiff_t>(mix.momentaryLufs.size())) {
-        momentaryNowLabel_->setText(QStringLiteral("—"));
-        shortTermNowLabel_->setText(QStringLiteral("—"));
         return;
     }
     momentaryNowLabel_->setText(formatLevel(mix.momentaryLufs[static_cast<std::size_t>(index)], QStringLiteral("LUFS")));

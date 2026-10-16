@@ -9,17 +9,22 @@ namespace sound_mind::core {
 namespace {
 
 /// @brief The mix of `project` (respecting mute), decoded and measured; an
-/// empty measurement if nothing is audible. `composite` receives the
-/// composited image when there is one.
+/// empty measurement if nothing is audible. `composite` and `audio` receive
+/// the composited image and the decoded mix when there is one.
 LoudnessMeasurement measureMix(const Project& project, const std::function<bool()>& shouldCancel,
-                               std::optional<sound_mind::codec::StreamImage>* composite = nullptr) {
+                               std::optional<sound_mind::codec::StreamImage>* composite = nullptr,
+                               std::shared_ptr<const sound_mind::codec::AudioBuffer>* audio = nullptr) {
     auto image = compositeProject(project, shouldCancel, /*respectMute=*/true);
     if (!image.has_value()) {
         return {};
     }
-    const LoudnessMeasurement measurement = measureLoudness(sound_mind::codec::decode(*image), shouldCancel);
+    auto decoded = std::make_shared<const sound_mind::codec::AudioBuffer>(sound_mind::codec::decode(*image));
+    const LoudnessMeasurement measurement = measureLoudness(*decoded, shouldCancel);
     if (composite != nullptr) {
         *composite = std::move(image);
+    }
+    if (audio != nullptr) {
+        *audio = std::move(decoded);
     }
     return measurement;
 }
@@ -29,9 +34,13 @@ LoudnessMeasurement measureMix(const Project& project, const std::function<bool(
 ProjectLoudnessReport analyzeProjectLoudness(const Project& project, const std::function<bool()>& shouldCancel) {
     ProjectLoudnessReport report;
     std::optional<sound_mind::codec::StreamImage> composite;
-    report.mix = measureMix(project, shouldCancel, &composite);
+    report.mix = measureMix(project, shouldCancel, &composite, &report.mixAudio);
+    if (report.mixAudio != nullptr) {
+        report.mixStereo = measureStereo(*report.mixAudio);
+    }
     if (composite.has_value()) {
         report.mixBandLevels = bandLevelsOverTime(*composite);
+        report.mixBandWidths = bandStereoWidths(*composite);
         report.frameCount = composite->frameCount;
         report.secondsPerFrame =
             static_cast<double>(composite->config.hopLength) / static_cast<double>(composite->config.sampleRateHz);

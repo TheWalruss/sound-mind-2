@@ -59,6 +59,11 @@ TEST_CASE("analyzeProjectLoudness measures the mix and each layer on its own", "
     CHECK(report.frameCount == 300);
     CHECK(report.mixBandLevels.size() == sound_mind::core::loudnessBands().size() * 300);
     CHECK(report.secondsPerFrame > 0.0);
+    // Both tones are identical in each channel: a mono mix.
+    REQUIRE(report.mixAudio != nullptr);
+    CHECK(report.mixAudio->frameCount() > 0);
+    CHECK(report.mixStereo.correlation == Catch::Approx(1.0).margin(0.01));
+    CHECK(report.mixBandWidths.size() == sound_mind::core::loudnessBands().size());
 }
 
 TEST_CASE("analyzeProjectLoudness leaves out muted, hidden and filter layers", "[core][project_analysis]") {
@@ -83,4 +88,5 @@ TEST_CASE("analyzeProjectLoudness reports nothing audible for an empty project",
     const auto report = sound_mind::core::analyzeProjectLoudness(project);
     CHECK(report.layers.empty());
     CHECK(report.mix.integratedLufs == sound_mind::core::kLoudnessFloorLufs);
+    CHECK(report.mixAudio == nullptr);
 }

@@ -2326,6 +2326,20 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `AnalysisPanelTest`: 7 cases.
       - `MainWindowTest`: analyze end to end, staleness on a new recording, cleared on a new project.
 
+250. **Stereo analysis: correlation, width, goniometer.** Settled in `v0.1.40.2`, Pre-Beta Plan milestone `v0.Y.80.1` installment B.
+    - **Core** `stereo_analysis.h`:
+      - `measureStereo(AudioBuffer)` gives correlation (normalized L·R cross-correlation, `1` when silent) and width (the legacy formula `sqrt(Eside)/(sqrt(Emid)+sqrt(Eside))`, mid/side = (L±R)/2), overall and per 400 ms window every 100 ms (aligned with the momentary loudness series). Prefix sums of LL, RR and LR make each window O(1).
+      - `bandStereoWidths(StreamImage)` applies the same width formula per loudness band, from the cells' left/right amplitudes with A-weighting removed. Since the format shares one phase across channels, this sees only level differences between the channels. That's documented; `measureStereo()` on decoded audio sees phase too.
+    - **Report:** `ProjectLoudnessReport` (now the panel's whole report) gains `mixStereo`, `mixBandWidths` and `mixAudio`, a `shared_ptr<const AudioBuffer>` the goniometer reads around the playhead. `measureMix()` already decoded the mix, so keeping it costs memory only.
+    - **Studio:** the Analysis panel's Stereo tab:
+      - correlation (red below 0) and width, overall and at the playhead;
+      - `StereoGraphWidget` - correlation and width over time, zero line, playhead;
+      - `GoniometerWidget` - `kWindowSamples` (2048) points as (side, mid)/√2 around the playhead, or strided across the whole mix when stopped, so mono is a vertical line;
+      - `BandWidthBarsWidget`.
+    - **Tests:**
+      - Core: 4 cases - mono → (1, 0), inverted → (-1, 1), independent noise → (0, 0.5), band widths from spectral level differences (mono 0, one-sided 0.5); the project report carries stereo data and the decoded mix.
+      - `AnalysisPanelTest`: 3 new cases - Stereo tab filled and cleared, red negative correlation, goniometer points (mono vertical, windowed around the playhead).
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

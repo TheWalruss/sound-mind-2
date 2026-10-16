@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.2] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.80.1` (Analysis tools), installment B.
+
+### Added
+
+- **Stereo analysis.** The Analysis panel's new **Stereo** tab shows the mix's correlation (red below 0, a mono-compatibility warning) and width, both overall and at the playhead. It also has a correlation/width graph over time, a goniometer plotting the samples around the playhead, and per-band width bars.
+
 ## [0.1.40.1] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.80.1` (Analysis tools), installment A.
