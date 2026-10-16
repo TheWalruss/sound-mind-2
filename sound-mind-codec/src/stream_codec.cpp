@@ -7,6 +7,7 @@
 
 #include <pocketfft_hdronly.h>
 
+#include "sound_mind/codec/parallel.h"
 #include "stream_frame_codec.h"
 
 namespace sound_mind::codec {
@@ -19,6 +20,11 @@ namespace {
 /// start/end, where fewer windows have accumulated, against dividing by
 /// (near) zero.
 constexpr float kMinWindowSumSquared = 1e-6f;
+
+/// @brief Frames per parallelFor() block in encode()/decode() - fixed, so
+/// the result never depends on how many threads ran (decode()'s overlap-add
+/// merges block sums in block order).
+constexpr std::size_t kFramesPerBlock = 64;
 
 /// @brief Inverse real FFT: `n/2 + 1` complex bins -> `n` real samples.
 void inverseRealFft(const std::vector<std::complex<float>>& bins, std::size_t n, std::vector<float>& frame) {
@@ -131,6 +137,9 @@ StreamImage encode(const AudioBuffer& audio, const StreamCodecConfig& configIn) 
     image.rightMagnitudeDb.resize(std::size_t{config.binCount} * frameCount);
     image.sharedPhaseRadians.resize(std::size_t{config.binCount} * frameCount);
 
+    // Frames are independent and each writes only its own cells, so blocks
+    // of them run on worker threads (v0.1.41.2), each with its own buffers.
+    parallelFor(frameCount, kFramesPerBlock, [&](std::size_t blockBegin, std::size_t blockEnd) {
     std::vector<float> frameLeft(fftSize);
     std::vector<float> frameRight(fftSize);
     std::vector<float> frameMid(fftSize);
@@ -138,7 +147,7 @@ StreamImage encode(const AudioBuffer& audio, const StreamCodecConfig& configIn) 
     std::vector<std::complex<float>> spectrumRight;
     std::vector<std::complex<float>> spectrumMid;
 
-    for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+    for (auto frame = static_cast<std::uint32_t>(blockBegin); frame < blockEnd; ++frame) {
         const auto start = static_cast<std::ptrdiff_t>(frame) * static_cast<std::ptrdiff_t>(config.hopLength);
         extractFrame(audio.left, start, padSamples, frameLeft);
         extractFrame(audio.right, start, padSamples, frameRight);
@@ -166,6 +175,7 @@ StreamImage encode(const AudioBuffer& audio, const StreamCodecConfig& configIn) 
             image.sharedPhaseRadians[cell] = std::atan2(mid_.sinPhase, mid_.cosPhase);
         }
     }
+    });
 
     return image;
 }
@@ -193,12 +203,32 @@ AudioBuffer decode(const StreamImage& image) {
     std::vector<float> rightAccumulator(outputLength, 0.0f);
     std::vector<float> windowSumSquared(outputLength, 0.0f);
 
+    // Each block of frames is synthesized on a worker thread (v0.1.41.2)
+    // into its own overlap-add buffers, covering just the samples its frames
+    // reach; the blocks are then summed into the output in block order, so
+    // the result is the same whatever the thread count.
+    struct BlockSum {
+        std::size_t offset = 0;
+        std::vector<float> left;
+        std::vector<float> right;
+        std::vector<float> weight;
+    };
+    const std::size_t blockCount = (frameCount + kFramesPerBlock - 1) / kFramesPerBlock;
+    std::vector<BlockSum> blockSums(blockCount);
+    parallelFor(frameCount, kFramesPerBlock, [&](std::size_t blockBegin, std::size_t blockEnd) {
+    BlockSum& sum = blockSums[blockBegin / kFramesPerBlock];
+    sum.offset = blockBegin * config.hopLength;
+    const std::size_t span = (blockEnd - 1 - blockBegin) * config.hopLength + fftSize;
+    sum.left.assign(span, 0.0f);
+    sum.right.assign(span, 0.0f);
+    sum.weight.assign(span, 0.0f);
+
     std::vector<std::complex<float>> spectrumLeft(linearBinCount);
     std::vector<std::complex<float>> spectrumRight(linearBinCount);
     std::vector<float> frameLeft;
     std::vector<float> frameRight;
 
-    for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+    for (auto frame = static_cast<std::uint32_t>(blockBegin); frame < blockEnd; ++frame) {
         for (std::size_t k = 0; k < linearBinCount; ++k) {
             const float logBinIndex = logBinIndexForLinearBin[k];
             const float phase = sampleStoredPhase(image.sharedPhaseRadians, config.binCount, frameCount, frame, logBinIndex);
@@ -211,12 +241,20 @@ AudioBuffer decode(const StreamImage& image) {
         inverseRealFft(spectrumLeft, fftSize, frameLeft);
         inverseRealFft(spectrumRight, fftSize, frameRight);
 
-        const auto start = static_cast<std::size_t>(frame) * config.hopLength;
+        const std::size_t start = static_cast<std::size_t>(frame) * config.hopLength - sum.offset;
         for (std::uint32_t i = 0; i < fftSize; ++i) {
             const float w = window[i];
-            leftAccumulator[start + i] += frameLeft[i] * w;
-            rightAccumulator[start + i] += frameRight[i] * w;
-            windowSumSquared[start + i] += w * w;
+            sum.left[start + i] += frameLeft[i] * w;
+            sum.right[start + i] += frameRight[i] * w;
+            sum.weight[start + i] += w * w;
+        }
+    }
+    });
+    for (const BlockSum& sum : blockSums) {
+        for (std::size_t i = 0; i < sum.left.size(); ++i) {
+            leftAccumulator[sum.offset + i] += sum.left[i];
+            rightAccumulator[sum.offset + i] += sum.right[i];
+            windowSumSquared[sum.offset + i] += sum.weight[i];
         }
     }
 

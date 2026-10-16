@@ -144,6 +144,8 @@ None of these are regressions from a working feature that was removed - the curr
 
 ## 8. CPU vs. GPU
 
+**Multithreaded since `v0.1.41.2`:** Stream `encode()`/`decode()` split their frames into fixed 64-frame blocks run by `sound_mind::codec::parallelFor()` (`parallel.h`). Encode blocks write disjoint cells. Decode blocks overlap-add into their own buffers, which are then summed into the output in block order, so the result is bit-identical whatever the thread count. On the 12-core dev machine, a 180 s decode went from 1856 to 335 ms and an encode from 3859 to 500 ms. Pool is unchanged.
+
 **Both codecs are CPU-only, in both directions, as of this writing.** Checked directly: nothing in `sound-mind-codec` references `sound_mind::gpu::ComputeDevice` or any DirectX 12 type. `StreamCodecConfig`'s own docs and `encode()`'s own Doxygen comment say so explicitly ("CPU-only for now... the not-yet-prototyped GPU path").
 
 This is easy to conflate with a different, already-shipped GPU capability: `sound-mind-gpu`'s compute shaders (`mix_amplitude_phase_signal.hlsl` and friends) *do* accelerate GPU work in this codebase, but for `sound-mind-core`'s **compositor** - blending already-encoded layers' amplitude/phase together - not for the codec's own audio-to-spectrogram or spectrogram-to-audio transform. A project with GPU acceleration enabled gets a faster *composite*; encoding a new import or decoding for playback still runs the exact same CPU code path described in Section 2 either way.

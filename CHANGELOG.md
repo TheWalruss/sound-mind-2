@@ -6,6 +6,23 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.41.2] - 2026-10-16
+
+Roadmap slot `v0.Y.80.2`, step 2.
+
+### Changed
+
+- **Playback preparation, export, importing and Analyze are several times faster.** They now use every CPU core. On a 12-core laptop:
+  - decoding 3 minutes of audio dropped from 1.9 s to 0.34 s;
+  - encoding it dropped from 3.9 s to 0.5 s;
+  - analyzing an 8-layer project dropped from 5.1 s to 1.2 s.
+
+  Results are identical to before, whatever the number of cores.
+
+### Fixed
+
+- **GPU work from two background tasks at once could read unfinished results.** The shared GPU device handed out its completion signals unsafely, so, for example, preparing playback while Analyze ran could use a GPU result too early. Submitting work to the GPU is now serialized, and each task waits only for its own work.
+
 ## [0.1.41.1] - 2026-10-16
 
 Roadmap slot `v0.Y.80.2` (codec, analysis and noise acceleration), step 1.

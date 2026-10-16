@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+#include <mutex>
 #include <cstdint>
 #include <optional>
 #include <vector>
@@ -88,7 +90,10 @@ struct AmplitudePhaseSignal {
  * faster" - not a pattern a real, repeatedly-dispatched, wired-in kernel
  * should copy.
  *
- * @note Not thread-safe, and not real-time-safe: every operation
+ * @note Every operation may be called from several threads at once
+ *       (`v0.1.41.2` - each submission takes a short lock; before that, two
+ *       background tasks using the shared device together could share a
+ *       fence value and read results early). Not real-time-safe: every operation
  *       allocates, and every method blocks its own calling thread on a
  *       GPU fence. Matches every other DSP path in this codebase before
  *       its own real-time-safe pass (`compositeProject()`,
@@ -431,7 +436,10 @@ private:
     /// @brief Closes, executes, and blocks the calling thread until
     ///        `commandList` has actually finished running on the GPU -
     ///        the shared tail end of every method in this class that
-    ///        records and submits its own commands.
+    ///        records and submits its own commands. Safe to call from
+    ///        several threads at once (`v0.1.41.2`): submission is
+    ///        serialized, and each caller waits for its own fence value
+    ///        only.
     /// @param commandList The command list to close and execute -
     ///        already fully recorded.
     void executeAndWait(ID3D12GraphicsCommandList* commandList) const;
@@ -445,8 +453,14 @@ private:
     // than reusing one - see this class's own docs) - mutable since
     // every public method here is logically const (none change which
     // device/adapter this object represents) but still needs to advance
-    // this internal counter.
+    // this internal counter. Guarded by submitMutex_ (v0.1.41.2).
     mutable std::uint64_t nextFenceValue_ = 1;
+    // Makes "execute, then signal the next fence value" one step, so
+    // concurrent callers (several background tasks, or parallel analysis
+    // work) never share a fence value or signal out of order. Held only
+    // while submitting, not while waiting. A pointer so the class stays
+    // movable.
+    std::unique_ptr<std::mutex> submitMutex_ = std::make_unique<std::mutex>();
     void* fenceEvent_ = nullptr;  // HANDLE, kept void* to avoid <Windows.h> in this public header.
 };
 

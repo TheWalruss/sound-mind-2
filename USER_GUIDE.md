@@ -2312,6 +2312,13 @@ expected, so you know what's actually driving it.
   off if you want to compare speed or results against the CPU path
   directly, or if you suspect it's causing a visual problem; it stays
   as you left it across restarts.
+- **Using every CPU core**: turning the canvas into sound (preparing
+  playback, Repeat and Loop refreshes, filter previews, exports) and
+  turning sound into a canvas (importing, recording) share the work
+  across all of your computer's cores. So does **Analyze**, which measures
+  the mix and each layer at the same time. On a typical multi-core laptop
+  these run several times faster than with a single core. The result is
+  exactly the same whatever the number of cores.
 - **Filters**: **Uniform Blur** and **Edge-Preserving Blur** (see
   [Filter Layers](#filter-layers) above) both use the GPU when
   Hardware Acceleration is on. For Uniform Blur, a larger **Sigma**

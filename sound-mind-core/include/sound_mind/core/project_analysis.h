@@ -65,11 +65,14 @@ struct ProjectLoudnessReport {
  *        (on their own they contribute nothing); muted or hidden layers too.
  *
  * @param project The project to analyze; not modified.
- * @param shouldCancel Polled between stages and layers.
+ * @param shouldCancel Polled between stages and layers - from several
+ *        threads at once, so it must be thread-safe (an atomic flag is).
  * @return The report; an empty mix measurement if nothing is audible.
  * @throws CompositeCancelled or std::runtime_error if cancelled.
  * @note Costs one composite and decode for the mix plus one per layer; run
- *       it off the GUI thread.
+ *       it off the GUI thread. Since `v0.1.41.2` the mix and the layers run
+ *       as parallel tasks (`sound_mind::codec::parallelFor()`), each decode
+ *       itself parallel too; the report is the same as a serial run's.
  * @param pitchVoices How many simultaneous pitches to track (`v0.1.40.11`)
  *        - see `detectPitches()`.
  */

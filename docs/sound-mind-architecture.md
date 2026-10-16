@@ -2478,6 +2478,22 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Core: the source survives `translatedCopy()` (and its box moves), `cloneOperation()` and a JSON round trip; `textPasteBox()` recovers the box; an ordinary paste has none; `supersedes` is set.
       - `TextControllerTest`: apply keeps the settings; Pick reads them; editing replaces the text in the same box as one step and stays Picked; no-op and blank edits are refused; undo restores the original.
       - `MainWindowTest`: panel edits do nothing with nothing Picked; Picking fills the panel and shows the note; two quick edits make one change; undo; the Text tool goes back to new text.
+
+258. **CPU parallelism for the codec and the analysis, and a thread-safe GPU device.** Settled in `v0.1.41.1`-`v0.1.41.2`, roadmap slot `v0.Y.80.2` steps 1-2 (inserted 2026-10-16 at the user's request).
+    - **Measure first (`v0.1.41.1`):** `sound-mind-benchmark` gained `codec`, `analysis` and `generator` categories and a `--category` filter (`casesInCategories()`). The Release baseline is recorded in the roadmap.
+    - **`sound_mind::codec::parallelFor(count, blockSize, body)`** (`parallel.h`) is the shared primitive, in the codec library because core depends on it and not the other way round.
+      - Blocks are fixed by `count` and `blockSize`, never by the thread count, and handed out dynamically. The caller works too.
+      - A block's exception is rethrown on the caller.
+      - `maxWorkerThreads()` / `setMaxWorkerThreads()` (an override for tests and benchmarks; 1 = serial).
+      - It creates threads per call (`std::jthread`), which is negligible against encode/decode work and keeps it free of global state. It's not for the audio thread.
+    - **Codec:**
+      - `encode()` runs 64-frame blocks, each with its own frame/spectrum buffers, writing disjoint cells.
+      - `decode()` blocks overlap-add into private `BlockSum` buffers spanning just their frames' samples. These are summed into the output in block order, so decode is bit-identical across thread counts. It differs from the old fully serial summation only in rounding where blocks overlap, well within every codec test's tolerance.
+      - PocketFFT's plan cache was already thread-safe (decode already ran on concurrent background tasks).
+    - **Analysis:** `analyzeProjectLoudness()` runs the mix (with its stereo, band and pitch stages) and each soloed layer as parallel items, writing into pre-sized slots, so the report order is unchanged. `shouldCancel` is now documented as called concurrently; `MainWindow`'s polls an atomic.
+    - **A latent GPU race, fixed first:** `ComputeDevice` was documented "not thread-safe", yet `gpuComputeDeviceOrNull()` hands one device to every background task (playback preparation, export, analysis, Repeat refresh, filter preview) with no lock. `executeAndWait()` incremented a plain fence counter and shared one wait event, so concurrent callers could take the same fence value, signal out of order, or be woken by each other's completion and read results early. It now executes and signals under a `submitMutex_` (held only while submitting), and waits with `SetEventOnCompletion(value, nullptr)`, which blocks until that caller's own value, with no shared event. Parallel analysis made this necessary, but the race predates it.
+    - **Measured:** see the roadmap - encode up to 7.7x, decode up to 5.5x, a whole 8-layer analysis 4.2x. The loudness measurement (single-threaded K-weighting and true peak) is now the largest single cost in a small project's analysis.
+    - **Tests:** `test_parallel.cpp` - every item visited once in fixed blocks at 1 and 4 threads, exception propagation, the override, and encode/decode bit-identical at 1 vs 8 threads. GPU: six threads × 40 concurrent `multiplyByTwo()` calls all correct. A race doesn't reproduce reliably, so this test passing on the old code wouldn't have proven it safe. The existing analysis tests pass unchanged against the parallel report.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

@@ -332,6 +332,7 @@ ComputeDevice::ComputeDevice(ComputeDevice&& other) noexcept
       commandQueue_(std::move(other.commandQueue_)),
       fence_(std::move(other.fence_)),
       nextFenceValue_(other.nextFenceValue_),
+      submitMutex_(std::move(other.submitMutex_)),
       fenceEvent_(other.fenceEvent_) {
     other.fenceEvent_ = nullptr;
 }
@@ -346,6 +347,7 @@ ComputeDevice& ComputeDevice::operator=(ComputeDevice&& other) noexcept {
         commandQueue_ = std::move(other.commandQueue_);
         fence_ = std::move(other.fence_);
         nextFenceValue_ = other.nextFenceValue_;
+        submitMutex_ = std::move(other.submitMutex_);
         fenceEvent_ = other.fenceEvent_;
         other.fenceEvent_ = nullptr;
     }
@@ -361,13 +363,20 @@ ComputeDevice::~ComputeDevice() {
 void ComputeDevice::executeAndWait(ID3D12GraphicsCommandList* commandList) const {
     throwIfFailed(commandList->Close(), "Close (command list)");
     ID3D12CommandList* commandLists[] = {commandList};
-    commandQueue_->ExecuteCommandLists(1, commandLists);
-
-    const std::uint64_t fenceValueToWaitFor = nextFenceValue_++;
-    throwIfFailed(commandQueue_->Signal(fence_.Get(), fenceValueToWaitFor), "Signal (fence)");
+    std::uint64_t fenceValueToWaitFor = 0;
+    {
+        // Execute + signal as one step, so fence values are issued and
+        // signalled in the same order whatever thread submits.
+        const std::lock_guard lock(*submitMutex_);
+        commandQueue_->ExecuteCommandLists(1, commandLists);
+        fenceValueToWaitFor = nextFenceValue_++;
+        throwIfFailed(commandQueue_->Signal(fence_.Get(), fenceValueToWaitFor), "Signal (fence)");
+    }
     if (fence_->GetCompletedValue() < fenceValueToWaitFor) {
-        throwIfFailed(fence_->SetEventOnCompletion(fenceValueToWaitFor, fenceEvent_), "SetEventOnCompletion");
-        WaitForSingleObject(fenceEvent_, INFINITE);
+        // A null event makes this block until the fence reaches the value -
+        // each caller waits for its own work, with no shared event to be
+        // woken by someone else's.
+        throwIfFailed(fence_->SetEventOnCompletion(fenceValueToWaitFor, nullptr), "SetEventOnCompletion");
     }
 }
 

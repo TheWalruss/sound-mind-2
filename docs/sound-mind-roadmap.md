@@ -1191,7 +1191,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.78.1` | Text tool | `0.1.38.1` (follow-up `0.1.40.13`: editable after applying) | #243, #257 |
 | `v0.Y.79.1` | Generators | `0.1.39.1`-`0.1.39.4` (plus the codec fix `0.1.39.5`) | #244-#248 |
 | `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges; `0.1.40.13` belongs to `v0.Y.78.1`) | #249-#256 |
-| `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`- *(in progress)* | |
+| `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.2` *(in progress)* | #258 |
 | `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.42.x`)* | |
 | `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.43.x`)* | |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
@@ -1353,7 +1353,11 @@ The GPU-offloading candidates assessed on 2026-10-16, taken in the order recomme
    - Analyze 1/4/8 layers of 30 s: 1.16/2.79/5.07 s (GPU on);
    - stages at 60 s: loudness 381 ms, stereo 28 ms, band levels 49 ms, band widths 52 ms, pitch 113 ms (1 voice) / 161 ms (3 voices);
    - noise layer 30/120 s: 115/486 ms; noise MindWave field: 236/941 ms; Fractal and Streaming layers: 3-51 ms.
-2. **CPU multithreading.** Nothing in the codec or the analysis used more than one thread; the dev machine has 12 cores. Parallelize `encode()`/`decode()` across frames (deterministic regardless of thread count) and the analysis's per-layer work, then re-measure.
+2. ✅ **CPU multithreading** (`v0.1.41.2`). Nothing in the codec or the analysis used more than one thread; the dev machine has 12 cores. `encode()`/`decode()` are parallel across frames (deterministic regardless of thread count), and the analysis runs the mix and each layer as parallel tasks. Re-measured:
+   - encode 10/60/180 s: 31/167/500 ms (6.8-7.7x); decode: 22/115/335 ms (4.5-5.5x);
+   - Analyze 1/4/8 layers: 0.44/0.67/1.19 s (2.6-4.2x).
+
+   Both runs had a `MainWindowTest` run going in the background, so the speedups are slightly understated. The loudness measurement (376 ms at 60 s, still single-threaded) now dominates a small project's analysis.
 3. **GPU Stream decode/encode.** Decide on measured numbers whether a DirectX 12 FFT path is still worth it after step 2, and build it if so (no new third-party FFT dependency without asking).
 4. **Analysis on the GPU.** Per-band levels and widths, and pitch candidate scoring (per frame); the sequential parts (K-weighting, true peak, voice tracking) stay on the CPU.
 5. **Noise generation on the GPU.** The noise Generate Layer and the noise MindWave field (per-cell hashed randomness), the same shape as the Fractal field's existing GPU path.

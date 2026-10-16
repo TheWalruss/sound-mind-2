@@ -12,6 +12,7 @@
 #include <complex>
 #include <cstddef>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -1179,3 +1180,39 @@ TEST_CASE("fractalField is measurably faster than the CPU reference on a large f
     checkGpuFasterThanCpu(cpuWork,
                           [&]() { static_cast<void>(sharedDevice().fractalField(tValues, iterations, roughness, seed)); });
 }
+
+// v0.1.41.2 - the shared device is used by several threads at once.
+TEST_CASE("The device gives correct results when several threads use it at once", "[gpu][compute_device]") {
+    auto device = ComputeDevice::create();
+    if (!device.has_value()) {
+        SKIP("no D3D12 adapter");
+    }
+    constexpr int kThreads = 6;
+    constexpr int kIterations = 40;
+    std::vector<int> wrong(kThreads, 0);
+    {
+        std::vector<std::jthread> threads;
+        for (int t = 0; t < kThreads; ++t) {
+            threads.emplace_back([&, t]() {
+                std::vector<float> input(4096);
+                for (std::size_t i = 0; i < input.size(); ++i) {
+                    input[i] = static_cast<float>(t * 10000 + static_cast<int>(i));
+                }
+                for (int iteration = 0; iteration < kIterations; ++iteration) {
+                    const auto output = device->multiplyByTwo(input);
+                    for (std::size_t i = 0; i < input.size(); ++i) {
+                        if (output[i] != 2.0f * input[i]) {
+                            ++wrong[static_cast<std::size_t>(t)];
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+    }
+    for (int t = 0; t < kThreads; ++t) {
+        INFO("thread " << t);
+        CHECK(wrong[static_cast<std::size_t>(t)] == 0);
+    }
+}
+
