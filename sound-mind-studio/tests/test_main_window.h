@@ -353,4 +353,6 @@ private slots:
     void masterLimiterSettingReachesPlaybackAndBothDevicePanels();
     void loudnessNormalizationRemeasuresARepeatRefresh();
     void masterLimiterSettingReachesLoopMode();
+    void autoAnalyzeRunsOnChangesAndInterruptsARunningAnalysis();
+    void analysisOverlaysReachTheCanvas();
 };

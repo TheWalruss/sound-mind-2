@@ -690,7 +690,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(toolPaletteController_, &ToolPaletteController::contentChanged, this,
             [this](sound_mind::core::LayerId layer) {
                 hasUnsavedChanges_ = true;
-                analysisPanel_->setStale();
+                noteProjectChangedForAnalysis();
                 // v0.1.7.1 (docs/sound-mind-roadmap.md's targeted-
                 // invalidation raster cache) - every kind of content
                 // commit this signal fires for (paint, fill, cut, paste,
@@ -777,7 +777,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         new LayerController(canvas_, playbackController_, layersPanel_, filterConfigurationPanel_, &undoStack_, this);
     connect(layerController_, &LayerController::layersChanged, this, [this]() {
         hasUnsavedChanges_ = true;
-        analysisPanel_->setStale();
+        noteProjectChangedForAnalysis();
         refreshHistoryPanel();
         refreshComposerPanel();
         refreshRecordTargets();
@@ -885,6 +885,29 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(analysisPanel_, &AnalysisPanel::analyzeRequested, this, &MainWindow::analyzeLoudness);
     connect(analysisPanel_, &AnalysisPanel::pitchOverlayToggled, this,
             [this](bool, const std::vector<float>& hzPerFrame) { canvas_->setPitchOverlay(hzPerFrame); });
+    connect(analysisPanel_, &AnalysisPanel::loudnessOverlayToggled, this,
+            [this](bool, const std::vector<float>& momentary, const std::vector<float>& shortTerm) {
+                canvas_->setLoudnessOverlay(momentary, shortTerm, sound_mind::core::kLoudnessStepSeconds);
+            });
+    connect(analysisPanel_, &AnalysisPanel::stereoOverlayToggled, this,
+            [this](bool, const std::vector<float>& correlation, const std::vector<float>& width) {
+                canvas_->setStereoOverlay(correlation, width, sound_mind::core::kLoudnessStepSeconds);
+            });
+    connect(analysisPanel_, &AnalysisPanel::autoAnalyzeToggled, this, &MainWindow::setAutoAnalyze);
+    autoAnalyzeTimer_ = new QTimer(this);
+    autoAnalyzeTimer_->setSingleShot(true);
+    autoAnalyzeTimer_->setInterval(kAutoAnalyzeDelayMs);
+    connect(autoAnalyzeTimer_, &QTimer::timeout, this, [this]() {
+        if (!autoAnalyze_ || !project_) {
+            return;
+        }
+        if (loudnessTask_ != nullptr) {
+            autoAnalyzeTimer_->start();  // a cancelled run is still winding down: try again shortly.
+            return;
+        }
+        analyzeLoudness();
+    });
+    setAutoAnalyze(settings_.value(QStringLiteral("analysisAutoUpdate"), false).toBool());
     loudnessTimer_ = new QTimer(this);
     loudnessTimer_->setInterval(50);
     connect(loudnessTimer_, &QTimer::timeout, this, [this]() {
@@ -897,6 +920,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         if (loudnessResult_.has_value()) {
             analysisPanel_->setReport(*loudnessResult_);
             loudnessResult_.reset();
+            if (analysisStale_) {
+                analysisPanel_->setStale();  // a change landed after this run had already finished.
+            }
         }
     });
 
@@ -2123,6 +2149,11 @@ void MainWindow::setProject(sound_mind::core::Project project) {
         loudnessTask_->requestCancel();  // its result is for the old project - see the timer's handler.
     }
     analysisPanel_->clearReport();
+    analysisStale_ = false;
+    autoAnalyzeTimer_->stop();
+    if (autoAnalyze_) {
+        autoAnalyzeTimer_->start();  // analyze the newly opened project once it's in place.
+    }
     loopUpdateTimer_->stop();
     if (loopEngine_) {
         loopEngine_->stop();
@@ -3544,13 +3575,42 @@ void MainWindow::applyNormalizationGain() {
     playbackController_->setNormalizationGainDb(static_cast<float>(gainDb));
 }
 
+void MainWindow::noteProjectChangedForAnalysis() {
+    analysisStale_ = true;
+    analysisPanel_->setStale();
+    if (!autoAnalyze_) {
+        return;
+    }
+    if (loudnessTask_ != nullptr && !loudnessTask_->wasCancelled()) {
+        loudnessTask_->requestCancel();  // its result would already be out of date.
+        ++cancelledAnalyses_;
+    }
+    autoAnalyzeTimer_->start();  // restarts the wait on each change.
+}
+
+void MainWindow::setAutoAnalyze(bool enabled) {
+    autoAnalyze_ = enabled;
+    settings_.setValue(QStringLiteral("analysisAutoUpdate"), enabled);
+    analysisPanel_->setAutoAnalyze(enabled);
+    if (!enabled) {
+        autoAnalyzeTimer_->stop();
+        return;
+    }
+    if (project_ && (!analysisPanel_->hasReport() || analysisStale_)) {
+        analyzeLoudness();
+    }
+}
+
 void MainWindow::analyzeLoudness() {
     if (!project_ || loudnessTask_ != nullptr) {
         return;
     }
     loudnessResult_.reset();
+    analysisStale_ = false;
     analysisPanel_->setAnalyzing(true);
-    analysisPanel_->show();
+    if (!autoAnalyze_) {
+        analysisPanel_->show();  // an explicit request; Auto-update never pops the panel up by itself.
+    }
     loudnessTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
         [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
             try {
@@ -3688,12 +3748,12 @@ void MainWindow::updateConfiguredDeviceLockState() {
 
 void MainWindow::undo() {
     undoStack_.undo();
-    analysisPanel_->setStale();  // undo can change anything the report measured.
+    noteProjectChangedForAnalysis();  // undo can change anything the report measured.
 }
 
 void MainWindow::redo() {
     undoStack_.redo();
-    analysisPanel_->setStale();
+    noteProjectChangedForAnalysis();
 }
 
 void MainWindow::refreshHistoryPanel() {
@@ -5172,7 +5232,7 @@ bool MainWindow::commitRecording(const sound_mind::codec::AudioBuffer& captured)
         canvas_->invalidateCompositeAll();
         playbackController_->invalidate();
         hasUnsavedChanges_ = true;
-        analysisPanel_->setStale();
+        noteProjectChangedForAnalysis();
         layerController_->refreshLayersPanel();
         refreshRecordTargets();
         return true;

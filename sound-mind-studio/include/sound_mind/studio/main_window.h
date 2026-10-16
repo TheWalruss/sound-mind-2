@@ -1483,6 +1483,24 @@ public slots:
     [[nodiscard]] bool isAnalyzingLoudness() const noexcept { return loudnessTask_ != nullptr; }
 
     /**
+     * @brief Turns the Analysis panel's Auto-update on or off (`v0.1.40.7`).
+     *        While on, every project change (the same ones that mark the
+     *        report out of date) cancels a running analysis at once and
+     *        starts a fresh one after 300 ms without further
+     *        changes - so a burst of edits costs one analysis. Turning it on
+     *        analyzes straight away when the report is missing or out of
+     *        date; opening a project analyzes it. Remembered across sessions;
+     *        off by default.
+     * @param enabled Whether to re-analyze automatically.
+     */
+    void setAutoAnalyze(bool enabled);
+
+    /// @brief How many running analyses a change has cancelled - a test
+    ///        hook for setAutoAnalyze().
+    /// @return The count since this window was built.
+    [[nodiscard]] int cancelledAnalysisCount() const noexcept { return cancelledAnalyses_; }
+
+    /**
      * @brief Undoes the most recent undoable edit, if any - the actual
      *        work behind the Edit menu's Undo action.
      *
@@ -3869,6 +3887,20 @@ private:
     ///        the GUI thread.
     /// @param lufs The loudness, LUFS (`kLoudnessFloorLufs` if silent).
     void noteLoadedPlaybackLoudness(double lufs);
+    /// @brief Every project change the analysis report could depend on:
+    ///        marks it out of date and, with Auto-update on, cancels a
+    ///        running analysis and (re)starts autoAnalyzeTimer_.
+    void noteProjectChangedForAnalysis();
+    /// @brief How long Auto-update waits after the last change, ms - see setAutoAnalyze().
+    static constexpr int kAutoAnalyzeDelayMs = 300;
+    /// @brief See setAutoAnalyze().
+    bool autoAnalyze_ = false;
+    /// @brief The report on screen no longer matches the project.
+    bool analysisStale_ = false;
+    /// @brief Auto-update's debounce - see setAutoAnalyze().
+    QTimer* autoAnalyzeTimer_ = nullptr;
+    /// @brief See cancelledAnalysisCount().
+    int cancelledAnalyses_ = 0;
     /// @brief The running loudness analysis's result; declared before the
     ///        task so the task is destroyed first (as refreshResult_).
     std::optional<sound_mind::core::ProjectLoudnessReport> loudnessResult_;

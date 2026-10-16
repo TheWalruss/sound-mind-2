@@ -2068,3 +2068,38 @@ void CanvasWidgetTest::aPitchOverlayIsDrawnOverTheCanvas() {
     QVERIFY(!widget.hasPitchOverlay());
     QVERIFY(widget.grab().toImage() == before);
 }
+
+void CanvasWidgetTest::aLoudnessOverlayIsDrawnOverTheCanvas() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(600, 300);  // big enough that the legend (top-left) leaves column 500 clear.
+    const QImage before = widget.grab().toImage();
+
+    // Far more readings than the canvas lasts, so the line crosses every column.
+    widget.setLoudnessOverlay(std::vector<float>(2000, -20.0f), std::vector<float>(2000, -18.0f), 0.1);
+    QVERIFY(widget.hasLoudnessOverlay());
+    QVERIFY(columnContainsColor(widget.grab().toImage(), 500, CanvasWidget::kLoudnessOverlayColor));
+
+    widget.setLoudnessOverlay({}, {}, 0.1);
+    QVERIFY(!widget.hasLoudnessOverlay());
+    QVERIFY(widget.grab().toImage() == before);
+}
+
+void CanvasWidgetTest::aStereoOverlayIsDrawnOverTheCanvas() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(600, 300);  // big enough that the legend (top-left) leaves column 500 clear.
+    const QImage before = widget.grab().toImage();
+
+    widget.setStereoOverlay(std::vector<float>(2000, 0.5f), std::vector<float>(2000, 0.2f), 0.1);
+    QVERIFY(widget.hasStereoOverlay());
+    const QImage after = widget.grab().toImage();
+    QVERIFY(columnContainsColor(after, 500, CanvasWidget::kCorrelationOverlayColor));
+    QVERIFY(columnContainsColor(after, 500, CanvasWidget::kWidthOverlayColor));
+
+    widget.setStereoOverlay({}, {}, 0.1);
+    QVERIFY(!widget.hasStereoOverlay());
+    QVERIFY(widget.grab().toImage() == before);
+}

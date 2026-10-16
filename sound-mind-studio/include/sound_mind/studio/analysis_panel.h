@@ -52,6 +52,19 @@ class StereoGraphWidget;
  * time graph, and **Show pitch on canvas** (pitchOverlayToggled()), which
  * `MainWindow` forwards to `CanvasWidget::setPitchOverlay()`.
  *
+ * **Above the tabs** (`v0.1.40.7`), so they're at hand on every tab:
+ * **Analyze**, **Auto-update** (autoAnalyzeToggled() - `MainWindow` then
+ * re-analyzes after every change, cancelling a run that's in progress) and
+ * the status line.
+ *
+ * **Canvas overlays** (`v0.1.40.7`, besides the pitch one): **Show loudness
+ * on canvas** on the Loudness tab (loudnessOverlayToggled()) and **Show
+ * correlation and width on canvas** on the Stereo tab
+ * (stereoOverlayToggled()), forwarded by `MainWindow` to
+ * `CanvasWidget::setLoudnessOverlay()`/`setStereoOverlay()`. Each overlay
+ * signal is re-emitted with every new report while its box is checked, and
+ * with empty data when the report is cleared.
+ *
  * The report describes the project as it was when analyzed; setStale()
  * says so once it has changed since.
  *
@@ -84,6 +97,15 @@ public:
     /// @param seconds The playback position.
     void setPlaybackPosition(std::optional<double> seconds);
 
+    /// @brief Whether Auto-update is checked.
+    /// @return The box's state.
+    [[nodiscard]] bool autoAnalyze() const noexcept;
+
+    /// @brief Checks or unchecks Auto-update without emitting
+    ///        autoAnalyzeToggled() (e.g. restoring the saved setting).
+    /// @param enabled Whether to check it.
+    void setAutoAnalyze(bool enabled);
+
     /// @brief Whether a report is showing.
     /// @return `true` after setReport() until clearReport().
     [[nodiscard]] bool hasReport() const noexcept { return report_.has_value(); }
@@ -106,6 +128,31 @@ signals:
      *        report, or when turned off).
      */
     void pitchOverlayToggled(bool enabled, const std::vector<float>& hzPerFrame);
+
+    /// @brief Auto-update was toggled by the user.
+    /// @param enabled Whether to re-analyze after every change.
+    void autoAnalyzeToggled(bool enabled);
+
+    /**
+     * @brief "Show loudness on canvas" was toggled, or the report changed
+     *        while it's checked.
+     * @param enabled Whether to show it.
+     * @param momentaryLufs The mix's momentary readings (empty when off or
+     *        with no report).
+     * @param shortTermLufs Its short-term readings (likewise).
+     */
+    void loudnessOverlayToggled(bool enabled, const std::vector<float>& momentaryLufs,
+                                const std::vector<float>& shortTermLufs);
+
+    /**
+     * @brief "Show correlation and width on canvas" was toggled, or the
+     *        report changed while it's checked.
+     * @param enabled Whether to show it.
+     * @param correlation The mix's correlation readings (empty when off or
+     *        with no report).
+     * @param width Its width readings (likewise).
+     */
+    void stereoOverlayToggled(bool enabled, const std::vector<float>& correlation, const std::vector<float>& width);
 
 private:
     QTabWidget* tabs_ = nullptr;
@@ -132,9 +179,18 @@ private:
     QLabel* noteNowLabel_ = nullptr;
     PitchGraphWidget* pitchGraph_ = nullptr;
     QCheckBox* pitchOverlayCheckBox_ = nullptr;
+    QCheckBox* autoAnalyzeCheckBox_ = nullptr;
+    QCheckBox* loudnessOverlayCheckBox_ = nullptr;
+    QCheckBox* stereoOverlayCheckBox_ = nullptr;
 
     /// @brief Re-emits pitchOverlayToggled() with the current track.
     void emitPitchOverlay();
+    /// @brief Re-emits loudnessOverlayToggled() with the current readings.
+    void emitLoudnessOverlay();
+    /// @brief Re-emits stereoOverlayToggled() with the current readings.
+    void emitStereoOverlay();
+    /// @brief Re-emits all three overlay signals.
+    void emitOverlays();
     std::optional<sound_mind::core::ProjectLoudnessReport> report_;
 };
 

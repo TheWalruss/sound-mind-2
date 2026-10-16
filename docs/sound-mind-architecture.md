@@ -2374,6 +2374,28 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
         - Its sample rate is the project's codec rate, set at construction and reset in `start()`.
         - `MainWindow::setMasterLimiter()` forwards to it, and `setProject()` applies the current setting to each freshly built engine.
         - Tests: the core `LoopEngine` routing tests that use over-full-scale marker values turn the limiter off. Two new core cases: the limiter caps the heard output while the take records unlimited; quiet output is untouched, off passes through, and the ceiling is adjustable. A `MainWindowTest` case covers forwarding, including a new project's engine.
+
+253. **Analysis panel: Auto-update, loudness and stereo canvas overlays, shared controls above the tabs.** Settled in `v0.1.40.7`, a user-requested follow-up to Pre-Beta Plan milestone `v0.Y.80.1`.
+    - **Shared controls above the tabs.** The user asked for Analyze (and the new Auto-update box) to be copied onto the Stereo and Pitch tabs. They now sit once, above the `QTabWidget`, with the status line: a single Analyze already fills all three tabs, so one shared control does the same job as three copies kept in sync.
+    - **Auto-update** (`AnalysisPanel::autoAnalyzeToggled()`, non-emitting `setAutoAnalyze()`; `MainWindow::setAutoAnalyze()`, persisted as `analysisAutoUpdate`, off by default):
+      - Every place that used to call `AnalysisPanel::setStale()` now goes through `MainWindow::noteProjectChangedForAnalysis()`: layer changes, tool content commits, recordings, undo and redo.
+      - With Auto-update on, a change requests cancellation of a running analysis at once (`cancelledAnalysisCount()` is the test hook) and restarts a 300 ms single-shot timer (`kAutoAnalyzeDelayMs`). When the timer fires, it analyzes. If the cancelled run is still winding down, it retries after another 300 ms. A burst of edits therefore costs one analysis.
+      - `analysisStale_` covers a change that lands after a run has finished computing but before the poll picks up its result: the report is shown, then immediately marked out of date, and the pending timer re-runs it.
+      - Turning it on analyzes at once if there's no report or it's stale. `setProject()` schedules an analysis of the newly opened project.
+      - An automatic run doesn't pop the panel open; only an explicit `analyzeLoudness()` does.
+      - It runs whether or not the panel is visible, because the canvas overlays depend on it too. Its cost is one project analysis per pause in editing, all off the GUI thread.
+    - **Overlays:**
+      - `loudnessOverlayToggled(enabled, momentary, shortTerm)` and `stereoOverlayToggled(enabled, correlation, width)` follow the pitch overlay's pattern: emitted on toggle, with every new report while checked, and empty on `clearReport()`.
+      - `MainWindow` forwards them to `CanvasWidget::setLoudnessOverlay()` / `setStereoOverlay()`.
+      - Since these values aren't frequencies, each uses its own vertical scale over the canvas's full height: loudness from -60 LUFS (bottom) to 0 LUFS (top), with silence-floor readings breaking the line; correlation from -1 to +1 with a dashed zero line; width from 0 to 1.
+      - Reading `i` is placed at the end of its window, `(i + 1) * kLoudnessStepSeconds`, matching the panel's at-playhead readings.
+      - Colors are public constants (`kLoudnessOverlayColor` yellow, `kCorrelationOverlayColor` blue, `kWidthOverlayColor` orange), each line drawn with a black halo.
+      - A legend in the visible area's top-left names each line and its scale.
+      - Hidden in polar view, like the other line overlays.
+    - **Tests:**
+      - `AnalysisPanelTest`, 4 cases: controls above the tabs, one of each; Auto-update emits and its setter doesn't; each overlay emits only while checked, with new and cleared reports.
+      - `CanvasWidgetTest`, 2 cases: each overlay draws its colors and clears.
+      - `MainWindowTest`, 2 cases: Auto-update analyzes on toggle, a change during a run cancels it and the next report reflects every change, and the setting is remembered; overlays reach the canvas and go with a project switch.
     - **Normalization** is a gain, not a processor:
       - `PlaybackEngine::setNormalizationGainDb()` multiplies the volume, ahead of the limiter.
       - `MainWindow` measures `integratedLoudnessLufs()` (the new BS.1770 integrated-only entry point, sharing `gatedIntegrated()` with `measureLoudness()`) on each buffer it loads for playback: a fresh composite, or a repeat-mode refresh.

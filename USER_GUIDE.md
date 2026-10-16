@@ -2139,12 +2139,27 @@ where one makes sense:
 **View → Analysis** opens the Analysis panel - meters that read the project
 without ever changing it.
 
+At the top, above the three tabs (so they're there whichever tab you're
+on):
+
+- **Analyze** measures the project - loudness, stereo and pitch all at
+  once. It runs in the background, so you can keep working.
+- **Auto-update** analyzes again by itself whenever you change the project.
+  If an analysis is already running when you make a change, it's stopped
+  and a fresh one starts about a third of a second after your last change.
+  A quick series of edits therefore costs one analysis. Turning it on
+  analyzes straight away if the results are missing or out of date, and it
+  also analyzes each project you open. It's off by default and remembered
+  between sessions. On a long project with many layers, analysis can keep
+  your computer busy while you edit, so leave it off if editing feels slow.
+- The status line says whether the results are up to date. Without
+  Auto-update, they say **Out of date** once you change the project, until
+  you analyze again.
+
 ### Loudness
 
-Click **Analyze** to measure the whole mix, exactly as you hear it, and
-every audible layer on its own (each with its own volume, balance and
-timing). It runs in the background, so you can keep working; the results
-say **Out of date** once you change the project, until you analyze again.
+**Analyze** measures the whole mix, exactly as you hear it, and every
+audible layer on its own (each with its own volume, balance and timing).
 
 - **Integrated** - the loudness of the whole mix in LUFS, measured the way
   streaming services and broadcasters do (EBU R128). Many streaming
@@ -2167,6 +2182,13 @@ say **Out of date** once you change the project, until you analyze again.
 - **The layer table** lists each layer heard on its own: integrated
   loudness, loudest 3 s, true peak and clipped samples (red when
   clipping).
+- **Show loudness on canvas** draws the mix's loudness right over the
+  canvas, lined up with the time axis:
+  - short-term loudness is a solid yellow line, and momentary loudness a
+    thinner, fainter one;
+  - the scale runs from -60 LUFS at the bottom of the canvas to 0 LUFS at
+    the top, which is not the canvas's frequency axis;
+  - the line breaks where the mix is silent.
 
 ### Stereo
 
@@ -2187,6 +2209,15 @@ stereo image:
   stereo as a cloud, and out-of-phase sound leans toward horizontal.
 - **The width bars** show each frequency band's width - bass is usually
   kept narrow, highs wider.
+- **Show correlation and width on canvas** draws both over the canvas, lined
+  up with the time axis, each on its own scale over the canvas's full
+  height:
+  - correlation is blue, from -1 at the bottom to +1 at the top, with a
+    dashed line at 0;
+  - width is orange, from 0 at the bottom to 1 at the top.
+
+  A small legend in the top-left corner of the canvas names each line on
+  the canvas and its scale.
 
 ### Pitch
 

@@ -109,4 +109,6 @@ private slots:
     void pickMultiSelectionAndRubberBandAreDrawn();
     void textModeDragEmitsBoxSignalsAndAPreviewIsDrawn();
     void aPitchOverlayIsDrawnOverTheCanvas();
+    void aLoudnessOverlayIsDrawnOverTheCanvas();
+    void aStereoOverlayIsDrawnOverTheCanvas();
 };

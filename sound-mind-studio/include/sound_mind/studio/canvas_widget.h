@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <tuple>
 #include <vector>
@@ -287,6 +288,67 @@ public:
     /// @brief Whether a pitch track is showing.
     /// @return `true` while setPitchOverlay() has a track.
     [[nodiscard]] bool hasPitchOverlay() const noexcept { return !pitchOverlay_.empty(); }
+
+    /// @brief The loudness overlay's line color (yellow).
+    static constexpr QColor kLoudnessOverlayColor{255, 210, 40};
+    /// @brief The stereo overlay's correlation line color (blue).
+    static constexpr QColor kCorrelationOverlayColor{90, 170, 255};
+    /// @brief The stereo overlay's width line color (orange).
+    static constexpr QColor kWidthOverlayColor{255, 120, 40};
+
+    /// @brief The loudness overlay's vertical scale: the canvas bottom.
+    static constexpr double kLoudnessOverlayFloorLufs = -60.0;
+
+    /**
+     * @brief Draws the mix's loudness over time across the canvas - the
+     *        Analysis panel's "Show loudness on canvas" (`v0.1.40.7`).
+     *
+     * Unlike the pitch track, these values aren't frequencies, so they use
+     * their own vertical scale over the canvas's full height:
+     * `kLoudnessOverlayFloorLufs` (-60 LUFS) at the bottom to 0 LUFS at the
+     * top. Short-term loudness is a solid line; momentary a thinner, fainter
+     * one. Reading `i` is drawn at the end of its window, `(i + 1) *
+     * stepSeconds`, matching the panel's at-playhead readings. Readings at
+     * or below the silence floor break the line. A small legend in the
+     * visible area's top-left corner names each line and its scale. Hidden
+     * in polar view, like the other line overlays. Repaints.
+     *
+     * @param momentaryLufs Momentary readings, LUFS.
+     * @param shortTermLufs Short-term readings, LUFS (same count).
+     * @param stepSeconds Seconds between readings.
+     * @note Both empty hides it.
+     */
+    void setLoudnessOverlay(std::vector<float> momentaryLufs, std::vector<float> shortTermLufs, double stepSeconds);
+
+    /// @brief Whether a loudness overlay is showing.
+    /// @return `true` while setLoudnessOverlay() has readings.
+    [[nodiscard]] bool hasLoudnessOverlay() const noexcept {
+        return !loudnessMomentary_.empty() || !loudnessShortTerm_.empty();
+    }
+
+    /**
+     * @brief Draws the mix's stereo correlation and width over time across
+     *        the canvas - the Analysis panel's "Show correlation and width on
+     *        canvas" (`v0.1.40.7`).
+     *
+     * Its own vertical scale over the canvas's full height: correlation
+     * from -1 (bottom) to +1 (top), with a dashed line at 0 - below it the
+     * channels cancel when summed to mono; width from 0 (bottom) to 1 (top).
+     * Readings are placed as in setLoudnessOverlay(), with the same legend.
+     * Hidden in polar view. Repaints.
+     *
+     * @param correlation Correlation readings.
+     * @param width Width readings (same count).
+     * @param stepSeconds Seconds between readings.
+     * @note Both empty hides it.
+     */
+    void setStereoOverlay(std::vector<float> correlation, std::vector<float> width, double stepSeconds);
+
+    /// @brief Whether a stereo overlay is showing.
+    /// @return `true` while setStereoOverlay() has readings.
+    [[nodiscard]] bool hasStereoOverlay() const noexcept {
+        return !stereoCorrelation_.empty() || !stereoWidth_.empty();
+    }
 
     /// @brief Whether a Text tool preview is showing.
     /// @return `true` while setTextPreview() has bounds.
@@ -1136,6 +1198,22 @@ private:
     QImage textPreviewImage_;
     std::optional<sound_mind::core::TimeFrequencyRect> textPreviewBounds_;
     std::vector<float> pitchOverlay_;
+    std::vector<float> loudnessMomentary_;
+    std::vector<float> loudnessShortTerm_;
+    double loudnessStepSeconds_ = 0.1;
+    std::vector<float> stereoCorrelation_;
+    std::vector<float> stereoWidth_;
+    double stereoStepSeconds_ = 0.1;
+    /// @brief Draws one analysis series as a haloed polyline: reading `i` at
+    ///        `(i + 1) * stepSeconds`, `toFraction` mapping a value to 0
+    ///        (bottom) .. 1 (top), or `std::nullopt` for a gap.
+    void drawAnalysisSeries(QPainter& painter, const std::vector<float>& values, double stepSeconds,
+                            const QColor& color, double width,
+                            const std::function<std::optional<double>(float)>& toFraction) const;
+    /// @brief The canvas x of a time, in seconds.
+    [[nodiscard]] double widgetXForSeconds(double seconds) const;
+    /// @brief The analysis overlays' legend, top-left of the visible area.
+    void drawAnalysisLegend(QPainter& painter) const;
     sound_mind::core::Path paintPreviewPath_;
     std::optional<std::size_t> previewSelectedNodeIndex_;
     std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;

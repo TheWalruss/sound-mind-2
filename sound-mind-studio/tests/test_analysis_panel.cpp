@@ -4,6 +4,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
+#include <QTabWidget>
 #include <QTableWidget>
 #include <QtTest/QtTest>
 
@@ -236,3 +237,87 @@ void AnalysisPanelTest::showPitchOnCanvasEmitsTheTrackOnlyWhileChecked() {
     box->setChecked(false);
     QVERIFY(received.empty());
 }
+
+// v0.1.40.7 - Analyze and Auto-update reachable from every tab; loudness and
+// stereo canvas overlays.
+void AnalysisPanelTest::analyzeAndAutoUpdateSitAboveTheTabsSoEveryTabHasThem() {
+    AnalysisPanel panel;
+    auto* tabs = panel.findChild<QTabWidget*>();
+    QVERIFY(tabs != nullptr);
+    QCOMPARE(tabs->count(), 3);
+    for (const char* name : {"analyzeLoudnessButton", "autoAnalyzeCheckBox", "analysisStatusLabel"}) {
+        QWidget* control = panel.findChild<QWidget*>(QString::fromLatin1(name));
+        QVERIFY2(control != nullptr, name);
+        QVERIFY2(!tabs->isAncestorOf(control), name);  // shown whichever tab is current.
+    }
+    // One of each, not a copy per tab.
+    QCOMPARE(panel.findChildren<QPushButton*>(QStringLiteral("analyzeLoudnessButton")).size(), 1);
+    QCOMPARE(panel.findChildren<QCheckBox*>(QStringLiteral("autoAnalyzeCheckBox")).size(), 1);
+}
+
+void AnalysisPanelTest::autoUpdateCheckBoxEmitsAndItsSetterDoesNot() {
+    AnalysisPanel panel;
+    QVERIFY(!panel.autoAnalyze());
+    QSignalSpy spy(&panel, &AnalysisPanel::autoAnalyzeToggled);
+    auto* box = panel.findChild<QCheckBox*>(QStringLiteral("autoAnalyzeCheckBox"));
+    box->setChecked(true);
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.last().at(0).toBool(), true);
+    QVERIFY(panel.autoAnalyze());
+
+    panel.setAutoAnalyze(false);
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(!box->isChecked());
+}
+
+void AnalysisPanelTest::showLoudnessOnCanvasEmitsTheSeriesOnlyWhileChecked() {
+    AnalysisPanel panel;
+    bool enabled = false;
+    std::vector<float> momentary{1.0f};
+    std::vector<float> shortTerm{1.0f};
+    connect(&panel, &AnalysisPanel::loudnessOverlayToggled,
+            [&](bool on, const std::vector<float>& m, const std::vector<float>& st) {
+                enabled = on;
+                momentary = m;
+                shortTerm = st;
+            });
+    auto* box = panel.findChild<QCheckBox*>(QStringLiteral("loudnessOverlayCheckBox"));
+    QVERIFY(box != nullptr);
+    box->setChecked(true);  // no report yet: nothing to show.
+    QVERIFY(enabled);
+    QVERIFY(momentary.empty());
+    panel.setReport(twoLayerReport());  // a new report while checked: shown.
+    QCOMPARE(momentary.size(), std::size_t{20});
+    QCOMPARE(shortTerm.size(), std::size_t{20});
+    panel.clearReport();
+    QVERIFY(momentary.empty());
+    panel.setReport(twoLayerReport());
+    box->setChecked(false);
+    QVERIFY(!enabled);
+    QVERIFY(momentary.empty());
+}
+
+void AnalysisPanelTest::showStereoOnCanvasEmitsTheSeriesOnlyWhileChecked() {
+    AnalysisPanel panel;
+    bool enabled = false;
+    std::vector<float> correlation;
+    std::vector<float> width;
+    connect(&panel, &AnalysisPanel::stereoOverlayToggled,
+            [&](bool on, const std::vector<float>& c, const std::vector<float>& w) {
+                enabled = on;
+                correlation = c;
+                width = w;
+            });
+    auto* box = panel.findChild<QCheckBox*>(QStringLiteral("stereoOverlayCheckBox"));
+    QVERIFY(box != nullptr);
+    panel.setReport(twoLayerReport());
+    QVERIFY(correlation.empty());  // unchecked: nothing.
+    box->setChecked(true);
+    QVERIFY(enabled);
+    QCOMPARE(correlation.size(), std::size_t{20});
+    QCOMPARE(width.size(), std::size_t{20});
+    QCOMPARE(correlation.front(), 0.75f);
+    box->setChecked(false);
+    QVERIFY(correlation.empty());
+}
+

@@ -18,4 +18,8 @@ private slots:
     void theGoniometerPlotsMonoAsAVerticalLineAroundThePlayhead();
     void thePitchTabShowsTheNoteAtThePlayhead();
     void showPitchOnCanvasEmitsTheTrackOnlyWhileChecked();
+    void analyzeAndAutoUpdateSitAboveTheTabsSoEveryTabHasThem();
+    void autoUpdateCheckBoxEmitsAndItsSetterDoesNot();
+    void showLoudnessOnCanvasEmitsTheSeriesOnlyWhileChecked();
+    void showStereoOnCanvasEmitsTheSeriesOnlyWhileChecked();
 };

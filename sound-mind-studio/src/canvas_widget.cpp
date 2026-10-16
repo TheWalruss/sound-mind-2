@@ -17,6 +17,7 @@
 
 #include "sound_mind/codec/color_mapping.h"
 #include "sound_mind/codec/polar_projection.h"
+#include "sound_mind/core/loudness_meter.h"
 #include "sound_mind/core/guide_path_operation.h"
 #include "sound_mind/core/compositor.h"
 #include "sound_mind/core/paint_application.h"
@@ -182,6 +183,84 @@ void CanvasWidget::setPickMultiSelectionBounds(std::vector<sound_mind::core::Tim
 void CanvasWidget::setPitchOverlay(std::vector<float> hzPerFrame) {
     pitchOverlay_ = std::move(hzPerFrame);
     update();
+}
+
+void CanvasWidget::setLoudnessOverlay(std::vector<float> momentaryLufs, std::vector<float> shortTermLufs,
+                                      double stepSeconds) {
+    loudnessMomentary_ = std::move(momentaryLufs);
+    loudnessShortTerm_ = std::move(shortTermLufs);
+    loudnessStepSeconds_ = stepSeconds > 0.0 ? stepSeconds : 0.1;
+    update();
+}
+
+void CanvasWidget::setStereoOverlay(std::vector<float> correlation, std::vector<float> width, double stepSeconds) {
+    stereoCorrelation_ = std::move(correlation);
+    stereoWidth_ = std::move(width);
+    stereoStepSeconds_ = stepSeconds > 0.0 ? stepSeconds : 0.1;
+    update();
+}
+
+double CanvasWidget::widgetXForSeconds(double seconds) const {
+    // Any frequency will do: x depends on time alone.
+    return timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint{seconds, 1000.0}).x();
+}
+
+void CanvasWidget::drawAnalysisSeries(QPainter& painter, const std::vector<float>& values, double stepSeconds,
+                                      const QColor& color, double width,
+                                      const std::function<std::optional<double>(float)>& toFraction) const {
+    const double height = static_cast<double>(rect().height());
+    painter.setBrush(Qt::NoBrush);
+    for (const auto& [pen, penWidth] : {std::pair{QColor(Qt::black), width + 2.0}, std::pair{color, width}}) {
+        painter.setPen(QPen(pen, penWidth));
+        std::optional<QPointF> previous;
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            const auto fraction = toFraction(values[i]);
+            if (!fraction.has_value()) {
+                previous.reset();
+                continue;
+            }
+            const QPointF point(widgetXForSeconds(static_cast<double>(i + 1) * stepSeconds),
+                                height * (1.0 - std::clamp(*fraction, 0.0, 1.0)));
+            if (previous.has_value()) {
+                painter.drawLine(*previous, point);
+            } else {
+                painter.drawPoint(point);
+            }
+            previous = point;
+        }
+    }
+}
+
+void CanvasWidget::drawAnalysisLegend(QPainter& painter) const {
+    std::vector<std::pair<QColor, QString>> entries;
+    if (hasLoudnessOverlay()) {
+        entries.emplace_back(kLoudnessOverlayColor, tr("Loudness, short-term (thin: momentary): -60 to 0 LUFS"));
+    }
+    if (hasStereoOverlay()) {
+        entries.emplace_back(kCorrelationOverlayColor, tr("Correlation: -1 to +1 (dashed: 0)"));
+        entries.emplace_back(kWidthOverlayColor, tr("Width: 0 to 1"));
+    }
+    if (entries.empty()) {
+        return;
+    }
+    const QFontMetrics metrics(font());
+    const int lineHeight = metrics.height();
+    int textWidth = 0;
+    for (const auto& entry : entries) {
+        textWidth = std::max(textWidth, metrics.horizontalAdvance(entry.second));
+    }
+    const QPoint origin = visibleRegion().boundingRect().topLeft() + QPoint(6, 6);
+    const QRect box(origin, QSize(textWidth + 30, lineHeight * static_cast<int>(entries.size()) + 8));
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 170));
+    painter.drawRect(box);
+    for (std::size_t i = 0; i < entries.size(); ++i) {
+        const int y = box.top() + 4 + lineHeight * static_cast<int>(i);
+        painter.setPen(QPen(entries[i].first, 3));
+        painter.drawLine(box.left() + 6, y + lineHeight / 2, box.left() + 20, y + lineHeight / 2);
+        painter.setPen(Qt::white);
+        painter.drawText(QRect(box.left() + 26, y, textWidth, lineHeight), Qt::AlignVCenter, entries[i].second);
+    }
 }
 
 void CanvasWidget::setTextPreview(QImage image, std::optional<sound_mind::core::TimeFrequencyRect> bounds) {
@@ -669,6 +748,33 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
                 previous = point;
             }
         }
+    }
+    // The Analysis panel's loudness and stereo overlays (v0.1.40.7), each on
+    // its own vertical scale - see setLoudnessOverlay()/setStereoOverlay().
+    if (!polarMode_ && project_ != nullptr && (hasLoudnessOverlay() || hasStereoOverlay())) {
+        if (hasLoudnessOverlay()) {
+            const auto loudness = [](float lufs) -> std::optional<double> {
+                if (lufs <= sound_mind::core::kLoudnessFloorLufs) {
+                    return std::nullopt;  // silence: a gap.
+                }
+                return (lufs - kLoudnessOverlayFloorLufs) / -kLoudnessOverlayFloorLufs;
+            };
+            QColor faint = kLoudnessOverlayColor;
+            faint.setAlpha(150);
+            drawAnalysisSeries(painter, loudnessMomentary_, loudnessStepSeconds_, faint, 1.0, loudness);
+            drawAnalysisSeries(painter, loudnessShortTerm_, loudnessStepSeconds_, kLoudnessOverlayColor, 2.0,
+                               loudness);
+        }
+        if (hasStereoOverlay()) {
+            const double middle = static_cast<double>(rect().height()) / 2.0;
+            painter.setPen(QPen(kCorrelationOverlayColor, 1, Qt::DashLine));
+            painter.drawLine(QPointF(0.0, middle), QPointF(static_cast<double>(rect().width()), middle));
+            drawAnalysisSeries(painter, stereoCorrelation_, stereoStepSeconds_, kCorrelationOverlayColor, 2.0,
+                               [](float c) -> std::optional<double> { return (static_cast<double>(c) + 1.0) / 2.0; });
+            drawAnalysisSeries(painter, stereoWidth_, stereoStepSeconds_, kWidthOverlayColor, 2.0,
+                               [](float w) -> std::optional<double> { return static_cast<double>(w); });
+        }
+        drawAnalysisLegend(painter);
     }
     if (!polarMode_ && project_ != nullptr && textPreviewBounds_.has_value()) {
         const QRectF box = widgetRectFor(*textPreviewBounds_);

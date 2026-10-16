@@ -7180,6 +7180,63 @@ void MainWindowTest::loudnessNormalizationRemeasuresARepeatRefresh() {
     window.setPlaybackRepeat(false);
 }
 
+// v0.1.40.7: Auto-update re-analyzes after each change, interrupting a run in progress.
+void MainWindowTest::autoAnalyzeRunsOnChangesAndInterruptsARunningAnalysis() {
+    {
+        TestMainWindow window;
+        createFreshTestProject(window);
+        QVERIFY(window.commitRecording(recordedTone(0.5f)));
+        auto* panel = window.findChild<sound_mind::studio::AnalysisPanel*>();
+        auto* status = panel->findChild<QLabel*>(QStringLiteral("analysisStatusLabel"));
+        auto* table = panel->findChild<QTableWidget*>(QStringLiteral("layerLoudnessTable"));
+        auto* autoBox = panel->findChild<QCheckBox*>(QStringLiteral("autoAnalyzeCheckBox"));
+
+        autoBox->setChecked(true);  // turning it on analyzes what's there now.
+        QVERIFY(window.isAnalyzingLoudness());
+        QTRY_VERIFY_WITH_TIMEOUT(panel->hasReport() && !window.isAnalyzingLoudness(), 120000);
+        QCOMPARE(table->rowCount(), 1);
+
+        // A change while a run is in progress cancels it; the next run sees the change.
+        QVERIFY(window.commitRecording(recordedTone(0.2f)));
+        QTRY_VERIFY_WITH_TIMEOUT(window.isAnalyzingLoudness(), 10000);
+        const int cancelledBefore = window.cancelledAnalysisCount();
+        QVERIFY(window.commitRecording(recordedTone(0.1f)));
+        QCOMPARE(window.cancelledAnalysisCount(), cancelledBefore + 1);
+        QTRY_VERIFY_WITH_TIMEOUT(!window.isAnalyzingLoudness() && table->rowCount() == 3 &&
+                                     !status->text().contains(QStringLiteral("Out of date")),
+                                 120000);
+    }
+    {
+        // Remembered across sessions.
+        TestMainWindow window;
+        auto* autoBox = window.findChild<QCheckBox*>(QStringLiteral("autoAnalyzeCheckBox"));
+        QVERIFY(autoBox->isChecked());
+        autoBox->setChecked(false);  // back to the default for later tests.
+    }
+}
+
+void MainWindowTest::analysisOverlaysReachTheCanvas() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));
+    window.analyzeLoudness();
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isAnalyzingLoudness(), 120000);
+    auto* canvas = window.findChild<sound_mind::studio::CanvasWidget*>();
+    QVERIFY(!canvas->hasLoudnessOverlay());
+    QVERIFY(!canvas->hasStereoOverlay());
+
+    window.findChild<QCheckBox*>(QStringLiteral("loudnessOverlayCheckBox"))->setChecked(true);
+    QVERIFY(canvas->hasLoudnessOverlay());
+    window.findChild<QCheckBox*>(QStringLiteral("stereoOverlayCheckBox"))->setChecked(true);
+    QVERIFY(canvas->hasStereoOverlay());
+
+    createFreshTestProject(window);  // another project: the report, and so the overlays, go.
+    QVERIFY(!canvas->hasLoudnessOverlay());
+    QVERIFY(!canvas->hasStereoOverlay());
+    window.findChild<QCheckBox*>(QStringLiteral("loudnessOverlayCheckBox"))->setChecked(false);
+    window.findChild<QCheckBox*>(QStringLiteral("stereoOverlayCheckBox"))->setChecked(false);
+}
+
 void MainWindowTest::masterLimiterSettingReachesPlaybackAndBothDevicePanels() {
     TestMainWindow window;
     auto checkBoxes = window.findChildren<QCheckBox*>(QStringLiteral("masterLimiterCheckBox"));

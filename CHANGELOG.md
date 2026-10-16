@@ -6,6 +6,17 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.7] - 2026-10-16
+
+### Added
+
+- **Auto-update in the Analysis panel.** When checked, the panel analyzes again whenever the project changes. A change while an analysis is running stops it and starts a fresh one shortly after your last edit. It's off by default and remembered between sessions.
+- **Loudness and stereo on the canvas.** **Show loudness on canvas** (Loudness tab) draws short-term and momentary loudness over the canvas, from -60 LUFS at the bottom to 0 LUFS at the top. **Show correlation and width on canvas** (Stereo tab) draws correlation (-1 to +1) and width (0 to 1) the same way. A small legend names each line.
+
+### Changed
+
+- **Analyze, Auto-update and the status line now sit above the Analysis panel's tabs,** so they're at hand on the Stereo and Pitch tabs too, not just Loudness.
+
 ## [0.1.40.6] - 2026-10-16
 
 ### Added

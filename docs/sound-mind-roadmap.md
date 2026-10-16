@@ -1190,7 +1190,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.77.1` | Paths, selection and context menus | `0.1.37.1`-`0.1.37.4` | #239-#242 |
 | `v0.Y.78.1` | Text tool | `0.1.38.1` | #243 |
 | `v0.Y.79.1` | Generators | `0.1.39.1`-`0.1.39.4` (plus the codec fix `0.1.39.5`) | #244-#248 |
-| `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.6` | #249-#252 |
+| `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.7` | #249-#253 |
 | `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.41.x`)* | |
 | `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.42.x`)* | |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
@@ -1326,7 +1326,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - ✅ **C** (`v0.1.39.3`, Decision #246): the Fractal family.
 - ✅ **D** (`v0.1.39.4`, Decision #247): the Streaming family.
 
-#### ✅ `v0.Y.80.1` - Analysis tools (L) - settled in `v0.1.40.1`-`v0.1.40.4`, see architecture Decisions #249-#252
+#### ✅ `v0.Y.80.1` - Analysis tools (L) - settled in `v0.1.40.1`-`v0.1.40.7`, see architecture Decisions #249-#253
 
 - **Three tools,** each with visualizations, graphs and overlays:
   - **Goniometer / stereo width.**

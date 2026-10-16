@@ -6,6 +6,7 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -31,20 +32,34 @@ void setWarning(QLabel* label, bool warning) {
 
 AnalysisPanel::AnalysisPanel(QWidget* parent) : QDockWidget(tr("Analysis"), parent) {
     setObjectName(QStringLiteral("analysisPanel"));
-    tabs_ = new QTabWidget(this);
+    auto* body = new QWidget(this);
+    auto* bodyLayout = new QVBoxLayout(body);
+    bodyLayout->setContentsMargins(0, 0, 0, 0);
+
+    // Above the tabs, so Analyze and Auto-update are at hand on every tab (v0.1.40.7).
+    auto* top = new QHBoxLayout();
+    analyzeButton_ = new QPushButton(tr("Analyze"), body);
+    analyzeButton_->setObjectName(QStringLiteral("analyzeLoudnessButton"));
+    analyzeButton_->setToolTip(tr("Measure the mix and every audible layer - loudness, stereo and pitch"));
+    connect(analyzeButton_, &QPushButton::clicked, this, &AnalysisPanel::analyzeRequested);
+    top->addWidget(analyzeButton_);
+    autoAnalyzeCheckBox_ = new QCheckBox(tr("Auto-update"), body);
+    autoAnalyzeCheckBox_->setObjectName(QStringLiteral("autoAnalyzeCheckBox"));
+    autoAnalyzeCheckBox_->setToolTip(
+        tr("Analyze again whenever the project changes, stopping an analysis that's already running"));
+    connect(autoAnalyzeCheckBox_, &QCheckBox::toggled, this, &AnalysisPanel::autoAnalyzeToggled);
+    top->addWidget(autoAnalyzeCheckBox_);
+    statusLabel_ = new QLabel(tr("Not analyzed yet."), body);
+    statusLabel_->setObjectName(QStringLiteral("analysisStatusLabel"));
+    statusLabel_->setWordWrap(true);
+    top->addWidget(statusLabel_, 1);
+    bodyLayout->addLayout(top);
+
+    tabs_ = new QTabWidget(body);
+    bodyLayout->addWidget(tabs_, 1);
 
     auto* loudness = new QWidget(tabs_);
     auto* root = new QVBoxLayout(loudness);
-    auto* top = new QHBoxLayout();
-    analyzeButton_ = new QPushButton(tr("Analyze"), loudness);
-    analyzeButton_->setObjectName(QStringLiteral("analyzeLoudnessButton"));
-    analyzeButton_->setToolTip(tr("Measure the mix and every audible layer"));
-    connect(analyzeButton_, &QPushButton::clicked, this, &AnalysisPanel::analyzeRequested);
-    top->addWidget(analyzeButton_);
-    statusLabel_ = new QLabel(tr("Not analyzed yet."), loudness);
-    statusLabel_->setObjectName(QStringLiteral("analysisStatusLabel"));
-    top->addWidget(statusLabel_, 1);
-    root->addLayout(top);
 
     auto* summary = new QFormLayout();
     integratedLabel_ = makeReading(loudness, QStringLiteral("integratedLoudnessLabel"));
@@ -74,6 +89,12 @@ AnalysisPanel::AnalysisPanel(QWidget* parent) : QDockWidget(tr("Analysis"), pare
     bands_ = new BandLevelsWidget(loudness);
     bands_->setObjectName(QStringLiteral("bandLevels"));
     root->addWidget(bands_);
+    loudnessOverlayCheckBox_ = new QCheckBox(tr("Show loudness on canvas"), loudness);
+    loudnessOverlayCheckBox_->setObjectName(QStringLiteral("loudnessOverlayCheckBox"));
+    loudnessOverlayCheckBox_->setToolTip(tr("Draw the mix's loudness over time across the canvas (yellow): "
+                                            "-60 LUFS at the bottom to 0 LUFS at the top"));
+    connect(loudnessOverlayCheckBox_, &QCheckBox::toggled, this, &AnalysisPanel::emitLoudnessOverlay);
+    root->addWidget(loudnessOverlayCheckBox_);
 
     layerTable_ = new QTableWidget(0, 5, loudness);
     layerTable_->setObjectName(QStringLiteral("layerLoudnessTable"));
@@ -113,6 +134,12 @@ AnalysisPanel::AnalysisPanel(QWidget* parent) : QDockWidget(tr("Analysis"), pare
     bandWidths_->setObjectName(QStringLiteral("bandWidths"));
     stereoBottom->addWidget(bandWidths_, 1);
     stereoRoot->addLayout(stereoBottom, 1);
+    stereoOverlayCheckBox_ = new QCheckBox(tr("Show correlation and width on canvas"), stereo);
+    stereoOverlayCheckBox_->setObjectName(QStringLiteral("stereoOverlayCheckBox"));
+    stereoOverlayCheckBox_->setToolTip(tr("Draw correlation (blue, -1 to +1, dashed line at 0) and width (orange, "
+                                          "0 to 1) over time across the canvas"));
+    connect(stereoOverlayCheckBox_, &QCheckBox::toggled, this, &AnalysisPanel::emitStereoOverlay);
+    stereoRoot->addWidget(stereoOverlayCheckBox_);
     tabs_->addTab(stereo, tr("Stereo"));
 
     // --- Pitch (installment C) ---
@@ -131,7 +158,14 @@ AnalysisPanel::AnalysisPanel(QWidget* parent) : QDockWidget(tr("Analysis"), pare
     connect(pitchOverlayCheckBox_, &QCheckBox::toggled, this, &AnalysisPanel::emitPitchOverlay);
     pitchRoot->addWidget(pitchOverlayCheckBox_);
     tabs_->addTab(pitch, tr("Pitch"));
-    setWidget(tabs_);
+    setWidget(body);
+}
+
+bool AnalysisPanel::autoAnalyze() const noexcept { return autoAnalyzeCheckBox_->isChecked(); }
+
+void AnalysisPanel::setAutoAnalyze(bool enabled) {
+    const QSignalBlocker blocker(autoAnalyzeCheckBox_);
+    autoAnalyzeCheckBox_->setChecked(enabled);
 }
 
 QString AnalysisPanel::formatLevel(double value, const QString& unit) {
@@ -182,7 +216,7 @@ void AnalysisPanel::setReport(const sound_mind::core::ProjectLoudnessReport& rep
         }
     }
     setPlaybackPosition(std::nullopt);
-    emitPitchOverlay();
+    emitOverlays();
 }
 
 void AnalysisPanel::clearReport() {
@@ -200,13 +234,14 @@ void AnalysisPanel::clearReport() {
     goniometer_->setAudio(nullptr);
     bandWidths_->setWidths({});
     pitchGraph_->setTrack({}, 0.0);
-    emitPitchOverlay();
+    emitOverlays();
     layerTable_->setRowCount(0);
 }
 
 void AnalysisPanel::setStale() {
     if (report_.has_value()) {
-        statusLabel_->setText(tr("Out of date - the project changed. Analyze again."));
+        statusLabel_->setText(autoAnalyze() ? tr("Out of date - the project changed. Updating shortly…")
+                                            : tr("Out of date - the project changed. Analyze again."));
     }
 }
 
@@ -264,6 +299,28 @@ void AnalysisPanel::emitPitchOverlay() {
     const bool enabled = pitchOverlayCheckBox_->isChecked();
     static const std::vector<float> kNone;
     emit pitchOverlayToggled(enabled, enabled && report_.has_value() ? report_->mixPitchHz : kNone);
+}
+
+void AnalysisPanel::emitLoudnessOverlay() {
+    const bool enabled = loudnessOverlayCheckBox_->isChecked();
+    static const std::vector<float> kNone;
+    const bool show = enabled && report_.has_value();
+    emit loudnessOverlayToggled(enabled, show ? report_->mix.momentaryLufs : kNone,
+                                show ? report_->mix.shortTermLufs : kNone);
+}
+
+void AnalysisPanel::emitStereoOverlay() {
+    const bool enabled = stereoOverlayCheckBox_->isChecked();
+    static const std::vector<float> kNone;
+    const bool show = enabled && report_.has_value();
+    emit stereoOverlayToggled(enabled, show ? report_->mixStereo.correlationOverTime : kNone,
+                              show ? report_->mixStereo.widthOverTime : kNone);
+}
+
+void AnalysisPanel::emitOverlays() {
+    emitPitchOverlay();
+    emitLoudnessOverlay();
+    emitStereoOverlay();
 }
 
 }  // namespace sound_mind::studio
