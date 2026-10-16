@@ -4,9 +4,13 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <tuple>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/codec/parallel.h"
 #include "sound_mind/core/loudness_meter.h"
+#include "sound_mind/core/pitch_detection.h"
+#include "sound_mind/core/stereo_analysis.h"
 #include "sound_mind/core/project_settings.h"
 
 using sound_mind::codec::AudioBuffer;
@@ -114,3 +118,36 @@ TEST_CASE("integratedLoudnessLufs matches the full measurement", "[core][loudnes
     CHECK(sound_mind::core::integratedLoudnessLufs(audio) == Catch::Approx(measureLoudness(audio).integratedLufs));
     CHECK(sound_mind::core::integratedLoudnessLufs(AudioBuffer{}) == kLoudnessFloorLufs);
 }
+
+// v0.1.41.4 - the analysis stages run in parallel; results must not depend on it.
+TEST_CASE("Analysis stages give identical results on one thread and on many", "[core][loudness_meter]") {
+    AudioBuffer audio = sine(440.0, 0.4, 4.0);
+    for (std::size_t i = 0; i < audio.left.size(); ++i) {
+        audio.right[i] = 0.5f * audio.left[i] + 0.2f * std::sin(static_cast<float>(i) * 0.37f);
+    }
+    audio.left[1000] = 1.3f;  // a clip and a true peak to find.
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 300;
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+    const auto content = sound_mind::codec::encode(sine(440.0, 0.4, 3.0, config.sampleRateHz), config);
+
+    const auto run = [&]() {
+        const auto loudness = measureLoudness(audio);
+        return std::make_tuple(loudness.integratedLufs, loudness.truePeakDbtp, loudness.momentaryLufs,
+                               sound_mind::core::bandLevelsOverTime(content),
+                               sound_mind::core::bandStereoWidths(content),
+                               sound_mind::core::detectPitches(content, 2));
+    };
+    sound_mind::codec::setMaxWorkerThreads(1);
+    const auto serial = run();
+    sound_mind::codec::setMaxWorkerThreads(8);
+    const auto parallel = run();
+    sound_mind::codec::setMaxWorkerThreads(0);
+    CHECK(std::get<0>(parallel) == std::get<0>(serial));
+    CHECK(std::get<1>(parallel) == std::get<1>(serial));
+    CHECK(std::get<2>(parallel) == std::get<2>(serial));
+    CHECK(std::get<3>(parallel) == std::get<3>(serial));
+    CHECK(std::get<4>(parallel) == std::get<4>(serial));
+    CHECK(std::get<5>(parallel) == std::get<5>(serial));
+}
+

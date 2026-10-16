@@ -1,6 +1,8 @@
 #include "sound_mind/core/loudness_meter.h"
+#include "sound_mind/codec/parallel.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
 #include <stdexcept>
@@ -62,16 +64,21 @@ std::vector<double> squaredPrefix(const sound_mind::codec::AudioBuffer& audio) {
     const bool stereo = audio.right.size() == count;
     const Biquad shelf = kWeightingShelf(audio.sampleRateHz);
     const Biquad highPass = kWeightingHighPass(audio.sampleRateHz);
-    std::vector<double> power(count, 0.0);
-    for (const std::vector<float>* channel : {&audio.left, &audio.right}) {
-        if (channel == &audio.right && !stereo) {
-            break;
+    // The K-weighting filters are recursive - sample by sample - but the
+    // channels are independent, so each runs on its own thread (v0.1.41.4).
+    const std::array<const std::vector<float>*, 2> channels{&audio.left, &audio.right};
+    std::array<std::vector<double>, 2> filtered;
+    sound_mind::codec::parallelFor(stereo ? 2 : 1, 1, [&](std::size_t begin, std::size_t end) {
+        for (std::size_t c = begin; c < end; ++c) {
+            filtered[c].assign(channels[c]->begin(), channels[c]->end());
+            shelf.run(filtered[c]);
+            highPass.run(filtered[c]);
         }
-        std::vector<double> filtered(channel->begin(), channel->end());
-        shelf.run(filtered);
-        highPass.run(filtered);
+    });
+    std::vector<double> power(count, 0.0);
+    for (std::size_t c = 0; c < (stereo ? 2u : 1u); ++c) {
         for (std::size_t i = 0; i < count; ++i) {
-            power[i] += filtered[i] * filtered[i];
+            power[i] += filtered[c][i] * filtered[c][i];
         }
     }
     for (std::size_t i = 0; i < count; ++i) {
@@ -108,30 +115,60 @@ double interpolationKernel(double t) {
     return window * std::sin(std::numbers::pi * t) / (std::numbers::pi * t);
 }
 
+/// @brief interpolationKernel() at the 16 taps of each of the three
+/// quarter-sample points: `[point][j]` is the weight of sample `n - 7 + j`
+/// for the point `n + {0.25, 0.5, 0.75}`. The offsets are the same for every
+/// `n`, so the kernel's trig is done once, not per sample (v0.1.41.4).
+const std::array<std::array<double, 16>, 3>& interpolationTable() {
+    static const auto table = [] {
+        std::array<std::array<double, 16>, 3> weights{};
+        constexpr double kFractions[] = {0.25, 0.5, 0.75};
+        for (std::size_t point = 0; point < 3; ++point) {
+            for (std::size_t j = 0; j < 16; ++j) {
+                weights[point][j] = interpolationKernel(kFractions[point] + 7.0 - static_cast<double>(j));
+            }
+        }
+        return weights;
+    }();
+    return table;
+}
+
 /// @brief The largest |value| at the three quarter-sample points between
-/// samples, examined only near samples within 6 dB of `samplePeak`.
+/// samples, examined only near samples within 6 dB of `samplePeak`. Blocks
+/// of samples run in parallel (v0.1.41.4); the maximum doesn't depend on
+/// the order.
 double interSamplePeak(const std::vector<float>& channel, double samplePeak) {
-    double peak = 0.0;
     const double threshold = samplePeak * 0.5;
     const auto count = static_cast<std::int64_t>(channel.size());
-    for (std::int64_t n = 0; n + 1 < count; ++n) {
-        if (std::abs(channel[static_cast<std::size_t>(n)]) < threshold &&
-            std::abs(channel[static_cast<std::size_t>(n + 1)]) < threshold) {
-            continue;
-        }
-        for (const double fraction : {0.25, 0.5, 0.75}) {
-            double value = 0.0;
-            for (std::int64_t k = n - 7; k <= n + 8; ++k) {
-                if (k < 0 || k >= count) {
-                    continue;
-                }
-                value += channel[static_cast<std::size_t>(k)] *
-                         interpolationKernel(static_cast<double>(n) + fraction - static_cast<double>(k));
-            }
-            peak = std::max(peak, std::abs(value));
-        }
+    if (count < 2) {
+        return 0.0;
     }
-    return peak;
+    const auto& table = interpolationTable();
+    constexpr std::size_t kBlock = 1 << 16;
+    const std::size_t pairs = static_cast<std::size_t>(count - 1);
+    std::vector<double> blockPeaks((pairs + kBlock - 1) / kBlock, 0.0);
+    sound_mind::codec::parallelFor(pairs, kBlock, [&](std::size_t begin, std::size_t end) {
+        double peak = 0.0;
+        for (auto n = static_cast<std::int64_t>(begin); n < static_cast<std::int64_t>(end); ++n) {
+            if (std::abs(channel[static_cast<std::size_t>(n)]) < threshold &&
+                std::abs(channel[static_cast<std::size_t>(n + 1)]) < threshold) {
+                continue;
+            }
+            for (std::size_t point = 0; point < 3; ++point) {
+                double value = 0.0;
+                for (std::int64_t j = 0; j < 16; ++j) {
+                    const std::int64_t k = n - 7 + j;
+                    if (k < 0 || k >= count) {
+                        continue;
+                    }
+                    value += channel[static_cast<std::size_t>(k)] * table[point][static_cast<std::size_t>(j)];
+                }
+                peak = std::max(peak, std::abs(value));
+            }
+        }
+        blockPeaks[begin / kBlock] = peak;
+    });
+    return blockPeaks.empty() ? 0.0 : *std::max_element(blockPeaks.begin(), blockPeaks.end());
 }
 
 /// @brief BS.1770 integrated loudness from running squared sums: complete
@@ -242,6 +279,8 @@ const std::vector<LoudnessBand>& loudnessBands() {
 std::vector<float> bandLevelsOverTime(const sound_mind::codec::StreamImage& content) {
     const auto& bands = loudnessBands();
     std::vector<float> levels(bands.size() * content.frameCount, static_cast<float>(kLoudnessFloorLufs));
+    // Each band's frames are independent: blocks of frames run in parallel
+    // (v0.1.41.4), each writing only its own cells.
     for (std::size_t band = 0; band < bands.size(); ++band) {
         std::vector<std::uint32_t> bins;
         std::vector<double> weights;
@@ -255,18 +294,20 @@ std::vector<float> bandLevelsOverTime(const sound_mind::codec::StreamImage& cont
         if (bins.empty()) {
             continue;
         }
-        for (std::uint32_t frame = 0; frame < content.frameCount; ++frame) {
-            double power = 0.0;
-            for (std::size_t i = 0; i < bins.size(); ++i) {
-                const std::size_t cell = cellIndex(bins[i], frame, content.frameCount);
-                power += std::pow(10.0, (content.leftMagnitudeDb[cell] - weights[i]) / 10.0) +
-                         std::pow(10.0, (content.rightMagnitudeDb[cell] - weights[i]) / 10.0);
+        sound_mind::codec::parallelFor(content.frameCount, 256, [&](std::size_t begin, std::size_t end) {
+            for (auto frame = static_cast<std::uint32_t>(begin); frame < end; ++frame) {
+                double power = 0.0;
+                for (std::size_t i = 0; i < bins.size(); ++i) {
+                    const std::size_t cell = cellIndex(bins[i], frame, content.frameCount);
+                    power += std::pow(10.0, (content.leftMagnitudeDb[cell] - weights[i]) / 10.0) +
+                             std::pow(10.0, (content.rightMagnitudeDb[cell] - weights[i]) / 10.0);
+                }
+                power /= 2.0 * static_cast<double>(bins.size());
+                levels[band * content.frameCount + frame] =
+                    static_cast<float>(power > 0.0 ? std::max(kLoudnessFloorLufs, 10.0 * std::log10(power))
+                                                   : kLoudnessFloorLufs);
             }
-            power /= 2.0 * static_cast<double>(bins.size());
-            levels[band * content.frameCount + frame] =
-                static_cast<float>(power > 0.0 ? std::max(kLoudnessFloorLufs, 10.0 * std::log10(power))
-                                               : kLoudnessFloorLufs);
-        }
+        });
     }
     return levels;
 }

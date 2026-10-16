@@ -1,4 +1,5 @@
 #include "sound_mind/core/stereo_analysis.h"
+#include "sound_mind/codec/parallel.h"
 
 #include <algorithm>
 #include <cmath>
@@ -65,22 +66,39 @@ StereoMeasurement measureStereo(const sound_mind::codec::AudioBuffer& audio) {
 std::vector<float> bandStereoWidths(const sound_mind::codec::StreamImage& content) {
     const auto& bands = loudnessBands();
     std::vector<float> widths(bands.size(), 0.0f);
-    for (std::size_t band = 0; band < bands.size(); ++band) {
-        double midEnergy = 0.0;
-        double sideEnergy = 0.0;
-        for (std::uint32_t bin = 0; bin < content.config.binCount; ++bin) {
+    // Each bin's mid/side energy is summed on its own (bins in parallel,
+    // v0.1.41.4), then the bins are added up in order - the same result
+    // whatever the thread count.
+    const std::uint32_t binCount = content.config.binCount;
+    std::vector<double> binMid(binCount, 0.0);
+    std::vector<double> binSide(binCount, 0.0);
+    sound_mind::codec::parallelFor(binCount, 8, [&](std::size_t begin, std::size_t end) {
+        for (auto bin = static_cast<std::uint32_t>(begin); bin < end; ++bin) {
             const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), content.config);
-            if (frequencyHz < bands[band].lowHz || frequencyHz >= bands[band].highHz) {
-                continue;
-            }
             const float weight = sound_mind::codec::aWeightingOffsetDb(frequencyHz);
+            double mid = 0.0;
+            double side = 0.0;
             for (std::uint32_t frame = 0; frame < content.frameCount; ++frame) {
                 const std::size_t cell = cellIndex(bin, frame, content.frameCount);
                 const double left = std::pow(10.0, (content.leftMagnitudeDb[cell] - weight) / 20.0);
                 const double right = std::pow(10.0, (content.rightMagnitudeDb[cell] - weight) / 20.0);
-                midEnergy += 0.25 * (left + right) * (left + right);
-                sideEnergy += 0.25 * (left - right) * (left - right);
+                mid += 0.25 * (left + right) * (left + right);
+                side += 0.25 * (left - right) * (left - right);
             }
+            binMid[bin] = mid;
+            binSide[bin] = side;
+        }
+    });
+    for (std::size_t band = 0; band < bands.size(); ++band) {
+        double midEnergy = 0.0;
+        double sideEnergy = 0.0;
+        for (std::uint32_t bin = 0; bin < binCount; ++bin) {
+            const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), content.config);
+            if (frequencyHz < bands[band].lowHz || frequencyHz >= bands[band].highHz) {
+                continue;
+            }
+            midEnergy += binMid[bin];
+            sideEnergy += binSide[bin];
         }
         const double mid = std::sqrt(midEnergy);
         const double side = std::sqrt(sideEnergy);

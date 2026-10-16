@@ -2497,6 +2497,13 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `sampleSpectrum()` takes the phase vector as Re/|z|, Im/|z| instead of cos/sin(arg z). It's shared with `StreamIncrementalEncoder`, so live and batch encoding still agree exactly.
       - Decode 180 s 335 -> 214 ms, encode 500 -> 263 ms.
       - **The GPU codec was assessed and not built.** The reasons (transfer volume against ~840x real time, plus a custom FFT shader) are in the codec design doc, section 8.
+    - **`v0.1.41.4`, the analysis stages:**
+      - `interSamplePeak()` reads a 3×16 table of `interpolationKernel()` weights (the tap offsets are the same for every sample), computed once with the same formula, so values are unchanged. Blocks of 65 536 samples run in parallel, with a per-block maximum.
+      - `squaredPrefix()` runs each channel's K-weighting biquads on its own thread; they're recursive, so they can't split further.
+      - `bandLevelsOverTime()` runs blocks of frames per band. `bandStereoWidths()` sums each bin's mid/side energy in parallel and adds bins up in order.
+      - `detectPitches()`' per-frame candidate search runs blocks of frames, each with its own working spectra; voice tracking stays serial.
+      - Every stage is identical at 1 and 8 threads (tested). Loudness at 60 s went from 381 to 53 ms, and a whole 8-layer analysis from 5.07 to 0.79 s.
+      - **GPU analysis assessed and not built:** what's left is a few tens of milliseconds at 60 s, about the cost of uploading the spectrum.
     - **Measured:** see the roadmap - encode up to 7.7x, decode up to 5.5x, a whole 8-layer analysis 4.2x. The loudness measurement (single-threaded K-weighting and true peak) is now the largest single cost in a small project's analysis.
     - **Tests:** `test_parallel.cpp` - every item visited once in fixed blocks at 1 and 4 threads, exception propagation, the override, and encode/decode bit-identical at 1 vs 8 threads. GPU: six threads × 40 concurrent `multiplyByTwo()` calls all correct. A race doesn't reproduce reliably, so this test passing on the old code wouldn't have proven it safe. The existing analysis tests pass unchanged against the parallel report.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).

@@ -1191,7 +1191,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.78.1` | Text tool | `0.1.38.1` (follow-up `0.1.40.13`: editable after applying) | #243, #257 |
 | `v0.Y.79.1` | Generators | `0.1.39.1`-`0.1.39.4` (plus the codec fix `0.1.39.5`) | #244-#248 |
 | `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges; `0.1.40.13` belongs to `v0.Y.78.1`) | #249-#256 |
-| `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.3` *(in progress)* | #258 |
+| `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.4` *(in progress)* | #258 |
 | `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.42.x`)* | |
 | `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.43.x`)* | |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
@@ -1361,7 +1361,10 @@ The GPU-offloading candidates assessed on 2026-10-16, taken in the order recomme
 3. ✅ **GPU Stream decode/encode - assessed, not built** (`v0.1.41.3`).
    - First, trig removed from the codec's per-bin loops: decode 180 s 335 -> 214 ms, encode 500 -> 263 ms, so 8.7x / 14.7x against the baseline.
    - At ~840x real time, a GPU path's ~170 MB of upload and readback per 3 minutes, plus a hand-written FFT shader, isn't worth it on this hardware. See `docs/sound-mind-codec-design.md` section 8.
-4. **Analysis on the GPU.** Per-band levels and widths, and pitch candidate scoring (per frame); the sequential parts (K-weighting, true peak, voice tracking) stay on the CPU.
+4. ✅ **Analysis - made parallel on the CPU, GPU assessed and not built** (`v0.1.41.4`).
+   - True peak: the kernel's fixed 3×16 weights are tabled once instead of 96 trig calls per sample, and sample blocks run in parallel. K-weighting runs each channel on its own thread. Per-band levels run in parallel across frames, per-band widths across bins (combined in order), and pitch candidates across frames (tracking stays serial).
+   - At 60 s: loudness 381 -> 53 ms, band levels 49 -> 10 ms, band widths 52 -> 9 ms, pitch 113/161 -> 20/28 ms. Analyze 1/4/8 layers: 0.24/0.49/0.79 s (was 1.16/2.79/5.07).
+   - The GPU-shaped stages (per-band, pitch scoring) now cost about what uploading the spectrum would (~37 MB per minute), so a GPU path isn't worth it.
 5. **Noise generation on the GPU.** The noise Generate Layer and the noise MindWave field (per-cell hashed randomness), the same shape as the Fractal field's existing GPU path.
 
 #### `v0.Y.81.1` - Operation history persisted with the project (L)

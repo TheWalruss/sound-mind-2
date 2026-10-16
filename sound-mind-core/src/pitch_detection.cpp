@@ -1,4 +1,5 @@
 #include "sound_mind/core/pitch_detection.h"
+#include "sound_mind/codec/parallel.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -44,10 +45,13 @@ std::vector<std::vector<PitchCandidate>> framePitchCandidates(const sound_mind::
     // at least this wide, which at low frequencies covers many log bins.
     const double linearBinHz = static_cast<double>(config.sampleRateHz) / (4.0 * static_cast<double>(config.hopLength));
 
+    // Frames are independent here (tracking comes later), so blocks of them
+    // run in parallel (v0.1.41.4), each with its own working spectra.
+    sound_mind::codec::parallelFor(content.frameCount, 64, [&](std::size_t blockBegin, std::size_t blockEnd) {
     std::vector<double> amplitude(config.binCount);
     std::vector<double> levelDb(config.binCount);
     std::vector<double> residual(config.binCount);
-    for (std::uint32_t frame = 0; frame < content.frameCount; ++frame) {
+    for (auto frame = static_cast<std::uint32_t>(blockBegin); frame < blockEnd; ++frame) {
         double loudestDb = -1e9;
         for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
             const std::size_t cell = cellIndex(bin, frame, content.frameCount);
@@ -172,6 +176,7 @@ std::vector<std::vector<PitchCandidate>> framePitchCandidates(const sound_mind::
             removeHarmonics(frequencyHz);  // so the next search finds another voice.
         }
     }
+    });
     return frames;
 }
 

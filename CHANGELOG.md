@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.41.4] - 2026-10-16
+
+Roadmap slot `v0.Y.80.2`, step 4.
+
+### Changed
+
+- **Analyze is faster again.** Loudness, per-band levels and widths, and pitch now use every core, and the true-peak search no longer recomputes its fixed interpolation weights for every sample. Since the original baseline:
+  - an 8-layer, 30-second project analyzes in 0.8 s (was 5.1 s);
+  - a 1-layer project analyzes in 0.24 s (was 1.2 s).
+
+  The results are identical whatever the number of cores.
+
 ## [0.1.41.3] - 2026-10-16
 
 Roadmap slot `v0.Y.80.2`, step 3.
