@@ -118,7 +118,8 @@ std::optional<sound_mind::core::OperationId> TextController::apply() {
     const sound_mind::core::OperationId id = log.reserveId();
     auto paste = sound_mind::core::makeTextPaste(
         id, box_->layer, raster, box_->frameLow, box_->binLow, settings_.leftIntensityDb, settings_.rightIntensityDb,
-        settings_.opacity, settings_.blendMode, sound_mind::core::streamCodecConfigFor(project_->settings()));
+        settings_.opacity, settings_.blendMode, sound_mind::core::streamCodecConfigFor(project_->settings()),
+        sourceFor(settings_));
     if (paste == nullptr) {
         return std::nullopt;
     }
@@ -130,6 +131,36 @@ std::optional<sound_mind::core::OperationId> TextController::apply() {
     emit contentChanged(target);
     emit previewChanged();
     return id;
+}
+
+sound_mind::core::TextSource TextController::sourceFor(const TextSettings& settings) {
+    sound_mind::core::TextSource source;
+    source.text = settings.text.toStdString();
+    source.fontFamily = settings.fontFamily.toStdString();
+    source.fontSize = settings.fontSize;
+    source.bold = settings.bold;
+    source.italic = settings.italic;
+    source.leftIntensityDb = settings.leftIntensityDb;
+    source.rightIntensityDb = settings.rightIntensityDb;
+    source.opacity = settings.opacity;
+    source.rotationDegrees = settings.rotationDegrees;
+    return source;
+}
+
+TextSettings TextController::settingsFor(const sound_mind::core::TextSource& source,
+                                         sound_mind::core::BlendMode blendMode) {
+    TextSettings settings;
+    settings.text = QString::fromStdString(source.text);
+    settings.fontFamily = QString::fromStdString(source.fontFamily);
+    settings.fontSize = source.fontSize;
+    settings.bold = source.bold;
+    settings.italic = source.italic;
+    settings.leftIntensityDb = source.leftIntensityDb;
+    settings.rightIntensityDb = source.rightIntensityDb;
+    settings.opacity = source.opacity;
+    settings.blendMode = blendMode;
+    settings.rotationDegrees = source.rotationDegrees;
+    return settings;
 }
 
 void TextController::reset() {

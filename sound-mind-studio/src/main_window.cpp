@@ -623,6 +623,30 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         if (const auto mode = toolPaletteController_->selectedPasteBlendMode(); mode.has_value()) {
             selectionConfigurationPanel_->setPasteBlendMode(*mode);
         }
+        // Picked applied text (v0.1.40.13): its settings fill the Text
+        // panel, where changing them edits it - like a Picked stroke and
+        // the Tool Configuration panel.
+        const auto text = toolPaletteController_->selectedTextSettings();
+        if (!pendingPickedTextSettings_.has_value()) {
+            if (text.has_value()) {
+                textToolPanel_->setSettings(*text);
+                if (!textToolPanel_->isEditingPickedText()) {
+                    textToolPanel_->show();
+                    textToolPanel_->raise();
+                }
+            }
+            textToolPanel_->setEditingPickedText(text.has_value() && !textAction_->isChecked());
+        }
+    });
+    pickedTextEditTimer_ = new QTimer(this);
+    pickedTextEditTimer_->setSingleShot(true);
+    pickedTextEditTimer_->setInterval(kPickedTextEditDelayMs);
+    connect(pickedTextEditTimer_, &QTimer::timeout, this, &MainWindow::flushPickedTextEdit);
+    connect(textToolPanel_, &TextToolPanel::settingsChanged, this, [this](const TextSettings& settings) {
+        if (textToolPanel_->isEditingPickedText()) {
+            pendingPickedTextSettings_ = settings;
+            pickedTextEditTimer_->start();  // restarts the pause on each change.
+        }
     });
     connect(canvas_, &CanvasWidget::paintStrokeStarted, this, [this](sound_mind::core::TimeFrequencyPoint point) {
         if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
@@ -3667,7 +3691,19 @@ void MainWindow::analyzeLoudness() {
     loudnessTimer_->start();
 }
 
+void MainWindow::flushPickedTextEdit() {
+    pickedTextEditTimer_->stop();
+    if (!pendingPickedTextSettings_.has_value()) {
+        return;
+    }
+    const TextSettings settings = *pendingPickedTextSettings_;
+    pendingPickedTextSettings_.reset();
+    toolPaletteController_->applyTextSettingsToPicked(settings);
+}
+
 void MainWindow::setTextModeEnabled(bool enabled) {
+    flushPickedTextEdit();  // an edit in flight lands on the text it was meant for.
+    textToolPanel_->setEditingPickedText(!enabled && toolPaletteController_->selectedTextSettings().has_value());
     if (!enabled) {
         toolPaletteController_->textController()->reset();
     } else {

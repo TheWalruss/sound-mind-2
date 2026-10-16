@@ -3893,6 +3893,16 @@ private:
     void noteProjectChangedForAnalysis();
     /// @brief How long Auto-update waits after the last change, ms - see setAutoAnalyze().
     static constexpr int kAutoAnalyzeDelayMs = 300;
+    /// @brief Text panel edits to the Picked text, applied after a short
+    ///        pause (`v0.1.40.13`): typing a word is one undo step, not one
+    ///        per letter. See pickedTextEditTimer_.
+    std::optional<TextSettings> pendingPickedTextSettings_;
+    /// @brief Fires kPickedTextEditDelayMs after the last Text panel edit
+    ///        to the Picked text, applying pendingPickedTextSettings_.
+    QTimer* pickedTextEditTimer_ = nullptr;
+    static constexpr int kPickedTextEditDelayMs = 400;
+    /// @brief Applies pendingPickedTextSettings_ to the Picked text now.
+    void flushPickedTextEdit();
     /// @brief See setAutoAnalyze().
     bool autoAnalyze_ = false;
     /// @brief The Analysis panel's "Voices" (`v0.1.40.11`), passed to each

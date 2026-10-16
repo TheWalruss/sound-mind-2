@@ -3,6 +3,8 @@
 
 #include <cmath>
 
+#include "sound_mind/core/operation_clone.h"
+#include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paste_application.h"
 #include "sound_mind/core/project_settings.h"
@@ -92,3 +94,54 @@ TEST_CASE("makeTextPaste returns nothing for empty or invisible text", "[core][t
     CHECK(makeTextPaste(OperationId{1}, LayerId{2}, faint, 0, 0, -10.0f, -10.0f, 0.0f, BlendMode::Normal, config) ==
           nullptr);
 }
+
+// v0.1.40.13 - applied text keeps what it was rendered from.
+TEST_CASE("A text paste keeps its source through moves, copies and saving", "[core][text_paste]") {
+    const auto config = testConfig();
+    sound_mind::core::TextSource source;
+    source.text = "Hi";
+    source.fontFamily = "Arial";
+    source.fontSize = 12;
+    source.bold = true;
+    source.leftIntensityDb = -10.0f;
+    source.rightIntensityDb = -14.0f;
+    source.opacity = 0.75f;
+    source.rotationDegrees = 15.0;
+    auto paste = makeTextPaste(OperationId{1}, LayerId{2}, smallRaster(), 5, 4, -10.0f, -14.0f, 0.75f,
+                               BlendMode::Normal, config, source, OperationId{0});
+    REQUIRE(paste != nullptr);
+    REQUIRE(paste->textSource().has_value());
+    CHECK(*paste->textSource() == source);
+    CHECK(paste->supersedes() == OperationId{0});
+
+    // Its box comes back exactly: 3 x 2 cells at (5, 4).
+    const auto box = sound_mind::core::textPasteBox(*paste, config);
+    CHECK(box.frameLow == 5);
+    CHECK(box.binLow == 4);
+    CHECK(box.width == 3);
+    CHECK(box.height == 2);
+
+    const auto moved = paste->translatedCopy(OperationId{3}, 0.0, 2.0, config);
+    const auto* movedPaste = dynamic_cast<const sound_mind::core::PasteOperation*>(moved.get());
+    REQUIRE(movedPaste != nullptr);
+    CHECK(movedPaste->textSource() == paste->textSource());
+    CHECK(sound_mind::core::textPasteBox(*movedPaste, config).binLow == 6);  // the box moves with it.
+
+    const auto copied = sound_mind::core::cloneOperation(*paste, OperationId{4}, LayerId{2});
+    CHECK(dynamic_cast<const sound_mind::core::PasteOperation&>(*copied).textSource() == paste->textSource());
+
+    sound_mind::core::OperationLog log;
+    log.append(std::move(paste));
+    const nlohmann::json json = log;
+    const auto restored = json.get<sound_mind::core::OperationLog>();
+    const auto& restoredPaste = dynamic_cast<const sound_mind::core::PasteOperation&>(restored.at(0));
+    REQUIRE(restoredPaste.textSource().has_value());
+    CHECK(*restoredPaste.textSource() == source);
+
+    // An ordinary paste has none.
+    CHECK(!makeTextPaste(OperationId{5}, LayerId{2}, smallRaster(), 0, 0, -10.0f, -10.0f, 1.0f, BlendMode::Normal,
+                         config)
+               ->textSource()
+               .has_value());
+}
+

@@ -1674,9 +1674,21 @@ spectrum. The **Text Tool** panel opens alongside:
    left exactly as it was.
 
 **Reset** discards the box without writing anything; switching to another
-tool does the same. Once applied, the text is an ordinary pasted object:
-[Pick](#pick) can move or delete it, but it can't be edited as text any
-more - to change the wording, delete it and write it again.
+tool does the same.
+
+**Editing applied text.** Applied text stays editable, like any painted
+object:
+- [Pick](#pick) it, and its settings fill the Text Tool panel (which comes to
+  the front), with a note that you're editing the picked text.
+- Change anything there - the wording, font, size, intensities, opacity,
+  blend mode or rotation - and the text is redrawn in the same place.
+- Changes apply as you make them. While you're typing, the text redraws
+  after a short pause, so typing a word is a single step to undo.
+- Pick can also move, copy or delete it as before, and moved or copied text
+  stays editable.
+- Clearing the text box entirely is ignored rather than erasing the text;
+  delete it with Pick to remove it.
+- Choosing the Text tool again goes back to setting up new text.
 
 ## Chord Generator
 

@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QString>
 
+#include "sound_mind/studio/text_controller.h"
 #include "sound_mind/core/blend_mode.h"
 #include "sound_mind/core/operation.h"
 #include "sound_mind/core/operation_log.h"
@@ -290,6 +291,27 @@ public:
      *         reopen).
      */
     [[nodiscard]] std::optional<sound_mind::core::BlendMode> selectedPasteBlendMode() const;
+
+    /**
+     * @brief The settings the Picked object was rendered from, when it's
+     *        applied text (`v0.1.40.13`) - see
+     *        `sound_mind::core::PasteOperation::textSource()`.
+     * @return The settings, or `std::nullopt` when nothing, or something
+     *         other than text, is Picked.
+     */
+    [[nodiscard]] std::optional<TextSettings> selectedTextSettings() const;
+
+    /**
+     * @brief Re-renders the Picked text with `settings` into the same box
+     *        and replaces it - one undo step ("Edited text"), the text
+     *        counterpart of applyToolConfiguration(). The edited text stays
+     *        Picked.
+     * @param settings The new settings.
+     * @return `false` (nothing changed) when no text is Picked, the
+     *         settings already match, or the new text would write nothing
+     *         (blank or fully transparent) - delete it instead.
+     */
+    bool applyTextSettings(const TextSettings& settings);
 
     /**
      * @brief The selected object's geometry as branches - a guide path's

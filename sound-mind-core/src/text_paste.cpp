@@ -11,7 +11,8 @@ namespace sound_mind::core {
 std::unique_ptr<PasteOperation> makeTextPaste(OperationId id, LayerId layer, const GlyphRaster& raster,
                                               int frameOrigin, int binOrigin, float leftIntensityDb,
                                               float rightIntensityDb, float opacity, BlendMode blendMode,
-                                              const sound_mind::codec::StreamCodecConfig& config) {
+                                              const sound_mind::codec::StreamCodecConfig& config,
+                                              std::optional<TextSource> source, std::optional<OperationId> supersedes) {
     const std::size_t cells = static_cast<std::size_t>(raster.width) * raster.height;
     if (raster.width == 0 || raster.height == 0 || raster.coverage.size() < cells) {
         return nullptr;
@@ -54,9 +55,22 @@ std::unique_ptr<PasteOperation> makeTextPaste(OperationId id, LayerId layer, con
     placement.endTimeSeconds = frameIndexToTime(static_cast<double>(frameHigh), config);
     placement.lowFrequencyHz = binIndexToFrequency(static_cast<float>(binOrigin), config);
     placement.highFrequencyHz = binIndexToFrequency(static_cast<float>(binHigh), config);
-    return std::make_unique<PasteOperation>(id, layer, placement, std::move(clip), std::nullopt,
+    return std::make_unique<PasteOperation>(id, layer, placement, std::move(clip), supersedes,
                                             SelectionRegion(frameOrigin, frameHigh, binOrigin, binHigh, std::move(mask)),
-                                            blendMode);
+                                            blendMode, std::move(source));
+}
+
+TextPasteBox textPasteBox(const PasteOperation& paste, const sound_mind::codec::StreamCodecConfig& config) {
+    const TimeFrequencyRect placement = paste.bounds();
+    TextPasteBox box;
+    box.frameLow = static_cast<int>(std::lround(timeToFrameIndex(placement.startTimeSeconds, config)));
+    const auto frameHigh = static_cast<int>(std::lround(timeToFrameIndex(placement.endTimeSeconds, config)));
+    box.binLow = static_cast<int>(std::lround(frequencyToBinIndex(static_cast<float>(placement.lowFrequencyHz), config)));
+    const auto binHigh =
+        static_cast<int>(std::lround(frequencyToBinIndex(static_cast<float>(placement.highFrequencyHz), config)));
+    box.width = std::max(1, frameHigh - box.frameLow + 1);
+    box.height = std::max(1, binHigh - box.binLow + 1);
+    return box;
 }
 
 }  // namespace sound_mind::core

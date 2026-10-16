@@ -348,6 +348,7 @@ private slots:
     void copyAndPastePickedObjectsDuplicatesThem();
     void mergingTwoPickedPathsMakesOneBranchingPath();
     void textToolPlacesPreviewsAndAppliesText();
+    void pickingAppliedTextLetsTheTextPanelEditIt();
     void analyzeLoudnessReportsTheMixAndLayersAndGoesStaleOnEdits();
     void loudnessNormalizationGainFollowsTheLoadedMixAndIsRemembered();
     void masterLimiterSettingReachesPlaybackAndBothDevicePanels();

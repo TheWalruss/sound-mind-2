@@ -7,6 +7,7 @@
 class QCheckBox;
 class QComboBox;
 class QFontComboBox;
+class QLabel;
 class QLineEdit;
 class QPushButton;
 
@@ -46,6 +47,16 @@ public:
     /// @param placed Whether a box is placed.
     void setBoxPlaced(bool placed);
 
+    /// @brief Shows or hides the note that the controls are editing the
+    ///        Picked text, live, rather than setting up new text
+    ///        (`v0.1.40.13`).
+    /// @param editing Whether Picked text is being edited.
+    void setEditingPickedText(bool editing);
+
+    /// @brief Whether the "editing the Picked text" note is showing.
+    /// @return The state set by setEditingPickedText().
+    [[nodiscard]] bool isEditingPickedText() const noexcept { return editingPickedText_; }
+
 signals:
     /// @brief Any control changed.
     /// @param settings The complete new settings.
@@ -73,6 +84,8 @@ private:
     NumericField* rotationField_ = nullptr;
     QPushButton* applyButton_ = nullptr;
     QPushButton* resetButton_ = nullptr;
+    QLabel* editingPickedLabel_ = nullptr;
+    bool editingPickedText_ = false;
     bool loading_ = false;
 };
 

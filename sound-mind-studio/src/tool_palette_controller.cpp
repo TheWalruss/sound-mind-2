@@ -306,6 +306,14 @@ std::optional<sound_mind::core::BlendMode> ToolPaletteController::selectedPasteB
     return pickController_->selectedPasteBlendMode();
 }
 
+std::optional<TextSettings> ToolPaletteController::selectedTextSettings() const {
+    return pickController_->selectedTextSettings();
+}
+
+bool ToolPaletteController::applyTextSettingsToPicked(const TextSettings& settings) {
+    return pickController_->applyTextSettings(settings);
+}
+
 void ToolPaletteController::applyPasteBlendMode(sound_mind::core::BlendMode mode) {
     pickController_->applyPasteBlendMode(mode);
 }

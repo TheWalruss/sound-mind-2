@@ -7088,6 +7088,58 @@ void MainWindowTest::textToolPlacesPreviewsAndAppliesText() {
     QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
 }
 
+// v0.1.40.13
+void MainWindowTest::pickingAppliedTextLetsTheTextPanelEditIt() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-text-edit.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    canvas->setFixedSize(100, 50);
+    auto* panel = window.findChild<sound_mind::studio::TextToolPanel*>();
+    auto* textEdit = panel->findChild<QLineEdit*>(QStringLiteral("textEdit"));
+    auto* hint = panel->findChild<QLabel*>(QStringLiteral("textEditingPickedLabel"));
+    window.setTextModeEnabled(true);
+    textEdit->setText(QStringLiteral("Hi"));
+    dragBetween(canvas, QPoint(10, 10), QPoint(80, 40));
+    panel->findChild<QPushButton*>(QStringLiteral("textApplyButton"))->click();
+    const auto& log = window.project()->operationLog();
+    QCOMPARE(log.size(), std::size_t{1});
+    const auto textId = log.at(0).id();
+    const auto layer = *log.at(0).targetLayer();
+    window.setTextModeEnabled(false);
+
+    // Typing something else in the panel, with nothing Picked, changes nothing.
+    textEdit->setText(QStringLiteral("Other"));
+    QTest::qWait(600);
+    QCOMPARE(log.size(), std::size_t{1});
+
+    // Pick the text: its settings fill the panel, and the panel edits it.
+    window.setPickModeEnabled(true);
+    window.findChild<sound_mind::studio::ToolPaletteController*>()->selectOperation(layer, textId);
+    QCOMPARE(textEdit->text(), QStringLiteral("Hi"));
+    QVERIFY(panel->isEditingPickedText());
+    QVERIFY(!hint->isHidden());
+    textEdit->setText(QStringLiteral("Ho"));
+    textEdit->setText(QStringLiteral("Hop"));  // two quick edits...
+    QTRY_COMPARE_WITH_TIMEOUT(log.size(), std::size_t{2}, 5000);  // ...one change.
+    QTest::qWait(600);
+    QCOMPARE(log.size(), std::size_t{2});
+    const auto& edited = dynamic_cast<const sound_mind::core::PasteOperation&>(log.at(1));
+    QCOMPARE(edited.supersedes(), std::optional(textId));
+    QCOMPARE(QString::fromStdString(edited.textSource()->text), QStringLiteral("Hop"));
+
+    // Undo brings the original back.
+    window.undo();
+    const auto active = log.activeOperationsTargeting(layer);
+    QCOMPARE(active.size(), std::size_t{1});
+    QCOMPARE(active[0]->id(), textId);
+
+    // Back in the Text tool, the panel sets up new text again.
+    window.setTextModeEnabled(true);
+    QVERIFY(!panel->isEditingPickedText());
+}
+
 void MainWindowTest::analyzeLoudnessReportsTheMixAndLayersAndGoesStaleOnEdits() {
     TestMainWindow window;
     createFreshTestProject(window);

@@ -1188,9 +1188,9 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.75.1` | Record and Loop | `0.1.35.1`-`0.1.35.2` | #236-#237 |
 | `v0.Y.76.1` | Filter preview | `0.1.36.1` | #238 |
 | `v0.Y.77.1` | Paths, selection and context menus | `0.1.37.1`-`0.1.37.4` | #239-#242 |
-| `v0.Y.78.1` | Text tool | `0.1.38.1` | #243 |
+| `v0.Y.78.1` | Text tool | `0.1.38.1` (follow-up `0.1.40.13`: editable after applying) | #243, #257 |
 | `v0.Y.79.1` | Generators | `0.1.39.1`-`0.1.39.4` (plus the codec fix `0.1.39.5`) | #244-#248 |
-| `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges) | #249-#256 |
+| `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges; `0.1.40.13` belongs to `v0.Y.78.1`) | #249-#256 |
 | `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.41.x`)* | |
 | `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.42.x`)* | |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |

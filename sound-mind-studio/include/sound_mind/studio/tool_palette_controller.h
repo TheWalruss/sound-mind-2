@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QString>
 
+#include "sound_mind/studio/text_controller.h"
 #include "sound_mind/core/resonant_instrument.h"
 #include "sound_mind/core/filter_preview.h"
 #include "sound_mind/core/chord_generator.h"
@@ -328,6 +329,15 @@ public:
     /// @return The selected object's own blend mode, or `std::nullopt` if
     ///         nothing suitable is Picked.
     [[nodiscard]] std::optional<sound_mind::core::BlendMode> selectedPasteBlendMode() const;
+
+    /// @brief Forwards to `PickController::selectedTextSettings()`.
+    /// @return The Picked text's settings, if text is Picked.
+    [[nodiscard]] std::optional<TextSettings> selectedTextSettings() const;
+
+    /// @brief Forwards to `PickController::applyTextSettings()`.
+    /// @param settings The new settings.
+    /// @return Whether the Picked text changed.
+    bool applyTextSettingsToPicked(const TextSettings& settings);
 
     /// @brief Applies a new blend mode to the currently Picked object -
     ///        forwards to `PickController::applyPasteBlendMode()`. A no-op

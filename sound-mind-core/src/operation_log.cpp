@@ -252,6 +252,9 @@ void to_json(nlohmann::json& json, const OperationLog& log) {
                 entry["boundary"] = *paste->boundary();
             }
             entry["blendMode"] = paste->blendMode();
+            if (paste->textSource()) {
+                entry["textSource"] = *paste->textSource();
+            }
             operations.push_back(std::move(entry));
         } else if (const auto* sequence = dynamic_cast<const SequenceOperation*>(operation.get())) {
             nlohmann::json entry;
@@ -318,9 +321,11 @@ void from_json(const nlohmann::json& json, OperationLog& log) {
                 // before this milestone was implicitly always a hard
                 // overwrite anyway.
                 const BlendMode blendMode = entry.value("blendMode", BlendMode::Overwrite);
+                std::optional<TextSource> textSource =
+                    entry.contains("textSource") ? std::optional(entry.at("textSource").get<TextSource>()) : std::nullopt;
                 log.operations_.push_back(std::make_unique<PasteOperation>(
                     fields.id, fields.targetLayer, placement, std::move(clip), fields.supersedes,
-                    std::move(boundary), blendMode));
+                    std::move(boundary), blendMode, std::move(textSource)));
             } else if (kind == kSequenceOperationKind) {
                 const CommonOperationFields fields = readCommonOperationFields(entry);
                 std::vector<NoteEvent> notes = entry.at("notes").get<std::vector<NoteEvent>>();

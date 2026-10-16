@@ -2192,7 +2192,7 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Each covered cell is written at `intensity + 20*log10(coverage*opacity)`, so edges fade.
       - A **Mask** `SelectionRegion` covers only cells at or above `kTextCoverageThreshold`. Even an Overwrite blend leaves everything around and between the letters untouched; Paste itself has no per-cell alpha, and the mask is how the glyph shape is kept.
       - The raster's top row lands on the highest bin.
-    - **Reuse:** applied text is therefore undoable, Pickable, movable, deletable and saved like any paste, with no new operation kind and no file-format change. As in the legacy tool, it isn't re-editable as text.
+    - **Reuse:** applied text is therefore undoable, Pickable, movable, deletable and saved like any paste, with no new operation kind and no file-format change. As in the legacy tool, it wasn't re-editable as text - **superseded by Decision #257 (`v0.1.40.13`)**, which keeps its settings on the paste.
     - **Deviation from the roadmap entry** ("rasterized and painted through the normal paint pipeline, using `v0.Y.74.1`'s brush work"): it goes through the *paste* pipeline instead. That matches the legacy tool's blit-with-blend-mode behavior, and stamping a brush along glyph outlines would neither reproduce filled letters nor their antialiasing.
     - **Studio:**
       - Canvas `ToolMode::Text` emits `textBoxStarted/Continued/Ended` and draws `setTextPreview()` (glyphs stretched into a dashed box).
@@ -2456,6 +2456,28 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
         - **Costs:** a voice heard within 250 ms costs the distance from its last pitch. Otherwise it costs 1 + half the distance from its *register*: an exponential moving average of its log pitch with a ~2 s time constant (so a part that moves over a song is followed). Until first heard, that register is a log-even default from ~800 Hz down to ~80 Hz (two voices: ~450 and ~140 Hz). A lone guitar line therefore lands low, and a voice entering above it takes voice 1 without displacing it.
         - The never-used-track cost and the final median sort are gone; the defaults order the voices.
         - **Tests:** a 147 Hz line alone, then a 330 Hz voice entering at 60% - the low line stays on voice 2 throughout, and the entry takes voice 1. Over noise, voice 1 is above voice 2 in every frame where both sound (and they do, in over 50 frames). The single-tone-with-three-voices case now lands on the middle voice (220 Hz vs defaults ~450/250/140), with the other two silent. The earlier two-voice and bass-gap cases pass unchanged.
+
+257. **Applied text stays editable.** Settled in `v0.1.40.13`, a user request revisiting Decision #243 (Pre-Beta Plan `v0.Y.78.1`).
+    - **The constraint:** core has no font engine, so text can't be re-rendered on replay. The paste must keep replaying from its rendered clip.
+    - **The design:** the paste also *keeps the settings it was rendered from*.
+      - `PasteOperation` gains an optional `TextSource` (text, font family, size, bold, italic, both intensities, opacity, rotation; the blend mode stays the paste's own).
+      - Core stores, copies and serializes it but never reads it.
+      - `makeTextPaste()` takes it, plus `supersedes`, and `TextController::apply()` passes it.
+      - It travels through everything that rebuilds a paste: `translatedCopy()` (moves), `cloneOperation()` (copy/paste), `PickController::applyPasteBlendMode()` and the operation-log JSON (`"textSource"`, written only when present).
+    - **Editing:**
+      - `PickController::selectedTextSettings()` / `applyTextSettings()` are the text counterparts of `selectedConfiguration()` / `applyToolConfiguration()`.
+      - An edit re-rasterizes with the Studio's `TextController::rasterize()` into the paste's own cell box, recovered from its placement by the new core `textPasteBox()`. A moved text is therefore redrawn where it now is.
+      - The result commits as a superseding paste through `commitReplacement()` ("Edited text", one undo step) and stays Picked.
+      - Settings that already match, or text that would write nothing (blank or fully transparent), are refused, so clearing the box can't silently erase it; Pick → Delete does that.
+    - **Studio wiring:**
+      - On a Pick selection change, `MainWindow` loads a Picked text's settings into the Text Tool panel (non-emitting `setSettings()`), brings the panel forward, and shows its new "editing the picked text" note (`setEditingPickedText()`).
+      - While that's on (Picked text, Text tool not active), the panel's `settingsChanged()` is applied after a 400 ms pause (`pickedTextEditTimer_`). A `QLineEdit` emits per keystroke, and a word should be one undo step, not one per letter.
+      - Entering or leaving the Text tool flushes a pending edit onto the text it was meant for. In the Text tool, the panel sets up new text as before.
+    - **Compatibility:** text applied before this version has no `TextSource`. It loads and behaves as before (movable and deletable) but isn't editable. No migration, per the pre-Beta decision.
+    - **Tests:**
+      - Core: the source survives `translatedCopy()` (and its box moves), `cloneOperation()` and a JSON round trip; `textPasteBox()` recovers the box; an ordinary paste has none; `supersedes` is set.
+      - `TextControllerTest`: apply keeps the settings; Pick reads them; editing replaces the text in the same box as one step and stays Picked; no-op and blank edits are refused; undo restores the original.
+      - `MainWindowTest`: panel edits do nothing with nothing Picked; Picking fills the panel and shows the note; two quick edits make one change; undo; the Text tool goes back to new text.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

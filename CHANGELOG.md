@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.13] - 2026-10-16
+
+### Added
+
+- **Applied text can be edited.** Pick applied text and its settings appear in the Text Tool panel. Change the wording, font, size, levels, opacity, blend mode or rotation, and the text is redrawn in the same place. While typing, it redraws after a short pause, so a word is one undo step. Moved and copied text stays editable. Text applied before this version can still be moved and deleted but not edited, since it was saved without its settings.
+
 ## [0.1.40.12] - 2026-10-16
 
 ### Fixed

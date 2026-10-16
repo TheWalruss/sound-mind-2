@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "sound_mind/codec/stream_codec.h"
@@ -57,6 +58,10 @@ inline constexpr float kTextSilenceDb = -96.0f;
  * @param opacity Scales every cell's amplitude, in `[0, 1]`.
  * @param blendMode How the text combines with what's already there.
  * @param config The layer content's codec configuration (Hz/time mapping).
+ * @param source The settings the raster was rendered from, kept on the
+ *        paste so it stays editable as text (`v0.1.40.13`).
+ * @param supersedes The paste this one replaces - an edited text's
+ *        original.
  * @return The paste, or `nullptr` if no cell reaches the coverage
  *         threshold (empty or fully transparent text).
  */
@@ -64,6 +69,28 @@ inline constexpr float kTextSilenceDb = -96.0f;
                                                             int frameOrigin, int binOrigin, float leftIntensityDb,
                                                             float rightIntensityDb, float opacity,
                                                             BlendMode blendMode,
-                                                            const sound_mind::codec::StreamCodecConfig& config);
+                                                            const sound_mind::codec::StreamCodecConfig& config,
+                                                            std::optional<TextSource> source = std::nullopt,
+                                                            std::optional<OperationId> supersedes = std::nullopt);
+
+/// @brief The box a text paste covers, in canvas cells - the inverse of
+///        makeTextPaste()'s placement (`v0.1.40.13`), so edited text is
+///        re-rendered into exactly the box it was applied to (or moved to).
+struct TextPasteBox {
+    /// @brief The left edge's frame.
+    int frameLow = 0;
+    /// @brief The bottom edge's bin.
+    int binLow = 0;
+    /// @brief Width in frames.
+    int width = 0;
+    /// @brief Height in bins.
+    int height = 0;
+};
+
+/// @brief The cell box `paste` covers.
+/// @param paste A paste (normally one made by makeTextPaste()).
+/// @param config The layer content's codec configuration.
+/// @return Its box, at least one cell each way.
+[[nodiscard]] TextPasteBox textPasteBox(const PasteOperation& paste, const sound_mind::codec::StreamCodecConfig& config);
 
 }  // namespace sound_mind::core

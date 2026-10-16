@@ -14,4 +14,5 @@ private slots:
     void applyWritesTheTextAsOneUndoStepAndClearsTheBox();
     void applyDoesNothingWithoutABoxOrText();
     void resetDiscardsTheBox();
+    void appliedTextKeepsItsSettingsAndCanBeEditedWhenPicked();
 };

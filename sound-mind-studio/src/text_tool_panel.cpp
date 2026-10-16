@@ -3,6 +3,7 @@
 #include <array>
 #include <utility>
 
+#include <QLabel>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFontComboBox>
@@ -115,6 +116,14 @@ TextToolPanel::TextToolPanel(QWidget* parent) : QDockWidget(tr("Text Tool"), par
     buttons->addWidget(applyButton_);
     buttons->addWidget(resetButton_);
     root->addLayout(buttons);
+    editingPickedLabel_ = new QLabel(
+        tr("Editing the picked text - changes apply as you make them. Pick something else, or use the Text tool, "
+           "to stop."),
+        container);
+    editingPickedLabel_->setObjectName(QStringLiteral("textEditingPickedLabel"));
+    editingPickedLabel_->setWordWrap(true);
+    editingPickedLabel_->hide();
+    root->addWidget(editingPickedLabel_);
     root->addStretch();
     setWidget(container);
     setBoxPlaced(false);
@@ -160,6 +169,11 @@ void TextToolPanel::setSettings(const TextSettings& settings) {
     blendModeCombo_->setCurrentIndex(blendModeCombo_->findData(static_cast<int>(settings.blendMode)));
     rotationField_->setValue(settings.rotationDegrees);
     loading_ = false;
+}
+
+void TextToolPanel::setEditingPickedText(bool editing) {
+    editingPickedText_ = editing;
+    editingPickedLabel_->setVisible(editing);
 }
 
 void TextToolPanel::setBoxPlaced(bool placed) {

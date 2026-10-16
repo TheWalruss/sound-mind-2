@@ -11,6 +11,7 @@
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/paint_controller.h"
+#include "sound_mind/studio/pick_controller.h"
 #include "sound_mind/studio/text_controller.h"
 #include "sound_mind/studio/undo_stack.h"
 
@@ -207,3 +208,62 @@ void TextControllerTest::resetDiscardsTheBox() {
     QVERIFY(!controller.box().has_value());
     QVERIFY(!controller.previewBounds().has_value());
 }
+
+// v0.1.40.13 - applied text stays editable.
+void TextControllerTest::appliedTextKeepsItsSettingsAndCanBeEditedWhenPicked() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    UndoStack undoStack;
+    PaintController paintController(&undoStack);
+    paintController.setProject(&project);
+    TextController controller(&paintController);
+    controller.setProject(&project);
+    controller.setSettings(hello());
+    controller.beginBox(layerId, pointAt(project, 20, 20));
+    controller.continueBox(pointAt(project, 80, 50));
+    controller.endBox();
+    const auto id = controller.apply();
+    QVERIFY(id.has_value());
+    const auto& applied = dynamic_cast<const sound_mind::core::PasteOperation&>(project.operationLog().at(0));
+    QVERIFY(applied.textSource().has_value());
+    QCOMPARE(TextController::settingsFor(*applied.textSource(), applied.blendMode()), hello());
+    const auto box = sound_mind::core::textPasteBox(
+        applied, sound_mind::core::streamCodecConfigFor(project.settings()));
+
+    sound_mind::studio::PickController pick(&paintController);
+    pick.setProject(&project);
+    QVERIFY(pick.selectOperation(layerId, *id));
+    QVERIFY(pick.selectedTextSettings().has_value());
+    QCOMPARE(*pick.selectedTextSettings(), hello());
+
+    TextSettings edited = hello();
+    edited.text = QStringLiteral("Bye");
+    edited.bold = true;
+    QVERIFY(pick.applyTextSettings(edited));
+    QCOMPARE(undoStack.count(), std::size_t{2});
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{1});  // the edit replaced the original.
+    const auto& replaced = dynamic_cast<const sound_mind::core::PasteOperation&>(*active[0]);
+    QCOMPARE(QString::fromStdString(replaced.textSource()->text), QStringLiteral("Bye"));
+    QVERIFY(replaced.textSource()->bold);
+    const auto newBox = sound_mind::core::textPasteBox(
+        replaced, sound_mind::core::streamCodecConfigFor(project.settings()));
+    QCOMPARE(newBox.frameLow, box.frameLow);  // the same box.
+    QCOMPARE(newBox.binLow, box.binLow);
+    QCOMPARE(newBox.width, box.width);
+    QCOMPARE(newBox.height, box.height);
+    QCOMPARE(*pick.selectedTextSettings(), edited);  // still Picked.
+
+    QVERIFY(!pick.applyTextSettings(edited));  // nothing changed: no new step.
+    TextSettings blank = edited;
+    blank.text.clear();
+    QVERIFY(!pick.applyTextSettings(blank));  // would write nothing: refused.
+    QCOMPARE(undoStack.count(), std::size_t{2});
+
+    undoStack.undo();  // back to "Hello".
+    const auto restored = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(QString::fromStdString(
+                 dynamic_cast<const sound_mind::core::PasteOperation&>(*restored[0]).textSource()->text),
+             hello().text);
+}
+

@@ -164,6 +164,23 @@ public:
      */
     [[nodiscard]] static sound_mind::core::GlyphRaster rasterize(const TextSettings& settings, int width, int height);
 
+    /**
+     * @brief The core record of `settings` kept on an applied text paste
+     *        (`v0.1.40.13`) - see `sound_mind::core::TextSource`.
+     * @param settings The settings.
+     * @return Everything but the blend mode (the paste's own).
+     */
+    [[nodiscard]] static sound_mind::core::TextSource sourceFor(const TextSettings& settings);
+
+    /**
+     * @brief The settings an applied text paste was rendered from.
+     * @param source The paste's text source.
+     * @param blendMode The paste's blend mode.
+     * @return The settings.
+     */
+    [[nodiscard]] static TextSettings settingsFor(const sound_mind::core::TextSource& source,
+                                                  sound_mind::core::BlendMode blendMode);
+
     /// @brief A drag shorter than this many cells on both axes is a click.
     static constexpr int kMinimumDragCells = 3;
 

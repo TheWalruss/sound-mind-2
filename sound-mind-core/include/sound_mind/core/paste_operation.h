@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -56,6 +57,70 @@ void to_json(nlohmann::json& json, const Clip& clip);
 void from_json(const nlohmann::json& json, Clip& clip);
 
 /**
+ * @brief The settings a text paste was rendered from (`v0.1.40.13`) -
+ *        everything the Studio's Text tool needs to render it again, so
+ *        applied text stays editable: Pick it, change a setting, and it's
+ *        re-rendered into the same box. Core keeps it but never reads it:
+ *        the paste still replays from its rendered `clip()`, since core
+ *        has no font engine. The blend mode is the paste's own.
+ */
+struct TextSource {
+    /// @brief The text, UTF-8.
+    std::string text;
+    /// @brief The font family.
+    std::string fontFamily;
+    /// @brief The glyph height in canvas cells.
+    int fontSize = 36;
+    /// @brief Bold letters.
+    bool bold = false;
+    /// @brief Italic letters.
+    bool italic = false;
+    /// @brief The left channel's level where a glyph is fully covered, dBFS.
+    float leftIntensityDb = -12.0f;
+    /// @brief The right channel's level where a glyph is fully covered, dBFS.
+    float rightIntensityDb = -12.0f;
+    /// @brief The whole text's amplitude scale, `[0, 1]`.
+    float opacity = 1.0f;
+    /// @brief Rotation, degrees counterclockwise.
+    double rotationDegrees = 0.0;
+
+    /// @brief Field-by-field equality.
+    /// @return `true` when every field matches.
+    bool operator==(const TextSource&) const = default;
+};
+
+/// @brief Serializes a TextSource.
+/// @param json The output.
+/// @param source The source.
+inline void to_json(nlohmann::json& json, const TextSource& source) {
+    json = nlohmann::json{{"text", source.text},
+                          {"fontFamily", source.fontFamily},
+                          {"fontSize", source.fontSize},
+                          {"bold", source.bold},
+                          {"italic", source.italic},
+                          {"leftIntensityDb", source.leftIntensityDb},
+                          {"rightIntensityDb", source.rightIntensityDb},
+                          {"opacity", source.opacity},
+                          {"rotationDegrees", source.rotationDegrees}};
+}
+
+/// @brief Deserializes a TextSource; a missing field keeps its default.
+/// @param json The input.
+/// @param source The result.
+inline void from_json(const nlohmann::json& json, TextSource& source) {
+    const TextSource defaults;
+    source.text = json.value("text", defaults.text);
+    source.fontFamily = json.value("fontFamily", defaults.fontFamily);
+    source.fontSize = json.value("fontSize", defaults.fontSize);
+    source.bold = json.value("bold", defaults.bold);
+    source.italic = json.value("italic", defaults.italic);
+    source.leftIntensityDb = json.value("leftIntensityDb", defaults.leftIntensityDb);
+    source.rightIntensityDb = json.value("rightIntensityDb", defaults.rightIntensityDb);
+    source.opacity = json.value("opacity", defaults.opacity);
+    source.rotationDegrees = json.value("rotationDegrees", defaults.rotationDegrees);
+}
+
+/**
  * @brief Pastes a previously captured `Clip` onto a layer's content, logged
  *        non-destructively - see `docs/sound-mind-design.md`'s "Cut / Copy /
  *        Paste" and `docs/sound-mind-architecture.md`'s Core Data Model.
@@ -107,16 +172,29 @@ public:
      *        target - see `blendMode()`'s own docs. `BlendMode::Overwrite`
      *        (the default) reproduces this class's own pre-`v0.Y.37.1`
      *        hard-overwrite behavior exactly.
+     * @param textSource For applied text, the settings it was rendered
+     *        from - see textSource().
      */
     PasteOperation(OperationId id, LayerId targetLayer, TimeFrequencyRect placement, Clip clip,
                     std::optional<OperationId> supersedes = std::nullopt,
                     std::optional<SelectionRegion> boundary = std::nullopt,
-                    BlendMode blendMode = BlendMode::Overwrite) noexcept
+                    BlendMode blendMode = BlendMode::Overwrite,
+                    std::optional<TextSource> textSource = std::nullopt) noexcept
         : LayerContentOperation(id, targetLayer, supersedes),
           placement_(placement),
           clip_(std::move(clip)),
           boundary_(std::move(boundary)),
-          blendMode_(blendMode) {}
+          blendMode_(blendMode),
+          textSource_(std::move(textSource)) {}
+
+    /**
+     * @brief For applied text (the Text tool, `v0.1.40.13`), the settings
+     *        it was rendered from - what makes it editable as text after
+     *        it's applied. Carried through moves, copies and blend-mode
+     *        changes.
+     * @return The source, or `std::nullopt` for any other paste.
+     */
+    [[nodiscard]] const std::optional<TextSource>& textSource() const noexcept { return textSource_; }
 
     /// @brief This operation's own time/frequency footprint - exactly
     ///        where the clip was placed. Always the *bounding box*, even
@@ -167,7 +245,7 @@ public:
         }
         return std::make_unique<PasteOperation>(
             newId, targetLayer_, translated(placement_, deltaTimeSeconds, deltaFrequencyBins, config), clip_, id(),
-            std::move(translatedBoundary), blendMode_);
+            std::move(translatedBoundary), blendMode_, textSource_);
     }
 
 private:
@@ -175,6 +253,7 @@ private:
     Clip clip_;
     std::optional<SelectionRegion> boundary_;
     BlendMode blendMode_ = BlendMode::Overwrite;
+    std::optional<TextSource> textSource_;
 };
 
 }  // namespace sound_mind::core

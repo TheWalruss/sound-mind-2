@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 
+#include "sound_mind/core/text_paste.h"
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/guide_path_operation.h"
@@ -303,6 +304,39 @@ std::optional<sound_mind::core::BlendMode> PickController::selectedPasteBlendMod
     return paste->blendMode();
 }
 
+std::optional<TextSettings> PickController::selectedTextSettings() const {
+    if (!pickedOperationId_.has_value()) {
+        return std::nullopt;
+    }
+    const auto* paste = dynamic_cast<const sound_mind::core::PasteOperation*>(pickedOperation_);
+    if (paste == nullptr || !paste->textSource().has_value()) {
+        return std::nullopt;
+    }
+    return TextController::settingsFor(*paste->textSource(), paste->blendMode());
+}
+
+bool PickController::applyTextSettings(const TextSettings& settings) {
+    const std::optional<TextSettings> current = selectedTextSettings();
+    if (!current.has_value() || *current == settings) {
+        return false;
+    }
+    const auto& paste = dynamic_cast<const sound_mind::core::PasteOperation&>(*pickedOperation_);
+    const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
+    const sound_mind::core::TextPasteBox box = sound_mind::core::textPasteBox(paste, config);
+    const sound_mind::core::GlyphRaster raster = TextController::rasterize(settings, box.width, box.height);
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    const sound_mind::core::OperationId newId = log.reserveId();
+    auto replacement = sound_mind::core::makeTextPaste(
+        newId, pickedLayer_, raster, box.frameLow, box.binLow, settings.leftIntensityDb, settings.rightIntensityDb,
+        settings.opacity, settings.blendMode, config, TextController::sourceFor(settings), pickedOperationId_);
+    if (replacement == nullptr) {
+        return false;
+    }
+    commitReplacement(std::move(replacement), tr("Edited text"));
+    emit selectionChanged();  // its bounds may differ; the panel shows the new settings.
+    return true;
+}
+
 std::vector<sound_mind::core::BranchGraft> PickController::selectedBranches() const {
     if (!pickedOperationId_.has_value()) {
         return {};
@@ -516,7 +550,8 @@ void PickController::applyPasteBlendMode(sound_mind::core::BlendMode mode) {
     sound_mind::core::OperationLog& log = project_->operationLog();
     const sound_mind::core::OperationId newId = log.reserveId();
     commitReplacement(std::make_unique<sound_mind::core::PasteOperation>(
-                           newId, pickedLayer_, paste->bounds(), paste->clip(), pickedOperationId_, paste->boundary(), mode),
+                           newId, pickedLayer_, paste->bounds(), paste->clip(), pickedOperationId_, paste->boundary(), mode,
+                           paste->textSource()),
                        tr("Changed picked object's blend mode"));
 }
 

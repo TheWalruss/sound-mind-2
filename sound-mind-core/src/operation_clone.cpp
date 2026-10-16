@@ -19,7 +19,7 @@ std::unique_ptr<Operation> cloneOperation(const Operation& operation, OperationI
     }
     if (const auto* paste = dynamic_cast<const PasteOperation*>(&operation)) {
         return std::make_unique<PasteOperation>(newId, targetLayer, paste->bounds(), paste->clip(), std::nullopt,
-                                                paste->boundary(), paste->blendMode());
+                                                paste->boundary(), paste->blendMode(), paste->textSource());
     }
     if (const auto* sequence = dynamic_cast<const SequenceOperation*>(&operation)) {
         return std::make_unique<SequenceOperation>(newId, targetLayer, sequence->notes(), sequence->config().clone());
