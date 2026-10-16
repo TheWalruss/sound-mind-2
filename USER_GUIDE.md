@@ -2236,6 +2236,18 @@ the mix - the fundamental of whatever is loudest - from 50 Hz to 2 kHz:
   in cents (+20 cents is a little sharp), and its frequency, e.g.
   "A4  +3 cents  (440.8 Hz)". It shows "—" where there's no clear pitch
   (silence, noise).
+- **Ignore spikes shorter than** removes brief pitch jumps, such as
+  momentary octave errors or the click of a note's attack. A jump lasting
+  less than this many milliseconds is removed:
+  - if the pitch on both sides of the jump agrees, the gap is smoothed over
+    with a glide between them;
+  - otherwise (a blip in silence, or right at a change of note) it's
+    erased, shown as no pitch.
+
+  Gentle glides and vibrato are never touched. `0` (the default) shows
+  every detected pitch. A good starting point is 30-60 ms. The setting
+  applies straight away to the readout, the graph and the canvas line,
+  without analyzing again, and it's remembered between sessions.
 - **The graph** draws the pitch over time on a musical scale, with a line at
   every C.
 - **Show pitch on canvas** draws the same pitch line, in bright green, right

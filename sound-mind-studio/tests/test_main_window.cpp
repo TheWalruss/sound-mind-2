@@ -7237,6 +7237,20 @@ void MainWindowTest::analysisOverlaysReachTheCanvas() {
     window.findChild<QCheckBox*>(QStringLiteral("stereoOverlayCheckBox"))->setChecked(false);
 }
 
+// v0.1.40.9
+void MainWindowTest::pitchSpikeFilterIsRemembered() {
+    {
+        TestMainWindow window;
+        window.findChild<NumericField*>(QStringLiteral("pitchSpikeFilterField"))->setValue(45.0);
+    }
+    {
+        TestMainWindow window;
+        auto* field = window.findChild<NumericField*>(QStringLiteral("pitchSpikeFilterField"));
+        QCOMPARE(field->value(), 45.0);
+        field->setValue(0.0);  // back to the default for later tests.
+    }
+}
+
 void MainWindowTest::masterLimiterSettingReachesPlaybackAndBothDevicePanels() {
     TestMainWindow window;
     auto checkBoxes = window.findChildren<QCheckBox*>(QStringLiteral("masterLimiterCheckBox"));

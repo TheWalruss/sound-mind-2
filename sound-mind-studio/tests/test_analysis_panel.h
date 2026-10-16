@@ -22,4 +22,5 @@ private slots:
     void autoUpdateCheckBoxEmitsAndItsSetterDoesNot();
     void showLoudnessOnCanvasEmitsTheSeriesOnlyWhileChecked();
     void showStereoOnCanvasEmitsTheSeriesOnlyWhileChecked();
+    void pitchSpikeFilterCleansTheGraphNoteAndOverlay();
 };

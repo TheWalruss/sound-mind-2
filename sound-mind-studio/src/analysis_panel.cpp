@@ -11,7 +11,9 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
+#include "sound_mind/core/pitch_detection.h"
 #include "sound_mind/studio/analysis_graphs.h"
+#include "sound_mind/studio/numeric_field.h"
 
 namespace sound_mind::studio {
 
@@ -149,6 +151,21 @@ AnalysisPanel::AnalysisPanel(QWidget* parent) : QDockWidget(tr("Analysis"), pare
     noteNowLabel_ = makeReading(pitch, QStringLiteral("noteNowLabel"));
     noteNowLabel_->setToolTip(tr("The note at the playback position, how far off it is in cents, and its frequency"));
     pitchSummary->addRow(tr("At playhead:"), noteNowLabel_);
+    pitchSpikeFilterField_ = new NumericField(pitch);
+    pitchSpikeFilterField_->setObjectName(QStringLiteral("pitchSpikeFilterField"));
+    pitchSpikeFilterField_->setRange(0.0, 1000.0);
+    pitchSpikeFilterField_->setSliderRange(0.0, 200.0);
+    pitchSpikeFilterField_->setDecimals(0);
+    pitchSpikeFilterField_->setSingleStep(5.0);
+    pitchSpikeFilterField_->setSuffix(QStringLiteral(" ms"));
+    pitchSpikeFilterField_->setToolTip(
+        tr("Pitch jumps lasting less than this are removed: smoothed over when the pitch on both sides agrees, "
+           "erased otherwise. 0 shows every detected pitch."));
+    connect(pitchSpikeFilterField_, &NumericField::valueChanged, this, [this](double milliseconds) {
+        refreshDisplayedPitch();
+        emit pitchSpikeFilterChanged(milliseconds);
+    });
+    pitchSummary->addRow(tr("Ignore spikes shorter than:"), pitchSpikeFilterField_);
     pitchRoot->addLayout(pitchSummary);
     pitchGraph_ = new PitchGraphWidget(pitch);
     pitchGraph_->setObjectName(QStringLiteral("pitchGraph"));
@@ -159,6 +176,24 @@ AnalysisPanel::AnalysisPanel(QWidget* parent) : QDockWidget(tr("Analysis"), pare
     pitchRoot->addWidget(pitchOverlayCheckBox_);
     tabs_->addTab(pitch, tr("Pitch"));
     setWidget(body);
+}
+
+void AnalysisPanel::setPitchSpikeFilterMs(double milliseconds) {
+    {
+        const QSignalBlocker blocker(pitchSpikeFilterField_);
+        pitchSpikeFilterField_->setValue(milliseconds);
+    }
+    refreshDisplayedPitch();
+}
+
+void AnalysisPanel::refreshDisplayedPitch() {
+    displayedPitch_ = report_.has_value()
+                          ? sound_mind::core::removePitchSpikes(report_->mixPitchHz, report_->secondsPerFrame,
+                                                                pitchSpikeFilterField_->value() / 1000.0)
+                          : std::vector<float>{};
+    pitchGraph_->setTrack(displayedPitch_, report_.has_value() ? report_->secondsPerFrame : 0.0);
+    setPlaybackPosition(playbackSeconds_);
+    emitPitchOverlay();
 }
 
 bool AnalysisPanel::autoAnalyze() const noexcept { return autoAnalyzeCheckBox_->isChecked(); }
@@ -195,7 +230,9 @@ void AnalysisPanel::setReport(const sound_mind::core::ProjectLoudnessReport& rep
                             sound_mind::core::kLoudnessStepSeconds);
     goniometer_->setAudio(report.mixAudio);
     bandWidths_->setWidths(report.mixBandWidths);
-    pitchGraph_->setTrack(report.mixPitchHz, report.secondsPerFrame);
+    displayedPitch_ = sound_mind::core::removePitchSpikes(report.mixPitchHz, report.secondsPerFrame,
+                                                          pitchSpikeFilterField_->value() / 1000.0);
+    pitchGraph_->setTrack(displayedPitch_, report.secondsPerFrame);
     bands_->setLevels(report.mixBandLevels, static_cast<int>(sound_mind::core::loudnessBands().size()),
                       static_cast<int>(report.frameCount), report.secondsPerFrame);
 
@@ -233,6 +270,7 @@ void AnalysisPanel::clearReport() {
     stereoGraph_->setSeries({}, {}, sound_mind::core::kLoudnessStepSeconds);
     goniometer_->setAudio(nullptr);
     bandWidths_->setWidths({});
+    displayedPitch_.clear();
     pitchGraph_->setTrack({}, 0.0);
     emitOverlays();
     layerTable_->setRowCount(0);
@@ -255,6 +293,7 @@ void AnalysisPanel::setAnalyzing(bool analyzing) {
 }
 
 void AnalysisPanel::setPlaybackPosition(std::optional<double> seconds) {
+    playbackSeconds_ = seconds;
     graph_->setPlayhead(seconds);
     bands_->setPlayhead(seconds);
     stereoGraph_->setPlayhead(seconds);
@@ -271,8 +310,8 @@ void AnalysisPanel::setPlaybackPosition(std::optional<double> seconds) {
     const auto index = static_cast<std::ptrdiff_t>(*seconds / sound_mind::core::kLoudnessStepSeconds) - 1;
     if (report_->secondsPerFrame > 0.0) {
         const auto frame = static_cast<std::size_t>(*seconds / report_->secondsPerFrame);
-        if (frame < report_->mixPitchHz.size() && report_->mixPitchHz[frame] > 0.0f) {
-            const double hz = report_->mixPitchHz[frame];
+        if (frame < displayedPitch_.size() && displayedPitch_[frame] > 0.0f) {
+            const double hz = displayedPitch_[frame];
             const auto note = sound_mind::core::noteFor(hz);
             noteNowLabel_->setText(QStringLiteral("%1%2  %3%4 cents  (%5 Hz)")
                                        .arg(QString::fromStdString(note.name))
@@ -298,7 +337,7 @@ void AnalysisPanel::setPlaybackPosition(std::optional<double> seconds) {
 void AnalysisPanel::emitPitchOverlay() {
     const bool enabled = pitchOverlayCheckBox_->isChecked();
     static const std::vector<float> kNone;
-    emit pitchOverlayToggled(enabled, enabled && report_.has_value() ? report_->mixPitchHz : kNone);
+    emit pitchOverlayToggled(enabled, enabled && report_.has_value() ? displayedPitch_ : kNone);
 }
 
 void AnalysisPanel::emitLoudnessOverlay() {

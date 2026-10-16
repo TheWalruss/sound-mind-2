@@ -355,4 +355,5 @@ private slots:
     void masterLimiterSettingReachesLoopMode();
     void autoAnalyzeRunsOnChangesAndInterruptsARunningAnalysis();
     void analysisOverlaysReachTheCanvas();
+    void pitchSpikeFilterIsRemembered();
 };

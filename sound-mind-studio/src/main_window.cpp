@@ -908,6 +908,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         analyzeLoudness();
     });
     setAutoAnalyze(settings_.value(QStringLiteral("analysisAutoUpdate"), false).toBool());
+    analysisPanel_->setPitchSpikeFilterMs(settings_.value(QStringLiteral("pitchSpikeFilterMs"), 0.0).toDouble());
+    connect(analysisPanel_, &AnalysisPanel::pitchSpikeFilterChanged, this, [this](double milliseconds) {
+        settings_.setValue(QStringLiteral("pitchSpikeFilterMs"), milliseconds);
+    });
     loudnessTimer_ = new QTimer(this);
     loudnessTimer_->setInterval(50);
     connect(loudnessTimer_, &QTimer::timeout, this, [this]() {

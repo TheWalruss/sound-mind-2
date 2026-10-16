@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.9] - 2026-10-16
+
+### Added
+
+- **Ignore pitch spikes.** A new **Ignore spikes shorter than** setting on the Analysis panel's Pitch tab removes pitch jumps lasting less than the time you set. A jump is smoothed over when the pitch on both sides agrees and erased otherwise. Glides and vibrato are left alone. It applies instantly to the readout, the graph and the canvas line, and is remembered between sessions. It's off (`0`) by default.
+
 ## [0.1.40.8] - 2026-10-16
 
 ### Changed

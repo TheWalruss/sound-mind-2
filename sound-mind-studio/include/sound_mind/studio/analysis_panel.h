@@ -15,6 +15,7 @@ class QTableWidget;
 namespace sound_mind::studio {
 
 class BandLevelsWidget;
+class NumericField;
 class BandWidthBarsWidget;
 class GoniometerWidget;
 class LoudnessGraphWidget;
@@ -50,7 +51,11 @@ class StereoGraphWidget;
  * **Pitch tab** (installment C): the note at the playback position (name,
  * octave, cents and Hz - see `sound_mind::core::noteFor()`), a pitch-over-
  * time graph, and **Show pitch on canvas** (pitchOverlayToggled()), which
- * `MainWindow` forwards to `CanvasWidget::setPitchOverlay()`.
+ * `MainWindow` forwards to `CanvasWidget::setPitchOverlay()`. **Ignore
+ * spikes shorter than** (`v0.1.40.9`, ms, `0` = off) runs the report's raw
+ * track through `sound_mind::core::removePitchSpikes()` before the graph,
+ * the note readout and the overlay see it - applied at once, without
+ * re-analyzing.
  *
  * **Above the tabs** (`v0.1.40.7`), so they're at hand on every tab:
  * **Analyze**, **Auto-update** (autoAnalyzeToggled() - `MainWindow` then
@@ -106,6 +111,12 @@ public:
     /// @param enabled Whether to check it.
     void setAutoAnalyze(bool enabled);
 
+    /// @brief Sets "Ignore spikes shorter than" and re-applies it to the
+    ///        displayed pitch, without emitting pitchSpikeFilterChanged()
+    ///        (e.g. restoring the saved setting).
+    /// @param milliseconds The limit; `0` shows the raw track.
+    void setPitchSpikeFilterMs(double milliseconds);
+
     /// @brief Whether a report is showing.
     /// @return `true` after setReport() until clearReport().
     [[nodiscard]] bool hasReport() const noexcept { return report_.has_value(); }
@@ -128,6 +139,10 @@ signals:
      *        report, or when turned off).
      */
     void pitchOverlayToggled(bool enabled, const std::vector<float>& hzPerFrame);
+
+    /// @brief "Ignore spikes shorter than" was changed by the user.
+    /// @param milliseconds The new limit.
+    void pitchSpikeFilterChanged(double milliseconds);
 
     /// @brief Auto-update was toggled by the user.
     /// @param enabled Whether to re-analyze after every change.
@@ -180,6 +195,14 @@ private:
     PitchGraphWidget* pitchGraph_ = nullptr;
     QCheckBox* pitchOverlayCheckBox_ = nullptr;
     QCheckBox* autoAnalyzeCheckBox_ = nullptr;
+    NumericField* pitchSpikeFilterField_ = nullptr;
+    /// @brief The report's pitch track with spikes removed - what the
+    ///        Pitch tab and its overlay show.
+    std::vector<float> displayedPitch_;
+    /// @brief The last setPlaybackPosition(), re-read when the track changes.
+    std::optional<double> playbackSeconds_;
+    /// @brief Recomputes displayedPitch_ and refreshes everything showing it.
+    void refreshDisplayedPitch();
     QCheckBox* loudnessOverlayCheckBox_ = nullptr;
     QCheckBox* stereoOverlayCheckBox_ = nullptr;
 

@@ -2410,6 +2410,24 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - It's recomputed on stamp-mode, principal-mode and project changes. With no project, the slider spans the whole typed range.
       - The low end is 0.001, not 0: an interval of 0 would mean infinitely many stamps.
     - **Tests:** `NumericFieldTest::sliderRangeNarrowsOnlyTheSlider`; `ToolConfigurationPanelTest`, 2 cases (brush size end at 5 with typing beyond; the interval slider's end in each unit and mode, and unbounded with no project).
+
+255. **Removing short pitch spikes.** Settled in `v0.1.40.9`, a user request following Pre-Beta Plan milestone `v0.Y.80.1`.
+    - **Core `removePitchSpikes(track, secondsPerFrame, maxSpikeSeconds)`:**
+      - The voiced frames split into **runs**: consecutive frames within `kPitchRunToleranceSemitones` (1) of their predecessor. A glide or vibrato stays one run, while a sudden jump starts a new one.
+      - A run shorter than the limit, or several short runs back to back that together are shorter, is a spike.
+      - It's **smoothed** (log-frequency interpolation between the frames on either side) when both sides are voiced and within tolerance of each other, and **erased** (unvoiced) otherwise: a blip in silence, at the edges, or between two different notes.
+      - A run exactly as long as the limit stays. A limit of 0 returns the track unchanged.
+    - **Where it applies - display, not analysis:**
+      - The report keeps the raw `mixPitchHz`.
+      - `AnalysisPanel` derives `displayedPitch_` from it with the "Ignore spikes shorter than" field (ms, 0-1000 typed, slider 0-200, default 0 = off), and feeds that to the graph, the at-playhead note and the canvas overlay.
+      - A change therefore applies instantly, with no re-analysis, and can be undone by setting it back.
+      - `pitchSpikeFilterChanged()` / non-emitting `setPitchSpikeFilterMs()`; `MainWindow` persists it as `pitchSpikeFilterMs`.
+      - `PitchGraphWidget::track()` was added as a read accessor.
+    - **Default off** keeps the existing readings unchanged until the user opts in. The user guide suggests 30-60 ms (3-6 frames at the default 10 ms hop).
+    - **Tests:**
+      - Core: 5 cases - an octave error inside a note is smoothed back; a bridged spike glides between agreeing neighbors; a spike between different notes is erased; a blip in silence is erased while a run exactly at the limit stays; glides, vibrato, a zero limit and an empty track pass unchanged.
+      - `AnalysisPanelTest`: the field cleans the note readout, overlay and graph; the setter applies without emitting.
+      - `MainWindowTest`: the setting is remembered.
     - **Normalization** is a gain, not a processor:
       - `PlaybackEngine::setNormalizationGainDb()` multiplies the volume, ahead of the limiter.
       - `MainWindow` measures `integratedLoudnessLufs()` (the new BS.1770 integrated-only entry point, sharing `gatedIntegrated()` with `measureLoudness()`) on each buffer it loads for playback: a fresh composite, or a repeat-mode refresh.

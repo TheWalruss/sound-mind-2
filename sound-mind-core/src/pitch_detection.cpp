@@ -129,4 +129,74 @@ NoteName noteFor(double frequencyHz, double a4Hz) {
     return result;
 }
 
+std::vector<float> removePitchSpikes(const std::vector<float>& hzPerFrame, double secondsPerFrame,
+                                     double maxSpikeSeconds) {
+    std::vector<float> cleaned = hzPerFrame;
+    if (maxSpikeSeconds <= 0.0 || secondsPerFrame <= 0.0 || hzPerFrame.empty()) {
+        return cleaned;
+    }
+    const auto semitonesApart = [](float a, float b) {
+        return std::abs(12.0 * std::log2(static_cast<double>(a) / static_cast<double>(b)));
+    };
+    const auto isShort = [&](std::size_t frames) {
+        // A small allowance so a run of exactly the limit isn't caught by rounding.
+        return static_cast<double>(frames) * secondsPerFrame < maxSpikeSeconds - 1e-9;
+    };
+
+    // Runs: [start, end) of voiced frames within tolerance of their predecessor.
+    struct Run {
+        std::size_t start;
+        std::size_t end;
+    };
+    std::vector<Run> runs;
+    for (std::size_t i = 0; i < hzPerFrame.size(); ++i) {
+        if (hzPerFrame[i] <= 0.0f) {
+            continue;
+        }
+        const bool continues = !runs.empty() && runs.back().end == i &&
+                               semitonesApart(hzPerFrame[i], hzPerFrame[i - 1]) <= kPitchRunToleranceSemitones;
+        if (continues) {
+            runs.back().end = i + 1;
+        } else {
+            runs.push_back(Run{i, i + 1});
+        }
+    }
+
+    // Back-to-back short runs form one spike block, judged by its total length.
+    std::size_t r = 0;
+    while (r < runs.size()) {
+        if (!isShort(runs[r].end - runs[r].start)) {
+            ++r;
+            continue;
+        }
+        std::size_t last = r;
+        while (last + 1 < runs.size() && runs[last + 1].start == runs[last].end &&
+               isShort(runs[last + 1].end - runs[last + 1].start)) {
+            ++last;
+        }
+        const std::size_t start = runs[r].start;
+        const std::size_t end = runs[last].end;
+        if (isShort(end - start)) {
+            const bool before = start > 0 && hzPerFrame[start - 1] > 0.0f;
+            const bool after = end < hzPerFrame.size() && hzPerFrame[end] > 0.0f;
+            if (before && after &&
+                semitonesApart(hzPerFrame[start - 1], hzPerFrame[end]) <= kPitchRunToleranceSemitones) {
+                // Smooth: glide from the frame before to the frame after, in log frequency.
+                const double from = std::log(static_cast<double>(hzPerFrame[start - 1]));
+                const double to = std::log(static_cast<double>(hzPerFrame[end]));
+                const auto span = static_cast<double>(end - start + 1);
+                for (std::size_t i = start; i < end; ++i) {
+                    const double t = static_cast<double>(i - start + 1) / span;
+                    cleaned[i] = static_cast<float>(std::exp(from + (to - from) * t));
+                }
+            } else {
+                std::fill(cleaned.begin() + static_cast<std::ptrdiff_t>(start),
+                          cleaned.begin() + static_cast<std::ptrdiff_t>(end), 0.0f);
+            }
+        }
+        r = last + 1;
+    }
+    return cleaned;
+}
+
 }  // namespace sound_mind::core

@@ -42,6 +42,35 @@ struct PitchSettings {
 [[nodiscard]] std::vector<float> detectPitch(const sound_mind::codec::StreamImage& content,
                                              const PitchSettings& settings = {});
 
+/// @brief How far apart, in semitones, two neighboring frames' pitches can
+///        be and still count as one continuous run - see removePitchSpikes().
+inline constexpr double kPitchRunToleranceSemitones = 1.0;
+
+/**
+ * @brief Removes pitch "spikes" - runs shorter than `maxSpikeSeconds` -
+ *        from a detected pitch track (`v0.1.40.9`).
+ *
+ * The voiced frames are split into **runs**: consecutive frames whose
+ * pitches are within `kPitchRunToleranceSemitones` of each other, so a glide
+ * or vibrato stays one run while a sudden jump (an octave error, a
+ * transient) starts a new one. A run lasting less than `maxSpikeSeconds`
+ * (frames × `secondsPerFrame`) - or several such runs back to back,
+ * together lasting less - is a spike:
+ * - **smoothed** when the frames on both sides are voiced and within
+ *   tolerance of each other: it's replaced by a glide between them,
+ *   interpolated in log frequency;
+ * - **erased** (made unvoiced, `0`) otherwise - a blip in silence, at the
+ *   track's edges, or between two different notes.
+ *
+ * @param hzPerFrame The track - see detectPitch() (`0` unvoiced).
+ * @param secondsPerFrame The frame duration.
+ * @param maxSpikeSeconds Runs shorter than this are spikes; `0` or less
+ *        returns the track unchanged.
+ * @return The cleaned track, the same length.
+ */
+[[nodiscard]] std::vector<float> removePitchSpikes(const std::vector<float>& hzPerFrame, double secondsPerFrame,
+                                                   double maxSpikeSeconds);
+
 /// @brief A frequency as a musical note.
 struct NoteName {
     /// @brief The pitch class, e.g. "A" or "C#".

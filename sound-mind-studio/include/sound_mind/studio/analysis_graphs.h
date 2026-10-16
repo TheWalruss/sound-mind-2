@@ -263,6 +263,10 @@ public:
     /// @return `true` with a voiced frame to draw.
     [[nodiscard]] bool hasData() const;
 
+    /// @brief The track being shown.
+    /// @return One fundamental per frame, Hz (`0` unvoiced).
+    [[nodiscard]] const std::vector<float>& track() const noexcept { return track_; }
+
     /// @brief A sensible default size for the panel layout.
     /// @return The size hint.
     [[nodiscard]] QSize sizeHint() const override { return {320, 120}; }

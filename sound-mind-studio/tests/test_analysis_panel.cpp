@@ -10,6 +10,7 @@
 
 #include "sound_mind/studio/analysis_graphs.h"
 #include "sound_mind/studio/analysis_panel.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::core::LayerLoudness;
 using sound_mind::core::LoudnessMeasurement;
@@ -319,5 +320,37 @@ void AnalysisPanelTest::showStereoOnCanvasEmitsTheSeriesOnlyWhileChecked() {
     QCOMPARE(correlation.front(), 0.75f);
     box->setChecked(false);
     QVERIFY(correlation.empty());
+}
+
+// v0.1.40.9 - ignoring short pitch spikes.
+void AnalysisPanelTest::pitchSpikeFilterCleansTheGraphNoteAndOverlay() {
+    AnalysisPanel panel;
+    ProjectLoudnessReport report = twoLayerReport();
+    report.secondsPerFrame = 0.01;
+    report.mixPitchHz.assign(20, 220.0f);
+    report.mixPitchHz[10] = 880.0f;  // a 10 ms octave spike.
+    std::vector<float> overlay;
+    connect(&panel, &AnalysisPanel::pitchOverlayToggled,
+            [&](bool, const std::vector<float>& track) { overlay = track; });
+    QSignalSpy spy(&panel, &AnalysisPanel::pitchSpikeFilterChanged);
+    panel.findChild<QCheckBox*>(QStringLiteral("pitchOverlayCheckBox"))->setChecked(true);
+    panel.setReport(report);
+    panel.setPlaybackPosition(0.105);
+    QVERIFY(text(panel, "noteNowLabel").startsWith(QStringLiteral("A5")));  // off by default: the spike shows.
+    QCOMPARE(overlay[10], 880.0f);
+
+    auto* field = panel.findChild<sound_mind::studio::NumericField*>(QStringLiteral("pitchSpikeFilterField"));
+    QVERIFY(field != nullptr);
+    QCOMPARE(field->value(), 0.0);
+    field->setValue(30.0);  // ms
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.last().at(0).toDouble(), 30.0);
+    QVERIFY(text(panel, "noteNowLabel").startsWith(QStringLiteral("A3")));  // smoothed back onto the note.
+    QVERIFY(std::abs(overlay[10] - 220.0f) < 0.01f);
+    QVERIFY(std::abs(panel.findChild<PitchGraphWidget*>()->track()[10] - 220.0f) < 0.01f);
+
+    panel.setPitchSpikeFilterMs(0.0);  // the setter applies without emitting.
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(overlay[10], 880.0f);
 }
 
