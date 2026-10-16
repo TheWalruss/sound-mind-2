@@ -51,9 +51,27 @@ sound_mind_gpu_compile_shader(colored_noise_field)
 
 add_custom_target(sound-mind-gpu-shaders DEPENDS ${SOUND_MIND_GPU_COMPILED_SHADERS})
 
+# Every compiled shader becomes a byte array in a generated source file built
+# into this library (v0.1.41.6), so an installed copy needs no shader files -
+# the earlier loose-.cso-in-the-build-tree approach only ever worked on the
+# machine that built it.
+set(SOUND_MIND_GPU_EMBEDDED_SHADERS ${CMAKE_CURRENT_BINARY_DIR}/embedded_shaders.cpp)
+add_custom_command(
+    OUTPUT ${SOUND_MIND_GPU_EMBEDDED_SHADERS}
+    COMMAND ${CMAKE_COMMAND} "-DOUTPUT=${SOUND_MIND_GPU_EMBEDDED_SHADERS}"
+            "-DSHADERS=${SOUND_MIND_GPU_COMPILED_SHADERS}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_shaders.cmake
+    DEPENDS ${SOUND_MIND_GPU_COMPILED_SHADERS} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_shaders.cmake
+    COMMENT "Embedding compiled shaders"
+    VERBATIM
+)
+
 add_library(sound-mind-gpu
     src/compute_device.cpp
+    src/embedded_shaders.h
+    ${SOUND_MIND_GPU_EMBEDDED_SHADERS}
 )
+target_include_directories(sound-mind-gpu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 add_dependencies(sound-mind-gpu sound-mind-gpu-shaders)
 
 target_include_directories(sound-mind-gpu
@@ -78,16 +96,6 @@ if (MSVC)
     target_compile_options(sound-mind-gpu PRIVATE /W4)
 endif ()
 
-# The compiled shader's own build-time location - multiplyByTwo() reads
-# it from here at runtime. A loose file next to the build tree, not
-# embedded into the binary - a deliberate, temporary simplification for
-# this installment's own "prove the plumbing" scope (see ComputeDevice's
-# own docs); a real shipped feature would need this revisited (embedded
-# bytecode, or an installer-packaged shaders folder).
-target_compile_definitions(sound-mind-gpu
-    PRIVATE
-        SOUND_MIND_GPU_SHADER_DIR="${SOUND_MIND_GPU_SHADER_DIR}"
-)
 
 if (BUILD_TESTING)
     add_subdirectory(tests)

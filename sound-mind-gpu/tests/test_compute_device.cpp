@@ -1282,3 +1282,16 @@ TEST_CASE("multiplyByTwo covers more items than one dispatch dimension allows",
     CHECK(doubled.back() == 2.0f * input.back());
     CHECK(doubled[kCount / 2] == 2.0f * input[kCount / 2]);
 }
+
+// v0.1.41.6 - shaders ship inside the program.
+TEST_CASE("Every compute shader is built into the program", "[gpu][compute_device]") {
+    const auto names = sound_mind::gpu::embeddedShaderNames();
+    for (const char* expected : {"multiply_by_two.cso", "gaussian_blur.cso", "mix_amplitude_phase_signal.cso",
+                                 "gaussian_blur_varying.cso", "median_blur_varying.cso",
+                                 "directional_blur_varying.cso", "fractal_field.cso", "colored_noise_field.cso"}) {
+        INFO(expected);
+        CHECK(std::find(names.begin(), names.end(), expected) != names.end());
+    }
+    CHECK(names.size() == 8);
+}
+

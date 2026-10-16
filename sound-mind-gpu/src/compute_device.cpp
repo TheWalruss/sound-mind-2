@@ -9,6 +9,8 @@
 
 #include "sound_mind/gpu/compute_device.h"
 
+#include "embedded_shaders.h"
+
 #include <Windows.h>
 
 #include <d3d12.h>
@@ -17,8 +19,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <sstream>
+#include <span>
 #include <stdexcept>
 
 using Microsoft::WRL::ComPtr;
@@ -37,24 +39,6 @@ void throwIfFailed(HRESULT hr, const char* what) {
                 << static_cast<unsigned long>(hr) << ")";
         throw std::runtime_error(message.str());
     }
-}
-
-/// @brief Reads a whole file's own bytes - used for the precompiled
-/// shader bytecode this module's own CMakeLists.txt compiles via `dxc`
-/// at build time (confirmed with the user: offline, not runtime,
-/// compilation).
-std::vector<std::uint8_t> readWholeFile(const std::string& path) {
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file) {
-        throw std::runtime_error("sound_mind::gpu: could not open shader bytecode file: " + path);
-    }
-    const std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
-    if (size > 0 && !file.read(reinterpret_cast<char*>(bytes.data()), size)) {
-        throw std::runtime_error("sound_mind::gpu: could not read shader bytecode file: " + path);
-    }
-    return bytes;
 }
 
 /// @brief A plain buffer resource description, `size` bytes, with the
@@ -193,13 +177,26 @@ struct ComputePipeline {
     ComPtr<ID3D12PipelineState> pipelineState;
 };
 
-/// @brief Loads `shaderFileName` (from `SOUND_MIND_GPU_SHADER_DIR`,
-/// this module's own build-time dxc output - see `CMakeLists.txt`) and
-/// builds its root signature (read directly out of the bytecode's own
-/// embedded `[RootSignature(...)]` blob - see the `.hlsl` files' own
-/// docs) and compute PSO.
+/// @brief The built-in bytecode of `shaderFileName` (`v0.1.41.6` - see
+/// `embedded_shaders.h`), or an empty span if there's no such shader.
+std::span<const unsigned char> embeddedBytecode(const std::string& shaderFileName) {
+    for (const detail::EmbeddedShader& shader : detail::embeddedShaders()) {
+        if (shaderFileName == shader.name) {
+            return {shader.data, shader.size};
+        }
+    }
+    return {};
+}
+
+/// @brief Loads `shaderFileName`'s bytecode (built into the program - see
+/// `embedded_shaders.h`) and builds its root signature (read directly out
+/// of the bytecode's own embedded `[RootSignature(...)]` blob - see the
+/// `.hlsl` files' own docs) and compute PSO.
 ComputePipeline loadComputePipeline(ID3D12Device* device, const std::string& shaderFileName) {
-    const auto bytecode = readWholeFile(std::string(SOUND_MIND_GPU_SHADER_DIR) + "/" + shaderFileName);
+    const std::span<const unsigned char> bytecode = embeddedBytecode(shaderFileName);
+    if (bytecode.empty()) {
+        throw std::runtime_error("sound_mind::gpu: no built-in shader named " + shaderFileName);
+    }
 
     ComputePipeline pipeline;
     throwIfFailed(
@@ -880,6 +877,14 @@ std::vector<float> ComputeDevice::coloredNoiseField(const std::vector<std::int64
 
     executeAndWait(recorder.list.Get());
     return readBackFloats(readbackBuffer.Get(), cellCount);
+}
+
+std::vector<std::string> embeddedShaderNames() {
+    std::vector<std::string> names;
+    for (const detail::EmbeddedShader& shader : detail::embeddedShaders()) {
+        names.emplace_back(shader.name);
+    }
+    return names;
 }
 
 }  // namespace sound_mind::gpu

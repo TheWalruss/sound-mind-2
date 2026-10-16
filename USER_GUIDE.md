@@ -2311,7 +2311,9 @@ expected, so you know what's actually driving it.
   dispatching work to the GPU at all has its own fixed cost. Turn it
   off if you want to compare speed or results against the CPU path
   directly, or if you suspect it's causing a visual problem; it stays
-  as you left it across restarts.
+  as you left it across restarts. (Before version 0.1.41.6, installed
+  copies couldn't find their GPU programs and quietly used the CPU for
+  everything; that's fixed.)
 - **Using every CPU core**: turning the canvas into sound (preparing
   playback, Repeat and Loop refreshes, filter previews, exports) and
   turning sound into a canvas (importing, recording) share the work

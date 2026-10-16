@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <array>
 #include <memory>
 #include <mutex>
@@ -514,5 +515,14 @@ private:
     std::unique_ptr<std::mutex> submitMutex_ = std::make_unique<std::mutex>();
     void* fenceEvent_ = nullptr;  // HANDLE, kept void* to avoid <Windows.h> in this public header.
 };
+
+/**
+ * @brief The compiled shaders built into this program (`v0.1.41.6`), by
+ *        file name - e.g. "gaussian_blur.cso". Every `ComputeDevice` kernel
+ *        loads its bytecode from these, so an installed copy needs no shader
+ *        files. For diagnostics and tests.
+ * @return The names, in build order.
+ */
+[[nodiscard]] std::vector<std::string> embeddedShaderNames();
 
 }  // namespace sound_mind::gpu

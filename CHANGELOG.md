@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.41.6] - 2026-10-16
+
+### Fixed
+
+- **Hardware Acceleration now works in installed copies.** The GPU programs were read from the folder the Studio was built in, which only exists on the developer's machine. Every installed or unzipped copy, every release included, silently did all of its GPU work on the CPU instead - still correct, just never accelerated. They're now built into the program itself.
+
 ## [0.1.41.5] - 2026-10-16
 
 Roadmap slot `v0.Y.80.2`, step 5 - completes the slot.
