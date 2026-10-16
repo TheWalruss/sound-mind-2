@@ -36,6 +36,7 @@ private slots:
     void addEmptyLayerAddsAndSelectsANormalLayer();
     void addFilterLayerAddsAndSelectsAFilterLayer();
     void addGeneratedLayerAddsAndSelectsAGeneratedLayer();
+    void addGeneratedLayerResolvesNoiseBindingsAgainstTheProject();
     void handleLayerSelectionChangedSyncsFilterConfigurationPanel();
     void applyFilterConfigurationAppliesOnlyToAFilterLayer();
     void applyFilterConfigurationIsUndoableAndRedoable();

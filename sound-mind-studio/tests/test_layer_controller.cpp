@@ -1,5 +1,7 @@
 #include "test_layer_controller.h"
 
+#include <algorithm>
+
 #include <cmath>
 
 #include <QComboBox>
@@ -739,6 +741,33 @@ void LayerControllerTest::addGeneratedLayerAddsAndSelectsAGeneratedLayer() {
     const sound_mind::core::Layer* layer = fixture.controller.layerById(*selectedId);
     QCOMPARE(layer->type(), LayerType::Normal);
     QVERIFY(layer->content().has_value());
+}
+
+void LayerControllerTest::addGeneratedLayerResolvesNoiseBindingsAgainstTheProject() {
+    Fixture fixture;
+    Project project = Project::createNew(testSettings());
+    fixture.controller.setProject(&project);
+    // A MindWave reading 0 everywhere: binding the custom spectrum to it
+    // silences the whole layer - proof the id was resolved.
+    sound_mind::core::MindWave silentWave;
+    silentWave.setPeriodicWaveform(sound_mind::core::PeriodicWaveform::Pulse);
+    silentWave.setDutyCycle(0.0);
+    const auto waveId = project.addMindWave("Silent", silentWave);
+
+    sound_mind::core::GeneratorConfiguration config;
+    config.family = sound_mind::core::GeneratorFamily::Noise;
+    config.noise.color = sound_mind::core::NoiseColor::Custom;
+    auto stop = config.noise.customSpectrum.stops().front();
+    stop.leftIntensity = -20.0f;
+    stop.rightIntensity = -20.0f;
+    config.noise.customSpectrum.setStopValues(0, stop);
+    config.noise.customSpectrum.setStopValues(1, stop);
+    config.noise.customSpectrumMindWave = waveId;
+    fixture.controller.addGeneratedLayer(config);
+
+    const sound_mind::core::Layer* layer = fixture.controller.layerById(*fixture.layersPanel.selectedLayerId());
+    const auto& levels = layer->content()->leftMagnitudeDb;
+    QVERIFY(std::all_of(levels.begin(), levels.end(), [](float db) { return db <= -96.0f; }));
 }
 
 void LayerControllerTest::handleLayerSelectionChangedSyncsFilterConfigurationPanel() {

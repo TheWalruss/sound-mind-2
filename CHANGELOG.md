@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.39.1] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.79.1` (Generators), installment A.
+
+### Added
+
+- **Noise in Generate Layer.** **+ Generate Layer** gains a **Generator** choice; **Noise** fills a layer with white, pink, red/brownian, purple/violet or gray (equal-loudness) noise, or a custom spectrum drawn with a gradient. It has a level, horizontal and vertical resolution (noise-cell size), and MindWave bindings for both resolutions and for the custom spectrum.
+
 ## [0.1.38.1] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.78.1` - Text tool.

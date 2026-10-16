@@ -233,4 +233,6 @@ AudioBuffer decode(const StreamImage& image) {
     return result;
 }
 
+float aWeightingOffsetDb(float frequencyHz) noexcept { return detail::aWeightingDb(frequencyHz); }
+
 }  // namespace sound_mind::codec

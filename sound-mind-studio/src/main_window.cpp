@@ -3293,6 +3293,11 @@ void MainWindow::generateLayer() {
         return;
     }
     GeneratorDialog dialog(this);
+    std::vector<std::pair<sound_mind::core::MindWaveId, QString>> mindWaves;
+    for (const sound_mind::core::NamedMindWave& entry : project_->mindWaves()) {
+        mindWaves.emplace_back(entry.id, QString::fromStdString(entry.name));
+    }
+    dialog.setAvailableMindWaves(mindWaves);
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }

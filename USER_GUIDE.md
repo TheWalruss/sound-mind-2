@@ -520,6 +520,38 @@ Down** nudge its opacity up/down by 5%. Each is a no-op where it doesn't
 apply - nothing selected, already at the top/bottom of the stack, or
 blocked by the locked Background/Equalizer layer.
 
+### Generating a Layer
+
+**+ Generate Layer** (in the Layers panel) adds a new layer filled by a
+generator - an ordinary layer afterwards, fully paintable and filterable.
+Pick the **Generator**, set its options, and click OK. Every generator
+takes a **Seed**: the same seed always reproduces exactly the same result
+(**Randomize** picks a new one).
+
+- **Lattice** - an organic, self-similar texture. The **Chaos ↔ Order**
+  slider runs from broadband noise (Chaos) through rich, coherent texture
+  (the middle) to smooth, rigid structure (Order).
+- **Noise** - colored noise across the whole canvas:
+  - **Color** - **White** (equal energy at every frequency), **Pink**
+    (equal energy per octave - the most natural-sounding), **Red /
+    Brownian** (deeper, bass-heavy), **Purple / Violet** (bright,
+    treble-heavy), **Gray** (sounds equally loud at every frequency - reads
+    flat on the canvas), or **Custom spectrum**.
+  - **Level** - how loud the noise reads at 1 kHz (for Gray, everywhere),
+    in dB or as a 0-1 value.
+  - **Horizontal / Vertical resolution** - how many time columns /
+    frequency rows one noise "cell" spans: 1 is fine-grained hiss; larger
+    values give blockier, slower-changing noise.
+  - **Custom spectrum** - draw the noise's shape with the gradient editor
+    (lowest frequency at the left, highest at the right; each stop's left
+    and right intensity are the two channels' levels).
+  - **MindWave bindings** - next to each resolution, and under the custom
+    spectrum, pick a MindWave to vary it across the canvas: where the
+    MindWave reads 0, the resolution is the finest (1) or the custom
+    spectrum is silent; where it reads 1, it's the value you set. Binding
+    the custom spectrum to a time-axis MindWave makes the noise swell and
+    fade over time.
+
 ### Compositing
 
 Every visible layer with content contributes to what the canvas shows
@@ -2163,14 +2195,10 @@ with one continuous audio track underneath and no audible restarts in
 the exported file. There's still no panel to inspect what a recorded
 macro actually contains, and it isn't saved with the project.
 
-**Generators** have taken their first step: a **+ Generate Layer** button
-(in the Layers panel, alongside + Add Layer/+ Add Filter Layer) opens a
-small dialog with a Chaos/Order slider and a seed, then adds a new,
-ordinary, fully paintable and filterable layer filled with an organic,
-generated texture - the same seed always reproduces the exact same
-result. Only the "Lattice" family described in the design document
-actually works so far; the "Fractal" and "Streaming" families are still
-future work.
+**Generators**: **+ Generate Layer** offers the Lattice and Noise
+generators (see [Generating a Layer](#generating-a-layer)). The design
+document's "Fractal" and "Streaming" families, and noise as a MindWave
+type, are still being built.
 
 **Analysis Tools** have taken their first step too: the Layers panel's own
 per-layer **loudness indicator** (see [Working with Layers](#working-with-layers)

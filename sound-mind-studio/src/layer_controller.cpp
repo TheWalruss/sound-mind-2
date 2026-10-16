@@ -719,7 +719,13 @@ void LayerController::addGeneratedLayer(const sound_mind::core::GeneratorConfigu
         return;
     }
     sound_mind::core::Layer layer(0, tr("New Generated Layer").toStdString(), sound_mind::core::LayerType::Normal);
-    layer.setContent(sound_mind::core::generateContent(config, project_->settings()));
+    // Bound noise parameters (v0.Y.79.1) resolve against this project's MindWaves.
+    const sound_mind::core::Project* project = project_;
+    layer.setContent(sound_mind::core::generateContent(
+        config, project_->settings(), [project](sound_mind::core::MindWaveId id) -> const sound_mind::core::MindWave* {
+            const auto* entry = project->mindWaveById(id);
+            return entry != nullptr ? &entry->wave : nullptr;
+        }));
     const sound_mind::core::LayerId id = project_->addLayer(std::move(layer));
     emit layersChanged();
     playbackController_->invalidate();

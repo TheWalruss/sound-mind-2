@@ -156,4 +156,15 @@ struct StreamImage {
  */
 [[nodiscard]] AudioBuffer decode(const StreamImage& image);
 
+/**
+ * @brief The A-weighting offset encode() adds to a bin at `frequencyHz`
+ *        (IEC 61672, `0` dB at 1 kHz) - exposed so content synthesized
+ *        directly in the stored representation (e.g. noise generators)
+ *        can place itself exactly where an encoded recording of the same
+ *        sound would.
+ * @param frequencyHz The frequency, in Hz; must be positive.
+ * @return The offset, in dB.
+ */
+[[nodiscard]] float aWeightingOffsetDb(float frequencyHz) noexcept;
+
 }  // namespace sound_mind::codec

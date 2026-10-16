@@ -9,4 +9,7 @@ private slots:
     void defaultsToLatticeFamilyAndCenteredOrderChaos();
     void movingTheSliderChangesOrderChaos();
     void randomizeButtonChangesTheSeed();
+    void choosingNoiseShowsTheNoiseControlsAndHidesOrderChaos();
+    void noiseSettingsAndBindingsReachTheConfiguration();
+    void theCustomSpectrumShowsOnlyForCustomNoise();
 };

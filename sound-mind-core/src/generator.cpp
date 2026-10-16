@@ -7,6 +7,8 @@
 #include <random>
 #include <vector>
 
+#include "sound_mind/core/gradient.h"
+#include "sound_mind/core/mind_wave.h"
 #include "sound_mind/core/paint_application.h"
 
 namespace sound_mind::core {
@@ -158,15 +160,127 @@ sound_mind::codec::StreamImage generateLatticeContent(const GeneratorConfigurati
     return result;
 }
 
+/// @brief SplitMix64's finalizer - a fast, well-mixed 64-bit hash.
+std::uint64_t mix64(std::uint64_t value) noexcept {
+    value += 0x9E3779B97F4A7C15ULL;
+    value = (value ^ (value >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    value = (value ^ (value >> 27)) * 0x94D049BB133111EBULL;
+    return value ^ (value >> 31);
+}
+
+/// @brief The per-cell parameter of a bound noise setting: `baseline` where
+/// the MindWave reads `0`, `value` where it reads `1` - see
+/// `NoiseConfiguration`'s docs. Unbound (an empty field), always `value`.
+double boundValue(const std::vector<float>& field, std::size_t cell, double baseline, double value) {
+    if (field.empty()) {
+        return value;
+    }
+    return baseline + static_cast<double>(field[cell]) * (value - baseline);
+}
+
+/// @brief `id`'s MindWave evaluated across the whole canvas, or an empty
+/// field when unbound or unresolvable.
+std::vector<float> fieldFor(const std::optional<MindWaveId>& id, const MindWaveResolver& resolveMindWave,
+                            const sound_mind::codec::StreamCodecConfig& config, std::uint32_t frameCount) {
+    if (!id.has_value() || !resolveMindWave) {
+        return {};
+    }
+    const MindWave* wave = resolveMindWave(*id);
+    return wave != nullptr ? evaluateMindWaveField(*wave, config, frameCount) : std::vector<float>{};
+}
+
+/**
+ * @brief `GeneratorFamily::Noise` - see `NoiseConfiguration`'s docs.
+ *
+ * Each canvas cell belongs to the noise cell `(frame / horizontal, bin /
+ * vertical)` (resolutions per cell when bound), whose amplitude and phase
+ * come from `hashedUnitNoise()` - so cells are independent of evaluation
+ * order and the result replays exactly. A named color's level at a bin is
+ * `levelDb + 10*alpha*log10(f / 1 kHz)` plus the codec's A-weighting at
+ * `f` (where an encoded recording of that noise would read), except
+ * `Gray`, which is flat by construction. The random amplitude is
+ * Rayleigh-distributed with unit mean power, as an STFT of real noise is.
+ */
+sound_mind::codec::StreamImage generateNoiseContent(const GeneratorConfiguration& config,
+                                                     const sound_mind::codec::StreamCodecConfig& codecConfig,
+                                                     std::uint32_t frameCount,
+                                                     const MindWaveResolver& resolveMindWave) {
+    const NoiseConfiguration& noise = config.noise;
+    sound_mind::codec::StreamImage result = silentResult(codecConfig, frameCount);
+    const std::vector<float> horizontalField =
+        fieldFor(noise.horizontalResolutionMindWave, resolveMindWave, codecConfig, frameCount);
+    const std::vector<float> verticalField =
+        fieldFor(noise.verticalResolutionMindWave, resolveMindWave, codecConfig, frameCount);
+    const std::vector<float> spectrumField =
+        noise.color == NoiseColor::Custom
+            ? fieldFor(noise.customSpectrumMindWave, resolveMindWave, codecConfig, frameCount)
+            : std::vector<float>{};
+    const double alpha = noiseColorExponent(noise.color);
+    const double binSpan = codecConfig.binCount > 1 ? static_cast<double>(codecConfig.binCount - 1) : 1.0;
+
+    for (std::uint32_t bin = 0; bin < codecConfig.binCount; ++bin) {
+        const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), codecConfig);
+        float leftShapeDb = 0.0f;
+        float rightShapeDb = 0.0f;
+        if (noise.color == NoiseColor::Custom) {
+            const GradientStop stop = noise.customSpectrum.evaluate(static_cast<float>(bin / binSpan));
+            leftShapeDb = stop.leftIntensity;
+            rightShapeDb = stop.rightIntensity;
+        } else {
+            float shape = noise.levelDb;
+            if (noise.color != NoiseColor::Gray) {
+                shape += static_cast<float>(10.0 * alpha * std::log10(frequencyHz / 1000.0)) +
+                         sound_mind::codec::aWeightingOffsetDb(frequencyHz);
+            }
+            leftShapeDb = shape;
+            rightShapeDb = shape;
+        }
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const std::size_t cell = cellIndex(bin, frame, frameCount);
+            const double horizontal = std::max(1.0, boundValue(horizontalField, cell, 1.0, noise.horizontalResolution));
+            const double vertical = std::max(1.0, boundValue(verticalField, cell, 1.0, noise.verticalResolution));
+            const auto cellX = static_cast<std::int64_t>(std::floor(frame / horizontal));
+            const auto cellY = static_cast<std::int64_t>(std::floor(bin / vertical));
+            const auto channelDb = [&](std::uint64_t stream, float shapeDb) {
+                const double level =
+                    boundValue(spectrumField, cell, kNoiseSilenceDb, static_cast<double>(shapeDb));
+                if (level <= kNoiseSilenceDb) {
+                    return kNoiseSilenceDb;  // silence stays silent - no random spread above the floor.
+                }
+                // Rayleigh with E[r^2] = 1: r = sqrt(-ln(1 - u)).
+                const double u = hashedUnitNoise(config.seed, stream, cellX, cellY);
+                const double rayleigh = std::sqrt(-std::log(std::max(1e-12, 1.0 - u)));
+                return static_cast<float>(
+                    std::max<double>(kNoiseSilenceDb, level + 20.0 * std::log10(std::max(1e-6, rayleigh))));
+            };
+            result.leftMagnitudeDb[cell] = channelDb(1, leftShapeDb);
+            result.rightMagnitudeDb[cell] = channelDb(2, rightShapeDb);
+            result.sharedPhaseRadians[cell] = static_cast<float>(
+                (hashedUnitNoise(config.seed, 3, cellX, cellY) * 2.0 - 1.0) * std::numbers::pi);
+        }
+    }
+    return result;
+}
+
 }  // namespace
 
-sound_mind::codec::StreamImage generateContent(const GeneratorConfiguration& config, const ProjectSettings& settings) {
+double hashedUnitNoise(std::uint64_t seed, std::uint64_t stream, std::int64_t x, std::int64_t y) noexcept {
+    std::uint64_t hash = mix64(seed ^ mix64(stream));
+    hash = mix64(hash ^ static_cast<std::uint64_t>(x));
+    hash = mix64(hash ^ static_cast<std::uint64_t>(y));
+    return static_cast<double>(hash >> 11) * (1.0 / 9007199254740992.0);  // 53 bits -> [0, 1).
+}
+
+sound_mind::codec::StreamImage generateContent(const GeneratorConfiguration& config, const ProjectSettings& settings,
+                                               const MindWaveResolver& resolveMindWave) {
     const sound_mind::codec::StreamCodecConfig codecConfig = streamCodecConfigFor(settings);
     const std::uint32_t frameCount = settings.canvasWidth;
 
     switch (config.family) {
         case GeneratorFamily::Lattice:
             return generateLatticeContent(config, codecConfig, frameCount);
+        case GeneratorFamily::Noise:
+            return generateNoiseContent(config, codecConfig, frameCount, resolveMindWave);
         case GeneratorFamily::Fractal:
         case GeneratorFamily::Streaming:
         default:

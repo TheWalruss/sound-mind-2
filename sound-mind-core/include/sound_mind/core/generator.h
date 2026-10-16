@@ -2,6 +2,7 @@
 
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/core/generator_configuration.h"
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/project_settings.h"
 
 namespace sound_mind::core {
@@ -25,11 +26,30 @@ namespace sound_mind::core {
  * @param settings The project's own settings - determines the result's
  *        own canvas dimensions (`canvasWidth`/`binCount`) and frequency
  *        range, the same as any other freshly-encoded layer content.
+ * @param resolveMindWave Resolves the MindWave ids a `Noise` run is bound
+ *        to (see `NoiseConfiguration`); an empty resolver, or an id that
+ *        doesn't resolve, leaves that parameter unbound.
  * @return The generated content, deterministic from `config.seed` (see
  *         `GeneratorConfiguration::seed`'s own docs on the exact
  *         reproducibility guarantee).
  */
 [[nodiscard]] sound_mind::codec::StreamImage generateContent(const GeneratorConfiguration& config,
-                                                               const ProjectSettings& settings);
+                                                               const ProjectSettings& settings,
+                                                               const MindWaveResolver& resolveMindWave = {});
+
+/**
+ * @brief A seeded, order-independent random value in `[0, 1)` for one
+ *        integer coordinate - the shared core of every noise generator
+ *        (layer noise here, noise MindWaves), so each cell can be computed
+ *        on its own and still replay bit-for-bit.
+ * @param seed The run's seed.
+ * @param stream Separates independent draws at the same coordinate (e.g.
+ *        amplitude vs phase, left vs right).
+ * @param x The first coordinate.
+ * @param y The second coordinate.
+ * @return The value.
+ */
+[[nodiscard]] double hashedUnitNoise(std::uint64_t seed, std::uint64_t stream, std::int64_t x,
+                                     std::int64_t y) noexcept;
 
 }  // namespace sound_mind::core

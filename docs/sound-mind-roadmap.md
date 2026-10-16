@@ -1298,6 +1298,12 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - **MindWave bindings** for horizontal and vertical resolution (the time and frequency granularity of the noise cells), and for the custom spectrum.
 - **The Fractal and Streaming generator families,** deferred from `v0.Y.51.1`, finished here. They share the Order/Chaos axis the Lattice family established.
 
+**Installments:**
+- ✅ **A** (`v0.1.39.1`, Decision #244): noise as a Generate Layer type - the five colors and a custom spectrum, resolution and spectrum MindWave bindings, and a Generator choice in the dialog.
+- **B**: noise as a MindWave generator type, on the same seeded noise core.
+- **C**: the Fractal family.
+- **D**: the Streaming family.
+
 #### `v0.Y.80.1` - Analysis tools (L)
 
 - **Three tools,** each with visualizations, graphs and overlays:

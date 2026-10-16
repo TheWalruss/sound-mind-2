@@ -2208,6 +2208,34 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `CanvasWidgetTest`: Text-mode signals and preview.
       - `MainWindowTest`: the full tool flow - mode, panel, drag, preview, Apply, discard on leaving.
 
+244. **Noise generators (Generate Layer).** Settled in `v0.1.39.1`, Pre-Beta Plan milestone `v0.Y.79.1` installment A.
+    - **Model:**
+      - `GeneratorFamily::Noise` with `NoiseConfiguration` (color, level, horizontal/vertical resolution, custom spectrum `Gradient`, and three optional `MindWaveId` bindings).
+      - `NoiseColor` - White/Pink/Red/Purple/Gray/Custom, JSON-serializable for installment B's MindWave type.
+      - `noiseColorExponent()` gives the power law PSD ∝ f^alpha: 0/-1/-2/+2.
+    - **Level per bin:**
+      - A stored bin reads the STFT magnitude at its centre frequency (decode interpolates log bins back to linear ones; no band integration). A power-law color therefore stores `level + 10*alpha*log10(f/1kHz)` plus the codec's A-weighting at f, which is where an encoded recording of that noise reads.
+      - **Gray** (equal loudness, i.e. inverse A-weighting) is therefore flat on the canvas.
+      - **Custom** takes each channel's level from the gradient at `t = bin/(binCount-1)`.
+      - The codec gains a public `aWeightingOffsetDb()` wrapper; the existing function stays private in its detail header.
+    - **Randomness:**
+      - `hashedUnitNoise(seed, stream, x, y)` is a SplitMix64-mixed hash, public for installment B. It makes each noise cell's Rayleigh amplitude (unit mean power, as real noise's STFT magnitude is) and uniform phase independent of evaluation order, deterministic and replayable.
+      - Left and right are independent streams.
+      - A noise cell is `(floor(frame/h), floor(bin/v))`.
+    - **Bindings** follow the Studio-wide baseline convention (value 0 → baseline, 1 → set value): resolution's baseline is 1 cell, the custom spectrum's is silence (`kNoiseSilenceDb`, written exactly - no random spread above the floor).
+      - "Binding the custom spectrum" was interpreted as the MindWave scaling its level per cell, so the spectrum can also change over time.
+      - Each bound MindWave is evaluated once over the canvas (`evaluateMindWaveField`).
+      - `generateContent()` gained an optional `MindWaveResolver`. `LayerController::addGeneratedLayer()` resolves against the project.
+    - **Studio:** `GeneratorDialog` gains a Generator (family) combo - Lattice and Noise; Fractal and Streaming appear once installments C and D implement them. It also gains a Noise group:
+      - color, and level with a dB/value toggle;
+      - both resolutions, each with a MindWave combo;
+      - a custom-spectrum `GradientEditorWidget` plus its combo, shown for Custom only.
+      - The order/chaos row is hidden for Noise, which isn't on that axis.
+    - **Tests:**
+      - Core: 6 cases - each color's slope with A-weighting removed (pink -3 dB/octave, red -6, purple +6, white flat), gray flat on canvas, determinism and independent channels, resolution blocks, custom levels, bindings (silence at 0, set value at 1, finest resolution at 0).
+      - `GeneratorDialogTest`: 3 new cases.
+      - `LayerControllerTest`: bindings resolve against the project.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 
