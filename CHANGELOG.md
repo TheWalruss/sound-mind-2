@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.6] - 2026-10-16
+
+### Added
+
+- **The master limiter now covers Loop Mode too.** What you hear while looping is kept under the ceiling. Your takes are still recorded at their full level; only the monitoring is limited.
+
 ## [0.1.40.5] - 2026-10-16
 
 ### Changed

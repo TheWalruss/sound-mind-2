@@ -7199,3 +7199,17 @@ void MainWindowTest::masterLimiterSettingReachesPlaybackAndBothDevicePanels() {
     }
     window.setMasterLimiter(true, -1.0);  // back to the defaults for later tests.
 }
+
+// v0.1.40.6: Loop Mode's engine follows the setting, including one built for a new project.
+void MainWindowTest::masterLimiterSettingReachesLoopMode() {
+    TestMainWindow window;
+    QVERIFY(!window.loopLimiterEnabled());  // no project, no Loop engine.
+    createFreshTestProject(window);
+    QVERIFY(window.loopLimiterEnabled());
+    window.setMasterLimiter(false, -1.0);
+    QVERIFY(!window.loopLimiterEnabled());
+    createFreshTestProject(window);  // a fresh engine picks up the current setting.
+    QVERIFY(!window.loopLimiterEnabled());
+    window.setMasterLimiter(true, -1.0);  // back to the defaults for later tests.
+    QVERIFY(window.loopLimiterEnabled());
+}

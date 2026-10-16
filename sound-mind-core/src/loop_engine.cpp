@@ -17,6 +17,7 @@ LoopEngine::LoopEngine(sound_mind::codec::StreamCodecConfig config, std::size_t 
       loopLengthSamples_(std::max<std::size_t>(loopLengthSamples, 1)),
       previewEncoder_(config) {
     backing_.sampleRateHz = config_.sampleRateHz;
+    limiter_.setSampleRate(static_cast<double>(config_.sampleRateHz));
     backing_.left.assign(loopLengthSamples_, 0.0f);
     backing_.right.assign(loopLengthSamples_, 0.0f);
     for (std::size_t take = 0; take < 2; ++take) {
@@ -37,6 +38,7 @@ void LoopEngine::start() {
         std::fill(takeRight_[take].begin(), takeRight_[take].end(), 0.0f);
     }
     swapInStagedBacking();
+    limiter_.setSampleRate(static_cast<double>(config_.sampleRateHz));  // also clears its state.
     playingTake_.store(0, std::memory_order_relaxed);
     position_ = 0;
     recording_ = !frozen_.load(std::memory_order_relaxed);
@@ -227,6 +229,9 @@ void LoopEngine::processBlock(const float* const* inputChannelData, int numInput
         currentInputLevel_.store(peak, std::memory_order_relaxed);
     }
     if (haveOutput) {
+        // The master limiter is the very last stage (v0.1.40.6).
+        limiter_.process(outputChannelData[0], numOutputChannels > 1 ? outputChannelData[1] : nullptr,
+                         static_cast<std::size_t>(numSamples));
         for (int channel = 2; channel < numOutputChannels; ++channel) {
             std::fill_n(outputChannelData[channel], numSamples, 0.0f);
         }

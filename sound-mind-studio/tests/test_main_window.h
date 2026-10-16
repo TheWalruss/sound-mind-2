@@ -352,4 +352,5 @@ private slots:
     void loudnessNormalizationGainFollowsTheLoadedMixAndIsRemembered();
     void masterLimiterSettingReachesPlaybackAndBothDevicePanels();
     void loudnessNormalizationRemeasuresARepeatRefresh();
+    void masterLimiterSettingReachesLoopMode();
 };

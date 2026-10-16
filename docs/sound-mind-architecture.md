@@ -2369,7 +2369,11 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - **Playback** (`PlaybackEngine::renderBlock()`, the last stage, after volume) uses `LookAhead::Off`. The look-ahead's 1.5 ms delay would have shifted the output against the playhead, and the transport's sample-exact contract and tests rely on that alignment. The instant attack is a little harsher on sharp transients, which is acceptable for monitoring.
       - **Export** (`exportProjectAudio()`/`exportProjectVideo()`, a new `std::optional<float> limiterCeilingDb` parameter that defaults to on) uses `applyMasterLimiter()`. That is the look-ahead version, offline, with its latency compensated so the result lines up and keeps its length.
       - `MainWindow` passes `std::nullopt` when the user turns the limiter off.
-      - **Not in Loop Mode** yet: `LoopEngine` has its own callback. Adding it there is a small follow-up; it was left out to keep this installment to the plan's "playback and export".
+      - **Loop Mode** (added in `v0.1.40.6`): `LoopEngine` has its own callback, so it owns its own zero-latency `MasterLimiter` as the last stage of `processBlock()`.
+        - It runs after the backing and the playing take are summed, and limits only the output. Takes are captured from the input unlimited, so a limited monitor never bakes into the recording.
+        - Its sample rate is the project's codec rate, set at construction and reset in `start()`.
+        - `MainWindow::setMasterLimiter()` forwards to it, and `setProject()` applies the current setting to each freshly built engine.
+        - Tests: the core `LoopEngine` routing tests that use over-full-scale marker values turn the limiter off. Two new core cases: the limiter caps the heard output while the take records unlimited; quiet output is untouched, off passes through, and the ceiling is adjustable. A `MainWindowTest` case covers forwarding, including a new project's engine.
     - **Normalization** is a gain, not a processor:
       - `PlaybackEngine::setNormalizationGainDb()` multiplies the volume, ahead of the limiter.
       - `MainWindow` measures `integratedLoudnessLufs()` (the new BS.1770 integrated-only entry point, sharing `gatedIntegrated()` with `measureLoudness()`) on each buffer it loads for playback: a fresh composite, or a repeat-mode refresh.

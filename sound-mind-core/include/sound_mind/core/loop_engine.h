@@ -14,6 +14,7 @@
 #include "sound_mind/codec/audio_buffer.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/codec/stream_incremental_encoder.h"
+#include "sound_mind/core/master_limiter.h"
 #include "sound_mind/core/playback_engine.h"
 
 namespace sound_mind::core {
@@ -144,6 +145,25 @@ public:
      */
     bool setBackingAudio(sound_mind::codec::AudioBuffer&& audio);
 
+    /**
+     * @brief Turns the master limiter on the loop's output on or off
+     *        (`v0.1.40.6`) - the same zero-latency `MasterLimiter` playback
+     *        uses, as the last stage of processBlock(). It shapes only what's
+     *        heard: captured takes are recorded unlimited. On by default.
+     * @param enabled Whether to limit.
+     * @note Real-time safe (atomic), callable from any thread.
+     */
+    void setLimiterEnabled(bool enabled) noexcept { limiter_.setEnabled(enabled); }
+
+    /// @brief Whether the output limiter is on.
+    /// @return The flag.
+    [[nodiscard]] bool limiterEnabled() const noexcept { return limiter_.enabled(); }
+
+    /// @brief Sets the output limiter's ceiling - see `MasterLimiter::setCeilingDb()`.
+    /// @param ceilingDb The ceiling, dBFS.
+    /// @note Real-time safe (atomic), callable from any thread.
+    void setLimiterCeilingDb(float ceilingDb) noexcept { limiter_.setCeilingDb(ceilingDb); }
+
     /// @brief Sets the take's own playback gains - the Loop layer's gain
     ///        and balance, already combined per channel by the caller.
     ///        Applies from the next audio block.
@@ -255,6 +275,9 @@ private:
     std::atomic<float> currentInputLevel_{0.0f};
     std::atomic<float> takeGainLeft_{1.0f};
     std::atomic<float> takeGainRight_{1.0f};
+    /// @brief The output's last stage - see setLimiterEnabled(). Reset in
+    ///        start(), before the callback runs.
+    MasterLimiter limiter_{MasterLimiter::LookAhead::Off};
 
     /// @brief Worker-thread state.
     std::uint64_t encodedTakes_ = 0;

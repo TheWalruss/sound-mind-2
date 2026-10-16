@@ -1977,8 +1977,9 @@ actually use.
 - **Output processing**:
   - **Master limiter** (on by default) keeps the output at or under its
     ceiling (default -1 dBFS). Where the mix would go over, it is turned down
-    smoothly for a moment instead of distorting. It applies to Playback and to
-    every audio or video export (not yet to Loop Mode). The number next to it is the
+    smoothly for a moment instead of distorting. It applies to Playback, to
+    what you hear in Loop Mode (your takes are still recorded at their full
+    level) and to every audio or video export. The number next to it is the
     ceiling (-24 to 0 dBFS).
   - **Normalize loudness** (off by default) plays every mix at the same
     loudness: when playback starts, the Studio measures the mix's integrated

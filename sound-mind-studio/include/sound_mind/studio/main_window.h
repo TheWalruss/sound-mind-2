@@ -1448,8 +1448,9 @@ public slots:
 
     /**
      * @brief Turns the master limiter on or off and sets its ceiling - in
-     *        playback and exports (Pre-Beta Plan `v0.Y.80.1`). Remembered
-     *        across sessions; on, at -1 dBFS, by default.
+     *        playback, Loop Mode (since `v0.1.40.6`) and exports (Pre-Beta
+     *        Plan `v0.Y.80.1`). Remembered across sessions; on, at -1 dBFS,
+     *        by default.
      * @param enabled Whether to limit.
      * @param ceilingDb The ceiling, dBFS.
      */
@@ -1467,6 +1468,11 @@ public slots:
      * @param targetLufs The target loudness, LUFS.
      */
     void setLoudnessNormalization(bool enabled, double targetLufs);
+
+    /// @brief Whether the current project's Loop Mode output is limited - a
+    ///        test hook for setMasterLimiter().
+    /// @return `false` with no project open (no Loop engine yet).
+    [[nodiscard]] bool loopLimiterEnabled() const noexcept;
 
     /// @brief The playback output's current normalization gain.
     /// @return The gain, dB (`0` when off).

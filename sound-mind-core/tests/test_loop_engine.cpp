@@ -105,6 +105,7 @@ TEST_CASE("emptyImage is a silent image as long as one loop", "[loop_engine]") {
 TEST_CASE("The output plays the staged project audio from the start, wrapping at the loop length", "[loop_engine]") {
     constexpr std::size_t loopLen = 8;
     LoopEngine engine(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    engine.setLimiterEnabled(false);  // marker values beyond full scale: routing, not level.
     AudioBuffer backing = constantAudio(loopLen, 0.0f, 0.0f);
     for (std::size_t i = 0; i < loopLen; ++i) {
         backing.left[i] = static_cast<float>(i);
@@ -132,6 +133,7 @@ TEST_CASE("Replacing the project audio while running takes effect at the next lo
           "[loop_engine]") {
     constexpr std::size_t loopLen = 8;
     LoopEngine engine(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    engine.setLimiterEnabled(false);  // marker values beyond the ceiling: routing, not level.
     REQUIRE(engine.setBackingAudio(constantAudio(loopLen, 1.0f, 1.0f)));
     engine.start();  // while idle, new project audio applies immediately instead.
     Block first(4);
@@ -290,3 +292,51 @@ TEST_CASE("start() resets position, takes and images", "[loop_engine]") {
     silent.run(engine);
     CHECK(silent.outLeft[0] == 0.0f);  // the old take is gone.
 }
+
+TEST_CASE("The loop's output limiter is on by default and caps what's heard, not what's recorded",
+          "[loop_engine][limiter]") {
+    constexpr std::size_t loopLen = 64;
+    LoopEngine engine(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    CHECK(engine.limiterEnabled());
+    REQUIRE(engine.setBackingAudio(constantAudio(loopLen, 1.2f, -1.2f)));
+    engine.start();
+    // Pass 1: the over-full-scale backing is heard limited, while a loud input is recorded.
+    Block first(loopLen, 1.5f);
+    first.run(engine);
+    const float ceiling = std::pow(10.0f, -1.0f / 20.0f);
+    for (std::size_t i = 0; i < loopLen; ++i) {
+        CHECK(std::abs(first.outLeft[i]) <= ceiling + 1e-6f);
+        CHECK(std::abs(first.outRight[i]) <= ceiling + 1e-6f);
+    }
+    // Pass 2, limiter off: the take plays back at its full recorded level.
+    engine.setLimiterEnabled(false);
+    Block second(loopLen, 0.0f);
+    second.run(engine);
+    CHECK(second.outLeft[10] == Catch::Approx(1.2f + 1.5f));
+    CHECK(second.outRight[10] == Catch::Approx(-1.2f + 1.5f));
+    engine.stop();
+}
+
+TEST_CASE("With the loop's limiter off or under the ceiling, output is unchanged", "[loop_engine][limiter]") {
+    constexpr std::size_t loopLen = 8;
+    LoopEngine quiet(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    REQUIRE(quiet.setBackingAudio(constantAudio(loopLen, 0.5f, -0.25f)));
+    Block quietBlock(loopLen);
+    quietBlock.run(quiet);
+    CHECK(quietBlock.outLeft[3] == 0.5f);
+    CHECK(quietBlock.outRight[3] == -0.25f);
+
+    LoopEngine loud(StreamCodecConfig{}, loopLen, AudioDeviceMode::None);
+    loud.setLimiterEnabled(false);
+    REQUIRE(loud.setBackingAudio(constantAudio(loopLen, 1.5f, -2.0f)));
+    Block loudBlock(loopLen);
+    loudBlock.run(loud);
+    CHECK(loudBlock.outLeft[3] == 1.5f);
+    CHECK(loudBlock.outRight[3] == -2.0f);
+
+    loud.setLimiterEnabled(true);
+    loud.setLimiterCeilingDb(-6.0f);
+    loudBlock.run(loud);
+    CHECK(std::abs(loudBlock.outRight[3]) <= std::pow(10.0f, -6.0f / 20.0f) + 1e-6f);
+}
+

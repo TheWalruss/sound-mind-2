@@ -2228,6 +2228,8 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     loopEngine_->setPreferredInputDevice(configuredInputDeviceName_.toStdString());
     loopEngine_->setPreferredOutputDevice(configuredOutputDeviceName_.toStdString());
     loopEngine_->setInputGain(configuredInputGain_);
+    loopEngine_->setLimiterEnabled(limiterEnabled_);
+    loopEngine_->setLimiterCeilingDb(static_cast<float>(limiterCeilingDb_));
 
     canvas_->setProject(&*project_);
     toolPaletteController_->setProject(&*project_);
@@ -3503,6 +3505,10 @@ void MainWindow::setMasterLimiter(bool enabled, double ceilingDb) {
     limiterCeilingDb_ = std::clamp(ceilingDb, -24.0, 0.0);
     playbackController_->setLimiterEnabled(enabled);
     playbackController_->setLimiterCeilingDb(static_cast<float>(limiterCeilingDb_));
+    if (loopEngine_) {
+        loopEngine_->setLimiterEnabled(enabled);
+        loopEngine_->setLimiterCeilingDb(static_cast<float>(limiterCeilingDb_));
+    }
     settings_.setValue(QStringLiteral("masterLimiterEnabled"), enabled);
     settings_.setValue(QStringLiteral("masterLimiterCeilingDb"), limiterCeilingDb_);
     configureDevicesPanel_->setMasterLimiter(enabled, limiterCeilingDb_);
@@ -3518,6 +3524,8 @@ void MainWindow::setLoudnessNormalization(bool enabled, double targetLufs) {
     landingPage_->deviceConfiguration()->setLoudnessNormalization(enabled, normalizationTargetLufs_);
     applyNormalizationGain();
 }
+
+bool MainWindow::loopLimiterEnabled() const noexcept { return loopEngine_ && loopEngine_->limiterEnabled(); }
 
 double MainWindow::normalizationGainDb() const noexcept { return playbackController_->normalizationGainDb(); }
 
