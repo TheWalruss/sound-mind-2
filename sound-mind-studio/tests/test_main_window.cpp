@@ -5448,9 +5448,11 @@ void MainWindowTest::pickingAPointOnTheTrunkThenAddingABranchGraftsItOn() {
     QCOMPARE(window.project()->resonanceProfiles().size(), std::size_t{1});
     QCOMPARE(window.project()->resonanceProfiles().front().name, std::string("Branching Wire"));
     QVERIFY(!window.project()->resonanceProfiles().front().spectrum.empty());
-    // A capture never logs an Operation - both strokes drawn above are the
-    // only two entries.
-    QCOMPARE(window.project()->operationLog().size(), std::size_t{2});
+    // Both strokes drawn above, plus the branching path the finished session
+    // keeps on the canvas (v0.Y.77.1, Decision #240) - nothing else.
+    QCOMPARE(window.project()->operationLog().size(), std::size_t{3});
+    QVERIFY(dynamic_cast<const sound_mind::core::GuidePathOperation*>(&window.project()->operationLog().at(2)) !=
+            nullptr);
 }
 
 void MainWindowTest::addPickedPathAsBranchIsANoOpWithNoPendingGraft() {
