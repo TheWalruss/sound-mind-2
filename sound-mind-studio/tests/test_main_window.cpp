@@ -7113,3 +7113,64 @@ void MainWindowTest::analyzeLoudnessReportsTheMixAndLayersAndGoesStaleOnEdits() 
     createFreshTestProject(window);  // another project: the report is dropped.
     QVERIFY(!panel->hasReport());
 }
+
+// v0.Y.80.1 Installment D.
+void MainWindowTest::loudnessNormalizationGainFollowsTheLoadedMixAndIsRemembered() {
+    {
+        TestMainWindow window;
+        createFreshTestProject(window);
+        QVERIFY(window.commitRecording(recordedTone(0.5f)));
+        QCOMPARE(window.normalizationGainDb(), 0.0);  // off by default.
+        window.setLoudnessNormalization(true, -30.0);
+        QCOMPARE(window.normalizationGainDb(), 0.0);  // nothing loaded yet.
+
+        window.startPlayback();
+        auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+        QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
+        QVERIFY(window.isPlaying());
+        // A half-scale tone is far louder than -30 LUFS: turned down.
+        const double gain = window.normalizationGainDb();
+        QVERIFY(gain < -5.0);
+        QVERIFY(gain >= -24.0);
+
+        window.setLoudnessNormalization(true, -20.0);  // a new target re-applies at once.
+        QVERIFY(std::abs(window.normalizationGainDb() - std::clamp(gain + 10.0, -24.0, 12.0)) < 1e-3);
+        window.setLoudnessNormalization(false, -20.0);
+        QCOMPARE(window.normalizationGainDb(), 0.0);
+        window.setLoudnessNormalization(true, -20.0);
+        window.stopPlayback();
+    }
+    {
+        // Remembered: a new window shows it in both device panels.
+        TestMainWindow window;
+        auto checkBoxes = window.findChildren<QCheckBox*>(QStringLiteral("loudnessNormalizationCheckBox"));
+        QCOMPARE(checkBoxes.size(), 2);
+        for (auto* checkBox : checkBoxes) {
+            QVERIFY(checkBox->isChecked());
+        }
+        for (auto* field : window.findChildren<NumericField*>(QStringLiteral("loudnessTargetField"))) {
+            QCOMPARE(field->value(), -20.0);
+        }
+        window.setLoudnessNormalization(false, -14.0);  // back to the defaults for later tests.
+    }
+}
+
+void MainWindowTest::masterLimiterSettingReachesPlaybackAndBothDevicePanels() {
+    TestMainWindow window;
+    auto checkBoxes = window.findChildren<QCheckBox*>(QStringLiteral("masterLimiterCheckBox"));
+    QCOMPARE(checkBoxes.size(), 2);
+    QVERIFY(checkBoxes[0]->isChecked());  // on by default.
+
+    checkBoxes[0]->setChecked(false);  // as if clicked in one panel...
+    for (auto* checkBox : checkBoxes) {
+        QVERIFY(!checkBox->isChecked());  // ...both show it.
+    }
+    window.setMasterLimiter(true, -3.0);
+    for (auto* checkBox : checkBoxes) {
+        QVERIFY(checkBox->isChecked());
+    }
+    for (auto* field : window.findChildren<NumericField*>(QStringLiteral("masterLimiterCeilingField"))) {
+        QCOMPARE(field->value(), -3.0);
+    }
+    window.setMasterLimiter(true, -1.0);  // back to the defaults for later tests.
+}

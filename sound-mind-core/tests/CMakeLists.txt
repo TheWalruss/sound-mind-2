@@ -32,6 +32,7 @@ add_executable(sound-mind-core-tests
     test_project_analysis.cpp
     test_stereo_analysis.cpp
     test_pitch_detection.cpp
+    test_master_limiter.cpp
     test_paste_operation.cpp
     test_sequence_operation.cpp
     test_sequence_application.cpp

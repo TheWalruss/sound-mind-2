@@ -106,3 +106,11 @@ TEST_CASE("Band levels place a tone in its own band", "[core][loudness_meter]") 
     CHECK(bands[loudest].lowHz <= 1000.0);
     CHECK(bands[loudest].highHz > 1000.0);
 }
+
+TEST_CASE("integratedLoudnessLufs matches the full measurement", "[core][loudness_meter]") {
+    AudioBuffer audio = sine(1000.0, 0.25, 3.0);
+    audio.left.resize(audio.left.size() + 48000, 0.0f);
+    audio.right.resize(audio.right.size() + 48000, 0.0f);
+    CHECK(sound_mind::core::integratedLoudnessLufs(audio) == Catch::Approx(measureLoudness(audio).integratedLufs));
+    CHECK(sound_mind::core::integratedLoudnessLufs(AudioBuffer{}) == kLoudnessFloorLufs);
+}

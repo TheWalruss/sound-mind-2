@@ -20,4 +20,7 @@ private slots:
     void setInputDeviceSelectionEnabledTogglesTheInputComboOnly();
     void setSelectedInputDeviceSelectsItWithoutEmittingInputDeviceChanged();
     void setSelectedOutputDeviceSelectsItWithoutEmittingOutputDeviceChanged();
+    void outputProcessingDefaultsToLimiterOnAndNormalizationOff();
+    void outputProcessingControlsEmitTheirSettings();
+    void outputProcessingSettersDoNotEmit();
 };

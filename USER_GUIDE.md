@@ -1974,6 +1974,21 @@ actually use.
   and Loop Mode at once. A **Gain** slider works the same way. Click
   **Test** to play a brief tone through the device, confirming you hear
   it from the right place.
+- **Output processing**:
+  - **Master limiter** (on by default) keeps the output at or under its
+    ceiling (default -1 dBFS). Where the mix would go over, it is turned down
+    smoothly for a moment instead of distorting. It applies to Playback and to
+    every audio or video export (not yet to Loop Mode). The number next to it is the
+    ceiling (-24 to 0 dBFS).
+  - **Normalize loudness** (off by default) plays every mix at the same
+    loudness: when playback starts, the Studio measures the mix's integrated
+    loudness and turns the output up or down toward the target (default
+    -14 LUFS, the level many streaming services use). The correction is at
+    most 24 dB down or 12 dB up, and it holds steady across pause and resume.
+    It affects playback only, so exports keep the mix's own level; use the
+    [Analysis](#analysis) panel to see that level.
+
+  Both settings are remembered between sessions.
 
 If a device can't be opened, **Test** un-checks itself and a warning says
 why - a Test that quietly does nothing never happens. Pressing **Play** also
@@ -2012,6 +2027,11 @@ Vorbis, or MP3 (pick the format via the save dialog's file type).
 
 **File → Export Video...** saves it as an MP4: the composite spectrogram,
 animated with the mixed audio played alongside it.
+
+Both run the audio through the master limiter first if it's on in
+[Configure Devices](#configure-devices), so a mix that goes over full scale
+is turned down at its peaks instead of clipping. Loudness normalization is
+never applied to exports.
 
 Both kinds of export run in the background - you can keep working while
 one encodes, and a small **✕** button appears in the status bar to cancel
@@ -2288,8 +2308,8 @@ macro actually contains, and it isn't saved with the project.
 
 **Analysis Tools**: the [Analysis](#analysis) panel's loudness meter and
 the Layers panel's per-layer loudness indicator are live. The Stereo
-(goniometer and stereo width) and Pitch tabs are live too. A master limiter
-and output loudness normalization are being built next; the design document's spectral-health
+(goniometer and stereo width) and Pitch tabs are live too, as are the master limiter and output
+loudness normalization in [Configure Devices](#configure-devices). The design document's spectral-health
 and criticality/pattern meters are planned for after Beta.
 
 **Sound Flower** (see [Canvas Navigation](#canvas-navigation) above) is

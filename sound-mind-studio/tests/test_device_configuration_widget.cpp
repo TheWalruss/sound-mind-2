@@ -1,5 +1,6 @@
 #include "test_device_configuration_widget.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QProgressBar>
 #include <QPushButton>
@@ -8,6 +9,7 @@
 #include <QtTest/QtTest>
 
 #include "sound_mind/studio/device_configuration_widget.h"
+#include "sound_mind/studio/numeric_field.h"
 
 using sound_mind::studio::DeviceConfigurationWidget;
 
@@ -183,3 +185,51 @@ void DeviceConfigurationWidgetTest::setSelectedOutputDeviceSelectsItWithoutEmitt
     auto* combo = widget.findChild<QComboBox*>(QStringLiteral("outputDeviceCombo"));
     QCOMPARE(combo->currentText(), QStringLiteral("Speakers B"));
 }
+
+// v0.Y.80.1 Installment D - the "Output processing" group.
+void DeviceConfigurationWidgetTest::outputProcessingDefaultsToLimiterOnAndNormalizationOff() {
+    DeviceConfigurationWidget widget;
+    QVERIFY(widget.findChild<QCheckBox*>(QStringLiteral("masterLimiterCheckBox"))->isChecked());
+    QCOMPARE(widget.findChild<sound_mind::studio::NumericField*>(QStringLiteral("masterLimiterCeilingField"))->value(),
+             -1.0);
+    QVERIFY(!widget.findChild<QCheckBox*>(QStringLiteral("loudnessNormalizationCheckBox"))->isChecked());
+    QCOMPARE(widget.findChild<sound_mind::studio::NumericField*>(QStringLiteral("loudnessTargetField"))->value(), -14.0);
+}
+
+void DeviceConfigurationWidgetTest::outputProcessingControlsEmitTheirSettings() {
+    DeviceConfigurationWidget widget;
+    QSignalSpy limiterSpy(&widget, &DeviceConfigurationWidget::masterLimiterChanged);
+    QSignalSpy normalizationSpy(&widget, &DeviceConfigurationWidget::loudnessNormalizationChanged);
+
+    widget.findChild<QCheckBox*>(QStringLiteral("masterLimiterCheckBox"))->setChecked(false);
+    QCOMPARE(limiterSpy.count(), 1);
+    QCOMPARE(limiterSpy.last().at(0).toBool(), false);
+    QCOMPARE(limiterSpy.last().at(1).toDouble(), -1.0);
+    widget.findChild<sound_mind::studio::NumericField*>(QStringLiteral("masterLimiterCeilingField"))->setValue(-3.0);
+    QCOMPARE(limiterSpy.last().at(1).toDouble(), -3.0);
+
+    widget.findChild<QCheckBox*>(QStringLiteral("loudnessNormalizationCheckBox"))->setChecked(true);
+    QCOMPARE(normalizationSpy.count(), 1);
+    QCOMPARE(normalizationSpy.last().at(0).toBool(), true);
+    QCOMPARE(normalizationSpy.last().at(1).toDouble(), -14.0);
+    widget.findChild<sound_mind::studio::NumericField*>(QStringLiteral("loudnessTargetField"))->setValue(-23.0);
+    QCOMPARE(normalizationSpy.last().at(1).toDouble(), -23.0);
+}
+
+void DeviceConfigurationWidgetTest::outputProcessingSettersDoNotEmit() {
+    DeviceConfigurationWidget widget;
+    QSignalSpy limiterSpy(&widget, &DeviceConfigurationWidget::masterLimiterChanged);
+    QSignalSpy normalizationSpy(&widget, &DeviceConfigurationWidget::loudnessNormalizationChanged);
+
+    widget.setMasterLimiter(false, -6.0);
+    widget.setLoudnessNormalization(true, -16.0);
+
+    QCOMPARE(limiterSpy.count(), 0);
+    QCOMPARE(normalizationSpy.count(), 0);
+    QVERIFY(!widget.findChild<QCheckBox*>(QStringLiteral("masterLimiterCheckBox"))->isChecked());
+    QCOMPARE(widget.findChild<sound_mind::studio::NumericField*>(QStringLiteral("masterLimiterCeilingField"))->value(),
+             -6.0);
+    QVERIFY(widget.findChild<QCheckBox*>(QStringLiteral("loudnessNormalizationCheckBox"))->isChecked());
+    QCOMPARE(widget.findChild<sound_mind::studio::NumericField*>(QStringLiteral("loudnessTargetField"))->value(), -16.0);
+}
+

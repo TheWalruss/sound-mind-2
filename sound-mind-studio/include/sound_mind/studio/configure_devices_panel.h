@@ -116,6 +116,16 @@ public:
     /// @param percent Clamped to `[0, kMaxGainPercent]`.
     void setOutputGainPercent(int percent);
 
+    /// @brief See `DeviceConfigurationWidget::setMasterLimiter()`.
+    /// @param enabled Whether the limiter is on.
+    /// @param ceilingDb Its ceiling, dBFS.
+    void setMasterLimiter(bool enabled, double ceilingDb);
+
+    /// @brief See `DeviceConfigurationWidget::setLoudnessNormalization()`.
+    /// @param enabled Whether normalization is on.
+    /// @param targetLufs Its target loudness, LUFS.
+    void setLoudnessNormalization(bool enabled, double targetLufs);
+
     /// @brief Updates the live input level meter - `MainWindow` calls this
     ///        on a timer while testInputButton_ is checked.
     /// @param level `[0, 1]` (or beyond - clamped here), matching
@@ -192,6 +202,16 @@ signals:
     /// @brief The output gain slider moved - see
     ///        inputGainPercentChanged()'s own docs.
     void outputGainPercentChanged(int percent);
+
+    /// @brief See `DeviceConfigurationWidget::masterLimiterChanged()`.
+    /// @param enabled Whether the limiter is on.
+    /// @param ceilingDb Its ceiling, dBFS.
+    void masterLimiterChanged(bool enabled, double ceilingDb);
+
+    /// @brief See `DeviceConfigurationWidget::loudnessNormalizationChanged()`.
+    /// @param enabled Whether normalization is on.
+    /// @param targetLufs Its target loudness, LUFS.
+    void loudnessNormalizationChanged(bool enabled, double targetLufs);
 
     /// @brief The "Test" toggle for the input device was checked/unchecked.
     /// @param testing `true` when newly checked (start testing).

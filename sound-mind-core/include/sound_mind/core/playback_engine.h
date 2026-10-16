@@ -9,6 +9,7 @@
 
 #include <juce_audio_devices/juce_audio_devices.h>
 
+#include "sound_mind/core/master_limiter.h"
 #include "sound_mind/codec/audio_buffer.h"
 
 namespace sound_mind::core {
@@ -230,6 +231,42 @@ public:
     /// @return The current gain, `1.0` meaning unity.
     [[nodiscard]] float volume() const noexcept;
 
+    /**
+     * @brief Turns the master limiter at the very end of the output on or off
+     *        (Pre-Beta Plan `v0.Y.80.1`) - see `MasterLimiter`. On by default.
+     * @param enabled Whether to limit.
+     * @note Real-time safe (atomic), callable from any thread.
+     */
+    void setLimiterEnabled(bool enabled) noexcept { limiter_.setEnabled(enabled); }
+
+    /// @brief Whether the master limiter is on.
+    /// @return The flag.
+    [[nodiscard]] bool limiterEnabled() const noexcept { return limiter_.enabled(); }
+
+    /// @brief Sets the master limiter's ceiling - see `MasterLimiter::setCeilingDb()`.
+    /// @param ceilingDb The ceiling, dBFS.
+    /// @note Real-time safe (atomic), callable from any thread.
+    void setLimiterCeilingDb(float ceilingDb) noexcept { limiter_.setCeilingDb(ceilingDb); }
+
+    /// @brief The master limiter's ceiling.
+    /// @return The ceiling, dBFS.
+    [[nodiscard]] float limiterCeilingDb() const noexcept { return limiter_.ceilingDb(); }
+
+    /**
+     * @brief An extra output gain, in dB, applied with volume() before the
+     *        limiter - output loudness normalization's correction (Pre-Beta
+     *        Plan `v0.Y.80.1`). `0` (the default) changes nothing.
+     * @param gainDb The gain.
+     * @note Real-time safe (atomic), callable from any thread.
+     */
+    void setNormalizationGainDb(float gainDb) noexcept;
+
+    /// @brief The normalization gain.
+    /// @return The gain, dB.
+    [[nodiscard]] float normalizationGainDb() const noexcept {
+        return normalizationGainDb_.load(std::memory_order_relaxed);
+    }
+
     /// @brief The upper bound setVolume() clamps to - 200%, a real boost
     /// past unity but still a sane ceiling against accidental clipping/
     /// hearing damage from an unbounded slider.
@@ -379,6 +416,12 @@ private:
     std::atomic<std::size_t> position_{0};
     std::atomic<bool> playing_{false};
     std::atomic<float> volume_{1.0f};
+    std::atomic<float> normalizationGainDb_{0.0f};
+    std::atomic<float> normalizationGain_{1.0f};
+    /// @brief The last stage of renderBlock() - see setLimiterEnabled().
+    ///        Its sample rate is set in loadAudio(), while stopped.
+    ///        No look-ahead, so output stays aligned with the playhead.
+    MasterLimiter limiter_{MasterLimiter::LookAhead::Off};
     std::atomic<bool> loopEnabled_{false};
     std::atomic<std::size_t> rangeEndSamples_{0};
     std::atomic<std::size_t> loopBackSamples_{0};

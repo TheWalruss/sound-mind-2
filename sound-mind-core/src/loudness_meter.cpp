@@ -134,6 +134,35 @@ double interSamplePeak(const std::vector<float>& channel, double samplePeak) {
     return peak;
 }
 
+/// @brief BS.1770 integrated loudness from running squared sums: complete
+/// 400 ms blocks every 100 ms, then the -70 LUFS absolute and -10 LU relative
+/// gates (a buffer shorter than one block is one block).
+double gatedIntegrated(const std::vector<double>& prefix, std::size_t count, std::uint32_t sampleRateHz) {
+    const double rate = static_cast<double>(sampleRateHz);
+    const auto block = std::min(count, static_cast<std::size_t>(std::lround(0.4 * rate)));
+    const auto step = std::max<std::size_t>(1, static_cast<std::size_t>(std::lround(kLoudnessStepSeconds * rate)));
+    std::vector<double> blockPowers;
+    for (std::size_t end = block; end <= count; end += step) {
+        blockPowers.push_back(windowPower(prefix, end, block));
+        if (block >= count) {
+            break;
+        }
+    }
+    const auto gatedMean = [&](double thresholdLufs) {
+        double sum = 0.0;
+        std::size_t kept = 0;
+        for (const double power : blockPowers) {
+            if (lufsFromPower(power) > thresholdLufs) {
+                sum += power;
+                ++kept;
+            }
+        }
+        return kept == 0 ? 0.0 : sum / static_cast<double>(kept);
+    };
+    const double absolute = gatedMean(kLoudnessFloorLufs);
+    return absolute > 0.0 ? lufsFromPower(gatedMean(lufsFromPower(absolute) - 10.0)) : kLoudnessFloorLufs;
+}
+
 double toDb(double amplitude) {
     return amplitude > 0.0 ? std::max(kLoudnessFloorLufs, 20.0 * std::log10(amplitude)) : kLoudnessFloorLufs;
 }
@@ -189,31 +218,16 @@ LoudnessMeasurement measureLoudness(const sound_mind::codec::AudioBuffer& audio,
         result.maxShortTermLufs = std::max(result.maxShortTermLufs, static_cast<double>(longer));
     }
 
-    // Integrated: complete 400 ms blocks every 100 ms, absolute then
-    // relative gate (a buffer shorter than one block is one block).
-    std::vector<double> blockPowers;
-    for (std::size_t end = std::min(block, count); end <= count; end += step) {
-        blockPowers.push_back(windowPower(prefix, end, std::min(block, count)));
-        if (block >= count) {
-            break;
-        }
-    }
-    const auto gatedMean = [&](double thresholdLufs) {
-        double sum = 0.0;
-        std::size_t kept = 0;
-        for (const double power : blockPowers) {
-            if (lufsFromPower(power) > thresholdLufs) {
-                sum += power;
-                ++kept;
-            }
-        }
-        return kept == 0 ? 0.0 : sum / static_cast<double>(kept);
-    };
-    const double absolute = gatedMean(kLoudnessFloorLufs);
-    if (absolute > 0.0) {
-        result.integratedLufs = lufsFromPower(gatedMean(lufsFromPower(absolute) - 10.0));
-    }
+    result.integratedLufs = gatedIntegrated(prefix, count, audio.sampleRateHz);
     return result;
+}
+
+double integratedLoudnessLufs(const sound_mind::codec::AudioBuffer& audio) {
+    const std::size_t count = audio.frameCount();
+    if (count == 0 || audio.sampleRateHz == 0) {
+        return kLoudnessFloorLufs;
+    }
+    return gatedIntegrated(squaredPrefix(audio), count, audio.sampleRateHz);
 }
 
 const std::vector<LoudnessBand>& loudnessBands() {

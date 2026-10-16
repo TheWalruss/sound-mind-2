@@ -200,6 +200,26 @@ public:
     /// @return `1.0` is unity.
     [[nodiscard]] float volume() const noexcept;
 
+    /// @brief Forwards to `PlaybackEngine::setLimiterEnabled()`.
+    /// @param enabled Whether to limit.
+    void setLimiterEnabled(bool enabled) noexcept { engine_.setLimiterEnabled(enabled); }
+
+    /// @brief Forwards to `PlaybackEngine::setLimiterCeilingDb()`.
+    /// @param ceilingDb The ceiling, dBFS.
+    void setLimiterCeilingDb(float ceilingDb) noexcept { engine_.setLimiterCeilingDb(ceilingDb); }
+
+    /// @brief Forwards to `PlaybackEngine::setNormalizationGainDb()`.
+    /// @param gainDb The gain.
+    void setNormalizationGainDb(float gainDb) noexcept { engine_.setNormalizationGainDb(gainDb); }
+
+    /// @brief The engine's current normalization gain.
+    /// @return The gain, dB.
+    [[nodiscard]] float normalizationGainDb() const noexcept { return engine_.normalizationGainDb(); }
+
+    /// @brief Whether the engine's limiter is on.
+    /// @return The flag.
+    [[nodiscard]] bool limiterEnabled() const noexcept { return engine_.limiterEnabled(); }
+
 signals:
     /// @brief Emitted from invalidate(): whatever was prepared no longer
     /// matches the project. Lets a Repeat session re-prepare in the

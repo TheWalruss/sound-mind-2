@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
 #include <vector>
 
 #include "sound_mind/core/playback_engine.h"
@@ -512,3 +513,56 @@ TEST_CASE("stageAudio with nothing loaded is refused", "[core][playback_engine]"
     PlaybackEngine engine(AudioDeviceMode::None);
     CHECK_FALSE(engine.stageAudio(makeFreshTestAudio()));
 }
+
+TEST_CASE("The master limiter is on by default and keeps loud output under -1 dBFS", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    CHECK(engine.limiterEnabled());
+    CHECK(engine.limiterCeilingDb() == -1.0f);
+    AudioBuffer audio;
+    audio.sampleRateHz = 44100;
+    audio.left = {0.1f, 1.5f, -2.0f, 0.5f};
+    audio.right = {0.1f, 0.2f, 0.3f, 0.4f};
+    engine.loadAudio(audio);
+    engine.play();
+    std::vector<float> left(4, 0.0f);
+    std::vector<float> right(4, 0.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 4);
+    const float ceiling = std::pow(10.0f, -1.0f / 20.0f);
+    CHECK(left[0] == 0.1f);  // no delay, untouched below the ceiling.
+    for (const float sample : left) {
+        CHECK(std::abs(sample) <= ceiling + 1e-6f);
+    }
+}
+
+TEST_CASE("With the limiter off, loud output passes through unchanged", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    engine.setLimiterEnabled(false);
+    AudioBuffer audio;
+    audio.sampleRateHz = 44100;
+    audio.left = {1.5f, -2.0f};
+    audio.right = {0.0f, 0.0f};
+    engine.loadAudio(audio);
+    engine.play();
+    std::vector<float> left(2, 0.0f);
+    std::vector<float> right(2, 0.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 2);
+    CHECK(left[0] == 1.5f);
+    CHECK(left[1] == -2.0f);
+}
+
+TEST_CASE("The normalization gain scales the output like volume", "[core][playback_engine]") {
+    PlaybackEngine engine(AudioDeviceMode::None);
+    CHECK(engine.normalizationGainDb() == 0.0f);
+    engine.setNormalizationGainDb(20.0f * std::log10(0.5f));
+    engine.loadAudio(makeTestAudio());
+    engine.play();
+    std::vector<float> left(2, 0.0f);
+    std::vector<float> right(2, 0.0f);
+    float* channels[] = {left.data(), right.data()};
+    engine.renderBlock(channels, 2, 2);
+    CHECK(std::abs(left[0] - 0.05f) < 1e-6f);
+    CHECK(std::abs(left[1] - 0.1f) < 1e-6f);
+}
+

@@ -6,6 +6,15 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.4] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.80.1` (Analysis tools), installment D - completes the milestone.
+
+### Added
+
+- **Master limiter.** It is on by default, with a -1 dBFS ceiling, and set in Configure Devices → Output processing. Where the mix would go over the ceiling, it turns it down smoothly instead of letting it clip. It applies to Playback and every audio and video export (not yet to Loop Mode).
+- **Output loudness normalization.** It is off by default and set in Configure Devices → Output processing. Playback is turned up or down toward a target loudness (default -14 LUFS), measured from the mix each time playback starts. It affects playback only.
+
 ## [0.1.40.3] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.80.1` (Analysis tools), installment C.

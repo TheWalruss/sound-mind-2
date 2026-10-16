@@ -49,6 +49,7 @@
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/codec/stream_incremental_encoder.h"
 #include "sound_mind/core/filter_preview.h"
+#include "sound_mind/core/loudness_meter.h"
 #include "sound_mind/studio/text_controller.h"
 #include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/compositor.h"
@@ -402,6 +403,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             &MainWindow::toggleTestInputDevice);
     connect(configureDevicesPanel_, &ConfigureDevicesPanel::testOutputToggled, this,
             &MainWindow::toggleTestOutputDevice);
+    connect(configureDevicesPanel_, &ConfigureDevicesPanel::masterLimiterChanged, this, &MainWindow::setMasterLimiter);
+    connect(configureDevicesPanel_, &ConfigureDevicesPanel::loudnessNormalizationChanged, this,
+            &MainWindow::setLoudnessNormalization);
 
     // v0.Y.62.1 Installment H - the Landing Page's own embedded
     // DeviceConfigurationWidget is a second, independent instance of the
@@ -426,6 +430,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             &MainWindow::toggleTestInputDevice);
     connect(landingDeviceConfig, &DeviceConfigurationWidget::testOutputToggled, this,
             &MainWindow::toggleTestOutputDevice);
+    connect(landingDeviceConfig, &DeviceConfigurationWidget::masterLimiterChanged, this, &MainWindow::setMasterLimiter);
+    connect(landingDeviceConfig, &DeviceConfigurationWidget::loudnessNormalizationChanged, this,
+            &MainWindow::setLoudnessNormalization);
+    // Output processing (v0.Y.80.1), remembered across sessions.
+    setMasterLimiter(settings_.value(QStringLiteral("masterLimiterEnabled"), true).toBool(),
+                     settings_.value(QStringLiteral("masterLimiterCeilingDb"), -1.0).toDouble());
+    setLoudnessNormalization(settings_.value(QStringLiteral("loudnessNormalizationEnabled"), false).toBool(),
+                             settings_.value(QStringLiteral("loudnessTargetLufs"), -14.0).toDouble());
 
     refreshConfiguredDevices();
 
@@ -2930,10 +2942,12 @@ void MainWindow::exportCompositeVideoAsync(const std::filesystem::path& path) {
     // project_ copied by value - the background thread composites its own
     // independent copy, so later edits on the UI thread can't race it.
     exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
+        [this, path, projectCopy = *project_,
+         limiterCeiling = limiterEnabled_ ? std::optional<float>(static_cast<float>(limiterCeilingDb_)) : std::nullopt](sound_mind::core::CancellationToken& token) {
             const auto shouldCancel = [&token]() { return token.cancellationRequested(); };
             try {
-                if (!sound_mind::core::exportProjectVideo(projectCopy, path, /*frameRate=*/30, shouldCancel)) {
+                if (!sound_mind::core::exportProjectVideo(projectCopy, path, /*frameRate=*/30, shouldCancel,
+                                                          limiterCeiling)) {
                     exportOutcome_ = ExportOutcome::Failed;
                     exportErrorMessage_ = tr("Nothing to export - no visible, unmuted layer has content.");
                 }
@@ -2972,10 +2986,11 @@ void MainWindow::exportCompositeAudioAsync(const std::filesystem::path& path,
 
     // project_ copied by value - see exportCompositeVideoAsync().
     exportTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, format, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
+        [this, path, format, projectCopy = *project_,
+         limiterCeiling = limiterEnabled_ ? std::optional<float>(static_cast<float>(limiterCeilingDb_)) : std::nullopt](sound_mind::core::CancellationToken& token) {
             const auto shouldCancel = [&token]() { return token.cancellationRequested(); };
             try {
-                if (!sound_mind::core::exportProjectAudio(projectCopy, path, format, shouldCancel)) {
+                if (!sound_mind::core::exportProjectAudio(projectCopy, path, format, shouldCancel, limiterCeiling)) {
                     exportOutcome_ = ExportOutcome::Failed;
                     exportErrorMessage_ = tr("Nothing to export - no visible, unmuted layer has content.");
                 }
@@ -3481,6 +3496,45 @@ void MainWindow::setChordModeEnabled(bool enabled) {
     // own single-press gesture has no in-progress state to cancel in the
     // first place (see CanvasWidget::ToolMode::ChordStamp's own docs).
     setExclusiveToolMode(chordAction_, enabled, CanvasWidget::ToolMode::ChordStamp);
+}
+
+void MainWindow::setMasterLimiter(bool enabled, double ceilingDb) {
+    limiterEnabled_ = enabled;
+    limiterCeilingDb_ = std::clamp(ceilingDb, -24.0, 0.0);
+    playbackController_->setLimiterEnabled(enabled);
+    playbackController_->setLimiterCeilingDb(static_cast<float>(limiterCeilingDb_));
+    settings_.setValue(QStringLiteral("masterLimiterEnabled"), enabled);
+    settings_.setValue(QStringLiteral("masterLimiterCeilingDb"), limiterCeilingDb_);
+    configureDevicesPanel_->setMasterLimiter(enabled, limiterCeilingDb_);
+    landingPage_->deviceConfiguration()->setMasterLimiter(enabled, limiterCeilingDb_);
+}
+
+void MainWindow::setLoudnessNormalization(bool enabled, double targetLufs) {
+    normalizationEnabled_ = enabled;
+    normalizationTargetLufs_ = std::clamp(targetLufs, -40.0, -5.0);
+    settings_.setValue(QStringLiteral("loudnessNormalizationEnabled"), enabled);
+    settings_.setValue(QStringLiteral("loudnessTargetLufs"), normalizationTargetLufs_);
+    configureDevicesPanel_->setLoudnessNormalization(enabled, normalizationTargetLufs_);
+    landingPage_->deviceConfiguration()->setLoudnessNormalization(enabled, normalizationTargetLufs_);
+    applyNormalizationGain();
+}
+
+double MainWindow::normalizationGainDb() const noexcept { return playbackController_->normalizationGainDb(); }
+
+void MainWindow::noteLoadedPlaybackAudio(const sound_mind::codec::AudioBuffer& audio) {
+    const double lufs = sound_mind::core::integratedLoudnessLufs(audio);
+    loadedMixLoudnessLufs_ =
+        lufs > sound_mind::core::kLoudnessFloorLufs ? std::optional<double>(lufs) : std::nullopt;
+    applyNormalizationGain();
+}
+
+void MainWindow::applyNormalizationGain() {
+    double gainDb = 0.0;
+    if (normalizationEnabled_ && loadedMixLoudnessLufs_.has_value()) {
+        // Bounded, so a near-silent mix isn't turned up into a roar.
+        gainDb = std::clamp(normalizationTargetLufs_ - *loadedMixLoudnessLufs_, -24.0, 12.0);
+    }
+    playbackController_->setNormalizationGainDb(static_cast<float>(gainDb));
 }
 
 void MainWindow::analyzeLoudness() {
@@ -5518,6 +5572,7 @@ void MainWindow::pollRepeatRefresh() {
     if (!result.has_value() || !repeatEnabled_ || !playbackController_->isPlaying()) {
         return;
     }
+    noteLoadedPlaybackAudio(*result);  // the refreshed mix's own loudness.
     if (playbackController_->stageAudio(std::move(*result))) {
         return;
     }
@@ -5670,7 +5725,11 @@ void MainWindow::pollCompositeProgress() {
                 // constructor to playbackPanel_->setDuration()) - only
                 // needs doing once per load, matching startPlayback()'s own
                 // prior synchronous contract.
-                playbackController_->load(sound_mind::codec::decode(*compositedResult_));
+                {
+                    sound_mind::codec::AudioBuffer audio = sound_mind::codec::decode(*compositedResult_);
+                    noteLoadedPlaybackAudio(audio);
+                    playbackController_->load(std::move(audio));
+                }
                 // A fresh load starts a new "nothing edited yet this
                 // session" range - the whole track, regardless of
                 // playbackScope_ - narrowed only once a real edit actually

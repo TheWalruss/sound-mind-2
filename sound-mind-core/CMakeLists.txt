@@ -78,6 +78,7 @@ add_library(sound-mind-core
     src/project_analysis.cpp
     src/stereo_analysis.cpp
     src/pitch_detection.cpp
+    src/master_limiter.cpp
     src/grid_preset.cpp
 )
 

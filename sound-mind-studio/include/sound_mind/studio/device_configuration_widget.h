@@ -4,12 +4,15 @@
 #include <QStringList>
 #include <QWidget>
 
+class QCheckBox;
 class QComboBox;
 class QProgressBar;
 class QPushButton;
 class QSlider;
 
 namespace sound_mind::studio {
+
+class NumericField;
 
 /**
  * @brief The actual input/output device selection, gain, and "test it"
@@ -83,6 +86,18 @@ public:
     /// @param percent Clamped to `[0, kMaxGainPercent]`.
     void setOutputGainPercent(int percent);
 
+    /// @brief Shows the master limiter settings without emitting
+    ///        masterLimiterChanged() (Pre-Beta Plan `v0.Y.80.1`).
+    /// @param enabled Whether the limiter is on.
+    /// @param ceilingDb Its ceiling, dBFS.
+    void setMasterLimiter(bool enabled, double ceilingDb);
+
+    /// @brief Shows the output loudness normalization settings without
+    ///        emitting loudnessNormalizationChanged().
+    /// @param enabled Whether normalization is on.
+    /// @param targetLufs Its target loudness, LUFS.
+    void setLoudnessNormalization(bool enabled, double targetLufs);
+
     /// @brief See `ConfigureDevicesPanel::setInputLevel()`'s own docs.
     /// @param level `[0, 1]` (or beyond - clamped here).
     void setInputLevel(float level);
@@ -123,6 +138,16 @@ signals:
     ///        docs.
     void outputGainPercentChanged(int percent);
 
+    /// @brief The master limiter's checkbox or ceiling changed.
+    /// @param enabled Whether the limiter is on.
+    /// @param ceilingDb Its ceiling, dBFS.
+    void masterLimiterChanged(bool enabled, double ceilingDb);
+
+    /// @brief The loudness normalization checkbox or target changed.
+    /// @param enabled Whether normalization is on.
+    /// @param targetLufs Its target loudness, LUFS.
+    void loudnessNormalizationChanged(bool enabled, double targetLufs);
+
     /// @brief See `ConfigureDevicesPanel::testInputToggled()`'s own docs.
     void testInputToggled(bool testing);
 
@@ -137,6 +162,10 @@ private:
 
     QComboBox* outputDeviceCombo_ = nullptr;
     QSlider* outputGainSlider_ = nullptr;
+    QCheckBox* limiterCheckBox_ = nullptr;
+    NumericField* limiterCeilingField_ = nullptr;
+    QCheckBox* normalizationCheckBox_ = nullptr;
+    NumericField* normalizationTargetField_ = nullptr;
     QPushButton* testOutputButton_ = nullptr;
 };
 

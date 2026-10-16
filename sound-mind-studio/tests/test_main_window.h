@@ -349,4 +349,6 @@ private slots:
     void mergingTwoPickedPathsMakesOneBranchingPath();
     void textToolPlacesPreviewsAndAppliesText();
     void analyzeLoudnessReportsTheMixAndLayersAndGoesStaleOnEdits();
+    void loudnessNormalizationGainFollowsTheLoadedMixAndIsRemembered();
+    void masterLimiterSettingReachesPlaybackAndBothDevicePanels();
 };

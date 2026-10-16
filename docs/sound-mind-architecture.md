@@ -2359,6 +2359,35 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `AnalysisPanelTest`: note at the playhead (A4, +20 cents, unvoiced dash); the overlay emits only while checked, and again on a new report.
       - `CanvasWidgetTest`: the overlay draws and clears.
 
+252. **Master limiter and output loudness normalization.** Settled in `v0.1.40.4`, Pre-Beta Plan milestone `v0.Y.80.1` installment D. This completes the milestone.
+    - **Core** `master_limiter.h` - `MasterLimiter`:
+      - Each sample's required gain (`ceiling / max(|L|, |R|)`) enters a 1.5 ms window. The gain glides toward the window's minimum with an attack that arrives before the peak leaves the delay line, and recovers with an ~80 ms release. A final clamp guarantees the ceiling.
+      - The ceiling is a **sample-peak** ceiling (-1 dBFS by default, clamped to [-24, 0]), not a true-peak one. The meter's true-peak readout still shows any inter-sample overshoot; a true-peak limiter would need oversampling inside the audio callback, which wasn't worth it pre-Beta.
+      - Real-time safe: buffers are preallocated for up to `kMaxLookAheadSamples`; `setEnabled()`/`setCeilingDb()` are atomics.
+      - `LookAhead::Off` gives a zero-latency variant: the gain drops instantly to what the current sample needs and recovers with the same release.
+    - **Where it runs:**
+      - **Playback** (`PlaybackEngine::renderBlock()`, the last stage, after volume) uses `LookAhead::Off`. The look-ahead's 1.5 ms delay would have shifted the output against the playhead, and the transport's sample-exact contract and tests rely on that alignment. The instant attack is a little harsher on sharp transients, which is acceptable for monitoring.
+      - **Export** (`exportProjectAudio()`/`exportProjectVideo()`, a new `std::optional<float> limiterCeilingDb` parameter that defaults to on) uses `applyMasterLimiter()`. That is the look-ahead version, offline, with its latency compensated so the result lines up and keeps its length.
+      - `MainWindow` passes `std::nullopt` when the user turns the limiter off.
+      - **Not in Loop Mode** yet: `LoopEngine` has its own callback. Adding it there is a small follow-up; it was left out to keep this installment to the plan's "playback and export".
+    - **Normalization** is a gain, not a processor:
+      - `PlaybackEngine::setNormalizationGainDb()` multiplies the volume, ahead of the limiter.
+      - `MainWindow` measures `integratedLoudnessLufs()` (the new BS.1770 integrated-only entry point, sharing `gatedIntegrated()` with `measureLoudness()`) on each buffer it loads for playback: a fresh composite, or a repeat-mode refresh.
+      - The gain is `clamp(target - integrated, -24, +12)` dB, or 0 when the mix is silent. It is fixed per loaded buffer, so it holds steady across pause and resume, and a target change re-applies at once.
+      - Playback only: an export keeps the mix's own level, which the Analysis panel measures.
+    - **Settings:**
+      - `DeviceConfigurationWidget` has a new "Output processing" group: a limiter checkbox with a ceiling `NumericField`, and a normalization checkbox with a target `NumericField` (-40..-5 LUFS).
+      - `masterLimiterChanged` and `loudnessNormalizationChanged` signals, forwarded by `ConfigureDevicesPanel`, and non-emitting setters, so the panel and the start screen stay in sync.
+      - Persisted in `QSettings` (`masterLimiterEnabled`, `masterLimiterCeilingDb`, `loudnessNormalizationEnabled`, `loudnessTargetLufs`).
+    - **Tests:**
+      - Core:
+        - limiter: zero-latency mode holds the ceiling undelayed;
+        - engine: on by default and caps output; off passes over-full-scale samples through; normalization gain scales the output;
+        - export: a mix over full scale is limited to -1 dBFS, and with `std::nullopt` it isn't;
+        - loudness: `integratedLoudnessLufs` equals the full measurement.
+      - `DeviceConfigurationWidgetTest`: 3 cases - defaults, emitting, non-emitting setters.
+      - `MainWindowTest`: 2 cases - the normalization gain follows the loaded mix, re-applies on a target change, is 0 when off, and is remembered in both panels; the limiter setting syncs both panels.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

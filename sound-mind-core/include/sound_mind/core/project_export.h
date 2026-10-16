@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 
+#include "sound_mind/core/master_limiter.h"
 #include "sound_mind/codec/audio_buffer.h"
 #include "sound_mind/codec/audio_export.h"
 #include "sound_mind/codec/rgb_image.h"
@@ -48,6 +49,10 @@ struct ProjectExportMedia {
  * @param format Which compressed format to write - see
  *        `sound_mind::codec::exportCompressedAudio()`.
  * @param shouldCancel Consulted while compositing and while encoding.
+ * @param limiterCeilingDb Runs the audio through the master limiter at this
+ *        ceiling before encoding (`applyMasterLimiter()`, Pre-Beta Plan
+ *        `v0.Y.80.1`) - on by default, as in playback; `std::nullopt` exports
+ *        the mix unlimited.
  * @return `true` if exported; `false` if no layer contributes (nothing
  *         written).
  * @throws std::runtime_error if the underlying codec export fails.
@@ -57,7 +62,8 @@ struct ProjectExportMedia {
  */
 bool exportProjectAudio(const Project& project, const std::filesystem::path& path,
                         sound_mind::codec::CompressedAudioFormat format,
-                        const std::function<bool()>& shouldCancel = nullptr);
+                        const std::function<bool()>& shouldCancel = nullptr,
+                        std::optional<float> limiterCeilingDb = kDefaultLimiterCeilingDb);
 
 /**
  * @brief Exports the whole project as an MP4 video: the composite canvas
@@ -69,6 +75,10 @@ bool exportProjectAudio(const Project& project, const std::filesystem::path& pat
  * @param frameRate Video frame rate, in frames per second - see
  *        `sound_mind::codec::exportVideo()`.
  * @param shouldCancel Consulted while compositing and while encoding.
+ * @param limiterCeilingDb Runs the audio through the master limiter at this
+ *        ceiling before encoding (`applyMasterLimiter()`, Pre-Beta Plan
+ *        `v0.Y.80.1`) - on by default, as in playback; `std::nullopt` exports
+ *        the mix unlimited.
  * @return `true` if exported; `false` if no layer contributes (nothing
  *         written).
  * @throws std::runtime_error if the underlying codec export fails.
@@ -77,6 +87,7 @@ bool exportProjectAudio(const Project& project, const std::filesystem::path& pat
  *         respectively.
  */
 bool exportProjectVideo(const Project& project, const std::filesystem::path& path, int frameRate = 30,
-                        const std::function<bool()>& shouldCancel = nullptr);
+                        const std::function<bool()>& shouldCancel = nullptr,
+                        std::optional<float> limiterCeilingDb = kDefaultLimiterCeilingDb);
 
 }  // namespace sound_mind::core

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <numbers>
 
+#include "sound_mind/codec/audio_file.h"
 #include "sound_mind/codec/stream_codec.h"
 #include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/compositor.h"
@@ -143,3 +144,23 @@ TEST_CASE("exportProjectVideo writes a real file for a project with content", "[
     CHECK(exported);
     CHECK(exists);
 }
+
+TEST_CASE("exportProjectAudio limits a mix that goes over full scale, unless told not to", "[core][project_export]") {
+    Project project = Project::createNew(smallExportSettings());
+    // Three loud layers together sum well past full scale.
+    addToneLayer(project, 500.0f, 0.9f);
+    addToneLayer(project, 500.0f, 0.9f);
+    addToneLayer(project, 500.0f, 0.9f);
+    const auto path = std::filesystem::temp_directory_path() / "sound-mind-test-project-export-limited.flac";
+
+    REQUIRE(exportProjectAudio(project, path, CompressedAudioFormat::Flac));
+    const float limitedPeak = peakOf(sound_mind::codec::readAudioFile(path));
+    REQUIRE(exportProjectAudio(project, path, CompressedAudioFormat::Flac, nullptr, std::nullopt));
+    const float unlimitedPeak = peakOf(sound_mind::codec::readAudioFile(path));
+    std::filesystem::remove(path);
+
+    CHECK(limitedPeak <= std::pow(10.0f, -1.0f / 20.0f) + 1e-3f);
+    // FLAC stores fixed point, so an unlimited over-full-scale mix clips to 1.
+    CHECK(unlimitedPeak > 0.95f);
+}
+

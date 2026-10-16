@@ -9,6 +9,10 @@ namespace sound_mind::studio {
 ConfigureDevicesPanel::ConfigureDevicesPanel(QWidget* parent) : QDockWidget(tr("Configure Devices"), parent) {
     widget_ = new DeviceConfigurationWidget(this);
     connect(widget_, &DeviceConfigurationWidget::refreshRequested, this, &ConfigureDevicesPanel::refreshRequested);
+    connect(widget_, &DeviceConfigurationWidget::masterLimiterChanged, this,
+            &ConfigureDevicesPanel::masterLimiterChanged);
+    connect(widget_, &DeviceConfigurationWidget::loudnessNormalizationChanged, this,
+            &ConfigureDevicesPanel::loudnessNormalizationChanged);
     connect(widget_, &DeviceConfigurationWidget::inputDeviceChanged, this,
             &ConfigureDevicesPanel::inputDeviceChanged);
     connect(widget_, &DeviceConfigurationWidget::outputDeviceChanged, this,
@@ -43,6 +47,14 @@ void ConfigureDevicesPanel::setSelectedOutputDevice(const QString& deviceName) {
 void ConfigureDevicesPanel::setInputGainPercent(int percent) { widget_->setInputGainPercent(percent); }
 
 void ConfigureDevicesPanel::setOutputGainPercent(int percent) { widget_->setOutputGainPercent(percent); }
+
+void ConfigureDevicesPanel::setMasterLimiter(bool enabled, double ceilingDb) {
+    widget_->setMasterLimiter(enabled, ceilingDb);
+}
+
+void ConfigureDevicesPanel::setLoudnessNormalization(bool enabled, double targetLufs) {
+    widget_->setLoudnessNormalization(enabled, targetLufs);
+}
 
 void ConfigureDevicesPanel::setInputLevel(float level) { widget_->setInputLevel(level); }
 

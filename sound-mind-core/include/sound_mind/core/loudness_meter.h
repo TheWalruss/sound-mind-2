@@ -70,6 +70,16 @@ struct LoudnessMeasurement {
 [[nodiscard]] LoudnessMeasurement measureLoudness(const sound_mind::codec::AudioBuffer& audio,
                                                   const std::function<bool()>& shouldCancel = {});
 
+/**
+ * @brief Just the gated integrated loudness of `audio`, LUFS - what output
+ *        loudness normalization needs, without the peak search or the
+ *        momentary/short-term series, so it's quick enough for the GUI thread
+ *        when playback audio is loaded.
+ * @param audio The audio to measure.
+ * @return The same value `measureLoudness(audio).integratedLufs` gives.
+ */
+[[nodiscard]] double integratedLoudnessLufs(const sound_mind::codec::AudioBuffer& audio);
+
 /// @brief One frequency band of the per-band loudness view.
 struct LoudnessBand {
     /// @brief Display name, e.g. "Bass (60–250 Hz)".

@@ -1446,6 +1446,32 @@ public slots:
      */
     void analyzeLoudness();
 
+    /**
+     * @brief Turns the master limiter on or off and sets its ceiling - in
+     *        playback and exports (Pre-Beta Plan `v0.Y.80.1`). Remembered
+     *        across sessions; on, at -1 dBFS, by default.
+     * @param enabled Whether to limit.
+     * @param ceilingDb The ceiling, dBFS.
+     */
+    void setMasterLimiter(bool enabled, double ceilingDb);
+
+    /**
+     * @brief Turns output loudness normalization on or off and sets its
+     *        target (Pre-Beta Plan `v0.Y.80.1`): the playback output is turned
+     *        up or down by `target - integrated loudness` of the loaded mix
+     *        (within -24..+12 dB), measured each time playback audio is
+     *        loaded or refreshed - so it holds steady across pause and resume.
+     *        Playback only; exports keep the mix's own level. Remembered
+     *        across sessions; off, at -14 LUFS, by default.
+     * @param enabled Whether to normalize.
+     * @param targetLufs The target loudness, LUFS.
+     */
+    void setLoudnessNormalization(bool enabled, double targetLufs);
+
+    /// @brief The playback output's current normalization gain.
+    /// @return The gain, dB (`0` when off).
+    [[nodiscard]] double normalizationGainDb() const noexcept;
+
     /// @brief Whether a loudness analysis is running.
     /// @return `true` from analyzeLoudness() until its report arrives.
     [[nodiscard]] bool isAnalyzingLoudness() const noexcept { return loudnessTask_ != nullptr; }
@@ -3819,6 +3845,18 @@ private:
 
     /// @brief The Analysis panel - see analyzeLoudness().
     AnalysisPanel* analysisPanel_ = nullptr;
+    /// @brief See setMasterLimiter()/setLoudnessNormalization().
+    bool limiterEnabled_ = true;
+    double limiterCeilingDb_ = -1.0;
+    bool normalizationEnabled_ = false;
+    double normalizationTargetLufs_ = -14.0;
+    /// @brief The loaded playback mix's integrated loudness, if measured.
+    std::optional<double> loadedMixLoudnessLufs_;
+    /// @brief Applies the current normalization settings to the loaded mix's
+    ///        measured loudness - see setLoudnessNormalization().
+    void applyNormalizationGain();
+    /// @brief Measures `audio` (about to be played) for normalization.
+    void noteLoadedPlaybackAudio(const sound_mind::codec::AudioBuffer& audio);
     /// @brief The running loudness analysis's result; declared before the
     ///        task so the task is destroyed first (as refreshResult_).
     std::optional<sound_mind::core::ProjectLoudnessReport> loudnessResult_;

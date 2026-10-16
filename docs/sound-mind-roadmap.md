@@ -1304,7 +1304,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - ✅ **C** (`v0.1.39.3`, Decision #246): the Fractal family.
 - ✅ **D** (`v0.1.39.4`, Decision #247): the Streaming family.
 
-#### `v0.Y.80.1` - Analysis tools (L)
+#### ✅ `v0.Y.80.1` - Analysis tools (L) - settled in `v0.1.40.1`-`v0.1.40.4`, see architecture Decisions #249-#252
 
 - **Three tools,** each with visualizations, graphs and overlays:
   - **Goniometer / stereo width.**
@@ -1320,7 +1320,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - ✅ **A** (`v0.1.40.1`, Decision #249): the loudness meter. BS.1770 loudness, true peak and clips are measured on the decoded mix and each soloed layer; per-band levels come from the spectral data. It lives in a new Analysis panel. (Building it uncovered the decode-edge click fixed in `v0.1.39.5`, Decision #248.)
 - ✅ **B** (`v0.1.40.2`, Decision #250): goniometer and stereo width (over time, per band).
 - ✅ **C** (`v0.1.40.3`, Decision #251): pitch detection with a canvas overlay.
-- **D**: master limiter (playback and export; on by default, -1 dBTP ceiling) and output loudness normalization (off by default, target -14 LUFS, in Configure Devices).
+- ✅ **D** (`v0.1.40.4`, Decision #252): master limiter (playback and export; on by default, -1 dBFS sample-peak ceiling) and output loudness normalization (off by default, target -14 LUFS, playback only), both in Configure Devices.
 
 #### `v0.Y.81.1` - Operation history persisted with the project (L)
 

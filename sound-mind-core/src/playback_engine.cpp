@@ -1,5 +1,6 @@
 #include "sound_mind/core/playback_engine.h"
 
+#include <cmath>
 #include <algorithm>
 
 #include "sound_mind/core/audio_device_list.h"
@@ -48,6 +49,11 @@ double PlaybackEngine::deviceSampleRateHz() const noexcept {
     return deviceSampleRateHz_.load(std::memory_order_relaxed);
 }
 
+void PlaybackEngine::setNormalizationGainDb(float gainDb) noexcept {
+    normalizationGainDb_.store(gainDb, std::memory_order_relaxed);
+    normalizationGain_.store(std::pow(10.0f, gainDb / 20.0f), std::memory_order_relaxed);
+}
+
 void PlaybackEngine::loadAudio(sound_mind::codec::AudioBuffer audio) {
     {
         const std::lock_guard<std::mutex> lock(stagedMutex_);
@@ -55,6 +61,9 @@ void PlaybackEngine::loadAudio(sound_mind::codec::AudioBuffer audio) {
         hasStaged_.store(false, std::memory_order_relaxed);
     }
     audio_ = std::move(audio);
+    // loadAudio() runs while stopped, and a stopped renderBlock() never
+    // touches the limiter, so this can't race it.
+    limiter_.setSampleRate(static_cast<double>(audio_.sampleRateHz));
     frameCount_.store(audio_.frameCount(), std::memory_order_relaxed);
     sampleRateHzCached_.store(audio_.sampleRateHz, std::memory_order_relaxed);
     position_.store(0, std::memory_order_relaxed);
@@ -215,7 +224,8 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
     std::size_t position = position_.load(std::memory_order_relaxed);
     const std::size_t frameCount = frameCount_.load(std::memory_order_relaxed);
     const std::size_t rangeEnd = std::min(rangeEndSamples_.load(std::memory_order_relaxed), frameCount);
-    const float volume = volume_.load(std::memory_order_relaxed);
+    const float volume =
+        volume_.load(std::memory_order_relaxed) * normalizationGain_.load(std::memory_order_relaxed);
 
     // Resolved once up front too (not just on the in-loop crossing below) -
     // covers a position that's already at or past rangeEnd as this block
@@ -266,6 +276,10 @@ void PlaybackEngine::renderBlock(float* const* outputChannelData, int numOutputC
     if (halted) {
         playing_.store(false, std::memory_order_relaxed);
     }
+
+    // The master limiter is the very last stage (v0.Y.80.1).
+    limiter_.process(outputChannelData[0], numOutputChannels > 1 ? outputChannelData[1] : nullptr,
+                     static_cast<std::size_t>(numSamples));
 }
 
 void PlaybackEngine::audioDeviceIOCallbackWithContext(const float* const* /*inputChannelData*/,
