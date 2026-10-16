@@ -2373,6 +2373,10 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Normalization** is a gain, not a processor:
       - `PlaybackEngine::setNormalizationGainDb()` multiplies the volume, ahead of the limiter.
       - `MainWindow` measures `integratedLoudnessLufs()` (the new BS.1770 integrated-only entry point, sharing `gatedIntegrated()` with `measureLoudness()`) on each buffer it loads for playback: a fresh composite, or a repeat-mode refresh.
+      - **Amended in `v0.1.40.5`:** the measurement runs on the background task that prepares the buffer, never on the GUI thread. In `v0.1.40.4` it ran on the GUI thread while loading.
+        - `compositeTask_` now decodes as well as composites. That decode was also on the GUI thread before. `compositedResult_` holds the decoded `AudioBuffer` plus `compositedLoudnessLufs_`.
+        - `refreshTask_` sets `refreshLoudnessLufs_` alongside `refreshResult_`.
+        - The GUI side only calls `noteLoadedPlaybackLoudness(lufs)`, so the gain is known before playback starts and nothing plays at the wrong level first.
       - The gain is `clamp(target - integrated, -24, +12)` dB, or 0 when the mix is silent. It is fixed per loaded buffer, so it holds steady across pause and resume, and a target change re-applies at once.
       - Playback only: an export keeps the mix's own level, which the Analysis panel measures.
     - **Settings:**

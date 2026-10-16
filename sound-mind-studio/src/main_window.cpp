@@ -3521,8 +3521,7 @@ void MainWindow::setLoudnessNormalization(bool enabled, double targetLufs) {
 
 double MainWindow::normalizationGainDb() const noexcept { return playbackController_->normalizationGainDb(); }
 
-void MainWindow::noteLoadedPlaybackAudio(const sound_mind::codec::AudioBuffer& audio) {
-    const double lufs = sound_mind::core::integratedLoudnessLufs(audio);
+void MainWindow::noteLoadedPlaybackLoudness(double lufs) {
     loadedMixLoudnessLufs_ =
         lufs > sound_mind::core::kLoudnessFloorLufs ? std::optional<double>(lufs) : std::nullopt;
     applyNormalizationGain();
@@ -4584,8 +4583,13 @@ void MainWindow::startPlayback() {
         compositeTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
             [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
                 try {
-                    compositedResult_ = sound_mind::core::compositeProject(
+                    const auto composite = sound_mind::core::compositeProject(
                         projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
+                    if (composite.has_value()) {
+                        // Decoded and measured here, off the GUI thread.
+                        compositedResult_ = sound_mind::codec::decode(*composite);
+                        compositedLoudnessLufs_ = sound_mind::core::integratedLoudnessLufs(*compositedResult_);
+                    }
                 } catch (const sound_mind::core::CompositeCancelled&) {
                     compositeOutcome_ = CompositeOutcome::Cancelled;
                 } catch (const std::exception& e) {
@@ -5546,6 +5550,7 @@ void MainWindow::scheduleRepeatRefresh() {
                     projectCopy, [&token]() { return token.cancellationRequested(); }, /*respectMute=*/true);
                 if (composite.has_value()) {
                     refreshResult_ = sound_mind::codec::decode(*composite);
+                    refreshLoudnessLufs_ = sound_mind::core::integratedLoudnessLufs(*refreshResult_);
                 }
             } catch (const std::exception&) {
                 refreshResult_.reset();  // cancelled or failed: playback just keeps the older audio.
@@ -5572,7 +5577,7 @@ void MainWindow::pollRepeatRefresh() {
     if (!result.has_value() || !repeatEnabled_ || !playbackController_->isPlaying()) {
         return;
     }
-    noteLoadedPlaybackAudio(*result);  // the refreshed mix's own loudness.
+    noteLoadedPlaybackLoudness(refreshLoudnessLufs_);  // the refreshed mix's own loudness.
     if (playbackController_->stageAudio(std::move(*result))) {
         return;
     }
@@ -5725,11 +5730,8 @@ void MainWindow::pollCompositeProgress() {
                 // constructor to playbackPanel_->setDuration()) - only
                 // needs doing once per load, matching startPlayback()'s own
                 // prior synchronous contract.
-                {
-                    sound_mind::codec::AudioBuffer audio = sound_mind::codec::decode(*compositedResult_);
-                    noteLoadedPlaybackAudio(audio);
-                    playbackController_->load(std::move(audio));
-                }
+                noteLoadedPlaybackLoudness(compositedLoudnessLufs_);
+                playbackController_->load(std::move(*compositedResult_));
                 // A fresh load starts a new "nothing edited yet this
                 // session" range - the whole track, regardless of
                 // playbackScope_ - narrowed only once a real edit actually

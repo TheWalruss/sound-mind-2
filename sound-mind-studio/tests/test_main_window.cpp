@@ -7155,6 +7155,31 @@ void MainWindowTest::loudnessNormalizationGainFollowsTheLoadedMixAndIsRemembered
     }
 }
 
+// v0.1.40.5: the repeat refresh (measured on its own background task) updates
+// the gain to match the fresh mix.
+void MainWindowTest::loudnessNormalizationRemeasuresARepeatRefresh() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.05f)));
+    window.setLoudnessNormalization(true, -20.0);
+    window.setPlaybackRepeat(true);
+    window.startPlayback();
+    auto* compositeCancelButton = window.findChild<QPushButton*>(QStringLiteral("compositeCancelButton"));
+    QTRY_VERIFY_WITH_TIMEOUT(compositeCancelButton->isHidden(), 120000);
+    QVERIFY(window.isPlaying());
+    const double quietGain = window.normalizationGainDb();
+
+    // A much louder layer joins the mix; the refresh measures it and turns the output down.
+    QVERIFY(window.commitRecording(recordedTone(0.8f)));
+    auto* tools = window.findChild<sound_mind::studio::ToolPaletteController*>();
+    emit tools->contentChanged(window.project()->layers().back().id());
+    QTRY_VERIFY_WITH_TIMEOUT(window.normalizationGainDb() < quietGain - 6.0, 120000);
+
+    window.stopPlayback();
+    window.setLoudnessNormalization(false, -14.0);  // back to the defaults for later tests.
+    window.setPlaybackRepeat(false);
+}
+
 void MainWindowTest::masterLimiterSettingReachesPlaybackAndBothDevicePanels() {
     TestMainWindow window;
     auto checkBoxes = window.findChildren<QCheckBox*>(QStringLiteral("masterLimiterCheckBox"));

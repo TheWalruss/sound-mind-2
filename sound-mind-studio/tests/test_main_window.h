@@ -351,4 +351,5 @@ private slots:
     void analyzeLoudnessReportsTheMixAndLayersAndGoesStaleOnEdits();
     void loudnessNormalizationGainFollowsTheLoadedMixAndIsRemembered();
     void masterLimiterSettingReachesPlaybackAndBothDevicePanels();
+    void loudnessNormalizationRemeasuresARepeatRefresh();
 };

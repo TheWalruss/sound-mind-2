@@ -3467,7 +3467,8 @@ private:
     /// isCompositingForPlayback() (still polling); once the background
     /// composite finishes, stops the timer, hides
     /// compositeCancelButton_, and reports the outcome per
-    /// compositeOutcome_ - success (loads compositedResult_ into
+    /// compositeOutcome_ - success (loads compositedResult_, already
+    /// decoded and measured on the background task, into
     /// playbackController_ and starts playback, the same
     /// load()-then-play() sequence startPlayback() always did
     /// synchronously - or a status message noting there was nothing to
@@ -3855,8 +3856,13 @@ private:
     /// @brief Applies the current normalization settings to the loaded mix's
     ///        measured loudness - see setLoudnessNormalization().
     void applyNormalizationGain();
-    /// @brief Measures `audio` (about to be played) for normalization.
-    void noteLoadedPlaybackAudio(const sound_mind::codec::AudioBuffer& audio);
+    /// @brief Records the integrated loudness of the audio just loaded
+    ///        (or staged) for playback, and re-applies the normalization
+    ///        gain. The measurement itself runs on the background task that
+    ///        prepared the audio (compositeTask_ or refreshTask_), never on
+    ///        the GUI thread.
+    /// @param lufs The loudness, LUFS (`kLoudnessFloorLufs` if silent).
+    void noteLoadedPlaybackLoudness(double lufs);
     /// @brief The running loudness analysis's result; declared before the
     ///        task so the task is destroyed first (as refreshResult_).
     std::optional<sound_mind::core::ProjectLoudnessReport> loudnessResult_;
@@ -4243,6 +4249,8 @@ private:
     /// release/acquire reasoning as compositedResult_. Declared before
     /// refreshTask_ so the task is destroyed first.
     std::optional<sound_mind::codec::AudioBuffer> refreshResult_;
+    /// @brief refreshResult_'s integrated loudness, measured on refreshTask_.
+    double refreshLoudnessLufs_ = -70.0;
     std::unique_ptr<sound_mind::core::BackgroundTask> refreshTask_;
     QTimer* refreshTimer_ = nullptr;
     /// @brief A change arrived while refreshTask_ was running.
@@ -4269,8 +4277,11 @@ private:
     /// isCompositingForPlayback() == false, safe for the same release/
     /// acquire reason exportOutcome_/pooledContent_ are (see
     /// BackgroundTask::isRunning()'s own docs). `std::nullopt` on
-    /// cancellation, failure, or a composite with nothing to play.
-    std::optional<sound_mind::codec::StreamImage> compositedResult_;
+    /// cancellation, failure, or a composite with nothing to play. Already
+    /// decoded, and measured into compositedLoudnessLufs_, on the task.
+    std::optional<sound_mind::codec::AudioBuffer> compositedResult_;
+    /// @brief compositedResult_'s integrated loudness (for normalization).
+    double compositedLoudnessLufs_ = -70.0;
 
     enum class CompositeOutcome { Success, Cancelled, Failed };
     CompositeOutcome compositeOutcome_ = CompositeOutcome::Success;

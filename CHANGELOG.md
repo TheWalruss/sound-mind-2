@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.5] - 2026-10-16
+
+### Changed
+
+- **Starting playback no longer freezes the window on a long mix.** Decoding the mix, and measuring its loudness for normalization, now happen in the background along with the rest of the playback preparation (the **✕** cancel button covers them too). The repeat-refresh path measures in the background as well.
+
 ## [0.1.40.4] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.80.1` (Analysis tools), installment D - completes the milestone.
