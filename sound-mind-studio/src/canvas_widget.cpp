@@ -1,3 +1,4 @@
+#include "sound_mind/studio/analysis_graphs.h"
 #include "sound_mind/studio/canvas_widget.h"
 
 #include <algorithm>
@@ -180,9 +181,14 @@ void CanvasWidget::setPickMultiSelectionBounds(std::vector<sound_mind::core::Tim
     update();
 }
 
-void CanvasWidget::setPitchOverlay(std::vector<float> hzPerFrame) {
-    pitchOverlay_ = std::move(hzPerFrame);
+void CanvasWidget::setPitchOverlay(std::vector<std::vector<float>> tracks) {
+    pitchOverlay_ = std::move(tracks);
     update();
+}
+
+bool CanvasWidget::hasPitchOverlay() const noexcept {
+    return std::any_of(pitchOverlay_.begin(), pitchOverlay_.end(),
+                       [](const std::vector<float>& track) { return !track.empty(); });
 }
 
 void CanvasWidget::setLoudnessOverlay(std::vector<float> momentaryLufs, std::vector<float> shortTermLufs,
@@ -727,25 +733,29 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
             painter.drawRect(widgetRectFor(bounds));
         }
     }
-    if (!polarMode_ && project_ != nullptr && !pitchOverlay_.empty()) {
+    if (!polarMode_ && project_ != nullptr && hasPitchOverlay()) {
         const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
         painter.setBrush(Qt::NoBrush);
-        for (const auto& [color, width] : {std::pair{QColor(Qt::black), 4.0}, std::pair{QColor(80, 255, 120), 2.0}}) {
-            painter.setPen(QPen(color, width));
-            std::optional<QPointF> previous;
-            for (std::size_t frame = 0; frame < pitchOverlay_.size(); ++frame) {
-                if (pitchOverlay_[frame] <= 0.0f) {
-                    previous.reset();
-                    continue;
+        for (std::size_t voice = 0; voice < pitchOverlay_.size(); ++voice) {
+            const auto& track = pitchOverlay_[voice];
+            for (const auto& [color, width] :
+                 {std::pair{QColor(Qt::black), 4.0}, std::pair{pitchVoiceColor(voice), 2.0}}) {
+                painter.setPen(QPen(color, width));
+                std::optional<QPointF> previous;
+                for (std::size_t frame = 0; frame < track.size(); ++frame) {
+                    if (track[frame] <= 0.0f) {
+                        previous.reset();
+                        continue;
+                    }
+                    const QPointF point = timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint{
+                        sound_mind::core::frameIndexToTime(static_cast<double>(frame), config), track[frame]});
+                    if (previous.has_value()) {
+                        painter.drawLine(*previous, point);
+                    } else {
+                        painter.drawPoint(point);
+                    }
+                    previous = point;
                 }
-                const QPointF point = timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint{
-                    sound_mind::core::frameIndexToTime(static_cast<double>(frame), config), pitchOverlay_[frame]});
-                if (previous.has_value()) {
-                    painter.drawLine(*previous, point);
-                } else {
-                    painter.drawPoint(point);
-                }
-                previous = point;
             }
         }
     }

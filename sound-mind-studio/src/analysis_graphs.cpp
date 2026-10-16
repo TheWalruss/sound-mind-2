@@ -1,8 +1,10 @@
 #include "sound_mind/studio/analysis_graphs.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 
@@ -273,13 +275,20 @@ void BandWidthBarsWidget::paintEvent(QPaintEvent* /*event*/) {
     }
 }
 
+QColor pitchVoiceColor(std::size_t voice) {
+    static const std::array<QColor, 6> kColors{QColor(80, 255, 120),  QColor(255, 100, 190), QColor(90, 200, 255),
+                                               QColor(255, 220, 70),  QColor(185, 130, 255), QColor(255, 110, 90)};
+    return kColors[voice % kColors.size()];
+}
+
 PitchGraphWidget::PitchGraphWidget(QWidget* parent) : QWidget(parent) {
     setMinimumHeight(80);
+    setMouseTracking(true);
     setToolTip(tr("Detected pitch over time, 50 Hz to 2 kHz, with a line at each C"));
 }
 
-void PitchGraphWidget::setTrack(std::vector<float> hzPerFrame, double secondsPerFrame) {
-    track_ = std::move(hzPerFrame);
+void PitchGraphWidget::setTracks(std::vector<std::vector<float>> tracks, double secondsPerFrame) {
+    tracks_ = std::move(tracks);
     secondsPerFrame_ = secondsPerFrame;
     update();
 }
@@ -290,7 +299,36 @@ void PitchGraphWidget::setPlayhead(std::optional<double> seconds) {
 }
 
 bool PitchGraphWidget::hasData() const {
-    return std::any_of(track_.begin(), track_.end(), [](float hz) { return hz > 0.0f; });
+    return std::any_of(tracks_.begin(), tracks_.end(), [](const std::vector<float>& track) {
+        return std::any_of(track.begin(), track.end(), [](float hz) { return hz > 0.0f; });
+    });
+}
+
+std::size_t PitchGraphWidget::frameCount() const noexcept {
+    std::size_t count = 0;
+    for (const auto& track : tracks_) {
+        count = std::max(count, track.size());
+    }
+    return count;
+}
+
+std::optional<double> PitchGraphWidget::secondsAt(double x) const {
+    const std::size_t frames = frameCount();
+    if (frames < 2 || secondsPerFrame_ <= 0.0 || rect().width() <= 0) {
+        return std::nullopt;
+    }
+    const double xScale = static_cast<double>(rect().width()) / static_cast<double>(frames - 1);
+    return std::clamp(x / xScale, 0.0, static_cast<double>(frames - 1)) * secondsPerFrame_;
+}
+
+void PitchGraphWidget::mouseMoveEvent(QMouseEvent* event) {
+    emit hoverChanged(secondsAt(event->position().x()));
+    QWidget::mouseMoveEvent(event);
+}
+
+void PitchGraphWidget::leaveEvent(QEvent* event) {
+    emit hoverChanged(std::nullopt);
+    QWidget::leaveEvent(event);
 }
 
 void PitchGraphWidget::paintEvent(QPaintEvent* /*event*/) {
@@ -307,22 +345,26 @@ void PitchGraphWidget::paintEvent(QPaintEvent* /*event*/) {
     for (double c = 65.406; c < kHighHz; c *= 2.0) {  // C2, C3, ...
         painter.drawLine(QPointF(0.0, yFor(c)), QPointF(rect().width(), yFor(c)));
     }
-    if (track_.empty()) {
+    const std::size_t frames = frameCount();
+    if (frames == 0) {
         return;
     }
-    const double xScale = track_.size() > 1 ? static_cast<double>(rect().width()) / (track_.size() - 1) : 0.0;
-    painter.setPen(QPen(QColor(80, 255, 120), 2));
-    std::optional<QPointF> previous;
-    for (std::size_t i = 0; i < track_.size(); ++i) {
-        if (track_[i] <= 0.0f) {
-            previous.reset();
-            continue;
+    const double xScale = frames > 1 ? static_cast<double>(rect().width()) / static_cast<double>(frames - 1) : 0.0;
+    for (std::size_t voice = 0; voice < tracks_.size(); ++voice) {
+        const auto& track = tracks_[voice];
+        painter.setPen(QPen(pitchVoiceColor(voice), 2));
+        std::optional<QPointF> previous;
+        for (std::size_t i = 0; i < track.size(); ++i) {
+            if (track[i] <= 0.0f) {
+                previous.reset();
+                continue;
+            }
+            const QPointF point(static_cast<double>(i) * xScale, yFor(std::clamp<double>(track[i], kLowHz, kHighHz)));
+            if (previous.has_value()) {
+                painter.drawLine(*previous, point);
+            }
+            previous = point;
         }
-        const QPointF point(static_cast<double>(i) * xScale, yFor(std::clamp<double>(track_[i], kLowHz, kHighHz)));
-        if (previous.has_value()) {
-            painter.drawLine(*previous, point);
-        }
-        previous = point;
     }
     if (playhead_.has_value() && secondsPerFrame_ > 0.0) {
         const double x = *playhead_ / secondsPerFrame_ * xScale;

@@ -151,6 +151,18 @@ AnalysisPanel::AnalysisPanel(QWidget* parent) : QDockWidget(tr("Analysis"), pare
     noteNowLabel_ = makeReading(pitch, QStringLiteral("noteNowLabel"));
     noteNowLabel_->setToolTip(tr("The note at the playback position, how far off it is in cents, and its frequency"));
     pitchSummary->addRow(tr("At playhead:"), noteNowLabel_);
+    noteMouseLabel_ = makeReading(pitch, QStringLiteral("noteMouseLabel"));
+    noteMouseLabel_->setToolTip(tr("The pitch under the mouse - hover over the canvas or the graph below"));
+    pitchSummary->addRow(tr("At mouse:"), noteMouseLabel_);
+    pitchVoiceCountField_ = new IntegerField(pitch);
+    pitchVoiceCountField_->setObjectName(QStringLiteral("pitchVoiceCountField"));
+    pitchVoiceCountField_->setRange(1, sound_mind::core::kMaxPitchVoices);
+    pitchVoiceCountField_->setValue(1);
+    pitchVoiceCountField_->setToolTip(
+        tr("How many simultaneous pitches to follow - e.g. 2 for a melody over a bassline. Each gets its own "
+           "track, highest first. Takes a new analysis."));
+    connect(pitchVoiceCountField_, &IntegerField::valueChanged, this, &AnalysisPanel::pitchVoiceCountChanged);
+    pitchSummary->addRow(tr("Voices:"), pitchVoiceCountField_);
     pitchSpikeFilterField_ = new NumericField(pitch);
     pitchSpikeFilterField_->setObjectName(QStringLiteral("pitchSpikeFilterField"));
     pitchSpikeFilterField_->setRange(0.0, 1000.0);
@@ -167,8 +179,15 @@ AnalysisPanel::AnalysisPanel(QWidget* parent) : QDockWidget(tr("Analysis"), pare
     });
     pitchSummary->addRow(tr("Ignore spikes shorter than:"), pitchSpikeFilterField_);
     pitchRoot->addLayout(pitchSummary);
+    voiceList_ = new QWidget(pitch);
+    voiceList_->setObjectName(QStringLiteral("pitchVoiceList"));
+    auto* voiceLayout = new QHBoxLayout(voiceList_);
+    voiceLayout->setContentsMargins(0, 0, 0, 0);
+    voiceList_->hide();
+    pitchRoot->addWidget(voiceList_);
     pitchGraph_ = new PitchGraphWidget(pitch);
     pitchGraph_->setObjectName(QStringLiteral("pitchGraph"));
+    connect(pitchGraph_, &PitchGraphWidget::hoverChanged, this, &AnalysisPanel::setMouseTime);
     pitchRoot->addWidget(pitchGraph_, 1);
     pitchOverlayCheckBox_ = new QCheckBox(tr("Show pitch on canvas"), pitch);
     pitchOverlayCheckBox_->setObjectName(QStringLiteral("pitchOverlayCheckBox"));
@@ -187,13 +206,93 @@ void AnalysisPanel::setPitchSpikeFilterMs(double milliseconds) {
 }
 
 void AnalysisPanel::refreshDisplayedPitch() {
-    displayedPitch_ = report_.has_value()
-                          ? sound_mind::core::removePitchSpikes(report_->mixPitchHz, report_->secondsPerFrame,
-                                                                pitchSpikeFilterField_->value() / 1000.0)
-                          : std::vector<float>{};
-    pitchGraph_->setTrack(displayedPitch_, report_.has_value() ? report_->secondsPerFrame : 0.0);
+    displayedPitch_.clear();
+    if (report_.has_value()) {
+        for (std::size_t voice = 0; voice < report_->mixPitchTracks.size(); ++voice) {
+            const bool hidden = voice < hiddenVoices_.size() && hiddenVoices_[voice];
+            displayedPitch_.push_back(hidden ? std::vector<float>{}
+                                             : sound_mind::core::removePitchSpikes(
+                                                   report_->mixPitchTracks[voice], report_->secondsPerFrame,
+                                                   pitchSpikeFilterField_->value() / 1000.0));
+        }
+    }
+    pitchGraph_->setTracks(displayedPitch_, report_.has_value() ? report_->secondsPerFrame : 0.0);
     setPlaybackPosition(playbackSeconds_);
+    setMouseTime(mouseSeconds_);
     emitPitchOverlay();
+}
+
+void AnalysisPanel::setPitchVoiceCount(int voices) {
+    const QSignalBlocker blocker(pitchVoiceCountField_);
+    pitchVoiceCountField_->setValue(voices);
+}
+
+int AnalysisPanel::pitchVoiceCount() const noexcept { return pitchVoiceCountField_->value(); }
+
+void AnalysisPanel::rebuildVoiceList() {
+    for (QCheckBox* box : voiceCheckBoxes_) {
+        delete box;
+    }
+    voiceCheckBoxes_.clear();
+    const std::size_t count = report_.has_value() ? report_->mixPitchTracks.size() : 0;
+    hiddenVoices_.resize(std::max(hiddenVoices_.size(), count), false);
+    voiceList_->setVisible(count > 1);
+    if (count < 2) {
+        return;
+    }
+    for (std::size_t voice = 0; voice < count; ++voice) {
+        QString label = tr("Voice %1").arg(voice + 1);
+        if (voice == 0) {
+            label += tr(" (highest)");
+        } else if (voice + 1 == count) {
+            label += tr(" (lowest)");
+        }
+        auto* box = new QCheckBox(label, voiceList_);
+        box->setObjectName(QStringLiteral("pitchVoiceCheckBox%1").arg(voice));
+        box->setChecked(!hiddenVoices_[voice]);
+        const QColor color = pitchVoiceColor(voice);
+        box->setStyleSheet(QStringLiteral("QCheckBox { color: rgb(%1, %2, %3); font-weight: bold; }")
+                               .arg(color.red())
+                               .arg(color.green())
+                               .arg(color.blue()));
+        box->setToolTip(tr("Show or hide this voice in the graph, the readouts and on the canvas"));
+        connect(box, &QCheckBox::toggled, this, [this, voice](bool shown) {
+            hiddenVoices_[voice] = !shown;
+            refreshDisplayedPitch();
+        });
+        voiceList_->layout()->addWidget(box);
+        voiceCheckBoxes_.push_back(box);
+    }
+}
+
+QString AnalysisPanel::notesAt(double seconds) const {
+    if (!report_.has_value() || report_->secondsPerFrame <= 0.0 || seconds < 0.0) {
+        return QStringLiteral("—");
+    }
+    const auto frame = static_cast<std::size_t>(seconds / report_->secondsPerFrame);
+    const bool numbered = displayedPitch_.size() > 1;
+    QStringList lines;
+    for (std::size_t voice = 0; voice < displayedPitch_.size(); ++voice) {
+        const auto& track = displayedPitch_[voice];
+        if (frame >= track.size() || track[frame] <= 0.0f) {
+            continue;
+        }
+        const double hz = track[frame];
+        const auto note = sound_mind::core::noteFor(hz);
+        const QString text = QStringLiteral("%1%2  %3%4 cents  (%5 Hz)")
+                                 .arg(QString::fromStdString(note.name))
+                                 .arg(note.octave)
+                                 .arg(note.cents >= 0.0 ? QStringLiteral("+") : QString())
+                                 .arg(note.cents, 0, 'f', 0)
+                                 .arg(hz, 0, 'f', 1);
+        lines.push_back(numbered ? QStringLiteral("%1: %2").arg(voice + 1).arg(text) : text);
+    }
+    return lines.isEmpty() ? QStringLiteral("—") : lines.join(QLatin1Char('\n'));
+}
+
+void AnalysisPanel::setMouseTime(std::optional<double> seconds) {
+    mouseSeconds_ = seconds;
+    noteMouseLabel_->setText(seconds.has_value() ? notesAt(*seconds) : QStringLiteral("—"));
 }
 
 bool AnalysisPanel::autoAnalyze() const noexcept { return autoAnalyzeCheckBox_->isChecked(); }
@@ -230,9 +329,7 @@ void AnalysisPanel::setReport(const sound_mind::core::ProjectLoudnessReport& rep
                             sound_mind::core::kLoudnessStepSeconds);
     goniometer_->setAudio(report.mixAudio);
     bandWidths_->setWidths(report.mixBandWidths);
-    displayedPitch_ = sound_mind::core::removePitchSpikes(report.mixPitchHz, report.secondsPerFrame,
-                                                          pitchSpikeFilterField_->value() / 1000.0);
-    pitchGraph_->setTrack(displayedPitch_, report.secondsPerFrame);
+    rebuildVoiceList();
     bands_->setLevels(report.mixBandLevels, static_cast<int>(sound_mind::core::loudnessBands().size()),
                       static_cast<int>(report.frameCount), report.secondsPerFrame);
 
@@ -252,6 +349,7 @@ void AnalysisPanel::setReport(const sound_mind::core::ProjectLoudnessReport& rep
             layerTable_->setItem(row, column, item);
         }
     }
+    refreshDisplayedPitch();  // also re-reads the playhead and mouse readouts.
     setPlaybackPosition(std::nullopt);
     emitOverlays();
 }
@@ -271,7 +369,9 @@ void AnalysisPanel::clearReport() {
     goniometer_->setAudio(nullptr);
     bandWidths_->setWidths({});
     displayedPitch_.clear();
-    pitchGraph_->setTrack({}, 0.0);
+    rebuildVoiceList();
+    pitchGraph_->setTracks({}, 0.0);
+    setMouseTime(std::nullopt);
     emitOverlays();
     layerTable_->setRowCount(0);
 }
@@ -308,19 +408,7 @@ void AnalysisPanel::setPlaybackPosition(std::optional<double> seconds) {
     // Reading i covers the window ending at (i + 1) steps.
     const auto& mix = report_->mix;
     const auto index = static_cast<std::ptrdiff_t>(*seconds / sound_mind::core::kLoudnessStepSeconds) - 1;
-    if (report_->secondsPerFrame > 0.0) {
-        const auto frame = static_cast<std::size_t>(*seconds / report_->secondsPerFrame);
-        if (frame < displayedPitch_.size() && displayedPitch_[frame] > 0.0f) {
-            const double hz = displayedPitch_[frame];
-            const auto note = sound_mind::core::noteFor(hz);
-            noteNowLabel_->setText(QStringLiteral("%1%2  %3%4 cents  (%5 Hz)")
-                                       .arg(QString::fromStdString(note.name))
-                                       .arg(note.octave)
-                                       .arg(note.cents >= 0.0 ? QStringLiteral("+") : QString())
-                                       .arg(note.cents, 0, 'f', 0)
-                                       .arg(hz, 0, 'f', 1));
-        }
-    }
+    noteNowLabel_->setText(notesAt(*seconds));
     const auto& stereo = report_->mixStereo;
     if (index >= 0 && index < static_cast<std::ptrdiff_t>(stereo.correlationOverTime.size())) {
         correlationNowLabel_->setText(
@@ -336,7 +424,7 @@ void AnalysisPanel::setPlaybackPosition(std::optional<double> seconds) {
 
 void AnalysisPanel::emitPitchOverlay() {
     const bool enabled = pitchOverlayCheckBox_->isChecked();
-    static const std::vector<float> kNone;
+    static const std::vector<std::vector<float>> kNone;
     emit pitchOverlayToggled(enabled, enabled && report_.has_value() ? displayedPitch_ : kNone);
 }
 

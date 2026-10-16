@@ -23,4 +23,7 @@ private slots:
     void showLoudnessOnCanvasEmitsTheSeriesOnlyWhileChecked();
     void showStereoOnCanvasEmitsTheSeriesOnlyWhileChecked();
     void pitchSpikeFilterCleansTheGraphNoteAndOverlay();
+    void eachVoiceGetsACheckboxThatHidesIt();
+    void voiceCountFieldEmitsAndItsSetterDoesNot();
+    void atMouseShowsThePitchesUnderTheMouse();
 };

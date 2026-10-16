@@ -21,6 +21,7 @@
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/core/tool_configuration.h"
+#include "sound_mind/studio/analysis_graphs.h"
 #include "sound_mind/studio/canvas_widget.h"
 
 using sound_mind::codec::StreamImage;
@@ -2060,10 +2061,17 @@ void CanvasWidgetTest::aPitchOverlayIsDrawnOverTheCanvas() {
     widget.resize(100, 50);
     const QImage before = widget.grab().toImage();
 
-    widget.setPitchOverlay(std::vector<float>(100, 800.0f));
+    widget.setPitchOverlay({std::vector<float>(100, 800.0f)});
     QVERIFY(widget.hasPitchOverlay());
     QVERIFY(columnContainsColor(widget.grab().toImage(), 50, QColor(80, 255, 120)));
 
+    // A second voice draws in its own color; a hidden (empty) voice draws nothing.
+    widget.setPitchOverlay({{}, std::vector<float>(100, 300.0f)});
+    QVERIFY(widget.hasPitchOverlay());
+    QVERIFY(columnContainsColor(widget.grab().toImage(), 50, sound_mind::studio::pitchVoiceColor(1)));
+    QVERIFY(!columnContainsColor(widget.grab().toImage(), 50, QColor(80, 255, 120)));
+    widget.setPitchOverlay({{}, {}});
+    QVERIFY(!widget.hasPitchOverlay());
     widget.setPitchOverlay({});
     QVERIFY(!widget.hasPitchOverlay());
     QVERIFY(widget.grab().toImage() == before);

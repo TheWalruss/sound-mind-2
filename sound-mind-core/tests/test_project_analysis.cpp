@@ -65,8 +65,11 @@ TEST_CASE("analyzeProjectLoudness measures the mix and each layer on its own", "
     CHECK(report.mixStereo.correlation == Catch::Approx(1.0).margin(0.01));
     CHECK(report.mixBandWidths.size() == sound_mind::core::loudnessBands().size());
     // The loud 1 kHz tone dominates: that's the pitch heard.
-    REQUIRE(report.mixPitchHz.size() == 300);
-    CHECK(report.mixPitchHz[150] == Catch::Approx(1000.0).epsilon(0.02));
+    REQUIRE(report.mixPitchTracks.size() == 1);
+    REQUIRE(report.mixPitchTracks[0].size() == 300);
+    CHECK(report.mixPitchTracks[0][150] == Catch::Approx(1000.0).epsilon(0.02));
+    // Asking for more voices gives as many tracks.
+    CHECK(sound_mind::core::analyzeProjectLoudness(project, {}, 3).mixPitchTracks.size() == 3);
 }
 
 TEST_CASE("analyzeProjectLoudness leaves out muted, hidden and filter layers", "[core][project_analysis]") {

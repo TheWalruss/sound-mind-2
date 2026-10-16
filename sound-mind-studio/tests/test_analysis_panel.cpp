@@ -50,7 +50,7 @@ ProjectLoudnessReport twoLayerReport() {
     report.mixStereo.correlationOverTime.assign(20, 0.75f);
     report.mixStereo.widthOverTime.assign(20, 0.3f);
     report.mixBandWidths = {0.0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
-    report.mixPitchHz = {0.0f, 440.0f, 445.0f, 0.0f};
+    report.mixPitchTracks = {{0.0f, 440.0f, 445.0f, 0.0f}};
     report.layers.push_back(LayerLoudness{1, "Drums", steady(-16.0, 20)});
     report.layers.push_back(LayerLoudness{2, "Pad", steady(-24.0, 20)});
     return report;
@@ -222,11 +222,11 @@ void AnalysisPanelTest::thePitchTabShowsTheNoteAtThePlayhead() {
 
 void AnalysisPanelTest::showPitchOnCanvasEmitsTheTrackOnlyWhileChecked() {
     AnalysisPanel panel;
-    std::vector<float> received{1.0f};
+    std::vector<std::vector<float>> received{{1.0f}};
     bool enabled = false;
-    connect(&panel, &AnalysisPanel::pitchOverlayToggled, [&](bool on, const std::vector<float>& track) {
+    connect(&panel, &AnalysisPanel::pitchOverlayToggled, [&](bool on, const std::vector<std::vector<float>>& tracks) {
         enabled = on;
-        received = track;
+        received = tracks;
     });
     auto* box = panel.findChild<QCheckBox*>(QStringLiteral("pitchOverlayCheckBox"));
 
@@ -234,7 +234,8 @@ void AnalysisPanelTest::showPitchOnCanvasEmitsTheTrackOnlyWhileChecked() {
     QVERIFY(enabled);
     QVERIFY(received.empty());
     panel.setReport(twoLayerReport());  // a new report while checked: shown.
-    QCOMPARE(received.size(), std::size_t{4});
+    QCOMPARE(received.size(), std::size_t{1});
+    QCOMPARE(received[0].size(), std::size_t{4});
     box->setChecked(false);
     QVERIFY(received.empty());
 }
@@ -327,11 +328,12 @@ void AnalysisPanelTest::pitchSpikeFilterCleansTheGraphNoteAndOverlay() {
     AnalysisPanel panel;
     ProjectLoudnessReport report = twoLayerReport();
     report.secondsPerFrame = 0.01;
-    report.mixPitchHz.assign(20, 220.0f);
-    report.mixPitchHz[10] = 880.0f;  // a 10 ms octave spike.
+    report.mixPitchTracks = {std::vector<float>(20, 220.0f)};
+    report.mixPitchTracks[0][10] = 880.0f;  // a 10 ms octave spike.
     std::vector<float> overlay;
-    connect(&panel, &AnalysisPanel::pitchOverlayToggled,
-            [&](bool, const std::vector<float>& track) { overlay = track; });
+    connect(&panel, &AnalysisPanel::pitchOverlayToggled, [&](bool, const std::vector<std::vector<float>>& tracks) {
+        overlay = tracks.empty() ? std::vector<float>{} : tracks[0];
+    });
     QSignalSpy spy(&panel, &AnalysisPanel::pitchSpikeFilterChanged);
     panel.findChild<QCheckBox*>(QStringLiteral("pitchOverlayCheckBox"))->setChecked(true);
     panel.setReport(report);
@@ -347,10 +349,92 @@ void AnalysisPanelTest::pitchSpikeFilterCleansTheGraphNoteAndOverlay() {
     QCOMPARE(spy.last().at(0).toDouble(), 30.0);
     QVERIFY(text(panel, "noteNowLabel").startsWith(QStringLiteral("A3")));  // smoothed back onto the note.
     QVERIFY(std::abs(overlay[10] - 220.0f) < 0.01f);
-    QVERIFY(std::abs(panel.findChild<PitchGraphWidget*>()->track()[10] - 220.0f) < 0.01f);
+    QVERIFY(std::abs(panel.findChild<PitchGraphWidget*>()->tracks()[0][10] - 220.0f) < 0.01f);
 
     panel.setPitchSpikeFilterMs(0.0);  // the setter applies without emitting.
     QCOMPARE(spy.count(), 1);
     QCOMPARE(overlay[10], 880.0f);
+}
+
+// v0.1.40.11 - several voices, and the pitch at the mouse.
+namespace {
+ProjectLoudnessReport twoVoiceReport() {
+    ProjectLoudnessReport report = twoLayerReport();
+    report.secondsPerFrame = 0.1;
+    report.mixPitchTracks = {std::vector<float>(10, 440.0f), std::vector<float>(10, 110.0f)};
+    report.mixPitchTracks[1][5] = 0.0f;  // the bass rests for a moment.
+    return report;
+}
+}  // namespace
+
+void AnalysisPanelTest::eachVoiceGetsACheckboxThatHidesIt() {
+    AnalysisPanel panel;
+    std::vector<std::vector<float>> overlay;
+    connect(&panel, &AnalysisPanel::pitchOverlayToggled,
+            [&](bool, const std::vector<std::vector<float>>& tracks) { overlay = tracks; });
+    panel.findChild<QCheckBox*>(QStringLiteral("pitchOverlayCheckBox"))->setChecked(true);
+
+    panel.setReport(twoLayerReport());  // one track: no voice list.
+    QVERIFY(panel.findChild<QWidget*>(QStringLiteral("pitchVoiceList"))->isHidden());
+    QVERIFY(panel.findChild<QCheckBox*>(QStringLiteral("pitchVoiceCheckBox0")) == nullptr);
+
+    panel.setReport(twoVoiceReport());
+    QVERIFY(!panel.findChild<QWidget*>(QStringLiteral("pitchVoiceList"))->isHidden());
+    auto* top = panel.findChild<QCheckBox*>(QStringLiteral("pitchVoiceCheckBox0"));
+    auto* bass = panel.findChild<QCheckBox*>(QStringLiteral("pitchVoiceCheckBox1"));
+    QVERIFY(top != nullptr && bass != nullptr);
+    QVERIFY(top->text().contains(QStringLiteral("highest")));
+    QVERIFY(bass->text().contains(QStringLiteral("lowest")));
+    QCOMPARE(overlay.size(), std::size_t{2});
+    panel.setPlaybackPosition(0.25);
+    QCOMPARE(text(panel, "noteNowLabel"), QStringLiteral("1: A4  +0 cents  (440.0 Hz)\n2: A2  +0 cents  (110.0 Hz)"));
+    panel.setPlaybackPosition(0.55);  // the bass is resting: only voice 1.
+    QCOMPARE(text(panel, "noteNowLabel"), QStringLiteral("1: A4  +0 cents  (440.0 Hz)"));
+
+    bass->setChecked(false);  // hidden from the graph, the readouts and the overlay.
+    QVERIFY(overlay[1].empty());
+    QVERIFY(!overlay[0].empty());
+    QVERIFY(panel.findChild<PitchGraphWidget*>()->tracks()[1].empty());
+    panel.setPlaybackPosition(0.25);
+    QCOMPARE(text(panel, "noteNowLabel"), QStringLiteral("1: A4  +0 cents  (440.0 Hz)"));
+
+    panel.setReport(twoVoiceReport());  // a new report keeps the choice.
+    QVERIFY(!panel.findChild<QCheckBox*>(QStringLiteral("pitchVoiceCheckBox1"))->isChecked());
+    QVERIFY(overlay[1].empty());
+}
+
+void AnalysisPanelTest::voiceCountFieldEmitsAndItsSetterDoesNot() {
+    AnalysisPanel panel;
+    QCOMPARE(panel.pitchVoiceCount(), 1);
+    QSignalSpy spy(&panel, &AnalysisPanel::pitchVoiceCountChanged);
+    auto* field = panel.findChild<sound_mind::studio::IntegerField*>(QStringLiteral("pitchVoiceCountField"));
+    QVERIFY(field != nullptr);
+    QCOMPARE(field->maximum(), 6);
+    field->setValue(3);
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.last().at(0).toInt(), 3);
+    panel.setPitchVoiceCount(2);
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.pitchVoiceCount(), 2);
+}
+
+void AnalysisPanelTest::atMouseShowsThePitchesUnderTheMouse() {
+    AnalysisPanel panel;
+    QCOMPARE(text(panel, "noteMouseLabel"), QStringLiteral("—"));
+    panel.setReport(twoVoiceReport());
+    panel.setMouseTime(0.25);
+    QCOMPARE(text(panel, "noteMouseLabel"), QStringLiteral("1: A4  +0 cents  (440.0 Hz)\n2: A2  +0 cents  (110.0 Hz)"));
+    panel.setMouseTime(std::nullopt);
+    QCOMPARE(text(panel, "noteMouseLabel"), QStringLiteral("—"));
+
+    // Hovering the pitch graph feeds it too.
+    auto* graph = panel.findChild<PitchGraphWidget*>();
+    graph->resize(90, 50);  // 10 frames, first and last at the edges: 10 px per frame.
+    QVERIFY(graph->secondsAt(25.0).has_value());
+    QVERIFY(std::abs(*graph->secondsAt(25.0) - 0.25) < 1e-9);
+    emit graph->hoverChanged(graph->secondsAt(55.0));  // 0.55 s: the bass is resting.
+    QCOMPARE(text(panel, "noteMouseLabel"), QStringLiteral("1: A4  +0 cents  (440.0 Hz)"));
+    emit graph->hoverChanged(std::nullopt);
+    QCOMPARE(text(panel, "noteMouseLabel"), QStringLiteral("—"));
 }
 

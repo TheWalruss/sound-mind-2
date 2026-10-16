@@ -44,9 +44,10 @@ struct ProjectLoudnessReport {
     StereoMeasurement mixStereo;
     /// @brief The mix's per-band stereo widths - see `bandStereoWidths()`.
     std::vector<float> mixBandWidths;
-    /// @brief The mix's fundamental per frame, Hz (`0` unvoiced) - see
-    ///        `detectPitch()`.
-    std::vector<float> mixPitchHz;
+    /// @brief The mix's pitch tracks, highest voice first, each one
+    ///        fundamental per frame in Hz (`0` where silent) - see
+    ///        `detectPitches()`. As many tracks as the analysis asked for.
+    std::vector<std::vector<float>> mixPitchTracks;
     /// @brief The decoded mix (shared, never modified) - the goniometer draws
     ///        the samples around the playhead from it. Null if nothing is
     ///        audible.
@@ -69,8 +70,11 @@ struct ProjectLoudnessReport {
  * @throws CompositeCancelled or std::runtime_error if cancelled.
  * @note Costs one composite and decode for the mix plus one per layer; run
  *       it off the GUI thread.
+ * @param pitchVoices How many simultaneous pitches to track (`v0.1.40.11`)
+ *        - see `detectPitches()`.
  */
 [[nodiscard]] ProjectLoudnessReport analyzeProjectLoudness(const Project& project,
-                                                           const std::function<bool()>& shouldCancel = {});
+                                                           const std::function<bool()>& shouldCancel = {},
+                                                           int pitchVoices = 1);
 
 }  // namespace sound_mind::core

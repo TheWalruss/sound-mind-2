@@ -50,6 +50,7 @@
 #include "sound_mind/codec/stream_incremental_encoder.h"
 #include "sound_mind/core/filter_preview.h"
 #include "sound_mind/core/loudness_meter.h"
+#include "sound_mind/core/pitch_detection.h"
 #include "sound_mind/studio/text_controller.h"
 #include "sound_mind/codec/video_export.h"
 #include "sound_mind/core/compositor.h"
@@ -892,7 +893,14 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     addDockWidget(Qt::RightDockWidgetArea, analysisPanel_);
     connect(analysisPanel_, &AnalysisPanel::analyzeRequested, this, &MainWindow::analyzeLoudness);
     connect(analysisPanel_, &AnalysisPanel::pitchOverlayToggled, this,
-            [this](bool, const std::vector<float>& hzPerFrame) { canvas_->setPitchOverlay(hzPerFrame); });
+            [this](bool, const std::vector<std::vector<float>>& tracks) { canvas_->setPitchOverlay(tracks); });
+    // The canvas's horizontal mouse position feeds the Pitch tab's "At mouse" (v0.1.40.11).
+    connect(canvas_, &CanvasWidget::cursorMoved, this,
+            [this](QPointF, std::optional<sound_mind::core::TimeFrequencyPoint> point) {
+                analysisPanel_->setMouseTime(point.has_value() ? std::optional<double>(point->timeSeconds)
+                                                               : std::nullopt);
+            });
+    connect(canvas_, &CanvasWidget::cursorLeft, this, [this]() { analysisPanel_->setMouseTime(std::nullopt); });
     connect(analysisPanel_, &AnalysisPanel::loudnessOverlayToggled, this,
             [this](bool, const std::vector<float>& momentary, const std::vector<float>& shortTerm) {
                 canvas_->setLoudnessOverlay(momentary, shortTerm, sound_mind::core::kLoudnessStepSeconds);
@@ -906,7 +914,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     autoAnalyzeTimer_->setSingleShot(true);
     autoAnalyzeTimer_->setInterval(kAutoAnalyzeDelayMs);
     connect(autoAnalyzeTimer_, &QTimer::timeout, this, [this]() {
-        if (!autoAnalyze_ || !project_) {
+        if ((!autoAnalyze_ && !reanalyzeRequested_) || !project_) {
             return;
         }
         if (loudnessTask_ != nullptr) {
@@ -917,6 +925,16 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     });
     setAutoAnalyze(settings_.value(QStringLiteral("analysisAutoUpdate"), false).toBool());
     analysisPanel_->setPitchSpikeFilterMs(settings_.value(QStringLiteral("pitchSpikeFilterMs"), 0.0).toDouble());
+    pitchVoiceCount_ = std::clamp(settings_.value(QStringLiteral("pitchVoiceCount"), 1).toInt(), 1,
+                                  sound_mind::core::kMaxPitchVoices);
+    analysisPanel_->setPitchVoiceCount(pitchVoiceCount_);
+    connect(analysisPanel_, &AnalysisPanel::pitchVoiceCountChanged, this, [this](int voices) {
+        pitchVoiceCount_ = voices;
+        settings_.setValue(QStringLiteral("pitchVoiceCount"), voices);
+        if (analysisPanel_->hasReport() || loudnessTask_ != nullptr) {
+            requestReanalysis();  // the report's pitch tracks no longer match.
+        }
+    });
     connect(analysisPanel_, &AnalysisPanel::pitchSpikeFilterChanged, this, [this](double milliseconds) {
         settings_.setValue(QStringLiteral("pitchSpikeFilterMs"), milliseconds);
     });
@@ -3603,6 +3621,15 @@ void MainWindow::noteProjectChangedForAnalysis() {
     autoAnalyzeTimer_->start();  // restarts the wait on each change.
 }
 
+void MainWindow::requestReanalysis() {
+    if (loudnessTask_ != nullptr && !loudnessTask_->wasCancelled()) {
+        loudnessTask_->requestCancel();
+        ++cancelledAnalyses_;
+    }
+    reanalyzeRequested_ = true;
+    autoAnalyzeTimer_->start();
+}
+
 void MainWindow::setAutoAnalyze(bool enabled) {
     autoAnalyze_ = enabled;
     settings_.setValue(QStringLiteral("analysisAutoUpdate"), enabled);
@@ -3622,15 +3649,16 @@ void MainWindow::analyzeLoudness() {
     }
     loudnessResult_.reset();
     analysisStale_ = false;
+    reanalyzeRequested_ = false;
     analysisPanel_->setAnalyzing(true);
     if (!autoAnalyze_) {
         analysisPanel_->show();  // an explicit request; Auto-update never pops the panel up by itself.
     }
     loudnessTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
+        [this, projectCopy = *project_, voices = pitchVoiceCount_](sound_mind::core::CancellationToken& token) {
             try {
                 loudnessResult_ = sound_mind::core::analyzeProjectLoudness(
-                    projectCopy, [&token]() { return token.cancellationRequested(); });
+                    projectCopy, [&token]() { return token.cancellationRequested(); }, voices);
             } catch (const std::exception&) {
                 loudnessResult_.reset();  // cancelled or failed - nothing to show.
             }

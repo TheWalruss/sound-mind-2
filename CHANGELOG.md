@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.11] - 2026-10-16
+
+### Added
+
+- **Pitch analysis can follow several voices.** The Pitch tab's new **Voices** setting (1-6) tracks that many simultaneous pitches, such as a melody and a bassline. Each voice keeps its own track and color, highest first, even across pauses.
+- **Show or hide each voice.** With more than one voice, a checkbox per voice shows or hides it in the graph, the readouts and on the canvas.
+- **Pitch at the mouse.** A new **At mouse** readout on the Pitch tab shows the pitch, or pitches, at the horizontal position of the mouse over the canvas or the pitch graph.
+
 ## [0.1.40.10] - 2026-10-16
 
 ### Fixed

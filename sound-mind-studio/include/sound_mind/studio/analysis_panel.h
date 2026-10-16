@@ -15,6 +15,7 @@ class QTableWidget;
 namespace sound_mind::studio {
 
 class BandLevelsWidget;
+class IntegerField;
 class NumericField;
 class BandWidthBarsWidget;
 class GoniometerWidget;
@@ -56,6 +57,16 @@ class StereoGraphWidget;
  * track through `sound_mind::core::removePitchSpikes()` before the graph,
  * the note readout and the overlay see it - applied at once, without
  * re-analyzing.
+ *
+ * **Several voices** (`v0.1.40.11`): **Voices** (1-6) sets how many
+ * simultaneous pitches the analysis tracks (`detectPitches()`;
+ * pitchVoiceCountChanged() - a new analysis applies it). With more than one
+ * track in the report, a checkbox per voice ("Voice 1 (highest)" ... in its
+ * graph/canvas color) shows or hides it everywhere - graph, readouts and
+ * overlay. Hidden voices are remembered for the session by index. The
+ * readouts list each shown, sounding voice as "1: A4 +3 cents (440.8 Hz)",
+ * one per line; with a single track, just the note. **At mouse** shows the
+ * same for the time under the mouse on the canvas or the pitch graph.
  *
  * **Above the tabs** (`v0.1.40.7`), so they're at hand on every tab:
  * **Analyze**, **Auto-update** (autoAnalyzeToggled() - `MainWindow` then
@@ -111,6 +122,21 @@ public:
     /// @param enabled Whether to check it.
     void setAutoAnalyze(bool enabled);
 
+    /// @brief Sets "Voices" without emitting pitchVoiceCountChanged()
+    ///        (e.g. restoring the saved setting).
+    /// @param voices How many pitches to track, clamped to [1, 6].
+    void setPitchVoiceCount(int voices);
+
+    /// @brief The "Voices" setting.
+    /// @return How many pitches to track.
+    [[nodiscard]] int pitchVoiceCount() const noexcept;
+
+    /// @brief Shows the pitch (or pitches) at `seconds` in the Pitch tab's
+    ///        "At mouse" readout - fed by the canvas's and the pitch graph's
+    ///        horizontal mouse position (`v0.1.40.11`).
+    /// @param seconds The time under the mouse; `std::nullopt` clears it.
+    void setMouseTime(std::optional<double> seconds);
+
     /// @brief Sets "Ignore spikes shorter than" and re-applies it to the
     ///        displayed pitch, without emitting pitchSpikeFilterChanged()
     ///        (e.g. restoring the saved setting).
@@ -135,10 +161,15 @@ signals:
     /**
      * @brief "Show pitch on canvas" was toggled.
      * @param enabled Whether to show the track.
-     * @param hzPerFrame The current report's pitch track (empty with no
-     *        report, or when turned off).
+     * @param tracks The displayed pitch tracks (empty with no report, or
+     *        when turned off; a hidden voice's track is empty).
      */
-    void pitchOverlayToggled(bool enabled, const std::vector<float>& hzPerFrame);
+    void pitchOverlayToggled(bool enabled, const std::vector<std::vector<float>>& tracks);
+
+    /// @brief "Voices" was changed by the user (`v0.1.40.11`) - takes a
+    ///        new analysis to apply.
+    /// @param voices How many pitches to track.
+    void pitchVoiceCountChanged(int voices);
 
     /// @brief "Ignore spikes shorter than" was changed by the user.
     /// @param milliseconds The new limit.
@@ -196,9 +227,20 @@ private:
     QCheckBox* pitchOverlayCheckBox_ = nullptr;
     QCheckBox* autoAnalyzeCheckBox_ = nullptr;
     NumericField* pitchSpikeFilterField_ = nullptr;
-    /// @brief The report's pitch track with spikes removed - what the
-    ///        Pitch tab and its overlay show.
-    std::vector<float> displayedPitch_;
+    IntegerField* pitchVoiceCountField_ = nullptr;
+    QWidget* voiceList_ = nullptr;
+    std::vector<QCheckBox*> voiceCheckBoxes_;
+    /// @brief Voices hidden by index - kept across reports for the session.
+    std::vector<bool> hiddenVoices_;
+    QLabel* noteMouseLabel_ = nullptr;
+    std::optional<double> mouseSeconds_;
+    /// @brief The report's pitch tracks with spikes removed and hidden
+    ///        voices emptied - what the Pitch tab and its overlay show.
+    std::vector<std::vector<float>> displayedPitch_;
+    /// @brief Rebuilds the voice checkboxes for the report's track count.
+    void rebuildVoiceList();
+    /// @brief The readout text for the displayed pitches at `seconds`.
+    [[nodiscard]] QString notesAt(double seconds) const;
     /// @brief The last setPlaybackPosition(), re-read when the track changes.
     std::optional<double> playbackSeconds_;
     /// @brief Recomputes displayedPitch_ and refreshes everything showing it.

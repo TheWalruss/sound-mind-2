@@ -277,17 +277,20 @@ public:
     void setTextPreview(QImage image, std::optional<sound_mind::core::TimeFrequencyRect> bounds);
 
     /**
-     * @brief Draws a detected pitch track over the canvas - the Analysis
-     *        panel's "Show pitch on canvas" (Pre-Beta Plan `v0.Y.80.1`): a
-     *        bright line through each voiced frame's fundamental, broken
-     *        where unvoiced. Empty hides it. Repaints.
-     * @param hzPerFrame One fundamental per canvas frame, Hz (`0` unvoiced).
+     * @brief Draws detected pitch tracks over the canvas - the Analysis
+     *        panel's "Show pitch on canvas" (Pre-Beta Plan `v0.Y.80.1`;
+     *        several voices since `v0.1.40.11`): a bright line per track
+     *        through each voiced frame's fundamental, broken where unvoiced,
+     *        in `pitchVoiceColor()` of its index. An empty track (a hidden
+     *        voice) draws nothing. No tracks hides it. Repaints.
+     * @param tracks One fundamental per canvas frame per track, Hz (`0`
+     *        unvoiced).
      */
-    void setPitchOverlay(std::vector<float> hzPerFrame);
+    void setPitchOverlay(std::vector<std::vector<float>> tracks);
 
-    /// @brief Whether a pitch track is showing.
-    /// @return `true` while setPitchOverlay() has a track.
-    [[nodiscard]] bool hasPitchOverlay() const noexcept { return !pitchOverlay_.empty(); }
+    /// @brief Whether any pitch track is showing.
+    /// @return `true` while setPitchOverlay() has a non-empty track.
+    [[nodiscard]] bool hasPitchOverlay() const noexcept;
 
     /// @brief The loudness overlay's line color (yellow).
     static constexpr QColor kLoudnessOverlayColor{255, 210, 40};
@@ -1197,7 +1200,7 @@ private:
     bool textBoxActive_ = false;
     QImage textPreviewImage_;
     std::optional<sound_mind::core::TimeFrequencyRect> textPreviewBounds_;
-    std::vector<float> pitchOverlay_;
+    std::vector<std::vector<float>> pitchOverlay_;
     std::vector<float> loudnessMomentary_;
     std::vector<float> loudnessShortTerm_;
     double loudnessStepSeconds_ = 0.1;

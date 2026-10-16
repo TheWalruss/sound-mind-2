@@ -3895,6 +3895,15 @@ private:
     static constexpr int kAutoAnalyzeDelayMs = 300;
     /// @brief See setAutoAnalyze().
     bool autoAnalyze_ = false;
+    /// @brief The Analysis panel's "Voices" (`v0.1.40.11`), passed to each
+    ///        analysis; remembered as `pitchVoiceCount`.
+    int pitchVoiceCount_ = 1;
+    /// @brief A re-analysis was asked for regardless of Auto-update (a new
+    ///        voice count) - honored when autoAnalyzeTimer_ fires.
+    bool reanalyzeRequested_ = false;
+    /// @brief Cancels a running analysis and starts a fresh one shortly,
+    ///        via autoAnalyzeTimer_ - for a setting the report depends on.
+    void requestReanalysis();
     /// @brief The report on screen no longer matches the project.
     bool analysisStale_ = false;
     /// @brief Auto-update's debounce - see setAutoAnalyze().

@@ -7286,6 +7286,47 @@ void MainWindowTest::mindWaveAndFilterEditsMarkAnalysisAndPlaybackStale() {
     panel->findChild<QCheckBox*>(QStringLiteral("autoAnalyzeCheckBox"))->setChecked(false);
 }
 
+// v0.1.40.11
+void MainWindowTest::pitchVoiceCountReanalyzesAndIsRemembered() {
+    {
+        TestMainWindow window;
+        createFreshTestProject(window);
+        QVERIFY(window.commitRecording(recordedTone(0.5f)));
+        auto* panel = window.findChild<sound_mind::studio::AnalysisPanel*>();
+        auto* field = panel->findChild<sound_mind::studio::IntegerField*>(QStringLiteral("pitchVoiceCountField"));
+        field->setValue(2);  // no report yet: nothing to redo.
+        QVERIFY(!window.isAnalyzingLoudness());
+        window.analyzeLoudness();
+        QTRY_VERIFY_WITH_TIMEOUT(!window.isAnalyzingLoudness(), 120000);
+        QVERIFY(panel->findChild<QCheckBox*>(QStringLiteral("pitchVoiceCheckBox1")) != nullptr);  // 2 tracks.
+
+        field->setValue(3);  // with a report showing, it re-analyzes by itself.
+        QTRY_VERIFY_WITH_TIMEOUT(window.isAnalyzingLoudness(), 10000);
+        QTRY_VERIFY_WITH_TIMEOUT(!window.isAnalyzingLoudness(), 120000);
+        QVERIFY(panel->findChild<QCheckBox*>(QStringLiteral("pitchVoiceCheckBox2")) != nullptr);  // 3 tracks.
+    }
+    {
+        TestMainWindow window;
+        auto* field = window.findChild<sound_mind::studio::IntegerField*>(QStringLiteral("pitchVoiceCountField"));
+        QCOMPARE(field->value(), 3);
+        field->setValue(1);  // back to the default for later tests.
+    }
+}
+
+void MainWindowTest::canvasMousePositionFeedsThePitchReadout() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));  // 440 Hz for 0.2 s.
+    window.analyzeLoudness();
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isAnalyzingLoudness(), 120000);
+    auto* label = window.findChild<QLabel*>(QStringLiteral("noteMouseLabel"));
+    auto* canvas = window.findChild<sound_mind::studio::CanvasWidget*>();
+    emit canvas->cursorMoved(QPointF(), sound_mind::core::TimeFrequencyPoint{0.1, 440.0});
+    QVERIFY2(label->text().contains(QStringLiteral("A4")), qPrintable(label->text()));
+    emit canvas->cursorLeft();
+    QCOMPARE(label->text(), QStringLiteral("—"));
+}
+
 // v0.1.40.9
 void MainWindowTest::pitchSpikeFilterIsRemembered() {
     {

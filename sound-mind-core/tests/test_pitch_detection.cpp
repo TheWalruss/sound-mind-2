@@ -9,6 +9,7 @@
 #include "sound_mind/core/project_settings.h"
 
 using sound_mind::core::detectPitch;
+using sound_mind::core::detectPitches;
 using sound_mind::core::noteFor;
 using sound_mind::core::removePitchSpikes;
 
@@ -27,6 +28,37 @@ sound_mind::codec::StreamImage harmonicTone(double f0, double fundamentalGain = 
         for (int harmonic = 1; harmonic <= 5; ++harmonic) {
             const double gain = (harmonic == 1 ? fundamentalGain : 1.0) * 0.3 / harmonic;
             value += gain * std::sin(2.0 * std::numbers::pi * f0 * harmonic * static_cast<double>(i) / config.sampleRateHz);
+        }
+        audio.left.push_back(static_cast<float>(value));
+    }
+    audio.right = audio.left;
+    return sound_mind::codec::encode(audio, config);
+}
+
+/// @brief Two harmonic voices at once: a bass at `bassHz` (silent between
+///        `bassGapStart` and `bassGapEnd`, as fractions of the length) and
+///        a melody that moves from `melodyA` to `melodyB` halfway through.
+sound_mind::codec::StreamImage twoVoices(double bassHz, double melodyA, double melodyB, double bassGapStart = 2.0,
+                                         double bassGapEnd = 2.0) {
+    sound_mind::core::ProjectSettings settings;
+    settings.canvasWidth = 120;
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+    sound_mind::codec::AudioBuffer audio;
+    audio.sampleRateHz = config.sampleRateHz;
+    const auto count = static_cast<std::size_t>(settings.canvasWidth) * config.hopLength;
+    double melodyPhase = 0.0;
+    for (std::size_t i = 0; i < count; ++i) {
+        const double position = static_cast<double>(i) / static_cast<double>(count);
+        const double melodyHz = position < 0.5 ? melodyA : melodyB;
+        melodyPhase += 2.0 * std::numbers::pi * melodyHz / config.sampleRateHz;
+        const bool bassOn = position < bassGapStart || position >= bassGapEnd;
+        double value = 0.0;
+        for (int harmonic = 1; harmonic <= 5; ++harmonic) {
+            value += 0.25 / harmonic * std::sin(melodyPhase * harmonic);
+            if (bassOn) {
+                value += 0.2 / harmonic *
+                         std::sin(2.0 * std::numbers::pi * bassHz * harmonic * static_cast<double>(i) / config.sampleRateHz);
+            }
         }
         audio.left.push_back(static_cast<float>(value));
     }
@@ -145,3 +177,47 @@ TEST_CASE("Glides, vibrato and a zero limit pass through unchanged", "[core][pit
     CHECK(removePitchSpikes({}, 0.01, 0.1).empty());
 }
 
+// v0.1.40.11 - tracking several voices.
+TEST_CASE("detectPitches separates a melody from a bassline, highest first", "[core][pitch]") {
+    const auto tracks = detectPitches(twoVoices(110.0, 370.0, 392.0), 2);
+    REQUIRE(tracks.size() == 2);
+    REQUIRE(tracks[0].size() == 120);
+    // Track 0 is the melody, moving between the halves; track 1 the steady bass.
+    // (The melody is kept clear of the bass's harmonics - 220, 330, 440 Hz:
+    // partials closer than the codec's frequency resolution beat against
+    // each other, which makes the weaker one drop out now and then.)
+    CHECK(tracks[0][30] == Catch::Approx(370.0).epsilon(0.03));
+    CHECK(tracks[0][90] == Catch::Approx(392.0).epsilon(0.02));
+    CHECK(tracks[1][30] == Catch::Approx(110.0).epsilon(0.03));
+    CHECK(tracks[1][90] == Catch::Approx(110.0).epsilon(0.03));
+}
+
+TEST_CASE("detectPitches keeps a voice on its own track across a gap", "[core][pitch]") {
+    // The bass drops out in the middle third and comes back.
+    const auto tracks = detectPitches(twoVoices(110.0, 370.0, 392.0, 0.33, 0.66), 2);
+    REQUIRE(tracks.size() == 2);
+    CHECK(tracks[1][20] == Catch::Approx(110.0).epsilon(0.03));
+    CHECK(tracks[1][50] == 0.0f);  // silent while the bass is.
+    CHECK(tracks[0][50] == Catch::Approx(370.0).epsilon(0.03));
+    CHECK(tracks[1][70] == 0.0f);  // still silent after the melody changes note mid-gap.
+    CHECK(tracks[0][70] == Catch::Approx(392.0).epsilon(0.02));
+    CHECK(tracks[1][100] == Catch::Approx(110.0).epsilon(0.03));  // back on its own track.
+    CHECK(tracks[0][100] == Catch::Approx(392.0).epsilon(0.02));
+}
+
+TEST_CASE("detectPitches with one voice matches detectPitch; extra voices stay silent", "[core][pitch]") {
+    const auto content = harmonicTone(220.0);
+    const auto single = detectPitches(content, 1);
+    REQUIRE(single.size() == 1);
+    CHECK(single[0] == detectPitch(content));
+    const auto three = detectPitches(content, 3);  // only one voice is there.
+    REQUIRE(three.size() == 3);
+    CHECK(three[0][30] == Catch::Approx(220.0).epsilon(0.02));
+    std::size_t voicedExtras = 0;
+    for (std::size_t frame = 0; frame < three[1].size(); ++frame) {
+        voicedExtras += (three[1][frame] > 0.0f ? 1 : 0) + (three[2][frame] > 0.0f ? 1 : 0);
+    }
+    CHECK(voicedExtras < three[1].size() / 10);  // at most stray frames.
+    CHECK(detectPitches(content, 0).size() == 1);  // clamped.
+    CHECK(detectPitches(content, 99).size() == static_cast<std::size_t>(sound_mind::core::kMaxPitchVoices));
+}

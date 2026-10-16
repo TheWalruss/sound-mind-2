@@ -20,7 +20,14 @@ struct PitchSettings {
     ///        loudest cell - otherwise a strong harmonic's sub-octave could
     ///        win on its harmonics alone.
     double fundamentalWithinDb = 30.0;
+    /// @brief detectPitches() only: a second or later voice in a frame must
+    ///        score at least this fraction of the frame's strongest voice's
+    ///        harmonic sum - weaker leftovers aren't reported as voices.
+    double additionalVoiceMinScoreRatio = 0.2;
 };
+
+/// @brief The most voices detectPitches() will track.
+inline constexpr int kMaxPitchVoices = 6;
 
 /**
  * @brief Finds the fundamental frequency in every frame of `content`, read
@@ -41,6 +48,51 @@ struct PitchSettings {
  */
 [[nodiscard]] std::vector<float> detectPitch(const sound_mind::codec::StreamImage& content,
                                              const PitchSettings& settings = {});
+
+/**
+ * @brief Tracks up to `voiceCount` simultaneous pitches - a melody over a
+ *        bassline, say - and keeps each on its own consistent track
+ *        (`v0.1.40.11`).
+ *
+ * **Per frame:** the strongest pitch is found exactly as detectPitch()
+ * finds it. Its harmonics (up to the 12th, each ±3% or ± one of the codec's
+ * linear FFT bins, whichever is wider) are then removed from a working copy
+ * of the spectrum, and the search repeats on what's left, up to
+ * `voiceCount` times. A later pick must score at least
+ * `additionalVoiceMinScoreRatio` of the first and lie more than a semitone
+ * from every voice already found in the frame, so a single voice isn't
+ * padded out with its own leftovers.
+ *
+ * **Limitations:** a voice sharing most of its harmonics with a louder one
+ * (an octave above or below it) is absorbed by it. Two partials closer than
+ * about one linear FFT bin (25 Hz at the defaults) beat against each other,
+ * so the weaker voice can drop out now and then.
+ *
+ * **Tracking:** each frame's pitches are assigned to tracks, choosing the
+ * assignment with the lowest total cost:
+ * - a track heard within the last 250 ms costs the distance, in semitones,
+ *   from its last pitch;
+ * - a track silent for longer costs 1 plus the distance from its average
+ *   pitch so far, so it picks up again in its own register;
+ * - a never-used track costs 13, more than an octave's leap, so a voice
+ *   leaping around isn't split across tracks;
+ * - leaving a pitch unassigned costs 14 - allowed for all but the frame's
+ *   strongest, so a stray extra pitch (two notes seen at once just where a
+ *   note changes, say) is dropped rather than pulling a silent track out
+ *   of its register.
+ * Finally the tracks are ordered by their median pitch, highest first:
+ * track 0 is the top voice (usually the melody), the last the lowest
+ * (usually the bass). Unused tracks come last, all `0`.
+ *
+ * @param content Layer or composite content.
+ * @param voiceCount How many tracks, clamped to [1, `kMaxPitchVoices`].
+ *        With 1, the single track equals detectPitch()'s.
+ * @param settings The search range and thresholds.
+ * @return `voiceCount` tracks, each one fundamental per frame in Hz (`0`
+ *         where that voice is silent).
+ */
+[[nodiscard]] std::vector<std::vector<float>> detectPitches(const sound_mind::codec::StreamImage& content,
+                                                            int voiceCount, const PitchSettings& settings = {});
 
 /// @brief How far apart, in semitones, two neighboring frames' pitches can
 ///        be and still count as one continuous run - see removePitchSpikes().

@@ -2231,13 +2231,33 @@ stereo image:
 
 ### Pitch
 
-The **Pitch** tab (also filled in by **Analyze**) follows the main pitch of
-the mix - the fundamental of whatever is loudest - from 50 Hz to 2 kHz:
+The **Pitch** tab (also filled in by **Analyze**) follows the pitch of the
+mix from 50 Hz to 2 kHz. By default it follows the main pitch, the
+fundamental of whatever is loudest. It can also follow several voices at
+once, such as a melody and a bassline:
 
 - **At playhead** - the note at the playback position, how far off it is
   in cents (+20 cents is a little sharp), and its frequency, e.g.
   "A4  +3 cents  (440.8 Hz)". It shows "—" where there's no clear pitch
-  (silence, noise).
+  (silence, noise). With several voices, each sounding voice gets its own
+  line, numbered: "1: A4 ...", "2: A2 ...".
+- **At mouse** - the same, for the moment under the mouse: hover over the
+  canvas, or over the pitch graph below, and it shows the pitch (or
+  pitches) at that horizontal position.
+- **Voices** - how many simultaneous pitches to follow, from 1 to 6 (for
+  example, 2 for a melody over a bassline). Each voice gets its own track
+  and color: voice 1 is the highest, the last voice the lowest. The
+  analysis keeps each voice on its own track, even when it pauses and
+  comes back. Changing it analyzes again by itself if there are results
+  showing, and it's remembered between sessions.
+  - With more than one voice, a row of checkboxes appears, one per voice
+    in that voice's color, such as "Voice 1 (highest)" or "Voice 2
+    (lowest)". Untick a voice to hide it from the graph, the readouts and
+    the canvas. The choice holds until you close the Studio.
+  - Limits: a voice an exact octave above or below a louder one is
+    usually swallowed by it. Two notes whose frequencies are very close
+    (within about 25 Hz, including one voice's overtones) can make the
+    quieter one drop out now and then.
 - **Ignore spikes shorter than** removes brief pitch jumps, such as
   momentary octave errors or the click of a note's attack. A jump lasting
   less than this many milliseconds is removed:
@@ -2251,10 +2271,10 @@ the mix - the fundamental of whatever is loudest - from 50 Hz to 2 kHz:
   applies straight away to the readout, the graph and the canvas line,
   without analyzing again, and it's remembered between sessions.
 - **The graph** draws the pitch over time on a musical scale, with a line at
-  every C.
-- **Show pitch on canvas** draws the same pitch line, in bright green, right
-  over the canvas, so you can see which painted line is being heard as the
-  melody.
+  every C - one line per voice, each in its own color.
+- **Show pitch on canvas** draws the same pitch lines right over the canvas
+  (the first voice in bright green, the others in their own colors), so you
+  can see which painted line is being heard as the melody.
 
 ## Performance
 

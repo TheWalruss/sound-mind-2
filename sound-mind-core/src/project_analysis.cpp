@@ -31,7 +31,8 @@ LoudnessMeasurement measureMix(const Project& project, const std::function<bool(
 
 }  // namespace
 
-ProjectLoudnessReport analyzeProjectLoudness(const Project& project, const std::function<bool()>& shouldCancel) {
+ProjectLoudnessReport analyzeProjectLoudness(const Project& project, const std::function<bool()>& shouldCancel,
+                                             int pitchVoices) {
     ProjectLoudnessReport report;
     std::optional<sound_mind::codec::StreamImage> composite;
     report.mix = measureMix(project, shouldCancel, &composite, &report.mixAudio);
@@ -41,7 +42,7 @@ ProjectLoudnessReport analyzeProjectLoudness(const Project& project, const std::
     if (composite.has_value()) {
         report.mixBandLevels = bandLevelsOverTime(*composite);
         report.mixBandWidths = bandStereoWidths(*composite);
-        report.mixPitchHz = detectPitch(*composite);
+        report.mixPitchTracks = detectPitches(*composite, pitchVoices);
         report.frameCount = composite->frameCount;
         report.secondsPerFrame =
             static_cast<double>(composite->config.hopLength) / static_cast<double>(composite->config.sampleRateHz);

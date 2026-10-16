@@ -4,11 +4,24 @@
 #include <optional>
 #include <vector>
 
+#include <QColor>
 #include <QWidget>
 
 #include "sound_mind/codec/audio_buffer.h"
 
+class QMouseEvent;
+
 namespace sound_mind::studio {
+
+/**
+ * @brief The color of pitch voice `voice` (`v0.1.40.11`) - shared by the
+ *        Pitch tab's graph, its voice checkboxes and the canvas overlay, so
+ *        a voice looks the same everywhere. Voice 0 keeps the original
+ *        pitch green.
+ * @param voice The voice index (wraps after 6).
+ * @return The color.
+ */
+[[nodiscard]] QColor pitchVoiceColor(std::size_t voice);
 
 /**
  * @brief The loudness meter's graph (Pre-Beta Plan `v0.Y.80.1`): momentary
@@ -249,11 +262,13 @@ public:
     explicit PitchGraphWidget(QWidget* parent = nullptr);
 
     /**
-     * @brief Shows a pitch track.
-     * @param hzPerFrame One fundamental per frame, Hz (`0` unvoiced).
+     * @brief Shows pitch tracks - one line per voice, each in
+     *        pitchVoiceColor() of its index (`v0.1.40.11`). An empty track
+     *        (a hidden voice) draws nothing but keeps its color slot.
+     * @param tracks One fundamental per frame per track, Hz (`0` unvoiced).
      * @param secondsPerFrame Seconds per frame, for the playhead.
      */
-    void setTrack(std::vector<float> hzPerFrame, double secondsPerFrame);
+    void setTracks(std::vector<std::vector<float>> tracks, double secondsPerFrame);
 
     /// @brief Moves (or, with `std::nullopt`, hides) the playhead line.
     /// @param seconds The playback position.
@@ -263,21 +278,40 @@ public:
     /// @return `true` with a voiced frame to draw.
     [[nodiscard]] bool hasData() const;
 
-    /// @brief The track being shown.
-    /// @return One fundamental per frame, Hz (`0` unvoiced).
-    [[nodiscard]] const std::vector<float>& track() const noexcept { return track_; }
+    /// @brief The tracks being shown.
+    /// @return One fundamental per frame per track, Hz (`0` unvoiced).
+    [[nodiscard]] const std::vector<std::vector<float>>& tracks() const noexcept { return tracks_; }
+
+    /// @brief The time under a horizontal position, or `std::nullopt` with
+    ///        nothing to show.
+    /// @param x A widget x coordinate.
+    /// @return Seconds.
+    [[nodiscard]] std::optional<double> secondsAt(double x) const;
+
 
     /// @brief A sensible default size for the panel layout.
     /// @return The size hint.
     [[nodiscard]] QSize sizeHint() const override { return {320, 120}; }
 
+signals:
+    /// @brief The mouse moved over the graph (`v0.1.40.11`).
+    /// @param seconds The time under it; `std::nullopt` once it leaves.
+    void hoverChanged(std::optional<double> seconds);
+
 protected:
     /// @brief Draws the octave lines, the track and the playhead.
     /// @param event The paint event (unused).
     void paintEvent(QPaintEvent* event) override;
+    /// @brief Emits hoverChanged() with the time under the mouse.
+    /// @param event The move event.
+    void mouseMoveEvent(QMouseEvent* event) override;
+    /// @brief Emits hoverChanged(std::nullopt).
+    /// @param event The leave event (unused).
+    void leaveEvent(QEvent* event) override;
 
 private:
-    std::vector<float> track_;
+    [[nodiscard]] std::size_t frameCount() const noexcept;
+    std::vector<std::vector<float>> tracks_;
     double secondsPerFrame_ = 0.0;
     std::optional<double> playhead_;
 };

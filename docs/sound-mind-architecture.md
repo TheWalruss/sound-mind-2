@@ -2434,6 +2434,38 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Core: 5 cases - an octave error inside a note is smoothed back; a bridged spike glides between agreeing neighbors; a spike between different notes is erased; a blip in silence is erased while a run exactly at the limit stays; glides, vibrato, a zero limit and an empty track pass unchanged.
       - `AnalysisPanelTest`: the field cleans the note readout, overlay and graph; the setter applies without emitting.
       - `MainWindowTest`: the setting is remembered.
+
+256. **Several pitch voices, per-voice visibility, and the pitch at the mouse.** Settled in `v0.1.40.11`, a user request following Pre-Beta Plan milestone `v0.Y.80.1`.
+    - **Core `detectPitches(content, voiceCount, settings)`:** `detectPitch()` is now its one-voice case, and returns exactly what it did before.
+      - **Per frame, iterative harmonic removal:**
+        - pick the strongest candidate by the existing harmonic summation and refinements;
+        - zero its first 12 harmonics in a working copy of the spectrum, each ±max(3%, one linear FFT bin - `sampleRate / (4 × hop)`, 25 Hz at the defaults);
+        - search again, up to the voice count, with a few extra attempts.
+        - A later pick must score at least `additionalVoiceMinScoreRatio` (0.2) of the frame's first. Any pick within a semitone of a voice already found is rejected, both before and after refinement. Phase-vocoder refinement can pull a leakage bin back onto the dominant partial (it carries that partial's phase): a 195 Hz leakage bin "refined" to 220 Hz, and gave three copies of one tone before this check.
+        - The linear-bin floor matters at low frequencies, where log bins are finer than the codec's FFT bins and ±3% doesn't cover a partial.
+      - **Tracking:** each frame's picks are assigned to tracks by exhaustive search over injective assignments (at most a few thousand for 6 voices). Costs:
+        - a track heard in the last 250 ms: the semitone distance from its last pitch;
+        - a track silent longer: 1 + the distance from its geometric-mean pitch so far, so it resumes in its own register;
+        - a never-used track: 13, dearer than an octave's leap, so a leaping voice isn't split;
+        - leaving a pick unassigned: 14, allowed for all but the frame's strongest.
+        - The drop option exists because, where a note changes, the STFT briefly sees both notes. That stray second pitch was dragging a silent bass track into the melody's register and swapping the tracks for good. The one-voice case never drops.
+      - Tracks are finally ordered by median pitch, highest first; unused tracks come last.
+      - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
+    - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
+    - **Studio:**
+      - **Voices** is an `IntegerField`, 1-`kMaxPitchVoices` (6). `pitchVoiceCountChanged()` / non-emitting `setPitchVoiceCount()`.
+      - `MainWindow` persists it as `pitchVoiceCount` and passes it into each analysis. When a report is showing or a run is going, a change calls `requestReanalysis()`: it cancels a running analysis and fires `autoAnalyzeTimer_` with `reanalyzeRequested_` set, honored even with Auto-update off.
+      - With more than one track, `rebuildVoiceList()` adds a checkbox per voice (`pitchVoiceCheckBox<i>`), labelled "Voice i (highest/lowest)" in its `pitchVoiceColor()`. Hidden voices are kept by index for the session, and their displayed tracks are empty.
+      - `pitchVoiceColor()` is one shared palette (voice 0 keeps the original green) for the graph, the checkboxes and the canvas.
+      - `PitchGraphWidget::setTracks()` draws each voice. `CanvasWidget::setPitchOverlay()` takes tracks, and `pitchOverlayToggled()` carries them.
+    - **The pitch at the mouse:** `AnalysisPanel::setMouseTime()` fills "At mouse" via the same `notesAt()` as "At playhead". With several tracks, each sounding, shown voice gets a numbered line; a single track gives the bare note, unchanged.
+      - It's fed by `CanvasWidget::cursorMoved()` (the existing hover signal: the time under the cursor) and `cursorLeft()`, connected in `MainWindow`.
+      - The pitch graph also feeds it: it now tracks the mouse and emits `hoverChanged()`, mapped by `secondsAt(x)`.
+    - **Tests:**
+      - Core: 3 cases - a melody over a bass on separate tracks, highest first, the melody changing note; the bass keeping its own track across a gap in which the melody changes note; one voice equal to `detectPitch()`, a single tone with three voices asked for giving at most stray extras, and clamping. The project report gives as many tracks as asked.
+      - `AnalysisPanelTest`, 3 cases: voice checkboxes - none for one track, labels, numbered readouts, hiding from overlay, graph and readouts, the choice surviving a new report; the Voices field emits and its setter doesn't; "At mouse" from `setMouseTime()` and from the graph's hover.
+      - `CanvasWidgetTest`: a second voice in its own color, an empty voice not drawn.
+      - `MainWindowTest`, 2 cases: the voice count re-analyzes with a report showing and is remembered; the canvas cursor feeds "At mouse".
     - **Normalization** is a gain, not a processor:
       - `PlaybackEngine::setNormalizationGainDb()` multiplies the volume, ahead of the limiter.
       - `MainWindow` measures `integratedLoudnessLufs()` (the new BS.1770 integrated-only entry point, sharing `gatedIntegrated()` with `measureLoudness()`) on each buffer it loads for playback: a fresh composite, or a repeat-mode refresh.
