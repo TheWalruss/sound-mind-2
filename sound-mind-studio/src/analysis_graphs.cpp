@@ -273,4 +273,62 @@ void BandWidthBarsWidget::paintEvent(QPaintEvent* /*event*/) {
     }
 }
 
+PitchGraphWidget::PitchGraphWidget(QWidget* parent) : QWidget(parent) {
+    setMinimumHeight(80);
+    setToolTip(tr("Detected pitch over time, 50 Hz to 2 kHz, with a line at each C"));
+}
+
+void PitchGraphWidget::setTrack(std::vector<float> hzPerFrame, double secondsPerFrame) {
+    track_ = std::move(hzPerFrame);
+    secondsPerFrame_ = secondsPerFrame;
+    update();
+}
+
+void PitchGraphWidget::setPlayhead(std::optional<double> seconds) {
+    playhead_ = seconds;
+    update();
+}
+
+bool PitchGraphWidget::hasData() const {
+    return std::any_of(track_.begin(), track_.end(), [](float hz) { return hz > 0.0f; });
+}
+
+void PitchGraphWidget::paintEvent(QPaintEvent* /*event*/) {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.fillRect(rect(), QColor(20, 20, 28));
+    constexpr double kLowHz = 50.0;
+    constexpr double kHighHz = 2000.0;
+    const double height = rect().height();
+    const auto yFor = [&](double hz) {
+        return height * (1.0 - std::log(hz / kLowHz) / std::log(kHighHz / kLowHz));
+    };
+    painter.setPen(QPen(QColor(60, 60, 75), 1));
+    for (double c = 65.406; c < kHighHz; c *= 2.0) {  // C2, C3, ...
+        painter.drawLine(QPointF(0.0, yFor(c)), QPointF(rect().width(), yFor(c)));
+    }
+    if (track_.empty()) {
+        return;
+    }
+    const double xScale = track_.size() > 1 ? static_cast<double>(rect().width()) / (track_.size() - 1) : 0.0;
+    painter.setPen(QPen(QColor(80, 255, 120), 2));
+    std::optional<QPointF> previous;
+    for (std::size_t i = 0; i < track_.size(); ++i) {
+        if (track_[i] <= 0.0f) {
+            previous.reset();
+            continue;
+        }
+        const QPointF point(static_cast<double>(i) * xScale, yFor(std::clamp<double>(track_[i], kLowHz, kHighHz)));
+        if (previous.has_value()) {
+            painter.drawLine(*previous, point);
+        }
+        previous = point;
+    }
+    if (playhead_.has_value() && secondsPerFrame_ > 0.0) {
+        const double x = *playhead_ / secondsPerFrame_ * xScale;
+        painter.setPen(QPen(Qt::white, 1));
+        painter.drawLine(QPointF(x, 0.0), QPointF(x, height));
+    }
+}
+
 }  // namespace sound_mind::studio

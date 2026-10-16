@@ -1,5 +1,6 @@
 #include "sound_mind/studio/analysis_panel.h"
 
+#include <QCheckBox>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -113,6 +114,23 @@ AnalysisPanel::AnalysisPanel(QWidget* parent) : QDockWidget(tr("Analysis"), pare
     stereoBottom->addWidget(bandWidths_, 1);
     stereoRoot->addLayout(stereoBottom, 1);
     tabs_->addTab(stereo, tr("Stereo"));
+
+    // --- Pitch (installment C) ---
+    auto* pitch = new QWidget(tabs_);
+    auto* pitchRoot = new QVBoxLayout(pitch);
+    auto* pitchSummary = new QFormLayout();
+    noteNowLabel_ = makeReading(pitch, QStringLiteral("noteNowLabel"));
+    noteNowLabel_->setToolTip(tr("The note at the playback position, how far off it is in cents, and its frequency"));
+    pitchSummary->addRow(tr("At playhead:"), noteNowLabel_);
+    pitchRoot->addLayout(pitchSummary);
+    pitchGraph_ = new PitchGraphWidget(pitch);
+    pitchGraph_->setObjectName(QStringLiteral("pitchGraph"));
+    pitchRoot->addWidget(pitchGraph_, 1);
+    pitchOverlayCheckBox_ = new QCheckBox(tr("Show pitch on canvas"), pitch);
+    pitchOverlayCheckBox_->setObjectName(QStringLiteral("pitchOverlayCheckBox"));
+    connect(pitchOverlayCheckBox_, &QCheckBox::toggled, this, &AnalysisPanel::emitPitchOverlay);
+    pitchRoot->addWidget(pitchOverlayCheckBox_);
+    tabs_->addTab(pitch, tr("Pitch"));
     setWidget(tabs_);
 }
 
@@ -143,6 +161,7 @@ void AnalysisPanel::setReport(const sound_mind::core::ProjectLoudnessReport& rep
                             sound_mind::core::kLoudnessStepSeconds);
     goniometer_->setAudio(report.mixAudio);
     bandWidths_->setWidths(report.mixBandWidths);
+    pitchGraph_->setTrack(report.mixPitchHz, report.secondsPerFrame);
     bands_->setLevels(report.mixBandLevels, static_cast<int>(sound_mind::core::loudnessBands().size()),
                       static_cast<int>(report.frameCount), report.secondsPerFrame);
 
@@ -163,6 +182,7 @@ void AnalysisPanel::setReport(const sound_mind::core::ProjectLoudnessReport& rep
         }
     }
     setPlaybackPosition(std::nullopt);
+    emitPitchOverlay();
 }
 
 void AnalysisPanel::clearReport() {
@@ -170,7 +190,7 @@ void AnalysisPanel::clearReport() {
     statusLabel_->setText(tr("Not analyzed yet."));
     for (QLabel* label : {integratedLabel_, maxShortTermLabel_, maxMomentaryLabel_, truePeakLabel_, samplePeakLabel_,
                           clipsLabel_, momentaryNowLabel_, shortTermNowLabel_, correlationLabel_, widthLabel_,
-                          correlationNowLabel_, widthNowLabel_}) {
+                          correlationNowLabel_, widthNowLabel_, noteNowLabel_}) {
         label->setText(QStringLiteral("—"));
         setWarning(label, false);
     }
@@ -179,6 +199,8 @@ void AnalysisPanel::clearReport() {
     stereoGraph_->setSeries({}, {}, sound_mind::core::kLoudnessStepSeconds);
     goniometer_->setAudio(nullptr);
     bandWidths_->setWidths({});
+    pitchGraph_->setTrack({}, 0.0);
+    emitPitchOverlay();
     layerTable_->setRowCount(0);
 }
 
@@ -201,8 +223,9 @@ void AnalysisPanel::setPlaybackPosition(std::optional<double> seconds) {
     graph_->setPlayhead(seconds);
     bands_->setPlayhead(seconds);
     stereoGraph_->setPlayhead(seconds);
+    pitchGraph_->setPlayhead(seconds);
     goniometer_->setPosition(seconds);
-    for (QLabel* label : {momentaryNowLabel_, shortTermNowLabel_, correlationNowLabel_, widthNowLabel_}) {
+    for (QLabel* label : {momentaryNowLabel_, shortTermNowLabel_, correlationNowLabel_, widthNowLabel_, noteNowLabel_}) {
         label->setText(QStringLiteral("—"));
     }
     if (!report_.has_value() || !seconds.has_value()) {
@@ -211,6 +234,19 @@ void AnalysisPanel::setPlaybackPosition(std::optional<double> seconds) {
     // Reading i covers the window ending at (i + 1) steps.
     const auto& mix = report_->mix;
     const auto index = static_cast<std::ptrdiff_t>(*seconds / sound_mind::core::kLoudnessStepSeconds) - 1;
+    if (report_->secondsPerFrame > 0.0) {
+        const auto frame = static_cast<std::size_t>(*seconds / report_->secondsPerFrame);
+        if (frame < report_->mixPitchHz.size() && report_->mixPitchHz[frame] > 0.0f) {
+            const double hz = report_->mixPitchHz[frame];
+            const auto note = sound_mind::core::noteFor(hz);
+            noteNowLabel_->setText(QStringLiteral("%1%2  %3%4 cents  (%5 Hz)")
+                                       .arg(QString::fromStdString(note.name))
+                                       .arg(note.octave)
+                                       .arg(note.cents >= 0.0 ? QStringLiteral("+") : QString())
+                                       .arg(note.cents, 0, 'f', 0)
+                                       .arg(hz, 0, 'f', 1));
+        }
+    }
     const auto& stereo = report_->mixStereo;
     if (index >= 0 && index < static_cast<std::ptrdiff_t>(stereo.correlationOverTime.size())) {
         correlationNowLabel_->setText(
@@ -222,6 +258,12 @@ void AnalysisPanel::setPlaybackPosition(std::optional<double> seconds) {
     }
     momentaryNowLabel_->setText(formatLevel(mix.momentaryLufs[static_cast<std::size_t>(index)], QStringLiteral("LUFS")));
     shortTermNowLabel_->setText(formatLevel(mix.shortTermLufs[static_cast<std::size_t>(index)], QStringLiteral("LUFS")));
+}
+
+void AnalysisPanel::emitPitchOverlay() {
+    const bool enabled = pitchOverlayCheckBox_->isChecked();
+    static const std::vector<float> kNone;
+    emit pitchOverlayToggled(enabled, enabled && report_.has_value() ? report_->mixPitchHz : kNone);
 }
 
 }  // namespace sound_mind::studio

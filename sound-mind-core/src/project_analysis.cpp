@@ -41,6 +41,7 @@ ProjectLoudnessReport analyzeProjectLoudness(const Project& project, const std::
     if (composite.has_value()) {
         report.mixBandLevels = bandLevelsOverTime(*composite);
         report.mixBandWidths = bandStereoWidths(*composite);
+        report.mixPitchHz = detectPitch(*composite);
         report.frameCount = composite->frameCount;
         report.secondsPerFrame =
             static_cast<double>(composite->config.hopLength) / static_cast<double>(composite->config.sampleRateHz);

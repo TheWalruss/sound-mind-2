@@ -1,5 +1,6 @@
 #include "test_analysis_panel.h"
 
+#include <QCheckBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QSignalSpy>
@@ -16,6 +17,7 @@ using sound_mind::studio::AnalysisPanel;
 using sound_mind::studio::BandLevelsWidget;
 using sound_mind::studio::BandWidthBarsWidget;
 using sound_mind::studio::GoniometerWidget;
+using sound_mind::studio::PitchGraphWidget;
 using sound_mind::studio::StereoGraphWidget;
 using sound_mind::studio::LoudnessGraphWidget;
 
@@ -46,6 +48,7 @@ ProjectLoudnessReport twoLayerReport() {
     report.mixStereo.correlationOverTime.assign(20, 0.75f);
     report.mixStereo.widthOverTime.assign(20, 0.3f);
     report.mixBandWidths = {0.0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
+    report.mixPitchHz = {0.0f, 440.0f, 445.0f, 0.0f};
     report.layers.push_back(LayerLoudness{1, "Drums", steady(-16.0, 20)});
     report.layers.push_back(LayerLoudness{2, "Pad", steady(-24.0, 20)});
     return report;
@@ -199,4 +202,37 @@ void AnalysisPanelTest::theGoniometerPlotsMonoAsAVerticalLineAroundThePlayhead()
     goniometer.setPosition(std::nullopt);  // the whole buffer, spread out.
     QVERIFY(!goniometer.points().empty());
     QVERIFY(static_cast<int>(goniometer.points().size()) <= GoniometerWidget::kWindowSamples);
+}
+
+void AnalysisPanelTest::thePitchTabShowsTheNoteAtThePlayhead() {
+    AnalysisPanel panel;
+    panel.setReport(twoLayerReport());
+    QVERIFY(panel.findChild<PitchGraphWidget*>()->hasData());
+
+    panel.setPlaybackPosition(0.6);  // frame 1 (0.5 s per frame): 440 Hz.
+    QVERIFY(text(panel, "noteNowLabel").startsWith(QStringLiteral("A4")));
+    QVERIFY(text(panel, "noteNowLabel").contains(QStringLiteral("440.0 Hz")));
+    panel.setPlaybackPosition(1.1);  // 445 Hz: about +20 cents.
+    QVERIFY(text(panel, "noteNowLabel").contains(QStringLiteral("+20 cents")));
+    panel.setPlaybackPosition(0.1);  // unvoiced.
+    QCOMPARE(text(panel, "noteNowLabel"), QStringLiteral("—"));
+}
+
+void AnalysisPanelTest::showPitchOnCanvasEmitsTheTrackOnlyWhileChecked() {
+    AnalysisPanel panel;
+    std::vector<float> received{1.0f};
+    bool enabled = false;
+    connect(&panel, &AnalysisPanel::pitchOverlayToggled, [&](bool on, const std::vector<float>& track) {
+        enabled = on;
+        received = track;
+    });
+    auto* box = panel.findChild<QCheckBox*>(QStringLiteral("pitchOverlayCheckBox"));
+
+    box->setChecked(true);  // no report yet: nothing to show.
+    QVERIFY(enabled);
+    QVERIFY(received.empty());
+    panel.setReport(twoLayerReport());  // a new report while checked: shown.
+    QCOMPARE(received.size(), std::size_t{4});
+    box->setChecked(false);
+    QVERIFY(received.empty());
 }

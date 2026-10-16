@@ -108,4 +108,5 @@ private slots:
     void contextMenuEventEmitsContextMenuRequestedWithAConvertedPointAndGlobalPos();
     void pickMultiSelectionAndRubberBandAreDrawn();
     void textModeDragEmitsBoxSignalsAndAPreviewIsDrawn();
+    void aPitchOverlayIsDrawnOverTheCanvas();
 };

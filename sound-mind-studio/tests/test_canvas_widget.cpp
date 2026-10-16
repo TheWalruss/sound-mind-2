@@ -2052,3 +2052,19 @@ void CanvasWidgetTest::textModeDragEmitsBoxSignalsAndAPreviewIsDrawn() {
     widget.setTextPreview(QImage{}, std::nullopt);
     QVERIFY(!widget.hasTextPreview());
 }
+
+void CanvasWidgetTest::aPitchOverlayIsDrawnOverTheCanvas() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    const QImage before = widget.grab().toImage();
+
+    widget.setPitchOverlay(std::vector<float>(100, 800.0f));
+    QVERIFY(widget.hasPitchOverlay());
+    QVERIFY(columnContainsColor(widget.grab().toImage(), 50, QColor(80, 255, 120)));
+
+    widget.setPitchOverlay({});
+    QVERIFY(!widget.hasPitchOverlay());
+    QVERIFY(widget.grab().toImage() == before);
+}

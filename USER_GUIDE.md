@@ -2167,6 +2167,21 @@ stereo image:
 - **The width bars** show each frequency band's width - bass is usually
   kept narrow, highs wider.
 
+### Pitch
+
+The **Pitch** tab (also filled in by **Analyze**) follows the main pitch of
+the mix - the fundamental of whatever is loudest - from 50 Hz to 2 kHz:
+
+- **At playhead** - the note at the playback position, how far off it is
+  in cents (+20 cents is a little sharp), and its frequency, e.g.
+  "A4  +3 cents  (440.8 Hz)". It shows "—" where there's no clear pitch
+  (silence, noise).
+- **The graph** draws the pitch over time on a musical scale, with a line at
+  every C.
+- **Show pitch on canvas** draws the same pitch line, in bright green, right
+  over the canvas, so you can see which painted line is being heard as the
+  melody.
+
 ## Performance
 
 Most editing stays responsive on an ordinary machine, but a few things
@@ -2272,8 +2287,8 @@ macro actually contains, and it isn't saved with the project.
 
 
 **Analysis Tools**: the [Analysis](#analysis) panel's loudness meter and
-the Layers panel's per-layer loudness indicator are live. The Stereo tab
-(goniometer and stereo width) is live too. Pitch detection, a master limiter
+the Layers panel's per-layer loudness indicator are live. The Stereo
+(goniometer and stereo width) and Pitch tabs are live too. A master limiter
 and output loudness normalization are being built next; the design document's spectral-health
 and criticality/pattern meters are planned for after Beta.
 

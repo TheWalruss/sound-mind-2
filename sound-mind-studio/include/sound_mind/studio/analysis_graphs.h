@@ -234,4 +234,48 @@ private:
     std::vector<float> widths_;
 };
 
+/**
+ * @brief The Pitch tab's graph (Pre-Beta Plan `v0.Y.80.1`): the detected
+ *        fundamental over time on a logarithmic frequency axis (50 Hz to
+ *        2 kHz), with octave lines at each C and a playhead. Unvoiced
+ *        frames leave gaps.
+ * @note GUI thread only.
+ */
+class PitchGraphWidget : public QWidget {
+    Q_OBJECT
+
+public:
+    /// @param parent The owning widget; may be `nullptr`.
+    explicit PitchGraphWidget(QWidget* parent = nullptr);
+
+    /**
+     * @brief Shows a pitch track.
+     * @param hzPerFrame One fundamental per frame, Hz (`0` unvoiced).
+     * @param secondsPerFrame Seconds per frame, for the playhead.
+     */
+    void setTrack(std::vector<float> hzPerFrame, double secondsPerFrame);
+
+    /// @brief Moves (or, with `std::nullopt`, hides) the playhead line.
+    /// @param seconds The playback position.
+    void setPlayhead(std::optional<double> seconds);
+
+    /// @brief Whether any frame is voiced.
+    /// @return `true` with a voiced frame to draw.
+    [[nodiscard]] bool hasData() const;
+
+    /// @brief A sensible default size for the panel layout.
+    /// @return The size hint.
+    [[nodiscard]] QSize sizeHint() const override { return {320, 120}; }
+
+protected:
+    /// @brief Draws the octave lines, the track and the playhead.
+    /// @param event The paint event (unused).
+    void paintEvent(QPaintEvent* event) override;
+
+private:
+    std::vector<float> track_;
+    double secondsPerFrame_ = 0.0;
+    std::optional<double> playhead_;
+};
+
 }  // namespace sound_mind::studio

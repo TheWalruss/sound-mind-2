@@ -8,6 +8,7 @@
 
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/loudness_meter.h"
+#include "sound_mind/core/pitch_detection.h"
 #include "sound_mind/core/stereo_analysis.h"
 #include "sound_mind/core/project.h"
 
@@ -43,6 +44,9 @@ struct ProjectLoudnessReport {
     StereoMeasurement mixStereo;
     /// @brief The mix's per-band stereo widths - see `bandStereoWidths()`.
     std::vector<float> mixBandWidths;
+    /// @brief The mix's fundamental per frame, Hz (`0` unvoiced) - see
+    ///        `detectPitch()`.
+    std::vector<float> mixPitchHz;
     /// @brief The decoded mix (shared, never modified) - the goniometer draws
     ///        the samples around the playhead from it. Null if nothing is
     ///        audible.

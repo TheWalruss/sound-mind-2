@@ -275,6 +275,19 @@ public:
     /// @param bounds Where it goes.
     void setTextPreview(QImage image, std::optional<sound_mind::core::TimeFrequencyRect> bounds);
 
+    /**
+     * @brief Draws a detected pitch track over the canvas - the Analysis
+     *        panel's "Show pitch on canvas" (Pre-Beta Plan `v0.Y.80.1`): a
+     *        bright line through each voiced frame's fundamental, broken
+     *        where unvoiced. Empty hides it. Repaints.
+     * @param hzPerFrame One fundamental per canvas frame, Hz (`0` unvoiced).
+     */
+    void setPitchOverlay(std::vector<float> hzPerFrame);
+
+    /// @brief Whether a pitch track is showing.
+    /// @return `true` while setPitchOverlay() has a track.
+    [[nodiscard]] bool hasPitchOverlay() const noexcept { return !pitchOverlay_.empty(); }
+
     /// @brief Whether a Text tool preview is showing.
     /// @return `true` while setTextPreview() has bounds.
     [[nodiscard]] bool hasTextPreview() const noexcept { return textPreviewBounds_.has_value(); }
@@ -1122,6 +1135,7 @@ private:
     bool textBoxActive_ = false;
     QImage textPreviewImage_;
     std::optional<sound_mind::core::TimeFrequencyRect> textPreviewBounds_;
+    std::vector<float> pitchOverlay_;
     sound_mind::core::Path paintPreviewPath_;
     std::optional<std::size_t> previewSelectedNodeIndex_;
     std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;

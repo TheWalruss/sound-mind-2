@@ -6206,7 +6206,7 @@ namespace {
 ///        group once each has been shown at least once, regardless of
 ///        which one is actually on top.
 QString currentTabifiedPanelTitle(const QMainWindow& window) {
-    const QList<QTabBar*> tabBars = window.findChildren<QTabBar*>();
+    const QList<QTabBar*> tabBars = window.findChildren<QTabBar*>(Qt::FindDirectChildrenOnly);  // dock tab bars, not a panel's own tabs.
     if (tabBars.isEmpty() || tabBars.first()->currentIndex() < 0) {
         return QString();
     }
@@ -6269,7 +6269,7 @@ void MainWindowTest::clickingATabifiedPanelsOwnTabSwitchesBackToIt() {
     QTest::qWait(50);
     QCOMPARE(currentTabifiedPanelTitle(window), historyPanel->windowTitle());
 
-    const QList<QTabBar*> tabBars = window.findChildren<QTabBar*>();
+    const QList<QTabBar*> tabBars = window.findChildren<QTabBar*>(Qt::FindDirectChildrenOnly);  // dock tab bars, not a panel's own tabs.
     QVERIFY(!tabBars.isEmpty());
     QTabBar* tabBar = tabBars.first();
     int layersIndex = -1;

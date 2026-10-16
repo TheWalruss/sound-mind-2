@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.3] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.80.1` (Analysis tools), installment C.
+
+### Added
+
+- **Pitch detection.** The Analysis panel's new **Pitch** tab shows the note at the playhead (name, octave, cents and Hz) and a pitch-over-time graph. **Show pitch on canvas** draws the detected pitch line over the canvas.
+
 ## [0.1.40.2] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.80.1` (Analysis tools), installment B.

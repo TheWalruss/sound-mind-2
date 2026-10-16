@@ -16,4 +16,6 @@ private slots:
     void setReportFillsTheStereoTab();
     void negativeCorrelationIsFlaggedInRed();
     void theGoniometerPlotsMonoAsAVerticalLineAroundThePlayhead();
+    void thePitchTabShowsTheNoteAtThePlayhead();
+    void showPitchOnCanvasEmitsTheTrackOnlyWhileChecked();
 };

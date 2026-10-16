@@ -1319,7 +1319,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 **Installments** (decisions taken autonomously and recorded in the architecture doc):
 - ✅ **A** (`v0.1.40.1`, Decision #249): the loudness meter. BS.1770 loudness, true peak and clips are measured on the decoded mix and each soloed layer; per-band levels come from the spectral data. It lives in a new Analysis panel. (Building it uncovered the decode-edge click fixed in `v0.1.39.5`, Decision #248.)
 - ✅ **B** (`v0.1.40.2`, Decision #250): goniometer and stereo width (over time, per band).
-- **C**: pitch detection with a canvas overlay.
+- ✅ **C** (`v0.1.40.3`, Decision #251): pitch detection with a canvas overlay.
 - **D**: master limiter (playback and export; on by default, -1 dBTP ceiling) and output loudness normalization (off by default, target -14 LUFS, in Configure Devices).
 
 #### `v0.Y.81.1` - Operation history persisted with the project (L)

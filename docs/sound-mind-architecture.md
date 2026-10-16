@@ -2340,6 +2340,25 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Core: 4 cases - mono → (1, 0), inverted → (-1, 1), independent noise → (0, 0.5), band widths from spectral level differences (mono 0, one-sided 0.5); the project report carries stereo data and the decoded mix.
       - `AnalysisPanelTest`: 3 new cases - Stereo tab filled and cleared, red negative correlation, goniometer points (mono vertical, windowed around the playhead).
 
+251. **Pitch detection and its canvas overlay.** Settled in `v0.1.40.3`, Pre-Beta Plan milestone `v0.Y.80.1` installment C.
+    - **Core** `pitch_detection.h` - `detectPitch(StreamImage)` reads the spectral data directly, A-weighting removed, channels averaged.
+      - **Candidates:** local-maximum bins in [minHz, maxHz] whose own level is within 30 dB of the frame's loudest cell. Requiring a strong fundamental stops a sub-octave from winning on its harmonics alone.
+      - **Scoring:** harmonic summation, Σ_{h=1..5} peak(h·f)/h, where peak is the loudest bin within half a bin.
+      - **Coarse frequency:** a parabolic refinement on dB levels.
+      - **Phase-vocoder refinement:** the stored phase's advance between frames gives f modulo sampleRate/hop (100 Hz at the defaults), and the coarse estimate picks the multiple. This is necessary because below a few hundred Hz the log bins are finer than the codec's linear FFT bins (about 25 Hz). The magnitude peak therefore sits on the nearest linear bin: 110 Hz read 100.5 Hz before the refinement and reads 110 after.
+      - Frames below -60 dB are unvoiced (`0`).
+      - `noteFor(hz)` gives the equal-tempered name, octave (scientific notation) and cents.
+      - The legacy lowest-strong-partial method was the reference; harmonic summation was chosen over it as more robust to a weak fundamental's neighbors.
+    - **Report:** gains `mixPitchHz` from the mix composite.
+    - **Studio:**
+      - The Pitch tab: the note at the playhead (e.g. "A4  +3 cents  (440.8 Hz)"), `PitchGraphWidget` (log axis 50 Hz-2 kHz, a line at each C, gaps where unvoiced, playhead), and "Show pitch on canvas".
+      - `pitchOverlayToggled(enabled, track)` is re-emitted with each new report while checked and emptied on clear, and `MainWindow` forwards it to the new `CanvasWidget::setPitchOverlay()`. That draws a haloed green line through voiced frames, broken at unvoiced ones, hidden in polar view like the other line overlays.
+    - **Test-helper fix:** `MainWindowTest`'s tabified-panel helpers took the window's *first* `QTabBar`, which became the Analysis panel's own inner tab bar ("Loudness") once that panel joined the dock group. They now look only at the main window's direct-child (dock) tab bars. The full MainWindowTest run on `v0.1.40.1` caught this (2 failures out of 283); it's fixed here.
+    - **Tests:**
+      - Core: 4 cases - 110/220/440 Hz harmonic tones within 2%, 300 Hz with no sub-octave error, silence unvoiced, note names and cents; the project report's pitch reads the dominant 1 kHz tone.
+      - `AnalysisPanelTest`: note at the playhead (A4, +20 cents, unvoiced dash); the overlay emits only while checked, and again on a new report.
+      - `CanvasWidgetTest`: the overlay draws and clears.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

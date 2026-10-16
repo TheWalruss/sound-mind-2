@@ -871,6 +871,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     analysisPanel_->hide();
     addDockWidget(Qt::RightDockWidgetArea, analysisPanel_);
     connect(analysisPanel_, &AnalysisPanel::analyzeRequested, this, &MainWindow::analyzeLoudness);
+    connect(analysisPanel_, &AnalysisPanel::pitchOverlayToggled, this,
+            [this](bool, const std::vector<float>& hzPerFrame) { canvas_->setPitchOverlay(hzPerFrame); });
     loudnessTimer_ = new QTimer(this);
     loudnessTimer_->setInterval(50);
     connect(loudnessTimer_, &QTimer::timeout, this, [this]() {

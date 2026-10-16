@@ -6,6 +6,7 @@
 
 #include "sound_mind/core/project_analysis.h"
 
+class QCheckBox;
 class QLabel;
 class QPushButton;
 class QTabWidget;
@@ -17,11 +18,13 @@ class BandLevelsWidget;
 class BandWidthBarsWidget;
 class GoniometerWidget;
 class LoudnessGraphWidget;
+class PitchGraphWidget;
 class StereoGraphWidget;
 
 /**
  * @brief The Analysis panel (Pre-Beta Plan `v0.Y.80.1`) - read-only meters
- *        that never change the project, in tabs: **Loudness** and **Stereo**.
+ *        that never change the project, in tabs: **Loudness**, **Stereo** and
+ *        **Pitch**.
  *
  * **Loudness tab:**
  * - **Analyze** (analyzeRequested()) - `MainWindow` composites, decodes and
@@ -43,6 +46,11 @@ class StereoGraphWidget;
  * of the samples around the playhead (or the whole mix when stopped), and
  * per-band width bars. Negative correlation - channels that cancel when
  * summed to mono - is flagged in red.
+ *
+ * **Pitch tab** (installment C): the note at the playback position (name,
+ * octave, cents and Hz - see `sound_mind::core::noteFor()`), a pitch-over-
+ * time graph, and **Show pitch on canvas** (pitchOverlayToggled()), which
+ * `MainWindow` forwards to `CanvasWidget::setPitchOverlay()`.
  *
  * The report describes the project as it was when analyzed; setStale()
  * says so once it has changed since.
@@ -91,6 +99,14 @@ signals:
     /// @brief Analyze was clicked.
     void analyzeRequested();
 
+    /**
+     * @brief "Show pitch on canvas" was toggled.
+     * @param enabled Whether to show the track.
+     * @param hzPerFrame The current report's pitch track (empty with no
+     *        report, or when turned off).
+     */
+    void pitchOverlayToggled(bool enabled, const std::vector<float>& hzPerFrame);
+
 private:
     QTabWidget* tabs_ = nullptr;
     QPushButton* analyzeButton_ = nullptr;
@@ -113,6 +129,12 @@ private:
     StereoGraphWidget* stereoGraph_ = nullptr;
     GoniometerWidget* goniometer_ = nullptr;
     BandWidthBarsWidget* bandWidths_ = nullptr;
+    QLabel* noteNowLabel_ = nullptr;
+    PitchGraphWidget* pitchGraph_ = nullptr;
+    QCheckBox* pitchOverlayCheckBox_ = nullptr;
+
+    /// @brief Re-emits pitchOverlayToggled() with the current track.
+    void emitPitchOverlay();
     std::optional<sound_mind::core::ProjectLoudnessReport> report_;
 };
 

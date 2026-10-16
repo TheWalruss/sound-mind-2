@@ -179,6 +179,11 @@ void CanvasWidget::setPickMultiSelectionBounds(std::vector<sound_mind::core::Tim
     update();
 }
 
+void CanvasWidget::setPitchOverlay(std::vector<float> hzPerFrame) {
+    pitchOverlay_ = std::move(hzPerFrame);
+    update();
+}
+
 void CanvasWidget::setTextPreview(QImage image, std::optional<sound_mind::core::TimeFrequencyRect> bounds) {
     textPreviewImage_ = std::move(image);
     textPreviewBounds_ = bounds;
@@ -641,6 +646,28 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         painter.setPen(QPen(Qt::white, 2));
         for (const auto& bounds : pickMultiSelectionBounds_) {
             painter.drawRect(widgetRectFor(bounds));
+        }
+    }
+    if (!polarMode_ && project_ != nullptr && !pitchOverlay_.empty()) {
+        const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
+        painter.setBrush(Qt::NoBrush);
+        for (const auto& [color, width] : {std::pair{QColor(Qt::black), 4.0}, std::pair{QColor(80, 255, 120), 2.0}}) {
+            painter.setPen(QPen(color, width));
+            std::optional<QPointF> previous;
+            for (std::size_t frame = 0; frame < pitchOverlay_.size(); ++frame) {
+                if (pitchOverlay_[frame] <= 0.0f) {
+                    previous.reset();
+                    continue;
+                }
+                const QPointF point = timeFrequencyToWidgetPoint(sound_mind::core::TimeFrequencyPoint{
+                    sound_mind::core::frameIndexToTime(static_cast<double>(frame), config), pitchOverlay_[frame]});
+                if (previous.has_value()) {
+                    painter.drawLine(*previous, point);
+                } else {
+                    painter.drawPoint(point);
+                }
+                previous = point;
+            }
         }
     }
     if (!polarMode_ && project_ != nullptr && textPreviewBounds_.has_value()) {
