@@ -32,8 +32,9 @@ in-app behavior is correct and this guide is due an update.
 21. [Exporting](#exporting)
 22. [Saving and Project Files](#saving-and-project-files)
 23. [Resource Browser](#resource-browser)
-24. [Performance](#performance)
-25. [What's Not Here Yet](#whats-not-here-yet)
+24. [Analysis](#analysis)
+25. [Performance](#performance)
+26. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -2112,6 +2113,40 @@ where one makes sense:
   import; the same Overwrite/Keep Existing/Keep Both prompt appears for
   any bundled entry whose name collides with one you already have.
 
+## Analysis
+
+**View → Analysis** opens the Analysis panel - meters that read the project
+without ever changing it.
+
+### Loudness
+
+Click **Analyze** to measure the whole mix, exactly as you hear it, and
+every audible layer on its own (each with its own volume, balance and
+timing). It runs in the background, so you can keep working; the results
+say **Out of date** once you change the project, until you analyze again.
+
+- **Integrated** - the loudness of the whole mix in LUFS, measured the way
+  streaming services and broadcasters do (EBU R128). Many streaming
+  services play music at around -14 LUFS.
+- **Loudest 3 s / Loudest 400 ms** - the loudest short-term and momentary
+  readings anywhere in the mix.
+- **True peak** - the highest peak, including the peaks that fall between
+  samples. Above 0 dBTP it turns **red**: those peaks will distort.
+- **Sample peak** - the highest sample.
+- **Clipped samples** - how many samples go beyond full scale, which
+  distort (hard-clip) when played or exported. Any at all shows in **red**.
+- **At playhead** - the momentary (400 ms) and short-term (3 s) loudness at
+  the playback position, following playback.
+- **The graph** shows momentary (thin, blue) and short-term (thick, gold)
+  loudness over the whole project, from 0 down to -60 LUFS, with the
+  playback position marked.
+- **The band view** below it shows each frequency band's level over time -
+  sub, bass, low-mid, mid, high-mid and air, lowest at the bottom, brighter
+  meaning louder.
+- **The layer table** lists each layer heard on its own: integrated
+  loudness, loudest 3 s, true peak and clipped samples (red when
+  clipping).
+
 ## Performance
 
 Most editing stays responsive on an ordinary machine, but a few things
@@ -2216,13 +2251,11 @@ the exported file. There's still no panel to inspect what a recorded
 macro actually contains, and it isn't saved with the project.
 
 
-**Analysis Tools** have taken their first step too: the Layers panel's own
-per-layer **loudness indicator** (see [Working with Layers](#working-with-layers)
-above) is live. The design document's own broader plan - a representative
-meter for each of loudness/mastering, pitch/vocal, stereo/phase, spectral
-health, and criticality/pattern, plus output audio normalization toward a
-configured target loudness in Configure Devices - is still future work;
-only the one loudness/mastering meter above actually exists so far.
+**Analysis Tools**: the [Analysis](#analysis) panel's loudness meter and
+the Layers panel's per-layer loudness indicator are live. A goniometer and
+stereo width, pitch detection, a master limiter and output loudness
+normalization are being built next; the design document's spectral-health
+and criticality/pattern meters are planned for after Beta.
 
 **Sound Flower** (see [Canvas Navigation](#canvas-navigation) above) is
 now complete for its own confirmed scope: the polar canvas view and

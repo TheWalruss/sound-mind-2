@@ -1,0 +1,61 @@
+#pragma once
+
+#include <cstdint>
+#include <functional>
+#include <string>
+#include <vector>
+
+#include "sound_mind/core/layer.h"
+#include "sound_mind/core/loudness_meter.h"
+#include "sound_mind/core/project.h"
+
+namespace sound_mind::core {
+
+/// @brief One layer's own contribution, heard on its own - see
+///        `ProjectLoudnessReport`.
+struct LayerLoudness {
+    /// @brief The layer measured.
+    LayerId layer = 0;
+    /// @brief Its name when measured.
+    std::string name;
+    /// @brief Its loudness, peaks and clipping, soloed.
+    LoudnessMeasurement measurement;
+};
+
+/**
+ * @brief The loudness meter's full report on a project (Pre-Beta Plan
+ *        `v0.Y.80.1`): the mix as played, and each audible layer's own
+ *        contribution.
+ */
+struct ProjectLoudnessReport {
+    /// @brief The mix, exactly as playback hears it (respecting mute).
+    LoudnessMeasurement mix;
+    /// @brief The mix's per-band levels - see `bandLevelsOverTime()`.
+    std::vector<float> mixBandLevels;
+    /// @brief Frames in the mix's composite (the band levels' row length).
+    std::uint32_t frameCount = 0;
+    /// @brief Seconds per frame - maps a band-level column to a time.
+    double secondsPerFrame = 0.0;
+    /// @brief Each visible, unmuted, non-Filter layer with content, soloed
+    ///        (every other layer muted), in stack order.
+    std::vector<LayerLoudness> layers;
+};
+
+/**
+ * @brief Composites, decodes and measures `project`: the whole mix, then
+ *        each audible layer on its own - a layer's contribution includes
+ *        its own opacity, gain, balance and timing, exactly as heard in the
+ *        mix. Filter and Equalizer layers are left out of the per-layer list
+ *        (on their own they contribute nothing); muted or hidden layers too.
+ *
+ * @param project The project to analyze; not modified.
+ * @param shouldCancel Polled between stages and layers.
+ * @return The report; an empty mix measurement if nothing is audible.
+ * @throws CompositeCancelled or std::runtime_error if cancelled.
+ * @note Costs one composite and decode for the mix plus one per layer; run
+ *       it off the GUI thread.
+ */
+[[nodiscard]] ProjectLoudnessReport analyzeProjectLoudness(const Project& project,
+                                                           const std::function<bool()>& shouldCancel = {});
+
+}  // namespace sound_mind::core

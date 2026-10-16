@@ -74,6 +74,8 @@ add_library(sound-mind-core
     src/operation_clone.cpp
     src/path_merge.cpp
     src/text_paste.cpp
+    src/loudness_meter.cpp
+    src/project_analysis.cpp
     src/grid_preset.cpp
 )
 

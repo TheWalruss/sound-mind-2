@@ -71,6 +71,8 @@ add_library(sound-mind-studio-lib
     src/paint_controller.cpp
     src/path_controller.cpp
     src/text_controller.cpp
+    src/analysis_graphs.cpp
+    src/analysis_panel.cpp
     src/text_tool_panel.cpp
     src/path_edit_session.cpp
     src/pick_controller.cpp
@@ -133,6 +135,8 @@ add_library(sound-mind-studio-lib
     include/sound_mind/studio/paint_controller.h
     include/sound_mind/studio/path_controller.h
     include/sound_mind/studio/text_controller.h
+    include/sound_mind/studio/analysis_graphs.h
+    include/sound_mind/studio/analysis_panel.h
     include/sound_mind/studio/text_tool_panel.h
     include/sound_mind/studio/path_edit_session.h
     include/sound_mind/studio/pick_controller.h

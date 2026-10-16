@@ -28,6 +28,7 @@
 #include <QMouseEvent>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QTableWidget>
 #include <QTabBar>
 #include <QScrollArea>
 #include <QSignalSpy>
@@ -51,6 +52,7 @@
 #include "sound_mind/core/paste_operation.h"
 #include "sound_mind/core/playback_engine.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/studio/analysis_panel.h"
 #include "sound_mind/studio/text_tool_panel.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/chord_generator_panel.h"
@@ -7084,4 +7086,30 @@ void MainWindowTest::textToolPlacesPreviewsAndAppliesText() {
     window.setTextModeEnabled(false);
     QVERIFY(!canvas->hasTextPreview());
     QCOMPARE(window.project()->operationLog().size(), std::size_t{1});
+}
+
+void MainWindowTest::analyzeLoudnessReportsTheMixAndLayersAndGoesStaleOnEdits() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));
+    auto* panel = window.findChild<sound_mind::studio::AnalysisPanel*>();
+    QVERIFY(panel != nullptr);
+
+    window.analyzeLoudness();
+    QVERIFY(window.isAnalyzingLoudness());
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isAnalyzingLoudness(), 120000);
+
+    QVERIFY(panel->hasReport());
+    QVERIFY(!panel->isHidden());
+    auto* table = panel->findChild<QTableWidget*>(QStringLiteral("layerLoudnessTable"));
+    QCOMPARE(table->rowCount(), 1);  // the recording.
+    QVERIFY(panel->findChild<QLabel*>(QStringLiteral("integratedLoudnessLabel"))->text().endsWith(QStringLiteral("LUFS")));
+    auto* status = panel->findChild<QLabel*>(QStringLiteral("analysisStatusLabel"));
+    QVERIFY(!status->text().contains(QStringLiteral("Out of date")));
+
+    QVERIFY(window.commitRecording(recordedTone(0.1f)));  // a new layer: the report no longer matches.
+    QVERIFY(status->text().contains(QStringLiteral("Out of date")));
+
+    createFreshTestProject(window);  // another project: the report is dropped.
+    QVERIFY(!panel->hasReport());
 }

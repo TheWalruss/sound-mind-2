@@ -46,6 +46,7 @@ add_executable(sound-mind-studio-tests
     test_paint_controller.cpp
     test_path_controller.cpp
     test_text_controller.cpp
+    test_analysis_panel.cpp
     test_text_tool_panel.cpp
     test_path_edit_session.cpp
     test_pick_controller.cpp

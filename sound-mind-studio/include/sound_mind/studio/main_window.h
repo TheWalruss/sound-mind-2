@@ -27,6 +27,7 @@
 #include "sound_mind/core/record_engine.h"
 #include "sound_mind/studio/audio_snippet_picker_dialog.h"
 #include "sound_mind/studio/branch_curve_session.h"
+#include "sound_mind/studio/analysis_panel.h"
 #include "sound_mind/studio/canvas_widget.h"
 #include "sound_mind/studio/text_tool_panel.h"
 #include "sound_mind/studio/chord_generator_panel.h"
@@ -1434,6 +1435,20 @@ public slots:
      * @param enabled `true` to place text on the canvas.
      */
     void setTextModeEnabled(bool enabled);
+
+    /**
+     * @brief Measures the project's loudness - the Analysis panel's Analyze
+     *        button (Pre-Beta Plan `v0.Y.80.1`). Composites, decodes and
+     *        measures the mix and each audible layer on a background task
+     *        (`sound_mind::core::analyzeProjectLoudness()`), then shows the
+     *        report in the Analysis panel. A no-op with no project open or
+     *        while an analysis is already running.
+     */
+    void analyzeLoudness();
+
+    /// @brief Whether a loudness analysis is running.
+    /// @return `true` from analyzeLoudness() until its report arrives.
+    [[nodiscard]] bool isAnalyzingLoudness() const noexcept { return loudnessTask_ != nullptr; }
 
     /**
      * @brief Undoes the most recent undoable edit, if any - the actual
@@ -3801,6 +3816,14 @@ private:
     QAction* chordAction_ = nullptr;
     /// @brief The Tool dropdown's "Text" - see setTextModeEnabled().
     QAction* textAction_ = nullptr;
+
+    /// @brief The Analysis panel - see analyzeLoudness().
+    AnalysisPanel* analysisPanel_ = nullptr;
+    /// @brief The running loudness analysis's result; declared before the
+    ///        task so the task is destroyed first (as refreshResult_).
+    std::optional<sound_mind::core::ProjectLoudnessReport> loudnessResult_;
+    std::unique_ptr<sound_mind::core::BackgroundTask> loudnessTask_;
+    QTimer* loudnessTimer_ = nullptr;
     /// @brief The Text tool's panel - see `TextToolPanel`.
     TextToolPanel* textToolPanel_ = nullptr;
 

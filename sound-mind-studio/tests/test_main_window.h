@@ -348,4 +348,5 @@ private slots:
     void copyAndPastePickedObjectsDuplicatesThem();
     void mergingTwoPickedPathsMakesOneBranchingPath();
     void textToolPlacesPreviewsAndAppliesText();
+    void analyzeLoudnessReportsTheMixAndLayersAndGoesStaleOnEdits();
 };

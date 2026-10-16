@@ -28,6 +28,8 @@ add_executable(sound-mind-core-tests
     test_text_paste.cpp
     test_noise_generator.cpp
     test_fractal_generator.cpp
+    test_loudness_meter.cpp
+    test_project_analysis.cpp
     test_paste_operation.cpp
     test_sequence_operation.cpp
     test_sequence_application.cpp

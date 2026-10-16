@@ -2294,6 +2294,38 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Separately observed, not changed here:** round-trip level falls above about 2 kHz at the default 512 bins (about -6 dB at 3 kHz, -18 dB at 5 kHz for a pure tone). Log bins are wider than linear bins there, and interpolation misses a narrow peak. This is recorded for the codec's own backlog.
     - **Test:** a 0.4-amplitude tone at 250 Hz / 1 / 3 / 9 kHz never decodes above 1.25x its own amplitude anywhere in the buffer. Before the fix all four failed.
 
+249. **The loudness meter and the Analysis panel.** Settled in `v0.1.40.1`, Pre-Beta Plan milestone `v0.Y.80.1` installment A.
+    - **Where each measure comes from:** the design doc says analysis reads the spectral data directly. That holds for per-band views (and installments B/C's stereo-per-band and pitch). Loudness (LUFS), true peak and clip counts, though, are only correct in the time domain:
+      - K-weighting is defined as time-domain filters;
+      - the stored log bins are A-weighted point samples of the STFT, not band powers;
+      - inter-sample peaks and |x| > 1 exist only in samples.
+      - So these are measured on the *decoded* audio, which playback and export already produce. That's a deliberate, recorded departure from "no decoding required" for these meters only.
+    - **Core:** `loudness_meter.h` - `measureLoudness(AudioBuffer)` returns a `LoudnessMeasurement`.
+      - **K-weighting:** the two BS.1770 biquads, designed per sample rate from their analog prototypes (pyloudnorm's derivation), channels summed.
+      - **Gating:** 400 ms blocks at 100 ms steps, -70 LUFS absolute and -10 LU relative.
+      - **Series and peaks:** momentary and short-term series every 100 ms; sample peak; clipped samples (|x| > 1).
+      - **True peak** is 4x interpolation with a 16-tap Hann-windowed sinc, evaluated only near samples within 6 dB of the sample peak, which keeps a long mix fast.
+    - **Per band:** `bandLevelsOverTime(StreamImage)` gives six bands' (legacy set) power-mean levels per frame, A-weighting removed.
+    - **Report:** `project_analysis.h` - `analyzeProjectLoudness(Project)` measures the mix (composite, respecting mute, then decode) and each visible, unmuted, non-Filter/Background layer *soloed*, i.e. every other layer muted in a copy. Each layer's figure therefore includes its own opacity, gain, balance and timing as heard in the mix.
+    - **Studio:**
+      - `AnalysisPanel` (View → Analysis, tabbed with the others) has a Loudness tab: Analyze, status, summary with red flags (clips > 0, true peak > 0 dBTP), at-playhead readings, `LoudnessGraphWidget`, `BandLevelsWidget`, and the per-layer table.
+      - `MainWindow::analyzeLoudness()` runs on a `BackgroundTask` with a 50 ms poll.
+      - The report is marked stale on layer changes, tool content changes, recordings, undo and redo, and is cleared (and a running task cancelled) on project switch.
+      - Playback position drives the at-playhead readings and playheads.
+      - The Text Tool panel now joins the shared dock tab group too.
+    - *Performance:* one composite and decode per audible layer plus one for the mix, all off the GUI thread. A very long project with many layers takes a while, but the panel stays responsive. Per-band levels are a candidate for the GPU path.
+    - **Tests:**
+      - Core loudness meter, 7 cases:
+        - a -6 dBFS 1 kHz stereo sine reads -6.0 LUFS at 48 and 44.1 kHz;
+        - 40 Hz is K-weighted down;
+        - gating ignores silence; silence reads the floor;
+        - clip counting;
+        - true peak of a phase-offset fs/4 sine recovers the 3 dB inter-sample peak;
+        - band placement.
+      - Core project analysis, 3 cases: mix vs soloed layers; muted/hidden/filter exclusion; an empty project.
+      - `AnalysisPanelTest`: 7 cases.
+      - `MainWindowTest`: analyze end to end, staleness on a new recording, cleared on a new project.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

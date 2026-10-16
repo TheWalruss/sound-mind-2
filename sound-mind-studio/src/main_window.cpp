@@ -331,6 +331,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         // updateLoudnessDisplays()'s own docs on why pausing needs nothing
         // further here).
         layerController_->updateLoudnessDisplays(total > 0.0 ? positionSeconds / total : 0.0);
+        analysisPanel_->setPlaybackPosition(positionSeconds);
         advanceMacroPlayback(positionSeconds);
     });
     connect(playbackPanel_, &PlaybackPanel::repeatChanged, this, &MainWindow::setPlaybackRepeat);
@@ -677,6 +678,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     connect(toolPaletteController_, &ToolPaletteController::contentChanged, this,
             [this](sound_mind::core::LayerId layer) {
                 hasUnsavedChanges_ = true;
+                analysisPanel_->setStale();
                 // v0.1.7.1 (docs/sound-mind-roadmap.md's targeted-
                 // invalidation raster cache) - every kind of content
                 // commit this signal fires for (paint, fill, cut, paste,
@@ -763,6 +765,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         new LayerController(canvas_, playbackController_, layersPanel_, filterConfigurationPanel_, &undoStack_, this);
     connect(layerController_, &LayerController::layersChanged, this, [this]() {
         hasUnsavedChanges_ = true;
+        analysisPanel_->setStale();
         refreshHistoryPanel();
         refreshComposerPanel();
         refreshRecordTargets();
@@ -862,6 +865,26 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         }
     });
     connect(recordPanel_, &RecordPanel::configureDevicesRequested, this, &MainWindow::showConfigureDevicesPanel);
+
+    // The Analysis panel (v0.Y.80.1) - see analyzeLoudness().
+    analysisPanel_ = new AnalysisPanel(this);
+    analysisPanel_->hide();
+    addDockWidget(Qt::RightDockWidgetArea, analysisPanel_);
+    connect(analysisPanel_, &AnalysisPanel::analyzeRequested, this, &MainWindow::analyzeLoudness);
+    loudnessTimer_ = new QTimer(this);
+    loudnessTimer_->setInterval(50);
+    connect(loudnessTimer_, &QTimer::timeout, this, [this]() {
+        if (loudnessTask_ == nullptr || loudnessTask_->isRunning()) {
+            return;
+        }
+        loudnessTimer_->stop();
+        loudnessTask_.reset();
+        analysisPanel_->setAnalyzing(false);
+        if (loudnessResult_.has_value()) {
+            analysisPanel_->setReport(*loudnessResult_);
+            loudnessResult_.reset();
+        }
+    });
 
     loopPanel_ = new LoopPanel(this);
     loopPanel_->hide();  // also needs setProject() - loopEngine_ doesn't exist until then.
@@ -1462,6 +1485,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     // confirmed with the user.
     viewMenu->addSeparator();
     viewMenu->addAction(composerPanel_->toggleViewAction());
+    viewMenu->addAction(analysisPanel_->toggleViewAction());
 
     // Workflow & Device Polish, Installment D: Documentation links
     // (v0.0.42.4) - each link is reachable from both the Help menu and the
@@ -1723,6 +1747,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     tabifyDockWidget(layersPanel_, filterConfigurationPanel_);
     tabifyDockWidget(layersPanel_, recordPanel_);
     tabifyDockWidget(layersPanel_, loopPanel_);
+    tabifyDockWidget(layersPanel_, analysisPanel_);
+    tabifyDockWidget(layersPanel_, textToolPanel_);
 
     // Showing a tabified panel (via its own toggleViewAction(), or any
     // other show() call) adds its tab without switching to it - Qt
@@ -2079,6 +2105,10 @@ void MainWindow::setProject(sound_mind::core::Project project) {
     // no-op when already stopped, or when loopEngine_ doesn't exist yet -
     // see its own docs), so this is always safe regardless of caller.
     setFilterPreviewEnabled(false);
+    if (loudnessTask_) {
+        loudnessTask_->requestCancel();  // its result is for the old project - see the timer's handler.
+    }
+    analysisPanel_->clearReport();
     loopUpdateTimer_->stop();
     if (loopEngine_) {
         loopEngine_->stop();
@@ -3451,6 +3481,26 @@ void MainWindow::setChordModeEnabled(bool enabled) {
     setExclusiveToolMode(chordAction_, enabled, CanvasWidget::ToolMode::ChordStamp);
 }
 
+void MainWindow::analyzeLoudness() {
+    if (!project_ || loudnessTask_ != nullptr) {
+        return;
+    }
+    loudnessResult_.reset();
+    analysisPanel_->setAnalyzing(true);
+    analysisPanel_->show();
+    loudnessTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
+        [this, projectCopy = *project_](sound_mind::core::CancellationToken& token) {
+            try {
+                loudnessResult_ = sound_mind::core::analyzeProjectLoudness(
+                    projectCopy, [&token]() { return token.cancellationRequested(); });
+            } catch (const std::exception&) {
+                loudnessResult_.reset();  // cancelled or failed - nothing to show.
+            }
+        });
+    loudnessTask_->start();
+    loudnessTimer_->start();
+}
+
 void MainWindow::setTextModeEnabled(bool enabled) {
     if (!enabled) {
         toolPaletteController_->textController()->reset();
@@ -3573,9 +3623,15 @@ void MainWindow::updateConfiguredDeviceLockState() {
     landingPage_->deviceConfiguration()->setOutputDeviceSelectionEnabled(!outputBusy);
 }
 
-void MainWindow::undo() { undoStack_.undo(); }
+void MainWindow::undo() {
+    undoStack_.undo();
+    analysisPanel_->setStale();  // undo can change anything the report measured.
+}
 
-void MainWindow::redo() { undoStack_.redo(); }
+void MainWindow::redo() {
+    undoStack_.redo();
+    analysisPanel_->setStale();
+}
 
 void MainWindow::refreshHistoryPanel() {
     QStringList descriptions;
@@ -5048,6 +5104,7 @@ bool MainWindow::commitRecording(const sound_mind::codec::AudioBuffer& captured)
         canvas_->invalidateCompositeAll();
         playbackController_->invalidate();
         hasUnsavedChanges_ = true;
+        analysisPanel_->setStale();
         layerController_->refreshLayersPanel();
         refreshRecordTargets();
         return true;

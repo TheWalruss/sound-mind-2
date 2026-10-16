@@ -71,6 +71,7 @@
 #include "test_paint_controller.h"
 #include "test_path_controller.h"
 #include "test_text_controller.h"
+#include "test_analysis_panel.h"
 #include "test_text_tool_panel.h"
 #include "test_path_edit_session.h"
 #include "test_pick_controller.h"
@@ -126,6 +127,7 @@ const std::array kTestClasses{
     SM_TEST_CLASS_ENTRY(PickControllerTest),
     SM_TEST_CLASS_ENTRY(PathControllerTest),
     SM_TEST_CLASS_ENTRY(TextControllerTest),
+    SM_TEST_CLASS_ENTRY(AnalysisPanelTest),
     SM_TEST_CLASS_ENTRY(TextToolPanelTest),
     SM_TEST_CLASS_ENTRY(PathEditSessionTest),
     SM_TEST_CLASS_ENTRY(SelectionControllerTest),

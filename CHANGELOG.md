@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.1] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.80.1` (Analysis tools), installment A.
+
+### Added
+
+- **Loudness meter.** A new **Analysis** panel (View → Analysis). **Analyze** measures the mix and every audible layer: integrated loudness (LUFS, EBU R128), loudest short-term and momentary readings, true peak and sample peak, and clipped samples, with red flags for clipping and true peaks above 0 dBTP. It also has live readings at the playhead, a loudness-over-time graph, a per-band level view and a per-layer table.
+
 ## [0.1.39.5] - 2026-10-16
 
 ### Fixed
