@@ -370,6 +370,14 @@ public:
     /// @return The pasted objects' ids.
     std::vector<sound_mind::core::OperationId> pastePickedObjects(sound_mind::core::LayerId layer);
 
+    /// @brief Forwards to `PickController::canMergeSelection()`.
+    /// @return `true` if two or more Picked objects have a path.
+    [[nodiscard]] bool canMergePickedPaths() const;
+
+    /// @brief Forwards to `PickController::mergeSelectionIntoBranchingPath()`.
+    /// @return The new branching path's id, or `std::nullopt`.
+    std::optional<sound_mind::core::OperationId> mergePickedPaths();
+
     /// @brief Forwards to `PickController::selectedBranches()`.
     /// @return The Picked object's branches; empty with nothing suitable Picked.
     [[nodiscard]] std::vector<sound_mind::core::BranchGraft> selectedBranches() const;

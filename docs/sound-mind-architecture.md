@@ -2167,6 +2167,25 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `CanvasWidgetTest`: highlights and band drawn.
       - `MainWindowTest`: band by mouse, the menu, delete and undo; copy/paste of a Picked path.
 
+242. **Merging paths into a branching path.** Settled in `v0.1.37.4`, Pre-Beta Plan milestone `v0.Y.77.1` installment D, completing the milestone.
+    - **`BranchGraft::attachPoint`** (optional; JSON `attachPoint`; moved by `translatedCopy()`):
+      - A graft used to always weld the parent's nearest node to the child's *start*, which is right for a hand-drawn branch. But a merge's shortest connection can land anywhere along a stroke.
+      - With `attachPoint` set, `curveGraphFromBranches()` welds the child's nearest resampled node to it instead. Unset keeps the old behavior exactly.
+      - The canvas draws the dashed join to the attach point.
+    - **`mergeIntoBranchingPath()`** (`path_merge.h`):
+      - **Flatten:** each input path is a piece (its branches, with internal grafts as undirected joins).
+      - **Join:** a minimum spanning tree over the pieces by Kruskal - every anchor pair across two pieces is a candidate, distance in the normalized space resonance geometry uses (seconds, Hz / `frequencyToTimeScale`), with union-find - gives exactly k-1 joins.
+      - **Order:** a breadth-first walk from the first piece's trunk lists every branch after its parent. Each join is oriented away from the root as it's crossed, with `graftPoint` on the parent and `attachPoint` on the child.
+      - This re-roots a piece's internal grafts where the join lands on a non-trunk branch, without splitting or reversing any stroke - the geometry and the graph are unchanged.
+      - The roadmap's wording ("the k-1 shortest node-to-node connecting edges") is met using Path anchors as the nodes.
+    - **`PickController::mergeSelectionIntoBranchingPath()`**: in one undo step, it appends the merged `GuidePathOperation` plus a tombstone for each merged guide path. Painted strokes contribute their path and stay (user decision). The result becomes the selection. `canMergeSelection()` needs two or more selected objects with paths.
+    - **Menus:** Edit → Picked Path Tools → **Merge Picked Paths into Branching Path**, and **Merge into Branching Path** in the multi-selection right-click menu - both grayed out per #240.
+    - *Performance:* candidate pairs are O(N^2) in total anchors. Freehand-fitted paths have tens of anchors, so this is instant for any realistic selection; resampling first would be the fix if it ever isn't.
+    - **Tests:**
+      - Core: 5 cases - two paths join at their closest anchors; k paths get exactly k-1 joins and a connected graph; a branching input is re-rooted and stays connected; empty input; `attachPoint` welding.
+      - `PickControllerTest`: merge consumes guides, keeps strokes, one undo step; needs two paths.
+      - `MainWindowTest`: merge by menu after a rubber band; the multi-selection menu includes Merge.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

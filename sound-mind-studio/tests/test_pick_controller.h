@@ -78,4 +78,6 @@ private slots:
     void draggingAMultiSelectionMovesThemAllAsOneUndoStep();
     void copyThenPasteDuplicatesTheObjectsAndSelectsThem();
     void clickingElsewhereReplacesAMultiSelection();
+    void mergingConsumesGuidePathsKeepsStrokesAndIsOneUndoStep();
+    void mergingNeedsTwoPaths();
 };

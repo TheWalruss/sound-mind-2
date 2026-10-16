@@ -10,6 +10,7 @@
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/operation_clone.h"
 #include "sound_mind/core/operation_log.h"
+#include "sound_mind/core/path_merge.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
 #include "sound_mind/core/paste_operation.h"
@@ -80,6 +81,19 @@ const sound_mind::core::Path* editablePathOf(const sound_mind::core::Operation* 
         return &guide->branches().front().path;
     }
     return nullptr;
+}
+
+/// @brief `operation`'s geometry as branches: a guide path's own, or a
+/// painted stroke's path as a single trunk; empty for anything else.
+std::vector<sound_mind::core::BranchGraft> branchesOf(const sound_mind::core::Operation* operation) {
+    if (const auto* guide = dynamic_cast<const sound_mind::core::GuidePathOperation*>(operation)) {
+        return guide->branches();
+    }
+    if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(operation);
+        paint != nullptr && !paint->path().nodes().empty()) {
+        return {sound_mind::core::BranchGraft{paint->path(), std::nullopt, sound_mind::core::TimeFrequencyPoint{}}};
+    }
+    return {};
 }
 
 /// @brief A closed, four-corner rectangular outline Path tracing `rect` -
@@ -293,14 +307,56 @@ std::vector<sound_mind::core::BranchGraft> PickController::selectedBranches() co
     if (!pickedOperationId_.has_value()) {
         return {};
     }
-    if (const auto* guide = dynamic_cast<const sound_mind::core::GuidePathOperation*>(pickedOperation_)) {
-        return guide->branches();
+    return branchesOf(pickedOperation_);
+}
+
+bool PickController::canMergeSelection() const {
+    std::size_t withPaths = 0;
+    for (const sound_mind::core::OperationId id : multiSelection_) {
+        if (!branchesOf(activeOperation(multiLayer_, id)).empty()) {
+            ++withPaths;
+        }
     }
-    if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(pickedOperation_);
-        paint != nullptr && !paint->path().nodes().empty()) {
-        return {sound_mind::core::BranchGraft{paint->path(), std::nullopt, sound_mind::core::TimeFrequencyPoint{}}};
+    return withPaths >= 2;
+}
+
+std::optional<sound_mind::core::OperationId> PickController::mergeSelectionIntoBranchingPath() {
+    if (project_ == nullptr || !canMergeSelection()) {
+        return std::nullopt;
     }
-    return {};
+    const sound_mind::core::LayerId layer = multiLayer_;
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    std::vector<std::vector<sound_mind::core::BranchGraft>> pieces;
+    // Build everything before appending anything - append() may move the
+    // log's storage under the pointers activeOperation() returns.
+    std::vector<std::unique_ptr<sound_mind::core::Operation>> toAppend;
+    for (const sound_mind::core::OperationId id : multiSelection_) {
+        const sound_mind::core::Operation* operation = activeOperation(layer, id);
+        auto branches = branchesOf(operation);
+        if (branches.empty()) {
+            continue;
+        }
+        pieces.push_back(std::move(branches));
+        if (dynamic_cast<const sound_mind::core::GuidePathOperation*>(operation) != nullptr) {
+            toAppend.push_back(PaintController::makeDeletionTombstone(*operation, log.reserveId()));
+        }
+    }
+    auto merged = sound_mind::core::mergeIntoBranchingPath(
+        pieces, sound_mind::core::frequencyToTimeScaleFor(project_->settings()));
+    if (merged.empty()) {
+        return std::nullopt;
+    }
+    const sound_mind::core::OperationId mergedId = log.reserveId();
+    toAppend.push_back(std::make_unique<sound_mind::core::GuidePathOperation>(mergedId, layer, std::move(merged)));
+    const std::size_t count = toAppend.size();
+    for (auto& operation : toAppend) {
+        log.append(std::move(operation));
+    }
+    paintController_->notifyOperationsCommitted(
+        count, tr("Merged %n path(s) into a branching path", "", static_cast<int>(pieces.size())));
+    emit contentChanged(layer);
+    selectOperation(layer, mergedId);
+    return mergedId;
 }
 
 bool PickController::selectedIsGuidePath() const {

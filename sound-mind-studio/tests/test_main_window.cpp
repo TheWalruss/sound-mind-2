@@ -6989,9 +6989,11 @@ void MainWindowTest::rectangleDragInPickModeSelectsAndDeletesSeveralObjects() {
     dragBetween(canvas, QPoint(10, 10), QPoint(60, 35));  // from empty space, around both.
 
     const auto shown = shownContextMenuActions(canvas, QPoint(25, 22));
-    QCOMPARE(shown.size(), 2);
+    QCOMPARE(shown.size(), 3);
     QCOMPARE(shown.at(0).first, QStringLiteral("Copy"));
-    QCOMPARE(shown.at(1).first, QStringLiteral("Delete"));
+    QCOMPARE(shown.at(1).first, QStringLiteral("Merge into Branching Path"));
+    QVERIFY(shown.at(1).second);  // two paths - mergeable.
+    QCOMPARE(shown.at(2).first, QStringLiteral("Delete"));
 
     window.deletePickedObject();
     const auto layer = *window.project()->operationLog().at(0).targetLayer();
@@ -7021,4 +7023,29 @@ void MainWindowTest::copyAndPastePickedObjectsDuplicatesThem() {
 
     const auto layer = *window.project()->operationLog().at(0).targetLayer();
     QCOMPARE(window.project()->operationLog().activeOperationsTargeting(layer).size(), std::size_t{2});
+}
+
+void MainWindowTest::mergingTwoPickedPathsMakesOneBranchingPath() {
+    const auto projectPath = std::filesystem::temp_directory_path() / "sound-mind-test-merge-paths.smproj";
+    TestMainWindow window;
+    QVERIFY(window.createProjectAt(imageScalingTestProjectSettings(), projectPath));
+    std::filesystem::remove(projectPath);
+    auto* canvas = window.findChild<CanvasWidget*>();
+    canvas->setFixedSize(100, 50);
+    window.setPathModeEnabled(true);
+    dragBetween(canvas, QPoint(20, 20), QPoint(30, 25));
+    dragBetween(canvas, QPoint(40, 20), QPoint(50, 25));
+    window.setPickModeEnabled(true);
+    dragBetween(canvas, QPoint(10, 10), QPoint(60, 35));
+
+    window.mergePickedPaths();
+
+    const auto& log = window.project()->operationLog();
+    const auto* merged = dynamic_cast<const sound_mind::core::GuidePathOperation*>(&log.at(log.size() - 1));
+    QVERIFY(merged != nullptr);
+    QVERIFY(merged->isBranching());
+    QCOMPARE(merged->branches().size(), std::size_t{2});
+    window.undo();
+    const auto layer = *log.at(0).targetLayer();
+    QCOMPARE(log.activeOperationsTargeting(layer).size(), std::size_t{2});
 }

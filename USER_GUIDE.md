@@ -1353,6 +1353,15 @@ canvas to draw a dashed rectangle. Every object lying entirely inside it
   [Selection](#selection-and-fill) active, Copy copies the selected region
   instead, as always; Paste pastes whichever you copied last.)
 
+- **Merge into Branching Path** (right-click, or **Edit → Picked Path Tools →
+  Merge Picked Paths into Branching Path**) joins every selected path into
+  one branching path (pink), adding the fewest, shortest connections that
+  link them all - each path is joined to its nearest neighbor at their two
+  closest points. Paths drawn with the [Path Tool](#path-tool) (and
+  branching paths) are replaced by the merged one; painted strokes lend
+  their shape but stay where they are, still sounding. Use the result for
+  **Create Resonance Profile...** or **Stroke Path with Current Tool**.
+
 Each of these is a single undo step, however many objects are involved.
 Clicking anything outside the selection replaces it as usual.
 
@@ -1566,8 +1575,9 @@ is **silent**: it paints nothing and changes nothing you hear. It's a guide
 you can use afterwards:
 
 - It's drawn on the canvas as a **cyan** line on every visible layer. A
-  **branching path** (see [Pick](#pick)'s Branching Curve editor) is drawn
-  in **pink**, with a dashed join where each branch grows out of another.
+  **branching path** - made by merging several selected paths (see
+  [Pick](#pick)), or kept from the Branching Curve editor - is drawn in
+  **pink**, with a dashed join where each branch connects to another.
 - [Pick](#pick) it to select, move or delete it, or to **edit its nodes**
   (**Edit → Path Editing → Edit Path**) exactly like a painted stroke's.
 - Use it anywhere a Picked stroke's path is used: **Create Resonance from

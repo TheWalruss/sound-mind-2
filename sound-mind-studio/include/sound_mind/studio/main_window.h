@@ -1555,6 +1555,16 @@ public slots:
      */
     void strokePickedPath();
 
+    /**
+     * @brief Merges the Picked paths into one branching path - the Edit
+     *        menu's "Merge Picked Paths into Branching Path" and the
+     *        multi-selection right-click menu's "Merge into Branching Path"
+     *        (Pre-Beta Plan `v0.Y.77.1`). See
+     *        `PickController::mergeSelectionIntoBranchingPath()`. A no-op
+     *        unless two or more Picked objects have a path.
+     */
+    void mergePickedPaths();
+
     /// @brief Converts the currently selected node (within an active path
     ///        edit) between `Corner` and `Smooth` - the actual work
     ///        behind the Edit menu's "Toggle Node Type" action. Delegates

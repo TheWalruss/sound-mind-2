@@ -851,8 +851,9 @@ void CanvasWidget::drawGuidePaths(QPainter& painter) const {
                 painter.drawPath(path);
                 if (branch.parentIndex.has_value() && !branch.path.nodes().empty()) {
                     painter.setPen(QPen(color, 2, Qt::DashLine));
-                    painter.drawLine(timeFrequencyToWidgetPoint(branch.graftPoint),
-                                     timeFrequencyToWidgetPoint(branch.path.nodes().front().anchor));
+                    painter.drawLine(
+                        timeFrequencyToWidgetPoint(branch.graftPoint),
+                        timeFrequencyToWidgetPoint(branch.attachPoint.value_or(branch.path.nodes().front().anchor)));
                 }
             }
         }

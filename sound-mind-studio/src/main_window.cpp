@@ -1257,6 +1257,9 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     QAction* strokePickedPathAction = pickedPathToolsMenu->addAction(tr("Stroke Picked Path with Current &Tool"));
     connect(strokePickedPathAction, &QAction::triggered, this, &MainWindow::strokePickedPath);
 
+    QAction* mergePickedPathsAction = pickedPathToolsMenu->addAction(tr("&Merge Picked Paths into Branching Path"));
+    connect(mergePickedPathsAction, &QAction::triggered, this, &MainWindow::mergePickedPaths);
+
     // When each of the actions above applies - see updateEditActionStates().
     {
         ToolPaletteController* const palette = toolPaletteController_;
@@ -1294,6 +1297,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             {cancelBranchingCurveAction, session},
             {createResonanceFromGraphAction, session},
             {strokePickedPathAction, [palette]() { return palette->selectedIsGuidePath(); }},
+            {mergePickedPathsAction, [palette]() { return palette->canMergePickedPaths(); }},
         };
     }
 
@@ -3652,6 +3656,12 @@ void MainWindow::restoreEditActions() {
     }
 }
 
+void MainWindow::mergePickedPaths() {
+    if (toolPaletteController_->mergePickedPaths().has_value()) {
+        statusBar()->showMessage(tr("Merged the Picked paths into a branching path."), 5000);
+    }
+}
+
 void MainWindow::strokePickedPath() {
     if (!project_.has_value() || toolPaletteController_->selectedBranches().empty()) {
         return;
@@ -3698,6 +3708,9 @@ void MainWindow::showCanvasContextMenu(sound_mind::core::TimeFrequencyPoint poin
         // A rectangle multi-selection (v0.Y.77.1): what applies to them all.
         QAction* copyObjects = menu.addAction(tr("Copy"));
         connect(copyObjects, &QAction::triggered, this, &MainWindow::copySelection);
+        QAction* merge = menu.addAction(tr("Merge into Branching Path"));
+        merge->setEnabled(toolPaletteController_->canMergePickedPaths());
+        connect(merge, &QAction::triggered, this, &MainWindow::mergePickedPaths);
         menu.addSeparator();
         QAction* deleteObjects = menu.addAction(tr("Delete"));
         connect(deleteObjects, &QAction::triggered, this, &MainWindow::deletePickedObject);

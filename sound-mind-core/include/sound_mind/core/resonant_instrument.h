@@ -206,14 +206,24 @@ struct BranchGraft {
     ///        locates the parent's own nearest resampled node to it).
     ///        Ignored when `parentIndex` is `std::nullopt`.
     TimeFrequencyPoint graftPoint;
+
+    /// @brief Where along *this* stroke the graft attaches - its own
+    ///        nearest resampled node to this point is the one welded to the
+    ///        parent. `std::nullopt` (the default) attaches at the stroke's
+    ///        start, as a hand-drawn branch growing out of its parent does.
+    ///        Set when merging paths (`mergeIntoBranchingPath()`), where the
+    ///        shortest connection can land anywhere along a stroke. Ignored
+    ///        when `parentIndex` is `std::nullopt`.
+    std::optional<TimeFrequencyPoint> attachPoint;
 };
 
 /**
  * @brief Resamples every stroke in `branches` into its own linear chain of
  *        `targetNodeCountPerBranch` nodes (exactly `curveGraphFromPath()`'s
  *        own resampling, run once per stroke), then welds each non-trunk
- *        stroke onto its own parent with one extra edge at the closest
- *        resampled node to its own `graftPoint` - the genuinely branching
+ *        stroke onto its own parent with one extra edge from the parent's
+ *        closest resampled node to its own `graftPoint` to the stroke's own
+ *        start (or, with `attachPoint` set, its closest node to that) - the genuinely branching
  *        counterpart to `curveGraphFromPath()`, assembling a real tree (or,
  *        if a later installment ever lets a stroke graft onto more than
  *        one parent, a general graph) out of individually-drawn strokes

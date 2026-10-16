@@ -1901,3 +1901,79 @@ void PickControllerTest::clickingElsewhereReplacesAMultiSelection() {
     QVERIFY(!controller.hasMultiSelection());
     QCOMPARE(*controller.selectedOperationId(), strokes.wide);
 }
+
+namespace {
+
+OperationId addGuideLine(Project& project, LayerId layer, double startTime, double endTime, double frequencyHz) {
+    Path path;
+    PathNode a;
+    a.anchor = TimeFrequencyPoint{startTime, frequencyHz};
+    a.type = PathNodeType::Corner;
+    PathNode b = a;
+    b.anchor.timeSeconds = endTime;
+    path.addNode(a);
+    path.addNode(b);
+    auto& log = project.operationLog();
+    const OperationId id = log.reserveId();
+    log.append(std::make_unique<sound_mind::core::GuidePathOperation>(
+        id, layer, std::vector<sound_mind::core::BranchGraft>{{std::move(path), std::nullopt, TimeFrequencyPoint{}}}));
+    return id;
+}
+
+}  // namespace
+
+void PickControllerTest::mergingConsumesGuidePathsKeepsStrokesAndIsOneUndoStep() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId guideA = addGuideLine(project, layerId, 0.10, 0.30, 400.0);
+    const OperationId guideB = addGuideLine(project, layerId, 0.40, 0.60, 600.0);
+    const OperationId stroke = addPaintOperation(project, layerId, 0.70, 800.0, 0.80, 850.0, makeOpaqueTool(0.005));
+    sound_mind::studio::UndoStack undoStack;
+    PaintController paintController(&undoStack);
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QCOMPARE(controller.selectOperations(layerId, {guideA, guideB, stroke}), std::size_t{3});
+    QVERIFY(controller.canMergeSelection());
+
+    const auto merged = controller.mergeSelectionIntoBranchingPath();
+
+    QVERIFY(merged.has_value());
+    QCOMPARE(*controller.selectedOperationId(), *merged);
+    QCOMPARE(undoStack.count(), std::size_t{1});
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    std::size_t branchingPaths = 0;
+    std::size_t liveGuides = 0;
+    bool strokeStays = false;
+    for (const auto* operation : active) {
+        if (const auto* guide = dynamic_cast<const sound_mind::core::GuidePathOperation*>(operation)) {
+            if (!guide->isEmpty()) {
+                ++liveGuides;
+                branchingPaths += guide->isBranching() && guide->branches().size() == 3 ? 1 : 0;
+            }
+        }
+        strokeStays = strokeStays || operation->id() == stroke;
+    }
+    QCOMPARE(liveGuides, std::size_t{1});  // the two merged guides are gone...
+    QCOMPARE(branchingPaths, std::size_t{1});  // ...replaced by one three-branch tree.
+    QVERIFY(strokeStays);
+
+    undoStack.undo();
+    const auto restored = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(restored.size(), std::size_t{3});
+}
+
+void PickControllerTest::mergingNeedsTwoPaths() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const OperationId guide = addGuideLine(project, layerId, 0.10, 0.30, 400.0);
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    controller.selectOperations(layerId, {guide});
+
+    QVERIFY(!controller.canMergeSelection());
+    QVERIFY(!controller.mergeSelectionIntoBranchingPath().has_value());
+    QCOMPARE(project.operationLog().size(), std::size_t{1});
+}

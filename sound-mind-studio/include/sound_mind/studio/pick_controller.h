@@ -363,6 +363,28 @@ public:
      */
     std::vector<sound_mind::core::OperationId> pasteObjects(sound_mind::core::LayerId layer);
 
+    /**
+     * @brief Whether the selection can be merged into a branching path:
+     *        two or more selected objects with a path (guide paths, regular
+     *        or branching, or painted strokes).
+     * @return `true` when mergeSelectionIntoBranchingPath() would merge.
+     */
+    [[nodiscard]] bool canMergeSelection() const;
+
+    /**
+     * @brief Merges every selected path into one branching guide path,
+     *        joined by the fewest, shortest extra connections
+     *        (`sound_mind::core::mergeIntoBranchingPath()`), as one undoable
+     *        step (Pre-Beta Plan `v0.Y.77.1`). Merged guide paths are
+     *        consumed (tombstoned); painted strokes contribute their path
+     *        but stay as they are, still sounding (user decision,
+     *        2026-10-16). The new branching path becomes the selection.
+     *        Emits contentChanged() and selectionChanged().
+     * @return The new branching path's id, or `std::nullopt` if
+     *         canMergeSelection() is `false`.
+     */
+    std::optional<sound_mind::core::OperationId> mergeSelectionIntoBranchingPath();
+
     /// @brief The selected object's own layer.
     /// @return The layer, or `std::nullopt` if nothing is selected.
     [[nodiscard]] std::optional<sound_mind::core::LayerId> selectedLayer() const noexcept {

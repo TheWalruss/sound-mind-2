@@ -346,4 +346,5 @@ private slots:
     void rightClickingEmptyCanvasGraysOutSelectionEntries();
     void rectangleDragInPickModeSelectsAndDeletesSeveralObjects();
     void copyAndPastePickedObjectsDuplicatesThem();
+    void mergingTwoPickedPathsMakesOneBranchingPath();
 };

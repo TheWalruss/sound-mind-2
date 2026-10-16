@@ -209,7 +209,12 @@ CurveGraph curveGraphFromBranches(const std::vector<BranchGraft>& branches, doub
         }
         const std::size_t parentNode = nearestNodeInRange(graph, *firstNodeOfBranch[*parent], nodeCount,
                                                            normalize(branches[i].graftPoint, frequencyToTimeScale));
-        graph.addEdge(parentNode, *firstNodeOfBranch[i]);
+        const std::size_t childNode =
+            branches[i].attachPoint.has_value()
+                ? nearestNodeInRange(graph, *firstNodeOfBranch[i], nodeCount,
+                                     normalize(*branches[i].attachPoint, frequencyToTimeScale))
+                : *firstNodeOfBranch[i];
+        graph.addEdge(parentNode, childNode);
     }
     return graph;
 }

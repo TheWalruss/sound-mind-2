@@ -1268,7 +1268,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - The queued "filter preview control": loop a few seconds of audio through the in-progress filter configuration live, so it can be tuned by ear.
 - Placed straight after Record and Loop because it reuses the same live looping and staged-audio swap machinery.
 
-#### `v0.Y.77.1` - Paths, selection and context menus (L)
+#### ✅ `v0.Y.77.1` - Paths, selection and context menus (L) - settled in `v0.1.37.1`-`v0.1.37.4`, see architecture Decisions #239-#242
 
 **Decisions (user, 2026-10-16):** the Path tool produces a *silent guide path* object (pickable, movable, node-editable; later strokable with a brush and usable for Resonance Profiles and merging). Branching paths become persistent canvas objects; the Edit-menu Branching Curve session stays and also finishes by creating one. Merge consumes the guide/branching paths it merges (one undo step); painted strokes contribute their geometry but stay as they are. Rectangle multi-select picks every Pickable object lying fully inside the rectangle on the active layer.
 
@@ -1276,7 +1276,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - ✅ **A** (`v0.1.37.1`, Decision #239): `GuidePathOperation`, the freehand Path tool, distinct canvas colors, Pick/edit/delete of guide paths; Smooth Nodes and Finish/Cancel Path removed.
 - ✅ **B** (`v0.1.37.2`, Decision #240): right-click entries for paths and branching paths (Stroke Path with Current Tool, Create Resonance Profile, Edit Path), the Branching Curve session also creating a branching path, and graying out menu entries that don't apply.
 - ✅ **C** (`v0.1.37.3`, Decision #241): rectangle multi-select with Pick - delete, copy and move as one undo step.
-- **D**: merge selected paths into one branching path (minimum spanning tree).
+- ✅ **D** (`v0.1.37.4`, Decision #242): merge selected paths into one branching path (minimum spanning tree).
 
 - **Path tool reworked as "paint without stamping".** After a stroke is drawn, its nodes are individually editable, as today.
 - **Distinct canvas colors** for regular paths and branching (Resonance) paths.

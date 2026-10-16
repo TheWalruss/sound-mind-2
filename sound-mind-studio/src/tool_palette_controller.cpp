@@ -302,6 +302,12 @@ std::vector<sound_mind::core::BranchGraft> ToolPaletteController::selectedBranch
     return pickController_->selectedBranches();
 }
 
+bool ToolPaletteController::canMergePickedPaths() const { return pickController_->canMergeSelection(); }
+
+std::optional<sound_mind::core::OperationId> ToolPaletteController::mergePickedPaths() {
+    return pickController_->mergeSelectionIntoBranchingPath();
+}
+
 bool ToolPaletteController::selectedIsGuidePath() const { return pickController_->selectedIsGuidePath(); }
 
 std::optional<sound_mind::core::LayerId> ToolPaletteController::selectedLayer() const {

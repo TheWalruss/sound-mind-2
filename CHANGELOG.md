@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.37.4] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.77.1`, installment D - completes the milestone.
+
+### Added
+
+- **Merge several selected paths into one branching path.** Right-click a multi-selection (or **Edit → Picked Path Tools → Merge Picked Paths into Branching Path**). The paths are joined by the fewest, shortest connections between their closest points. Path-tool paths are replaced by the merged one; painted strokes keep sounding. One undo step.
+
 ## [0.1.37.3] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.77.1`, installment C.
