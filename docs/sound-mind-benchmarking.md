@@ -82,7 +82,7 @@ An initial version of the `EdgePreservingBlur`/`Convolve` sweeps used `{3, 9, 25
 
 ### Generators (`generator_scenarios.cpp`, `v0.1.41.1`)
 
-- **Noise Generate Layers** (white and pink), the **Fractal** and **Streaming** families, and a **noise MindWave field** (`evaluateMindWaveField()`), at 3000- and 12000-frame canvases (30 s and 120 s).
+- **Noise Generate Layers** (white and pink), the **Fractal** and **Streaming** families, and a **noise MindWave field** (`evaluateMindWaveField()`), at 3000- and 12000-frame canvases (30 s and 120 s). The field is GPU-eligible since `v0.1.41.5`.
 
 Every compositing case uses deterministic pseudo-random per-layer content (seeded differently per layer) rather than identical layers, since some blend modes (`Difference`, in particular) would otherwise degenerate into trivially cheap, branch-predictable work no real layered project would ever actually produce.
 

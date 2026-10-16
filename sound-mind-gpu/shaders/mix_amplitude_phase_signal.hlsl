@@ -1,3 +1,7 @@
+// ThreadsPerRow (v0.1.41.5): Dispatch() is 2D - D3D12 allows at most 65 535
+// thread groups per dimension, which a flat dispatch of 64-thread groups
+// passes at ~4.2 million cells (a 512-bin canvas of ~82 s) - so the flat
+// index is rebuilt from both dimensions.
 // Mixes one already-placed layer's own contribution into a running
 // composite, per cell - see
 // sound_mind::gpu::ComputeDevice::mixAmplitudePhaseSignal()'s own docs
@@ -33,7 +37,7 @@
 // verbatim ports of blend_mode_application.cpp's own anonymous-namespace
 // helpers.
 #define ComputeRootSignature \
-    "RootConstants(num32BitConstants=3, b0), " \
+    "RootConstants(num32BitConstants=4, b0), " \
     "SRV(t0), SRV(t1), SRV(t2), " \
     "SRV(t3), SRV(t4), SRV(t5), " \
     "SRV(t6), " \
@@ -43,6 +47,7 @@ cbuffer Constants : register(b0) {
     uint CellCount;
     float Gain;  // layer's own opacity, as a linear gain.
     uint BlendMode;  // sound_mind::core::BlendMode's own ordinal value.
+    uint ThreadsPerRow;  // see this file's first comment.
 }
 
 StructuredBuffer<float> RunningLeftDb : register(t0);
@@ -153,10 +158,10 @@ float2 BlendPhaseComplex(uint mode, float2 baseZ, float2 overlayZ, float basePha
 [RootSignature(ComputeRootSignature)]
 [numthreads(64, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= CellCount) {
+    uint cell = id.y * ThreadsPerRow + id.x;
+    if (cell >= CellCount) {
         return;
     }
-    uint cell = id.x;
     float cellGain = Gain * MindWaveField[cell];
 
     if (BlendMode == kBlendNormal) {

@@ -1216,3 +1216,69 @@ TEST_CASE("The device gives correct results when several threads use it at once"
     }
 }
 
+// v0.1.41.5
+TEST_CASE("coloredNoiseField covers a canvas wider than one dispatch dimension allows", "[gpu][compute_device]") {
+    auto device = ComputeDevice::create();
+    if (!device.has_value() || !device->supportsInt64ShaderOps()) {
+        SKIP("no D3D12 adapter with 64-bit integer shader support");
+    }
+    // 4 bins x 300 000 frames: more than 65 535 groups of 64 in one dimension
+    // if it were dispatched flat.
+    std::vector<std::int64_t> bins{0, 1, 2, 3};
+    std::vector<std::int64_t> frames(300000);
+    for (std::size_t i = 0; i < frames.size(); ++i) {
+        frames[i] = static_cast<std::int64_t>(i / 7);
+    }
+    ComputeDevice::ColoredNoiseParameters parameters;
+    parameters.seed = 99;
+    parameters.toward = 0.0f;  // plain white noise.
+    const auto field = device->coloredNoiseField(bins, frames, parameters);
+    REQUIRE(field.size() == bins.size() * frames.size());
+    // Cells sharing a coordinate read the same; everything is in [0, 1]; and
+    // the last row was written.
+    CHECK(field[0] == field[6]);
+    CHECK(field[3 * frames.size() + frames.size() - 1] >= 0.0f);
+    double sum = 0.0;
+    for (const float value : field) {
+        REQUIRE(value >= 0.0f);
+        REQUIRE(value <= 1.0f);
+        sum += value;
+    }
+    CHECK(std::abs(sum / static_cast<double>(field.size()) - 0.5) < 0.02);
+}
+
+
+TEST_CASE("fractalField covers more cells than one dispatch dimension allows", "[gpu][compute_device]") {
+    auto device = ComputeDevice::create();
+    if (!device.has_value()) {
+        SKIP("no D3D12 adapter");
+    }
+    // 512 bins x 12 000 frames (a 2-minute canvas): 96 000 groups of 64 if dispatched flat.
+    std::vector<float> tValues(512 * 12000);
+    for (std::size_t i = 0; i < tValues.size(); ++i) {
+        tValues[i] = static_cast<float>(i % 1000) / 1000.0f;
+    }
+    const auto field = device->fractalField(tValues, 6, 0.5f, 7u);
+    REQUIRE(field.size() == tValues.size());
+    // The last cell holds the same value as an earlier one with the same t - it was really computed.
+    CHECK(field.back() == field[field.size() - 1 - 1000]);
+    CHECK(field.back() != 0.0f);
+}
+
+TEST_CASE("multiplyByTwo covers more items than one dispatch dimension allows",
+          "[gpu][compute_device]") {
+    auto device = ComputeDevice::create();
+    if (!device.has_value()) {
+        SKIP("no D3D12 adapter");
+    }
+    // 4.5 million items: past 65 535 groups of 64 if dispatched flat.
+    constexpr std::size_t kCount = 4500000;
+    std::vector<float> input(kCount);
+    for (std::size_t i = 0; i < kCount; ++i) {
+        input[i] = static_cast<float>(i % 977);
+    }
+    const auto doubled = device->multiplyByTwo(input);
+    REQUIRE(doubled.size() == kCount);
+    CHECK(doubled.back() == 2.0f * input.back());
+    CHECK(doubled[kCount / 2] == 2.0f * input[kCount / 2]);
+}

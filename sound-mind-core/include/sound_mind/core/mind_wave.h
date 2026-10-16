@@ -921,8 +921,9 @@ public:
     [[nodiscard]] float evaluate(TimeFrequencyPoint point, const sound_mind::codec::StreamCodecConfig& config) const;
 
     /// @brief Grants `evaluateMindWaveField()` access to
-    ///        `tryEvaluateFractalFieldOnGpu()` (private below) - its own
-    ///        GPU fast path, not meant to be called from anywhere else.
+    ///        `tryEvaluateFractalFieldOnGpu()` and
+    ///        `tryEvaluateNoiseFieldOnGpu()` (private below) - its own GPU
+    ///        fast paths, not meant to be called from anywhere else.
     friend std::vector<float> evaluateMindWaveField(const MindWave& wave,
                                                      const sound_mind::codec::StreamCodecConfig& config,
                                                      std::uint32_t canvasWidth);
@@ -992,6 +993,21 @@ private:
     double continuousCharacter_ = 0.0;
     std::optional<ResonanceProfileId> sourceResonanceProfileId_;
     std::vector<float> resonanceSpectrum_;
+
+    /**
+     * @brief `evaluateMindWaveField()`'s GPU path for `GeneratorType::Noise`
+     *        (`v0.1.41.5`) - `sound_mind::gpu::ComputeDevice::coloredNoiseField()`.
+     *        Resolves each bin's and frame's integer noise coordinate exactly
+     *        as evaluate() does (Reversed included, Inverted applied after),
+     *        then evaluates every cell on the GPU.
+     * @param config The codec configuration.
+     * @param canvasWidth The field's width in frames.
+     * @return The field, or `std::nullopt` - not Noise, warped (the warp
+     *         offset depends on the cell), no GPU, no 64-bit integer shader
+     *         support, or any GPU failure - so the caller uses the CPU.
+     */
+    [[nodiscard]] std::optional<std::vector<float>> tryEvaluateNoiseFieldOnGpu(
+        const sound_mind::codec::StreamCodecConfig& config, std::uint32_t canvasWidth) const;
 
     /// @brief `evaluateMindWaveField()`'s own GPU fast path for
     ///        `GeneratorType::Fractal` - `v0.1.6.4`

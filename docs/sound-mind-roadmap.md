@@ -1191,7 +1191,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.78.1` | Text tool | `0.1.38.1` (follow-up `0.1.40.13`: editable after applying) | #243, #257 |
 | `v0.Y.79.1` | Generators | `0.1.39.1`-`0.1.39.4` (plus the codec fix `0.1.39.5`) | #244-#248 |
 | `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges; `0.1.40.13` belongs to `v0.Y.78.1`) | #249-#256 |
-| `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.4` *(in progress)* | #258 |
+| `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.5` | #258 |
 | `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.42.x`)* | |
 | `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.43.x`)* | |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
@@ -1345,7 +1345,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 - ✅ **C** (`v0.1.40.3`, Decision #251): pitch detection with a canvas overlay.
 - ✅ **D** (`v0.1.40.4`, Decision #252): master limiter (playback and export; on by default, -1 dBFS sample-peak ceiling) and output loudness normalization (off by default, target -14 LUFS, playback only), both in Configure Devices.
 
-#### `v0.Y.80.2` - Codec, analysis and noise acceleration (L) - inserted 2026-10-16 at the user's request
+#### ✅ `v0.Y.80.2` - Codec, analysis and noise acceleration (L) - inserted 2026-10-16 at the user's request; settled in `v0.1.41.1`-`v0.1.41.5`, see architecture Decision #258
 
 The GPU-offloading candidates assessed on 2026-10-16, taken in the order recommended there:
 1. ✅ **Benchmarks first** (`v0.1.41.1`). Add codec (encode/decode), whole-analysis and per-stage analysis, and generator cases to `sound-mind-benchmark`, plus a `--category` filter, and record a baseline. Baseline (Release, Snapdragon X, 2026-10-16):
@@ -1365,7 +1365,11 @@ The GPU-offloading candidates assessed on 2026-10-16, taken in the order recomme
    - True peak: the kernel's fixed 3×16 weights are tabled once instead of 96 trig calls per sample, and sample blocks run in parallel. K-weighting runs each channel on its own thread. Per-band levels run in parallel across frames, per-band widths across bins (combined in order), and pitch candidates across frames (tracking stays serial).
    - At 60 s: loudness 381 -> 53 ms, band levels 49 -> 10 ms, band widths 52 -> 9 ms, pitch 113/161 -> 20/28 ms. Analyze 1/4/8 layers: 0.24/0.49/0.79 s (was 1.16/2.79/5.07).
    - The GPU-shaped stages (per-band, pitch scoring) now cost about what uploading the spectrum would (~37 MB per minute), so a GPU path isn't worth it.
-5. **Noise generation on the GPU.** The noise Generate Layer and the noise MindWave field (per-cell hashed randomness), the same shape as the Fractal field's existing GPU path.
+5. ✅ **Noise generation** (`v0.1.41.5`).
+   - CPU first: noise-layer rows and MindWave-field rows in parallel (except where a Drawn MindWave's lazily-filled cache is involved), and the colored-noise octave weights cached per color rather than ten `pow()` calls per cell. Noise layer 120 s: 486 -> 91 ms; field: 941 -> 222 ms.
+   - Then the **noise MindWave field on the GPU** (`colored_noise_field.hlsl`, exact 64-bit SplitMix64 hashing): 222 -> 37 ms (25x against the baseline). It's re-evaluated on every recomposite where it's bound, so it was worth it.
+   - The noise layer is generated once per click, and 91 ms didn't justify a GPU path.
+   - **Found on the way:** three kernels (`multiplyByTwo`, `fractalField`, and the compositor's `mixAmplitudePhaseSignal`) dispatched flat. That exceeds D3D12's 65 535 groups per dimension past ~4.2 M cells, an ~82 s 512-bin canvas. This Adreno driver tolerated it; others needn't. All now dispatch in 2D.
 
 #### `v0.Y.81.1` - Operation history persisted with the project (L)
 

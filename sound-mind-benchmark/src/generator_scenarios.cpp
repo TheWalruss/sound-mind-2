@@ -74,7 +74,7 @@ std::vector<BenchmarkCase> buildGeneratorScenarios() {
         nlohmann::json parameters;
         parameters["canvasWidth"] = width;
         cases.push_back(BenchmarkCase{"noiseMindWaveField,canvasWidth=" + std::to_string(width), "generator",
-                                       parameters, /*gpuEligible=*/false, [wave, codecConfig, width]() {
+                                       parameters, /*gpuEligible=*/true, [wave, codecConfig, width]() {
                                            static_cast<void>(
                                                sound_mind::core::evaluateMindWaveField(*wave, codecConfig, width));
                                        }});

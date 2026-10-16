@@ -1,5 +1,6 @@
 #include "sound_mind/core/generator.h"
 #include "sound_mind/core/mind_wave.h"
+#include "sound_mind/codec/parallel.h"
 
 #include <algorithm>
 #include <cmath>
@@ -592,17 +593,106 @@ std::optional<std::vector<float>> MindWave::tryEvaluateFractalFieldOnGpu(
     }
 }
 
+std::optional<std::vector<float>> MindWave::tryEvaluateNoiseFieldOnGpu(
+    const sound_mind::codec::StreamCodecConfig& config, std::uint32_t canvasWidth) const {
+    if (type_ != GeneratorType::Noise || hasWarpSource() || canvasWidth == 0 || config.binCount == 0) {
+        return std::nullopt;
+    }
+    sound_mind::gpu::ComputeDevice* device = sound_mind::core::detail::gpuComputeDeviceOrNull();
+    if (device == nullptr) {
+        return std::nullopt;
+    }
+
+    // evaluate()'s Noise case, split by axis: the step along the noise comes
+    // from one axis, the row from the other - each a function of just the
+    // bin or just the frame (no warp, ruled out above).
+    const double width = std::max(kMinimumPeriod, noiseCellWidth_);
+    const double height = std::max(kMinimumPeriod, noiseCellHeight_);
+    const bool alongTime = axis_ == MindWaveAxis::Time;
+    const double mirror = reversed_ ? -1.0 : 1.0;
+    std::vector<std::int64_t> binCoordinates(config.binCount);
+    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+        const double binIndex =
+            static_cast<double>(frequencyToBinIndex(binIndexToFrequency(static_cast<float>(bin), config), config));
+        binCoordinates[bin] = static_cast<std::int64_t>(
+            std::floor(alongTime ? binIndex / height : mirror * binIndex / height));
+    }
+    std::vector<std::int64_t> frameCoordinates(canvasWidth);
+    for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {
+        const double timeSeconds = frameIndexToTime(frame, config);
+        frameCoordinates[frame] = static_cast<std::int64_t>(
+            std::floor(alongTime ? mirror * timeSeconds / width : timeSeconds / width));
+    }
+
+    sound_mind::gpu::ComputeDevice::ColoredNoiseParameters parameters;
+    parameters.seed = seed_;
+    parameters.stepAlongFrames = alongTime;
+    const double alpha = noiseColor_ == NoiseColor::Custom ? noiseSlope_ : noiseColorExponent(noiseColor_);
+    if (alpha >= 0.0) {
+        parameters.toward = static_cast<float>(std::clamp(alpha / 2.0, 0.0, 1.0));
+    } else {
+        parameters.useOctaves = true;
+        const double beta = -alpha;
+        double weightSquares = 0.0;
+        for (std::size_t k = 0; k < parameters.weights.size(); ++k) {
+            const double weight = std::pow(2.0, static_cast<double>(k) * (beta - 1.0) / 2.0);
+            parameters.weights[k] = static_cast<float>(weight);
+            weightSquares += weight * weight;
+        }
+        parameters.inverseSpread = static_cast<float>(1.0 / (3.0 * std::sqrt(weightSquares / 12.0)));
+    }
+
+    try {
+        std::vector<float> field = device->coloredNoiseField(binCoordinates, frameCoordinates, parameters);
+        if (inverted_) {
+            for (float& value : field) {
+                value = 1.0f - value;
+            }
+        }
+        return field;
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
+
+namespace {
+
+/// @brief Whether evaluating `wave` touches a lazily-filled cache - a Drawn
+/// MindWave, itself or anywhere down its warp-source chain.
+bool usesLazyCache(const MindWave& wave) {
+    if (wave.type() == GeneratorType::Drawn) {
+        return true;
+    }
+    return wave.hasWarpSource() && usesLazyCache(wave.warpSource());
+}
+
+}  // namespace
+
 std::vector<float> evaluateMindWaveField(const MindWave& wave, const sound_mind::codec::StreamCodecConfig& config,
                                           std::uint32_t canvasWidth) {
     if (auto gpuField = wave.tryEvaluateFractalFieldOnGpu(config, canvasWidth)) {
         return std::move(*gpuField);
     }
+    if (auto gpuField = wave.tryEvaluateNoiseFieldOnGpu(config, canvasWidth)) {
+        return std::move(*gpuField);
+    }
 
     std::vector<float> field(std::size_t{config.binCount} * canvasWidth);
-    for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
-        for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {
-            field[cellIndex(bin, frame, canvasWidth)] = mindWaveValueAt(wave, bin, frame, config);
+    const auto evaluateRows = [&](std::size_t begin, std::size_t end) {
+        for (auto bin = static_cast<std::uint32_t>(begin); bin < end; ++bin) {
+            for (std::uint32_t frame = 0; frame < canvasWidth; ++frame) {
+                field[cellIndex(bin, frame, canvasWidth)] = mindWaveValueAt(wave, bin, frame, config);
+            }
         }
+    };
+    // evaluate() is a pure function of the cell for every generator but
+    // Drawn, whose polyline cache fills lazily on first use (documented as
+    // single-threaded) - so rows run in parallel (v0.1.41.5) unless a Drawn
+    // MindWave is anywhere in the chain.
+    if (usesLazyCache(wave)) {
+        evaluateRows(0, config.binCount);
+    } else {
+        sound_mind::codec::parallelFor(config.binCount, 8, evaluateRows);
     }
     return field;
 }

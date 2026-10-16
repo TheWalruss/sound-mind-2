@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <memory>
 #include <mutex>
 #include <cstdint>
@@ -424,6 +425,56 @@ public:
      */
     [[nodiscard]] std::vector<float> fractalField(const std::vector<float>& tValues, int iterations, float roughness,
                                                    std::uint32_t seed) const;
+
+    /// @brief The settings of a colored-noise field - see coloredNoiseField().
+    struct ColoredNoiseParameters {
+        /// @brief The hash seed (`MindWave::seed()`).
+        std::uint64_t seed = 0;
+        /// @brief `true`: the noise steps along frames (a Time-axis
+        ///        MindWave), rows are bins; `false`: the other way round.
+        bool stepAlongFrames = true;
+        /// @brief `true` for alpha < 0 (octave sum); `false` for white
+        ///        blended toward its first difference.
+        bool useOctaves = false;
+        /// @brief alpha >= 0: `clamp(alpha / 2, 0, 1)`.
+        float toward = 0.0f;
+        /// @brief alpha < 0: `1 / (3 * sqrt(sum of squared weights / 12))`.
+        float inverseSpread = 1.0f;
+        /// @brief alpha < 0: octave `k`'s weight, `2^(k (beta - 1) / 2)`.
+        std::array<float, 10> weights{};
+    };
+
+    /**
+     * @brief Evaluates `sound_mind::core`'s Noise MindWave over a whole
+     *        `binCount` x `frameCount` field (`v0.1.41.5`) - a port of
+     *        `coloredNoiseSample()`, `colored_noise_field.hlsl`.
+     *
+     * The caller resolves each bin's and each frame's integer noise
+     * coordinate (one is the step along the noise, the other its row, per
+     * `stepAlongFrames`) exactly as `MindWave::evaluate()` does. The hash
+     * is the CPU's exact 64-bit SplitMix64; what follows is float where the
+     * CPU uses double, so values agree to about 1e-6. Dispatched in 2D
+     * (frames x bins), so any canvas fits within D3D12's 65 535 thread
+     * groups per dimension.
+     *
+     * @param binCoordinates One per bin.
+     * @param frameCoordinates One per frame.
+     * @param parameters The noise settings.
+     * @return `binCount * frameCount` values in `[0, 1]`, row-major by bin
+     *         (`cellIndex(bin, frame, frameCount)`).
+     * @throws std::runtime_error if the device lacks 64-bit integer shader
+     *         support (`Int64ShaderOps`) or a D3D12 call fails - callers
+     *         fall back to the CPU.
+     * @note Thread-safe, like every method here.
+     */
+    [[nodiscard]] std::vector<float> coloredNoiseField(const std::vector<std::int64_t>& binCoordinates,
+                                                        const std::vector<std::int64_t>& frameCoordinates,
+                                                        const ColoredNoiseParameters& parameters) const;
+
+    /// @brief Whether shaders can use 64-bit integers on this device
+    ///        (`D3D12_FEATURE_DATA_D3D12_OPTIONS1::Int64ShaderOps`).
+    /// @return The capability.
+    [[nodiscard]] bool supportsInt64ShaderOps() const;
 
 private:
     /// @brief Wraps an already-successfully-created device/queue/fence

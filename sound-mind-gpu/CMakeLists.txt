@@ -47,6 +47,7 @@ sound_mind_gpu_compile_shader(gaussian_blur_varying)
 sound_mind_gpu_compile_shader(median_blur_varying)
 sound_mind_gpu_compile_shader(directional_blur_varying)
 sound_mind_gpu_compile_shader(fractal_field)
+sound_mind_gpu_compile_shader(colored_noise_field)
 
 add_custom_target(sound-mind-gpu-shaders DEPENDS ${SOUND_MIND_GPU_COMPILED_SHADERS})
 

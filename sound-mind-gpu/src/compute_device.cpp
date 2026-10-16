@@ -94,6 +94,28 @@ D3D12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE type) {
 /// bound directly as a root SRV with no separate default-heap copy (see
 /// `ComputeDevice`'s own docs on why that's an accepted simplification
 /// for resources read exactly once per call).
+/// @brief A dispatch of 64-thread groups covering `count` items, folded into
+/// 2D so neither dimension passes D3D12's 65 535 groups
+/// (`D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION`) - a flat dispatch
+/// passes it at ~4.2 million items, a 512-bin canvas of ~82 s (v0.1.41.5).
+/// Shaders rebuild the flat index as `id.y * threadsPerRow + id.x`.
+struct FlatDispatch {
+    UINT groupsX = 1;
+    UINT groupsY = 1;
+    UINT threadsPerRow = 64;
+};
+
+FlatDispatch flatDispatchFor(std::size_t count) {
+    constexpr std::size_t kGroupSize = 64;
+    constexpr std::size_t kMaxGroups = D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION;
+    const std::size_t groups = std::max<std::size_t>(1, (count + kGroupSize - 1) / kGroupSize);
+    FlatDispatch dispatch;
+    dispatch.groupsX = static_cast<UINT>(std::min(groups, kMaxGroups));
+    dispatch.groupsY = static_cast<UINT>((groups + dispatch.groupsX - 1) / dispatch.groupsX);
+    dispatch.threadsPerRow = static_cast<UINT>(dispatch.groupsX * kGroupSize);
+    return dispatch;
+}
+
 ComPtr<ID3D12Resource> createUploadBuffer(ID3D12Device* device, const void* data, UINT64 sizeInBytes) {
     const D3D12_HEAP_PROPERTIES heapProps = heapProperties(D3D12_HEAP_TYPE_UPLOAD);
     const D3D12_RESOURCE_DESC desc = bufferResourceDesc(sizeInBytes, D3D12_RESOURCE_FLAG_NONE);
@@ -403,14 +425,14 @@ std::vector<float> ComputeDevice::multiplyByTwo(const std::vector<float>& input)
     // order exactly: 0 = the element-count constant (b0), 1 = the input
     // SRV (t0), 2 = the output UAV (u0).
     recorder.list->SetComputeRootSignature(pipeline.rootSignature.Get());
-    recorder.list->SetComputeRoot32BitConstant(0, elementCount, 0);
-    recorder.list->SetComputeRootShaderResourceView(1, inputBuffer->GetGPUVirtualAddress());
-    recorder.list->SetComputeRootUnorderedAccessView(2, outputBuffer->GetGPUVirtualAddress());
-
     // Rounds up - the shader's own bounds check (see the .hlsl file)
     // handles any extra threads in a partial last group of 64.
-    const UINT threadGroupCount = (elementCount + 63) / 64;
-    recorder.list->Dispatch(threadGroupCount, 1, 1);
+    const FlatDispatch dispatch = flatDispatchFor(elementCount);
+    recorder.list->SetComputeRoot32BitConstant(0, elementCount, 0);
+    recorder.list->SetComputeRoot32BitConstant(0, dispatch.threadsPerRow, 1);
+    recorder.list->SetComputeRootShaderResourceView(1, inputBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootUnorderedAccessView(2, outputBuffer->GetGPUVirtualAddress());
+    recorder.list->Dispatch(dispatch.groupsX, dispatch.groupsY, 1);
 
     const D3D12_RESOURCE_BARRIER barrier = transitionBarrier(
         outputBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -706,12 +728,14 @@ AmplitudePhaseSignal ComputeDevice::mixAmplitudePhaseSignal(const AmplitudePhase
     // v0.Y.31.1 Installment C1, a per-cell gain multiplier alongside the
     // scalar gain above), 8-10 = the three output UAVs (u0-u2).
     recorder.list->SetComputeRootSignature(pipeline.rootSignature.Get());
+    const FlatDispatch dispatch = flatDispatchFor(cellCount);
     struct Constants {
         UINT cellCount;
         float gain;
         UINT blendMode;
-    } constants{static_cast<UINT>(cellCount), layerGain, static_cast<UINT>(blendMode)};
-    recorder.list->SetComputeRoot32BitConstants(0, 3, &constants, 0);
+        UINT threadsPerRow;
+    } constants{static_cast<UINT>(cellCount), layerGain, static_cast<UINT>(blendMode), dispatch.threadsPerRow};
+    recorder.list->SetComputeRoot32BitConstants(0, 4, &constants, 0);
     recorder.list->SetComputeRootShaderResourceView(1, runningLeft->GetGPUVirtualAddress());
     recorder.list->SetComputeRootShaderResourceView(2, runningRight->GetGPUVirtualAddress());
     recorder.list->SetComputeRootShaderResourceView(3, runningPhase->GetGPUVirtualAddress());
@@ -723,8 +747,7 @@ AmplitudePhaseSignal ComputeDevice::mixAmplitudePhaseSignal(const AmplitudePhase
     recorder.list->SetComputeRootUnorderedAccessView(9, outRight->GetGPUVirtualAddress());
     recorder.list->SetComputeRootUnorderedAccessView(10, outPhase->GetGPUVirtualAddress());
 
-    const UINT threadGroupCount = (static_cast<UINT>(cellCount) + 63) / 64;
-    recorder.list->Dispatch(threadGroupCount, 1, 1);
+    recorder.list->Dispatch(dispatch.groupsX, dispatch.groupsY, 1);
 
     D3D12_RESOURCE_BARRIER barriers[3] = {
         transitionBarrier(outLeft.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE),
@@ -765,18 +788,19 @@ std::vector<float> ComputeDevice::fractalField(const std::vector<float>& tValues
     // string order: 0 = constants (b0: cell count, iterations, roughness,
     // seed), 1 = the TValues SRV (t0), 2 = the output UAV (u0).
     recorder.list->SetComputeRootSignature(pipeline.rootSignature.Get());
+    const FlatDispatch dispatch = flatDispatchFor(cellCount);
     struct Constants {
         UINT cellCount;
         UINT iterations;
         float roughness;
         UINT seed;
-    } constants{cellCount, static_cast<UINT>(std::max(0, iterations)), roughness, seed};
-    recorder.list->SetComputeRoot32BitConstants(0, 4, &constants, 0);
+        UINT threadsPerRow;
+    } constants{cellCount, static_cast<UINT>(std::max(0, iterations)), roughness, seed, dispatch.threadsPerRow};
+    recorder.list->SetComputeRoot32BitConstants(0, 5, &constants, 0);
     recorder.list->SetComputeRootShaderResourceView(1, tValuesBuffer->GetGPUVirtualAddress());
     recorder.list->SetComputeRootUnorderedAccessView(2, outputBuffer->GetGPUVirtualAddress());
 
-    const UINT threadGroupCount = (cellCount + 63) / 64;
-    recorder.list->Dispatch(threadGroupCount, 1, 1);
+    recorder.list->Dispatch(dispatch.groupsX, dispatch.groupsY, 1);
 
     const D3D12_RESOURCE_BARRIER barrier = transitionBarrier(
         outputBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -785,6 +809,77 @@ std::vector<float> ComputeDevice::fractalField(const std::vector<float>& tValues
 
     executeAndWait(recorder.list.Get());
     return readBackFloats(readbackBuffer.Get(), tValues.size());
+}
+
+bool ComputeDevice::supportsInt64ShaderOps() const {
+    D3D12_FEATURE_DATA_D3D12_OPTIONS1 options{};
+    if (FAILED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &options, sizeof(options)))) {
+        return false;
+    }
+    return options.Int64ShaderOps != FALSE;
+}
+
+std::vector<float> ComputeDevice::coloredNoiseField(const std::vector<std::int64_t>& binCoordinates,
+                                                    const std::vector<std::int64_t>& frameCoordinates,
+                                                    const ColoredNoiseParameters& parameters) const {
+    if (binCoordinates.empty() || frameCoordinates.empty()) {
+        return {};
+    }
+    if (!supportsInt64ShaderOps()) {
+        throw std::runtime_error("sound_mind::gpu: this device has no 64-bit integer shader support");
+    }
+    const auto binCount = static_cast<UINT>(binCoordinates.size());
+    const auto frameCount = static_cast<UINT>(frameCoordinates.size());
+    const std::size_t cellCount = std::size_t{binCount} * frameCount;
+    const UINT64 outputSize = static_cast<UINT64>(cellCount) * sizeof(float);
+
+    const ComputePipeline pipeline = loadComputePipeline(device_.Get(), "colored_noise_field.cso");
+    CommandRecorder recorder = createCommandRecorder(device_.Get(), pipeline.pipelineState.Get());
+    const ComPtr<ID3D12Resource> binBuffer = createUploadBuffer(
+        device_.Get(), binCoordinates.data(), static_cast<UINT64>(binCoordinates.size()) * sizeof(std::int64_t));
+    const ComPtr<ID3D12Resource> frameBuffer = createUploadBuffer(
+        device_.Get(), frameCoordinates.data(), static_cast<UINT64>(frameCoordinates.size()) * sizeof(std::int64_t));
+    const ComPtr<ID3D12Resource> outputBuffer = createUavBuffer(device_.Get(), outputSize);
+    const ComPtr<ID3D12Resource> readbackBuffer = createReadbackBuffer(device_.Get(), outputSize);
+
+    // Matches colored_noise_field.hlsl's cbuffer: eight scalars, then the
+    // weights as three float4s (20 32-bit values).
+    struct Constants {
+        UINT binCount;
+        UINT frameCount;
+        UINT stepAlongFrames;
+        UINT seedLow;
+        UINT seedHigh;
+        UINT useOctaves;
+        float toward;
+        float inverseSpread;
+        float weights[12];
+    } constants{binCount,
+                frameCount,
+                parameters.stepAlongFrames ? 1u : 0u,
+                static_cast<UINT>(parameters.seed & 0xFFFFFFFFu),
+                static_cast<UINT>(parameters.seed >> 32),
+                parameters.useOctaves ? 1u : 0u,
+                parameters.toward,
+                parameters.inverseSpread,
+                {}};
+    std::copy(parameters.weights.begin(), parameters.weights.end(), constants.weights);
+    static_assert(sizeof(Constants) == 20 * sizeof(UINT));
+
+    recorder.list->SetComputeRootSignature(pipeline.rootSignature.Get());
+    recorder.list->SetComputeRoot32BitConstants(0, 20, &constants, 0);
+    recorder.list->SetComputeRootShaderResourceView(1, binBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootShaderResourceView(2, frameBuffer->GetGPUVirtualAddress());
+    recorder.list->SetComputeRootUnorderedAccessView(3, outputBuffer->GetGPUVirtualAddress());
+    recorder.list->Dispatch((frameCount + 63) / 64, binCount, 1);
+
+    const D3D12_RESOURCE_BARRIER barrier = transitionBarrier(
+        outputBuffer.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    recorder.list->ResourceBarrier(1, &barrier);
+    recorder.list->CopyBufferRegion(readbackBuffer.Get(), 0, outputBuffer.Get(), 0, outputSize);
+
+    executeAndWait(recorder.list.Get());
+    return readBackFloats(readbackBuffer.Get(), cellCount);
 }
 
 }  // namespace sound_mind::gpu

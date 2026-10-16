@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.41.5] - 2026-10-16
+
+Roadmap slot `v0.Y.80.2`, step 5 - completes the slot.
+
+### Changed
+
+- **Noise is much faster.** A noise MindWave over a 2-minute canvas now evaluates in 37 ms on the GPU (was 941 ms), and in 222 ms when Hardware Acceleration is off. A noise Generate Layer of the same length takes 91 ms (was 486 ms).
+
+### Fixed
+
+- **GPU blending, Fractal MindWaves and the GPU tests could fail on long canvases with some graphics drivers.** Their GPU work was launched as one long row, which DirectX 12 caps at about 4.2 million cells - a 512-bin canvas of about 82 seconds. This machine's driver tolerated going past the cap; others may not. The work is now launched in a grid that always stays within it.
+
 ## [0.1.41.4] - 2026-10-16
 
 Roadmap slot `v0.Y.80.2`, step 4.

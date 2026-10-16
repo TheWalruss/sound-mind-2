@@ -1,3 +1,7 @@
+// ThreadsPerRow (v0.1.41.5): Dispatch() is 2D - D3D12 allows at most 65 535
+// thread groups per dimension, which a flat dispatch of 64-thread groups
+// passes at ~4.2 million cells (a 512-bin canvas of ~82 s) - so the flat
+// index is rebuilt from both dimensions.
 // Evaluates sound_mind::core's own recursive-midpoint-displacement
 // GeneratorType::Fractal MindWave generator across a flat array of
 // already-resolved per-cell "t" (loop-fraction, already folded into
@@ -13,7 +17,7 @@
 // a runtime (not compile-time-constant) recursion depth, which this
 // generator's own Iterations is - hence the loop.
 #define ComputeRootSignature \
-    "RootConstants(num32BitConstants=4, b0), " \
+    "RootConstants(num32BitConstants=5, b0), " \
     "SRV(t0), " \
     "UAV(u0)"
 
@@ -22,6 +26,7 @@ cbuffer Constants : register(b0) {
     uint Iterations;
     float Roughness;
     uint Seed;
+    uint ThreadsPerRow;  // see this file's first comment.
 }
 
 StructuredBuffer<float> TValues : register(t0);
@@ -56,10 +61,11 @@ float HashToUnitSigned(uint h) {
 [RootSignature(ComputeRootSignature)]
 [numthreads(64, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= CellCount) {
+    const uint cell = id.y * ThreadsPerRow + id.x;
+    if (cell >= CellCount) {
         return;
     }
-    float t = TValues[id.x];
+    float t = TValues[cell];
 
     // The same (left, right, leftValue, rightValue, level, nodeIndex)
     // state midpointDisplacement()'s own recursion threads through its
@@ -91,5 +97,5 @@ void CSMain(uint3 id : SV_DispatchThreadID) {
 
     float span = right - left;
     float localT = (span > 0.0f) ? (t - left) / span : 0.0f;
-    Output[id.x] = leftValue + (rightValue - leftValue) * localT;
+    Output[cell] = leftValue + (rightValue - leftValue) * localT;
 }

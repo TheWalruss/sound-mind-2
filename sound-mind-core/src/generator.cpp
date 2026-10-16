@@ -1,6 +1,8 @@
 #include "sound_mind/core/generator.h"
+#include "sound_mind/codec/parallel.h"
 
 #include <algorithm>
+#include <limits>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -468,7 +470,11 @@ sound_mind::codec::StreamImage generateNoiseContent(const GeneratorConfiguration
     const double alpha = noiseColorExponent(noise.color);
     const double binSpan = codecConfig.binCount > 1 ? static_cast<double>(codecConfig.binCount - 1) : 1.0;
 
-    for (std::uint32_t bin = 0; bin < codecConfig.binCount; ++bin) {
+    // Every cell is independent (its randomness is hashed from its own
+    // position), so frequency rows run in parallel (v0.1.41.5), each
+    // writing only its own cells.
+    sound_mind::codec::parallelFor(codecConfig.binCount, 8, [&](std::size_t rowBegin, std::size_t rowEnd) {
+    for (auto bin = static_cast<std::uint32_t>(rowBegin); bin < rowEnd; ++bin) {
         const float frequencyHz = binIndexToFrequency(static_cast<float>(bin), codecConfig);
         float leftShapeDb = 0.0f;
         float rightShapeDb = 0.0f;
@@ -509,6 +515,7 @@ sound_mind::codec::StreamImage generateNoiseContent(const GeneratorConfiguration
                 (hashedUnitNoise(config.seed, 3, cellX, cellY) * 2.0 - 1.0) * std::numbers::pi);
         }
     }
+    });
     return result;
 }
 
@@ -535,18 +542,32 @@ double coloredNoiseSample(std::uint64_t seed, std::int64_t row, std::int64_t n, 
     // falls as f^alpha (beta = -alpha).
     constexpr int kOctaves = 10;
     const double beta = -alpha;
-    double sum = 0.0;
-    double weightSquares = 0.0;
-    for (int k = 0; k < kOctaves; ++k) {
-        const double weight = std::pow(2.0, k * (beta - 1.0) / 2.0);
-        const auto held = static_cast<std::int64_t>(std::floor(static_cast<double>(n) / std::ldexp(1.0, k)));
-        sum += weight * white(static_cast<std::uint64_t>(1 + k), held);
-        weightSquares += weight * weight;
+    // The weights depend only on beta, which a whole field shares: cache the
+    // last one's per thread (v0.1.41.5) - the same pow() calls, made once per
+    // field instead of ten per cell, so the values are bit-identical.
+    struct OctaveWeights {
+        double beta = std::numeric_limits<double>::quiet_NaN();
+        std::array<double, kOctaves> weight{};
+        double spread = 1.0;
+    };
+    thread_local OctaveWeights cached;
+    if (!(cached.beta == beta)) {
+        double weightSquares = 0.0;
+        for (int k = 0; k < kOctaves; ++k) {
+            cached.weight[static_cast<std::size_t>(k)] = std::pow(2.0, k * (beta - 1.0) / 2.0);
+            weightSquares += cached.weight[static_cast<std::size_t>(k)] * cached.weight[static_cast<std::size_t>(k)];
+        }
+        // A uniform on [-0.5, 0.5) has standard deviation 1/sqrt(12); three
+        // standard deviations of the sum span [0, 1].
+        cached.spread = 3.0 * std::sqrt(weightSquares / 12.0);
+        cached.beta = beta;
     }
-    // A uniform on [-0.5, 0.5) has standard deviation 1/sqrt(12); three
-    // standard deviations of the sum span [0, 1].
-    const double spread = 3.0 * std::sqrt(weightSquares / 12.0);
-    return std::clamp(0.5 + 0.5 * sum / spread, 0.0, 1.0);
+    double sum = 0.0;
+    for (int k = 0; k < kOctaves; ++k) {
+        const auto held = static_cast<std::int64_t>(std::floor(static_cast<double>(n) / std::ldexp(1.0, k)));
+        sum += cached.weight[static_cast<std::size_t>(k)] * white(static_cast<std::uint64_t>(1 + k), held);
+    }
+    return std::clamp(0.5 + 0.5 * sum / cached.spread, 0.0, 1.0);
 }
 
 sound_mind::codec::StreamImage generateContent(const GeneratorConfiguration& config, const ProjectSettings& settings,

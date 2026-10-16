@@ -2319,6 +2319,10 @@ expected, so you know what's actually driving it.
   the mix and each layer at the same time. On a typical multi-core laptop
   these run several times faster than with a single core. The result is
   exactly the same whatever the number of cores.
+- **Noise**: a noise MindWave is computed on the GPU when Hardware
+  Acceleration is on (about 6x faster than on the CPU). A noise Generate
+  Layer uses every CPU core. Either way the noise is the same - the GPU's
+  values differ from the CPU's only in the sixth decimal place.
 - **Filters**: **Uniform Blur** and **Edge-Preserving Blur** (see
   [Filter Layers](#filter-layers) above) both use the GPU when
   Hardware Acceleration is on. For Uniform Blur, a larger **Sigma**
