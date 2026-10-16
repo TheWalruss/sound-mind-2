@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "sound_mind/codec/stream_codec.h"
+#include "sound_mind/core/noise_color.h"
 #include "sound_mind/core/path.h"
 #include "sound_mind/core/resonance_profile.h"
 
@@ -61,6 +62,8 @@ enum class GeneratorType {
     StepGrid,
     Continuous,
     Resonance,
+    /// @brief Colored noise in cells - see `noiseColor()` (Pre-Beta Plan `v0.Y.79.1`).
+    Noise,
 };
 
 // clang-format off
@@ -74,6 +77,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(GeneratorType, {
     {GeneratorType::StepGrid, "stepGrid"},
     {GeneratorType::Continuous, "continuous"},
     {GeneratorType::Resonance, "resonance"},
+    {GeneratorType::Noise, "noise"},
 })
 // clang-format on
 
@@ -492,6 +496,54 @@ public:
     /// @param persistence The new persistence.
     void setNoisePersistence(double persistence) noexcept { noisePersistence_ = persistence; }
 
+    /**
+     * @brief `GeneratorType::Noise`'s color (Pre-Beta Plan `v0.Y.79.1`).
+     *
+     * A noise MindWave is a grid of cells - `noiseCellWidth()` seconds by
+     * `noiseCellHeight()` bins - each holding one value. Along this
+     * MindWave's `axis()` the values follow the color's spectrum
+     * (`coloredNoiseSample()`): white jumps freely, pink and red wander
+     * smoothly, purple alternates; rows across the other axis are
+     * independent. `Gray` (an audio-loudness notion) behaves as `White`;
+     * `Custom` uses `noiseSlope()`. Seeded by `seed()`.
+     *
+     * @return The color; meaningless unless `type()` is `Noise`.
+     */
+    [[nodiscard]] NoiseColor noiseColor() const noexcept { return noiseColor_; }
+
+    /// @brief Sets the noise color - see noiseColor().
+    /// @param color The new color.
+    void setNoiseColor(NoiseColor color) noexcept { noiseColor_ = color; }
+
+    /// @brief `Custom` noise's spectral exponent (`f^alpha`): `-2` red, `-1`
+    ///        pink, `0` white, `+2` purple, and anything between.
+    /// @return The exponent; meaningless unless `noiseColor()` is `Custom`.
+    [[nodiscard]] double noiseSlope() const noexcept { return noiseSlope_; }
+
+    /// @brief Sets `Custom` noise's spectral exponent - see noiseSlope().
+    /// @param slope The new exponent, typically in `[-2, 2]`.
+    void setNoiseSlope(double slope) noexcept { noiseSlope_ = slope; }
+
+    /// @brief A noise cell's width along the time axis, in seconds - the
+    ///        noise's horizontal resolution. Floored at a small positive
+    ///        value by evaluate().
+    /// @return The width.
+    [[nodiscard]] double noiseCellWidth() const noexcept { return noiseCellWidth_; }
+
+    /// @brief Sets the noise cell width - see noiseCellWidth().
+    /// @param seconds The new width.
+    void setNoiseCellWidth(double seconds) noexcept { noiseCellWidth_ = seconds; }
+
+    /// @brief A noise cell's height along the frequency axis, in bins - the
+    ///        noise's vertical resolution. Floored at a small positive
+    ///        value by evaluate().
+    /// @return The height.
+    [[nodiscard]] double noiseCellHeight() const noexcept { return noiseCellHeight_; }
+
+    /// @brief Sets the noise cell height - see noiseCellHeight().
+    /// @param bins The new height.
+    void setNoiseCellHeight(double bins) noexcept { noiseCellHeight_ = bins; }
+
     /// @brief Which two-axis pattern this MindWave produces - only
     ///        meaningful while `type()` is `GeneratorType::Spatial`.
     /// @return The current spatial pattern.
@@ -889,6 +941,10 @@ private:
     SteppedNoiseShape steppedNoiseShape_ = SteppedNoiseShape::Stepped;
     int stepCount_ = 4;
     std::uint32_t seed_ = 1;
+    NoiseColor noiseColor_ = NoiseColor::Pink;
+    double noiseSlope_ = -1.0;
+    double noiseCellWidth_ = 0.1;
+    double noiseCellHeight_ = 4.0;
     double noiseScale_ = 1.0;
     int noiseOctaves_ = 4;
     double noisePersistence_ = 0.5;

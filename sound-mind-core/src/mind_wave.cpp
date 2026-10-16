@@ -1,3 +1,4 @@
+#include "sound_mind/core/generator.h"
 #include "sound_mind/core/mind_wave.h"
 
 #include <algorithm>
@@ -507,6 +508,20 @@ float MindWave::evaluate(TimeFrequencyPoint point, const sound_mind::codec::Stre
             result = shaped + continuousCharacter_ * kContinuousCharacterAmplitude * turbulence;
             break;
         }
+        case GeneratorType::Noise: {
+            // Cells of noiseCellWidth_ seconds by noiseCellHeight_ bins; the
+            // color runs along axis_, rows across the other axis are
+            // independent - see noiseColor()'s docs.
+            const double width = std::max(kMinimumPeriod, noiseCellWidth_);
+            const double height = std::max(kMinimumPeriod, noiseCellHeight_);
+            const bool alongTime = axis_ == MindWaveAxis::Time;
+            const double along = axisPosition / (alongTime ? width : height);
+            const double across = (alongTime ? effectiveBinIndex : effectiveTimeSeconds) / (alongTime ? height : width);
+            const double alpha = noiseColor_ == NoiseColor::Custom ? noiseSlope_ : noiseColorExponent(noiseColor_);
+            result = coloredNoiseSample(seed_, static_cast<std::int64_t>(std::floor(across)),
+                                        static_cast<std::int64_t>(std::floor(along)), alpha);
+            break;
+        }
         case GeneratorType::Resonance: {
             if (resonanceSpectrum_.empty()) {
                 result = 0.5;  // Nothing to index - see stepGridValues()'s own identical "nothing to index" case.
@@ -654,6 +669,10 @@ void to_json(nlohmann::json& json, const MindWave& mindWave) {
     json["continuousSkew"] = mindWave.continuousSkew();
     json["continuousCharacter"] = mindWave.continuousCharacter();
     json["resonanceSpectrum"] = mindWave.resonanceSpectrum();
+    json["noiseColor"] = mindWave.noiseColor();
+    json["noiseSlope"] = mindWave.noiseSlope();
+    json["noiseCellWidth"] = mindWave.noiseCellWidth();
+    json["noiseCellHeight"] = mindWave.noiseCellHeight();
     json["reversed"] = mindWave.reversed();
     json["inverted"] = mindWave.inverted();
     // "sourceResonanceProfileId" is UI-only metadata (see its own docs) -
@@ -696,6 +715,11 @@ void from_json(const nlohmann::json& json, MindWave& mindWave) {
     mindWave.setWarpStrength(json.value("warpStrength", 1.0));
     // reversed/inverted were added after MindWave files already existed - lenient, default off.
     mindWave.setReversed(json.value("reversed", false));
+    // Noise (v0.Y.79.1) - lenient, so a MindWave saved before it still loads.
+    mindWave.setNoiseColor(json.value("noiseColor", NoiseColor::Pink));
+    mindWave.setNoiseSlope(json.value("noiseSlope", -1.0));
+    mindWave.setNoiseCellWidth(json.value("noiseCellWidth", 0.1));
+    mindWave.setNoiseCellHeight(json.value("noiseCellHeight", 4.0));
     mindWave.setInverted(json.value("inverted", false));
     const auto warpSourceStack =
         json.value("warpSourceStack", nlohmann::json::array()).get<std::vector<MindWave>>();

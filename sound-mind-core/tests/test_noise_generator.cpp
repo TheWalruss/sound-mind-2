@@ -159,3 +159,90 @@ TEST_CASE("MindWave bindings blend noise parameters from their baseline", "[core
     };
     CHECK(at(16) != at(17));
 }
+
+namespace {
+
+MindWave noiseWave(NoiseColor color, std::uint32_t seed = 3) {
+    MindWave wave;
+    wave.setType(sound_mind::core::GeneratorType::Noise);
+    wave.setNoiseColor(color);
+    wave.setNoiseCellWidth(0.01);
+    wave.setNoiseCellHeight(1.0);
+    wave.setSeed(seed);
+    return wave;
+}
+
+/// @brief The mean absolute change between neighboring cells along time.
+double meanStep(const MindWave& wave, const sound_mind::codec::StreamCodecConfig& config) {
+    double sum = 0.0;
+    double previous = wave.evaluate({0.005, 1000.0}, config);
+    for (int cell = 1; cell < 2000; ++cell) {
+        const double value = wave.evaluate({0.01 * cell + 0.005, 1000.0}, config);
+        sum += std::abs(value - previous);
+        previous = value;
+    }
+    return sum / 1999.0;
+}
+
+}  // namespace
+
+TEST_CASE("A noise MindWave holds one value per cell and is deterministic", "[core][noise][mind_wave]") {
+    const auto config = sound_mind::core::streamCodecConfigFor(noiseSettings());
+    MindWave wave = noiseWave(NoiseColor::White);
+    wave.setNoiseCellWidth(0.1);
+
+    const float a = wave.evaluate({0.12, 1000.0}, config);
+    CHECK(a == wave.evaluate({0.18, 1000.0}, config));  // the same 0.1 s cell.
+    CHECK(a != wave.evaluate({0.22, 1000.0}, config));  // the next one.
+
+    MindWave same = wave;
+    CHECK(same.evaluate({0.12, 1000.0}, config) == a);
+    same.setSeed(99);
+    CHECK(same.evaluate({0.12, 1000.0}, config) != a);
+    for (int cell = 0; cell < 200; ++cell) {
+        const float value = wave.evaluate({0.1 * cell, 500.0}, config);
+        REQUIRE(value >= 0.0f);
+        REQUIRE(value <= 1.0f);
+    }
+}
+
+TEST_CASE("A noise MindWave's color sets how smoothly it wanders", "[core][noise][mind_wave]") {
+    const auto config = sound_mind::core::streamCodecConfigFor(noiseSettings());
+    const double white = meanStep(noiseWave(NoiseColor::White), config);
+    const double pink = meanStep(noiseWave(NoiseColor::Pink), config);
+    const double red = meanStep(noiseWave(NoiseColor::Red), config);
+    const double purple = meanStep(noiseWave(NoiseColor::Purple), config);
+    CHECK(red < pink);
+    CHECK(pink < white);
+    // Purple is anti-correlated: each value tends to swing back from the last.
+    const MindWave violet = noiseWave(NoiseColor::Purple);
+    double lagProduct = 0.0;
+    double previous = violet.evaluate({0.005, 1000.0}, config) - 0.5;
+    for (int cell = 1; cell < 2000; ++cell) {
+        const double value = violet.evaluate({0.01 * cell + 0.005, 1000.0}, config) - 0.5;
+        lagProduct += value * previous;
+        previous = value;
+    }
+    CHECK(lagProduct < 0.0);
+    CHECK(purple > 0.0);
+    MindWave customRed = noiseWave(NoiseColor::Custom);
+    customRed.setNoiseSlope(-2.0);
+    CHECK(meanStep(customRed, config) == Catch::Approx(red));
+}
+
+TEST_CASE("A noise MindWave's settings round-trip through JSON", "[core][noise][mind_wave]") {
+    MindWave wave = noiseWave(NoiseColor::Custom, 11);
+    wave.setNoiseSlope(0.5);
+    wave.setNoiseCellWidth(0.25);
+    wave.setNoiseCellHeight(3.0);
+
+    const nlohmann::json json = wave;
+    const MindWave restored = json.get<MindWave>();
+
+    CHECK(restored.type() == sound_mind::core::GeneratorType::Noise);
+    CHECK(restored.noiseColor() == NoiseColor::Custom);
+    CHECK(restored.noiseSlope() == 0.5);
+    CHECK(restored.noiseCellWidth() == 0.25);
+    CHECK(restored.noiseCellHeight() == 3.0);
+    CHECK(restored.seed() == 11u);
+}

@@ -46,4 +46,6 @@ private slots:
     void selectingAResonantProfileUpdatesTheWaveAndEmits();
     void loadingAResonantMindWaveSyncsThePickersSelection();
     void loadingAResonantMindWaveWithNoSourceIdSelectsThePlaceholder();
+    void choosingNoiseShowsItsControlsAndEditsReachTheMindWave();
+    void setMindWaveLoadsNoiseSettings();
 };

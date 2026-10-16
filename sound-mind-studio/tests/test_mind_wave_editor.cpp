@@ -507,3 +507,44 @@ void MindWaveEditorTest::loadingAResonantMindWaveWithNoSourceIdSelectsThePlaceho
     QCOMPARE(combo->currentIndex(), 0);
     QCOMPARE(combo->currentText(), QStringLiteral("(none captured yet)"));
 }
+
+void MindWaveEditorTest::choosingNoiseShowsItsControlsAndEditsReachTheMindWave() {
+    MindWaveEditor editor;
+    std::optional<MindWave> received;
+    connect(&editor, &MindWaveEditor::mindWaveChanged, [&](const MindWave& wave) { received = wave; });
+    auto* type = editor.findChild<QComboBox*>(QStringLiteral("generatorTypeCombo"));
+    auto* group = editor.findChild<QGroupBox*>(QStringLiteral("noiseGroup"));
+    QVERIFY(group != nullptr);
+    QVERIFY(group->isHidden());
+
+    type->setCurrentIndex(type->findData(static_cast<int>(GeneratorType::Noise)));
+    QVERIFY(!group->isHidden());
+    auto* color = editor.findChild<QComboBox*>(QStringLiteral("noiseColorCombo"));
+    QCOMPARE(color->findText(QStringLiteral("Gray (equal loudness)")), -1);  // layer-only.
+    color->setCurrentIndex(color->findData(static_cast<int>(sound_mind::core::NoiseColor::Red)));
+    editor.findChild<NumericField*>(QStringLiteral("noiseCellWidthSpinBox"))->setValue(0.5);
+
+    QVERIFY(received.has_value());
+    QCOMPARE(received->type(), GeneratorType::Noise);
+    QCOMPARE(received->noiseColor(), sound_mind::core::NoiseColor::Red);
+    QCOMPARE(received->noiseCellWidth(), 0.5);
+    QVERIFY(!editor.findChild<NumericField*>(QStringLiteral("noiseSlopeSpinBox"))->isEnabled());  // Custom only.
+}
+
+void MindWaveEditorTest::setMindWaveLoadsNoiseSettings() {
+    MindWaveEditor editor;
+    MindWave wave;
+    wave.setType(GeneratorType::Noise);
+    wave.setNoiseColor(sound_mind::core::NoiseColor::Custom);
+    wave.setNoiseSlope(1.5);
+    wave.setNoiseCellHeight(8.0);
+    QSignalSpy spy(&editor, &MindWaveEditor::mindWaveChanged);
+
+    editor.setMindWave(wave);
+
+    QCOMPARE(spy.count(), 0);
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("noiseSlopeSpinBox"))->value(), 1.5);
+    QVERIFY(editor.findChild<NumericField*>(QStringLiteral("noiseSlopeSpinBox"))->isEnabled());
+    QCOMPARE(editor.findChild<NumericField*>(QStringLiteral("noiseCellHeightSpinBox"))->value(), 8.0);
+    QVERIFY(!editor.findChild<QGroupBox*>(QStringLiteral("noiseGroup"))->isHidden());
+}

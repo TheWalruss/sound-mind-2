@@ -31,7 +31,7 @@ using sound_mind::core::PeriodicWaveform;
 using sound_mind::core::SpatialPattern;
 using sound_mind::core::SteppedNoiseShape;
 
-constexpr std::array<std::pair<GeneratorType, const char*>, 9> kGeneratorTypes{{
+constexpr std::array<std::pair<GeneratorType, const char*>, 10> kGeneratorTypes{{
     {GeneratorType::Periodic, "Periodic"},
     {GeneratorType::Envelope, "Envelope"},
     {GeneratorType::SteppedNoise, "Stepped/Noise"},
@@ -41,6 +41,17 @@ constexpr std::array<std::pair<GeneratorType, const char*>, 9> kGeneratorTypes{{
     {GeneratorType::StepGrid, "Step Grid"},
     {GeneratorType::Continuous, "Continuous"},
     {GeneratorType::Resonance, "Resonance"},
+    {GeneratorType::Noise, "Noise"},
+}};
+
+/// @brief The noise colors a noise MindWave offers - Gray (an audio-loudness
+/// notion) only makes sense for layer noise; Custom takes a slope instead.
+constexpr std::array<std::pair<sound_mind::core::NoiseColor, const char*>, 5> kMindWaveNoiseColors{{
+    {sound_mind::core::NoiseColor::White, "White"},
+    {sound_mind::core::NoiseColor::Pink, "Pink"},
+    {sound_mind::core::NoiseColor::Red, "Red / Brownian"},
+    {sound_mind::core::NoiseColor::Purple, "Purple / Violet"},
+    {sound_mind::core::NoiseColor::Custom, "Custom slope"},
 }};
 
 constexpr std::array<std::pair<MindWaveAxis, const char*>, 2> kAxes{{
@@ -291,6 +302,50 @@ MindWaveEditor::MindWaveEditor(QWidget* parent) : QWidget(parent) {
     });
     envelopeForm->addRow(tr("Decay Rate:"), decayRateSpinBox_);
     root->addWidget(envelopeGroup_);
+
+    noiseGroup_ = new QGroupBox(tr("Noise"), this);
+    noiseGroup_->setObjectName(QStringLiteral("noiseGroup"));
+    auto* noiseForm = new QFormLayout(noiseGroup_);
+    noiseColorCombo_ = new QComboBox(noiseGroup_);
+    noiseColorCombo_->setObjectName(QStringLiteral("noiseColorCombo"));
+    populateCombo(noiseColorCombo_, kMindWaveNoiseColors);
+    connect(noiseColorCombo_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        wave_.setNoiseColor(static_cast<sound_mind::core::NoiseColor>(noiseColorCombo_->itemData(index).toInt()));
+        noiseSlopeSpinBox_->setEnabled(wave_.noiseColor() == sound_mind::core::NoiseColor::Custom);
+        emitChanged();
+    });
+    noiseForm->addRow(tr("Color:"), noiseColorCombo_);
+    noiseSlopeSpinBox_ = new NumericField(noiseGroup_);
+    noiseSlopeSpinBox_->setObjectName(QStringLiteral("noiseSlopeSpinBox"));
+    noiseSlopeSpinBox_->setRange(-2.0, 2.0);
+    noiseSlopeSpinBox_->setDecimals(2);
+    noiseSlopeSpinBox_->setToolTip(tr("Custom slope: -2 red, -1 pink, 0 white, +2 purple."));
+    connect(noiseSlopeSpinBox_, &NumericField::valueChanged, this, [this](double value) {
+        wave_.setNoiseSlope(value);
+        emitChanged();
+    });
+    noiseForm->addRow(tr("Slope:"), noiseSlopeSpinBox_);
+    noiseCellWidthSpinBox_ = new NumericField(noiseGroup_);
+    noiseCellWidthSpinBox_->setObjectName(QStringLiteral("noiseCellWidthSpinBox"));
+    noiseCellWidthSpinBox_->setRange(0.001, 60.0);
+    noiseCellWidthSpinBox_->setDecimals(3);
+    noiseCellWidthSpinBox_->setToolTip(tr("Horizontal resolution: how many seconds one noise cell spans."));
+    connect(noiseCellWidthSpinBox_, &NumericField::valueChanged, this, [this](double value) {
+        wave_.setNoiseCellWidth(value);
+        emitChanged();
+    });
+    noiseForm->addRow(tr("Cell Width (s):"), noiseCellWidthSpinBox_);
+    noiseCellHeightSpinBox_ = new NumericField(noiseGroup_);
+    noiseCellHeightSpinBox_->setObjectName(QStringLiteral("noiseCellHeightSpinBox"));
+    noiseCellHeightSpinBox_->setRange(0.1, 2048.0);
+    noiseCellHeightSpinBox_->setDecimals(1);
+    noiseCellHeightSpinBox_->setToolTip(tr("Vertical resolution: how many frequency rows one noise cell spans."));
+    connect(noiseCellHeightSpinBox_, &NumericField::valueChanged, this, [this](double value) {
+        wave_.setNoiseCellHeight(value);
+        emitChanged();
+    });
+    noiseForm->addRow(tr("Cell Height (bins):"), noiseCellHeightSpinBox_);
+    root->addWidget(noiseGroup_);
 
     steppedNoiseGroup_ = new QGroupBox(tr("Stepped/Noise"), this);
     steppedNoiseGroup_->setObjectName(QStringLiteral("steppedNoiseGroup"));
@@ -565,6 +620,7 @@ void MindWaveEditor::updateVisibleGroup() {
     periodicGroup_->setVisible(type == GeneratorType::Periodic);
     envelopeGroup_->setVisible(type == GeneratorType::Envelope);
     steppedNoiseGroup_->setVisible(type == GeneratorType::SteppedNoise);
+    noiseGroup_->setVisible(type == GeneratorType::Noise);
     spatialGroup_->setVisible(type == GeneratorType::Spatial);
     fractalGroup_->setVisible(type == GeneratorType::Fractal);
     drawnGroup_->setVisible(type == GeneratorType::Drawn);
@@ -598,6 +654,10 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     const QSignalBlocker invertedBlocker(invertedCheckBox_);
     const QSignalBlocker seedBlocker(seedSpinBox_);
     const QSignalBlocker noiseScaleBlocker(noiseScaleSpinBox_);
+    const QSignalBlocker noiseColorBlocker(noiseColorCombo_);
+    const QSignalBlocker noiseSlopeBlocker(noiseSlopeSpinBox_);
+    const QSignalBlocker noiseCellWidthBlocker(noiseCellWidthSpinBox_);
+    const QSignalBlocker noiseCellHeightBlocker(noiseCellHeightSpinBox_);
     const QSignalBlocker noiseOctavesBlocker(noiseOctavesSpinBox_);
     const QSignalBlocker noisePersistenceBlocker(noisePersistenceSpinBox_);
     const QSignalBlocker periodicWaveformBlocker(periodicWaveformCombo_);
@@ -628,6 +688,11 @@ void MindWaveEditor::setMindWave(const sound_mind::core::MindWave& wave) {
     seedSpinBox_->setValue(static_cast<int>(std::min<std::uint32_t>(
         wave_.seed(), static_cast<std::uint32_t>(std::numeric_limits<int>::max()))));
     noiseScaleSpinBox_->setValue(wave_.noiseScale());
+    noiseColorCombo_->setCurrentIndex(noiseColorCombo_->findData(static_cast<int>(wave_.noiseColor())));
+    noiseSlopeSpinBox_->setValue(wave_.noiseSlope());
+    noiseSlopeSpinBox_->setEnabled(wave_.noiseColor() == sound_mind::core::NoiseColor::Custom);
+    noiseCellWidthSpinBox_->setValue(wave_.noiseCellWidth());
+    noiseCellHeightSpinBox_->setValue(wave_.noiseCellHeight());
     noiseOctavesSpinBox_->setValue(wave_.noiseOctaves());
     noisePersistenceSpinBox_->setValue(wave_.noisePersistence());
     selectComboValue(periodicWaveformCombo_, wave_.periodicWaveform());

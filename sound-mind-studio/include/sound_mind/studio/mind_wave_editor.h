@@ -214,6 +214,12 @@ private:
     NumericField* envelopeSteepnessSpinBox_ = nullptr;
     NumericField* decayRateSpinBox_ = nullptr;
 
+    /// @brief `GeneratorType::Noise`'s controls (Pre-Beta Plan `v0.Y.79.1`).
+    QGroupBox* noiseGroup_ = nullptr;
+    QComboBox* noiseColorCombo_ = nullptr;
+    NumericField* noiseSlopeSpinBox_ = nullptr;
+    NumericField* noiseCellWidthSpinBox_ = nullptr;
+    NumericField* noiseCellHeightSpinBox_ = nullptr;
     QGroupBox* steppedNoiseGroup_ = nullptr;
     QComboBox* steppedNoiseShapeCombo_ = nullptr;
     IntegerField* stepCountSpinBox_ = nullptr;

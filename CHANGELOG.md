@@ -6,6 +6,18 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.39.2] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.79.1` (Generators), installment B.
+
+### Added
+
+- **Noise MindWaves.** A new **Noise** generator type: random values in cells of adjustable width (seconds) and height (frequency rows), colored white, pink, red/brownian, purple/violet or a custom slope, which sets how they move from cell to cell.
+
+### Fixed
+
+- The MindWaves panel now shows a type badge for Drawn, Step Grid, Continuous and Resonance MindWaves too.
+
 ## [0.1.39.1] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.79.1` (Generators), installment A.

@@ -2236,6 +2236,19 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `GeneratorDialogTest`: 3 new cases.
       - `LayerControllerTest`: bindings resolve against the project.
 
+245. **Noise MindWaves.** Settled in `v0.1.39.2`, Pre-Beta Plan milestone `v0.Y.79.1` installment B.
+    - **The type:** `GeneratorType::Noise` (JSON `noise`), with `noiseColor()`, `noiseSlope()` (Custom's exponent), `noiseCellWidth()` (seconds) and `noiseCellHeight()` (bins). The fields are JSON-lenient, and the type reuses `seed()`.
+    - **Header move:** `NoiseColor` moved to its own `noise_color.h`. `generator_configuration.h` already includes `mind_wave.h` for binding ids, so `mind_wave.h` couldn't include it back.
+    - **Evaluation:** a cell is `(floor(along / size), floor(across / size))`, with along = the MindWave's `axis()` and across = the other axis. Its value is `coloredNoiseSample(seed, acrossCell, alongCell, alpha)` (public in `generator.h`), on the same `hashedUnitNoise()` core as layer noise.
+      - **alpha < 0** (pink -1, red -2) is a generalized Voss-McCartney sum: ten octave generators held 2^k steps, weighted 2^(k(-alpha-1)/2), normalized to ±3σ.
+      - **alpha >= 0** blends white toward its first difference (anti-correlated) at alpha = 2.
+      - **Gray** behaves as White, since equal loudness has no meaning for a control field; the editor omits it.
+    - **Scope:** the roadmap's MindWave bindings for resolution and spectrum are on the *layer* generator (#244). A MindWave's own parameters can't be MindWave-bound - there's no MindWave-to-MindWave binding mechanism beyond Warp - so here resolution is plain cell size.
+    - **Studio:** `MindWaveEditor` gains a Noise group (color combo without Gray; slope enabled for Custom only; cell width and height). `MindWavesPanel`'s type badge, which had been missing Drawn/Step Grid/Continuous/Resonance, now covers every type.
+    - **Tests:**
+      - Core: 3 cases - one value per cell and seeded determinism; color ordering of mean step size (red < pink < white), purple's negative lag-1 correlation, Custom -2 matching Red; JSON round trip.
+      - `MindWaveEditorTest`: 2 cases.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

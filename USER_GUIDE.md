@@ -654,7 +654,7 @@ shape instead of staying fixed.
   create a different project, or when you close this panel.
 - Selecting a MindWave shows its own editor: a **Generator Type** (Periodic,
   Envelope, Stepped/Noise, Spatial, Fractal, Drawn, Step Grid, Continuous,
-  or Resonance) and that type's own plain numeric parameters - a period, a
+  Resonance, or Noise) and that type's own plain numeric parameters - a period, a
   phase, a seed, and so on. This is a bare-bones, functional editor, not a
   polished one yet - there are no dials or drawing tools here, just fields
   to type numbers into. Every MindWave also has **Reversed** (run the
@@ -699,6 +699,14 @@ MindWave Shape**
   [Pick](#pick)'s "Create Resonance from Picked Path..." for how
   to capture one). With nothing picked yet, or nothing captured in the
   project at all, the generator produces a flat neutral value instead.
+- **Noise** fills the canvas with cells of random values - **Cell Width**
+  (seconds) and **Cell Height** (frequency rows) set how coarse they are.
+  The **Color** decides how the values move from one cell to the next along
+  the MindWave's axis: **White** jumps freely, **Pink** wanders, **Red /
+  Brownian** drifts slowly and smoothly, **Purple / Violet** flickers back
+  and forth, and **Custom slope** lets you dial anywhere from -2 (red)
+  through 0 (white) to +2 (purple). The **Seed** picks which random values
+  you get.
 - **Warp** lets one MindWave distort the position another is sampled at,
   giving a wavier, less mechanically regular result than either shape
   alone - check **Enable Warp** to reveal a **Strength** number field and a
@@ -2196,9 +2204,9 @@ the exported file. There's still no panel to inspect what a recorded
 macro actually contains, and it isn't saved with the project.
 
 **Generators**: **+ Generate Layer** offers the Lattice and Noise
-generators (see [Generating a Layer](#generating-a-layer)). The design
-document's "Fractal" and "Streaming" families, and noise as a MindWave
-type, are still being built.
+generators (see [Generating a Layer](#generating-a-layer)), and Noise is a
+MindWave type too. The design document's "Fractal" and "Streaming" families
+are still being built.
 
 **Analysis Tools** have taken their first step too: the Layers panel's own
 per-layer **loudness indicator** (see [Working with Layers](#working-with-layers)

@@ -45,6 +45,16 @@ QString generatorTypeBadge(GeneratorType type) {
             return QObject::tr("Spatial");
         case GeneratorType::Fractal:
             return QObject::tr("Fractal");
+        case GeneratorType::Drawn:
+            return QObject::tr("Drawn");
+        case GeneratorType::StepGrid:
+            return QObject::tr("Step Grid");
+        case GeneratorType::Continuous:
+            return QObject::tr("Continuous");
+        case GeneratorType::Resonance:
+            return QObject::tr("Resonance");
+        case GeneratorType::Noise:
+            return QObject::tr("Noise");
     }
     return QString();
 }

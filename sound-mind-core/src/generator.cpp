@@ -271,6 +271,34 @@ double hashedUnitNoise(std::uint64_t seed, std::uint64_t stream, std::int64_t x,
     return static_cast<double>(hash >> 11) * (1.0 / 9007199254740992.0);  // 53 bits -> [0, 1).
 }
 
+double coloredNoiseSample(std::uint64_t seed, std::int64_t row, std::int64_t n, double alpha) noexcept {
+    const auto white = [&](std::uint64_t stream, std::int64_t step) {
+        return hashedUnitNoise(seed, stream, step, row) - 0.5;  // in [-0.5, 0.5).
+    };
+    if (alpha >= 0.0) {
+        // White blended toward its own first difference (anti-correlated).
+        const double toward = std::clamp(alpha / 2.0, 0.0, 1.0);
+        const double value = (1.0 - toward) * white(0, n) + toward * 0.5 * (white(0, n) - white(0, n - 1));
+        return std::clamp(0.5 + value, 0.0, 1.0);
+    }
+    // Octave generators held over 2^k steps, weighted so the summed spectrum
+    // falls as f^alpha (beta = -alpha).
+    constexpr int kOctaves = 10;
+    const double beta = -alpha;
+    double sum = 0.0;
+    double weightSquares = 0.0;
+    for (int k = 0; k < kOctaves; ++k) {
+        const double weight = std::pow(2.0, k * (beta - 1.0) / 2.0);
+        const auto held = static_cast<std::int64_t>(std::floor(static_cast<double>(n) / std::ldexp(1.0, k)));
+        sum += weight * white(static_cast<std::uint64_t>(1 + k), held);
+        weightSquares += weight * weight;
+    }
+    // A uniform on [-0.5, 0.5) has standard deviation 1/sqrt(12); three
+    // standard deviations of the sum span [0, 1].
+    const double spread = 3.0 * std::sqrt(weightSquares / 12.0);
+    return std::clamp(0.5 + 0.5 * sum / spread, 0.0, 1.0);
+}
+
 sound_mind::codec::StreamImage generateContent(const GeneratorConfiguration& config, const ProjectSettings& settings,
                                                const MindWaveResolver& resolveMindWave) {
     const sound_mind::codec::StreamCodecConfig codecConfig = streamCodecConfigFor(settings);
