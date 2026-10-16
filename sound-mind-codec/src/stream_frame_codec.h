@@ -194,10 +194,20 @@ struct SpectrumSample {
     const std::complex<float>& low = spectrum[lowIndex];
     const std::complex<float>& high = spectrum[highIndex];
 
+    // cos(arg z) = Re z / |z| and sin(arg z) = Im z / |z| - the same unit
+    // vector the angle would give, without trig (v0.1.41.3). A zero bin
+    // reads as angle 0, as arg(0) does.
+    const float lowMagnitude = std::sqrt(std::norm(low));
+    const float highMagnitude = std::sqrt(std::norm(high));
+    const float lowCos = lowMagnitude > 0.0f ? low.real() / lowMagnitude : 1.0f;
+    const float lowSin = lowMagnitude > 0.0f ? low.imag() / lowMagnitude : 0.0f;
+    const float highCos = highMagnitude > 0.0f ? high.real() / highMagnitude : 1.0f;
+    const float highSin = highMagnitude > 0.0f ? high.imag() / highMagnitude : 0.0f;
+
     SpectrumSample sample;
-    sample.magnitude = std::lerp(std::abs(low), std::abs(high), t);
-    sample.cosPhase = std::lerp(std::cos(std::arg(low)), std::cos(std::arg(high)), t);
-    sample.sinPhase = std::lerp(std::sin(std::arg(low)), std::sin(std::arg(high)), t);
+    sample.magnitude = std::lerp(lowMagnitude, highMagnitude, t);
+    sample.cosPhase = std::lerp(lowCos, highCos, t);
+    sample.sinPhase = std::lerp(lowSin, highSin, t);
     return sample;
 }
 

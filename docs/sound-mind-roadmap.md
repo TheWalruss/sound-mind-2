@@ -1191,7 +1191,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.78.1` | Text tool | `0.1.38.1` (follow-up `0.1.40.13`: editable after applying) | #243, #257 |
 | `v0.Y.79.1` | Generators | `0.1.39.1`-`0.1.39.4` (plus the codec fix `0.1.39.5`) | #244-#248 |
 | `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges; `0.1.40.13` belongs to `v0.Y.78.1`) | #249-#256 |
-| `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.2` *(in progress)* | #258 |
+| `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.3` *(in progress)* | #258 |
 | `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.42.x`)* | |
 | `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.43.x`)* | |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
@@ -1358,7 +1358,9 @@ The GPU-offloading candidates assessed on 2026-10-16, taken in the order recomme
    - Analyze 1/4/8 layers: 0.44/0.67/1.19 s (2.6-4.2x).
 
    Both runs had a `MainWindowTest` run going in the background, so the speedups are slightly understated. The loudness measurement (376 ms at 60 s, still single-threaded) now dominates a small project's analysis.
-3. **GPU Stream decode/encode.** Decide on measured numbers whether a DirectX 12 FFT path is still worth it after step 2, and build it if so (no new third-party FFT dependency without asking).
+3. ✅ **GPU Stream decode/encode - assessed, not built** (`v0.1.41.3`).
+   - First, trig removed from the codec's per-bin loops: decode 180 s 335 -> 214 ms, encode 500 -> 263 ms, so 8.7x / 14.7x against the baseline.
+   - At ~840x real time, a GPU path's ~170 MB of upload and readback per 3 minutes, plus a hand-written FFT shader, isn't worth it on this hardware. See `docs/sound-mind-codec-design.md` section 8.
 4. **Analysis on the GPU.** Per-band levels and widths, and pitch candidate scoring (per frame); the sequential parts (K-weighting, true peak, voice tracking) stay on the CPU.
 5. **Noise generation on the GPU.** The noise Generate Layer and the noise MindWave field (per-cell hashed randomness), the same shape as the Fractal field's existing GPU path.
 

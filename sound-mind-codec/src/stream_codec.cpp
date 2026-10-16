@@ -40,8 +40,24 @@ void inverseRealFft(const std::vector<std::complex<float>>& bins, std::size_t n,
 }
 
 [[nodiscard]] float dbToAmplitude(float db) noexcept {
-    return std::pow(10.0f, db / 20.0f);
+    // 10^(dB/20) as one exp() - cheaper than pow() in decode()'s inner loop.
+    constexpr float kNepersPerDb = 0.11512925464970229f;  // ln(10) / 20.
+    return std::exp(db * kNepersPerDb);
 }
+
+/// @brief Below this length an interpolated phase vector has no meaningful
+/// direction (its two phases were nearly opposite) and decode() treats it as
+/// angle 0, as atan2(0, 0) does.
+constexpr float kMinPhaseVectorLength = 1e-12f;
+
+/// @brief Where one linear FFT bin reads the stored log bins in decode(),
+/// and the dB offset (full-scale reference minus A-weighting) it adds back.
+struct LogBinSample {
+    std::uint32_t lowBin = 0;
+    std::uint32_t highBin = 0;
+    float t = 0.0f;
+    float offsetDb = 0.0f;
+};
 
 /// @brief The inverse mapping of logBinToLinearBinIndex(): for each linear
 /// FFT bin (0..fftSize/2), the fractional log-bin index it corresponds to.
@@ -76,35 +92,6 @@ void inverseRealFft(const std::vector<std::complex<float>>& bins, std::size_t n,
         weights[k] = aWeightingDb(clampedFrequencyHz);
     }
     return weights;
-}
-
-/// @brief Linearly interpolates a stored `[bin][frame]` plane's `frame`
-/// column at the fractional bin index `logBinIndex`, clamped to range.
-[[nodiscard]] float sampleStoredPlane(const std::vector<float>& plane, std::uint32_t binCount, std::uint32_t frameCount,
-                                      std::uint32_t frame, float logBinIndex) {
-    const float clamped = std::clamp(logBinIndex, 0.0f, static_cast<float>(binCount - 1));
-    const auto lowBin = static_cast<std::uint32_t>(clamped);
-    const std::uint32_t highBin = std::min(lowBin + 1, binCount - 1);
-    const float t = clamped - static_cast<float>(lowBin);
-    const float low = plane[static_cast<std::size_t>(lowBin) * frameCount + frame];
-    const float high = plane[static_cast<std::size_t>(highBin) * frameCount + frame];
-    return std::lerp(low, high, t);
-}
-
-/// @brief Same idea as sampleStoredPlane(), but for the phase plane: the
-/// two neighboring stored phases are decomposed into cosine/sine before
-/// interpolating, for the same wraparound reason as SpectrumSample.
-[[nodiscard]] float sampleStoredPhase(const std::vector<float>& phasePlane, std::uint32_t binCount, std::uint32_t frameCount,
-                                      std::uint32_t frame, float logBinIndex) {
-    const float clamped = std::clamp(logBinIndex, 0.0f, static_cast<float>(binCount - 1));
-    const auto lowBin = static_cast<std::uint32_t>(clamped);
-    const std::uint32_t highBin = std::min(lowBin + 1, binCount - 1);
-    const float t = clamped - static_cast<float>(lowBin);
-    const float lowPhase = phasePlane[static_cast<std::size_t>(lowBin) * frameCount + frame];
-    const float highPhase = phasePlane[static_cast<std::size_t>(highBin) * frameCount + frame];
-    const float cosPhase = std::lerp(std::cos(lowPhase), std::cos(highPhase), t);
-    const float sinPhase = std::lerp(std::sin(lowPhase), std::sin(highPhase), t);
-    return std::atan2(sinPhase, cosPhase);
 }
 
 }  // namespace
@@ -203,6 +190,17 @@ AudioBuffer decode(const StreamImage& image) {
     std::vector<float> rightAccumulator(outputLength, 0.0f);
     std::vector<float> windowSumSquared(outputLength, 0.0f);
 
+    // Where each linear bin reads the stored log bins, worked out once for
+    // the whole decode rather than per frame (v0.1.41.3).
+    std::vector<LogBinSample> samples(linearBinCount);
+    for (std::size_t k = 0; k < linearBinCount; ++k) {
+        const float clamped = std::clamp(logBinIndexForLinearBin[k], 0.0f, static_cast<float>(config.binCount - 1));
+        samples[k].lowBin = static_cast<std::uint32_t>(clamped);
+        samples[k].highBin = std::min(samples[k].lowBin + 1, config.binCount - 1);
+        samples[k].t = clamped - static_cast<float>(samples[k].lowBin);
+        samples[k].offsetDb = referenceDb - weightDb[k];
+    }
+
     // Each block of frames is synthesized on a worker thread (v0.1.41.2)
     // into its own overlap-add buffers, covering just the samples its frames
     // reach; the blocks are then summed into the output in block order, so
@@ -227,15 +225,38 @@ AudioBuffer decode(const StreamImage& image) {
     std::vector<std::complex<float>> spectrumRight(linearBinCount);
     std::vector<float> frameLeft;
     std::vector<float> frameRight;
+    std::vector<float> cosStored(config.binCount);
+    std::vector<float> sinStored(config.binCount);
 
     for (auto frame = static_cast<std::uint32_t>(blockBegin); frame < blockEnd; ++frame) {
+        // Each stored phase's cosine and sine, once per frame (v0.1.41.3) -
+        // rather than twice per linear bin reading it, plus an atan2 and
+        // two polar() calls per bin to turn the interpolated vector back
+        // into an angle and out again.
+        for (std::uint32_t bin = 0; bin < config.binCount; ++bin) {
+            const float phase = image.sharedPhaseRadians[static_cast<std::size_t>(bin) * frameCount + frame];
+            cosStored[bin] = std::cos(phase);
+            sinStored[bin] = std::sin(phase);
+        }
         for (std::size_t k = 0; k < linearBinCount; ++k) {
-            const float logBinIndex = logBinIndexForLinearBin[k];
-            const float phase = sampleStoredPhase(image.sharedPhaseRadians, config.binCount, frameCount, frame, logBinIndex);
-            const float leftDb = sampleStoredPlane(image.leftMagnitudeDb, config.binCount, frameCount, frame, logBinIndex);
-            const float rightDb = sampleStoredPlane(image.rightMagnitudeDb, config.binCount, frameCount, frame, logBinIndex);
-            spectrumLeft[k] = std::polar(dbToAmplitude(leftDb - weightDb[k] + referenceDb), phase);
-            spectrumRight[k] = std::polar(dbToAmplitude(rightDb - weightDb[k] + referenceDb), phase);
+            const LogBinSample& at = samples[k];
+            const std::size_t low = static_cast<std::size_t>(at.lowBin) * frameCount + frame;
+            const std::size_t high = static_cast<std::size_t>(at.highBin) * frameCount + frame;
+            // The interpolated phase vector, normalized: exactly the unit
+            // vector polar(1, atan2(sin, cos)) gives, without the trig.
+            // A vanishing vector (opposite phases) reads as angle 0, as
+            // atan2(0, 0) did.
+            const float cosPhase = std::lerp(cosStored[at.lowBin], cosStored[at.highBin], at.t);
+            const float sinPhase = std::lerp(sinStored[at.lowBin], sinStored[at.highBin], at.t);
+            const float norm = std::sqrt(cosPhase * cosPhase + sinPhase * sinPhase);
+            const float unitCos = norm > kMinPhaseVectorLength ? cosPhase / norm : 1.0f;
+            const float unitSin = norm > kMinPhaseVectorLength ? sinPhase / norm : 0.0f;
+            const float leftDb = std::lerp(image.leftMagnitudeDb[low], image.leftMagnitudeDb[high], at.t);
+            const float rightDb = std::lerp(image.rightMagnitudeDb[low], image.rightMagnitudeDb[high], at.t);
+            const float leftAmplitude = dbToAmplitude(leftDb + at.offsetDb);
+            const float rightAmplitude = dbToAmplitude(rightDb + at.offsetDb);
+            spectrumLeft[k] = {leftAmplitude * unitCos, leftAmplitude * unitSin};
+            spectrumRight[k] = {rightAmplitude * unitCos, rightAmplitude * unitSin};
         }
 
         inverseRealFft(spectrumLeft, fftSize, frameLeft);
