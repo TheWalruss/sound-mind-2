@@ -2286,6 +2286,14 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Core: audible, seeded, decodes finite; over 4 seeds, the frame-to-frame spectral-centroid change at Order is under a fifth of that at Chaos.
       - The silent-family test is removed: every family is implemented.
 
+248. **Stream decode: no clicks at the buffer ends.** Fixed in `v0.1.39.5`, found while building Pre-Beta Plan milestone `v0.Y.80.1`'s loudness meter.
+    - **The bug:** `decode()` normalizes its overlap-add by the windows' squared sum, which is constant in the steady state but tends to zero across the first and last frames, where only a window's edge overlaps. The floor was `1e-6`. Because the spectrum is interpolated from log bins, a frame's inverse FFT isn't tapered toward its edges like an analysis-windowed segment would be, so dividing by the near-zero sum produced spikes over full scale - about 270x full scale for a 0.4-amplitude 3 kHz tone. That meant an audible click at the start of every decoded layer, playback and export, and inflated true-peak and loudness readings.
+    - **The fix:** floor the normalizer at a quarter of its steady-state value. The steady state is unaffected (every existing codec test passes unchanged), and the ends become a short fade.
+    - Centering the frames (padding by half an FFT) would remove the edge entirely, but it changes both encode and decode framing. It's noted as a possible later improvement rather than done here.
+    - **Not affected:** the Pool codec. Its overlap-add runs over the spectrum, not time, so it has no such edge.
+    - **Separately observed, not changed here:** round-trip level falls above about 2 kHz at the default 512 bins (about -6 dB at 3 kHz, -18 dB at 5 kHz for a pure tone). Log bins are wider than linear bins there, and interpolation misses a narrow peak. This is recorded for the codec's own backlog.
+    - **Test:** a 0.4-amplitude tone at 250 Hz / 1 / 3 / 9 kHz never decodes above 1.25x its own amplitude anywhere in the buffer. Before the fix all four failed.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

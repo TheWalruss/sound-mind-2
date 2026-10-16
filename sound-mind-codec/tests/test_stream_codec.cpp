@@ -203,3 +203,24 @@ TEST_CASE("A signal shorter than the reflection pad length still encodes/decodes
     CHECK(decoded.left.size() == original.frameCount());
 }
 
+
+TEST_CASE("Decoding never spikes at the start or end of the buffer", "[stream_codec]") {
+    // The first and last frames see only the edge of the synthesis window;
+    // dividing by its near-zero overlap sum used to multiply them into a
+    // loud click (hundreds of times full scale for a 3 kHz tone).
+    const StreamCodecConfig config;
+    for (const float frequencyHz : {250.0f, 1000.0f, 3000.0f, 9000.0f}) {
+        AudioBuffer original = makeSineTone(frequencyHz, 1.0f, config.sampleRateHz);
+        for (float& sample : original.left) {
+            sample *= 0.4f;
+        }
+        original.right = original.left;
+        const AudioBuffer decoded = decode(encode(original, config));
+        float peak = 0.0f;
+        for (const float sample : decoded.left) {
+            peak = std::max(peak, std::abs(sample));
+        }
+        INFO("frequency " << frequencyHz);
+        CHECK(peak <= 0.4f * 1.25f);
+    }
+}

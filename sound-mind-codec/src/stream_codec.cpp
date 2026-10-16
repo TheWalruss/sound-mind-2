@@ -221,8 +221,17 @@ AudioBuffer decode(const StreamImage& image) {
     }
 
 
+    // In the steady state the windows' squared sum is constant; only the
+    // first and last frames see just the edge of a window, where it tends
+    // to zero. Dividing by that tiny sum multiplied whatever those frames
+    // held - not tapered, since the spectrum is interpolated from log bins -
+    // into a loud click at both ends. Flooring it at a quarter of the steady
+    // value leaves the steady state untouched and turns the ends into a
+    // short fade instead.
+    const float steadyWindowSum = *std::max_element(windowSumSquared.begin(), windowSumSquared.end());
+    const float normalizerFloor = std::max(kMinWindowSumSquared, 0.25f * steadyWindowSum);
     for (std::size_t i = 0; i < outputLength; ++i) {
-        const float normalizer = std::max(windowSumSquared[i], kMinWindowSumSquared);
+        const float normalizer = std::max(windowSumSquared[i], normalizerFloor);
         leftAccumulator[i] = leftAccumulator[i] / normalizer;
         rightAccumulator[i] = rightAccumulator[i] / normalizer;
     }

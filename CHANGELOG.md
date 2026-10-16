@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.39.5] - 2026-10-16
+
+### Fixed
+
+- **A loud click at the start of decoded audio.** Decoding a layer (for playback, export, Loop and everything else) put a spike in its first and last few milliseconds - over full scale for most content, and hundreds of times full scale for a 3 kHz tone. The ends now fade in and out cleanly. Found while building the loudness meter, whose true-peak readings it inflated.
+
 ## [0.1.39.4] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.79.1` (Generators), installment D - completes the milestone.
