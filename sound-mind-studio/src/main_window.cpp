@@ -516,6 +516,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     filterPreviewTimer_->setInterval(33);
     connect(filterPreviewTimer_, &QTimer::timeout, this, &MainWindow::pollFilterPreviewRender);
     connect(playbackController_, &PlaybackController::invalidated, this, &MainWindow::scheduleRepeatRefresh);
+    // Anything that changes what's heard also changes what the analysis
+    // measured (v0.1.40.10) - one hook for every such edit, including ones
+    // that don't emit layersChanged()/contentChanged(), like MindWave edits.
+    connect(playbackController_, &PlaybackController::invalidated, this, &MainWindow::noteProjectChangedForAnalysis);
     connect(playbackController_, &PlaybackController::invalidated, this, [this]() {
         if (isLoopModeRunning()) {
             scheduleLoopBacking();
@@ -819,6 +823,10 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         // MindWave too, with nothing here tracking which layer's paint
         // history actually does.
         toolPaletteController_->invalidateContentCaches();
+        // v0.1.40.10: a MindWave can drive any layer's gain or any filter
+        // parameter, so prepared playback no longer matches the project
+        // (which also marks the analysis out of date - see invalidated()).
+        playbackController_->invalidate();
     });
 
     // The Resource Browser panel's own Project reads/mutations
@@ -3580,6 +3588,9 @@ void MainWindow::applyNormalizationGain() {
 }
 
 void MainWindow::noteProjectChangedForAnalysis() {
+    if (analysisPanel_ == nullptr || autoAnalyzeTimer_ == nullptr) {
+        return;  // still constructing: nothing analyzed yet.
+    }
     analysisStale_ = true;
     analysisPanel_->setStale();
     if (!autoAnalyze_) {

@@ -7237,6 +7237,55 @@ void MainWindowTest::analysisOverlaysReachTheCanvas() {
     window.findChild<QCheckBox*>(QStringLiteral("stereoOverlayCheckBox"))->setChecked(false);
 }
 
+// v0.1.40.10: every edit that changes what's heard reaches the analysis
+// (and prepared playback) - MindWave edits didn't.
+void MainWindowTest::mindWaveAndFilterEditsMarkAnalysisAndPlaybackStale() {
+    TestMainWindow window;
+    createFreshTestProject(window);
+    QVERIFY(window.commitRecording(recordedTone(0.5f)));
+    auto* panel = window.findChild<sound_mind::studio::AnalysisPanel*>();
+    auto* status = panel->findChild<QLabel*>(QStringLiteral("analysisStatusLabel"));
+    auto* controller = window.findChild<sound_mind::studio::PlaybackController*>();
+    const auto analyzeNow = [&]() {
+        window.analyzeLoudness();
+        QTRY_VERIFY_WITH_TIMEOUT(!window.isAnalyzingLoudness(), 120000);
+        QVERIFY(!status->text().contains(QStringLiteral("Out of date")));
+    };
+
+    // A MindWave edit.
+    window.addMindWave();
+    QVERIFY(!window.project()->mindWaves().empty());
+    analyzeNow();
+    controller->load(recordedTone(0.1f));  // as if playback had been prepared.
+    QVERIFY(controller->isLoaded());
+    const auto& named = window.project()->mindWaves().back();
+    sound_mind::core::MindWave edited = named.wave;
+    edited.setInverted(!edited.inverted());
+    window.updateMindWave(named.id, edited);
+    QVERIFY(status->text().contains(QStringLiteral("Out of date")));
+    QVERIFY(!controller->isLoaded());
+
+    // A Filter layer's configuration.
+    window.findChild<LayersPanel*>()->findChild<QPushButton*>(QStringLiteral("addFilterLayerButton"))->click();
+    analyzeNow();
+    sound_mind::core::FilterConfiguration config;
+    config.setType(sound_mind::core::FilterType::UniformBlur);
+    config.setBlurSigma(3.0f);
+    window.applyFilterConfiguration(config);
+    QVERIFY(status->text().contains(QStringLiteral("Out of date")));
+
+    // And with Auto-update on, a MindWave edit re-analyzes.
+    analyzeNow();
+    panel->findChild<QCheckBox*>(QStringLiteral("autoAnalyzeCheckBox"))->setChecked(true);
+    QVERIFY(!window.isAnalyzingLoudness());  // the report was current: nothing to do yet.
+    edited.setInverted(!edited.inverted());
+    window.updateMindWave(named.id, edited);
+    QTRY_VERIFY_WITH_TIMEOUT(window.isAnalyzingLoudness(), 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(!window.isAnalyzingLoudness() && !status->text().contains(QStringLiteral("Out of date")),
+                             120000);
+    panel->findChild<QCheckBox*>(QStringLiteral("autoAnalyzeCheckBox"))->setChecked(false);
+}
+
 // v0.1.40.9
 void MainWindowTest::pitchSpikeFilterIsRemembered() {
     {

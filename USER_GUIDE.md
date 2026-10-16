@@ -2152,7 +2152,9 @@ on):
 
 - **Analyze** measures the project - loudness, stereo and pitch all at
   once. It runs in the background, so you can keep working.
-- **Auto-update** analyzes again by itself whenever you change the project.
+- **Auto-update** analyzes again by itself whenever you change anything you
+  can hear - painting, layers, filters, MindWaves, recordings, undo and
+  redo.
   If an analysis is already running when you make a change, it's stopped
   and a fresh one starts about a third of a second after your last change.
   A quick series of edits therefore costs one analysis. Turning it on

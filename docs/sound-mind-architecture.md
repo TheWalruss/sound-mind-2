@@ -2379,6 +2379,11 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Shared controls above the tabs.** The user asked for Analyze (and the new Auto-update box) to be copied onto the Stereo and Pitch tabs. They now sit once, above the `QTabWidget`, with the status line: a single Analyze already fills all three tabs, so one shared control does the same job as three copies kept in sync.
     - **Auto-update** (`AnalysisPanel::autoAnalyzeToggled()`, non-emitting `setAutoAnalyze()`; `MainWindow::setAutoAnalyze()`, persisted as `analysisAutoUpdate`, off by default):
       - Every place that used to call `AnalysisPanel::setStale()` now goes through `MainWindow::noteProjectChangedForAnalysis()`: layer changes, tool content commits, recordings, undo and redo.
+      - **Amended in `v0.1.40.10`:**
+        - **The bug:** MindWave edits reached neither the analysis nor prepared playback. `MindWaveController::mindWavesChanged()` invalidated the canvas and content caches but not `PlaybackController`, so a MindWave driving a layer's gain or a filter parameter left Repeat/Loop audio and the report stale.
+        - **The fix:** that handler now calls `playbackController_->invalidate()`. `PlaybackController::invalidated()` is connected to `noteProjectChangedForAnalysis()` too, so any edit that changes what's heard, present or future, also reaches the analysis. The explicit calls stay, because some changes (e.g. a layer rename) emit `layersChanged()` without invalidating playback. A duplicate notification is harmless: marking stale is idempotent, and the debounce coalesces.
+        - The handler returns early while the window is still constructing (no panel yet).
+      - **Test-infrastructure fix found on the way:** `QStandardPaths::setTestModeEnabled()` gives *every* test process the same settings location. A `MainWindowTest` run in the background therefore rewrote `analysisAutoUpdate` mid-way through a foreground run's "remembered across sessions" check, and the check failed at random. `tests/main.cpp` now points `QSettings`' user-scope ini path at a per-process temp folder (`sound-mind-test-settings-<pid>`), removed on exit.
       - With Auto-update on, a change requests cancellation of a running analysis at once (`cancelledAnalysisCount()` is the test hook) and restarts a 300 ms single-shot timer (`kAutoAnalyzeDelayMs`). When the timer fires, it analyzes. If the cancelled run is still winding down, it retries after another 300 ms. A burst of edits therefore costs one analysis.
       - `analysisStale_` covers a change that lands after a run has finished computing but before the poll picks up its result: the report is shown, then immediately marked out of date, and the pending timer re-runs it.
       - Turning it on analyzes at once if there's no report or it's stale. `setProject()` schedules an analysis of the newly opened project.
@@ -2395,6 +2400,7 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
     - **Tests:**
       - `AnalysisPanelTest`, 4 cases: controls above the tabs, one of each; Auto-update emits and its setter doesn't; each overlay emits only while checked, with new and cleared reports.
       - `CanvasWidgetTest`, 2 cases: each overlay draws its colors and clears.
+      - `MainWindowTest` (`v0.1.40.10`): MindWave and Filter-configuration edits mark the report out of date and invalidate prepared playback; with Auto-update on, a MindWave edit re-analyzes.
       - `MainWindowTest`, 2 cases: Auto-update analyzes on toggle, a change during a run cancels it and the next report reflects every change, and the setting is remembered; overlays reach the canvas and go with a project switch.
 
 254. **Slider ranges narrower than typed ranges: Brush Size and Stamp Interval.** Settled in `v0.1.40.8`, a user request from manual testing, shipped between milestones.

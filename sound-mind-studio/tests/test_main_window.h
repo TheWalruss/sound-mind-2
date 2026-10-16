@@ -356,4 +356,5 @@ private slots:
     void autoAnalyzeRunsOnChangesAndInterruptsARunningAnalysis();
     void analysisOverlaysReachTheCanvas();
     void pitchSpikeFilterIsRemembered();
+    void mindWaveAndFilterEditsMarkAnalysisAndPlaybackStale();
 };

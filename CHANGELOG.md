@@ -6,6 +6,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.10] - 2026-10-16
+
+### Fixed
+
+- **Editing a MindWave now updates the Analysis panel and playback.** Editing a MindWave left the analysis showing "Up to date" and never re-ran Auto-update. It also didn't refresh the audio already prepared for Repeat playback or Loop Mode. Every edit that changes what you hear now marks the analysis out of date (re-running it with Auto-update on) and refreshes prepared playback.
+
 ## [0.1.40.9] - 2026-10-16
 
 ### Added

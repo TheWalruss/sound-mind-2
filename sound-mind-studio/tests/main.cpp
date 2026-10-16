@@ -21,6 +21,8 @@
 #include <memory>
 #include <vector>
 
+#include <QCoreApplication>
+#include <QSettings>
 #include <QApplication>
 #include <QDir>
 #include <QFile>
@@ -198,6 +200,19 @@ int main(int argc, char** argv) {
     // throwaway test project paths - the real, installed Studio's own
     // persisted settings on this machine.
     QStandardPaths::setTestModeEnabled(true);
+    // ...and gives this process its own ini folder. Test mode alone shares
+    // one location between every test process, so two runs at once (a
+    // long MainWindowTest run in the background, say) overwrote each
+    // other's settings mid-test and broke "remembered across sessions"
+    // checks at random.
+    const QString settingsDirectory =
+        QDir(QDir::tempPath())
+            .filePath(QStringLiteral("sound-mind-test-settings-%1").arg(QCoreApplication::applicationPid()));
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory);
+    struct RemoveOnExit {
+        QString path;
+        ~RemoveOnExit() { QDir(path).removeRecursively(); }
+    } const removeSettings{settingsDirectory};
 
     // The offscreen platform looks for fonts only in Qt's own lib/fonts,
     // which Qt no longer ships - so text (the Text tool, v0.Y.78.1) would
