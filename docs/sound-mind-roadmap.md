@@ -1173,6 +1173,28 @@ See `docs/sound-mind-architecture.md`'s Decision #225 for the full implementatio
 
 This sequences everything in the backlog blocks above into concrete Beta Readiness Loop iterations. The backlog bullets stay as they are, as the record of what was asked; this section is the order of work. Roadmap `v0.Y.70.1` corresponds to version `0.1.30.x` (the current build is `0.1.29.6`). Each milestone bumps `Z`; each installment within it bumps `W`. Every installment follows the normal CLAUDE.md workflow.
 
+**Slot → version mapping.** A roadmap label (`v0.Y.N.1`) is a planning slot. The shipped version (`0.Y.Z.W`, `CHANGELOG.md`) counts actual builds, and `Z` was reset to 0 by the file-format `Y` bump at `0.1.0.0` (2026-09-25). This table is the record of which builds each slot shipped as.
+- **When a milestone starts:** fill in its row.
+- **When an installment ships:** extend its row's range.
+- **Never renumber a slot.**
+
+| Roadmap slot | Milestone | Shipped as | Architecture Decisions |
+|---|---|---|---|
+| `v0.Y.70.1` | Test-suite and CI health | `0.1.30.1` (follow-up `0.1.34.2`) | #229 |
+| `v0.Y.71.1` | Correctness bugs | `0.1.31.1` | #230 |
+| `v0.Y.72.1` | Remove MindWave Superpositions | `0.1.32.1` | #231 |
+| `v0.Y.73.1` | Numeric input overhaul and intensity units | `0.1.33.1`-`0.1.33.3` | #232-#234 |
+| `v0.Y.74.1` | Brush and Paint tool | `0.1.34.1` | #235 |
+| `v0.Y.75.1` | Record and Loop | `0.1.35.1`-`0.1.35.2` | #236-#237 |
+| `v0.Y.76.1` | Filter preview | `0.1.36.1` | #238 |
+| `v0.Y.77.1` | Paths, selection and context menus | `0.1.37.1`-`0.1.37.4` | #239-#242 |
+| `v0.Y.78.1` | Text tool | `0.1.38.1` | #243 |
+| `v0.Y.79.1` | Generators | `0.1.39.1`-`0.1.39.4` (plus the codec fix `0.1.39.5`) | #244-#248 |
+| `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.6` | #249-#252 |
+| `v0.Y.81.1` | Operation history persisted with the project | *(planned: `0.1.41.x`)* | |
+| `v0.Y.82.1` | Macro recording and macro video export | *(planned: `0.1.42.x`)* | |
+| - | Beta readiness check | *(after `v0.Y.82.1`)* | |
+
 **Standing decision (2026-10-15): disregard file-format and backward-compatibility concerns completely until after Beta.** Old projects don't need to keep loading, so there are no lenient-read shims, migration paths or load-time notices for changes made before Beta. This overrides the usual "ask on file-format compatibility" stance for this period only.
 
 **Ordering rationale.**

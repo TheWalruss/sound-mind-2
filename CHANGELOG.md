@@ -263,6 +263,7 @@ Pre-Beta Plan milestone `v0.Y.71.1`: correctness bugs from manual testing.
 - **Deleting a layer that Mind Grain strokes read from now offers to delete those strokes too,** instead of refusing. Choose Yes to delete the layer and the dependent strokes, or Cancel to keep everything. To keep the layer's content but get it out of the way, hide it instead.
 - Export always uses the composite's Stream-mode audio now, even for Pooled layers.
 
+## [0.1.30.1] - 2026-10-15
 
 Pre-Beta Plan milestone `v0.Y.70.1`: test-suite and CI health.
 
