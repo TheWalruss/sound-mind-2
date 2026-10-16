@@ -50,8 +50,11 @@ ToolPaletteController::ToolPaletteController(CanvasWidget* canvas, ToolConfigura
         canvas_->update();
         emit contentChanged(layer);
     });
+    connect(pickController_, &PickController::rubberBandChanged, this,
+            [this]() { canvas_->setPickRubberBand(pickController_->rubberBand()); });
     connect(pickController_, &PickController::selectionChanged, this, [this]() {
         canvas_->setPickSelectionBounds(pickController_->selectionBounds());
+        canvas_->setPickMultiSelectionBounds(pickController_->multiSelectionBounds());
         // Pre-fills the panel with the newly-picked object's own settings,
         // ready to reopen and adjust - see docs/sound-mind-design.md's
         // "Pick". Left showing whatever it last displayed on a deselect
@@ -332,9 +335,33 @@ std::optional<sound_mind::core::FilterPreviewSelection> ToolPaletteController::c
     return selectionController_->committedSelection();
 }
 
-void ToolPaletteController::copySelection() { selectionController_->copySelection(); }
+void ToolPaletteController::copySelection() {
+    selectionController_->copySelection();
+    objectsCopiedLast_ = false;
+}
 
-void ToolPaletteController::cutSelection() { selectionController_->cutSelection(); }
+void ToolPaletteController::cutSelection() {
+    selectionController_->cutSelection();
+    objectsCopiedLast_ = false;
+}
+
+bool ToolPaletteController::hasPickedObjects() const { return !pickController_->selectedOperationIds().empty(); }
+
+std::size_t ToolPaletteController::pickedObjectCount() const { return pickController_->selectedOperationIds().size(); }
+
+std::size_t ToolPaletteController::copyPickedObjects() {
+    const std::size_t copied = pickController_->copySelectedObjects();
+    if (copied > 0) {
+        objectsCopiedLast_ = true;
+    }
+    return copied;
+}
+
+bool ToolPaletteController::pastesObjects() const { return objectsCopiedLast_ && pickController_->hasObjectClipboard(); }
+
+std::vector<sound_mind::core::OperationId> ToolPaletteController::pastePickedObjects(sound_mind::core::LayerId layer) {
+    return pickController_->pasteObjects(layer);
+}
 
 std::optional<sound_mind::core::MindShotId> ToolPaletteController::captureMindShot(const std::string& name,
                                                                                      double fundamentalFrequencyHz,

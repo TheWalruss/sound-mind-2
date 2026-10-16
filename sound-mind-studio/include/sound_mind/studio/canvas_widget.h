@@ -256,6 +256,17 @@ public:
     /// @return The color.
     [[nodiscard]] static QColor guidePathColor(bool branching);
 
+    /// @brief Highlights each object of a Pick multi-selection, the same way
+    ///        a single Picked object is highlighted (Pre-Beta Plan
+    ///        `v0.Y.77.1`). Repaints.
+    /// @param bounds Each selected object's bounds; empty to clear.
+    void setPickMultiSelectionBounds(std::vector<sound_mind::core::TimeFrequencyRect> bounds);
+
+    /// @brief Shows (or, with `std::nullopt`, hides) the rubber-band
+    ///        rectangle Pick draws while dragging from empty space. Repaints.
+    /// @param band The rectangle.
+    void setPickRubberBand(std::optional<sound_mind::core::TimeFrequencyRect> band);
+
     /// @brief The canvas's current mouse-interaction mode.
     /// @return The mode set via setToolMode(); `None` by default.
     [[nodiscard]] ToolMode toolMode() const noexcept { return toolMode_; }
@@ -1087,6 +1098,8 @@ private:
     sound_mind::core::Path paintPreviewPath_;
     std::optional<std::size_t> previewSelectedNodeIndex_;
     std::optional<sound_mind::core::TimeFrequencyRect> pickSelectionBounds_;
+    std::vector<sound_mind::core::TimeFrequencyRect> pickMultiSelectionBounds_;
+    std::optional<sound_mind::core::TimeFrequencyRect> pickRubberBand_;
     std::optional<sound_mind::core::TimeFrequencyRect> selectionBounds_;
     std::optional<sound_mind::core::Path> selectionBoundary_;
     bool selectionHasMaskShape_ = false;

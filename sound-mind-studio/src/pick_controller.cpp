@@ -7,6 +7,8 @@
 #include "sound_mind/core/fill_operation.h"
 #include "sound_mind/core/gradient.h"
 #include "sound_mind/core/guide_path_operation.h"
+#include "sound_mind/core/mind_grain.h"
+#include "sound_mind/core/operation_clone.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/paint_operation.h"
@@ -128,8 +130,29 @@ bool PickController::pick(sound_mind::core::LayerId layer, sound_mind::core::Tim
         return selected;
     }
 
-    const auto operations = project_->operationLog().activeOperationsTargeting(layer);
     const double scale = sound_mind::core::frequencyToTimeScaleFor(project_->settings());
+    // Every press starts a fresh gesture - nothing left over from an
+    // earlier one (e.g. a right-click that never dragged) carries over.
+    rubberAnchor_.reset();
+    groupDragArmed_ = false;
+
+    // A press on any object of a multi-selection keeps it, arming a drag
+    // that moves them all together - see this method's own docs.
+    if (hasMultiSelection()) {
+        for (const sound_mind::core::OperationId id : multiSelection_) {
+            const sound_mind::core::Operation* operation = activeOperation(multiLayer_, id);
+            if (operation != nullptr && containsPoint(operation->bounds(), point, kMinimumPickPaddingSeconds,
+                                                      kMinimumPickPaddingSeconds * scale)) {
+                groupDragArmed_ = true;
+                dragAnchor_ = point;
+                dragCurrent_ = point;
+                dragMoved_ = false;
+                return true;
+            }
+        }
+    }
+
+    const auto operations = project_->operationLog().activeOperationsTargeting(layer);
 
     // Every candidate under this point, most-recent-first (an overlapping
     // newer stroke ordinarily wins over an older one underneath it) -
@@ -157,7 +180,13 @@ bool PickController::pick(sound_mind::core::LayerId layer, sound_mind::core::Tim
 
     if (candidates.empty()) {
         clearSelection();
+        // A drag from here draws a rubber band - see this method's own docs.
+        rubberAnchor_ = point;
+        rubberLayer_ = layer;
         return false;
+    }
+    if (hasMultiSelection()) {
+        multiSelection_.clear();  // replaced by the single selection below.
     }
 
     // Clicking a fresh spot selects whatever's topmost there, same as
@@ -218,7 +247,14 @@ bool PickController::selectOperation(sound_mind::core::LayerId layer, sound_mind
 }
 
 void PickController::clearSelection() {
-    const bool hadSelection = pickedOperationId_.has_value();
+    const bool hadSelection = pickedOperationId_.has_value() || !multiSelection_.empty();
+    multiSelection_.clear();
+    groupDragArmed_ = false;
+    rubberAnchor_.reset();
+    if (rubberBand_.has_value()) {
+        rubberBand_.reset();
+        emit rubberBandChanged();
+    }
     pickedOperationId_.reset();
     pickedOperation_ = nullptr;
     dragMoved_ = false;
@@ -291,6 +327,37 @@ std::optional<sound_mind::core::Path> PickController::selectedPath() const {
 }
 
 void PickController::continueMove(sound_mind::core::TimeFrequencyPoint point) {
+    if (rubberAnchor_.has_value() && !pathEditSession_.isActive()) {
+        rubberBand_ = sound_mind::core::TimeFrequencyRect{
+            std::min(rubberAnchor_->timeSeconds, point.timeSeconds), std::max(rubberAnchor_->timeSeconds, point.timeSeconds),
+            std::min(rubberAnchor_->frequencyHz, point.frequencyHz), std::max(rubberAnchor_->frequencyHz, point.frequencyHz)};
+        emit rubberBandChanged();
+        return;
+    }
+    if (groupDragArmed_) {
+        if (gridSnappingEnabled_) {
+            point = snapToGrid(point, frequencyGridConfig_, timingGridConfig_, project_->settings());
+        }
+        dragMoved_ = true;
+        dragCurrent_ = point;
+        const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
+        const double deltaTimeSeconds = point.timeSeconds - dragAnchor_.timeSeconds;
+        const double deltaFrequencyBins = frequencyBinDelta(dragAnchor_, point, config);
+        const auto bounds = multiSelectionBounds();
+        if (!bounds.empty()) {
+            sound_mind::core::TimeFrequencyRect all = bounds.front();
+            for (const auto& rect : bounds) {
+                all.startTimeSeconds = std::min(all.startTimeSeconds, rect.startTimeSeconds);
+                all.endTimeSeconds = std::max(all.endTimeSeconds, rect.endTimeSeconds);
+                all.lowFrequencyHz = std::min(all.lowFrequencyHz, rect.lowFrequencyHz);
+                all.highFrequencyHz = std::max(all.highFrequencyHz, rect.highFrequencyHz);
+            }
+            previewPath_ =
+                outlinePathFor(sound_mind::core::translated(all, deltaTimeSeconds, deltaFrequencyBins, config));
+        }
+        emit pathChanged();
+        return;
+    }
     if (pathEditSession_.isActive()) {
         if (gridSnappingEnabled_) {
             point = snapToGrid(point, frequencyGridConfig_, timingGridConfig_, project_->settings());
@@ -322,6 +389,14 @@ void PickController::continueMove(sound_mind::core::TimeFrequencyPoint point) {
 }
 
 void PickController::endMove() {
+    if (rubberAnchor_.has_value() && !pathEditSession_.isActive()) {
+        endRubberBand();
+        return;
+    }
+    if (groupDragArmed_) {
+        endGroupMove();
+        return;
+    }
     if (pathEditSession_.isActive()) {
         // continueDrag() already applied the drag directly to the
         // session's own preview - nothing further to do until
@@ -392,6 +467,12 @@ void PickController::applyPasteBlendMode(sound_mind::core::BlendMode mode) {
 void PickController::deleteSelection() {
     if (pathEditSession_.isActive() && pathEditSession_.selectedNodeIndex().has_value()) {
         deleteSelectedPathNode();
+        return;
+    }
+    if (hasMultiSelection()) {
+        const auto ids = multiSelection_;
+        paintController_->deleteOperations(ids, tr("Deleted %n picked object(s)", "", static_cast<int>(ids.size())));
+        clearSelection();
         return;
     }
     if (!pickedOperationId_.has_value()) {
@@ -503,6 +584,172 @@ void PickController::cancelPathEdit() {
     pathEditSession_.end();
     previewPath_ = sound_mind::core::Path{};
     emit pathChanged();
+}
+
+const sound_mind::core::Operation* PickController::activeOperation(sound_mind::core::LayerId layer,
+                                                                   sound_mind::core::OperationId id) const {
+    if (project_ == nullptr) {
+        return nullptr;
+    }
+    for (const sound_mind::core::Operation* operation : project_->operationLog().activeOperationsTargeting(layer)) {
+        if (operation->id() == id) {
+            return operation;
+        }
+    }
+    return nullptr;
+}
+
+std::size_t PickController::selectOperations(sound_mind::core::LayerId layer,
+                                             const std::vector<sound_mind::core::OperationId>& ids) {
+    std::vector<sound_mind::core::OperationId> found;
+    for (const sound_mind::core::OperationId id : ids) {
+        if (activeOperation(layer, id) != nullptr) {
+            found.push_back(id);
+        }
+    }
+    if (found.size() == 1) {
+        selectOperation(layer, found.front());
+        return 1;
+    }
+    clearSelection();
+    if (found.empty()) {
+        return 0;
+    }
+    multiSelection_ = std::move(found);
+    multiLayer_ = layer;
+    emit selectionChanged();
+    return multiSelection_.size();
+}
+
+std::vector<sound_mind::core::OperationId> PickController::selectedOperationIds() const {
+    if (!multiSelection_.empty()) {
+        return multiSelection_;
+    }
+    if (pickedOperationId_.has_value()) {
+        return {*pickedOperationId_};
+    }
+    return {};
+}
+
+std::vector<sound_mind::core::TimeFrequencyRect> PickController::multiSelectionBounds() const {
+    std::vector<sound_mind::core::TimeFrequencyRect> bounds;
+    for (const sound_mind::core::OperationId id : multiSelection_) {
+        if (const sound_mind::core::Operation* operation = activeOperation(multiLayer_, id)) {
+            bounds.push_back(operation->bounds());
+        }
+    }
+    return bounds;
+}
+
+void PickController::endRubberBand() {
+    const auto band = rubberBand_;
+    const sound_mind::core::LayerId layer = rubberLayer_;
+    rubberAnchor_.reset();
+    rubberBand_.reset();
+    emit rubberBandChanged();
+    if (!band.has_value() || project_ == nullptr) {
+        return;
+    }
+    // Every Pickable object lying fully inside the band (user decision,
+    // 2026-10-16) - tombstones excluded.
+    std::vector<sound_mind::core::OperationId> inside;
+    for (const sound_mind::core::Operation* operation : project_->operationLog().activeOperationsTargeting(layer)) {
+        if (const auto* guide = dynamic_cast<const sound_mind::core::GuidePathOperation*>(operation);
+            guide != nullptr && guide->isEmpty()) {
+            continue;
+        }
+        if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(operation);
+            paint != nullptr && paint->path().nodes().empty()) {
+            continue;
+        }
+        const auto bounds = operation->bounds();
+        if (bounds.startTimeSeconds >= band->startTimeSeconds && bounds.endTimeSeconds <= band->endTimeSeconds &&
+            bounds.lowFrequencyHz >= band->lowFrequencyHz && bounds.highFrequencyHz <= band->highFrequencyHz) {
+            inside.push_back(operation->id());
+        }
+    }
+    selectOperations(layer, inside);
+}
+
+void PickController::endGroupMove() {
+    groupDragArmed_ = false;
+    if (!dragMoved_) {
+        return;
+    }
+    dragMoved_ = false;
+    const auto config = sound_mind::core::streamCodecConfigFor(project_->settings());
+    const double deltaTimeSeconds = dragCurrent_.timeSeconds - dragAnchor_.timeSeconds;
+    const double deltaFrequencyBins = frequencyBinDelta(dragAnchor_, dragCurrent_, config);
+
+    // Build every moved copy before appending any - append() may move the
+    // log's storage under the pointers activeOperation() returns.
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    std::vector<std::unique_ptr<sound_mind::core::Operation>> moved;
+    for (const sound_mind::core::OperationId id : multiSelection_) {
+        if (const sound_mind::core::Operation* operation = activeOperation(multiLayer_, id)) {
+            moved.push_back(operation->translatedCopy(log.reserveId(), deltaTimeSeconds, deltaFrequencyBins, config));
+        }
+    }
+    std::vector<sound_mind::core::OperationId> newIds;
+    for (auto& operation : moved) {
+        newIds.push_back(operation->id());
+        log.append(std::move(operation));
+    }
+    paintController_->notifyOperationsCommitted(
+        newIds.size(), tr("Moved %n picked object(s)", "", static_cast<int>(newIds.size())));
+    multiSelection_ = newIds;
+    previewPath_ = sound_mind::core::Path{};
+    paintController_->rebuildLayerContent(multiLayer_);
+    emit contentChanged(multiLayer_);
+    emit pathChanged();
+    emit selectionChanged();
+}
+
+std::size_t PickController::copySelectedObjects() {
+    const auto ids = selectedOperationIds();
+    if (ids.empty() || project_ == nullptr) {
+        return 0;
+    }
+    const sound_mind::core::LayerId layer = hasMultiSelection() ? multiLayer_ : pickedLayer_;
+    objectClipboard_.clear();
+    for (const sound_mind::core::OperationId id : ids) {
+        if (const sound_mind::core::Operation* operation = activeOperation(layer, id)) {
+            if (auto copy = sound_mind::core::cloneOperation(*operation, sound_mind::core::OperationId{0}, layer)) {
+                objectClipboard_.push_back(std::move(copy));
+            }
+        }
+    }
+    return objectClipboard_.size();
+}
+
+std::vector<sound_mind::core::OperationId> PickController::pasteObjects(sound_mind::core::LayerId layer) {
+    if (project_ == nullptr || objectClipboard_.empty()) {
+        return {};
+    }
+    sound_mind::core::OperationLog& log = project_->operationLog();
+    std::vector<sound_mind::core::OperationId> pasted;
+    for (const auto& source : objectClipboard_) {
+        if (const auto* paint = dynamic_cast<const sound_mind::core::PaintOperation*>(source.get())) {
+            if (const auto* grain = dynamic_cast<const sound_mind::core::MindGrainConfiguration*>(&paint->config());
+                grain != nullptr && !sound_mind::core::isLayerAbove(*project_, layer, grain->sourceLayerId())) {
+                continue;
+            }
+        }
+        auto copy = sound_mind::core::cloneOperation(*source, log.reserveId(), layer);
+        if (copy != nullptr) {
+            pasted.push_back(copy->id());
+            log.append(std::move(copy));
+        }
+    }
+    if (pasted.empty()) {
+        return {};
+    }
+    paintController_->notifyOperationsCommitted(pasted.size(),
+                                                tr("Pasted %n object(s)", "", static_cast<int>(pasted.size())));
+    paintController_->rebuildLayerContent(layer);
+    emit contentChanged(layer);
+    selectOperations(layer, pasted);
+    return pasted;
 }
 
 sound_mind::core::OperationId PickController::commitReplacement(

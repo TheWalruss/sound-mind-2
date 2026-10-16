@@ -1275,7 +1275,7 @@ Real-time path; the allocation-free and lock-free rules apply throughout.
 **Installments:**
 - ✅ **A** (`v0.1.37.1`, Decision #239): `GuidePathOperation`, the freehand Path tool, distinct canvas colors, Pick/edit/delete of guide paths; Smooth Nodes and Finish/Cancel Path removed.
 - ✅ **B** (`v0.1.37.2`, Decision #240): right-click entries for paths and branching paths (Stroke Path with Current Tool, Create Resonance Profile, Edit Path), the Branching Curve session also creating a branching path, and graying out menu entries that don't apply.
-- **C**: rectangle multi-select with Pick - delete, copy and move as one undo step.
+- ✅ **C** (`v0.1.37.3`, Decision #241): rectangle multi-select with Pick - delete, copy and move as one undo step.
 - **D**: merge selected paths into one branching path (minimum spanning tree).
 
 - **Path tool reworked as "paint without stamping".** After a stroke is drawn, its nodes are individually editable, as today.

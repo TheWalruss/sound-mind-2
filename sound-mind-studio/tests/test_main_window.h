@@ -344,4 +344,6 @@ private slots:
     void finishingABranchingCurveKeepsItAsABranchingPath();
     void rightClickingAGuidePathShowsPathEntries();
     void rightClickingEmptyCanvasGraysOutSelectionEntries();
+    void rectangleDragInPickModeSelectsAndDeletesSeveralObjects();
+    void copyAndPastePickedObjectsDuplicatesThem();
 };

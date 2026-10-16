@@ -19,6 +19,7 @@
 #include "sound_mind/studio/grid_config.h"
 #include "sound_mind/studio/paint_controller.h"
 #include "sound_mind/studio/pick_controller.h"
+#include "sound_mind/studio/undo_stack.h"
 
 using sound_mind::core::Clip;
 using sound_mind::core::FillOperation;
@@ -1736,4 +1737,167 @@ void PickControllerTest::selectedBranchesCoversStrokesAndGuidePaths() {
     QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.4, 600.0}));  // the guide path.
     QCOMPARE(controller.selectedBranches().size(), std::size_t{1});
     QVERIFY(controller.selectedIsGuidePath());
+}
+
+namespace {
+
+/// @brief Two small strokes near the bottom-left plus one long stroke that
+/// reaches past where a rubber band around the first two would end.
+struct ThreeStrokes {
+    OperationId first;
+    OperationId second;
+    OperationId wide;
+};
+
+ThreeStrokes addThreeStrokes(Project& project, LayerId layer) {
+    const auto tool = makeOpaqueTool(0.005);
+    return {addPaintOperation(project, layer, 0.10, 300.0, 0.15, 350.0, tool),
+            addPaintOperation(project, layer, 0.20, 400.0, 0.25, 450.0, tool),
+            addPaintOperation(project, layer, 0.10, 900.0, 0.80, 950.0, tool)};
+}
+
+/// @brief Drags a rubber band from (0.05 s, 250 Hz) to (0.30 s, 500 Hz).
+void rubberBandAroundTheFirstTwo(PickController& controller, LayerId layer) {
+    QVERIFY(!controller.pick(layer, TimeFrequencyPoint{0.05, 250.0}));
+    controller.continueMove(TimeFrequencyPoint{0.30, 500.0});
+    QVERIFY(controller.rubberBand().has_value());
+    controller.endMove();
+}
+
+}  // namespace
+
+void PickControllerTest::draggingFromEmptySpaceSelectsEveryObjectFullyInside() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto strokes = addThreeStrokes(project, layerId);
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    QSignalSpy bandSpy(&controller, &PickController::rubberBandChanged);
+
+    rubberBandAroundTheFirstTwo(controller, layerId);
+
+    QVERIFY(controller.hasMultiSelection());
+    QVERIFY(!controller.rubberBand().has_value());
+    QVERIFY(bandSpy.count() >= 2);  // shown while dragging, cleared on release.
+    const auto ids = controller.selectedOperationIds();
+    QCOMPARE(ids.size(), std::size_t{2});
+    QVERIFY(std::find(ids.begin(), ids.end(), strokes.first) != ids.end());
+    QVERIFY(std::find(ids.begin(), ids.end(), strokes.second) != ids.end());
+    QCOMPARE(controller.multiSelectionBounds().size(), std::size_t{2});
+}
+
+void PickControllerTest::aRubberBandAroundOneObjectMakesASingleSelection() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto strokes = addThreeStrokes(project, layerId);
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+
+    QVERIFY(!controller.pick(layerId, TimeFrequencyPoint{0.05, 250.0}));
+    controller.continueMove(TimeFrequencyPoint{0.17, 370.0});
+    controller.endMove();
+
+    QVERIFY(!controller.hasMultiSelection());
+    QCOMPARE(*controller.selectedOperationId(), strokes.first);
+}
+
+void PickControllerTest::deletingAMultiSelectionIsOneUndoStep() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addThreeStrokes(project, layerId);
+    sound_mind::studio::UndoStack undoStack;
+    PaintController paintController(&undoStack);
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    rubberBandAroundTheFirstTwo(controller, layerId);
+
+    controller.deleteSelection();
+
+    QVERIFY(controller.selectedOperationIds().empty());
+    QCOMPARE(undoStack.count(), std::size_t{1});
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    const auto painted = std::count_if(active.begin(), active.end(), [](const auto* operation) {
+        const auto* paint = dynamic_cast<const PaintOperation*>(operation);
+        return paint != nullptr && !paint->path().nodes().empty();
+    });
+    QCOMPARE(painted, 1);  // only the wide stroke is left.
+
+    undoStack.undo();
+    const auto restored = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(restored.size(), std::size_t{3});
+}
+
+void PickControllerTest::draggingAMultiSelectionMovesThemAllAsOneUndoStep() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    addThreeStrokes(project, layerId);
+    sound_mind::studio::UndoStack undoStack;
+    PaintController paintController(&undoStack);
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    rubberBandAroundTheFirstTwo(controller, layerId);
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.12, 320.0}));  // on the first stroke.
+    QVERIFY(controller.hasMultiSelection());                            // kept, not replaced.
+    controller.continueMove(TimeFrequencyPoint{0.22, 320.0});
+    QVERIFY(!controller.currentPreviewPath().nodes().empty());
+    controller.endMove();
+
+    QCOMPARE(undoStack.count(), std::size_t{1});
+    QVERIFY(controller.hasMultiSelection());
+    const auto bounds = controller.multiSelectionBounds();
+    QCOMPARE(bounds.size(), std::size_t{2});
+    for (const auto& rect : bounds) {
+        QVERIFY(rect.startTimeSeconds >= 0.19);  // both moved 0.1 s later.
+    }
+
+    undoStack.undo();
+    const auto active = project.operationLog().activeOperationsTargeting(layerId);
+    QCOMPARE(active.size(), std::size_t{3});
+    QVERIFY(qAbs(active.front()->bounds().startTimeSeconds - 0.10) < 1e-6);
+}
+
+void PickControllerTest::copyThenPasteDuplicatesTheObjectsAndSelectsThem() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const LayerId otherLayer = addBlankNormalLayer(project);
+    addThreeStrokes(project, layerId);
+    sound_mind::studio::UndoStack undoStack;
+    PaintController paintController(&undoStack);
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    rubberBandAroundTheFirstTwo(controller, layerId);
+
+    QCOMPARE(controller.copySelectedObjects(), std::size_t{2});
+    QVERIFY(controller.hasObjectClipboard());
+    const auto pasted = controller.pasteObjects(otherLayer);
+
+    QCOMPARE(pasted.size(), std::size_t{2});
+    QCOMPARE(project.operationLog().activeOperationsTargeting(otherLayer).size(), std::size_t{2});
+    QCOMPARE(project.operationLog().activeOperationsTargeting(layerId).size(), std::size_t{3});  // originals stay.
+    QCOMPARE(controller.selectedOperationIds(), pasted);
+    QCOMPARE(undoStack.count(), std::size_t{1});
+}
+
+void PickControllerTest::clickingElsewhereReplacesAMultiSelection() {
+    Project project = Project::createNew(testSettings());
+    const LayerId layerId = addBlankNormalLayer(project);
+    const auto strokes = addThreeStrokes(project, layerId);
+    PaintController paintController;
+    paintController.setProject(&project);
+    PickController controller(&paintController);
+    controller.setProject(&project);
+    rubberBandAroundTheFirstTwo(controller, layerId);
+
+    QVERIFY(controller.pick(layerId, TimeFrequencyPoint{0.5, 925.0}));  // the wide stroke.
+
+    QVERIFY(!controller.hasMultiSelection());
+    QCOMPARE(*controller.selectedOperationId(), strokes.wide);
 }

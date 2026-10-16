@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.37.3] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.77.1`, installment C.
+
+### Added
+
+- **Select several objects at once with Pick.** Drag a rectangle from empty canvas space to select everything lying fully inside it. Delete, move (drag any of them) or copy and paste them together, each as a single undo step. Copy/Paste of Picked objects works for a single object too.
+
 ## [0.1.37.2] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.77.1`, installment B.

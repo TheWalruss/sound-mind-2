@@ -2148,6 +2148,25 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `MainWindowTest`: Edit menu gray/restore; path entries enabled for a guide path; stroke as one undo step; the session keeping a branching path, and a Resonance from it matching the session's; guide-path right-click entries; empty-canvas entries grayed out.
       - The Edit-menu structure test no longer expects the Path Tool submenu removed in #239.
 
+241. **Rectangle multi-select with Pick, and copying Picked objects.** Settled in `v0.1.37.3`, Pre-Beta Plan milestone `v0.Y.77.1` installment C.
+    - **The selection model** keeps the existing single selection (`pickedOperationId_`) untouched and adds `multiSelection_` (two or more ids on `multiLayer_`). Everything single-object - edit path, tool configuration, blend mode, stack order - keeps working unchanged, and `selectOperations()` turns a one-object result into an ordinary single selection.
+    - **Rubber band:**
+      - A `pick()` that hits nothing records `rubberAnchor_`. `continueMove()` then grows `rubberBand_` (`rubberBandChanged()`, drawn dashed by `CanvasWidget::setPickRubberBand()`).
+      - `endMove()` selects every active object fully inside it on that layer (user decision), skipping tombstones.
+      - Every `pick()` first resets leftover gesture state, so a right-click that never dragged can't leave a stale anchor behind.
+    - **Bulk actions:**
+      - **Delete** goes through `PaintController::deleteOperations()` (already one undo step).
+      - **Move:** a press on any multi-selected object arms `groupDragArmed_`. The preview is the union outline, and `endGroupMove()` appends every `translatedCopy()` with one `notifyOperationsCommitted(n)`.
+      - **Copy** uses the new core `cloneOperation()` (`operation_clone.h`), which duplicates any concrete kind with a new id and layer, superseding nothing - unlike `translatedCopy()`.
+      - **Paste** (`pasteObjects()`) appends the clones as one step and selects them. It skips a Mind Grain stroke when the target layer isn't above its source.
+    - **Copy vs. region copy:** `MainWindow::copySelection()` copies a region Selection when there is one (unchanged), otherwise the Picked objects. `ToolPaletteController::objectsCopiedLast_` makes Paste paste whichever kind was copied last.
+    - **Menus:** the multi-selection right-click menu offers Copy and Delete. The Edit-menu conditions from #240 now treat any Pick (single or multi) as enabling Delete and Copy, and an object clipboard as enabling Paste.
+    - **Tests:**
+      - Core: two `cloneOperation()` cases.
+      - `PickControllerTest`: 6 cases - band selects only what's fully inside; one-object band; delete, move and paste each as one undo step; clicking elsewhere replaces.
+      - `CanvasWidgetTest`: highlights and band drawn.
+      - `MainWindowTest`: band by mouse, the menu, delete and undo; copy/paste of a Picked path.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

@@ -1261,6 +1261,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
     {
         ToolPaletteController* const palette = toolPaletteController_;
         const auto picked = [palette]() { return palette->selectedOperationId().has_value(); };
+        const auto anyPicked = [palette]() { return palette->hasPickedObjects(); };
         const auto editing = [palette]() { return palette->isPathEditActive(); };
         const auto singlePath = [palette]() { return palette->selectedPath().has_value(); };
         const auto selection = [palette]() { return palette->hasSelection(); };
@@ -1268,7 +1269,7 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
         editActionConditions_ = {
             {undoAction, [this]() { return undoStack_.canUndo(); }},
             {redoAction, [this]() { return undoStack_.canRedo(); }},
-            {deleteAction, [picked]() { return picked(); }},
+            {deleteAction, [anyPicked]() { return anyPicked(); }},
             {bringToFrontAction, [picked, editing]() { return picked() && !editing(); }},
             {sendToBackAction, [picked, editing]() { return picked() && !editing(); }},
             {bringForwardAction, [picked, editing]() { return picked() && !editing(); }},
@@ -1281,8 +1282,8 @@ MainWindow::MainWindow(QWidget* parent, sound_mind::core::AudioDeviceMode audioD
             {fillAction, selection},
             {applyFilterToSelectionAction, selection},
             {cutAction, selection},
-            {copyAction, selection},
-            {pasteAction, [palette]() { return palette->hasClipboard(); }},
+            {copyAction, [selection, anyPicked]() { return selection() || anyPicked(); }},
+            {pasteAction, [palette]() { return palette->hasClipboard() || palette->pastesObjects(); }},
             {captureMindShotAction, selection},
             {captureMindGrainAction, selection},
             {usePickedPathAsMindWaveShapeAction, singlePath},
@@ -3693,7 +3694,14 @@ void MainWindow::showCanvasContextMenu(sound_mind::core::TimeFrequencyPoint poin
     // Pre-Beta Plan v0.Y.77.1: a guide path (regular or branching) gets its
     // own entries, and entries that don't apply here are grayed out.
     QMenu menu(this);
-    if (toolPaletteController_->selectedOperationId().has_value()) {
+    if (toolPaletteController_->pickedObjectCount() > 1) {
+        // A rectangle multi-selection (v0.Y.77.1): what applies to them all.
+        QAction* copyObjects = menu.addAction(tr("Copy"));
+        connect(copyObjects, &QAction::triggered, this, &MainWindow::copySelection);
+        menu.addSeparator();
+        QAction* deleteObjects = menu.addAction(tr("Delete"));
+        connect(deleteObjects, &QAction::triggered, this, &MainWindow::deletePickedObject);
+    } else if (toolPaletteController_->selectedOperationId().has_value()) {
         const bool guide = toolPaletteController_->selectedIsGuidePath();
         const bool singlePath = toolPaletteController_->selectedPath().has_value();
         if (!guide || singlePath) {
@@ -3718,7 +3726,7 @@ void MainWindow::showCanvasContextMenu(sound_mind::core::TimeFrequencyPoint poin
     } else {
         const bool selection = toolPaletteController_->hasSelection();
         QAction* pasteAction = menu.addAction(tr("Paste"));
-        pasteAction->setEnabled(toolPaletteController_->hasClipboard());
+        pasteAction->setEnabled(toolPaletteController_->hasClipboard() || toolPaletteController_->pastesObjects());
         connect(pasteAction, &QAction::triggered, this, &MainWindow::paste);
         menu.addSeparator();
         QAction* fill = menu.addAction(tr("Fill Selection..."));
@@ -4105,7 +4113,17 @@ void MainWindow::noteBranchCurveGraftCandidate(sound_mind::core::TimeFrequencyPo
     branchCurveSession_.noteGraftCandidate(*operationId, point);
 }
 
-void MainWindow::copySelection() { toolPaletteController_->copySelection(); }
+void MainWindow::copySelection() {
+    // A region Selection is copied as pixels, as always; otherwise the
+    // Picked objects themselves are copied (v0.Y.77.1).
+    if (toolPaletteController_->hasSelection()) {
+        toolPaletteController_->copySelection();
+        return;
+    }
+    if (const std::size_t copied = toolPaletteController_->copyPickedObjects(); copied > 0) {
+        statusBar()->showMessage(tr("Copied %n object(s).", "", static_cast<int>(copied)), 5000);
+    }
+}
 
 void MainWindow::cutSelection() { toolPaletteController_->cutSelection(); }
 
@@ -4113,6 +4131,13 @@ void MainWindow::paste() {
     // The paste target is resolved fresh, right now - independent of
     // whichever layer the clipboard was originally copied from - per
     // SelectionController::pasteInto()'s own docs.
+    if (const auto layerId = layerController_->paintTargetLayerId();
+        layerId.has_value() && toolPaletteController_->pastesObjects()) {
+        // Copied objects paste as duplicates, selected, ready to drag into place.
+        setPickModeEnabled(true);
+        toolPaletteController_->pastePickedObjects(*layerId);
+        return;
+    }
     if (const auto layerId = layerController_->paintTargetLayerId(); layerId.has_value()) {
         const auto blendMode = selectionConfigurationPanel_->pasteBlendMode();
         if (const auto pastedId = toolPaletteController_->pasteInto(*layerId, blendMode); pastedId.has_value()) {

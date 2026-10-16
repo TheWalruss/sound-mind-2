@@ -2002,3 +2002,24 @@ void CanvasWidgetTest::aBranchingPathIsDrawnInADifferentColor() {
     QVERIFY(columnContainsColor(image, 70, CanvasWidget::guidePathColor(true)));
     QVERIFY(!columnContainsColor(image, 70, CanvasWidget::guidePathColor(false)));
 }
+
+void CanvasWidgetTest::pickMultiSelectionAndRubberBandAreDrawn() {
+    const Project project = Project::createNew(mouseConversionTestSettings());
+    CanvasWidget widget;
+    widget.setProject(&project);
+    widget.resize(100, 50);
+    widget.setToolMode(CanvasWidget::ToolMode::Pick);
+    const QImage before = widget.grab().toImage();
+
+    widget.setPickMultiSelectionBounds({sound_mind::core::TimeFrequencyRect{0.1, 0.3, 300.0, 600.0}});
+    const QImage withHighlight = widget.grab().toImage();
+    QVERIFY(withHighlight != before);
+
+    widget.setPickMultiSelectionBounds({});
+    widget.setPickRubberBand(sound_mind::core::TimeFrequencyRect{0.5, 0.8, 300.0, 900.0});
+    const QImage withBand = widget.grab().toImage();
+    QVERIFY(withBand != before);
+
+    widget.setPickRubberBand(std::nullopt);
+    QVERIFY(widget.grab().toImage() == before);
+}

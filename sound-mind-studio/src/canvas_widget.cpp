@@ -173,6 +173,16 @@ void CanvasWidget::setPreviewSelectedNodeIndex(std::optional<std::size_t> index)
     update();
 }
 
+void CanvasWidget::setPickMultiSelectionBounds(std::vector<sound_mind::core::TimeFrequencyRect> bounds) {
+    pickMultiSelectionBounds_ = std::move(bounds);
+    update();
+}
+
+void CanvasWidget::setPickRubberBand(std::optional<sound_mind::core::TimeFrequencyRect> band) {
+    pickRubberBand_ = band;
+    update();
+}
+
 void CanvasWidget::setPickSelectionBounds(std::optional<sound_mind::core::TimeFrequencyRect> bounds) {
     pickSelectionBounds_ = bounds;
     update();
@@ -619,6 +629,19 @@ void CanvasWidget::paintEvent(QPaintEvent* /*event*/) {
         paintPreviewPath_.nodes().empty()) {
         painter.setPen(QPen(Qt::white, 2));
         painter.drawRect(widgetRectFor(*pickSelectionBounds_));
+    }
+    if (!polarMode_ && project_ != nullptr && paintPreviewPath_.nodes().empty()) {
+        painter.setPen(QPen(Qt::white, 2));
+        for (const auto& bounds : pickMultiSelectionBounds_) {
+            painter.drawRect(widgetRectFor(bounds));
+        }
+    }
+    if (!polarMode_ && project_ != nullptr && pickRubberBand_.has_value()) {
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(Qt::black, 1));
+        painter.drawRect(widgetRectFor(*pickRubberBand_));
+        painter.setPen(QPen(Qt::white, 1, Qt::DashLine));
+        painter.drawRect(widgetRectFor(*pickRubberBand_));
     }
 
     // The current selection (Select) - see setSelectionBounds()'s/

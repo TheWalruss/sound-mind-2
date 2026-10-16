@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include <QObject>
 #include <QString>
@@ -182,7 +183,14 @@ public:
      * "cycle to the one under it".
      *
      * Clears the current selection (emitting selectionChanged()) if
-     * nothing is hit, or if no project is set.
+     * nothing is hit, or if no project is set. A drag starting where
+     * nothing is hit draws a **rubber-band rectangle** instead
+     * (continueMove()/rubberBand()); on endMove() every object lying fully
+     * inside it on `layer` is selected (selectOperations()).
+     *
+     * With a multi-selection, a press on any of its objects keeps the whole
+     * selection and arms a drag that moves them all together, as one
+     * undoable step; a press anywhere else replaces it as usual.
      *
      * @param layer Which layer's own paint objects to search.
      * @param point The click position, already converted to time/
@@ -298,6 +306,62 @@ public:
     ///        or branching).
     /// @return `true` for a `GuidePathOperation`.
     [[nodiscard]] bool selectedIsGuidePath() const;
+
+    /**
+     * @brief Selects several objects on `layer` at once (Pre-Beta Plan
+     *        `v0.Y.77.1`, rectangle multi-select) - exactly one id makes an
+     *        ordinary single selection; two or more make a multi-selection,
+     *        which can be deleted (deleteSelection()), moved (a drag starting
+     *        on any of them) or copied (copySelectedObjects()) together.
+     *        Ids not active on `layer` are skipped. Emits selectionChanged().
+     * @param layer The layer the objects are on.
+     * @param ids The objects to select.
+     * @return How many were selected.
+     */
+    std::size_t selectOperations(sound_mind::core::LayerId layer, const std::vector<sound_mind::core::OperationId>& ids);
+
+    /// @brief Whether two or more objects are selected together.
+    /// @return `true` for a multi-selection.
+    [[nodiscard]] bool hasMultiSelection() const noexcept { return multiSelection_.size() > 1; }
+
+    /// @brief Every selected object - the multi-selection, or the single
+    ///        selection as one id.
+    /// @return The ids; empty when nothing is selected.
+    [[nodiscard]] std::vector<sound_mind::core::OperationId> selectedOperationIds() const;
+
+    /// @brief Each multi-selected object's bounds, for drawing their
+    ///        highlights.
+    /// @return The bounds; empty without a multi-selection.
+    [[nodiscard]] std::vector<sound_mind::core::TimeFrequencyRect> multiSelectionBounds() const;
+
+    /// @brief The rubber-band rectangle being dragged out from empty space,
+    ///        if any - see pick()'s docs.
+    /// @return The rectangle, or `std::nullopt` when none is being dragged.
+    [[nodiscard]] std::optional<sound_mind::core::TimeFrequencyRect> rubberBand() const noexcept { return rubberBand_; }
+
+    /**
+     * @brief Copies every selected object onto this controller's object
+     *        clipboard (replacing what was there) - see
+     *        `sound_mind::core::cloneOperation()`.
+     * @return How many objects were copied (`0` with nothing selected).
+     */
+    std::size_t copySelectedObjects();
+
+    /// @brief Whether copySelectedObjects() has put anything on the object
+    ///        clipboard.
+    /// @return `true` once something was copied.
+    [[nodiscard]] bool hasObjectClipboard() const noexcept { return !objectClipboard_.empty(); }
+
+    /**
+     * @brief Pastes duplicates of the object clipboard onto `layer`, at the
+     *        same positions, as one undoable step, and selects them so they
+     *        can be dragged into place. A Mind Grain stroke is skipped when
+     *        `layer` isn't above its source layer (it couldn't be painted
+     *        there).
+     * @param layer The layer to paste onto.
+     * @return The pasted objects' ids; empty if nothing was pasted.
+     */
+    std::vector<sound_mind::core::OperationId> pasteObjects(sound_mind::core::LayerId layer);
 
     /// @brief The selected object's own layer.
     /// @return The layer, or `std::nullopt` if nothing is selected.
@@ -619,6 +683,10 @@ signals:
     /// @param layer Which layer's content changed.
     void contentChanged(sound_mind::core::LayerId layer);
 
+    /// @brief The rubber-band rectangle changed, appeared or went away -
+    ///        see rubberBand().
+    void rubberBandChanged();
+
 private:
     /// @brief Appends `replacement` (already constructed with its own
     ///        `supersedes()` pointing at the current selection) to the
@@ -642,6 +710,16 @@ private:
     /// @param reorder Which of `OperationLog`'s own reorder methods to
     ///        call.
     void reorderSelection(bool (sound_mind::core::OperationLog::*reorder)(sound_mind::core::OperationId));
+
+    /// @brief The active operation `id` on `layer`, or `nullptr`.
+    [[nodiscard]] const sound_mind::core::Operation* activeOperation(sound_mind::core::LayerId layer,
+                                                                     sound_mind::core::OperationId id) const;
+
+    /// @brief Commits the group drag armed by pick() - see its docs.
+    void endGroupMove();
+
+    /// @brief Selects whatever the finished rubber band encloses.
+    void endRubberBand();
 
     PaintController* paintController_;
     sound_mind::core::Project* project_ = nullptr;
@@ -671,6 +749,19 @@ private:
     ///        docs, and `PathEditSession`'s own class docs (Refactor &
     ///        Clean Up, `v0.Y.29.1`, Installment E).
     PathEditSession pathEditSession_;
+
+    /// @brief The multi-selection (two or more ids), all on multiLayer_;
+    ///        empty otherwise - see selectOperations().
+    std::vector<sound_mind::core::OperationId> multiSelection_;
+    sound_mind::core::LayerId multiLayer_ = 0;
+    /// @brief A drag armed on the multi-selection - see pick().
+    bool groupDragArmed_ = false;
+    /// @brief Where a rubber-band drag started, and on which layer.
+    std::optional<sound_mind::core::TimeFrequencyPoint> rubberAnchor_;
+    sound_mind::core::LayerId rubberLayer_ = 0;
+    std::optional<sound_mind::core::TimeFrequencyRect> rubberBand_;
+    /// @brief See copySelectedObjects().
+    std::vector<std::unique_ptr<sound_mind::core::Operation>> objectClipboard_;
 
     /// @brief Snap to Grid's own current state - see setGridSnapping()'s
     /// own docs.

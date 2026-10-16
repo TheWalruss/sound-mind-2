@@ -71,6 +71,7 @@ add_library(sound-mind-core
     src/tool_configuration_preview.cpp
     src/filter_preview.cpp
     src/guide_path_operation.cpp
+    src/operation_clone.cpp
     src/grid_preset.cpp
 )
 

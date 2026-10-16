@@ -1341,6 +1341,21 @@ regardless of the "Show bounding boxes" setting - ready to:
     new, undoable edit to the stroke. **Edit → Path Editing → Cancel Path Edit**
     discards it instead, leaving the stroke exactly as it was.
 
+**Selecting several objects at once:** drag from an empty part of the
+canvas to draw a dashed rectangle. Every object lying entirely inside it
+(on the active layer) is selected, each one highlighted. Then:
+
+- **Delete** removes them all.
+- **Drag any one of them** to move them all together.
+- **Edit → Clipboard → Copy** (Ctrl+C) copies them, and **Paste** (Ctrl+V)
+  adds duplicates at the same positions on the active layer, already
+  selected, so you can drag them where you want. (With a region
+  [Selection](#selection-and-fill) active, Copy copies the selected region
+  instead, as always; Paste pastes whichever you copied last.)
+
+Each of these is a single undo step, however many objects are involved.
+Clicking anything outside the selection replaces it as usual.
+
 Clicking empty canvas space deselects. If an object is entirely covered
 by another one on top of it, click the already-selected (covering)
 object again to select the one underneath - each further click on the
@@ -1350,7 +1365,8 @@ you reach the bottom.
 **Right-clicking** an object (in any tool mode, not just Pick) selects
 it and opens a small menu with **Edit Path**, **Bring to Front**,
 **Send to Back**, and **Delete** - the same actions as above, without
-reaching for the Edit menu. A [Path Tool](#path-tool) path (or a
+reaching for the Edit menu. With several objects selected, the menu
+offers **Copy** and **Delete** for all of them. A [Path Tool](#path-tool) path (or a
 branching path) also offers:
 
 - **Stroke Path with Current Tool** - paints along the path (every branch

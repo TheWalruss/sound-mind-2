@@ -345,6 +345,31 @@ public:
     /// @return `true` after a Copy/Cut.
     [[nodiscard]] bool hasClipboard() const;
 
+    /// @brief Whether anything is Picked - one object or several.
+    /// @return `true` with a single or multi Pick selection.
+    [[nodiscard]] bool hasPickedObjects() const;
+
+    /// @brief How many objects are Picked.
+    /// @return `0`, `1`, or the multi-selection's size.
+    [[nodiscard]] std::size_t pickedObjectCount() const;
+
+    /// @brief Copies the Picked objects - forwards to
+    ///        `PickController::copySelectedObjects()`, and makes Paste paste
+    ///        objects (not a region) until a region is copied again.
+    /// @return How many objects were copied.
+    std::size_t copyPickedObjects();
+
+    /// @brief Whether Paste should paste copied objects: some were copied,
+    ///        more recently than any region.
+    /// @return `true` when it should.
+    [[nodiscard]] bool pastesObjects() const;
+
+    /// @brief Pastes the copied objects onto `layer` - forwards to
+    ///        `PickController::pasteObjects()`.
+    /// @param layer The layer to paste onto.
+    /// @return The pasted objects' ids.
+    std::vector<sound_mind::core::OperationId> pastePickedObjects(sound_mind::core::LayerId layer);
+
     /// @brief Forwards to `PickController::selectedBranches()`.
     /// @return The Picked object's branches; empty with nothing suitable Picked.
     [[nodiscard]] std::vector<sound_mind::core::BranchGraft> selectedBranches() const;
@@ -532,6 +557,9 @@ private:
     PickController* pickController_ = nullptr;
     SelectionController* selectionController_ = nullptr;
     PathController* pathController_ = nullptr;
+    /// @brief Whether objects were copied more recently than a region - see
+    ///        pastesObjects().
+    bool objectsCopiedLast_ = false;
     ChordGeneratorController* chordGeneratorController_ = nullptr;
 };
 

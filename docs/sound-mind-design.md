@@ -377,6 +377,8 @@ Copies pixels from a source point to the cursor as you paint, offset consistentl
 
 Every stroke — a paintbrush stamp or a Smudge/Order-Chaos/Heal/Soften/Clone pass, freehand or Path-driven — becomes a **paint object**: the same non-destructive operation described in [Non-destructive Processing](#non-destructive-processing), now made directly interactive on the canvas rather than only editable through undo. Picking a paint object selects it by clicking within its bounding box (the same box [Show bounding boxes](#tool-configuration) can make visible for every object at once, used here for hit-testing a single click) — once picked, it can be copied, moved, modified, or deleted, independent of any pixel-region [Selection](#selection).
 
+Several objects can be picked at once by dragging a rectangle from an empty part of the canvas: everything lying entirely inside it is selected, and can then be deleted, moved or copied together, each as a single undoable step.
+
 Modifying a picked object means either of two things, and both are available at once: reopening its own tool configuration (the Panel or Wizard, pre-filled with exactly the settings it was painted with — see [Tool Configuration](#tool-configuration)) to change brush parameters or its gradient after the fact, or editing its Path directly — picking a paint object brings its nodes and handles back onto the canvas exactly as if it were still being drawn (see [Placing and Editing](#placing-and-editing)), so its shape can be reworked without repainting it from scratch.
 
 ### Selection

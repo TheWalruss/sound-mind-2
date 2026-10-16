@@ -106,4 +106,5 @@ private slots:
     // Canvas right-click context menu (direct user feedback).
     void contextMenuEventWithNoProjectEmitsNothing();
     void contextMenuEventEmitsContextMenuRequestedWithAConvertedPointAndGlobalPos();
+    void pickMultiSelectionAndRubberBandAreDrawn();
 };

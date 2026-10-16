@@ -72,4 +72,10 @@ private slots:
     void deletingAPickedGuidePathLeavesPaintedContentUntouched();
     void aDeletedGuidePathIsNoLongerPickable();
     void selectedBranchesCoversStrokesAndGuidePaths();
+    void draggingFromEmptySpaceSelectsEveryObjectFullyInside();
+    void aRubberBandAroundOneObjectMakesASingleSelection();
+    void deletingAMultiSelectionIsOneUndoStep();
+    void draggingAMultiSelectionMovesThemAllAsOneUndoStep();
+    void copyThenPasteDuplicatesTheObjectsAndSelectsThem();
+    void clickingElsewhereReplacesAMultiSelection();
 };
