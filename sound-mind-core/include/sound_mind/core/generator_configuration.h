@@ -16,25 +16,20 @@ namespace sound_mind::core {
  *        material - `docs/sound-mind-design.md`'s "Generators",
  *        `v0.Y.51.1`.
  *
- * **As of this milestone's own first installment, only `Lattice` is
- * actually functional** - `Fractal`/`Streaming` exist here so
- * `GeneratorConfiguration`/the Studio's own Generate dialog already have
- * a complete, forward-looking shape, but `generateContent()` returns
- * silent content for either, the same "groundwork, not yet functional"
- * state `ToolConfiguration`'s own `Clone` tool type already establishes
- * as this codebase's precedent for exactly this situation.
+ * `Lattice` shipped in `v0.Y.51.1`; `Fractal`, `Streaming` and `Noise` in
+ * Pre-Beta Plan `v0.Y.79.1`. The first three share the order/chaos axis
+ * (`GeneratorConfiguration::orderChaos`).
  */
 enum class GeneratorFamily {
     /// @brief A grid of coupled cells evolving under simple local rules -
     ///        an organic, self-similar texture across the whole canvas.
     Lattice,
-    /// @brief A branching grammar (the same kind behind fractal MindWave
-    ///        functions) grown directly into amplitude and phase - not
-    ///        yet implemented.
+    /// @brief A seeded branching grammar of tones - a trunk with branches
+    ///        at musical intervals, recursively.
     Fractal,
     /// @brief A genuinely time-varying signal, evolving continuously
-    ///        across the full duration of the layer - not yet
-    ///        implemented.
+    ///        across the full duration of the layer - voices driven by a
+    ///        coupled logistic-map lattice.
     Streaming,
     /// @brief Colored noise - see `NoiseConfiguration` (Pre-Beta Plan
     ///        `v0.Y.79.1`). Unlike the three families above it isn't placed

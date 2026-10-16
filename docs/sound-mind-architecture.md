@@ -2274,6 +2274,18 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - The old "unimplemented families are silent" test now covers Streaming only.
       - `GeneratorDialogTest`: Fractal offered with the slider.
 
+247. **The Streaming generator family.** Settled in `v0.1.39.4`, Pre-Beta Plan milestone `v0.Y.79.1` installment D, completing the milestone.
+    - **Dynamics:** `generateStreamingContent()` drives 8 voices with a coupled logistic-map lattice.
+      - Update: x_k ← (1-ε)f(x_k) + ε/2(f(x_{k-1}) + f(x_{k+1})), ring topology, ε = 0.3, clamped inside (0, 1).
+      - It steps every 4 frames and is linearly interpolated between steps, so voices glide rather than jump.
+      - Voice k's state sets its pitch (±half an octave around its home bin; homes span 20-80% of the range). Its neighbor's state sets its level (-18 to -36 dB). There's a 10-frame fade at the canvas ends.
+    - **Order/chaos → r:** about 2.9 (a stable fixed point - a steady drone) at Order; the edge of chaos (3.57) at the middle (evolving but coherent - the design doc's "rich" middle); 4.0 (fully chaotic wandering) at Chaos. The two halves are piecewise linear.
+    - **Rendering:** `ToneCanvas` was refactored around `drawTrajectory()` (per-frame bin and gain, with continuous phase accumulation at each frame's own frequency). Fractal's `draw(Partial)` now builds a trajectory too, so a gliding voice stays one continuous tone with no seams.
+    - **Studio:** `GeneratorDialog` offers Streaming on the order/chaos axis; generator-family Doxygen no longer calls Fractal/Streaming unimplemented.
+    - **Tests:**
+      - Core: audible, seeded, decodes finite; over 4 seeds, the frame-to-frame spectral-centroid change at Order is under a fifth of that at Chaos.
+      - The silent-family test is removed: every family is implemented.
+
 # NSGT Library Candidates
     - **Versioning note**: this milestone's own actually-shipped version bumped `Z` (`0.0.29.3` -> `0.0.30.1`) rather than continuing `W` under the prior `Z`, matching the more literal reading of the roadmap's own "`Z` increments for a feature release... `W`... including point releases with no new feature between them" (a refactor pass isn't a new feature) and this session's own recent precedent (Filter Layers' and GPU Compute Enablement's own multi-installment milestones each kept one `Z`, incrementing `W` per installment). This is a genuine inconsistency against the *earlier* Phase 2.5 "Refactor & Clean Up" milestone, whose own two installments (`v0.0.22.1`/`v0.0.23.1`) each bumped `Z` instead - flagged here rather than silently resolved, since both conventions have now actually been used in this project's own shipped history.
 

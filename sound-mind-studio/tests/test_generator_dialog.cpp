@@ -114,6 +114,7 @@ void GeneratorDialogTest::fractalIsOfferedOnTheOrderChaosAxis() {
     GeneratorDialog dialog;
     auto* family = dialog.findChild<QComboBox*>(QStringLiteral("generatorFamilyCombo"));
     QVERIFY(family->findData(static_cast<int>(GeneratorFamily::Fractal)) >= 0);
+    QVERIFY(family->findData(static_cast<int>(GeneratorFamily::Streaming)) >= 0);
 
     choose(family, static_cast<int>(GeneratorFamily::Fractal));
     dialog.findChild<QSlider*>(QStringLiteral("orderChaosSlider"))->setValue(-40);

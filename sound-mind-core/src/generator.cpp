@@ -183,34 +183,50 @@ public:
           loudest_(amplitude_.size(), 0.0f),
           phase_(amplitude_.size(), 0.0f) {}
 
-    /// @brief Draws `partial` as a narrow Gaussian ridge (about 1.4 bins
-    /// wide) with a short fade in and out, its phase advancing each frame by
-    /// `2*pi*f*hop/sampleRate` at its current frequency, so it decodes as a
-    /// clean, continuous tone. `initialPhase` is the phase at its first frame.
+    /// @brief Draws `partial` as a narrow Gaussian ridge with a short fade
+    /// (10% of its length) in and out - see drawTrajectory().
     void draw(const Partial& partial, double initialPhase) {
+        const auto first = static_cast<std::int64_t>(std::ceil(partial.startFrame));
+        std::vector<double> bins;
+        std::vector<double> gains;
         const double fade = std::max(1.0, 0.1 * partial.frames);
         const double gain = std::pow(10.0, partial.levelDb / 20.0);
-        const double phasePerHz = 2.0 * std::numbers::pi * config_.hopLength / config_.sampleRateHz;
-        double phase = initialPhase;
-        const auto first = static_cast<std::int64_t>(std::ceil(partial.startFrame));
         for (std::int64_t frame = first; static_cast<double>(frame) < partial.startFrame + partial.frames; ++frame) {
             const double t = static_cast<double>(frame) - partial.startFrame;
-            const double centre = partial.startBin + partial.driftBinsPerFrame * t;
-            const double frequencyHz = binIndexToFrequency(static_cast<float>(centre), config_);
-            if (frame > first) {
-                phase += phasePerHz * frequencyHz;
+            bins.push_back(partial.startBin + partial.driftBinsPerFrame * t);
+            gains.push_back(gain * std::min({1.0, (t + 1.0) / fade, (partial.frames - t) / fade}));
+        }
+        drawTrajectory(first, bins, gains, initialPhase);
+    }
+
+    /**
+     * @brief Draws one tone following `bins[i]` (fractional centre bin) at
+     * linear amplitude `gains[i]` in frame `firstFrame + i`: a narrow
+     * Gaussian ridge (about 1.4 bins wide) whose phase advances each frame
+     * by `2*pi*f*hop/sampleRate` at its current frequency, so it decodes as
+     * one clean, continuous tone even as it glides. Frames off the canvas
+     * are skipped (their phase still advances).
+     */
+    void drawTrajectory(std::int64_t firstFrame, const std::vector<double>& bins, const std::vector<double>& gains,
+                        double initialPhase) {
+        const double phasePerHz = 2.0 * std::numbers::pi * config_.hopLength / config_.sampleRateHz;
+        double phase = initialPhase;
+        for (std::size_t i = 0; i < bins.size(); ++i) {
+            const std::int64_t frame = firstFrame + static_cast<std::int64_t>(i);
+            const double centre = bins[i];
+            if (i > 0) {
+                phase += phasePerHz * binIndexToFrequency(static_cast<float>(centre), config_);
             }
             if (frame < 0 || frame >= static_cast<std::int64_t>(frameCount_)) {
                 continue;
             }
-            const double envelope = gain * std::min({1.0, (t + 1.0) / fade, (partial.frames - t) / fade});
             const auto lowBin = static_cast<std::int64_t>(std::floor(centre)) - 2;
             for (std::int64_t bin = lowBin; bin <= lowBin + 5; ++bin) {
                 if (bin < 0 || bin >= static_cast<std::int64_t>(config_.binCount)) {
                     continue;
                 }
                 const double distance = (static_cast<double>(bin) - centre) / 0.6;
-                const auto value = static_cast<float>(envelope * std::exp(-0.5 * distance * distance));
+                const auto value = static_cast<float>(gains[i] * std::exp(-0.5 * distance * distance));
                 if (value < 1e-7f) {
                     continue;
                 }
@@ -319,6 +335,77 @@ sound_mind::codec::StreamImage generateFractalContent(const GeneratorConfigurati
     ToneCanvas canvas(codecConfig, frameCount);
     for (const Partial& partial : partials) {
         canvas.draw(partial, (unit(rng) * 2.0 - 1.0) * std::numbers::pi);
+    }
+    return canvas.finish();
+}
+
+/**
+ * @brief `GeneratorFamily::Streaming` (Pre-Beta Plan `v0.Y.79.1`): a
+ * genuinely time-varying signal - see the design doc's "Generators".
+ *
+ * `kVoices` voices, spread across the frequency range, are driven by a
+ * coupled logistic-map lattice, `x_k <- (1-eps) f(x_k) + eps/2 (f(x_{k-1}) +
+ * f(x_{k+1}))` with `f(x) = r x (1-x)`, advanced every `kStepFrames` frames
+ * and interpolated between steps so each voice glides. A voice's state sets
+ * its pitch (up to half an octave either side of its own register) and its
+ * neighbor's state its level. `config.orderChaos` sets `r`: about 2.9
+ * toward order (the lattice settles to a fixed point - a steady drone),
+ * the edge of chaos (about 3.57) at the middle (evolving, but coherent),
+ * and 4.0 toward chaos (wandering without settling).
+ */
+sound_mind::codec::StreamImage generateStreamingContent(const GeneratorConfiguration& config,
+                                                         const sound_mind::codec::StreamCodecConfig& codecConfig,
+                                                         std::uint32_t frameCount) {
+    constexpr int kVoices = 8;
+    constexpr int kStepFrames = 4;
+    constexpr double kCoupling = 0.3;
+    constexpr double kFadeFrames = 10.0;
+    const double chaos = 1.0 - std::clamp((config.orderChaos + 1.0) / 2.0, 0.0, 1.0);
+    const double r = chaos <= 0.5 ? 2.9 + (3.57 - 2.9) * 2.0 * chaos : 3.57 + (4.0 - 3.57) * 2.0 * (chaos - 0.5);
+    const double binsPerOctave =
+        static_cast<double>(codecConfig.binCount > 1 ? codecConfig.binCount - 1 : 1) /
+        std::log2(std::max(1.0001, static_cast<double>(codecConfig.maxFrequencyHz) / codecConfig.minFrequencyHz));
+    std::mt19937_64 rng(config.seed);
+    std::uniform_real_distribution<double> unit(0.0, 1.0);
+
+    std::vector<double> state(kVoices);
+    for (double& x : state) {
+        x = 0.1 + 0.8 * unit(rng);
+    }
+    const auto logistic = [r](double x) { return r * x * (1.0 - x); };
+    const int steps = static_cast<int>(frameCount) / kStepFrames + 2;
+    std::vector<std::vector<double>> history(static_cast<std::size_t>(steps), std::vector<double>(kVoices));
+    for (int step = 0; step < steps; ++step) {
+        history[static_cast<std::size_t>(step)] = state;
+        std::vector<double> next(kVoices);
+        for (int k = 0; k < kVoices; ++k) {
+            const double left = logistic(state[static_cast<std::size_t>((k + kVoices - 1) % kVoices)]);
+            const double right = logistic(state[static_cast<std::size_t>((k + 1) % kVoices)]);
+            next[static_cast<std::size_t>(k)] =
+                std::clamp((1.0 - kCoupling) * logistic(state[static_cast<std::size_t>(k)]) +
+                               kCoupling / 2.0 * (left + right),
+                           1e-6, 1.0 - 1e-6);
+        }
+        state = std::move(next);
+    }
+
+    ToneCanvas canvas(codecConfig, frameCount);
+    for (int k = 0; k < kVoices; ++k) {
+        const double home = (0.2 + 0.6 * (k + 0.5) / kVoices) * (codecConfig.binCount - 1);
+        std::vector<double> bins(frameCount);
+        std::vector<double> gains(frameCount);
+        for (std::uint32_t frame = 0; frame < frameCount; ++frame) {
+            const auto step = static_cast<std::size_t>(frame / kStepFrames);
+            const double along = static_cast<double>(frame % kStepFrames) / kStepFrames;
+            const auto at = [&](std::size_t s, int voice) { return history[s][static_cast<std::size_t>(voice)]; };
+            const double x = at(step, k) + along * (at(step + 1, k) - at(step, k));
+            const int neighbor = (k + 1) % kVoices;
+            const double y = at(step, neighbor) + along * (at(step + 1, neighbor) - at(step, neighbor));
+            bins[frame] = home + (x - 0.5) * binsPerOctave;  // +-half an octave.
+            const double fade = std::min({1.0, (frame + 1.0) / kFadeFrames, (frameCount - frame) / kFadeFrames});
+            gains[frame] = std::pow(10.0, (-18.0 - 18.0 * (1.0 - y)) / 20.0) * fade;
+        }
+        canvas.drawTrajectory(0, bins, gains, (unit(rng) * 2.0 - 1.0) * std::numbers::pi);
     }
     return canvas.finish();
 }
@@ -475,6 +562,7 @@ sound_mind::codec::StreamImage generateContent(const GeneratorConfiguration& con
         case GeneratorFamily::Fractal:
             return generateFractalContent(config, codecConfig, frameCount);
         case GeneratorFamily::Streaming:
+            return generateStreamingContent(config, codecConfig, frameCount);
         default:
             return silentResult(codecConfig, frameCount);
     }

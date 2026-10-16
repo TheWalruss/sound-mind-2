@@ -19,10 +19,7 @@ namespace sound_mind::core {
  * addGeneratedLayer()` is what actually wraps this into a new `Layer`.
  *
  * @param config What to generate - see `GeneratorConfiguration`'s own
- *        docs. `GeneratorFamily::Fractal`/`GeneratorFamily::Streaming`
- *        aren't implemented yet - both return silent content, sized
- *        correctly, the same "groundwork, not yet functional" state
- *        `GeneratorFamily`'s own docs describe.
+ *        docs.
  * @param settings The project's own settings - determines the result's
  *        own canvas dimensions (`canvasWidth`/`binCount`) and frequency
  *        range, the same as any other freshly-encoded layer content.

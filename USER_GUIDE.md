@@ -538,6 +538,11 @@ takes a **Seed**: the same seed always reproduces exactly the same result
   thirds and hold their pitch - a rigid, repeating shape; toward Chaos,
   they sprout at random moments and intervals and slide in pitch; in
   between, the branching melodic shapes it's meant for.
+- **Streaming** - eight voices that keep changing over the whole length of
+  the layer, each gliding around its own register and swelling and fading,
+  all pushing and pulling on each other. Toward **Order** they settle into
+  a steady drone; around the middle they keep evolving without losing
+  shape; toward **Chaos** they wander restlessly.
 - **Noise** - colored noise across the whole canvas:
   - **Color** - **White** (equal energy at every frequency), **Pink**
     (equal energy per octave - the most natural-sounding), **Red /
@@ -2210,10 +2215,6 @@ with one continuous audio track underneath and no audible restarts in
 the exported file. There's still no panel to inspect what a recorded
 macro actually contains, and it isn't saved with the project.
 
-**Generators**: **+ Generate Layer** offers the Lattice, Fractal and Noise
-generators (see [Generating a Layer](#generating-a-layer)), and
-Noise is a MindWave type too. The design document's "Streaming" family is
-still being built.
 
 **Analysis Tools** have taken their first step too: the Layers panel's own
 per-layer **loudness indicator** (see [Working with Layers](#working-with-layers)

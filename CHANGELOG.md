@@ -6,6 +6,14 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.39.4] - 2026-10-16
+
+Pre-Beta Plan milestone `v0.Y.79.1` (Generators), installment D - completes the milestone.
+
+### Added
+
+- **Streaming generator.** **+ Generate Layer → Streaming** fills a layer with eight voices that keep evolving over its whole length, coupled to one another: a steady drone toward Order, restless wandering toward Chaos, and an evolving-but-coherent texture in between.
+
 ## [0.1.39.3] - 2026-10-16
 
 Pre-Beta Plan milestone `v0.Y.79.1` (Generators), installment C.
