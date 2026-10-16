@@ -198,6 +198,26 @@ void NumericFieldBase::setLogarithmicSlider(bool logarithmic) {
     refreshSlider();
 }
 
+void NumericFieldBase::setSliderRange(double minimum, double maximum) {
+    sliderRange_ = std::pair{minimum, std::max(minimum, maximum)};
+    setSingleStepInternal(singleStep_);
+    refreshSlider();
+}
+
+void NumericFieldBase::clearSliderRange() {
+    sliderRange_.reset();
+    setSingleStepInternal(singleStep_);
+    refreshSlider();
+}
+
+double NumericFieldBase::sliderMinimum() const noexcept {
+    return sliderRange_.has_value() ? std::clamp(sliderRange_->first, minimum_, maximum_) : minimum_;
+}
+
+double NumericFieldBase::sliderMaximum() const noexcept {
+    return sliderRange_.has_value() ? std::clamp(sliderRange_->second, sliderMinimum(), maximum_) : maximum_;
+}
+
 void NumericFieldBase::setRangeInternal(double minimum, double maximum) {
     minimum_ = minimum;
     maximum_ = std::max(minimum, maximum);
@@ -213,7 +233,8 @@ void NumericFieldBase::setDecimalsInternal(int decimals) {
 }
 
 void NumericFieldBase::setSingleStepInternal(double step) {
-    const double span = maximum_ - minimum_;
+    singleStep_ = step;
+    const double span = sliderMaximum() - sliderMinimum();
     const int positions =
         span > 0.0 ? static_cast<int>(std::lround(step / span * static_cast<double>(kSliderSteps))) : 1;
     const QSignalBlocker blocker(slider_);
@@ -261,23 +282,27 @@ double NumericFieldBase::clampAndRound(double value) const {
 }
 
 bool NumericFieldBase::usesLogarithmicSlider() const noexcept {
-    return logarithmic_ && minimum_ > 0.0 && maximum_ > minimum_;
+    return logarithmic_ && sliderMinimum() > 0.0 && sliderMaximum() > sliderMinimum();
 }
 
 double NumericFieldBase::sliderPositionToValue(int position) const {
+    const double low = sliderMinimum();
+    const double high = sliderMaximum();
     const double fraction = static_cast<double>(position) / static_cast<double>(kSliderSteps);
     if (usesLogarithmicSlider()) {
-        return minimum_ * std::pow(maximum_ / minimum_, fraction);
+        return low * std::pow(high / low, fraction);
     }
-    return minimum_ + fraction * (maximum_ - minimum_);
+    return low + fraction * (high - low);
 }
 
 int NumericFieldBase::valueToSliderPosition(double value) const {
-    if (maximum_ <= minimum_) {
+    const double low = sliderMinimum();
+    const double high = sliderMaximum();
+    if (high <= low) {
         return 0;
     }
-    const double fraction = usesLogarithmicSlider() ? std::log(value / minimum_) / std::log(maximum_ / minimum_)
-                                                    : (value - minimum_) / (maximum_ - minimum_);
+    const double fraction = usesLogarithmicSlider() ? std::log(value / low) / std::log(high / low)
+                                                    : (value - low) / (high - low);
     return static_cast<int>(std::lround(std::clamp(fraction, 0.0, 1.0) * static_cast<double>(kSliderSteps)));
 }
 

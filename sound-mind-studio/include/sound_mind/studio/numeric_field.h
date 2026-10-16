@@ -135,6 +135,29 @@ public:
     /// @param logarithmic `true` for a logarithmic slider.
     void setLogarithmicSlider(bool logarithmic);
 
+    /**
+     * @brief Narrows the slider to `[minimum, maximum]` without narrowing
+     *        what can be typed (`v0.1.40.8`): the slider covers the useful
+     *        range finely, while the text field still accepts anything in
+     *        the field's own range. A value beyond the slider range pins the
+     *        slider at that end. The slider range is clamped into the
+     *        field's range, now and whenever that changes.
+     * @param minimum The slider's low end.
+     * @param maximum The slider's high end.
+     */
+    void setSliderRange(double minimum, double maximum);
+
+    /// @brief Goes back to a slider spanning the field's whole range.
+    void clearSliderRange();
+
+    /// @brief The slider's low end - the field's minimum unless narrowed.
+    /// @return The value at the slider's start.
+    [[nodiscard]] double sliderMinimum() const noexcept;
+
+    /// @brief The slider's high end - the field's maximum unless narrowed.
+    /// @return The value at the slider's end.
+    [[nodiscard]] double sliderMaximum() const noexcept;
+
 protected:
     /// @brief Builds the slider/text/label layout and registers this field
     ///        for decimal-separator changes.
@@ -192,6 +215,11 @@ private:
     double value_ = 0.0;
     int decimals_ = 2;
     bool logarithmic_ = false;
+    /// @brief See setSliderRange(); unset means the whole field range.
+    std::optional<std::pair<double, double>> sliderRange_;
+    /// @brief The last setSingleStepInternal() step, re-applied when the
+    ///        slider's span changes.
+    double singleStep_ = 1.0;
     IntensityUnit intensityUnit_ = IntensityUnit::Decibels;
     /// @brief The suffix set via setSuffix(), restored when switching back
     ///        to `Decibels`.

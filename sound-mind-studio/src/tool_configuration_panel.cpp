@@ -26,6 +26,7 @@
 
 #include <stdexcept>
 
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/project.h"
@@ -545,6 +546,8 @@ ToolConfigurationPanel::ToolConfigurationPanel(QWidget* parent)
     sizeSpinBox_->setRange(0.001, 100.0);
     sizeSpinBox_->setSingleStep(0.01);
     sizeSpinBox_->setDecimals(3);
+    // The slider covers the useful sizes finely; typing reaches the rest (v0.1.40.8).
+    sizeSpinBox_->setSliderRange(0.001, kBrushSizeSliderMaximum);
     sizeSpinBox_->setValue(config_->size());
     // Not a screen-pixel radius - see ToolConfiguration::size()'s own
     // docs. Spelled out here since the unit isn't otherwise visible
@@ -1143,6 +1146,7 @@ void ToolConfigurationPanel::setPrincipalMode(sound_mind::core::PrincipalMode mo
 void ToolConfigurationPanel::updateStampIntervalAppearance() {
     const bool active = config_->stampMode() != StampMode::Stroke;
     stampIntervalSpinBox_->setEnabled(active);
+    updateStampIntervalSliderRange();
 
     // Own gate, not just `showStampModeAndInterval`'s own isFixedPlacement
     // check (updateSharedControlVisibility()) - a pattern is meaningless
@@ -1198,6 +1202,33 @@ void ToolConfigurationPanel::updateStampIntervalAppearance() {
     }
 }
 
+void ToolConfigurationPanel::updateStampIntervalSliderRange() {
+    if (project_ == nullptr) {
+        stampIntervalSpinBox_->clearSliderRange();
+        return;
+    }
+    const auto& settings = project_->settings();
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+    // The project's own extent along whichever axis the interval measures, in its unit.
+    double extent = sound_mind::core::frameIndexToTime(static_cast<double>(settings.canvasWidth), config);
+    switch (config_->stampMode()) {
+        case StampMode::AlongCurve:
+            if (imageMode_) {
+                extent = static_cast<double>(settings.canvasWidth);
+            }
+            break;
+        case StampMode::FrequencyAxis:
+            extent = imageMode_ ? static_cast<double>(config.binCount)
+                                : static_cast<double>(sound_mind::core::binIndexToFrequency(
+                                      static_cast<float>(config.binCount) - 1.0f, config));
+            break;
+        case StampMode::Stroke:
+        case StampMode::TimeAxis:
+            break;
+    }
+    stampIntervalSpinBox_->setSliderRange(0.001, extent);
+}
+
 void ToolConfigurationPanel::updateStampIntervalPattern() {
     const std::string text = stampIntervalPatternLineEdit_->text().toStdString();
     config_->setStampIntervalPatternText(text);
@@ -1225,6 +1256,7 @@ void ToolConfigurationPanel::updateStampIntervalPattern() {
 
 void ToolConfigurationPanel::setProject(sound_mind::core::Project* project) {
     project_ = project;
+    updateStampIntervalAppearance();  // the slider spans this project.
     refreshMindShots();
     refreshMindGrains();
     refreshResonanceProfiles();

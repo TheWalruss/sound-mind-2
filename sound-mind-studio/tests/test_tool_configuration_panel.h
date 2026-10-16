@@ -158,4 +158,6 @@ private slots:
     void tipThicknessIsShownOnlyForShapesThatUseItAndUpdatesTheConfig();
     void gradientBarKeepsAUsableHeightInACrowdedPanel();
     void stampIntervalUnitsFollowThePrincipalMode();
+    void brushSizeSliderStopsAtFiveButTypingGoesFurther();
+    void stampIntervalSliderSpansTheProjectInEachUnit();
 };

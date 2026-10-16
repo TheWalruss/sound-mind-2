@@ -25,4 +25,5 @@ private slots:
     void integerFieldRoundsAndEmitsAnInt();
     void intensityValueUnitShowsAndAcceptsTheCanonicalValue();
     void intensityUnitSelectorSwitchesEveryFieldInItsGroup();
+    void sliderRangeNarrowsOnlyTheSlider();
 };

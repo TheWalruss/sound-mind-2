@@ -238,3 +238,33 @@ void NumericFieldTest::intensityUnitSelectorSwitchesEveryFieldInItsGroup() {
     QCOMPARE(second.lineEdit()->text(), QStringLiteral("1"));
     QCOMPARE(first.intensityUnit(), IntensityUnit::Value);
 }
+
+// v0.1.40.8 - a slider range narrower than the typed range.
+void NumericFieldTest::sliderRangeNarrowsOnlyTheSlider() {
+    NumericField field;
+    field.setRange(0.0, 100.0);
+    field.setDecimals(2);
+    field.setSliderRange(0.0, 5.0);
+    QCOMPARE(field.sliderMaximum(), 5.0);
+    QSignalSpy spy(&field, &NumericField::valueChanged);
+
+    // The slider's far end is now 5, not 100.
+    field.slider()->setValue(field.slider()->maximum());
+    QCOMPARE(field.value(), 5.0);
+    field.slider()->setValue(field.slider()->maximum() / 2);
+    QCOMPARE(field.value(), 2.5);
+
+    // Typing still reaches the whole range; the slider just pins at its end.
+    field.lineEdit()->setText(QStringLiteral("40"));
+    emit field.lineEdit()->editingFinished();
+    QCOMPARE(field.value(), 40.0);
+    QCOMPARE(field.slider()->value(), field.slider()->maximum());
+
+    // A slider range outside the field's own range is clamped into it.
+    field.setSliderRange(-10.0, 500.0);
+    QCOMPARE(field.sliderMinimum(), 0.0);
+    QCOMPARE(field.sliderMaximum(), 100.0);
+    field.clearSliderRange();
+    QCOMPARE(field.sliderMaximum(), 100.0);
+}
+

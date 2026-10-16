@@ -186,6 +186,11 @@ public:
      */
     void setProject(sound_mind::core::Project* project);
 
+    /// @brief Where the Brush Size slider ends, in its seconds-radius units
+    ///        (`v0.1.40.8`) - a 10 s wide brush. Typing still accepts up to
+    ///        100.
+    static constexpr double kBrushSizeSliderMaximum = 5.0;
+
     /**
      * @brief Repopulates the Mind Shot picker from `project`'s own current
      *        `mindShots()` - call whenever that library might have changed
@@ -408,6 +413,15 @@ private:
     ///        see that method's own docs for why `TimeAxis`/`FrequencyAxis`
     ///        are deliberately excluded).
     void updateStampIntervalAppearance();
+    /// @brief Spans the Stamp Interval slider from (nearly) 0 to the open
+    ///        project's own extent in the interval's current unit
+    ///        (`v0.1.40.8`): its duration in seconds (Along Curve in Sound
+    ///        mode, Time Axis), its width in canvas pixels (Along Curve in
+    ///        Image mode), its top frequency in Hz (Frequency Axis, Sound
+    ///        mode) or its bin count (Frequency Axis, Image mode). With no
+    ///        project, the slider spans the whole typed range. Typing is
+    ///        never narrowed.
+    void updateStampIntervalSliderRange();
 
     /// @brief `stampIntervalPatternLineEdit_`'s own `textChanged` handler:
     ///        writes the raw text into `config_` unconditionally (so an

@@ -2396,6 +2396,20 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - `AnalysisPanelTest`, 4 cases: controls above the tabs, one of each; Auto-update emits and its setter doesn't; each overlay emits only while checked, with new and cleared reports.
       - `CanvasWidgetTest`, 2 cases: each overlay draws its colors and clears.
       - `MainWindowTest`, 2 cases: Auto-update analyzes on toggle, a change during a run cancels it and the next report reflects every change, and the setting is remembered; overlays reach the canvas and go with a project switch.
+
+254. **Slider ranges narrower than typed ranges: Brush Size and Stamp Interval.** Settled in `v0.1.40.8`, a user request from manual testing, shipped between milestones.
+    - **`NumericFieldBase::setSliderRange()` / `clearSliderRange()` / `sliderMinimum()` / `sliderMaximum()`:**
+      - The slider maps across a sub-range, clamped into the field's own range. The text field still accepts the whole range.
+      - A value beyond the slider range pins the slider at that end.
+      - The single step and the logarithmic mapping follow the slider range.
+      - This keeps every existing tool configuration and preset valid: narrowing the field range itself would have clamped stored values silently.
+    - **Brush Size:** the slider runs 0.001 to `ToolConfigurationPanel::kBrushSizeSliderMaximum` (5 s radius, a 10 s wide brush). The user suggested 5; the field still accepts up to 100.
+    - **Stamp Interval:**
+      - The user asked for "0 to project width". `updateStampIntervalSliderRange()` reads that in the interval's own unit: the project's duration in seconds (Along Curve in Sound mode, and Time Axis), `canvasWidth` pixels (Along Curve in Image mode), the top bin's frequency in Hz (Frequency Axis in Sound mode) or `binCount` bins (Frequency Axis in Image mode).
+      - For the two frequency-axis cases, "width" was read as the axis's own full extent, the only meaningful bound in those units.
+      - It's recomputed on stamp-mode, principal-mode and project changes. With no project, the slider spans the whole typed range.
+      - The low end is 0.001, not 0: an interval of 0 would mean infinitely many stamps.
+    - **Tests:** `NumericFieldTest::sliderRangeNarrowsOnlyTheSlider`; `ToolConfigurationPanelTest`, 2 cases (brush size end at 5 with typing beyond; the interval slider's end in each unit and mode, and unbounded with no project).
     - **Normalization** is a gain, not a processor:
       - `PlaybackEngine::setNormalizationGainDb()` multiplies the volume, ahead of the limiter.
       - `MainWindow` measures `integratedLoudnessLufs()` (the new BS.1770 integrated-only entry point, sharing `gatedIntegrated()` with `measureLoudness()`) on each buffer it loads for playback: a fresh composite, or a repeat-mode refresh.

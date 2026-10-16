@@ -220,6 +220,10 @@ Every number setting is a **slider with a text box** beside it:
   outside the allowed range are clamped to it, and anything that isn't a
   number (e.g. "1.2.3") just reverts. The box then shows the value it
   actually used.
+- A few sliders cover only the useful part of a wider range, so they're
+  easier to set finely: **Brush Size** and **Interval** in Tool
+  Configuration. You can still type a larger value into the text box; the
+  slider then just sits at its end.
 
 **Edit → Decimal Separator** chooses whether numbers are shown with a
 period (1.5) or a comma (1,5). It's saved with the project.
@@ -1204,8 +1208,9 @@ panel (off by default) with the brush's own settings:
   resolution) - unless **Edit → Image Mode** is checked (see below), which
   changes what that frequency-axis shape actually looks like. The panel's
   own default (`0.2`) is a comfortably visible stroke on a typical project
-  without covering too much of it at once. Hidden for Mind Shot/Mind
-  Grain, which don't use it.
+  without covering too much of it at once. The slider runs up to `5`; type
+  a value up to `100` into the box for a bigger brush. Hidden for Mind
+  Shot/Mind Grain, which don't use it.
 - **Stamp Mode** - how densely the brush's tip is stamped along a stroke's
   path, from a drop-down. **Hidden for Heal, Soften, Smudge, and
   Order/Chaos**, where it's fixed to Along Curve instead - manual testing
@@ -1230,7 +1235,10 @@ panel (off by default) with the brush's own settings:
   Frequency Axis - or, with **Edit → Image Mode** on, canvas pixels for
   Along Curve and frequency bins for Frequency Axis; the field's own unit
   label always says which) - it's disabled and ignored under Stroke, where
-  an interval wouldn't mean anything. This is the same idea as the legacy
+  an interval wouldn't mean anything. Its slider runs from 0 to the size of
+  the open project in that unit: the project's whole duration in seconds,
+  its width in pixels, or the full height of the frequency axis in Hz or
+  bins. Type a value into the box to go beyond that. This is the same idea as the legacy
   Studio's "Curve" tool. For
   Heal/Soften/Smudge/Order-Chaos, Interval is likewise hidden - it's always
   66% of Brush Size, so it stays proportional as Brush Size changes.

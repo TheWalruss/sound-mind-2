@@ -6,6 +6,13 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.40.8] - 2026-10-16
+
+### Changed
+
+- **The Brush Size slider now runs from 0 to 5** (it went to 100), so everyday sizes are easy to set. Type a larger value, up to 100, into its box if you need one.
+- **The Stamp Interval slider now runs from 0 to the size of the open project in the interval's unit:** the project's duration in seconds, its width in pixels in Image Mode, or the frequency axis's full height in Hz or bins for Frequency Axis. It used to run to 20,000 whatever the unit. Typing still reaches the old range.
+
 ## [0.1.40.7] - 2026-10-16
 
 ### Added

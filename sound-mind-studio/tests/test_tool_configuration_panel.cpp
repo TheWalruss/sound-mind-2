@@ -19,6 +19,7 @@
 #include "sound_mind/core/layer.h"
 #include "sound_mind/core/mind_grain.h"
 #include "sound_mind/core/mind_shot.h"
+#include "sound_mind/core/paint_application.h"
 #include "sound_mind/core/project.h"
 #include "sound_mind/core/project_settings.h"
 #include "sound_mind/studio/gradient_editor_widget.h"
@@ -1937,3 +1938,53 @@ void ToolConfigurationPanelTest::stampIntervalUnitsFollowThePrincipalMode() {
     selectMode(StampMode::AlongCurve);
     QVERIFY(interval->suffix().startsWith(QStringLiteral("s")));
 }
+
+// v0.1.40.8 - slider ranges sized for real use.
+void ToolConfigurationPanelTest::brushSizeSliderStopsAtFiveButTypingGoesFurther() {
+    ToolConfigurationPanel panel;
+    auto* size = panel.findChild<NumericField*>(QStringLiteral("sizeSpinBox"));
+    QVERIFY(size != nullptr);
+    QCOMPARE(size->sliderMaximum(), ToolConfigurationPanel::kBrushSizeSliderMaximum);
+    QCOMPARE(ToolConfigurationPanel::kBrushSizeSliderMaximum, 5.0);
+    QCOMPARE(size->maximum(), 100.0);
+    size->slider()->setValue(size->slider()->maximum());
+    QCOMPARE(size->value(), 5.0);
+}
+
+void ToolConfigurationPanelTest::stampIntervalSliderSpansTheProjectInEachUnit() {
+    ProjectSettings settings;
+    settings.canvasWidth = 400;
+    settings.binCount = 256;
+    Project project = Project::createNew(settings);
+    const auto config = sound_mind::core::streamCodecConfigFor(settings);
+    const double durationSeconds = sound_mind::core::frameIndexToTime(400.0, config);
+    const double topHz = sound_mind::core::binIndexToFrequency(255.0f, config);
+
+    ToolConfigurationPanel panel;
+    auto* stampModeCombo = panel.findChild<QComboBox*>(QStringLiteral("stampModeCombo"));
+    auto* interval = panel.findChild<NumericField*>(QStringLiteral("stampIntervalSpinBox"));
+    auto selectMode = [&](StampMode mode) {
+        stampModeCombo->setCurrentIndex(stampModeCombo->findData(QVariant::fromValue(static_cast<int>(mode))));
+    };
+    selectMode(StampMode::AlongCurve);
+    const double unbounded = interval->sliderMaximum();  // no project: the whole typed range.
+    QCOMPARE(unbounded, interval->maximum());
+
+    panel.setProject(&project);
+    QVERIFY(std::abs(interval->sliderMaximum() - durationSeconds) < 1e-3);  // seconds, Sound mode.
+    QVERIFY(interval->sliderMinimum() <= 0.001);
+    selectMode(StampMode::TimeAxis);
+    QVERIFY(std::abs(interval->sliderMaximum() - durationSeconds) < 1e-3);
+    selectMode(StampMode::FrequencyAxis);
+    QVERIFY(std::abs(interval->sliderMaximum() - topHz) < 1.0);  // Hz: the frequency axis's own extent.
+
+    panel.setPrincipalMode(sound_mind::core::PrincipalMode::Image);
+    QCOMPARE(interval->sliderMaximum(), 256.0);  // bins.
+    selectMode(StampMode::AlongCurve);
+    QCOMPARE(interval->sliderMaximum(), 400.0);  // canvas pixels.
+    QCOMPARE(interval->maximum(), 20000.0);  // typing is unchanged.
+
+    panel.setProject(nullptr);
+    QCOMPARE(interval->sliderMaximum(), unbounded);
+}
+
