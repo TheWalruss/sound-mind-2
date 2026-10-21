@@ -6,6 +6,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.42.1] - 2026-10-21
+
+Roadmap slot `v0.Y.80.3` (licensing and beta groundwork).
+
+### Added
+
+- **A licence.** Sound Mind Studio is copyright © 2026 Andreas Lundberg and now comes with an end-user licence (`LICENSE.md`): free to use for anything, including commercial work, and what you make with it is yours; no redistribution or modification. The installer's licence page shows it (it used to show a placeholder).
+- **Open-source notices.** `THIRD_PARTY_NOTICES.md` and a `licenses` folder ship with every download, listing every open-source component with its licence text. The source code of the LGPL and MPL components (Qt, FFmpeg, LAME, Eigen) is published in a [third-party sources release](https://github.com/TheWalruss/sound-mind-2/releases/tag/third-party-sources-1).
+- **About dialog:** shows the copyright and a licence summary, with **Licence...** and **Open-source notices...** buttons.
+- **Groundwork for a public beta:** a beta tester guide (`BETA.md`) and GitHub issue forms for bug reports and feedback. The beta isn't open yet.
+
+### Changed
+
+- **A smaller download.** The package no longer includes parts of Qt and Windows the Studio never uses: the software OpenGL renderer, the D3D and DXC shader compilers, Qt Network, and the touch-input, network-information and TLS plugins.
+
 ## [0.1.41.6] - 2026-10-16
 
 ### Fixed

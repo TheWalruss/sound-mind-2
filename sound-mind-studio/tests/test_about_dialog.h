@@ -8,4 +8,7 @@ class AboutDialogTest : public QObject {
 private slots:
     void showsTheAppNameAndVersion();
     void hasACloseButtonThatClosesTheDialog();
+    void showsTheCopyrightHolderAndLicenceSummary();
+    void theEmbeddedLicenceAndNoticesAreTheShippedFiles();
+    void licenceAndNoticesButtonsOpenReadableViewers();
 };

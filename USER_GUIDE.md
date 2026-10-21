@@ -34,7 +34,8 @@ in-app behavior is correct and this guide is due an update.
 23. [Resource Browser](#resource-browser)
 24. [Analysis](#analysis)
 25. [Performance](#performance)
-26. [What's Not Here Yet](#whats-not-here-yet)
+26. [Licence and Credits](#licence-and-credits)
+27. [What's Not Here Yet](#whats-not-here-yet)
 
 ## What Sound Mind Studio Is
 
@@ -2365,6 +2366,27 @@ expected, so you know what's actually driving it.
 - **Painting**: the **Heal** and **Soften** brushes blend each stroke
   toward a local average of the surrounding content - both stay fast
   regardless of how large you set the brush's own **Size**.
+
+## Licence and Credits
+
+Sound Mind Studio is copyright © 2026 Andreas Lundberg. You may use it free
+of charge for anything, including commercial work; everything you create
+with it is yours. You may not redistribute or modify it. The full terms are
+in `LICENSE.md`, next to the program.
+
+It includes open-source software by others - Qt, FFmpeg, LAME, JUCE (with
+FLAC and Ogg Vorbis), LibTIFF, PocketFFT, Eigen and more - each under its
+own licence. `THIRD_PARTY_NOTICES.md` and the `licenses` folder next to the
+program list them all with their licence texts. Qt and FFmpeg are separate
+DLLs you're free to replace with your own builds; their source code is
+published on the project's GitHub releases page.
+
+**Help → About Sound Mind Studio** shows the version and copyright, and
+its **Licence...** and **Open-source notices...** buttons open both
+documents.
+
+Sound Mind Studio collects nothing and contacts no server - it works
+entirely offline.
 
 ## What's Not Here Yet
 

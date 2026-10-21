@@ -1,0 +1,55 @@
+name: Bug report
+description: Something doesn't work, crashes, or sounds or looks wrong.
+labels: ["bug", "beta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing Sound Mind Studio! Please check the [known issues](https://github.com/TheWalruss/sound-mind-2/blob/main/BETA.md#known-issues) first.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Help → About shows it, e.g. 0.1.42.1.
+    validations:
+      required: true
+  - type: dropdown
+    id: architecture
+    attributes:
+      label: Windows version and processor
+      options:
+        - Windows 11, Arm (Snapdragon)
+        - Windows 11, x64 (Intel/AMD)
+        - Windows 10, x64 (Intel/AMD)
+        - Other (say below)
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What did you do?
+      description: Step by step, so it can be repeated.
+      placeholder: |
+        1. Created a project with ...
+        2. Imported ...
+        3. Clicked ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots, recordings or files
+      description: Drag files here. A small project (.smproj plus its folder, zipped) that shows the problem helps most. Only attach what you're happy to share publicly.
+  - type: checkboxes
+    id: settings
+    attributes:
+      label: Does it also happen with Hardware Acceleration off? (View menu)
+      options:
+        - label: Yes, it happens either way
+        - label: No, only with Hardware Acceleration on

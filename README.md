@@ -1,9 +1,9 @@
 # Sound Mind Studio
 
 Sound Mind Studio treats sound as a picture. It encodes audio as a
-spectrogram — a time/frequency image — that you can import, layer, and
-(eventually) paint on directly, then decodes it back into audio with no
-extra step. Horizontal position is time, vertical position is frequency,
+spectrogram — a time/frequency image — that you can import, layer, paint
+on, filter and analyze, then decodes it back into audio with no extra
+step. Horizontal position is time, vertical position is frequency,
 brightness is loudness, and color separates the left and right channels.
 Import a recording and you're looking at it; import an image and you're
 listening to it.
@@ -11,11 +11,10 @@ listening to it.
 This is a from-scratch C++/Qt/JUCE rewrite of an earlier Python prototype,
 built incrementally and tracked openly - see `CHANGELOG.md` for exactly
 what's implemented so far and `docs/sound-mind-roadmap.md` for what's
-planned next. The full creative vision (painting, filters, MindWaves,
-generators, a VST plugin, and more) is recorded in
-`docs/sound-mind-design.md`, but most of it is still ahead of where the
-Studio actually is today - **the guides below describe only what you can
-actually do right now.**
+planned next. The full creative vision is recorded in
+`docs/sound-mind-design.md`; parts of it (a VST plugin, among others) are
+still ahead of where the Studio actually is today - **the guides below
+describe only what you can actually do right now.**
 
 - **New to the Studio?** Start with [`QUICKSTART.md`](QUICKSTART.md) - one
   page, from launching the app to your first saved project.
@@ -24,6 +23,25 @@ actually do right now.**
 - **Building from source, or curious how it's built?**
   `docs/sound-mind-architecture.md` and `docs/tech-stack-decisions.md`
   cover the technical design; keep reading below for build instructions.
+
+## Licence
+
+Sound Mind Studio is copyright © 2026 Andreas Lundberg. It is **not** open
+source: it's free to download and use - for anything, including commercial
+work, and what you make with it is yours - but you may not redistribute or
+modify it. See [`LICENSE.md`](LICENSE.md) for the full terms. The source code
+is visible here, but being able to read it doesn't grant any further rights.
+
+It includes open-source components under their own licences - Qt, FFmpeg,
+LAME, JUCE, LibTIFF and others - listed with their licence texts in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and [`licenses/`](licenses/),
+which also ship with every download. The source code of the LGPL and MPL
+components is published in the
+[third-party sources release](https://github.com/TheWalruss/sound-mind-2/releases/tag/third-party-sources-1).
+In the app, **Help → About → Licence / Open-source notices** shows both.
+
+Sound Mind Studio is pre-release software. A public beta is being prepared
+- see [`BETA.md`](BETA.md).
 
 ## Building
 

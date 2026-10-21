@@ -1,0 +1,20 @@
+name: Feedback or idea
+description: Something is confusing, missing, slow, or could be better.
+labels: ["feedback", "beta"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Help → About shows it.
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Your feedback
+      description: What were you trying to do, and what got in the way (or what would you love to be able to do)?
+    validations:
+      required: true
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots or examples

@@ -52,3 +52,8 @@ data - keep them together.
   layers differently than the default Normal mix.
 - Read [`USER_GUIDE.md`](USER_GUIDE.md) for Loop Mode, Pooling, exporting
   audio/video, and every panel's full set of controls.
+
+---
+
+Sound Mind Studio is free to use, including for commercial work - see
+**Help → About** for the licence and the open-source notices.

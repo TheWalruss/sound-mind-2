@@ -60,6 +60,18 @@ function(rewrite_cross_links doc_content_var)
                    "(https://github.com/TheWalruss/sound-mind-2/blob/main/docs/sound-mind-design.md)"
                    doc_content "${doc_content}")
 
+    # The licence, notices, beta guide and licence-text folder (v0.1.42.1)
+    # aren't pages of this site either - pointed at GitHub the same way.
+    # (They also ship next to the program itself, and the About dialog shows
+    # the first two.)
+    foreach (repo_path IN ITEMS "LICENSE.md" "THIRD_PARTY_NOTICES.md" "BETA.md")
+        string(REPLACE "(${repo_path})"
+                       "(https://github.com/TheWalruss/sound-mind-2/blob/main/${repo_path})"
+                       doc_content "${doc_content}")
+    endforeach ()
+    string(REPLACE "(licenses/)" "(https://github.com/TheWalruss/sound-mind-2/tree/main/licenses)"
+           doc_content "${doc_content}")
+
     set(${doc_content_var} "${doc_content}" PARENT_SCOPE)
 endfunction()
 

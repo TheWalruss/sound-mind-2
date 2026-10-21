@@ -176,7 +176,7 @@ target_link_libraries(sound-mind-studio-lib
 target_compile_features(sound-mind-studio-lib PUBLIC cxx_std_23)
 target_compile_definitions(sound-mind-studio-lib PUBLIC SOUND_MIND_VERSION="${PROJECT_VERSION}")
 
-# resources/app.rc gives the built .exe its own icon (Explorer, taskbar,
+# resources/app.rc.in gives the built .exe its own icon (Explorer, taskbar,
 # Alt+Tab) via the RC compiler - a build-time step entirely separate from
 # assets/app.qrc above (Qt's own resource system, compiled into the lib and
 # read at runtime) - see that file's docs for why the two aren't merged.
@@ -187,9 +187,13 @@ target_compile_definitions(sound-mind-studio-lib PUBLIC SOUND_MIND_VERSION="${PR
 # generator, which understands .rc files intrinsically via MSBuild.
 enable_language(RC)
 
+# Since v0.1.42.1 app.rc also carries the executable's version and copyright
+# (Properties -> Details), filled in from project() by configure_file().
+configure_file(resources/app.rc.in "${CMAKE_CURRENT_BINARY_DIR}/app.rc" @ONLY)
+
 add_executable(sound-mind-studio WIN32
     src/main.cpp
-    resources/app.rc
+    "${CMAKE_CURRENT_BINARY_DIR}/app.rc"
 )
 
 target_link_libraries(sound-mind-studio
@@ -244,6 +248,19 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/docs/generated-user-docs/html/"
         COMPONENT Runtime
 )
 
+# The licence, the third-party notices and every licence text they refer to
+# ship next to the program (v0.1.42.1) - required by most of the third-party
+# licences, and what the About dialog's "Licence" and "Open-source notices"
+# describe. See docs/sound-mind-architecture.md's Decision #260.
+install(FILES "${CMAKE_SOURCE_DIR}/LICENSE.md" "${CMAKE_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+        DESTINATION .
+        COMPONENT Runtime
+)
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/licenses/"
+        DESTINATION licenses
+        COMPONENT Runtime
+)
+
 # vcpkg's own VCPKG_APPLOCAL_DEPS mechanism (see CMakePresets.json; ON for
 # both the debug and release presets) already copies every non-Qt runtime
 # DLL the built executable actually needs (FFmpeg's avcodec/avformat/
@@ -295,6 +312,13 @@ find_program(SOUND_MIND_QTPATHS
 # in v0.0.1.1's development. Harmless today only because packaging is
 # always done from the "release" preset - but a real bug waiting to
 # surface the first time someone packages a Debug build.
+# Beyond --no-translations, the package leaves out what a Qt Widgets app never
+# uses (v0.1.42.1): Mesa's software OpenGL (opengl32sw.dll), Microsoft's D3D
+# and DXC shader compilers (Qt's RHI only needs them for OpenGL/Quick
+# widgets, which this app has none of), and the TUIO touch, network-
+# information and TLS plugins - the TUIO plugin was the only reason Qt
+# Network shipped at all. Fewer components also means fewer licences to
+# honour - see THIRD_PARTY_NOTICES.md.
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(SOUND_MIND_WINDEPLOYQT_CONFIG_FLAG "--debug")
 else ()
@@ -305,7 +329,7 @@ if (SOUND_MIND_WINDEPLOYQT AND SOUND_MIND_QTPATHS)
     install(CODE "
         message(STATUS \"Deploying Qt runtime via windeployqt...\")
         execute_process(
-            COMMAND \"${SOUND_MIND_WINDEPLOYQT}\" --qtpaths \"${SOUND_MIND_QTPATHS}\" ${SOUND_MIND_WINDEPLOYQT_CONFIG_FLAG} --no-translations \"\${CMAKE_INSTALL_PREFIX}/sound-mind-studio.exe\"
+            COMMAND \"${SOUND_MIND_WINDEPLOYQT}\" --qtpaths \"${SOUND_MIND_QTPATHS}\" ${SOUND_MIND_WINDEPLOYQT_CONFIG_FLAG} --no-translations --no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler --skip-plugin-types generic,networkinformation,tls \"\${CMAKE_INSTALL_PREFIX}/sound-mind-studio.exe\"
             RESULT_VARIABLE _sound_mind_windeployqt_result
         )
         if (NOT _sound_mind_windeployqt_result EQUAL 0)

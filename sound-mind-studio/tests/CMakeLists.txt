@@ -67,6 +67,10 @@ add_executable(sound-mind-studio-tests
     test_waveform_preview_widget.cpp
 )
 
+# The repository root - test_about_dialog.cpp checks the embedded licence and
+# notices against the real LICENSE.md and THIRD_PARTY_NOTICES.md (v0.1.42.1).
+target_compile_definitions(sound-mind-studio-tests PRIVATE SOUND_MIND_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
 target_link_libraries(sound-mind-studio-tests
     PRIVATE
         sound-mind-studio-lib

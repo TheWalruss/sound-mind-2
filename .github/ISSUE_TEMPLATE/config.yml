@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Beta tester guide
+    url: https://github.com/TheWalruss/sound-mind-2/blob/main/BETA.md
+    about: What to test, how to report it, and what's already known.

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(SoundMind
-    VERSION 0.1.41.6
+    VERSION 0.1.42.1
     DESCRIPTION "Sound Mind Studio: a spectrogram-as-image DAW and graphics studio"
     LANGUAGES CXX C
 )
@@ -92,7 +92,12 @@ endif ()
 # installer, early, alongside the existing release zip - not replacing it.
 if (WIN32)
     set(CPACK_PACKAGE_NAME "Sound Mind Studio")
-    set(CPACK_PACKAGE_VENDOR "Sound Mind Project")
+    set(CPACK_PACKAGE_VENDOR "Andreas Lundberg")
+    # The installer's licence page (v0.1.42.1) - WiX takes .txt or .rtf, not
+    # .md, so a plain-text copy of LICENSE.md. Without this CPack showed its
+    # own generic placeholder text.
+    configure_file("${CMAKE_SOURCE_DIR}/LICENSE.md" "${CMAKE_BINARY_DIR}/LICENSE.txt" COPYONLY)
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_BINARY_DIR}/LICENSE.txt")
     set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
     set(CPACK_PACKAGE_INSTALL_DIRECTORY "Sound Mind Studio")
 

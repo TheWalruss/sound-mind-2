@@ -14,4 +14,11 @@
     <qresource prefix="/">
         <file>ChooseAgainLarge.png</file>
     </qresource>
+    <!-- The licence and third-party notices, shown by the About dialog
+         (v0.1.42.1) - embedded so they're readable even if the copies
+         installed next to the program go missing. -->
+    <qresource prefix="/legal">
+        <file alias="LICENSE.md">../../LICENSE.md</file>
+        <file alias="THIRD_PARTY_NOTICES.md">../../THIRD_PARTY_NOTICES.md</file>
+    </qresource>
 </RCC>

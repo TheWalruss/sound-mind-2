@@ -48,3 +48,9 @@ Reference notes from the initial planning conversation. Previous version was Pyt
 
 ## Open Decisions (not yet settled)
 - Plugin format support scope (VST3/AU) if applicable
+
+## Licensing (settled 2026-10-21)
+- **Sound Mind Studio:** proprietary, © 2026 Andreas Lundberg, under the end-user licence in `LICENSE.md`. Free to use, including commercially; no redistribution or modification. See `sound-mind-architecture.md` Decision #260.
+- **JUCE:** the JUCE 8 Starter EULA (free under $20,000 revenue in any 12 months), not its AGPLv3 option.
+- **Qt, FFmpeg, LAME:** LGPL. They're dynamically linked, replaceable DLLs, with their sources hosted in the `third-party-sources-N` GitHub releases.
+- **Rule for new dependencies:** no GPL-only or AGPL components (they would force the whole program open). Prefer permissive licences; LGPL only as a replaceable DLL. Re-run `tools/licenses/generate_notices.py` after any dependency change.
