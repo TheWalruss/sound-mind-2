@@ -6,6 +6,15 @@ follows [Keep a Changelog](https://keepachangelog.com/); versioning is the
 until `v1.0.0.0`; Y for a breaking file-format change; Z per feature
 milestone; W per binary build).
 
+## [0.1.43.2] - 2026-10-21
+
+Roadmap slot `v0.Y.81.1` (History), installment B.
+
+### Changed
+
+- **A project keeps its own copy of everything it was made from.** Imported audio, image and MIDI files are copied into the project's `sources` folder when you import them; recordings and every Loop take are saved there as lossless FLAC files; a layer brought in from another project is kept there too. A project no longer depends on files elsewhere on your computer, and its history can be replayed from the originals. The same file imported twice is only kept once. **Project folders grow accordingly** - especially with long Loop sessions, since every take is kept.
+- **Save As copies the sources** to the new project folder.
+
 ## [0.1.43.1] - 2026-10-21
 
 Roadmap slot `v0.Y.81.1` (History), installment A.

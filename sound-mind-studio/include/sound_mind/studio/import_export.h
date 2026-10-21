@@ -174,6 +174,36 @@ public:
                                            QString* errorMessage = nullptr, double offsetSeconds = 0.0);
 
 /**
+ * @brief Encodes an image file exactly as importImageFileInto() does,
+ *        without adding anything to a project - the shared step behind an
+ *        import and replaying one (`v0.1.43.2`).
+ * @param settings The project's settings (canvas size, codec).
+ * @param path The image file.
+ * @param mode How to fit it - see `ImageScalePickerDialog::Mode`.
+ * @param polarParams Required for `Mode::Polar`.
+ * @param errorMessage Receives the reason on failure; may be `nullptr`.
+ * @return The encoded content, or `std::nullopt` on failure.
+ */
+[[nodiscard]] std::optional<sound_mind::codec::StreamImage> encodeImageFile(
+    const sound_mind::core::ProjectSettings& settings, const std::filesystem::path& path,
+    ImageScalePickerDialog::Mode mode, const std::optional<PolarImportParams>& polarParams, QString* errorMessage);
+
+/**
+ * @brief Copies an imported file into `project`'s sources and names it in
+ *        each of `layers`' base recipes (`v0.1.43.2`) - a no-op for a
+ *        project without a folder. Failing to copy leaves the recipes
+ *        without a source (the import itself still succeeds).
+ * @param project The project.
+ * @param path The imported file.
+ * @param kind See `ProjectSource::kind`.
+ * @param layers The layers it made, not yet added to the project.
+ * @return The source's id, if it was stored.
+ */
+std::optional<sound_mind::core::SourceId> attachImportSource(sound_mind::core::Project& project,
+                                                             const std::filesystem::path& path, const std::string& kind,
+                                                             std::vector<sound_mind::core::Layer*> layers);
+
+/**
  * @brief Imports an image file as a new layer into `project`, resized per
  *        `mode`.
  *

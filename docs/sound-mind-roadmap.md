@@ -1193,7 +1193,7 @@ This sequences everything in the backlog blocks above into concrete Beta Readine
 | `v0.Y.80.1` | Analysis tools | `0.1.40.1`-`0.1.40.12` (`0.1.40.8`: slider ranges; `0.1.40.13` belongs to `v0.Y.78.1`) | #249-#256 |
 | `v0.Y.80.2` | Codec, analysis and noise acceleration (inserted 2026-10-16) | `0.1.41.1`-`0.1.41.5` (follow-up `0.1.41.6`: shaders embedded) | #258, #259 |
 | `v0.Y.80.3` | Licensing and beta groundwork (inserted 2026-10-21) | `0.1.42.1` (follow-up `0.1.42.2`: Microsoft Store MSIX) | #260, #261 |
-| `v0.Y.81.1` | History: every action recorded, sources in the project, Remaster (redesigned 2026-10-21) | `0.1.43.1`- *(in progress)* | #262, #263 |
+| `v0.Y.81.1` | History: every action recorded, sources in the project, Remaster (redesigned 2026-10-21) | `0.1.43.1`-`0.1.43.2` *(in progress)* | #262-#264 |
 | `v0.Y.82.1` | Macros: record, play and export a performance (redesigned 2026-10-21) | *(planned: `0.1.44.x`)* | #262 |
 | - | Beta readiness check | *(after `v0.Y.82.1`)* | |
 
@@ -1401,7 +1401,7 @@ The project can be rebuilt from scratch by replaying its saved History against i
   - Covers every layer property, layer add/remove/duplicate/reorder/rename, and every resource add/update/remove.
   - The Studio's undo, redo and History panel move onto it.
   - Layer translation becomes seconds.
-- **Installment B: sources.**
+- ✅ **Installment B: sources.** Settled in `v0.1.43.2`, see architecture Decision #264.
   - `SourceStore` (`sources/`, hash-named, deduplicated).
   - Audio, image and MIDI import become History entries referencing sources.
   - Recordings and Loop captures saved as FLAC sources.

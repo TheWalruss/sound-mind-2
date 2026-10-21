@@ -448,6 +448,12 @@ public:
     /// @return The recipe JSON, or `null` if none was given.
     [[nodiscard]] const nlohmann::json& baseRecipe() const noexcept { return baseRecipe_; }
 
+    /// @brief Completes the current base's recipe without making it a new
+    ///        base (the revision stays) - an import naming its source once
+    ///        the file has been copied into the project (`v0.1.43.2`).
+    /// @param recipe The recipe.
+    void setBaseRecipe(nlohmann::json recipe) { baseRecipe_ = std::move(recipe); }
+
     /**
      * @brief This layer's cached Pool-encoded content, if it's been
      *        Pooled at least once (see `sound_mind::core::poolLayer()`).

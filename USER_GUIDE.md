@@ -2082,10 +2082,17 @@ Both act on the same "one layer" rule described above - see
 
 **Ctrl+S** (or **File → Save Project**) saves in place; **File → Save
 Project As...** saves a copy elsewhere. A project is a `.smproj` file plus
-a same-named folder next to it (a `media/` subfolder holding every layer's
-actual encoded data, and a `pool/` subfolder once you've pooled at least
-one layer) - keep the file and its folder together; moving or copying one
-without the other breaks the project.
+a same-named folder next to it - keep the file and its folder together;
+moving or copying one without the other breaks the project. The folder
+holds:
+
+- `media/` - every layer's encoded content;
+- `pool/` - once you've pooled at least one layer;
+- `sources/` - a copy of every file you imported (audio, images, MIDI),
+  every recording and Loop take (as lossless FLAC files), and every layer
+  brought in from another project. The project never depends on the
+  originals elsewhere on your computer. This folder can grow large: every
+  Loop take is kept. **Save As** copies it along.
 
 Closing the window, opening a different project, or starting a new one
 while you have unsaved changes prompts you to save first.

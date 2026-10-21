@@ -38,8 +38,9 @@ bool poolLayer(Layer& layer) {
 
     PooledContent result = computePooledContent(*layer.content());
 
-    layer.setPoolContent(std::move(result.poolImage));
-    layer.setContent(std::move(result.streamContent));
+    // The pooled result is what the layer is built on now (v0.1.43.1).
+    layer.setBaseContent(std::move(result.streamContent), nlohmann::json{{"kind", "pool"}},
+                         std::move(result.poolImage));
     return true;
 }
 

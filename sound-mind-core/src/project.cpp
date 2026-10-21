@@ -82,7 +82,9 @@ Project::Project(const Project& other)
       convolutionKernels_(other.convolutionKernels_),
       toolPresets_(other.toolPresets_),
       filterPresets_(other.filterPresets_),
-      midiProgramMappings_(other.midiProgramMappings_) {
+      midiProgramMappings_(other.midiProgramMappings_),
+      sources_(other.sources_),
+      folder_(other.folder_) {
     // operationLog_ deliberately left default-constructed (empty) - see
     // this constructor's own docs.
 }
@@ -99,6 +101,8 @@ Project& Project::operator=(const Project& other) {
         toolPresets_ = other.toolPresets_;
         filterPresets_ = other.filterPresets_;
         midiProgramMappings_ = other.midiProgramMappings_;
+        sources_ = other.sources_;
+        folder_ = other.folder_;
         operationLog_ = OperationLog{};
     }
     return *this;
@@ -135,8 +139,50 @@ Project Project::load(const std::filesystem::path& path) {
         }
     }
 
+    project.folder_ = projectFolder(path);
     project.history_.setBaseline(project);
     return project;
+}
+
+void Project::setFolderForProjectFile(const std::filesystem::path& projectFile) {
+    folder_ = projectFolder(projectFile);
+}
+
+std::optional<std::filesystem::path> Project::sourcesFolder() const {
+    return folder_ ? std::optional(*folder_ / "sources") : std::nullopt;
+}
+
+SourceId Project::addSource(ProjectSource source) {
+    for (const ProjectSource& existing : sources_) {
+        if (existing.sha256 == source.sha256 && existing.kind == source.kind) {
+            return existing.id;
+        }
+    }
+    SourceId id = 1;
+    for (const ProjectSource& existing : sources_) {
+        id = std::max(id, existing.id + 1);
+    }
+    source.id = id;
+    sources_.push_back(std::move(source));
+    return id;
+}
+
+const ProjectSource* Project::sourceById(SourceId id) const noexcept {
+    for (const ProjectSource& source : sources_) {
+        if (source.id == id) {
+            return &source;
+        }
+    }
+    return nullptr;
+}
+
+std::optional<std::filesystem::path> Project::sourcePath(SourceId id) const {
+    const ProjectSource* source = sourceById(id);
+    const auto folder = sourcesFolder();
+    if (source == nullptr || !folder) {
+        return std::nullopt;
+    }
+    return *folder / std::filesystem::path(std::u8string(source->fileName.begin(), source->fileName.end()));
 }
 
 void Project::save(const std::filesystem::path& path) const {
@@ -146,6 +192,21 @@ void Project::save(const std::filesystem::path& path) const {
     }
     const nlohmann::json json = *this;
     file << json.dump(2);
+
+    // Save As: the sources come along to the new folder.
+    const std::filesystem::path newFolder = projectFolder(path);
+    if (folder_ && *folder_ != newFolder && std::filesystem::exists(*folder_ / "sources")) {
+        std::filesystem::create_directories(newFolder / "sources");
+        for (const ProjectSource& source : sources_) {
+            const std::filesystem::path name(std::u8string(source.fileName.begin(), source.fileName.end()));
+            const std::filesystem::path from = *folder_ / "sources" / name;
+            const std::filesystem::path to = newFolder / "sources" / name;
+            if (std::filesystem::exists(from) && !std::filesystem::exists(to)) {
+                std::filesystem::copy_file(from, to);
+            }
+        }
+    }
+    folder_ = newFolder;
 
     for (const Layer& layer : layers_) {
         if (layer.content().has_value()) {
@@ -681,6 +742,7 @@ void to_json(nlohmann::json& json, const Project& project) {
         {"gridPresets", project.gridPresets_},
         {"midiProgramMappings", project.midiProgramMappings_},
         {"history", project.history_},
+        {"sources", project.sources_},
     };
 }
 
@@ -773,6 +835,8 @@ void from_json(const nlohmann::json& json, Project& project) {
     // Configuration panel installment; a project saved before it had no
     // MIDI program mappings to lose.
     project.history_ = json.contains("history") ? json.at("history").get<History>() : History{};
+    project.sources_ =
+        json.contains("sources") ? json.at("sources").get<std::vector<ProjectSource>>() : std::vector<ProjectSource>{};
 
     project.midiProgramMappings_.clear();
     if (json.contains("midiProgramMappings")) {

@@ -82,17 +82,15 @@ struct PooledContent {
  *        "the resulting Pool file converted to a light-weight Stream
  *        copy."
  *
- * A first, minimal Pool action per `docs/sound-mind-roadmap.md`'s Pool
- * Codec milestone (`v0.0.5.1`): replaces the layer's content in place,
- * rather than the design doc's eventual "hide-not-delete, recorded as an
- * undoable operation" mechanics - those need the first concrete Operation
- * subtype, which doesn't exist yet (arrives with the Basic Painting
- * milestone, per `OperationLog`'s own docs).
+ * The pooled result becomes the layer's base content
+ * (`Layer::setBaseContent()`, recipe `{"kind": "pool"}`, `v0.1.43.1`);
+ * the caller bakes the layer's operations (`OperationLog::bakeLayer()`) and
+ * commits to the project's History, which is what makes pooling undoable.
  *
  * A thin wrapper around computePooledContent() (with no `shouldCancel`, so
- * it never throws `PoolCancelled`) plus the two `layer.set*()` calls - kept
- * as its own synchronous, non-cancellable entry point for every existing
- * caller that doesn't need cancellation.
+ * it never throws `PoolCancelled`) - kept as its own synchronous,
+ * non-cancellable entry point for every existing caller that doesn't need
+ * cancellation.
  *
  * @param layer The layer to pool.
  * @return `true` if pooling happened; `false` if the layer had no content

@@ -194,6 +194,11 @@ public:
     ///         worker has encoded one.
     [[nodiscard]] sound_mind::codec::StreamImage currentImage() const;
 
+    /// @return The latest finished take's audio - what currentImage() was
+    ///         encoded from, kept so the take can be saved as a project
+    ///         source (`v0.1.43.2`). Empty until the worker has encoded one.
+    [[nodiscard]] sound_mind::codec::AudioBuffer currentTakeAudio() const;
+
     /// @return The take in progress, encoded as far as it has arrived -
     ///         for the live-encoding view. Starts over at each pass; empty
     ///         while frozen.
@@ -287,6 +292,7 @@ private:
 
     mutable std::mutex imageMutex_;
     sound_mind::codec::StreamImage currentImage_;
+    sound_mind::codec::AudioBuffer currentTakeAudio_;
 };
 
 }  // namespace sound_mind::core

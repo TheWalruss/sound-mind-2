@@ -20,6 +20,7 @@
 #include "sound_mind/core/midi_program_mapping.h"
 #include "sound_mind/core/operation_log.h"
 #include "sound_mind/core/project_settings.h"
+#include "sound_mind/core/project_sources.h"
 #include "sound_mind/core/resonance_profile.h"
 #include "sound_mind/core/tool_preset.h"
 
@@ -272,6 +273,51 @@ public:
     /// @brief Read-only access to history().
     /// @return The history.
     [[nodiscard]] const History& history() const noexcept { return history_; }
+
+    /**
+     * @brief The folder beside the project file that holds its media,
+     *        sources and caches (`v0.1.43.2`) - set by load() and save(),
+     *        or setFolderForProjectFile().
+     * @return The folder, or `std::nullopt` for a project never saved.
+     */
+    [[nodiscard]] const std::optional<std::filesystem::path>& folder() const noexcept { return folder_; }
+
+    /// @brief Points folder() at the folder belonging to `projectFile`,
+    ///        without saving - a project created in memory and saved later.
+    /// @param projectFile The `.smproj` path.
+    void setFolderForProjectFile(const std::filesystem::path& projectFile);
+
+    /// @brief Where this project's sources are kept: `folder()/sources`.
+    /// @return The folder, or `std::nullopt` without a folder().
+    [[nodiscard]] std::optional<std::filesystem::path> sourcesFolder() const;
+
+    /**
+     * @brief Every source registered with this project, in registration
+     *        order (`v0.1.43.2`) - see `ProjectSource`. Not tracked by the
+     *        History: entries are only ever added, so an undone import's
+     *        source stays available to redo it.
+     * @return The registry.
+     */
+    [[nodiscard]] const std::vector<ProjectSource>& sources() const noexcept { return sources_; }
+
+    /**
+     * @brief Registers a source stored in sourcesFolder() (see
+     *        `storeSourceFile()` and friends); one with the same hash and
+     *        kind already registered is reused instead.
+     * @param source The stored source; its `id` is ignored.
+     * @return The registered source's id.
+     */
+    SourceId addSource(ProjectSource source);
+
+    /// @brief Looks a source up by id.
+    /// @param id The source.
+    /// @return It, or `nullptr`.
+    [[nodiscard]] const ProjectSource* sourceById(SourceId id) const noexcept;
+
+    /// @brief Where a source's file is.
+    /// @param id The source.
+    /// @return The path, or `std::nullopt` if unknown or without a folder().
+    [[nodiscard]] std::optional<std::filesystem::path> sourcePath(SourceId id) const;
 
     /**
      * @brief Reorders the layer stack.
@@ -1012,6 +1058,9 @@ private:
     std::vector<MidiProgramMapping> midiProgramMappings_;
     History history_;
     std::map<LayerId, LayerBase> displacedLayerBases_;
+    std::vector<ProjectSource> sources_;
+    /// Mutable: save() moves the project (Save As), sources included.
+    mutable std::optional<std::filesystem::path> folder_;
 };
 
 /// @brief Serializes a Project to its JSON representation.

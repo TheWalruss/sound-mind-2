@@ -52,6 +52,7 @@ void LoopEngine::start() {
     {
         const std::lock_guard<std::mutex> lock(imageMutex_);
         currentImage_ = sound_mind::codec::StreamImage{};
+        currentTakeAudio_ = sound_mind::codec::AudioBuffer{};
     }
     deviceProblem_.clear();
 
@@ -149,6 +150,11 @@ std::uint64_t LoopEngine::takesCompleted() const noexcept { return takesComplete
 sound_mind::codec::StreamImage LoopEngine::currentImage() const {
     const std::lock_guard<std::mutex> lock(imageMutex_);
     return currentImage_;
+}
+
+sound_mind::codec::AudioBuffer LoopEngine::currentTakeAudio() const {
+    const std::lock_guard<std::mutex> lock(imageMutex_);
+    return currentTakeAudio_;
 }
 
 sound_mind::codec::StreamImage LoopEngine::currentPreviewImage() const { return previewEncoder_.snapshot(); }
@@ -255,6 +261,7 @@ void LoopEngine::processPendingAudio() {
         {
             const std::lock_guard<std::mutex> lock(imageMutex_);
             currentImage_ = std::move(image);
+            currentTakeAudio_ = std::move(take);
         }
         encodedTakes_ = completed;
     }

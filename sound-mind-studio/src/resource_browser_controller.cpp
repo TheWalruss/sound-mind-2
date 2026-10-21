@@ -938,7 +938,23 @@ void ResourceBrowserController::handleImportEntryRequested() {
         }
         case ResourceCategory::Layer:
             if (const auto* layer = browsedProject_->layerById(static_cast<sound_mind::core::LayerId>(*id))) {
-                project_->addLayer(*layer);
+                // Its operations stay in the other project, so what it
+                // shows there is what it's built on here - kept as a
+                // source so the import can be replayed (v0.1.43.2).
+                sound_mind::core::Layer copy(*layer);
+                if (layer->content().has_value()) {
+                    nlohmann::json recipe{{"kind", "layerImage"}};
+                    if (const auto folder = project_->sourcesFolder()) {
+                        try {
+                            recipe["source"] = project_->addSource(
+                                sound_mind::core::storeSourceStreamImage(*folder, *layer->content(), layer->name()));
+                        } catch (const std::exception&) {
+                            // Kept without a source: not replayable from the original.
+                        }
+                    }
+                    copy.setBaseContent(*layer->content(), std::move(recipe), layer->poolContent());
+                }
+                project_->addLayer(std::move(copy));
             }
             break;
         case ResourceCategory::GridPreset:

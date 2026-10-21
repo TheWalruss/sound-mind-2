@@ -30,6 +30,7 @@ add_library(sound-mind-studio-lib
     src/command_line.cpp
     src/audio_snippet_picker_dialog.cpp
     src/axis_labels.cpp
+    src/base_recipes.cpp
     src/branch_curve_session.cpp
     src/canvas_widget.cpp
     src/checklist_dialog.cpp

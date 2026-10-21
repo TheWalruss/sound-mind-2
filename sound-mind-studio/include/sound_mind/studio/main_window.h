@@ -1530,6 +1530,23 @@ public slots:
      */
     void jumpToHistoryIndex(std::size_t index);
 
+    /**
+     * @brief Saves audio as a lossless project source (`v0.1.43.2`) - a
+     *        recording or a Loop take - and registers it.
+     * @param audio The audio.
+     * @param kind See `ProjectSource::kind`.
+     * @param name A descriptive name.
+     * @return The source's id; `std::nullopt` without a project folder, for
+     *         empty audio, or if writing failed.
+     */
+    std::optional<sound_mind::core::SourceId> storeAudioSource(const sound_mind::codec::AudioBuffer& audio,
+                                                               const std::string& kind, const QString& name);
+
+    /// @brief A recording's base recipe, its audio saved as a source.
+    /// @param captured The recorded audio.
+    /// @return `{"kind": "record", "source": id}` (no source if saving failed).
+    nlohmann::json recordingRecipe(const sound_mind::codec::AudioBuffer& captured);
+
     /// @brief Commits the open project's changes to its History with
     ///        `description` (`v0.1.43.1`) - a no-op without a project.
     /// @param description What the user did.
@@ -4267,6 +4284,9 @@ private:
     /// BackgroundTask::isRunning()'s own docs). Cleared at the start of
     /// every new importAudioSnippetsAsync() call.
     std::vector<sound_mind::core::Layer> importedLayers_;
+    /// @brief The imported audio file, copied into the project's sources by
+    ///        the import task, registered when it completes (`v0.1.43.2`).
+    std::optional<sound_mind::core::ProjectSource> importedSource_;
 
     enum class ImportOutcome { Success, Cancelled, Failed };
     ImportOutcome importOutcome_ = ImportOutcome::Success;

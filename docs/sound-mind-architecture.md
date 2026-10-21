@@ -2707,6 +2707,34 @@ CMake (per `tech-stack-decisions.md`'s "Professional CMake" reference) with vcpk
       - Studio `ProjectHistoryTest`, 7 cases.
       - `PickControllerTest::restackingIsUndoable`.
       - Existing controller tests now drive `ProjectHistory`; their setup helpers use `setBaseContent()`.
+264. **History installment B: project sources and executable recipes.** Settled in `v0.1.43.2`, roadmap slot `v0.Y.81.1`.
+    - **`ProjectSource` registry** (`project_sources.h`): id, kind (`audio`, `image`, `midi`, `recording`, `loopTake`, `layerImage`), original name, SHA-256 and file name.
+      - Saved in the project file (`"sources"`); files live in `<project folder>/sources/`, named by the first 16 hex digits of their hash plus the original extension.
+      - `Project::addSource()` reuses an entry with the same hash and kind, so a file imported twice is kept once.
+      - The registry is deliberately *not* tracked by the History: entries are only ever added, so redoing an undone import, or a Macro replaying it, still finds its source. (Pruning unreferenced sources is future work.)
+    - **Storing is thread-safe and separate from registering:**
+      - `storeSourceFile()` copies, `storeSourceAudio()` writes FLAC through the codec's existing `exportCompressedAudio()` (JUCE's FLAC writer - nothing new linked), and `storeSourceStreamImage()` writes a Stream file. None of them touch a project.
+      - The async audio import stores its file on the background thread and registers it on completion.
+    - **Wired in:**
+      - audio import (async and drag-and-drop), image import and MIDI import (`attachImportSource()`; MIDI's source goes in the entry's metadata, since its result is operations, not a base);
+      - recording into a new or an existing layer (`MainWindow::recordingRecipe()`);
+      - every Loop take (`LoopEngine::currentTakeAudio()`, new: the take's audio, kept beside its encoded image);
+      - a layer brought in from another project through the Resource Browser. That layer's operations stay in the other project, so its rendered content becomes its base here, which also fixes it losing its painting when painted on again.
+    - **`Project::folder()`** is set by `load()` and `save()`. `save()` to a new location copies the registered sources along (Save As); the folder is `mutable` so `save()` stays `const`. `Layer::setBaseRecipe()` completes a recipe with its source without making a new base.
+    - **`runBaseRecipe()` (Studio, `base_recipes.h`)** remakes a base from its recipe:
+      - `empty`;
+      - `importAudio` (through the same `encodeAudioSnippets()` as importing);
+      - `importImage` (through `encodeImageFile()`, extracted from `importImageFileInto()`);
+      - `generate` (the configuration, seed included);
+      - `record`/`loopTake` (FLAC, encoded);
+      - `layerImage` (re-encoded through decode/encode when the codec settings differ - Remaster);
+      - `duplicate`/`pool`/`phaseCleanup`, from a layer's rendered content, which the replay supplies.
+
+      It lives in the Studio because image import scales with Qt. Installment D's replay calls it.
+    - **Core `poolLayer()`** now sets the pooled result as the layer's base (recipe `pool`); the synchronous pool path bakes and commits like the async one.
+    - **Tests:**
+      - core `test_project_sources.cpp`, 6 cases: SHA-256 against the FIPS test vectors, file hash, store once, FLAC round trip, registry de-duplication and lookup, Save As carrying sources;
+      - Studio `BaseRecipesTest`, 6 cases: audio and image imports keep their file and replay bit-identically, a generated layer replays from its seed, a recording replays from FLAC within quantization, empty/duplicate/pool/phase cleanup from rendered content, missing source or unknown recipe fails with a reason.
       - **Limitations (documented):** a voice an octave from a louder one shares its harmonics and is absorbed by it. Partials within about one linear FFT bin beat, so the weaker voice drops out periodically (seen with a 415 Hz melody against a 110 Hz bass's 440 Hz harmonic; the tests use notes clear of that).
     - **Report:** `mixPitchHz` became `mixPitchTracks` (one track per voice). `analyzeProjectLoudness(project, shouldCancel, pitchVoices = 1)`.
     - **Studio:**

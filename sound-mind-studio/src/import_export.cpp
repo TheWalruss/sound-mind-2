@@ -165,6 +165,11 @@ int importAudioSnippetsInto(sound_mind::core::Project& project, const std::files
                              const std::vector<std::size_t>& snippetIndices, QString* errorMessage,
                              double offsetSeconds) {
     auto layers = encodeAudioSnippets(project.settings(), path, snippetIndices, nullptr, errorMessage, offsetSeconds);
+    std::vector<sound_mind::core::Layer*> made;
+    for (auto& layer : layers) {
+        made.push_back(&layer);
+    }
+    attachImportSource(project, path, "audio", made);
     for (auto& layer : layers) {
         project.addLayer(std::move(layer));
     }
@@ -174,23 +179,52 @@ int importAudioSnippetsInto(sound_mind::core::Project& project, const std::files
 bool importImageFileInto(sound_mind::core::Project& project, const std::filesystem::path& path,
                           ImageScalePickerDialog::Mode mode, QString* errorMessage,
                           sound_mind::core::LayerId* outLayerId, std::optional<PolarImportParams> polarParams) {
-    const QImage sourceImage(QString::fromStdString(path.string()));
+    const auto content = encodeImageFile(project.settings(), path, mode, polarParams, errorMessage);
+    if (!content.has_value()) {
+        return false;
+    }
+    sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
+    {
+        nlohmann::json recipe{{"kind", "importImage"},
+                              {"file", QString::fromStdWString(path.filename().wstring()).toStdString()},
+                              {"mode", static_cast<int>(mode)}};
+        if (polarParams.has_value()) {
+            recipe["polar"] = {{"originX", polarParams->originX},
+                               {"originY", polarParams->originY},
+                               {"radius", polarParams->radius},
+                               {"arcStartRadians", polarParams->arcStartRadians},
+                               {"arcEndRadians", polarParams->arcEndRadians},
+                               {"outputWidth", polarParams->outputWidth}};
+        }
+        layer.setBaseContent(*content, std::move(recipe));
+    }
+    attachImportSource(project, path, "image", {&layer});
+    const sound_mind::core::LayerId newId = project.addLayer(std::move(layer));
+    if (outLayerId != nullptr) {
+        *outLayerId = newId;
+    }
+    return true;
+}
+
+std::optional<sound_mind::codec::StreamImage> encodeImageFile(const sound_mind::core::ProjectSettings& settings,
+                                                              const std::filesystem::path& path,
+                                                              ImageScalePickerDialog::Mode mode,
+                                                              const std::optional<PolarImportParams>& polarParams,
+                                                              QString* errorMessage) {
+    const QImage sourceImage(QString::fromStdWString(path.wstring()));
     if (sourceImage.isNull()) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("Could not load the image file.");
         }
-        return false;
+        return std::nullopt;
     }
-
     if (mode == ImageScalePickerDialog::Mode::Polar && !polarParams.has_value()) {
         if (errorMessage != nullptr) {
             *errorMessage = tr("No polar origin was set for this import.");
         }
-        return false;
+        return std::nullopt;
     }
-
     try {
-        const auto& settings = project.settings();
         sound_mind::codec::RgbImage rgbImage;
         if (mode == ImageScalePickerDialog::Mode::Polar) {
             // polarToRect()'s own per-output-pixel sampling already
@@ -206,29 +240,34 @@ bool importImageFileInto(sound_mind::core::Project& project, const std::filesyst
                                                              static_cast<int>(settings.canvasHeight));
             rgbImage = toRgbImage(scaledImage);
         }
-        const auto content = sound_mind::codec::fromRgbImage(rgbImage, sound_mind::core::streamCodecConfigFor(settings));
-
-        sound_mind::core::Layer layer(0, path.filename().string(), sound_mind::core::LayerType::Normal);
-        nlohmann::json recipe{{"kind", "importImage"}, {"file", QString::fromStdWString(path.filename().wstring()).toStdString()}, {"mode", static_cast<int>(mode)}};
-        if (polarParams.has_value()) {
-            recipe["polar"] = {{"originX", polarParams->originX},
-                               {"originY", polarParams->originY},
-                               {"radius", polarParams->radius},
-                               {"arcStartRadians", polarParams->arcStartRadians},
-                               {"arcEndRadians", polarParams->arcEndRadians},
-                               {"outputWidth", polarParams->outputWidth}};
-        }
-        layer.setBaseContent(content, std::move(recipe));
-        const sound_mind::core::LayerId newId = project.addLayer(std::move(layer));
-        if (outLayerId != nullptr) {
-            *outLayerId = newId;
-        }
-        return true;
+        return sound_mind::codec::fromRgbImage(rgbImage, sound_mind::core::streamCodecConfigFor(settings));
     } catch (const std::exception& e) {
         if (errorMessage != nullptr) {
             *errorMessage = QString::fromStdString(e.what());
         }
-        return false;
+        return std::nullopt;
+    }
+}
+
+std::optional<sound_mind::core::SourceId> attachImportSource(sound_mind::core::Project& project,
+                                                             const std::filesystem::path& path, const std::string& kind,
+                                                             std::vector<sound_mind::core::Layer*> layers) {
+    const auto folder = project.sourcesFolder();
+    if (!folder.has_value()) {
+        return std::nullopt;
+    }
+    try {
+        const sound_mind::core::SourceId id = project.addSource(sound_mind::core::storeSourceFile(*folder, path, kind));
+        for (sound_mind::core::Layer* layer : layers) {
+            nlohmann::json recipe = layer->baseRecipe();
+            if (recipe.is_object()) {
+                recipe["source"] = id;
+                layer->setBaseRecipe(std::move(recipe));
+            }
+        }
+        return id;
+    } catch (const std::exception&) {
+        return std::nullopt;  // the import stands; it just can't be replayed from its original.
     }
 }
 

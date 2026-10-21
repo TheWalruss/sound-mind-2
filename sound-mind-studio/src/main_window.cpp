@@ -2717,7 +2717,12 @@ bool MainWindow::finishMidiImport(const std::vector<sound_mind::core::LayerId>& 
     for (const auto layerId : newLayerIds) {
         toolPaletteController_->rebuildLayerContent(layerId);
     }
-    commitHistory(tr("Imported MIDI \"%1\"").arg(QString::fromStdString(path.filename().string())));
+    nlohmann::json metadata;
+    if (const auto source = sound_mind::studio::attachImportSource(*project_, path, "midi", {})) {
+        metadata = {{"source", *source}};
+    }
+    history_.commit(*project_, tr("Imported MIDI \"%1\"").arg(QString::fromStdString(path.filename().string())),
+                    std::move(metadata));
 
     canvas_->invalidateCompositeAll();
     playbackController_->invalidate();
@@ -2814,8 +2819,10 @@ void MainWindow::importAudioSnippetsAsync(const std::filesystem::path& path,
     // project_ itself, so the background thread has nothing shared to
     // synchronize against - see this method's own docs.
     const auto settings = project_->settings();
+    importedSource_.reset();
+    const std::optional<std::filesystem::path> sourcesFolder = project_->sourcesFolder();
     importTask_ = std::make_unique<sound_mind::core::BackgroundTask>(
-        [this, path, snippetIndices, settings, offsetSeconds](sound_mind::core::CancellationToken& token) {
+        [this, path, snippetIndices, settings, offsetSeconds, sourcesFolder](sound_mind::core::CancellationToken& token) {
             QString encodeError;
             try {
                 importedLayers_ = sound_mind::studio::encodeAudioSnippets(
@@ -2824,6 +2831,14 @@ void MainWindow::importAudioSnippetsAsync(const std::filesystem::path& path,
                 if (importedLayers_.empty()) {
                     importOutcome_ = ImportOutcome::Failed;
                     importErrorMessage_ = encodeError;
+                } else if (sourcesFolder.has_value()) {
+                    // The file itself is kept in the project (v0.1.43.2),
+                    // copied here off the UI thread; registered on completion.
+                    try {
+                        importedSource_ = sound_mind::core::storeSourceFile(*sourcesFolder, path, "audio");
+                    } catch (const std::exception&) {
+                        importedSource_.reset();  // the import stands, just not replayable.
+                    }
                 }
             } catch (const sound_mind::studio::ImportCancelled&) {
                 importOutcome_ = ImportOutcome::Cancelled;
@@ -2857,6 +2872,15 @@ void MainWindow::pollImportProgress() {
     switch (importOutcome_) {
         case ImportOutcome::Success: {
             const auto importedCount = static_cast<int>(importedLayers_.size());
+            if (importedSource_.has_value()) {
+                const sound_mind::core::SourceId source = project_->addSource(std::move(*importedSource_));
+                importedSource_.reset();
+                for (auto& layer : importedLayers_) {
+                    nlohmann::json recipe = layer.baseRecipe();
+                    recipe["source"] = source;
+                    layer.setBaseRecipe(std::move(recipe));
+                }
+            }
             for (auto& layer : importedLayers_) {
                 project_->addLayer(std::move(layer));
             }
@@ -3853,6 +3877,27 @@ void MainWindow::refreshHistoryPanel() {
 void MainWindow::jumpToHistoryIndex(std::size_t index) {
     history_.jumpTo(index);
     noteProjectChangedForAnalysis();
+}
+
+std::optional<sound_mind::core::SourceId> MainWindow::storeAudioSource(const sound_mind::codec::AudioBuffer& audio,
+                                                                      const std::string& kind, const QString& name) {
+    const auto folder = project_ ? project_->sourcesFolder() : std::nullopt;
+    if (!folder.has_value() || audio.frameCount() == 0) {
+        return std::nullopt;
+    }
+    try {
+        return project_->addSource(sound_mind::core::storeSourceAudio(*folder, audio, kind, name.toStdString()));
+    } catch (const std::exception&) {
+        return std::nullopt;  // kept without a source: not replayable from the original.
+    }
+}
+
+nlohmann::json MainWindow::recordingRecipe(const sound_mind::codec::AudioBuffer& captured) {
+    nlohmann::json recipe{{"kind", "record"}};
+    if (const auto source = storeAudioSource(captured, "recording", tr("Recording"))) {
+        recipe["source"] = *source;
+    }
+    return recipe;
 }
 
 void MainWindow::commitHistory(const QString& description) {
@@ -5074,7 +5119,12 @@ void MainWindow::updateLoopLayer() {
         sound_mind::codec::StreamImage image = loopEngine_->currentImage();
         if (image.frameCount > 0) {
             // Each take replaces what the Loop layer is built on.
-            layer->setBaseContent(std::move(image), nlohmann::json{{"kind", "loopTake"}, {"take", takes}});
+            nlohmann::json recipe{{"kind", "loopTake"}, {"take", takes}};
+            if (const auto source = storeAudioSource(loopEngine_->currentTakeAudio(), "loopTake",
+                                                     tr("Loop take %1").arg(takes))) {
+                recipe["source"] = *source;
+            }
+            layer->setBaseContent(std::move(image), std::move(recipe));
             project_->operationLog().bakeLayer(layer->id());
             loopTakesShown_ = takes;
             commitHistory(tr("Loop take %1").arg(takes));
@@ -5332,7 +5382,7 @@ bool MainWindow::commitRecording(const sound_mind::codec::AudioBuffer& captured)
         sound_mind::core::Layer* existing = target.has_value() ? layerController_->layerById(*target) : nullptr;
         if (existing != nullptr) {
             // Recording over a layer replaces it, painting included.
-            existing->setBaseContent(std::move(content), nlohmann::json{{"kind", "record"}});
+            existing->setBaseContent(std::move(content), recordingRecipe(captured));
             project_->operationLog().bakeLayer(existing->id());
             commitHistory(tr("Recorded over \"%1\"").arg(QString::fromStdString(existing->name())));
             statusBar()->showMessage(
@@ -5340,7 +5390,7 @@ bool MainWindow::commitRecording(const sound_mind::codec::AudioBuffer& captured)
         } else {
             sound_mind::core::Layer layer(0, recordPanel_->newLayerName().toStdString(),
                                           sound_mind::core::LayerType::Normal);
-            layer.setBaseContent(std::move(content), nlohmann::json{{"kind", "record"}});
+            layer.setBaseContent(std::move(content), recordingRecipe(captured));
             layer.setRecorded(true);
             project_->addLayer(std::move(layer));
             commitHistory(tr("Recorded a new layer"));
@@ -5564,6 +5614,8 @@ bool MainWindow::poolLayerNow(sound_mind::core::LayerId id, QString* errorMessag
             }
             return false;
         }
+        project_->operationLog().bakeLayer(id);
+        commitHistory(tr("Pooled layer \"%1\"").arg(QString::fromStdString(layer->name())));
         canvas_->invalidateCompositeAll();
         // The layer's content was just replaced with a fresh, pool-derived
         // Stream copy - the next startPlayback() should pick that up
